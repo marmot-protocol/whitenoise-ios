@@ -1,0 +1,4 @@
+module marmot_uniffiFFI {
+    header "marmot_uniffiFFI.h"
+    export *
+}

@@ -1,0 +1,11 @@
+darkmatter-sha: 47bd5b0
+darkmatter-branch: feat/uniffi-bindings
+built-at: 2026-05-20T21:55:00Z
+uniffi-version: 0.28.3
+ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
+ios-deployment-target: 18.0
+
+Notes:
+- Rebuild this bundle with: darkmatter/crates/marmot-uniffi/xcframework.sh
+- After rebuild, copy crates/marmot-uniffi/output/{MarmotKit.xcframework,
+  MarmotKit.swift} into this directory and update the SHA above.
