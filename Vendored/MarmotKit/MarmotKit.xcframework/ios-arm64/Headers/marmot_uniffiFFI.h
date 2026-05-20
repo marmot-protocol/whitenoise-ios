@@ -331,6 +331,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_create_group(void*_Nonnull ptr, R
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_create_identity(void*_Nonnull ptr, RustBuffer default_relays, RustBuffer bootstrap_relays
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DISPLAY_NAME
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DISPLAY_NAME
+RustBuffer uniffi_marmot_uniffi_fn_method_marmot_display_name(void*_Nonnull ptr, RustBuffer account_id_hex, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MEMBERS
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_group_members(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex
@@ -369,6 +374,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_publish_relay_lists(void*_Nonnull
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PUBLISH_USER_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PUBLISH_USER_PROFILE
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_publish_user_profile(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer profile, RustBuffer default_relays, RustBuffer bootstrap_relays
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REFRESH_DIRECTORY
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REFRESH_DIRECTORY
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_refresh_directory(void*_Nonnull ptr, RustBuffer account_id_hex, RustBuffer bootstrap_relays
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REMOVE_MEMBERS
@@ -758,6 +768,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_create_identity(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_display_name(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_members(void
@@ -803,6 +819,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_USER_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_USER_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_DIRECTORY
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_DIRECTORY
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_refresh_directory(void
     
 );
 #endif

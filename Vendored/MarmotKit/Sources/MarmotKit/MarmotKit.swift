@@ -934,6 +934,14 @@ public protocol MarmotProtocol : AnyObject {
     func createIdentity(defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
     
     /**
+     * Best-effort cached display name for an account id. Returns the Nostr
+     * kind:0 display_name/name when the runtime has projected one, or the
+     * local account label if the id refers to one of our own accounts.
+     * `None` when nothing is known yet — call `refresh_directory` to fetch.
+     */
+    func displayName(accountIdHex: String)  -> String?
+    
+    /**
      * Membership roster for `group_id_hex`.
      */
     func groupMembers(accountRef: String, groupIdHex: String) async throws  -> [AppGroupMemberRecordFfi]
@@ -975,6 +983,13 @@ public protocol MarmotProtocol : AnyObject {
      * defaults are reflected here).
      */
     func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> UserProfileMetadataFfi
+    
+    /**
+     * Refresh the user-directory entry for `account_id_hex` from the given
+     * relays. After this resolves successfully, `display_name` will return
+     * the freshly-projected name (if any was published).
+     */
+    func refreshDirectory(accountIdHex: String, bootstrapRelays: [String]) async throws 
     
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
@@ -1132,6 +1147,20 @@ open func createIdentity(defaultRelays: [String], bootstrapRelays: [String])asyn
 }
     
     /**
+     * Best-effort cached display name for an account id. Returns the Nostr
+     * kind:0 display_name/name when the runtime has projected one, or the
+     * local account label if the id refers to one of our own accounts.
+     * `None` when nothing is known yet — call `refresh_directory` to fetch.
+     */
+open func displayName(accountIdHex: String) -> String? {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_marmot_display_name(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountIdHex),$0
+    )
+})
+}
+    
+    /**
      * Membership roster for `group_id_hex`.
      */
 open func groupMembers(accountRef: String, groupIdHex: String)async throws  -> [AppGroupMemberRecordFfi] {
@@ -1273,6 +1302,28 @@ open func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeUserProfileMetadataFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Refresh the user-directory entry for `account_id_hex` from the given
+     * relays. After this resolves successfully, `display_name` will return
+     * the freshly-projected name (if any was published).
+     */
+open func refreshDirectory(accountIdHex: String, bootstrapRelays: [String])async throws  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_refresh_directory(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountIdHex),FfiConverterSequenceString.lower(bootstrapRelays)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -2989,6 +3040,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity() != 64408) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_display_name() != 65469) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_members() != 54987) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3011,6 +3065,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 48272) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_directory() != 55539) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {
