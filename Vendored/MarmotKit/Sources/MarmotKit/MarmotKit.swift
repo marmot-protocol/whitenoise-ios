@@ -1004,11 +1004,11 @@ public protocol MarmotProtocol : AnyObject {
     func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> UserProfileMetadataFfi
     
     /**
-     * Refresh the user-directory entry for `account_id_hex` from the given
-     * relays. After this resolves successfully, `display_name` will return
-     * the freshly-projected name (if any was published).
+     * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
+     * After this resolves, `user_profile` / `display_name` return the
+     * freshly-fetched metadata (name, picture, etc.) for that account.
      */
-    func refreshDirectory(accountIdHex: String, bootstrapRelays: [String]) async throws 
+    func refreshProfile(accountIdHex: String, relays: [String]) async throws 
     
     /**
      * Live relay-plane connection health (connected / connecting /
@@ -1387,17 +1387,17 @@ open func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi
 }
     
     /**
-     * Refresh the user-directory entry for `account_id_hex` from the given
-     * relays. After this resolves successfully, `display_name` will return
-     * the freshly-projected name (if any was published).
+     * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
+     * After this resolves, `user_profile` / `display_name` return the
+     * freshly-fetched metadata (name, picture, etc.) for that account.
      */
-open func refreshDirectory(accountIdHex: String, bootstrapRelays: [String])async throws  {
+open func refreshProfile(accountIdHex: String, relays: [String])async throws  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_refresh_directory(
+                uniffi_marmot_uniffi_fn_method_marmot_refresh_profile(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountIdHex),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterString.lower(accountIdHex),FfiConverterSequenceString.lower(relays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
@@ -3570,7 +3570,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 48272) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_directory() != 55539) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_profile() != 33641) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_relay_health() != 9336) {

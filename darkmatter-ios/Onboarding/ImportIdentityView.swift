@@ -13,13 +13,13 @@ struct ImportIdentityView: View {
 
     private var canSubmit: Bool {
         let trimmed = identity.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !isImporting && (trimmed.hasPrefix("nsec") || trimmed.hasPrefix("npub"))
+        return !isImporting && trimmed.hasPrefix("nsec")
     }
 
     var body: some View {
         Form {
             Section {
-                TextField("nsec1… or npub1…", text: $identity, axis: .vertical)
+                TextField("nsec1…", text: $identity, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
@@ -27,7 +27,7 @@ struct ImportIdentityView: View {
             } header: {
                 Text("Identity")
             } footer: {
-                Text("Pasting an nsec stores it in the device keychain. Pasting an npub tracks the account read-only — you won't be able to send messages.")
+                Text("Paste your nsec (bech32 secret key). It's stored securely in your device's Keychain.")
                     .font(.footnote)
             }
 

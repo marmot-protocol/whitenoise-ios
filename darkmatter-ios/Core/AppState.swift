@@ -115,6 +115,11 @@ final class AppState {
                     activeAccountRef = accounts.first?.label
                 }
                 phase = .ready
+                // Warm the active account's profile (name + avatar) right away
+                // so it's visible without waiting for a screen to request it.
+                if let activeId = activeAccount?.accountIdHex {
+                    _ = await profile(forAccountIdHex: activeId)
+                }
             }
         } catch {
             phase = .failed(error.localizedDescription)
@@ -222,7 +227,8 @@ final class AppState {
             return
         }
 
-        try? await marmot.refreshDirectory(accountIdHex: id, bootstrapRelays: defaultRelays)
+        // Fetch this account's OWN kind:0 from relays (not its follows').
+        try? await marmot.refreshProfile(accountIdHex: id, relays: defaultRelays)
 
         if let fetched = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
             cacheProfile(fetched, for: id)
