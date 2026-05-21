@@ -19,58 +19,65 @@ struct ProfileQRView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Spacer(minLength: 8)
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 18) {
+                        AvatarBubble(
+                            seed: accountIdHex,
+                            title: appState.displayName(forAccountIdHex: accountIdHex),
+                            pictureURL: appState.avatarURL(forAccountIdHex: accountIdHex)
+                        )
+                        .frame(width: 150, height: 150)
 
-                AvatarBubble(
-                    seed: accountIdHex,
-                    title: appState.displayName(forAccountIdHex: accountIdHex),
-                    pictureURL: appState.avatarURL(forAccountIdHex: accountIdHex)
-                )
-                .frame(width: 88, height: 88)
+                        Text(appState.displayName(forAccountIdHex: accountIdHex))
+                            .font(.system(size: 40, weight: .bold))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.6)
 
-                Text(appState.displayName(forAccountIdHex: accountIdHex))
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
+                        Button(action: copyNpub) {
+                            HStack(spacing: 8) {
+                                Text(copied ? "Copied" : IdentityFormatter.short(npub, head: 16, tail: 14))
+                                    .font(.system(.callout, design: .monospaced))
+                                    .foregroundStyle(copied ? Color.green : Color.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                    .font(.caption)
+                                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
 
-                Button(action: copyNpub) {
-                    HStack(spacing: 8) {
-                        Text(copied ? "Copied" : IdentityFormatter.short(npub))
-                            .font(.system(.callout, design: .monospaced))
-                            .foregroundStyle(copied ? Color.green : Color.secondary)
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            .font(.caption)
-                            .foregroundStyle(copied ? Color.green : Color.accentColor)
+                        qrCard
                     }
-                    .contentShape(.rect)
+                    .padding(.top, 12)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 12)
                 }
-                .buttonStyle(.plain)
 
-                qrCard
-
-                Spacer(minLength: 8)
-
-                Button {
-                    scanError = nil
-                    showScanner = true
-                } label: {
-                    Label("Scan QR Code", systemImage: "qrcode.viewfinder")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 4)
+                VStack(spacing: 8) {
+                    if let scanError {
+                        Text(scanError)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                    Button {
+                        scanError = nil
+                        showScanner = true
+                    } label: {
+                        Label("Scan QR Code", systemImage: "qrcode.viewfinder")
+                            .font(.body.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
                 .padding(.horizontal, 24)
-
-                if let scanError {
-                    Text(scanError)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 24)
-                }
+                .padding(.bottom, 16)
             }
-            .padding(.bottom, 16)
             .navigationTitle("My Code")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -102,7 +109,7 @@ struct ProfileQRView: View {
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 240, height: 240)
+                    .frame(width: 300, height: 300)
                     .padding(16)
                     .background(.white, in: .rect(cornerRadius: 20))
                     .overlay(
@@ -112,7 +119,7 @@ struct ProfileQRView: View {
             } else {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(.quaternary)
-                    .frame(width: 272, height: 272)
+                    .frame(width: 332, height: 332)
                     .overlay(Text("Couldn't render QR").font(.caption).foregroundStyle(.secondary))
             }
         }
