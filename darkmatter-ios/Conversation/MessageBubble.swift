@@ -59,7 +59,9 @@ struct MessageBubble: View {
                     .padding(.vertical, 9)
                     .background(bubbleBackground)
                     .clipShape(.rect(cornerRadius: 18))
-                    .textSelection(.enabled)
+                    // No .textSelection here: it installs its own long-press
+                    // recognizer that swallows the bubble's long-press (the
+                    // actions menu). Copy is offered in the actions sheet.
                     .opacity(status == .sending ? 0.7 : 1)
 
                     if !reactions.isEmpty {

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MarmotKit
 
 struct ConversationView: View {
@@ -52,6 +53,11 @@ struct ConversationView: View {
                         },
                         onReply: {
                             viewModel.replyingTo = target.record
+                            actionsTarget = nil
+                        },
+                        onCopy: {
+                            UIPasteboard.general.string = viewModel.displayBody(of: target.record)
+                            Haptics.tap()
                             actionsTarget = nil
                         },
                         onDelete: {

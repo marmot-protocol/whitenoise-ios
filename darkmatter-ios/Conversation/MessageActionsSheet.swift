@@ -9,6 +9,7 @@ struct MessageActionsSheet: View {
     let quickReactions: [String]
     let onReact: (String) -> Void
     let onReply: () -> Void
+    let onCopy: () -> Void
     let onDelete: () -> Void
 
     @State private var showPicker = false
@@ -23,6 +24,8 @@ struct MessageActionsSheet: View {
             Divider()
 
             actionRow("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
+            Divider().padding(.leading, 52)
+            actionRow("Copy", systemImage: "doc.on.doc", action: onCopy)
 
             if isMine {
                 Divider().padding(.leading, 52)
@@ -31,7 +34,7 @@ struct MessageActionsSheet: View {
 
             Spacer(minLength: 0)
         }
-        .presentationDetents([.height(isMine ? 230 : 180)])
+        .presentationDetents([.height(isMine ? 290 : 230)])
         .presentationDragIndicator(.visible)
         .sheet(isPresented: $showPicker) {
             EmojiPickerSheet(onPick: onReact)
