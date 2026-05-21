@@ -399,6 +399,22 @@ fileprivate class UniffiHandleMap<T> {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -947,6 +963,11 @@ public protocol MarmotProtocol : AnyObject {
     func createIdentity(defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
     
     /**
+     * Revoke `member_ref`'s admin rights.
+     */
+    func demoteAdmin(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> SendSummaryFfi
+    
+    /**
      * Best-effort cached display name for an account id. Returns the Nostr
      * kind:0 display_name/name when the runtime has projected one, or the
      * local account label if the id refers to one of our own accounts.
@@ -958,6 +979,12 @@ public protocol MarmotProtocol : AnyObject {
      * Membership roster for `group_id_hex`.
      */
     func groupMembers(accountRef: String, groupIdHex: String) async throws  -> [AppGroupMemberRecordFfi]
+    
+    /**
+     * Current MLS state (epoch, member count, required components) for the
+     * conversation developer/debug view.
+     */
+    func groupMlsState(accountRef: String, groupIdHex: String) async throws  -> AppGroupMlsStateFfi
     
     func inviteMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
@@ -991,6 +1018,12 @@ public protocol MarmotProtocol : AnyObject {
     func npub(accountIdHex: String)  -> String?
     
     /**
+     * Grant admin rights to `member_ref` (npub or hex). Requires the caller
+     * to be an admin; publishes a group state update.
+     */
+    func promoteAdmin(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> SendSummaryFfi
+    
+    /**
      * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
@@ -1019,10 +1052,22 @@ public protocol MarmotProtocol : AnyObject {
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
     /**
+     * Step down as an admin of `group_id_hex` (demote the active account).
+     */
+    func selfDemoteAdmin(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
+    
+    /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
      * deletes, media) go through dedicated methods.
      */
     func sendText(accountRef: String, groupIdHex: String, text: String) async throws  -> SendSummaryFfi
+    
+    /**
+     * Flag a group archived (or restore it). Local-only projection state —
+     * it does not change membership or publish anything. The chats list
+     * filters archived groups unless `include_archived` is set.
+     */
+    func setGroupArchived(accountRef: String, groupIdHex: String, archived: Bool) throws  -> AppGroupRecordFfi
     
     /**
      * Tear the runtime down. Drops all subscriptions; long-lived
@@ -1215,6 +1260,26 @@ open func createIdentity(defaultRelays: [String], bootstrapRelays: [String])asyn
 }
     
     /**
+     * Revoke `member_ref`'s admin rights.
+     */
+open func demoteAdmin(accountRef: String, groupIdHex: String, memberRef: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_demote_admin(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(memberRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
      * Best-effort cached display name for an account id. Returns the Nostr
      * kind:0 display_name/name when the runtime has projected one, or the
      * local account label if the id refers to one of our own accounts.
@@ -1244,6 +1309,27 @@ open func groupMembers(accountRef: String, groupIdHex: String)async throws  -> [
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAppGroupMemberRecordFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Current MLS state (epoch, member count, required components) for the
+     * conversation developer/debug view.
+     */
+open func groupMlsState(accountRef: String, groupIdHex: String)async throws  -> AppGroupMlsStateFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_group_mls_state(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAppGroupMlsStateFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -1341,6 +1427,27 @@ open func npub(accountIdHex: String) -> String? {
         FfiConverterString.lower(accountIdHex),$0
     )
 })
+}
+    
+    /**
+     * Grant admin rights to `member_ref` (npub or hex). Requires the caller
+     * to be an admin; publishes a group state update.
+     */
+open func promoteAdmin(accountRef: String, groupIdHex: String, memberRef: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_promote_admin(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(memberRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
 }
     
     /**
@@ -1448,6 +1555,26 @@ open func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [Str
 }
     
     /**
+     * Step down as an admin of `group_id_hex` (demote the active account).
+     */
+open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_self_demote_admin(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
      * deletes, media) go through dedicated methods.
      */
@@ -1466,6 +1593,21 @@ open func sendText(accountRef: String, groupIdHex: String, text: String)async th
             liftFunc: FfiConverterTypeSendSummaryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+    
+    /**
+     * Flag a group archived (or restore it). Local-only projection state —
+     * it does not change membership or publish anything. The chats list
+     * filters archived groups unless `include_archived` is set.
+     */
+open func setGroupArchived(accountRef: String, groupIdHex: String, archived: Bool)throws  -> AppGroupRecordFfi {
+    return try  FfiConverterTypeAppGroupRecordFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_group_archived(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterString.lower(groupIdHex),
+        FfiConverterBool.lower(archived),$0
+    )
+})
 }
     
     /**
@@ -2079,6 +2221,92 @@ public func FfiConverterTypeAppGroupMemberRecordFfi_lift(_ buf: RustBuffer) thro
 #endif
 public func FfiConverterTypeAppGroupMemberRecordFfi_lower(_ value: AppGroupMemberRecordFfi) -> RustBuffer {
     return FfiConverterTypeAppGroupMemberRecordFfi.lower(value)
+}
+
+
+/**
+ * MLS-level group state for the conversation's developer/debug view: the
+ * current epoch, live member count, and the app components the group requires.
+ */
+public struct AppGroupMlsStateFfi {
+    public var groupIdHex: String
+    public var epoch: UInt64
+    public var memberCount: UInt32
+    public var requiredAppComponents: [UInt16]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String, epoch: UInt64, memberCount: UInt32, requiredAppComponents: [UInt16]) {
+        self.groupIdHex = groupIdHex
+        self.epoch = epoch
+        self.memberCount = memberCount
+        self.requiredAppComponents = requiredAppComponents
+    }
+}
+
+
+
+extension AppGroupMlsStateFfi: Equatable, Hashable {
+    public static func ==(lhs: AppGroupMlsStateFfi, rhs: AppGroupMlsStateFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.epoch != rhs.epoch {
+            return false
+        }
+        if lhs.memberCount != rhs.memberCount {
+            return false
+        }
+        if lhs.requiredAppComponents != rhs.requiredAppComponents {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(epoch)
+        hasher.combine(memberCount)
+        hasher.combine(requiredAppComponents)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAppGroupMlsStateFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AppGroupMlsStateFfi {
+        return
+            try AppGroupMlsStateFfi(
+                groupIdHex: FfiConverterString.read(from: &buf), 
+                epoch: FfiConverterUInt64.read(from: &buf), 
+                memberCount: FfiConverterUInt32.read(from: &buf), 
+                requiredAppComponents: FfiConverterSequenceUInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AppGroupMlsStateFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterUInt64.write(value.epoch, into: &buf)
+        FfiConverterUInt32.write(value.memberCount, into: &buf)
+        FfiConverterSequenceUInt16.write(value.requiredAppComponents, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppGroupMlsStateFfi_lift(_ buf: RustBuffer) throws -> AppGroupMlsStateFfi {
+    return try FfiConverterTypeAppGroupMlsStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppGroupMlsStateFfi_lower(_ value: AppGroupMlsStateFfi) -> RustBuffer {
+    return FfiConverterTypeAppGroupMlsStateFfi.lower(value)
 }
 
 
@@ -3330,6 +3558,31 @@ fileprivate struct FfiConverterOptionTypeMessageUpdateFfi: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceUInt16: FfiConverterRustBuffer {
+    typealias SwiftType = [UInt16]
+
+    public static func write(_ value: [UInt16], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterUInt16.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt16] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [UInt16]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterUInt16.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -3540,10 +3793,16 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity() != 64408) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_demote_admin() != 42693) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_display_name() != 65469) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_members() != 54987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_mls_state() != 57976) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_invite_members() != 53648) {
@@ -3564,6 +3823,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_npub() != 20744) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin() != 43119) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 678) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3579,7 +3841,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_text() != 30434) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 4034) {

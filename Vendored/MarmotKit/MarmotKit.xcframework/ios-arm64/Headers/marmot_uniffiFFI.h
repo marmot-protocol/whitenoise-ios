@@ -341,6 +341,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_create_group(void*_Nonnull ptr, R
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_create_identity(void*_Nonnull ptr, RustBuffer default_relays, RustBuffer bootstrap_relays
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DEMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DEMOTE_ADMIN
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_demote_admin(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer member_ref
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DISPLAY_NAME
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_DISPLAY_NAME
 RustBuffer uniffi_marmot_uniffi_fn_method_marmot_display_name(void*_Nonnull ptr, RustBuffer account_id_hex, RustCallStatus *_Nonnull out_status
@@ -349,6 +354,11 @@ RustBuffer uniffi_marmot_uniffi_fn_method_marmot_display_name(void*_Nonnull ptr,
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MEMBERS
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_group_members(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MLS_STATE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_GROUP_MLS_STATE
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_group_mls_state(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_INVITE_MEMBERS
@@ -381,6 +391,11 @@ RustBuffer uniffi_marmot_uniffi_fn_method_marmot_messages(void*_Nonnull ptr, Rus
 RustBuffer uniffi_marmot_uniffi_fn_method_marmot_npub(void*_Nonnull ptr, RustBuffer account_id_hex, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PROMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PROMOTE_ADMIN
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_promote_admin(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer member_ref
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_publish_relay_lists(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer default_relays, RustBuffer bootstrap_relays
@@ -406,9 +421,19 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_relay_health(void*_Nonnull ptr
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_remove_members(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer member_refs
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SELF_DEMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SELF_DEMOTE_ADMIN
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_self_demote_admin(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SEND_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SEND_TEXT
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_send_text(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer text
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SET_GROUP_ARCHIVED
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SET_GROUP_ARCHIVED
+RustBuffer uniffi_marmot_uniffi_fn_method_marmot_set_group_archived(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, int8_t archived, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SHUTDOWN
@@ -805,6 +830,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_create_identity(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_demote_admin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_display_name(void
@@ -814,6 +845,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_display_name(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_members(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MLS_STATE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MLS_STATE
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_mls_state(void
     
 );
 #endif
@@ -853,6 +890,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_npub(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_promote_admin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists(void
@@ -883,9 +926,21 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_remove_members(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_TEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_send_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_GROUP_ARCHIVED
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_GROUP_ARCHIVED
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived(void
     
 );
 #endif

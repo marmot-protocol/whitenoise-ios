@@ -1,6 +1,6 @@
-darkmatter-sha: d837562
-darkmatter-branch: feat/uniffi-bindings
-built-at: 2026-05-21T10:07:15Z
+darkmatter-sha: b7f0391
+darkmatter-branch: feat/uniffi-chat-mgmt
+built-at: 2026-05-21T10:37:02Z
 uniffi-version: 0.28.3
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
