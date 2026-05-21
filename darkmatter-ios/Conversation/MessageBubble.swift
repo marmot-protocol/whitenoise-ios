@@ -19,6 +19,12 @@ struct MessageBubble: View {
         sizeClass == .regular ? 560 : nil
     }
 
+    /// Minimum gap on the opposite side. Tiny on iPhone so long bubbles run
+    /// (near) full width; larger on iPad where width is also capped above.
+    private var oppositeInset: CGFloat {
+        sizeClass == .regular ? 64 : 0
+    }
+
     /// Reply text lives in the structured payload; plain messages use plaintext.
     private var bodyText: String {
         if case .reply(_, let text)? = record.appMessage { return text }
@@ -27,7 +33,7 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            if isFromMe { Spacer(minLength: 48) }
+            if isFromMe { Spacer(minLength: oppositeInset) }
 
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 2) {
                 if !isFromMe {
@@ -61,7 +67,7 @@ struct MessageBubble: View {
             }
             .frame(maxWidth: bubbleMaxWidth, alignment: isFromMe ? .trailing : .leading)
 
-            if !isFromMe { Spacer(minLength: 48) }
+            if !isFromMe { Spacer(minLength: oppositeInset) }
         }
         .padding(.horizontal, 12)
     }
