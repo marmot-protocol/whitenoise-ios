@@ -19,16 +19,18 @@ final class MarmotClient {
     let marmot: Marmot
     let rootPath: String
 
-    convenience init() {
+    convenience init() throws {
         let root = MarmotClient.applicationSupportRoot()
-        self.init(rootPath: root, relayUrls: MarmotClient.defaultRelays)
+        try self.init(rootPath: root, relayUrls: MarmotClient.defaultRelays)
     }
 
     /// Test-friendly init that lets callers override the on-disk root and
     /// relay set. Production code goes through the no-arg convenience init.
-    init(rootPath: String, relayUrls: [String]) {
+    /// Throwing because the keychain-backed account store can fail to
+    /// initialize (account secrets are stored in the Keychain, not on disk).
+    init(rootPath: String, relayUrls: [String]) throws {
         self.rootPath = rootPath
-        self.marmot = Marmot(rootPath: rootPath, relayUrls: relayUrls)
+        self.marmot = try Marmot(rootPath: rootPath, relayUrls: relayUrls)
     }
 
     private static func applicationSupportRoot() -> String {

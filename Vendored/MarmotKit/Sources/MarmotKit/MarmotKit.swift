@@ -1120,13 +1120,14 @@ open class Marmot:
     }
     /**
      * Open the Marmot app at `root_path`, configured with the given default
-     * relay URLs. The on-disk layout is created lazily — no I/O happens here
-     * beyond opening the account-home directory. Call [`Marmot::start`]
-     * before subscribing to events.
+     * relay URLs. Account secrets (Nostr private keys) are stored in the
+     * platform **Keychain** via the default keychain-backed account home —
+     * not in a plaintext file. Fallible because initializing the keychain
+     * store can fail. Call [`Marmot::start`] before subscribing to events.
      */
-public convenience init(rootPath: String, relayUrls: [String]) {
+public convenience init(rootPath: String, relayUrls: [String])throws  {
     let pointer =
-        try! rustCall() {
+        try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_constructor_marmot_new(
         FfiConverterString.lower(rootPath),
         FfiConverterSequenceString.lower(relayUrls),$0
@@ -3611,7 +3612,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_messagessubscription_snapshot() != 21328) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new() != 39471) {
+    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new() != 45653) {
         return InitializationResult.apiChecksumMismatch
     }
 

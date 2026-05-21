@@ -20,7 +20,7 @@ struct AppStateBootstrapTests {
     @Test func bootstrapWithoutAccountsTransitionsToOnboarding() async throws {
         // Use a fresh AppState backed by a tempdir-based MarmotClient so
         // we don't collide with the user's real Application Support data.
-        let appState = AppState(client: MarmotClient.testClient())
+        let appState = AppState(client: try MarmotClient.testClient())
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         #expect(appState.accounts.isEmpty)
@@ -152,10 +152,10 @@ extension MarmotClient {
     /// Builds a MarmotClient pointed at a unique temp directory so unit tests
     /// stay hermetic. Falls back to the production root only if the temp dir
     /// can't be created (which would itself be a test environment problem).
-    static func testClient() -> MarmotClient {
+    static func testClient() throws -> MarmotClient {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("MarmotTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        return MarmotClient(rootPath: tmp.path, relayUrls: ["wss://relay.invalid.test"])
+        return try MarmotClient(rootPath: tmp.path, relayUrls: ["wss://relay.invalid.test"])
     }
 }

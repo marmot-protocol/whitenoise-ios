@@ -76,13 +76,24 @@ final class AppState {
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let relaysKey = "marmot.defaultRelays"
 
-    init(client: MarmotClient = MarmotClient()) {
+    init(client: MarmotClient) {
         self.client = client
         let storedRelays = UserDefaults.standard.stringArray(forKey: Self.relaysKey)
         self.defaultRelays = storedRelays?.isEmpty == false
             ? (storedRelays ?? MarmotClient.defaultRelays)
             : MarmotClient.defaultRelays
         self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
+    }
+
+    /// Production entry point. Builds a keychain-backed client; if secure
+    /// storage can't be initialized the app can't run safely, so we trap
+    /// with a clear message rather than fall back to insecure on-disk keys.
+    convenience init() {
+        do {
+            self.init(client: try MarmotClient())
+        } catch {
+            fatalError("Failed to initialize Keychain-backed secret storage: \(error)")
+        }
     }
 
     /// Convenience accessor for the underlying FFI handle.
