@@ -58,36 +58,41 @@ struct AvatarBubble: View {
     var pictureURL: URL? = nil
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [color.opacity(0.85), color.opacity(0.5)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-
-            if let pictureURL {
-                AsyncImage(url: pictureURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .empty, .failure:
-                        initialsView
-                    @unknown default:
-                        initialsView
+        Circle()
+            .fill(LinearGradient(
+                colors: [color.opacity(0.85), color.opacity(0.5)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ))
+            .overlay {
+                if let pictureURL {
+                    AsyncImage(url: pictureURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            // Fill the circle edge-to-edge, aspect-preserved
+                            // and center-cropped. The overlay sizes the image
+                            // to the circle's bounds; clipShape crops overflow.
+                            image
+                                .resizable()
+                                .scaledToFill()
+                        case .empty, .failure:
+                            initialsView
+                        @unknown default:
+                            initialsView
+                        }
                     }
+                } else {
+                    initialsView
                 }
-            } else {
-                initialsView
             }
-        }
-        .clipShape(Circle())
+            .clipShape(Circle())
     }
 
     private var initialsView: some View {
         Text(initials)
             .font(.headline)
             .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var initials: String {
