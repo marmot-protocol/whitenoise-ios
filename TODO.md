@@ -23,4 +23,4 @@
 - [ ] on the chat screen we need some sort of contextual menu that like when you hold on a message pops up and shows you a bunch of emojis that you can react with and also an option to reply to messages. I think the reply should be a swipe. You know, so you swipe to the right and that will automatically kind of bounce the message and then starts a reply message and shows the actual message that you're replying to just above the message input field.
 - [x] the avatar button at the top left still seems to have padding around it to show the glass effect. can we remove that padding? if so, we should we still want the button's default drop shadow and behavior but the avatar image should bleed all the way to the edges of the button.
 - [x] on the chat screen we should remove the grey background from behind the message compose and just let the textfield and the send button float. 
-    
+- [x] on the chat screen the max-width of message bubbles should be full width on ios and pretty wide (but maybe not quite full width) on ipad.
