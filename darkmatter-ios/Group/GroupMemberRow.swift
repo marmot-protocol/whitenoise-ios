@@ -32,7 +32,7 @@ struct GroupMemberRow: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                Text(IdentityFormatter.short(member.account ?? member.memberIdHex))
+                Text(secondaryIdentity)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }
@@ -51,5 +51,14 @@ struct GroupMemberRow: View {
     private var avatarURL: URL? {
         guard let account = member.account, !account.isEmpty else { return nil }
         return appState.avatarURL(forAccountIdHex: account)
+    }
+
+    /// npub for accounts that map to a Nostr key; MLS member ids (no mapped
+    /// account) stay as short hex since they aren't pubkeys.
+    private var secondaryIdentity: String {
+        if let account = member.account, !account.isEmpty {
+            return appState.shortNpub(forAccountIdHex: account)
+        }
+        return IdentityFormatter.short(member.memberIdHex)
     }
 }

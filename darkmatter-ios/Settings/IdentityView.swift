@@ -17,9 +17,10 @@ struct IdentityView: View {
                     LabeledContent("Label") {
                         Text(active.label.isEmpty ? "—" : active.label)
                     }
-                    LabeledContent("Account ID") {
-                        Text(IdentityFormatter.short(active.accountIdHex))
+                    LabeledContent("npub") {
+                        Text(appState.shortNpub(forAccountIdHex: active.accountIdHex))
                             .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
                     }
                     LabeledContent("Local signing") {
                         Image(systemName: active.localSigning ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -32,15 +33,15 @@ struct IdentityView: View {
                 }
 
                 Section {
-                    ShareLink(item: active.accountIdHex) {
-                        Label("Share account ID", systemImage: "square.and.arrow.up")
+                    ShareLink(item: appState.npub(forAccountIdHex: active.accountIdHex)) {
+                        Label("Share npub", systemImage: "square.and.arrow.up")
                     }
                     Button {
-                        UIPasteboard.general.string = active.accountIdHex
+                        UIPasteboard.general.string = appState.npub(forAccountIdHex: active.accountIdHex)
                         Haptics.selection()
-                        appState.present(.success("Copied", message: "Account ID copied to clipboard."))
+                        appState.present(.success("Copied", message: "npub copied to clipboard."))
                     } label: {
-                        Label("Copy account ID", systemImage: "doc.on.doc")
+                        Label("Copy npub", systemImage: "doc.on.doc")
                     }
                 }
             } else {

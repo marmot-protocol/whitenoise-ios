@@ -52,6 +52,10 @@ final class AppState {
     /// on demand via `profile(forAccountIdHex:)`. Read-only from view code.
     private(set) var profiles: [String: UserProfileMetadataFfi] = [:]
 
+    /// Cache of npub (bech32) forms keyed by account id hex. Conversion is
+    /// deterministic and offline, so these never go stale.
+    private(set) var npubs: [String: String] = [:]
+
     /// Most recent transient banner. View code reads this via the
     /// `.toastHost()` modifier on the root view.
     private(set) var activeToast: Toast?
@@ -210,6 +214,24 @@ final class AppState {
     private static func name(from profile: UserProfileMetadataFfi) -> String? {
         // Untrusted kind:0 content — sanitize before it's used as a name.
         ProfileSanitizer.displayName(profile.displayName ?? profile.name)
+    }
+
+    // MARK: - npub
+
+    /// The `npub…` bech32 form of an account id hex. Falls back to the hex
+    /// if conversion fails (shouldn't, for a valid pubkey).
+    @MainActor
+    func npub(forAccountIdHex id: String) -> String {
+        if let cached = npubs[id] { return cached }
+        let value = marmot.npub(accountIdHex: id) ?? id
+        npubs[id] = value
+        return value
+    }
+
+    /// Truncated npub for compact UI (e.g. `npub1abc…wxyz`).
+    @MainActor
+    func shortNpub(forAccountIdHex id: String) -> String {
+        IdentityFormatter.short(npub(forAccountIdHex: id))
     }
 
     // MARK: - Toasts

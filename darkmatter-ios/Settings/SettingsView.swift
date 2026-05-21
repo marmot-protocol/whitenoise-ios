@@ -22,7 +22,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(appState.displayName(forAccountIdHex: active.accountIdHex))
                                     .font(.headline)
-                                Text(IdentityFormatter.short(active.accountIdHex))
+                                Text(appState.shortNpub(forAccountIdHex: active.accountIdHex))
                                     .font(.caption.monospaced())
                                     .foregroundStyle(.secondary)
                             }

@@ -47,7 +47,7 @@ struct AccountsView: View {
                 Text(appState.displayName(forAccountIdHex: account.accountIdHex))
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
-                Text(IdentityFormatter.short(account.accountIdHex))
+                Text(appState.shortNpub(forAccountIdHex: account.accountIdHex))
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
             }

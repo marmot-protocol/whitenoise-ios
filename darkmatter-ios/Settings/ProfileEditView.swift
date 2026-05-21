@@ -25,14 +25,15 @@ struct ProfileEditView: View {
                         AvatarBubble(
                             seed: active.accountIdHex,
                             title: displayName.isEmpty
-                                ? IdentityFormatter.short(active.accountIdHex)
-                                : displayName
+                                ? appState.shortNpub(forAccountIdHex: active.accountIdHex)
+                                : displayName,
+                            pictureURL: ProfileSanitizer.imageURL(picture)
                         )
                         .frame(width: 56, height: 56)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(displayName.isEmpty ? "Anonymous" : displayName)
                                 .font(.headline)
-                            Text(IdentityFormatter.short(active.accountIdHex))
+                            Text(appState.shortNpub(forAccountIdHex: active.accountIdHex))
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                         }

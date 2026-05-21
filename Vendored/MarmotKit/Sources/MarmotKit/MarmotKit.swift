@@ -922,6 +922,12 @@ public func FfiConverterTypeGroupStateSubscription_lower(_ value: GroupStateSubs
 public protocol MarmotProtocol : AnyObject {
     
     /**
+     * Per-account relay lists: the NIP-65, inbox, and key-package lists the
+     * account has published, plus the configured default/bootstrap sets.
+     */
+    func accountRelayLists(accountRef: String) throws  -> AccountRelayListsFfi
+    
+    /**
      * Create a new MLS group with `name` and the given members. Members are
      * referenced by `npub` or hex account id. Returns the group id as hex.
      */
@@ -972,6 +978,12 @@ public protocol MarmotProtocol : AnyObject {
     func messages(accountRef: String, groupIdHex: String?, limit: UInt32?) throws  -> [AppMessageRecordFfi]
     
     /**
+     * Convert a hex account id (Nostr public key) into its `npub…` bech32
+     * form for display. `None` if the hex isn't a valid public key.
+     */
+    func npub(accountIdHex: String)  -> String?
+    
+    /**
      * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
@@ -990,6 +1002,12 @@ public protocol MarmotProtocol : AnyObject {
      * the freshly-projected name (if any was published).
      */
     func refreshDirectory(accountIdHex: String, bootstrapRelays: [String]) async throws 
+    
+    /**
+     * Live relay-plane connection health (connected / connecting /
+     * disconnected counts, etc.) for the relay diagnostics view.
+     */
+    func relayHealth() async  -> RelayHealthFfi
     
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
@@ -1120,6 +1138,18 @@ public convenience init(rootPath: String, relayUrls: [String]) {
 
     
 
+    
+    /**
+     * Per-account relay lists: the NIP-65, inbox, and key-package lists the
+     * account has published, plus the configured default/bootstrap sets.
+     */
+open func accountRelayLists(accountRef: String)throws  -> AccountRelayListsFfi {
+    return try  FfiConverterTypeAccountRelayListsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_account_relay_lists(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
+}
     
     /**
      * Create a new MLS group with `name` and the given members. Members are
@@ -1281,6 +1311,18 @@ open func messages(accountRef: String, groupIdHex: String?, limit: UInt32?)throw
 }
     
     /**
+     * Convert a hex account id (Nostr public key) into its `npub…` bech32
+     * form for display. `None` if the hex isn't a valid public key.
+     */
+open func npub(accountIdHex: String) -> String? {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_marmot_npub(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountIdHex),$0
+    )
+})
+}
+    
+    /**
      * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
@@ -1342,6 +1384,28 @@ open func refreshDirectory(accountIdHex: String, bootstrapRelays: [String])async
             freeFunc: ffi_marmot_uniffi_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Live relay-plane connection health (connected / connecting /
+     * disconnected counts, etc.) for the relay diagnostics view.
+     */
+open func relayHealth()async  -> RelayHealthFfi {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_relay_health(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRelayHealthFfi.lift,
+            errorHandler: nil
+            
         )
 }
     
@@ -1732,6 +1796,112 @@ public func FfiConverterTypeMessagesSubscription_lift(_ pointer: UnsafeMutableRa
 #endif
 public func FfiConverterTypeMessagesSubscription_lower(_ value: MessagesSubscription) -> UnsafeMutableRawPointer {
     return FfiConverterTypeMessagesSubscription.lower(value)
+}
+
+
+public struct AccountRelayListsFfi {
+    public var complete: Bool
+    public var missing: [String]
+    public var defaultRelays: [String]
+    public var bootstrapRelays: [String]
+    public var nip65: RelayListFfi
+    public var inbox: RelayListFfi
+    public var keyPackage: RelayListFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(complete: Bool, missing: [String], defaultRelays: [String], bootstrapRelays: [String], nip65: RelayListFfi, inbox: RelayListFfi, keyPackage: RelayListFfi) {
+        self.complete = complete
+        self.missing = missing
+        self.defaultRelays = defaultRelays
+        self.bootstrapRelays = bootstrapRelays
+        self.nip65 = nip65
+        self.inbox = inbox
+        self.keyPackage = keyPackage
+    }
+}
+
+
+
+extension AccountRelayListsFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountRelayListsFfi, rhs: AccountRelayListsFfi) -> Bool {
+        if lhs.complete != rhs.complete {
+            return false
+        }
+        if lhs.missing != rhs.missing {
+            return false
+        }
+        if lhs.defaultRelays != rhs.defaultRelays {
+            return false
+        }
+        if lhs.bootstrapRelays != rhs.bootstrapRelays {
+            return false
+        }
+        if lhs.nip65 != rhs.nip65 {
+            return false
+        }
+        if lhs.inbox != rhs.inbox {
+            return false
+        }
+        if lhs.keyPackage != rhs.keyPackage {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(complete)
+        hasher.combine(missing)
+        hasher.combine(defaultRelays)
+        hasher.combine(bootstrapRelays)
+        hasher.combine(nip65)
+        hasher.combine(inbox)
+        hasher.combine(keyPackage)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountRelayListsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountRelayListsFfi {
+        return
+            try AccountRelayListsFfi(
+                complete: FfiConverterBool.read(from: &buf), 
+                missing: FfiConverterSequenceString.read(from: &buf), 
+                defaultRelays: FfiConverterSequenceString.read(from: &buf), 
+                bootstrapRelays: FfiConverterSequenceString.read(from: &buf), 
+                nip65: FfiConverterTypeRelayListFfi.read(from: &buf), 
+                inbox: FfiConverterTypeRelayListFfi.read(from: &buf), 
+                keyPackage: FfiConverterTypeRelayListFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountRelayListsFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.complete, into: &buf)
+        FfiConverterSequenceString.write(value.missing, into: &buf)
+        FfiConverterSequenceString.write(value.defaultRelays, into: &buf)
+        FfiConverterSequenceString.write(value.bootstrapRelays, into: &buf)
+        FfiConverterTypeRelayListFfi.write(value.nip65, into: &buf)
+        FfiConverterTypeRelayListFfi.write(value.inbox, into: &buf)
+        FfiConverterTypeRelayListFfi.write(value.keyPackage, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayListsFfi_lift(_ buf: RustBuffer) throws -> AccountRelayListsFfi {
+    return try FfiConverterTypeAccountRelayListsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountRelayListsFfi_lower(_ value: AccountRelayListsFfi) -> RustBuffer {
+    return FfiConverterTypeAccountRelayListsFfi.lower(value)
 }
 
 
@@ -2198,6 +2368,221 @@ public func FfiConverterTypeReceivedMessageFfi_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeReceivedMessageFfi_lower(_ value: ReceivedMessageFfi) -> RustBuffer {
     return FfiConverterTypeReceivedMessageFfi.lower(value)
+}
+
+
+/**
+ * Live relay-plane connection health for the diagnostics view.
+ */
+public struct RelayHealthFfi {
+    public var sdkBacked: Bool
+    public var totalRelays: UInt32
+    public var initialized: UInt32
+    public var pending: UInt32
+    public var connecting: UInt32
+    public var connected: UInt32
+    public var disconnected: UInt32
+    public var terminated: UInt32
+    public var banned: UInt32
+    public var sleeping: UInt32
+    public var connectionAttempts: UInt32
+    public var connectionSuccesses: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(sdkBacked: Bool, totalRelays: UInt32, initialized: UInt32, pending: UInt32, connecting: UInt32, connected: UInt32, disconnected: UInt32, terminated: UInt32, banned: UInt32, sleeping: UInt32, connectionAttempts: UInt32, connectionSuccesses: UInt32) {
+        self.sdkBacked = sdkBacked
+        self.totalRelays = totalRelays
+        self.initialized = initialized
+        self.pending = pending
+        self.connecting = connecting
+        self.connected = connected
+        self.disconnected = disconnected
+        self.terminated = terminated
+        self.banned = banned
+        self.sleeping = sleeping
+        self.connectionAttempts = connectionAttempts
+        self.connectionSuccesses = connectionSuccesses
+    }
+}
+
+
+
+extension RelayHealthFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayHealthFfi, rhs: RelayHealthFfi) -> Bool {
+        if lhs.sdkBacked != rhs.sdkBacked {
+            return false
+        }
+        if lhs.totalRelays != rhs.totalRelays {
+            return false
+        }
+        if lhs.initialized != rhs.initialized {
+            return false
+        }
+        if lhs.pending != rhs.pending {
+            return false
+        }
+        if lhs.connecting != rhs.connecting {
+            return false
+        }
+        if lhs.connected != rhs.connected {
+            return false
+        }
+        if lhs.disconnected != rhs.disconnected {
+            return false
+        }
+        if lhs.terminated != rhs.terminated {
+            return false
+        }
+        if lhs.banned != rhs.banned {
+            return false
+        }
+        if lhs.sleeping != rhs.sleeping {
+            return false
+        }
+        if lhs.connectionAttempts != rhs.connectionAttempts {
+            return false
+        }
+        if lhs.connectionSuccesses != rhs.connectionSuccesses {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(sdkBacked)
+        hasher.combine(totalRelays)
+        hasher.combine(initialized)
+        hasher.combine(pending)
+        hasher.combine(connecting)
+        hasher.combine(connected)
+        hasher.combine(disconnected)
+        hasher.combine(terminated)
+        hasher.combine(banned)
+        hasher.combine(sleeping)
+        hasher.combine(connectionAttempts)
+        hasher.combine(connectionSuccesses)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayHealthFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayHealthFfi {
+        return
+            try RelayHealthFfi(
+                sdkBacked: FfiConverterBool.read(from: &buf), 
+                totalRelays: FfiConverterUInt32.read(from: &buf), 
+                initialized: FfiConverterUInt32.read(from: &buf), 
+                pending: FfiConverterUInt32.read(from: &buf), 
+                connecting: FfiConverterUInt32.read(from: &buf), 
+                connected: FfiConverterUInt32.read(from: &buf), 
+                disconnected: FfiConverterUInt32.read(from: &buf), 
+                terminated: FfiConverterUInt32.read(from: &buf), 
+                banned: FfiConverterUInt32.read(from: &buf), 
+                sleeping: FfiConverterUInt32.read(from: &buf), 
+                connectionAttempts: FfiConverterUInt32.read(from: &buf), 
+                connectionSuccesses: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayHealthFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.sdkBacked, into: &buf)
+        FfiConverterUInt32.write(value.totalRelays, into: &buf)
+        FfiConverterUInt32.write(value.initialized, into: &buf)
+        FfiConverterUInt32.write(value.pending, into: &buf)
+        FfiConverterUInt32.write(value.connecting, into: &buf)
+        FfiConverterUInt32.write(value.connected, into: &buf)
+        FfiConverterUInt32.write(value.disconnected, into: &buf)
+        FfiConverterUInt32.write(value.terminated, into: &buf)
+        FfiConverterUInt32.write(value.banned, into: &buf)
+        FfiConverterUInt32.write(value.sleeping, into: &buf)
+        FfiConverterUInt32.write(value.connectionAttempts, into: &buf)
+        FfiConverterUInt32.write(value.connectionSuccesses, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthFfi_lift(_ buf: RustBuffer) throws -> RelayHealthFfi {
+    return try FfiConverterTypeRelayHealthFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayHealthFfi_lower(_ value: RelayHealthFfi) -> RustBuffer {
+    return FfiConverterTypeRelayHealthFfi.lower(value)
+}
+
+
+public struct RelayListFfi {
+    public var kind: UInt64
+    public var relays: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(kind: UInt64, relays: [String]) {
+        self.kind = kind
+        self.relays = relays
+    }
+}
+
+
+
+extension RelayListFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayListFfi, rhs: RelayListFfi) -> Bool {
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.relays != rhs.relays {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(kind)
+        hasher.combine(relays)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayListFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayListFfi {
+        return
+            try RelayListFfi(
+                kind: FfiConverterUInt64.read(from: &buf), 
+                relays: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayListFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.kind, into: &buf)
+        FfiConverterSequenceString.write(value.relays, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayListFfi_lift(_ buf: RustBuffer) throws -> RelayListFfi {
+    return try FfiConverterTypeRelayListFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayListFfi_lower(_ value: RelayListFfi) -> RustBuffer {
+    return FfiConverterTypeRelayListFfi.lower(value)
 }
 
 
@@ -3122,6 +3507,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_groupstatesubscription_snapshot() != 50946) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 20645) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_group() != 29327) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3149,6 +3537,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_messages() != 45709) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_npub() != 20744) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 678) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3156,6 +3547,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_directory() != 55539) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_relay_health() != 9336) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {
