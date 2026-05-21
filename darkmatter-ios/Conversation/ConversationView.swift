@@ -92,24 +92,26 @@ struct ConversationView: View {
         .background(alignment: .bottom) { composerBackdrop }
     }
 
-    /// Translucent-black blur behind the composer + reply box: reads as black
-    /// over empty space, blurs content scrolling under it, and fades out at the
-    /// top so there's no hard edge.
+    /// Black blur behind the composer + reply box that mirrors the nav bar's
+    /// scroll-edge effect at the top: uses the toolbar `.bar` material (reads
+    /// black in dark mode, not gray), darkened a touch, fading out as it rises.
+    /// Extends ~80pt above the composer so the fade starts higher up the page.
     private var composerBackdrop: some View {
         Rectangle()
-            .fill(.ultraThinMaterial)
-            .overlay(Color.black.opacity(0.22))
+            .fill(.bar)
+            .overlay(Color.black.opacity(0.35))
             .mask(
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.35),
+                        .init(color: .black, location: 0.65),
                         .init(color: .black, location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             )
+            .padding(.top, -80)
             .ignoresSafeArea(edges: .bottom)
             .allowsHitTesting(false)
     }
