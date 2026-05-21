@@ -8,10 +8,17 @@ import MarmotKit
 /// the delivery state.
 struct MessageBubble: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let record: AppMessageRecordFfi
     let status: MessageStatus
 
     private var isFromMe: Bool { record.direction == "sent" }
+
+    /// Near-full-width on iPhone (compact); capped on iPad (regular) so bubbles
+    /// don't stretch the whole window.
+    private var bubbleMaxWidth: CGFloat? {
+        sizeClass == .regular ? 560 : nil
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -38,6 +45,7 @@ struct MessageBubble: View {
                 metaLine
                     .padding(isFromMe ? .trailing : .leading, 12)
             }
+            .frame(maxWidth: bubbleMaxWidth, alignment: isFromMe ? .trailing : .leading)
 
             if !isFromMe { Spacer(minLength: 48) }
         }
