@@ -1037,6 +1037,11 @@ public protocol MarmotProtocol : AnyObject {
     func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> UserProfileMetadataFfi
     
     /**
+     * React to `target_message_id` with `emoji` (an "add" reaction).
+     */
+    func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String) async throws  -> SendSummaryFfi
+    
+    /**
      * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
      * After this resolves, `user_profile` / `display_name` return the
      * freshly-fetched metadata (name, picture, etc.) for that account.
@@ -1052,13 +1057,18 @@ public protocol MarmotProtocol : AnyObject {
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
     /**
+     * Send `text` as a reply that quotes `target_message_id`.
+     */
+    func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, text: String) async throws  -> SendSummaryFfi
+    
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
     func selfDemoteAdmin(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
     
     /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
-     * deletes, media) go through dedicated methods.
+     * replies, deletes, media) go through dedicated methods.
      */
     func sendText(accountRef: String, groupIdHex: String, text: String) async throws  -> SendSummaryFfi
     
@@ -1112,6 +1122,11 @@ public protocol MarmotProtocol : AnyObject {
      * tokio-runtime reason as [`Marmot::subscribe_chats`].
      */
     func subscribeMessages(accountRef: String, groupIdHex: String?) async throws  -> MessagesSubscription
+    
+    /**
+     * Remove this account's reaction from `target_message_id`.
+     */
+    func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws  -> SendSummaryFfi
     
     func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws  -> SendSummaryFfi
     
@@ -1494,6 +1509,26 @@ open func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi
 }
     
     /**
+     * React to `target_message_id` with `emoji` (an "add" reaction).
+     */
+open func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_react_to_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(emoji)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
      * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
      * After this resolves, `user_profile` / `display_name` return the
      * freshly-fetched metadata (name, picture, etc.) for that account.
@@ -1555,6 +1590,26 @@ open func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [Str
 }
     
     /**
+     * Send `text` as a reply that quotes `target_message_id`.
+     */
+open func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, text: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_reply_to_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(text)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
 open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -> SendSummaryFfi {
@@ -1576,7 +1631,7 @@ open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -
     
     /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
-     * deletes, media) go through dedicated methods.
+     * replies, deletes, media) go through dedicated methods.
      */
 open func sendText(accountRef: String, groupIdHex: String, text: String)async throws  -> SendSummaryFfi {
     return
@@ -1731,6 +1786,26 @@ open func subscribeMessages(accountRef: String, groupIdHex: String?)async throws
             completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
             liftFunc: FfiConverterTypeMessagesSubscription.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Remove this account's reaction from `target_message_id`.
+     */
+open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_unreact_from_message(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -2430,17 +2505,19 @@ public struct AppMessageRecordFfi {
     public var groupIdHex: String
     public var sender: String
     public var plaintext: String
+    public var appMessage: AppMessagePayloadFfi?
     public var recordedAt: UInt64
     public var receivedAt: UInt64
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, direction: String, groupIdHex: String, sender: String, plaintext: String, recordedAt: UInt64, receivedAt: UInt64) {
+    public init(messageIdHex: String, direction: String, groupIdHex: String, sender: String, plaintext: String, appMessage: AppMessagePayloadFfi?, recordedAt: UInt64, receivedAt: UInt64) {
         self.messageIdHex = messageIdHex
         self.direction = direction
         self.groupIdHex = groupIdHex
         self.sender = sender
         self.plaintext = plaintext
+        self.appMessage = appMessage
         self.recordedAt = recordedAt
         self.receivedAt = receivedAt
     }
@@ -2465,6 +2542,9 @@ extension AppMessageRecordFfi: Equatable, Hashable {
         if lhs.plaintext != rhs.plaintext {
             return false
         }
+        if lhs.appMessage != rhs.appMessage {
+            return false
+        }
         if lhs.recordedAt != rhs.recordedAt {
             return false
         }
@@ -2480,6 +2560,7 @@ extension AppMessageRecordFfi: Equatable, Hashable {
         hasher.combine(groupIdHex)
         hasher.combine(sender)
         hasher.combine(plaintext)
+        hasher.combine(appMessage)
         hasher.combine(recordedAt)
         hasher.combine(receivedAt)
     }
@@ -2498,6 +2579,7 @@ public struct FfiConverterTypeAppMessageRecordFfi: FfiConverterRustBuffer {
                 groupIdHex: FfiConverterString.read(from: &buf), 
                 sender: FfiConverterString.read(from: &buf), 
                 plaintext: FfiConverterString.read(from: &buf), 
+                appMessage: FfiConverterOptionTypeAppMessagePayloadFfi.read(from: &buf), 
                 recordedAt: FfiConverterUInt64.read(from: &buf), 
                 receivedAt: FfiConverterUInt64.read(from: &buf)
         )
@@ -2509,6 +2591,7 @@ public struct FfiConverterTypeAppMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.groupIdHex, into: &buf)
         FfiConverterString.write(value.sender, into: &buf)
         FfiConverterString.write(value.plaintext, into: &buf)
+        FfiConverterOptionTypeAppMessagePayloadFfi.write(value.appMessage, into: &buf)
         FfiConverterUInt64.write(value.recordedAt, into: &buf)
         FfiConverterUInt64.write(value.receivedAt, into: &buf)
     }
@@ -2536,15 +2619,17 @@ public struct ReceivedMessageFfi {
     public var sender: String
     public var senderDisplayName: String?
     public var plaintext: String
+    public var appMessage: AppMessagePayloadFfi?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, groupIdHex: String, sender: String, senderDisplayName: String?, plaintext: String) {
+    public init(messageIdHex: String, groupIdHex: String, sender: String, senderDisplayName: String?, plaintext: String, appMessage: AppMessagePayloadFfi?) {
         self.messageIdHex = messageIdHex
         self.groupIdHex = groupIdHex
         self.sender = sender
         self.senderDisplayName = senderDisplayName
         self.plaintext = plaintext
+        self.appMessage = appMessage
     }
 }
 
@@ -2567,6 +2652,9 @@ extension ReceivedMessageFfi: Equatable, Hashable {
         if lhs.plaintext != rhs.plaintext {
             return false
         }
+        if lhs.appMessage != rhs.appMessage {
+            return false
+        }
         return true
     }
 
@@ -2576,6 +2664,7 @@ extension ReceivedMessageFfi: Equatable, Hashable {
         hasher.combine(sender)
         hasher.combine(senderDisplayName)
         hasher.combine(plaintext)
+        hasher.combine(appMessage)
     }
 }
 
@@ -2591,7 +2680,8 @@ public struct FfiConverterTypeReceivedMessageFfi: FfiConverterRustBuffer {
                 groupIdHex: FfiConverterString.read(from: &buf), 
                 sender: FfiConverterString.read(from: &buf), 
                 senderDisplayName: FfiConverterOptionString.read(from: &buf), 
-                plaintext: FfiConverterString.read(from: &buf)
+                plaintext: FfiConverterString.read(from: &buf), 
+                appMessage: FfiConverterOptionTypeAppMessagePayloadFfi.read(from: &buf)
         )
     }
 
@@ -2601,6 +2691,7 @@ public struct FfiConverterTypeReceivedMessageFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.sender, into: &buf)
         FfiConverterOptionString.write(value.senderDisplayName, into: &buf)
         FfiConverterString.write(value.plaintext, into: &buf)
+        FfiConverterOptionTypeAppMessagePayloadFfi.write(value.appMessage, into: &buf)
     }
 }
 
@@ -3075,6 +3166,116 @@ public func FfiConverterTypeUserProfileMetadataFfi_lower(_ value: UserProfileMet
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Structured chat payloads (reactions, replies, deletes, …) carried inside a
+ * message. Flattened from `MarmotAppMessagePayloadV1` for the Swift side.
+ */
+
+public enum AppMessagePayloadFfi {
+    
+    case reaction(targetMessageId: String, emoji: String, removed: Bool
+    )
+    case delete(targetMessageId: String
+    )
+    case retry(targetMessageId: String
+    )
+    case media(fileName: String, mediaType: String, sizeBytes: UInt64, caption: String?
+    )
+    case reply(targetMessageId: String, text: String
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAppMessagePayloadFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AppMessagePayloadFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AppMessagePayloadFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .reaction(targetMessageId: try FfiConverterString.read(from: &buf), emoji: try FfiConverterString.read(from: &buf), removed: try FfiConverterBool.read(from: &buf)
+        )
+        
+        case 2: return .delete(targetMessageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .retry(targetMessageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .media(fileName: try FfiConverterString.read(from: &buf), mediaType: try FfiConverterString.read(from: &buf), sizeBytes: try FfiConverterUInt64.read(from: &buf), caption: try FfiConverterOptionString.read(from: &buf)
+        )
+        
+        case 5: return .reply(targetMessageId: try FfiConverterString.read(from: &buf), text: try FfiConverterString.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AppMessagePayloadFfi, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .reaction(targetMessageId,emoji,removed):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(targetMessageId, into: &buf)
+            FfiConverterString.write(emoji, into: &buf)
+            FfiConverterBool.write(removed, into: &buf)
+            
+        
+        case let .delete(targetMessageId):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(targetMessageId, into: &buf)
+            
+        
+        case let .retry(targetMessageId):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(targetMessageId, into: &buf)
+            
+        
+        case let .media(fileName,mediaType,sizeBytes,caption):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(fileName, into: &buf)
+            FfiConverterString.write(mediaType, into: &buf)
+            FfiConverterUInt64.write(sizeBytes, into: &buf)
+            FfiConverterOptionString.write(caption, into: &buf)
+            
+        
+        case let .reply(targetMessageId,text):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(targetMessageId, into: &buf)
+            FfiConverterString.write(text, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppMessagePayloadFfi_lift(_ buf: RustBuffer) throws -> AppMessagePayloadFfi {
+    return try FfiConverterTypeAppMessagePayloadFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppMessagePayloadFfi_lower(_ value: AppMessagePayloadFfi) -> RustBuffer {
+    return FfiConverterTypeAppMessagePayloadFfi.lower(value)
+}
+
+
+
+extension AppMessagePayloadFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Top-level event firehose, FFI-shaped. Agent streams collapse to a single
  * "agent stream activity" variant — the iOS app doesn't differentiate them
  * at the surface level for v1.
@@ -3510,6 +3711,30 @@ fileprivate struct FfiConverterOptionTypeUserProfileMetadataFfi: FfiConverterRus
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeAppMessagePayloadFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AppMessagePayloadFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeAppMessagePayloadFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeAppMessagePayloadFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeMarmotEventFfi: FfiConverterRustBuffer {
     typealias SwiftType = MarmotEventFfi?
 
@@ -3832,6 +4057,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 48272) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_react_to_message() != 39138) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_profile() != 33641) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -3841,10 +4069,13 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_reply_to_message() != 49057) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_send_text() != 30434) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_text() != 60625) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
@@ -3866,6 +4097,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages() != 58466) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message() != 11846) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_profile() != 53035) {

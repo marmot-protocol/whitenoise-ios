@@ -406,6 +406,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_publish_relay_lists(void*_Nonnull
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_publish_user_profile(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer profile, RustBuffer default_relays, RustBuffer bootstrap_relays
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REACT_TO_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REACT_TO_MESSAGE
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_react_to_message(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer target_message_id, RustBuffer emoji
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REFRESH_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REFRESH_PROFILE
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_refresh_profile(void*_Nonnull ptr, RustBuffer account_id_hex, RustBuffer relays
@@ -419,6 +424,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_relay_health(void*_Nonnull ptr
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REMOVE_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REMOVE_MEMBERS
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_remove_members(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer member_refs
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REPLY_TO_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_REPLY_TO_MESSAGE
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_reply_to_message(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer target_message_id, RustBuffer text
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SELF_DEMOTE_ADMIN
@@ -464,6 +474,11 @@ uint64_t uniffi_marmot_uniffi_fn_method_marmot_subscribe_group_state(void*_Nonnu
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 uint64_t uniffi_marmot_uniffi_fn_method_marmot_subscribe_messages(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_UNREACT_FROM_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_UNREACT_FROM_MESSAGE
+uint64_t uniffi_marmot_uniffi_fn_method_marmot_unreact_from_message(void*_Nonnull ptr, RustBuffer account_ref, RustBuffer group_id_hex, RustBuffer target_message_id
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_FN_METHOD_MARMOT_UPDATE_GROUP_PROFILE
@@ -908,6 +923,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REACT_TO_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REACT_TO_MESSAGE
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_react_to_message(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_refresh_profile(void
@@ -923,6 +944,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_relay_health(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_remove_members(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPLY_TO_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPLY_TO_MESSAGE
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_reply_to_message(void
     
 );
 #endif
@@ -977,6 +1004,12 @@ uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_group_state(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UNREACT_FROM_MESSAGE
+#define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UNREACT_FROM_MESSAGE
+uint16_t uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message(void
     
 );
 #endif
