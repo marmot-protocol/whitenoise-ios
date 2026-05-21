@@ -30,7 +30,7 @@ struct ProfileQRView: View {
                         .frame(width: 150, height: 150)
 
                         Text(appState.displayName(forAccountIdHex: accountIdHex))
-                            .font(.system(size: 40, weight: .bold))
+                            .font(.system(size: 30, weight: .bold))
                             .multilineTextAlignment(.center)
                             .lineLimit(2)
                             .minimumScaleFactor(0.6)
@@ -109,7 +109,7 @@ struct ProfileQRView: View {
                     .interpolation(.none)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 300, height: 300)
+                    .frame(width: 225, height: 225)
                     .padding(16)
                     .background(.white, in: .rect(cornerRadius: 20))
                     .overlay(
@@ -119,7 +119,7 @@ struct ProfileQRView: View {
             } else {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(.quaternary)
-                    .frame(width: 332, height: 332)
+                    .frame(width: 257, height: 257)
                     .overlay(Text("Couldn't render QR").font(.caption).foregroundStyle(.secondary))
             }
         }
