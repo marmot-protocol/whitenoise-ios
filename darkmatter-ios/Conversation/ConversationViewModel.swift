@@ -18,9 +18,18 @@ final class ConversationViewModel {
     private var messagesTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
 
+    /// The non-self member, used to title/avatar an unnamed 2-member group.
+    var otherMember: String? {
+        let me = appState?.activeAccount?.accountIdHex
+        return members.first { $0.account != nil && $0.account != me }?.account
+    }
+
     var displayTitle: String {
-        if let name = ProfileSanitizer.groupName(group.name) { return name }
-        return IdentityFormatter.short(group.groupIdHex)
+        guard let appState else {
+            if let name = ProfileSanitizer.groupName(group.name) { return name }
+            return IdentityFormatter.short(group.groupIdHex)
+        }
+        return GroupDisplay.title(group: group, otherMember: otherMember, appState: appState)
     }
 
     var displaySubtitle: String {
@@ -52,7 +61,7 @@ final class ConversationViewModel {
                 groupIdHex: group.groupIdHex
             )
             timeline = messagesSub.snapshot()
-                .map(TimelineItem.message)
+                .map { TimelineItem.message($0) }
                 .sorted { $0.timestamp < $1.timestamp }
 
             let groupSub = try await appState.marmot.subscribeGroupState(
@@ -92,7 +101,7 @@ final class ConversationViewModel {
         case .agentStreamFinalized(let m): record = receivedToRecord(m)
         }
         if let idx = timeline.firstIndex(where: { item in
-            if case .message(let existing) = item.kind {
+            if case .message(let existing, _) = item.kind {
                 return existing.messageIdHex == record.messageIdHex
                     && !record.messageIdHex.isEmpty
             }
@@ -108,7 +117,7 @@ final class ConversationViewModel {
     private func receivedToRecord(_ r: RuntimeMessageReceivedFfi) -> AppMessageRecordFfi {
         AppMessageRecordFfi(
             messageIdHex: r.message.messageIdHex,
-            direction: "in",
+            direction: "received",
             groupIdHex: r.message.groupIdHex,
             sender: r.message.sender,
             plaintext: r.message.plaintext,
@@ -168,20 +177,70 @@ final class ConversationViewModel {
               let appState,
               let accountRef = appState.activeAccountRef else { return }
 
+        // Optimistically render the message right away — the runtime emits no
+        // event for messages we send, so the live subscription never echoes
+        // them; this bubble is the only realtime representation.
+        let tempId = UUID().uuidString
+        let now = UInt64(Date().timeIntervalSince1970)
+        let optimistic = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: group.groupIdHex,
+            sender: appState.activeAccount?.accountIdHex ?? "",
+            plaintext: trimmed,
+            recordedAt: now,
+            receivedAt: now
+        )
+        timeline.append(.pendingMessage(tempId: tempId, record: optimistic))
+        timeline.sort { $0.timestamp < $1.timestamp }
+
         sendInFlight = true
         defer { sendInFlight = false }
         do {
-            _ = try await appState.marmot.sendText(
+            let summary = try await appState.marmot.sendText(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex,
                 text: trimmed
             )
+            confirmSent(tempId: tempId, record: optimistic, messageId: summary.messageIds.first)
         } catch {
+            markFailed(tempId: tempId)
             self.error = error.localizedDescription
             await MainActor.run {
                 Haptics.error()
                 appState.present(.error("Send failed", message: error.localizedDescription))
             }
         }
+    }
+
+    private func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
+        let realId = messageId ?? ""
+        let confirmed = AppMessageRecordFfi(
+            messageIdHex: realId,
+            direction: "sent",
+            groupIdHex: record.groupIdHex,
+            sender: record.sender,
+            plaintext: record.plaintext,
+            recordedAt: record.recordedAt,
+            receivedAt: record.receivedAt
+        )
+        let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
+        if let idx = timeline.firstIndex(where: { $0.id == "msg:\(tempId)" }) {
+            timeline[idx] = TimelineItem(
+                id: rowId,
+                kind: .message(record: confirmed, status: .sent),
+                timestamp: confirmed.recordedAt
+            )
+        }
+    }
+
+    private func markFailed(tempId: String) {
+        guard let idx = timeline.firstIndex(where: { $0.id == "msg:\(tempId)" }),
+              case .message(let record, _) = timeline[idx].kind else { return }
+        timeline[idx] = TimelineItem(
+            id: "msg:\(tempId)",
+            kind: .message(record: record, status: .failed),
+            timestamp: record.recordedAt
+        )
     }
 }

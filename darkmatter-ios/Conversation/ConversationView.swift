@@ -82,8 +82,8 @@ struct ConversationView: View {
                         LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(viewModel.timeline) { item in
                                 switch item.kind {
-                                case .message(let record):
-                                    MessageBubble(record: record)
+                                case .message(let record, let status):
+                                    MessageBubble(record: record, status: status)
                                         .id(item.id)
                                 case .systemEvent(let event):
                                     SystemEventRow(event: event)

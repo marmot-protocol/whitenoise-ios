@@ -39,6 +39,11 @@ struct ChatsListView: View {
         .task(id: appState.activeAccountRef) {
             await viewModel?.bind(accountRef: appState.activeAccountRef)
         }
+        .onAppear {
+            // Reflect messages we sent from a conversation (which emit no
+            // event) when returning to the list.
+            Task { await viewModel?.refreshLatest() }
+        }
     }
 
     @ViewBuilder
