@@ -10,10 +10,20 @@ struct ConversationView: View {
     @State private var draft: String = ""
     @State private var showDetails = false
     @State private var actionsTarget: ActionsTarget?
+    @State private var emojiPickerTarget: ActionsTarget?
 
     private struct ActionsTarget: Identifiable {
         let record: AppMessageRecordFfi
         let id = UUID()
+    }
+
+    /// Binding that's `true` only for the row matching `actionsTarget`, so the
+    /// floating actions popover anchors to the long-pressed bubble.
+    private func actionsBinding(for record: AppMessageRecordFfi) -> Binding<Bool> {
+        Binding(
+            get: { actionsTarget?.record.messageIdHex == record.messageIdHex && !record.messageIdHex.isEmpty },
+            set: { shown in if !shown { actionsTarget = nil } }
+        )
     }
 
     var body: some View {
@@ -41,30 +51,12 @@ struct ConversationView: View {
                     }
                 }
             }
-            .sheet(item: $actionsTarget) { target in
+            .sheet(item: $emojiPickerTarget) { target in
                 if let viewModel {
-                    MessageActionsSheet(
-                        isMine: target.record.direction == "sent",
-                        quickReactions: appState.quickReactions,
-                        onReact: { emoji in
-                            Task { await viewModel.toggleReaction(emoji, on: target.record) }
-                            appState.addRecentReaction(emoji)
-                            actionsTarget = nil
-                        },
-                        onReply: {
-                            viewModel.replyingTo = target.record
-                            actionsTarget = nil
-                        },
-                        onCopy: {
-                            UIPasteboard.general.string = viewModel.displayBody(of: target.record)
-                            Haptics.tap()
-                            actionsTarget = nil
-                        },
-                        onDelete: {
-                            Task { await viewModel.deleteMessage(target.record) }
-                            actionsTarget = nil
-                        }
-                    )
+                    EmojiPickerSheet(onPick: { emoji in
+                        Task { await viewModel.toggleReaction(emoji, on: target.record) }
+                        appState.addRecentReaction(emoji)
+                    })
                 }
             }
             .task {
@@ -221,6 +213,39 @@ struct ConversationView: View {
                 actionsTarget = ActionsTarget(record: record)
             }
             .gesture(replySwipe(for: record, viewModel: viewModel))
+            .popover(
+                isPresented: actionsBinding(for: record),
+                attachmentAnchor: .point(.bottom),
+                arrowEdge: .top
+            ) {
+                MessageActionsMenu(
+                    isMine: record.direction == "sent",
+                    quickReactions: appState.quickReactions,
+                    onReact: { emoji in
+                        Task { await viewModel.toggleReaction(emoji, on: record) }
+                        appState.addRecentReaction(emoji)
+                        actionsTarget = nil
+                    },
+                    onReply: {
+                        viewModel.replyingTo = record
+                        actionsTarget = nil
+                    },
+                    onCopy: {
+                        UIPasteboard.general.string = viewModel.displayBody(of: record)
+                        Haptics.tap()
+                        actionsTarget = nil
+                    },
+                    onDelete: {
+                        Task { await viewModel.deleteMessage(record) }
+                        actionsTarget = nil
+                    },
+                    onMoreEmoji: {
+                        let target = record
+                        actionsTarget = nil
+                        emojiPickerTarget = ActionsTarget(record: target)
+                    }
+                )
+            }
         case .systemEvent(let event):
             SystemEventRow(event: event)
                 .id(item.id)

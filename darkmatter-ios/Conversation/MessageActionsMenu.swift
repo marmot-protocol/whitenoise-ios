@@ -1,63 +1,56 @@
 import SwiftUI
 import MarmotKit
 
-/// Full-width actions overlay shown when long-pressing a message: a single
-/// row of the most-recent reaction emojis with a full-picker button, then
-/// Reply, then Delete (own messages only).
-struct MessageActionsSheet: View {
+/// Free-floating actions pane shown in a popover anchored under a long-pressed
+/// message: a row of the most-recent reaction emojis with a full-picker
+/// button, then Reply, Copy, and Delete (own messages only).
+struct MessageActionsMenu: View {
     let isMine: Bool
     let quickReactions: [String]
     let onReact: (String) -> Void
     let onReply: () -> Void
     let onCopy: () -> Void
     let onDelete: () -> Void
-
-    @State private var showPicker = false
+    let onMoreEmoji: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             reactionRow
-                .padding(.horizontal, 18)
-                .padding(.top, 14)
-                .padding(.bottom, 6)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
 
             Divider()
 
             actionRow("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
-            Divider().padding(.leading, 52)
+            Divider().padding(.leading, 46)
             actionRow("Copy", systemImage: "doc.on.doc", action: onCopy)
 
             if isMine {
-                Divider().padding(.leading, 52)
+                Divider().padding(.leading, 46)
                 actionRow("Delete", systemImage: "trash", role: .destructive, action: onDelete)
             }
-
-            Spacer(minLength: 0)
         }
-        .presentationDetents([.height(isMine ? 290 : 230)])
-        .presentationDragIndicator(.visible)
-        .sheet(isPresented: $showPicker) {
-            EmojiPickerSheet(onPick: onReact)
-        }
+        .frame(width: 280)
+        .presentationCompactAdaptation(.popover)
     }
 
     private var reactionRow: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 12) {
             ForEach(quickReactions, id: \.self) { emoji in
                 Button {
                     onReact(emoji)
                 } label: {
-                    Text(emoji).font(.title)
+                    Text(emoji).font(.title3)
                 }
                 .buttonStyle(.plain)
             }
-            Spacer(minLength: 8)
-            Divider().frame(height: 30)
+            Spacer(minLength: 4)
+            Divider().frame(height: 26)
             Button {
-                showPicker = true
+                onMoreEmoji()
             } label: {
                 Image(systemName: "face.smiling")
-                    .font(.title2)
+                    .font(.title3)
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
@@ -72,14 +65,14 @@ struct MessageActionsSheet: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(role: role, action: action) {
-            HStack(spacing: 14) {
+            HStack(spacing: 12) {
                 Image(systemName: systemImage)
-                    .frame(width: 24)
+                    .frame(width: 22)
                 Text(title)
                 Spacer()
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .contentShape(.rect)
         }
         .foregroundStyle(role == .destructive ? Color.red : Color.primary)
