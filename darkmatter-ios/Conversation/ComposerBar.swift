@@ -15,7 +15,7 @@ struct ComposerBar: View {
                 .lineLimit(1...5)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(.thinMaterial, in: .rect(cornerRadius: 20))
+                .glassEffect(.regular, in: .rect(cornerRadius: 20))
                 .submitLabel(.send)
                 .onSubmit(triggerSend)
 
