@@ -28,7 +28,8 @@ struct ChatRow: View {
     }
 
     private var title: String {
-        if !chat.name.isEmpty { return chat.name }
+        // Group name is relay/peer-sourced — sanitize before display.
+        if let name = ProfileSanitizer.groupName(chat.name) { return name }
         // For a "DM" (no group name), prefer the first admin's display name
         // when we have one cached — it'll usually be the other party.
         if let firstAdmin = chat.admins.first {
@@ -38,7 +39,9 @@ struct ChatRow: View {
     }
 
     private var subtitle: String {
-        if !chat.description.isEmpty { return chat.description }
+        if let desc = ProfileSanitizer.singleLine(chat.description, maxLength: 140) {
+            return desc
+        }
         return "\(chat.relays.count) relays · \(chat.admins.count) admin\(chat.admins.count == 1 ? "" : "s")"
     }
 

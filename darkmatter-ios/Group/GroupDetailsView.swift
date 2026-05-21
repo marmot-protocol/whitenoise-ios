@@ -20,8 +20,8 @@ struct GroupDetailsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(viewModel.displayTitle)
                             .font(.title3.weight(.semibold))
-                        if !viewModel.group.description.isEmpty {
-                            Text(viewModel.group.description)
+                        if let description = ProfileSanitizer.multilineText(viewModel.group.description, maxLength: 280) {
+                            Text(description)
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                         }

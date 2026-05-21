@@ -19,7 +19,7 @@ final class ConversationViewModel {
     private var groupStateTask: Task<Void, Never>?
 
     var displayTitle: String {
-        if !group.name.isEmpty { return group.name }
+        if let name = ProfileSanitizer.groupName(group.name) { return name }
         return IdentityFormatter.short(group.groupIdHex)
     }
 

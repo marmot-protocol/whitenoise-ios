@@ -101,6 +101,49 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("https://") == nil) // no host
         #expect(ProfileSanitizer.imageURL("not a url") == nil)
     }
+
+    // MARK: - Message bodies
+
+    @Test func messageBodyStripsBidiButKeepsNewlines() {
+        let raw = "first line\u{202E}spoof\nsecond line"
+        let safe = ProfileSanitizer.messageBody(raw)
+        #expect(!safe.unicodeScalars.contains { $0.value == 0x202E })
+        #expect(safe.contains("\n"))            // newline preserved
+        #expect(safe == "first linespoof\nsecond line")
+    }
+
+    @Test func messageBodyClampsBlankLineFlooding() {
+        let raw = "top\n\n\n\n\n\n\n\nbottom"
+        let safe = ProfileSanitizer.messageBody(raw)
+        #expect(safe == "top\n\nbottom")        // 3+ blank lines → 2
+    }
+
+    @Test func messageBodyCapsLength() {
+        let raw = String(repeating: "x", count: ProfileSanitizer.maxMessageLength + 500)
+        #expect(ProfileSanitizer.messageBody(raw).count == ProfileSanitizer.maxMessageLength)
+    }
+
+    @Test func messageBodyTrimsOuterWhitespace() {
+        #expect(ProfileSanitizer.messageBody("  \n hello \n  ") == "hello")
+    }
+
+    // MARK: - Group names
+
+    @Test func groupNameSingleLinesAndStripsBidi() {
+        let raw = "Secret\u{202E}evil\nClub"
+        let safe = ProfileSanitizer.groupName(raw)
+        #expect(safe == "Secretevil Club")      // bidi gone, newline → space
+    }
+
+    @Test func groupNameCaps() {
+        let raw = String(repeating: "g", count: 400)
+        #expect((ProfileSanitizer.groupName(raw)?.count ?? 0) <= ProfileSanitizer.maxGroupNameLength)
+    }
+
+    @Test func groupNameEmptyIsNil() {
+        #expect(ProfileSanitizer.groupName("") == nil)
+        #expect(ProfileSanitizer.groupName("\u{202E}\u{200B}") == nil)
+    }
 }
 
 // MARK: - Test scaffolding

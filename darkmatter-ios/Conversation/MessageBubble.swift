@@ -26,7 +26,7 @@ struct MessageBubble: View {
                         .padding(.leading, 12)
                 }
 
-                Text(record.plaintext)
+                Text(ProfileSanitizer.messageBody(record.plaintext))
                     .font(.body)
                     .foregroundStyle(isFromMe ? Color.white : Color.primary)
                     .padding(.horizontal, 14)

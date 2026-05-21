@@ -13,18 +13,31 @@ import Foundation
 enum ProfileSanitizer {
 
     static let maxNameLength = 80
+    static let maxGroupNameLength = 100
     static let maxAboutLength = 1000
+    static let maxMessageLength = 8000
 
-    /// Single-line name: strip control/bidi characters, collapse all
+    /// Single-line text: strip control/bidi characters, collapse all
     /// whitespace (including newlines) to single spaces, trim, cap length.
-    static func displayName(_ raw: String?) -> String? {
+    /// Returns nil when nothing renderable remains.
+    static func singleLine(_ raw: String?, maxLength: Int) -> String? {
         guard let raw else { return nil }
         let collapsed = stripUnsafe(raw)
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         guard !collapsed.isEmpty else { return nil }
-        return String(collapsed.prefix(maxNameLength))
+        return String(collapsed.prefix(maxLength))
+    }
+
+    /// Person display name (single line, short cap).
+    static func displayName(_ raw: String?) -> String? {
+        singleLine(raw, maxLength: maxNameLength)
+    }
+
+    /// Group name (single line, slightly longer cap than a person name).
+    static func groupName(_ raw: String?) -> String? {
+        singleLine(raw, maxLength: maxGroupNameLength)
     }
 
     /// Multi-line free text (e.g. about): strip control/bidi but keep normal
@@ -35,6 +48,23 @@ enum ProfileSanitizer {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleaned.isEmpty else { return nil }
         return String(cleaned.prefix(maxLength))
+    }
+
+    /// Message body: multi-line-safe. Strips control/bidi (Trojan-Source
+    /// spoofing), preserves newlines for legitimately multi-line messages,
+    /// but clamps runs of 3+ blank lines to 2 so a sender can't flood the
+    /// timeline with vertical whitespace. Trims outer whitespace and caps
+    /// length. Returns "" (not nil) so the bubble renders without optional
+    /// handling at the call site.
+    static func messageBody(_ raw: String) -> String {
+        let stripped = stripUnsafe(raw)
+        let clamped = stripped.replacingOccurrences(
+            of: "\n{3,}",
+            with: "\n\n",
+            options: .regularExpression
+        )
+        let trimmed = clamped.trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(trimmed.prefix(maxMessageLength))
     }
 
     /// Image URL allowlist: only http(s) with a host. Rejects data:, file:,
