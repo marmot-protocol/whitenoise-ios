@@ -1,6 +1,6 @@
-darkmatter-sha: 10305d6-dirty
+darkmatter-sha: f8ce19a-dirty
 darkmatter-branch: feat/uniffi-bindings
-built-at: 2026-05-21T09:05:27Z
+built-at: 2026-05-21T09:23:36Z
 uniffi-version: 0.28.3
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
