@@ -84,6 +84,11 @@ struct ChatsListView: View {
                         }
                         .tint(.gray)
                     }
+                    // Drop the separator above the very first row.
+                    .listRowSeparator(
+                        item.id == viewModel.items.first?.id ? .hidden : .automatic,
+                        edges: .top
+                    )
                 }
 
                 if !viewModel.archivedItems.isEmpty {
