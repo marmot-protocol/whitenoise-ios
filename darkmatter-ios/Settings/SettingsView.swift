@@ -92,7 +92,7 @@ struct SettingsView: View {
             } header: {
                 Text("Developer")
             } footer: {
-                Text("Adds debugging tools: MLS group internals on the chat-details screen and the diagnostics console.")
+                Text("Adds debugging tools, including MLS group internals and diagnostics. The diagnostics console can log message text and account activity on this device.")
             }
 
             if appState.developerMode {

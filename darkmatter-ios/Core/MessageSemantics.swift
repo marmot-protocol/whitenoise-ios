@@ -25,11 +25,16 @@ enum MessageSemantics {
     static let quoteRefTag = "q"
     static let imetaTag = "imeta"
     static let streamTag = "stream"
+    static let streamTypeTag = "stream-type"
+    static let streamFinalKindTag = "final-kind"
     static let streamHashTag = "stream-hash"
     static let streamStartTag = "stream-start"
     static let streamChunksTag = "stream-chunks"
     static let streamRouteTag = "route"
     static let streamBrokerTag = "broker"
+    static let streamTypeText = "text"
+    static let streamFinalKindChat = "9"
+    static let streamRouteQuic = "quic"
 
     /// The semantic classification of a message record.
     enum Kind: Equatable {
@@ -38,7 +43,7 @@ enum MessageSemantics {
         /// A kind-9 reply: `e` + `q` tags point at the parent. Body is plaintext.
         case reply(targetMessageId: String)
         /// A kind-9 media attachment described by an `imeta` tag.
-        case media(MediaInfo)
+        case media(MediaReferenceFfi)
         /// A kind-9 agent-stream final: carries a `stream` tag. The body
         /// (plaintext) is the full transcript; it replaces the live preview
         /// keyed by `streamId`.
@@ -52,14 +57,6 @@ enum MessageSemantics {
         case agentStreamStart(StreamStart)
         /// Anything we don't render as a bubble or index.
         case unknown
-    }
-
-    /// NIP-92 `imeta` media descriptor, parsed from `["imeta","m <type>","x <hash>","size <bytes>","name <name>"]`.
-    struct MediaInfo: Equatable {
-        var mediaType: String
-        var fileHashHex: String
-        var sizeBytes: UInt64
-        var fileName: String
     }
 
     /// A kind-1200 agent-stream start projected from its tags.
@@ -87,7 +84,8 @@ enum MessageSemantics {
             if let streamId = streamFinalId(from: tags) {
                 return .streamFinal(streamId: streamId)
             }
-            if let media = media(from: tags) {
+            if hasTag(imetaTag, in: tags) {
+                guard let media = media(from: tags) else { return .unknown }
                 return .media(media)
             }
             if hasTag(quoteRefTag, in: tags), let target = firstValue(of: eventRefTag, in: tags) {
@@ -128,36 +126,87 @@ enum MessageSemantics {
         }
     }
 
-    /// The `stream` id if this kind-9 is a stream-final (it also carries a
-    /// `stream-hash` or `stream-start` tag, distinguishing it from a start).
+    /// The `stream` id if this kind-9 is a complete stream-final. The current
+    /// text-stream profile requires `stream`, `stream-start`, `stream-hash`,
+    /// and `stream-chunks`; partial stream-ish tags are just normal chat text.
     private static func streamFinalId(from tags: [MessageTagFfi]) -> String? {
-        guard let streamId = firstValue(of: streamTag, in: tags),
-              hasTag(streamHashTag, in: tags) || hasTag(streamStartTag, in: tags)
+        guard let streamId = normalizedStreamId(firstValue(of: streamTag, in: tags)),
+              normalizedHex32(firstValue(of: streamStartTag, in: tags)) != nil,
+              normalizedHex32(firstValue(of: streamHashTag, in: tags)) != nil,
+              validUnsignedDecimal(firstValue(of: streamChunksTag, in: tags))
         else { return nil }
         return streamId
     }
 
-    /// Parse an `imeta` tag's space-prefixed fields (`m <type>`, `x <hash>`, …).
-    private static func media(from tags: [MessageTagFfi]) -> MediaInfo? {
+    /// Parse an `imeta` tag's space-prefixed fields (`url <blob>`, `m <type>`, `x <hash>`, ...).
+    private static func media(from tags: [MessageTagFfi]) -> MediaReferenceFfi? {
         guard let tag = tags.first(where: { $0.values.first == imetaTag }) else { return nil }
+        var url = ""
         var mediaType = ""
         var hash = ""
+        var nonce = ""
+        var version = ""
         var size: UInt64 = 0
         var name = ""
         for field in tag.values.dropFirst() {
-            if let value = field.dropPrefix("m ") { mediaType = value }
+            if let value = field.dropPrefix("url ") { url = value }
+            else if let value = field.dropPrefix("m ") { mediaType = value }
+            else if let value = field.dropPrefix("filename ") { name = value }
             else if let value = field.dropPrefix("x ") { hash = value }
+            else if let value = field.dropPrefix("n ") { nonce = value }
+            else if let value = field.dropPrefix("v ") { version = value }
             else if let value = field.dropPrefix("size ") { size = UInt64(value) ?? 0 }
-            else if let value = field.dropPrefix("name ") { name = value }
         }
-        return MediaInfo(mediaType: mediaType, fileHashHex: hash, sizeBytes: size, fileName: name)
+        guard !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !mediaType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              hash.isHexByteString(byteCount: 32),
+              nonce.isHexByteString(byteCount: 12),
+              version == "mip04-v2",
+              size > 0
+        else { return nil }
+        return MediaReferenceFfi(
+            url: url,
+            fileHashHex: hash,
+            nonceHex: nonce,
+            fileName: name,
+            mediaType: mediaType,
+            version: version
+        )
     }
 
     private static func streamStart(from tags: [MessageTagFfi]) -> StreamStart? {
-        guard let streamId = firstValue(of: streamTag, in: tags) else { return nil }
-        let route = firstValue(of: streamRouteTag, in: tags) ?? "quic"
+        guard let streamId = normalizedStreamId(firstValue(of: streamTag, in: tags)),
+              firstValue(of: streamTypeTag, in: tags) == streamTypeText,
+              firstValue(of: streamFinalKindTag, in: tags) == streamFinalKindChat
+        else { return nil }
+        guard let route = firstValue(of: streamRouteTag, in: tags)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        else { return nil }
+        guard route == streamRouteQuic else { return nil }
         let brokers = allValues(of: streamBrokerTag, in: tags)
         return StreamStart(streamId: streamId, route: route, brokers: brokers)
+    }
+
+    static func normalizedStreamId(_ raw: String?) -> String? {
+        normalizedHex32(raw)
+    }
+
+    private static func normalizedHex32(_ raw: String?) -> String? {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              value.count == 64,
+              value.range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil
+        else { return nil }
+        return value.lowercased()
+    }
+
+    private static func validUnsignedDecimal(_ raw: String?) -> Bool {
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty,
+              value.range(of: #"^[0-9]+$"#, options: .regularExpression) != nil
+        else { return false }
+        return UInt64(value) != nil
     }
 }
 
@@ -166,5 +215,10 @@ private extension String {
     func dropPrefix(_ prefix: String) -> String? {
         guard hasPrefix(prefix) else { return nil }
         return String(dropFirst(prefix.count))
+    }
+
+    func isHexByteString(byteCount: Int) -> Bool {
+        count == byteCount * 2
+            && range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil
     }
 }

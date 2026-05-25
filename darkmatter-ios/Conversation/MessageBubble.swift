@@ -26,10 +26,10 @@ struct MessageBubble: View {
         sizeClass == .regular ? 64 : 0
     }
 
-    /// Body text. Replies, media captions, and plain chat all live in plaintext
-    /// now that inner messages are unsigned Nostr events (kind + tags).
+    /// Body text projected from the decoded unsigned Nostr app event's kind,
+    /// tags, and content.
     private var bodyText: String {
-        record.plaintext
+        MessagePreview.body(record)
     }
 
     var body: some View {

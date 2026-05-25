@@ -1,8 +1,8 @@
 import SwiftUI
 import MarmotKit
 
-/// Edit the Nostr kind:0 profile for the currently active account. Writes
-/// directly to the configured relays via marmot-app.
+/// Edit the Nostr kind:0 profile for the currently active account. Marmot
+/// chooses the account relay lists; iOS only supplies the edited metadata.
 struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
@@ -117,11 +117,13 @@ struct ProfileEditView: View {
         )
 
         do {
+            let relays = appState.relayPublishRelays(for: accountRef)
+            let bootstrapRelays = appState.relayBootstrapRelays(for: accountRef)
             let published = try await appState.marmot.publishUserProfile(
                 accountRef: accountRef,
                 profile: metadata,
-                defaultRelays: appState.defaultRelays,
-                bootstrapRelays: appState.defaultRelays
+                defaultRelays: relays,
+                bootstrapRelays: bootstrapRelays
             )
             if let id = appState.activeAccount?.accountIdHex {
                 appState.cacheProfile(published, for: id)
@@ -130,7 +132,7 @@ struct ProfileEditView: View {
             Haptics.success()
             appState.present(.success(
                 "Profile published",
-                message: "Your kind:0 metadata is live on \(appState.defaultRelays.count) relays."
+                message: "Your kind:0 metadata is live on \(relays.count) relays."
             ))
         } catch {
             Haptics.error()

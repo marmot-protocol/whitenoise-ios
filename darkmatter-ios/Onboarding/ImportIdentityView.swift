@@ -1,8 +1,8 @@
 import SwiftUI
 import MarmotKit
 
-/// Import an existing Nostr identity. Accepts an `nsec...` (local signing) or
-/// `npub...` (read-only / tracked) bech32 string.
+/// Import an existing local-signing Nostr identity. `npub...` is only a public
+/// identity and is intentionally not accepted as a sign-in credential.
 struct ImportIdentityView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +27,7 @@ struct ImportIdentityView: View {
             } header: {
                 Text("Identity")
             } footer: {
-                Text("Paste your nsec (bech32 secret key). It's stored securely in your device's Keychain.")
+                Text("Paste your nsec (bech32 secret key). Public npub values are for sharing and cannot sign in.")
                     .font(.footnote)
             }
 

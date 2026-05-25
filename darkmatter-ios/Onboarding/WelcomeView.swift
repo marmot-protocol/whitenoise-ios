@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// First-launch entry point. Two paths: generate a brand-new Nostr
-/// identity, or import an existing one by pasting an nsec/npub.
+/// identity, or import an existing local-signing identity by pasting an nsec.
 struct WelcomeView: View {
     @State private var showCreate = false
     @State private var showImport = false

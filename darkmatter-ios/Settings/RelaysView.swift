@@ -1,96 +1,87 @@
 import SwiftUI
 import MarmotKit
 
-/// Relay configuration + diagnostics.
+/// Account relay configuration + diagnostics.
 ///
-/// Three layers:
-///  1. Default relays — the set used for *new* account creation and *new*
-///     groups when the user doesn't already have relays configured.
-///  2. Published relay lists — the NIP-65 / inbox / key-package lists this
-///     account has actually published (read from marmot-app's projection).
-///  3. Relay diagnostics — live relay-plane connection health.
+/// Marmot owns the account relay lists. This screen reads the current
+/// projection and sends edits back through Marmot, which publishes the updated
+/// NIP-65, inbox, and key-package lists.
 struct RelaysView: View {
     @Environment(AppState.self) private var appState
     @State private var pendingUrl: String = ""
-    @State private var isPublishing = false
-    @State private var publishError: String?
-    @State private var publishedAt: Date?
+    @State private var isSaving = false
+    @State private var saveError: String?
+    @State private var savedAt: Date?
 
     @State private var lists: AccountRelayListsFfi?
 
     var body: some View {
         Form {
-            defaultRelaysSection
-            republishSection
+            accountRelaysSection
             publishedListsSection
         }
         .navigationTitle("Relays")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { EditButton() }
-        .task(id: appState.activeAccountRef) { await reload() }
-    }
-
-    // MARK: - Default relays
-
-    private var defaultRelaysSection: some View {
-        Section {
-            ForEach(appState.defaultRelays, id: \.self) { url in
-                Text(url).font(.system(.body, design: .monospaced))
+        .toolbar {
+            if isSaving {
+                ProgressView().controlSize(.small)
+            } else {
+                EditButton()
             }
-            .onDelete { indexSet in
-                var next = appState.defaultRelays
-                next.remove(atOffsets: indexSet)
-                appState.defaultRelays = next
-            }
-
-            HStack {
-                TextField("wss://relay.example.com", text: $pendingUrl)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .font(.system(.body, design: .monospaced))
-                Button {
-                    addPending()
-                } label: {
-                    Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
-                }
-                .disabled(!canAdd)
-            }
-        } header: {
-            Text("Default Relays")
-        } footer: {
-            Text("These are the defaults used when you create a new identity or start a new group and don't already have relays configured. Existing groups use the relays embedded in their own routing.")
-                .font(.footnote)
         }
+        .task(id: appState.activeAccountRef) { await reload() }
+        .refreshable { await reload() }
     }
 
-    private var republishSection: some View {
+    // MARK: - Account relays
+
+    private var accountRelaysSection: some View {
         Section {
-            Button {
-                Task { await republish() }
-            } label: {
+            if lists == nil {
+                ProgressView("Loading relays")
+            } else {
+                if currentRelays.isEmpty {
+                    Text("No relays published")
+                        .foregroundStyle(.secondary)
+                }
+
+                ForEach(currentRelays, id: \.self) { url in
+                    Text(url).font(.system(.body, design: .monospaced))
+                }
+                .onDelete(perform: deleteRelays)
+
                 HStack {
-                    if isPublishing { ProgressView().controlSize(.small) }
-                    Text(isPublishing ? "Publishing…" : "Republish to Relays")
-                        .frame(maxWidth: .infinity)
+                    TextField("wss://relay.example.com", text: $pendingUrl)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .font(.system(.body, design: .monospaced))
+                        .disabled(isSaving || lists == nil)
+                    Button {
+                        addPending()
+                    } label: {
+                        Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
+                    }
+                    .disabled(!canAdd)
                 }
             }
-            .buttonStyle(.bordered)
-            .disabled(isPublishing || appState.activeAccountRef == nil)
 
-            if let publishError {
-                Label(publishError, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red).font(.callout)
+            if let saveError {
+                Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.callout)
             }
-            if let publishedAt {
-                Label("Published \(publishedAt.formatted(.relative(presentation: .named)))",
+
+            if let savedAt {
+                Label("Saved \(savedAt.formatted(.relative(presentation: .named)))",
                       systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green).font(.callout)
+                    .foregroundStyle(.green)
+                    .font(.callout)
             }
         } header: {
-            Text("Announce")
+            Text("Account Relays")
         } footer: {
-            Text("Publishes your three relay lists (NIP-65, inbox, and key package) to your default relays, so other people can discover where to reach you. Run this after changing your relays above. It contacts each relay, so it can fail if a relay is slow or unreachable — just try again.")
+            Text("Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65, inbox, and key-package relay lists.")
                 .font(.footnote)
         }
     }
@@ -110,7 +101,7 @@ struct RelaysView: View {
                 if lists.complete {
                     Text("All relay lists are published.").font(.footnote)
                 } else {
-                    Text("Missing: \(lists.missing.joined(separator: ", ")). Tap Republish to publish them.")
+                    Text("Missing: \(lists.missing.joined(separator: ", ")). Add a relay to publish them.")
                         .font(.footnote)
                         .foregroundStyle(.orange)
                 }
@@ -149,50 +140,86 @@ struct RelaysView: View {
         }
     }
 
-    // MARK: - Diagnostics
-
-    @ViewBuilder
     // MARK: - Actions
 
+    private var currentRelays: [String] {
+        guard let lists else { return [] }
+        return RelaySettings.editableRelays(from: lists)
+    }
+
     private var canAdd: Bool {
-        let t = pendingUrl.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard t.hasPrefix("wss://") || t.hasPrefix("ws://") else { return false }
-        return !appState.defaultRelays.contains(pendingUrl.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard lists != nil,
+              !isSaving,
+              let normalized = RelaySettings.normalizedRelayURL(pendingUrl)
+        else { return false }
+        return !currentRelays.contains(normalized)
     }
 
     private func addPending() {
-        let trimmed = pendingUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canAdd, !trimmed.isEmpty else { return }
-        appState.defaultRelays.append(trimmed)
-        pendingUrl = ""
+        guard let normalized = RelaySettings.normalizedRelayURL(pendingUrl), canAdd else { return }
+        Task {
+            if await saveRelays(currentRelays + [normalized]) {
+                pendingUrl = ""
+            }
+        }
+    }
+
+    private func deleteRelays(at indexSet: IndexSet) {
+        var next = currentRelays
+        next.remove(atOffsets: indexSet)
+        Task { await saveRelays(next) }
     }
 
     @MainActor
     private func reload() async {
-        guard let ref = appState.activeAccountRef else { return }
+        guard let ref = appState.activeAccountRef else {
+            lists = nil
+            return
+        }
         lists = try? appState.marmot.accountRelayLists(accountRef: ref)
     }
 
     @MainActor
-    private func republish() async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        isPublishing = true
-        publishError = nil
+    @discardableResult
+    private func saveRelays(_ relays: [String]) async -> Bool {
+        guard let accountRef = appState.activeAccountRef else { return false }
+        let normalized = RelaySettings.normalizedRelayURLs(relays)
+        guard !normalized.isEmpty else {
+            saveError = "Keep at least one relay."
+            Haptics.error()
+            return false
+        }
+
+        isSaving = true
+        saveError = nil
+        defer { isSaving = false }
+
         do {
-            try await appState.marmot.publishRelayLists(
+            let bootstrap = lists.map(RelaySettings.bootstrapRelays(from:)) ?? MarmotClient.seedRelays
+            _ = try await appState.marmot.setAccountInboxRelays(
                 accountRef: accountRef,
-                defaultRelays: appState.defaultRelays,
-                bootstrapRelays: appState.defaultRelays
+                relays: normalized,
+                bootstrapRelays: bootstrap
             )
-            publishedAt = Date()
+            _ = try await appState.marmot.setAccountKeyPackageRelays(
+                accountRef: accountRef,
+                relays: normalized,
+                bootstrapRelays: bootstrap
+            )
+            lists = try await appState.marmot.setAccountNip65Relays(
+                accountRef: accountRef,
+                relays: normalized,
+                bootstrapRelays: bootstrap
+            )
+            savedAt = Date()
             Haptics.success()
-            appState.present(.success("Relay lists republished"))
-            lists = try? appState.marmot.accountRelayLists(accountRef: accountRef)
+            appState.present(.success("Relay lists updated"))
+            return true
         } catch {
             Haptics.error()
-            publishError = error.localizedDescription
-            appState.present(.error("Republish failed", message: error.localizedDescription))
+            saveError = error.localizedDescription
+            appState.present(.error("Relay update failed", message: error.localizedDescription))
+            return false
         }
-        isPublishing = false
     }
 }

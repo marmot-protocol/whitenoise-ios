@@ -22,8 +22,8 @@ before every release tag.
       Continue lands in the empty Chats screen.
 - [ ] **Import Existing nsec** with a valid `nsec1…` succeeds and lands in
       Chats; the account appears in Settings → Accounts.
-- [ ] Importing with a `npub1…` succeeds but the resulting account is
-      marked **Read-only** in Settings → Accounts.
+- [ ] Pasting a `npub1…` into the import flow cannot be submitted; npub values
+      are public identifiers, not sign-in credentials.
 - [ ] Importing with garbage (random string) surfaces an error toast at
       the top of the screen and stays on the Import screen.
 - [ ] Force-quit + relaunch after onboarding lands directly on Chats; the
@@ -75,8 +75,9 @@ before every release tag.
       and tapping **Publish to Relays** shows a success toast.
 - [ ] After publish, the profile name appears in conversation sender
       labels for that account on a fresh device.
-- [ ] Settings → Relays: adding `wss://…` accepts; non-`wss` rejects.
-- [ ] Republish to Relays succeeds with a success toast.
+- [ ] Settings → Relays: adding `wss://…` or `ws://…` accepts, publishes
+      through Marmot, and refreshes the published NIP-65/inbox/key-package
+      lists; other schemes reject.
 - [ ] Settings → Identity: Share account ID surfaces the system share
       sheet with the hex id pre-filled.
 - [ ] Sign out only changes the active account locally; identities

@@ -34,14 +34,6 @@ final class AppState {
         }
     }
 
-    /// User-editable relay configuration. Persisted in UserDefaults for v1;
-    /// future versions may sync this from Nostr kind:10002.
-    var defaultRelays: [String] {
-        didSet {
-            UserDefaults.standard.set(defaultRelays, forKey: Self.relaysKey)
-        }
-    }
-
     /// Developer mode: surfaces extra debugging UI (e.g. MLS group internals
     /// on the chat-details screen). Off by default; toggled in Settings.
     var developerMode: Bool {
@@ -110,7 +102,6 @@ final class AppState {
     private var directoryFetchesInFlight: Set<String> = []
 
     private static let activeAccountKey = "marmot.activeAccountRef"
-    private static let relaysKey = "marmot.defaultRelays"
     private static let developerModeKey = "marmot.developerMode"
     private static let recentReactionsKey = "marmot.recentReactions"
     static let agentTextStreamQuicBrokerCandidate = "quic://quic-broker.ipf.dev:4450"
@@ -118,10 +109,6 @@ final class AppState {
 
     init(client: MarmotClient) {
         self.client = client
-        let storedRelays = UserDefaults.standard.stringArray(forKey: Self.relaysKey)
-        self.defaultRelays = storedRelays?.isEmpty == false
-            ? (storedRelays ?? MarmotClient.defaultRelays)
-            : MarmotClient.defaultRelays
         self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
@@ -181,9 +168,10 @@ final class AppState {
     /// Generate a fresh Nostr identity. On success the new account becomes active.
     @discardableResult
     func createIdentity() async throws -> AccountSummaryFfi {
+        let relays = MarmotClient.seedRelays
         let summary = try await marmot.createIdentity(
-            defaultRelays: defaultRelays,
-            bootstrapRelays: defaultRelays
+            defaultRelays: relays,
+            bootstrapRelays: relays
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
@@ -191,13 +179,14 @@ final class AppState {
         return summary
     }
 
-    /// Import an existing identity (nsec for local signing, npub for read-only).
+    /// Import an existing local-signing identity (nsec).
     @discardableResult
     func importIdentity(_ identity: String) async throws -> AccountSummaryFfi {
+        let relays = MarmotClient.seedRelays
         let summary = try await marmot.login(
             identity: identity,
-            defaultRelays: defaultRelays,
-            bootstrapRelays: defaultRelays
+            defaultRelays: relays,
+            bootstrapRelays: relays
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
@@ -208,6 +197,21 @@ final class AppState {
     var activeAccount: AccountSummaryFfi? {
         guard let ref = activeAccountRef else { return nil }
         return accounts.first { $0.label == ref }
+    }
+
+    func relayLists(for accountRef: String) -> AccountRelayListsFfi? {
+        try? marmot.accountRelayLists(accountRef: accountRef)
+    }
+
+    func relayPublishRelays(for accountRef: String) -> [String] {
+        guard let lists = relayLists(for: accountRef) else { return MarmotClient.seedRelays }
+        let relays = RelaySettings.editableRelays(from: lists)
+        return relays.isEmpty ? MarmotClient.seedRelays : relays
+    }
+
+    func relayBootstrapRelays(for accountRef: String) -> [String] {
+        guard let lists = relayLists(for: accountRef) else { return MarmotClient.seedRelays }
+        return RelaySettings.bootstrapRelays(from: lists)
     }
 
     @discardableResult
@@ -293,8 +297,10 @@ final class AppState {
             return
         }
 
-        // Fetch this account's OWN kind:0 from relays (not its follows').
-        try? await marmot.refreshProfile(accountIdHex: id, relays: defaultRelays)
+        // Fetch this account's OWN kind:0 through the active account's relay
+        // lists. Marmot owns those lists; iOS only asks for the current view.
+        let relays = activeAccountRef.map(relayBootstrapRelays(for:)) ?? MarmotClient.seedRelays
+        try? await marmot.refreshProfile(accountIdHex: id, relays: relays)
 
         if let fetched = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
             cacheProfile(fetched, for: id)

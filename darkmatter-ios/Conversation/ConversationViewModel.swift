@@ -113,10 +113,10 @@ final class ConversationViewModel {
         return (name, text)
     }
 
-    /// The visible body for a message. Reply text, media captions, and plain
-    /// chat all live in plaintext now that inner messages are Nostr events.
+    /// The visible body for a message, projected from the decoded unsigned
+    /// Nostr app event's kind/tags/content.
     func displayBody(of record: AppMessageRecordFfi) -> String {
-        record.plaintext
+        MessagePreview.body(record)
     }
 
     init(appState: AppState, group: AppGroupRecordFfi) {
@@ -140,7 +140,9 @@ final class ConversationViewModel {
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
-            for record in messagesSub.snapshot() { ingest(record) }
+            let snapshot = messagesSub.snapshot()
+            for record in snapshot { ingest(record) }
+            for record in snapshot { watchSnapshotStartIfNeeded(record) }
 
             let groupSub = try await appState.marmot.subscribeGroupState(
                 accountRef: accountRef,
@@ -169,6 +171,25 @@ final class ConversationViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func watchSnapshotStartIfNeeded(_ record: AppMessageRecordFfi) {
+        guard let streamIdHex = Self.snapshotStartStreamIdToWatch(
+            from: record,
+            finalizedStreamIds: finalizedStreamIds
+        ) else { return }
+        Task { [weak self] in await self?.startWatching(sender: record.sender, streamIdHex: streamIdHex) }
+    }
+
+    static func snapshotStartStreamIdToWatch(
+        from record: AppMessageRecordFfi,
+        finalizedStreamIds: Set<String>
+    ) -> String? {
+        guard case .agentStreamStart(let start) = MessageSemantics.classify(record),
+              let streamIdHex = MessageSemantics.normalizedStreamId(start.streamId),
+              !finalizedStreamIds.contains(streamIdHex)
+        else { return nil }
+        return streamIdHex
     }
 
     // MARK: - Ingestion
@@ -491,15 +512,7 @@ final class ConversationViewModel {
     /// nil (watch the latest stream) if absent or malformed.
     static func agentStreamId(from message: ReceivedMessageFfi) -> String? {
         guard case .agentStreamStart(let start) = MessageSemantics.classify(message) else { return nil }
-        return normalizedStreamId(start.streamId)
-    }
-
-    private static func normalizedStreamId(_ raw: String?) -> String? {
-        guard let streamId = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !streamId.isEmpty,
-              streamId.range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil
-        else { return nil }
-        return streamId.lowercased()
+        return MessageSemantics.normalizedStreamId(start.streamId)
     }
 
     /// Watch a concrete live agent stream when the start payload names one;
