@@ -447,6 +447,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -1111,6 +1127,8 @@ public func FfiConverterTypeGroupStateSubscription_lower(_ value: GroupStateSubs
 
 public protocol MarmotProtocol : AnyObject {
     
+    func acceptGroupInvite(accountRef: String, groupIdHex: String) async throws  -> AppGroupRecordFfi
+    
     /**
      * Normalize a public-key reference (npub or hex) to canonical hex.
      * `None` if it isn't a valid public key. Used to resolve a scanned or
@@ -1122,6 +1140,12 @@ public protocol MarmotProtocol : AnyObject {
     
     func accountKeyPackageRelays(accountRef: String) throws  -> [String]
     
+    /**
+     * List the local and relay-discovered Marmot KeyPackage publications for
+     * `account_ref`.
+     */
+    func accountKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws  -> [AccountKeyPackageFfi]
+    
     func accountNip65Relays(accountRef: String) throws  -> [String]
     
     /**
@@ -1129,6 +1153,12 @@ public protocol MarmotProtocol : AnyObject {
      * account has published, plus the configured default/bootstrap sets.
      */
     func accountRelayLists(accountRef: String) throws  -> AccountRelayListsFfi
+    
+    func catchUpAccounts() async throws 
+    
+    func clearPushRegistration(accountRef: String) async throws 
+    
+    func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationWakeSourceFfi) async throws  -> BackgroundNotificationCollectionFfi
     
     /**
      * Create a new MLS group with `name` and the given members. Members are
@@ -1141,6 +1171,13 @@ public protocol MarmotProtocol : AnyObject {
      * keychain, and publish initial relay lists + key package.
      */
     func createIdentity(defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
+    
+    func declineGroupInvite(accountRef: String, groupIdHex: String) async throws  -> GroupInviteDeclineResultFfi
+    
+    /**
+     * Publish a NIP-09 deletion for a KeyPackage event.
+     */
+    func deleteAccountKeyPackage(accountRef: String, eventIdHex: String, relays: [String]) async throws  -> UInt64
     
     /**
      * Mark `target_message_id` deleted for the whole group. This is a
@@ -1191,6 +1228,8 @@ public protocol MarmotProtocol : AnyObject {
      */
     func groupMlsState(accountRef: String, groupIdHex: String) async throws  -> AppGroupMlsStateFfi
     
+    func groupPushDebugInfo(accountRef: String, groupIdHex: String) async throws  -> GroupPushDebugInfoFfi
+    
     func inviteMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
     
     func inviteMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> GroupMutationResultFfi
@@ -1230,6 +1269,8 @@ public protocol MarmotProtocol : AnyObject {
      */
     func normalizeMemberRef(memberRef: String) throws  -> MemberRefFfi
     
+    func notificationSettings(accountRef: String) throws  -> NotificationSettingsFfi
+    
     /**
      * Convert a hex account id (Nostr public key) into its `npub…` bech32
      * form for display. `None` if the hex isn't a valid public key.
@@ -1245,6 +1286,11 @@ public protocol MarmotProtocol : AnyObject {
     func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> GroupMutationResultFfi
     
     /**
+     * Publish a new fresh KeyPackage for `account_ref`.
+     */
+    func publishNewKeyPackage(accountRef: String) async throws  -> UInt64
+    
+    /**
      * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
@@ -1256,6 +1302,8 @@ public protocol MarmotProtocol : AnyObject {
      * defaults are reflected here).
      */
     func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> UserProfileMetadataFfi
+    
+    func pushRegistration(accountRef: String) throws  -> PushRegistrationFfi?
     
     /**
      * React to `target_message_id` with `emoji` (an "add" reaction).
@@ -1283,6 +1331,12 @@ public protocol MarmotProtocol : AnyObject {
      * Send `text` as a reply that quotes `target_message_id`.
      */
     func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, text: String) async throws  -> SendSummaryFfi
+    
+    /**
+     * Re-publish the latest cached KeyPackage when possible, otherwise
+     * publish a fresh one.
+     */
+    func republishKeyPackage(accountRef: String) async throws  -> UInt64
     
     /**
      * Step down as an admin of `group_id_hex` (demote the active account).
@@ -1315,6 +1369,10 @@ public protocol MarmotProtocol : AnyObject {
      * filters archived groups unless `include_archived` is set.
      */
     func setGroupArchived(accountRef: String, groupIdHex: String, archived: Bool) throws  -> AppGroupRecordFfi
+    
+    func setLocalNotificationsEnabled(accountRef: String, enabled: Bool) throws  -> NotificationSettingsFfi
+    
+    func setNativePushEnabled(accountRef: String, enabled: Bool) async throws  -> NotificationSettingsFfi
     
     /**
      * Tear the runtime down. Drops all subscriptions; long-lived
@@ -1368,6 +1426,8 @@ public protocol MarmotProtocol : AnyObject {
      */
     func subscribeMessages(accountRef: String, groupIdHex: String?) async throws  -> MessagesSubscription
     
+    func subscribeNotifications() async throws  -> NotificationsSubscription
+    
     /**
      * Remove this account's reaction from `target_message_id`.
      */
@@ -1380,6 +1440,8 @@ public protocol MarmotProtocol : AnyObject {
      * send the resulting media reference into the group.
      */
     func uploadMedia(accountRef: String, groupIdHex: String, request: MediaUploadRequestFfi) async throws  -> MediaUploadResultFfi
+    
+    func upsertPushRegistration(accountRef: String, platform: PushPlatformFfi, rawToken: String, serverPubkeyHex: String, relayHint: String?) async throws  -> PushRegistrationFfi
     
     /**
      * Full cached Nostr kind:0 profile for an account id (name, display
@@ -1475,6 +1537,23 @@ public convenience init(rootPath: String, relayUrls: [String])throws  {
     
 
     
+open func acceptGroupInvite(accountRef: String, groupIdHex: String)async throws  -> AppGroupRecordFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_accept_group_invite(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAppGroupRecordFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
     /**
      * Normalize a public-key reference (npub or hex) to canonical hex.
      * `None` if it isn't a valid public key. Used to resolve a scanned or
@@ -1504,6 +1583,27 @@ open func accountKeyPackageRelays(accountRef: String)throws  -> [String] {
 })
 }
     
+    /**
+     * List the local and relay-discovered Marmot KeyPackage publications for
+     * `account_ref`.
+     */
+open func accountKeyPackages(accountRef: String, bootstrapRelays: [String])async throws  -> [AccountKeyPackageFfi] {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_account_key_packages(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(bootstrapRelays)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeAccountKeyPackageFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
 open func accountNip65Relays(accountRef: String)throws  -> [String] {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_method_marmot_account_nip65_relays(self.uniffiClonePointer(),
@@ -1522,6 +1622,57 @@ open func accountRelayLists(accountRef: String)throws  -> AccountRelayListsFfi {
         FfiConverterString.lower(accountRef),$0
     )
 })
+}
+    
+open func catchUpAccounts()async throws  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_catch_up_accounts(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+open func clearPushRegistration(accountRef: String)async throws  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_clear_push_registration(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+open func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationWakeSourceFfi)async throws  -> BackgroundNotificationCollectionFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_collect_notifications_after_wake(
+                    self.uniffiClonePointer(),
+                    FfiConverterUInt32.lower(maxWaitMs),FfiConverterTypeNotificationWakeSourceFfi.lower(source)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBackgroundNotificationCollectionFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
 }
     
     /**
@@ -1562,6 +1713,43 @@ open func createIdentity(defaultRelays: [String], bootstrapRelays: [String])asyn
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeAccountSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+open func declineGroupInvite(accountRef: String, groupIdHex: String)async throws  -> GroupInviteDeclineResultFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_decline_group_invite(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeGroupInviteDeclineResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Publish a NIP-09 deletion for a KeyPackage event.
+     */
+open func deleteAccountKeyPackage(accountRef: String, eventIdHex: String, relays: [String])async throws  -> UInt64 {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_delete_account_key_package(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(eventIdHex),FfiConverterSequenceString.lower(relays)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -1741,6 +1929,23 @@ open func groupMlsState(accountRef: String, groupIdHex: String)async throws  -> 
         )
 }
     
+open func groupPushDebugInfo(accountRef: String, groupIdHex: String)async throws  -> GroupPushDebugInfoFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_group_push_debug_info(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeGroupPushDebugInfoFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
 open func inviteMembers(accountRef: String, groupIdHex: String, memberRefs: [String])async throws  -> SendSummaryFfi {
     return
         try  await uniffiRustCallAsync(
@@ -1867,6 +2072,14 @@ open func normalizeMemberRef(memberRef: String)throws  -> MemberRefFfi {
 })
 }
     
+open func notificationSettings(accountRef: String)throws  -> NotificationSettingsFfi {
+    return try  FfiConverterTypeNotificationSettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_notification_settings(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
+}
+    
     /**
      * Convert a hex account id (Nostr public key) into its `npub…` bech32
      * form for display. `None` if the hex isn't a valid public key.
@@ -1918,6 +2131,26 @@ open func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef
 }
     
     /**
+     * Publish a new fresh KeyPackage for `account_ref`.
+     */
+open func publishNewKeyPackage(accountRef: String)async throws  -> UInt64 {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_publish_new_key_package(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
      * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
@@ -1958,6 +2191,14 @@ open func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi
             liftFunc: FfiConverterTypeUserProfileMetadataFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+    
+open func pushRegistration(accountRef: String)throws  -> PushRegistrationFfi? {
+    return try  FfiConverterOptionTypePushRegistrationFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_push_registration(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
 }
     
     /**
@@ -2074,6 +2315,27 @@ open func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+    /**
+     * Re-publish the latest cached KeyPackage when possible, otherwise
+     * publish a fresh one.
+     */
+open func republishKeyPackage(accountRef: String)async throws  -> UInt64 {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_republish_key_package(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -2221,6 +2483,32 @@ open func setGroupArchived(accountRef: String, groupIdHex: String, archived: Boo
         FfiConverterBool.lower(archived),$0
     )
 })
+}
+    
+open func setLocalNotificationsEnabled(accountRef: String, enabled: Bool)throws  -> NotificationSettingsFfi {
+    return try  FfiConverterTypeNotificationSettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_local_notifications_enabled(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterBool.lower(enabled),$0
+    )
+})
+}
+    
+open func setNativePushEnabled(accountRef: String, enabled: Bool)async throws  -> NotificationSettingsFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_native_push_enabled(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterBool.lower(enabled)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeNotificationSettingsFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
 }
     
     /**
@@ -2371,6 +2659,23 @@ open func subscribeMessages(accountRef: String, groupIdHex: String?)async throws
         )
 }
     
+open func subscribeNotifications()async throws  -> NotificationsSubscription {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_subscribe_notifications(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeNotificationsSubscription.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
     /**
      * Remove this account's reaction from `target_message_id`.
      */
@@ -2425,6 +2730,23 @@ open func uploadMedia(accountRef: String, groupIdHex: String, request: MediaUplo
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeMediaUploadResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+    
+open func upsertPushRegistration(accountRef: String, platform: PushPlatformFfi, rawToken: String, serverPubkeyHex: String, relayHint: String?)async throws  -> PushRegistrationFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_upsert_push_registration(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypePushPlatformFfi.lower(platform),FfiConverterString.lower(rawToken),FfiConverterString.lower(serverPubkeyHex),FfiConverterOptionString.lower(relayHint)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePushRegistrationFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -2666,6 +2988,267 @@ public func FfiConverterTypeMessagesSubscription_lift(_ pointer: UnsafeMutableRa
 #endif
 public func FfiConverterTypeMessagesSubscription_lower(_ value: MessagesSubscription) -> UnsafeMutableRawPointer {
     return FfiConverterTypeMessagesSubscription.lower(value)
+}
+
+
+
+
+public protocol NotificationsSubscriptionProtocol : AnyObject {
+    
+    func next() async  -> NotificationUpdateFfi?
+    
+}
+
+open class NotificationsSubscription:
+    NotificationsSubscriptionProtocol {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_marmot_uniffi_fn_clone_notificationssubscription(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_marmot_uniffi_fn_free_notificationssubscription(pointer, $0) }
+    }
+
+    
+
+    
+open func next()async  -> NotificationUpdateFfi? {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_notificationssubscription_next(
+                    self.uniffiClonePointer()
+                    
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeNotificationUpdateFfi.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationsSubscription: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = NotificationsSubscription
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> NotificationsSubscription {
+        return NotificationsSubscription(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: NotificationsSubscription) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationsSubscription {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: NotificationsSubscription, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationsSubscription_lift(_ pointer: UnsafeMutableRawPointer) throws -> NotificationsSubscription {
+    return try FfiConverterTypeNotificationsSubscription.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationsSubscription_lower(_ value: NotificationsSubscription) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeNotificationsSubscription.lower(value)
+}
+
+
+public struct AccountKeyPackageFfi {
+    public var accountRef: String?
+    public var accountIdHex: String
+    public var keyPackageId: String
+    public var keyPackageRefHex: String
+    public var eventIdHex: String
+    public var publishedAt: UInt64
+    public var keyPackageBytes: UInt64
+    public var sourceRelays: [String]
+    public var local: Bool
+    public var relay: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountRef: String?, accountIdHex: String, keyPackageId: String, keyPackageRefHex: String, eventIdHex: String, publishedAt: UInt64, keyPackageBytes: UInt64, sourceRelays: [String], local: Bool, relay: Bool) {
+        self.accountRef = accountRef
+        self.accountIdHex = accountIdHex
+        self.keyPackageId = keyPackageId
+        self.keyPackageRefHex = keyPackageRefHex
+        self.eventIdHex = eventIdHex
+        self.publishedAt = publishedAt
+        self.keyPackageBytes = keyPackageBytes
+        self.sourceRelays = sourceRelays
+        self.local = local
+        self.relay = relay
+    }
+}
+
+
+
+extension AccountKeyPackageFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountKeyPackageFfi, rhs: AccountKeyPackageFfi) -> Bool {
+        if lhs.accountRef != rhs.accountRef {
+            return false
+        }
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.keyPackageId != rhs.keyPackageId {
+            return false
+        }
+        if lhs.keyPackageRefHex != rhs.keyPackageRefHex {
+            return false
+        }
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.publishedAt != rhs.publishedAt {
+            return false
+        }
+        if lhs.keyPackageBytes != rhs.keyPackageBytes {
+            return false
+        }
+        if lhs.sourceRelays != rhs.sourceRelays {
+            return false
+        }
+        if lhs.local != rhs.local {
+            return false
+        }
+        if lhs.relay != rhs.relay {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountRef)
+        hasher.combine(accountIdHex)
+        hasher.combine(keyPackageId)
+        hasher.combine(keyPackageRefHex)
+        hasher.combine(eventIdHex)
+        hasher.combine(publishedAt)
+        hasher.combine(keyPackageBytes)
+        hasher.combine(sourceRelays)
+        hasher.combine(local)
+        hasher.combine(relay)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountKeyPackageFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountKeyPackageFfi {
+        return
+            try AccountKeyPackageFfi(
+                accountRef: FfiConverterOptionString.read(from: &buf), 
+                accountIdHex: FfiConverterString.read(from: &buf), 
+                keyPackageId: FfiConverterString.read(from: &buf), 
+                keyPackageRefHex: FfiConverterString.read(from: &buf), 
+                eventIdHex: FfiConverterString.read(from: &buf), 
+                publishedAt: FfiConverterUInt64.read(from: &buf), 
+                keyPackageBytes: FfiConverterUInt64.read(from: &buf), 
+                sourceRelays: FfiConverterSequenceString.read(from: &buf), 
+                local: FfiConverterBool.read(from: &buf), 
+                relay: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountKeyPackageFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.accountRef, into: &buf)
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterString.write(value.keyPackageId, into: &buf)
+        FfiConverterString.write(value.keyPackageRefHex, into: &buf)
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterUInt64.write(value.publishedAt, into: &buf)
+        FfiConverterUInt64.write(value.keyPackageBytes, into: &buf)
+        FfiConverterSequenceString.write(value.sourceRelays, into: &buf)
+        FfiConverterBool.write(value.local, into: &buf)
+        FfiConverterBool.write(value.relay, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountKeyPackageFfi_lift(_ buf: RustBuffer) throws -> AccountKeyPackageFfi {
+    return try FfiConverterTypeAccountKeyPackageFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountKeyPackageFfi_lower(_ value: AccountKeyPackageFfi) -> RustBuffer {
+    return FfiConverterTypeAccountKeyPackageFfi.lower(value)
 }
 
 
@@ -3100,10 +3683,13 @@ public struct AppGroupRecordFfi {
     public var relays: [String]
     public var nostrGroupIdHex: String
     public var archived: Bool
+    public var pendingConfirmation: Bool
+    public var welcomerAccountIdHex: String?
+    public var viaWelcomeMessageIdHex: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupIdHex: String, endpoint: String, name: String, description: String, admins: [String], relays: [String], nostrGroupIdHex: String, archived: Bool) {
+    public init(groupIdHex: String, endpoint: String, name: String, description: String, admins: [String], relays: [String], nostrGroupIdHex: String, archived: Bool, pendingConfirmation: Bool, welcomerAccountIdHex: String?, viaWelcomeMessageIdHex: String?) {
         self.groupIdHex = groupIdHex
         self.endpoint = endpoint
         self.name = name
@@ -3112,6 +3698,9 @@ public struct AppGroupRecordFfi {
         self.relays = relays
         self.nostrGroupIdHex = nostrGroupIdHex
         self.archived = archived
+        self.pendingConfirmation = pendingConfirmation
+        self.welcomerAccountIdHex = welcomerAccountIdHex
+        self.viaWelcomeMessageIdHex = viaWelcomeMessageIdHex
     }
 }
 
@@ -3143,6 +3732,15 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         if lhs.archived != rhs.archived {
             return false
         }
+        if lhs.pendingConfirmation != rhs.pendingConfirmation {
+            return false
+        }
+        if lhs.welcomerAccountIdHex != rhs.welcomerAccountIdHex {
+            return false
+        }
+        if lhs.viaWelcomeMessageIdHex != rhs.viaWelcomeMessageIdHex {
+            return false
+        }
         return true
     }
 
@@ -3155,6 +3753,9 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         hasher.combine(relays)
         hasher.combine(nostrGroupIdHex)
         hasher.combine(archived)
+        hasher.combine(pendingConfirmation)
+        hasher.combine(welcomerAccountIdHex)
+        hasher.combine(viaWelcomeMessageIdHex)
     }
 }
 
@@ -3173,7 +3774,10 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
                 admins: FfiConverterSequenceString.read(from: &buf), 
                 relays: FfiConverterSequenceString.read(from: &buf), 
                 nostrGroupIdHex: FfiConverterString.read(from: &buf), 
-                archived: FfiConverterBool.read(from: &buf)
+                archived: FfiConverterBool.read(from: &buf), 
+                pendingConfirmation: FfiConverterBool.read(from: &buf), 
+                welcomerAccountIdHex: FfiConverterOptionString.read(from: &buf), 
+                viaWelcomeMessageIdHex: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -3186,6 +3790,9 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.relays, into: &buf)
         FfiConverterString.write(value.nostrGroupIdHex, into: &buf)
         FfiConverterBool.write(value.archived, into: &buf)
+        FfiConverterBool.write(value.pendingConfirmation, into: &buf)
+        FfiConverterOptionString.write(value.welcomerAccountIdHex, into: &buf)
+        FfiConverterOptionString.write(value.viaWelcomeMessageIdHex, into: &buf)
     }
 }
 
@@ -3339,6 +3946,80 @@ public func FfiConverterTypeAppMessageRecordFfi_lower(_ value: AppMessageRecordF
 }
 
 
+public struct BackgroundNotificationCollectionFfi {
+    public var status: NotificationCollectionStatusFfi
+    public var notifications: [NotificationUpdateFfi]
+    public var error: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(status: NotificationCollectionStatusFfi, notifications: [NotificationUpdateFfi], error: String?) {
+        self.status = status
+        self.notifications = notifications
+        self.error = error
+    }
+}
+
+
+
+extension BackgroundNotificationCollectionFfi: Equatable, Hashable {
+    public static func ==(lhs: BackgroundNotificationCollectionFfi, rhs: BackgroundNotificationCollectionFfi) -> Bool {
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.notifications != rhs.notifications {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(status)
+        hasher.combine(notifications)
+        hasher.combine(error)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackgroundNotificationCollectionFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackgroundNotificationCollectionFfi {
+        return
+            try BackgroundNotificationCollectionFfi(
+                status: FfiConverterTypeNotificationCollectionStatusFfi.read(from: &buf), 
+                notifications: FfiConverterSequenceTypeNotificationUpdateFfi.read(from: &buf), 
+                error: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: BackgroundNotificationCollectionFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeNotificationCollectionStatusFfi.write(value.status, into: &buf)
+        FfiConverterSequenceTypeNotificationUpdateFfi.write(value.notifications, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackgroundNotificationCollectionFfi_lift(_ buf: RustBuffer) throws -> BackgroundNotificationCollectionFfi {
+    return try FfiConverterTypeBackgroundNotificationCollectionFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackgroundNotificationCollectionFfi_lower(_ value: BackgroundNotificationCollectionFfi) -> RustBuffer {
+    return FfiConverterTypeBackgroundNotificationCollectionFfi.lower(value)
+}
+
+
 public struct GroupDetailsFfi {
     public var group: AppGroupRecordFfi
     public var members: [GroupMemberDetailsFfi]
@@ -3402,6 +4083,72 @@ public func FfiConverterTypeGroupDetailsFfi_lift(_ buf: RustBuffer) throws -> Gr
 #endif
 public func FfiConverterTypeGroupDetailsFfi_lower(_ value: GroupDetailsFfi) -> RustBuffer {
     return FfiConverterTypeGroupDetailsFfi.lower(value)
+}
+
+
+public struct GroupInviteDeclineResultFfi {
+    public var group: AppGroupRecordFfi
+    public var summary: SendSummaryFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(group: AppGroupRecordFfi, summary: SendSummaryFfi) {
+        self.group = group
+        self.summary = summary
+    }
+}
+
+
+
+extension GroupInviteDeclineResultFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupInviteDeclineResultFfi, rhs: GroupInviteDeclineResultFfi) -> Bool {
+        if lhs.group != rhs.group {
+            return false
+        }
+        if lhs.summary != rhs.summary {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(group)
+        hasher.combine(summary)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupInviteDeclineResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupInviteDeclineResultFfi {
+        return
+            try GroupInviteDeclineResultFfi(
+                group: FfiConverterTypeAppGroupRecordFfi.read(from: &buf), 
+                summary: FfiConverterTypeSendSummaryFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupInviteDeclineResultFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeAppGroupRecordFfi.write(value.group, into: &buf)
+        FfiConverterTypeSendSummaryFfi.write(value.summary, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupInviteDeclineResultFfi_lift(_ buf: RustBuffer) throws -> GroupInviteDeclineResultFfi {
+    return try FfiConverterTypeGroupInviteDeclineResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupInviteDeclineResultFfi_lower(_ value: GroupInviteDeclineResultFfi) -> RustBuffer {
+    return FfiConverterTypeGroupInviteDeclineResultFfi.lower(value)
 }
 
 
@@ -3786,6 +4533,340 @@ public func FfiConverterTypeGroupMutationResultFfi_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeGroupMutationResultFfi_lower(_ value: GroupMutationResultFfi) -> RustBuffer {
     return FfiConverterTypeGroupMutationResultFfi.lower(value)
+}
+
+
+public struct GroupPushDebugInfoFfi {
+    public var totalTokenCount: UInt32
+    public var activeTokenCount: UInt32
+    public var staleTokenCount: UInt32
+    public var missingRelayHintCount: UInt32
+    public var lastTokenListUpdatedAtMs: Int64?
+    public var localRegistration: LocalPushRegistrationDebugFfi
+    public var tokens: [GroupPushTokenDebugEntryFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(totalTokenCount: UInt32, activeTokenCount: UInt32, staleTokenCount: UInt32, missingRelayHintCount: UInt32, lastTokenListUpdatedAtMs: Int64?, localRegistration: LocalPushRegistrationDebugFfi, tokens: [GroupPushTokenDebugEntryFfi]) {
+        self.totalTokenCount = totalTokenCount
+        self.activeTokenCount = activeTokenCount
+        self.staleTokenCount = staleTokenCount
+        self.missingRelayHintCount = missingRelayHintCount
+        self.lastTokenListUpdatedAtMs = lastTokenListUpdatedAtMs
+        self.localRegistration = localRegistration
+        self.tokens = tokens
+    }
+}
+
+
+
+extension GroupPushDebugInfoFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupPushDebugInfoFfi, rhs: GroupPushDebugInfoFfi) -> Bool {
+        if lhs.totalTokenCount != rhs.totalTokenCount {
+            return false
+        }
+        if lhs.activeTokenCount != rhs.activeTokenCount {
+            return false
+        }
+        if lhs.staleTokenCount != rhs.staleTokenCount {
+            return false
+        }
+        if lhs.missingRelayHintCount != rhs.missingRelayHintCount {
+            return false
+        }
+        if lhs.lastTokenListUpdatedAtMs != rhs.lastTokenListUpdatedAtMs {
+            return false
+        }
+        if lhs.localRegistration != rhs.localRegistration {
+            return false
+        }
+        if lhs.tokens != rhs.tokens {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(totalTokenCount)
+        hasher.combine(activeTokenCount)
+        hasher.combine(staleTokenCount)
+        hasher.combine(missingRelayHintCount)
+        hasher.combine(lastTokenListUpdatedAtMs)
+        hasher.combine(localRegistration)
+        hasher.combine(tokens)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupPushDebugInfoFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupPushDebugInfoFfi {
+        return
+            try GroupPushDebugInfoFfi(
+                totalTokenCount: FfiConverterUInt32.read(from: &buf), 
+                activeTokenCount: FfiConverterUInt32.read(from: &buf), 
+                staleTokenCount: FfiConverterUInt32.read(from: &buf), 
+                missingRelayHintCount: FfiConverterUInt32.read(from: &buf), 
+                lastTokenListUpdatedAtMs: FfiConverterOptionInt64.read(from: &buf), 
+                localRegistration: FfiConverterTypeLocalPushRegistrationDebugFfi.read(from: &buf), 
+                tokens: FfiConverterSequenceTypeGroupPushTokenDebugEntryFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupPushDebugInfoFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.totalTokenCount, into: &buf)
+        FfiConverterUInt32.write(value.activeTokenCount, into: &buf)
+        FfiConverterUInt32.write(value.staleTokenCount, into: &buf)
+        FfiConverterUInt32.write(value.missingRelayHintCount, into: &buf)
+        FfiConverterOptionInt64.write(value.lastTokenListUpdatedAtMs, into: &buf)
+        FfiConverterTypeLocalPushRegistrationDebugFfi.write(value.localRegistration, into: &buf)
+        FfiConverterSequenceTypeGroupPushTokenDebugEntryFfi.write(value.tokens, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupPushDebugInfoFfi_lift(_ buf: RustBuffer) throws -> GroupPushDebugInfoFfi {
+    return try FfiConverterTypeGroupPushDebugInfoFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupPushDebugInfoFfi_lower(_ value: GroupPushDebugInfoFfi) -> RustBuffer {
+    return FfiConverterTypeGroupPushDebugInfoFfi.lower(value)
+}
+
+
+public struct GroupPushTokenDebugEntryFfi {
+    public var memberIdHex: String
+    public var leafIndex: UInt32
+    public var platform: PushPlatformFfi
+    public var tokenFingerprint: String
+    public var serverPubkeyHex: String
+    public var hasRelayHint: Bool
+    public var activeLeaf: Bool
+    public var memberMatchesActiveLeaf: Bool
+    public var isLocalMember: Bool
+    public var updatedAtMs: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(memberIdHex: String, leafIndex: UInt32, platform: PushPlatformFfi, tokenFingerprint: String, serverPubkeyHex: String, hasRelayHint: Bool, activeLeaf: Bool, memberMatchesActiveLeaf: Bool, isLocalMember: Bool, updatedAtMs: Int64) {
+        self.memberIdHex = memberIdHex
+        self.leafIndex = leafIndex
+        self.platform = platform
+        self.tokenFingerprint = tokenFingerprint
+        self.serverPubkeyHex = serverPubkeyHex
+        self.hasRelayHint = hasRelayHint
+        self.activeLeaf = activeLeaf
+        self.memberMatchesActiveLeaf = memberMatchesActiveLeaf
+        self.isLocalMember = isLocalMember
+        self.updatedAtMs = updatedAtMs
+    }
+}
+
+
+
+extension GroupPushTokenDebugEntryFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupPushTokenDebugEntryFfi, rhs: GroupPushTokenDebugEntryFfi) -> Bool {
+        if lhs.memberIdHex != rhs.memberIdHex {
+            return false
+        }
+        if lhs.leafIndex != rhs.leafIndex {
+            return false
+        }
+        if lhs.platform != rhs.platform {
+            return false
+        }
+        if lhs.tokenFingerprint != rhs.tokenFingerprint {
+            return false
+        }
+        if lhs.serverPubkeyHex != rhs.serverPubkeyHex {
+            return false
+        }
+        if lhs.hasRelayHint != rhs.hasRelayHint {
+            return false
+        }
+        if lhs.activeLeaf != rhs.activeLeaf {
+            return false
+        }
+        if lhs.memberMatchesActiveLeaf != rhs.memberMatchesActiveLeaf {
+            return false
+        }
+        if lhs.isLocalMember != rhs.isLocalMember {
+            return false
+        }
+        if lhs.updatedAtMs != rhs.updatedAtMs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(memberIdHex)
+        hasher.combine(leafIndex)
+        hasher.combine(platform)
+        hasher.combine(tokenFingerprint)
+        hasher.combine(serverPubkeyHex)
+        hasher.combine(hasRelayHint)
+        hasher.combine(activeLeaf)
+        hasher.combine(memberMatchesActiveLeaf)
+        hasher.combine(isLocalMember)
+        hasher.combine(updatedAtMs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupPushTokenDebugEntryFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupPushTokenDebugEntryFfi {
+        return
+            try GroupPushTokenDebugEntryFfi(
+                memberIdHex: FfiConverterString.read(from: &buf), 
+                leafIndex: FfiConverterUInt32.read(from: &buf), 
+                platform: FfiConverterTypePushPlatformFfi.read(from: &buf), 
+                tokenFingerprint: FfiConverterString.read(from: &buf), 
+                serverPubkeyHex: FfiConverterString.read(from: &buf), 
+                hasRelayHint: FfiConverterBool.read(from: &buf), 
+                activeLeaf: FfiConverterBool.read(from: &buf), 
+                memberMatchesActiveLeaf: FfiConverterBool.read(from: &buf), 
+                isLocalMember: FfiConverterBool.read(from: &buf), 
+                updatedAtMs: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupPushTokenDebugEntryFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.memberIdHex, into: &buf)
+        FfiConverterUInt32.write(value.leafIndex, into: &buf)
+        FfiConverterTypePushPlatformFfi.write(value.platform, into: &buf)
+        FfiConverterString.write(value.tokenFingerprint, into: &buf)
+        FfiConverterString.write(value.serverPubkeyHex, into: &buf)
+        FfiConverterBool.write(value.hasRelayHint, into: &buf)
+        FfiConverterBool.write(value.activeLeaf, into: &buf)
+        FfiConverterBool.write(value.memberMatchesActiveLeaf, into: &buf)
+        FfiConverterBool.write(value.isLocalMember, into: &buf)
+        FfiConverterInt64.write(value.updatedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lift(_ buf: RustBuffer) throws -> GroupPushTokenDebugEntryFfi {
+    return try FfiConverterTypeGroupPushTokenDebugEntryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lower(_ value: GroupPushTokenDebugEntryFfi) -> RustBuffer {
+    return FfiConverterTypeGroupPushTokenDebugEntryFfi.lower(value)
+}
+
+
+public struct LocalPushRegistrationDebugFfi {
+    public var registered: Bool
+    public var shareable: Bool
+    public var localNotificationsEnabled: Bool
+    public var nativePushEnabled: Bool
+    public var localLeafIndex: UInt32?
+    public var localTokenCached: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(registered: Bool, shareable: Bool, localNotificationsEnabled: Bool, nativePushEnabled: Bool, localLeafIndex: UInt32?, localTokenCached: Bool) {
+        self.registered = registered
+        self.shareable = shareable
+        self.localNotificationsEnabled = localNotificationsEnabled
+        self.nativePushEnabled = nativePushEnabled
+        self.localLeafIndex = localLeafIndex
+        self.localTokenCached = localTokenCached
+    }
+}
+
+
+
+extension LocalPushRegistrationDebugFfi: Equatable, Hashable {
+    public static func ==(lhs: LocalPushRegistrationDebugFfi, rhs: LocalPushRegistrationDebugFfi) -> Bool {
+        if lhs.registered != rhs.registered {
+            return false
+        }
+        if lhs.shareable != rhs.shareable {
+            return false
+        }
+        if lhs.localNotificationsEnabled != rhs.localNotificationsEnabled {
+            return false
+        }
+        if lhs.nativePushEnabled != rhs.nativePushEnabled {
+            return false
+        }
+        if lhs.localLeafIndex != rhs.localLeafIndex {
+            return false
+        }
+        if lhs.localTokenCached != rhs.localTokenCached {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(registered)
+        hasher.combine(shareable)
+        hasher.combine(localNotificationsEnabled)
+        hasher.combine(nativePushEnabled)
+        hasher.combine(localLeafIndex)
+        hasher.combine(localTokenCached)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPushRegistrationDebugFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPushRegistrationDebugFfi {
+        return
+            try LocalPushRegistrationDebugFfi(
+                registered: FfiConverterBool.read(from: &buf), 
+                shareable: FfiConverterBool.read(from: &buf), 
+                localNotificationsEnabled: FfiConverterBool.read(from: &buf), 
+                nativePushEnabled: FfiConverterBool.read(from: &buf), 
+                localLeafIndex: FfiConverterOptionUInt32.read(from: &buf), 
+                localTokenCached: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPushRegistrationDebugFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.registered, into: &buf)
+        FfiConverterBool.write(value.shareable, into: &buf)
+        FfiConverterBool.write(value.localNotificationsEnabled, into: &buf)
+        FfiConverterBool.write(value.nativePushEnabled, into: &buf)
+        FfiConverterOptionUInt32.write(value.localLeafIndex, into: &buf)
+        FfiConverterBool.write(value.localTokenCached, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPushRegistrationDebugFfi_lift(_ buf: RustBuffer) throws -> LocalPushRegistrationDebugFfi {
+    return try FfiConverterTypeLocalPushRegistrationDebugFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPushRegistrationDebugFfi_lower(_ value: LocalPushRegistrationDebugFfi) -> RustBuffer {
+    return FfiConverterTypeLocalPushRegistrationDebugFfi.lower(value)
 }
 
 
@@ -4397,6 +5478,446 @@ public func FfiConverterTypeMessageTagFfi_lift(_ buf: RustBuffer) throws -> Mess
 #endif
 public func FfiConverterTypeMessageTagFfi_lower(_ value: MessageTagFfi) -> RustBuffer {
     return FfiConverterTypeMessageTagFfi.lower(value)
+}
+
+
+public struct NotificationSettingsFfi {
+    public var accountRef: String
+    public var accountIdHex: String
+    public var localNotificationsEnabled: Bool
+    public var nativePushEnabled: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountRef: String, accountIdHex: String, localNotificationsEnabled: Bool, nativePushEnabled: Bool) {
+        self.accountRef = accountRef
+        self.accountIdHex = accountIdHex
+        self.localNotificationsEnabled = localNotificationsEnabled
+        self.nativePushEnabled = nativePushEnabled
+    }
+}
+
+
+
+extension NotificationSettingsFfi: Equatable, Hashable {
+    public static func ==(lhs: NotificationSettingsFfi, rhs: NotificationSettingsFfi) -> Bool {
+        if lhs.accountRef != rhs.accountRef {
+            return false
+        }
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.localNotificationsEnabled != rhs.localNotificationsEnabled {
+            return false
+        }
+        if lhs.nativePushEnabled != rhs.nativePushEnabled {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountRef)
+        hasher.combine(accountIdHex)
+        hasher.combine(localNotificationsEnabled)
+        hasher.combine(nativePushEnabled)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationSettingsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationSettingsFfi {
+        return
+            try NotificationSettingsFfi(
+                accountRef: FfiConverterString.read(from: &buf), 
+                accountIdHex: FfiConverterString.read(from: &buf), 
+                localNotificationsEnabled: FfiConverterBool.read(from: &buf), 
+                nativePushEnabled: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NotificationSettingsFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountRef, into: &buf)
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterBool.write(value.localNotificationsEnabled, into: &buf)
+        FfiConverterBool.write(value.nativePushEnabled, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationSettingsFfi_lift(_ buf: RustBuffer) throws -> NotificationSettingsFfi {
+    return try FfiConverterTypeNotificationSettingsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationSettingsFfi_lower(_ value: NotificationSettingsFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationSettingsFfi.lower(value)
+}
+
+
+public struct NotificationUpdateFfi {
+    public var notificationKey: String
+    public var conversationKey: String
+    public var trigger: NotificationTriggerFfi
+    public var accountRef: String
+    public var accountIdHex: String
+    public var groupIdHex: String
+    public var groupName: String?
+    public var isDm: Bool
+    public var messageIdHex: String?
+    public var sender: NotificationUserFfi
+    public var receiver: NotificationUserFfi
+    public var previewText: String?
+    public var timestampMs: Int64
+    public var isFromSelf: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, timestampMs: Int64, isFromSelf: Bool) {
+        self.notificationKey = notificationKey
+        self.conversationKey = conversationKey
+        self.trigger = trigger
+        self.accountRef = accountRef
+        self.accountIdHex = accountIdHex
+        self.groupIdHex = groupIdHex
+        self.groupName = groupName
+        self.isDm = isDm
+        self.messageIdHex = messageIdHex
+        self.sender = sender
+        self.receiver = receiver
+        self.previewText = previewText
+        self.timestampMs = timestampMs
+        self.isFromSelf = isFromSelf
+    }
+}
+
+
+
+extension NotificationUpdateFfi: Equatable, Hashable {
+    public static func ==(lhs: NotificationUpdateFfi, rhs: NotificationUpdateFfi) -> Bool {
+        if lhs.notificationKey != rhs.notificationKey {
+            return false
+        }
+        if lhs.conversationKey != rhs.conversationKey {
+            return false
+        }
+        if lhs.trigger != rhs.trigger {
+            return false
+        }
+        if lhs.accountRef != rhs.accountRef {
+            return false
+        }
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.groupName != rhs.groupName {
+            return false
+        }
+        if lhs.isDm != rhs.isDm {
+            return false
+        }
+        if lhs.messageIdHex != rhs.messageIdHex {
+            return false
+        }
+        if lhs.sender != rhs.sender {
+            return false
+        }
+        if lhs.receiver != rhs.receiver {
+            return false
+        }
+        if lhs.previewText != rhs.previewText {
+            return false
+        }
+        if lhs.timestampMs != rhs.timestampMs {
+            return false
+        }
+        if lhs.isFromSelf != rhs.isFromSelf {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(notificationKey)
+        hasher.combine(conversationKey)
+        hasher.combine(trigger)
+        hasher.combine(accountRef)
+        hasher.combine(accountIdHex)
+        hasher.combine(groupIdHex)
+        hasher.combine(groupName)
+        hasher.combine(isDm)
+        hasher.combine(messageIdHex)
+        hasher.combine(sender)
+        hasher.combine(receiver)
+        hasher.combine(previewText)
+        hasher.combine(timestampMs)
+        hasher.combine(isFromSelf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationUpdateFfi {
+        return
+            try NotificationUpdateFfi(
+                notificationKey: FfiConverterString.read(from: &buf), 
+                conversationKey: FfiConverterString.read(from: &buf), 
+                trigger: FfiConverterTypeNotificationTriggerFfi.read(from: &buf), 
+                accountRef: FfiConverterString.read(from: &buf), 
+                accountIdHex: FfiConverterString.read(from: &buf), 
+                groupIdHex: FfiConverterString.read(from: &buf), 
+                groupName: FfiConverterOptionString.read(from: &buf), 
+                isDm: FfiConverterBool.read(from: &buf), 
+                messageIdHex: FfiConverterOptionString.read(from: &buf), 
+                sender: FfiConverterTypeNotificationUserFfi.read(from: &buf), 
+                receiver: FfiConverterTypeNotificationUserFfi.read(from: &buf), 
+                previewText: FfiConverterOptionString.read(from: &buf), 
+                timestampMs: FfiConverterInt64.read(from: &buf), 
+                isFromSelf: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NotificationUpdateFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.notificationKey, into: &buf)
+        FfiConverterString.write(value.conversationKey, into: &buf)
+        FfiConverterTypeNotificationTriggerFfi.write(value.trigger, into: &buf)
+        FfiConverterString.write(value.accountRef, into: &buf)
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterOptionString.write(value.groupName, into: &buf)
+        FfiConverterBool.write(value.isDm, into: &buf)
+        FfiConverterOptionString.write(value.messageIdHex, into: &buf)
+        FfiConverterTypeNotificationUserFfi.write(value.sender, into: &buf)
+        FfiConverterTypeNotificationUserFfi.write(value.receiver, into: &buf)
+        FfiConverterOptionString.write(value.previewText, into: &buf)
+        FfiConverterInt64.write(value.timestampMs, into: &buf)
+        FfiConverterBool.write(value.isFromSelf, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationUpdateFfi_lift(_ buf: RustBuffer) throws -> NotificationUpdateFfi {
+    return try FfiConverterTypeNotificationUpdateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationUpdateFfi_lower(_ value: NotificationUpdateFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationUpdateFfi.lower(value)
+}
+
+
+public struct NotificationUserFfi {
+    public var accountIdHex: String
+    public var displayName: String?
+    public var pictureUrl: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountIdHex: String, displayName: String?, pictureUrl: String?) {
+        self.accountIdHex = accountIdHex
+        self.displayName = displayName
+        self.pictureUrl = pictureUrl
+    }
+}
+
+
+
+extension NotificationUserFfi: Equatable, Hashable {
+    public static func ==(lhs: NotificationUserFfi, rhs: NotificationUserFfi) -> Bool {
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.displayName != rhs.displayName {
+            return false
+        }
+        if lhs.pictureUrl != rhs.pictureUrl {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountIdHex)
+        hasher.combine(displayName)
+        hasher.combine(pictureUrl)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationUserFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationUserFfi {
+        return
+            try NotificationUserFfi(
+                accountIdHex: FfiConverterString.read(from: &buf), 
+                displayName: FfiConverterOptionString.read(from: &buf), 
+                pictureUrl: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NotificationUserFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterOptionString.write(value.displayName, into: &buf)
+        FfiConverterOptionString.write(value.pictureUrl, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationUserFfi_lift(_ buf: RustBuffer) throws -> NotificationUserFfi {
+    return try FfiConverterTypeNotificationUserFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationUserFfi_lower(_ value: NotificationUserFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationUserFfi.lower(value)
+}
+
+
+public struct PushRegistrationFfi {
+    public var accountRef: String
+    public var accountIdHex: String
+    public var platform: PushPlatformFfi
+    public var tokenFingerprint: String
+    public var serverPubkeyHex: String
+    public var relayHint: String?
+    public var createdAtMs: Int64
+    public var updatedAtMs: Int64
+    public var lastSharedAtMs: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountRef: String, accountIdHex: String, platform: PushPlatformFfi, tokenFingerprint: String, serverPubkeyHex: String, relayHint: String?, createdAtMs: Int64, updatedAtMs: Int64, lastSharedAtMs: Int64?) {
+        self.accountRef = accountRef
+        self.accountIdHex = accountIdHex
+        self.platform = platform
+        self.tokenFingerprint = tokenFingerprint
+        self.serverPubkeyHex = serverPubkeyHex
+        self.relayHint = relayHint
+        self.createdAtMs = createdAtMs
+        self.updatedAtMs = updatedAtMs
+        self.lastSharedAtMs = lastSharedAtMs
+    }
+}
+
+
+
+extension PushRegistrationFfi: Equatable, Hashable {
+    public static func ==(lhs: PushRegistrationFfi, rhs: PushRegistrationFfi) -> Bool {
+        if lhs.accountRef != rhs.accountRef {
+            return false
+        }
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.platform != rhs.platform {
+            return false
+        }
+        if lhs.tokenFingerprint != rhs.tokenFingerprint {
+            return false
+        }
+        if lhs.serverPubkeyHex != rhs.serverPubkeyHex {
+            return false
+        }
+        if lhs.relayHint != rhs.relayHint {
+            return false
+        }
+        if lhs.createdAtMs != rhs.createdAtMs {
+            return false
+        }
+        if lhs.updatedAtMs != rhs.updatedAtMs {
+            return false
+        }
+        if lhs.lastSharedAtMs != rhs.lastSharedAtMs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountRef)
+        hasher.combine(accountIdHex)
+        hasher.combine(platform)
+        hasher.combine(tokenFingerprint)
+        hasher.combine(serverPubkeyHex)
+        hasher.combine(relayHint)
+        hasher.combine(createdAtMs)
+        hasher.combine(updatedAtMs)
+        hasher.combine(lastSharedAtMs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePushRegistrationFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PushRegistrationFfi {
+        return
+            try PushRegistrationFfi(
+                accountRef: FfiConverterString.read(from: &buf), 
+                accountIdHex: FfiConverterString.read(from: &buf), 
+                platform: FfiConverterTypePushPlatformFfi.read(from: &buf), 
+                tokenFingerprint: FfiConverterString.read(from: &buf), 
+                serverPubkeyHex: FfiConverterString.read(from: &buf), 
+                relayHint: FfiConverterOptionString.read(from: &buf), 
+                createdAtMs: FfiConverterInt64.read(from: &buf), 
+                updatedAtMs: FfiConverterInt64.read(from: &buf), 
+                lastSharedAtMs: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PushRegistrationFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountRef, into: &buf)
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterTypePushPlatformFfi.write(value.platform, into: &buf)
+        FfiConverterString.write(value.tokenFingerprint, into: &buf)
+        FfiConverterString.write(value.serverPubkeyHex, into: &buf)
+        FfiConverterOptionString.write(value.relayHint, into: &buf)
+        FfiConverterInt64.write(value.createdAtMs, into: &buf)
+        FfiConverterInt64.write(value.updatedAtMs, into: &buf)
+        FfiConverterOptionInt64.write(value.lastSharedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePushRegistrationFfi_lift(_ buf: RustBuffer) throws -> PushRegistrationFfi {
+    return try FfiConverterTypePushRegistrationFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePushRegistrationFfi_lower(_ value: PushRegistrationFfi) -> RustBuffer {
+    return FfiConverterTypePushRegistrationFfi.lower(value)
 }
 
 
@@ -5462,6 +6983,283 @@ extension MessageUpdateFfi: Equatable, Hashable {}
 
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum NotificationCollectionStatusFfi {
+    
+    case newData
+    case noData
+    case failed
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationCollectionStatusFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NotificationCollectionStatusFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationCollectionStatusFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .newData
+        
+        case 2: return .noData
+        
+        case 3: return .failed
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NotificationCollectionStatusFfi, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .newData:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .noData:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .failed:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationCollectionStatusFfi_lift(_ buf: RustBuffer) throws -> NotificationCollectionStatusFfi {
+    return try FfiConverterTypeNotificationCollectionStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationCollectionStatusFfi_lower(_ value: NotificationCollectionStatusFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationCollectionStatusFfi.lower(value)
+}
+
+
+
+extension NotificationCollectionStatusFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum NotificationTriggerFfi {
+    
+    case newMessage
+    case groupInvite
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationTriggerFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NotificationTriggerFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationTriggerFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .newMessage
+        
+        case 2: return .groupInvite
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NotificationTriggerFfi, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .newMessage:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .groupInvite:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationTriggerFfi_lift(_ buf: RustBuffer) throws -> NotificationTriggerFfi {
+    return try FfiConverterTypeNotificationTriggerFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationTriggerFfi_lower(_ value: NotificationTriggerFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationTriggerFfi.lower(value)
+}
+
+
+
+extension NotificationTriggerFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum NotificationWakeSourceFfi {
+    
+    case apnsNse
+    case fcmDataMessage
+    case androidForegroundService
+    case manualCatchUp
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationWakeSourceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NotificationWakeSourceFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationWakeSourceFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .apnsNse
+        
+        case 2: return .fcmDataMessage
+        
+        case 3: return .androidForegroundService
+        
+        case 4: return .manualCatchUp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: NotificationWakeSourceFfi, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .apnsNse:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .fcmDataMessage:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .androidForegroundService:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .manualCatchUp:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationWakeSourceFfi_lift(_ buf: RustBuffer) throws -> NotificationWakeSourceFfi {
+    return try FfiConverterTypeNotificationWakeSourceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationWakeSourceFfi_lower(_ value: NotificationWakeSourceFfi) -> RustBuffer {
+    return FfiConverterTypeNotificationWakeSourceFfi.lower(value)
+}
+
+
+
+extension NotificationWakeSourceFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum PushPlatformFfi {
+    
+    case apns
+    case fcm
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePushPlatformFfi: FfiConverterRustBuffer {
+    typealias SwiftType = PushPlatformFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PushPlatformFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .apns
+        
+        case 2: return .fcm
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PushPlatformFfi, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .apns:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .fcm:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePushPlatformFfi_lift(_ buf: RustBuffer) throws -> PushPlatformFfi {
+    return try FfiConverterTypePushPlatformFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePushPlatformFfi_lower(_ value: PushPlatformFfi) -> RustBuffer {
+    return FfiConverterTypePushPlatformFfi.lower(value)
+}
+
+
+
+extension PushPlatformFfi: Equatable, Hashable {}
+
+
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -5481,6 +7279,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -5553,6 +7375,54 @@ fileprivate struct FfiConverterOptionTypeAppGroupRecordFfi: FfiConverterRustBuff
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeAppGroupRecordFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeNotificationUpdateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = NotificationUpdateFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeNotificationUpdateFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeNotificationUpdateFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypePushRegistrationFfi: FfiConverterRustBuffer {
+    typealias SwiftType = PushRegistrationFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePushRegistrationFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePushRegistrationFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -5731,6 +7601,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAccountKeyPackageFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AccountKeyPackageFfi]
+
+    public static func write(_ value: [AccountKeyPackageFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAccountKeyPackageFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AccountKeyPackageFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AccountKeyPackageFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAccountKeyPackageFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeAccountSummaryFfi: FfiConverterRustBuffer {
     typealias SwiftType = [AccountSummaryFfi]
 
@@ -5881,6 +7776,31 @@ fileprivate struct FfiConverterSequenceTypeGroupMemberDetailsFfi: FfiConverterRu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeGroupPushTokenDebugEntryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [GroupPushTokenDebugEntryFfi]
+
+    public static func write(_ value: [GroupPushTokenDebugEntryFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeGroupPushTokenDebugEntryFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [GroupPushTokenDebugEntryFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [GroupPushTokenDebugEntryFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeGroupPushTokenDebugEntryFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeMediaRecordFfi: FfiConverterRustBuffer {
     typealias SwiftType = [MediaRecordFfi]
 
@@ -5923,6 +7843,31 @@ fileprivate struct FfiConverterSequenceTypeMessageTagFfi: FfiConverterRustBuffer
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeMessageTagFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeNotificationUpdateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [NotificationUpdateFfi]
+
+    public static func write(_ value: [NotificationUpdateFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeNotificationUpdateFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [NotificationUpdateFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [NotificationUpdateFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeNotificationUpdateFfi.read(from: &buf))
         }
         return seq
     }
@@ -6010,6 +7955,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_groupstatesubscription_snapshot() != 50946) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_accept_group_invite() != 61156) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_id_hex() != 53507) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6019,16 +7967,34 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_key_package_relays() != 12467) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_key_packages() != 23031) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_nip65_relays() != 27766) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 20645) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_catch_up_accounts() != 28824) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_clear_push_registration() != 45566) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_collect_notifications_after_wake() != 273) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_group() != 29327) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity() != 64408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_decline_group_invite() != 24239) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_delete_account_key_package() != 19816) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_delete_message() != 13951) {
@@ -6058,6 +8024,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_mls_state() != 57976) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_push_debug_info() != 25626) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_invite_members() != 53648) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6082,6 +8051,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_normalize_member_ref() != 27721) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_notification_settings() != 40364) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_npub() != 20744) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6091,10 +8063,16 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin_detailed() != 54201) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_publish_new_key_package() != 11266) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 678) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 48272) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_push_registration() != 38312) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_react_to_message() != 39138) {
@@ -6113,6 +8091,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reply_to_message() != 49057) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_republish_key_package() != 44103) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
@@ -6139,6 +8120,12 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_local_notifications_enabled() != 53550) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_native_push_enabled() != 28116) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 57342) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6160,6 +8147,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages() != 58466) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_notifications() != 41715) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message() != 11846) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -6167,6 +8157,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_upload_media() != 3159) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_upsert_push_registration() != 36089) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_user_profile() != 12217) {
@@ -6179,6 +8172,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_messagessubscription_snapshot() != 21328) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_notificationssubscription_next() != 46153) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new() != 56105) {

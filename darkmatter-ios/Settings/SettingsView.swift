@@ -62,6 +62,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Identity & Keys", systemImage: "key.fill")
                 }
+
+                NavigationLink {
+                    KeyPackagesView()
+                } label: {
+                    Label("Key Packages", systemImage: "key.horizontal.fill")
+                }
             }
 
             Section("Network") {
