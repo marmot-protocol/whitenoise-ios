@@ -44,8 +44,8 @@ final class ChatsListViewModel {
     }
 
     /// Begin (or rebind, when `accountRef` changes) the chats subscription.
-    func bind(accountRef: String?) async {
-        if currentAccount == accountRef { return }
+    func bind(accountRef: String?, force: Bool = false) async {
+        if currentAccount == accountRef, !force { return }
         chatsTask?.cancel(); chatsTask = nil
         messagesTask?.cancel(); messagesTask = nil
         groups = []

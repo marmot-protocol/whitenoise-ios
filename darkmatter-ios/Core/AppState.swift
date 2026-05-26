@@ -69,6 +69,10 @@ final class AppState {
     let notifications: AppNotifications
     private var notificationSubscriptionTask: Task<Void, Never>?
     private var isForegroundCatchUpRunning = false
+    private var isRuntimeSuspending = false
+    private(set) var isAppSceneActive = true
+    private(set) var runtimeSuspendedForBackground = false
+    private(set) var runtimeGeneration = 0
 
     /// Cache of best-known display names keyed by account id hex. Derived
     /// from `profiles` when available. Read-only from view code.
@@ -102,6 +106,7 @@ final class AppState {
     private(set) var pendingChatId: String?
     private(set) var pendingChatAccountRef: String?
     private(set) var pendingChatMessageIdHex: String?
+    private(set) var visibleChat: VisibleChatRoute?
 
     /// Tracks in-flight directory fetches so we don't pile up duplicate work.
     private var directoryFetchesInFlight: Set<String> = []
@@ -186,8 +191,21 @@ final class AppState {
         }
     }
 
+    private func stopNotificationSubscription() {
+        notificationSubscriptionTask?.cancel()
+        notificationSubscriptionTask = nil
+    }
+
     private func shouldPresentLocalNotification(_ update: NotificationUpdateFfi) -> Bool {
-        (try? marmot.notificationSettings(accountRef: update.accountRef).localNotificationsEnabled) == true
+        LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: (try? marmot.notificationSettings(
+                accountRef: update.accountRef
+            ).localNotificationsEnabled) == true,
+            appSceneActive: isAppSceneActive,
+            updateAccountRef: update.accountRef,
+            updateGroupIdHex: update.groupIdHex,
+            visibleChat: visibleChat
+        )
     }
 
     // MARK: - Notifications
@@ -310,6 +328,46 @@ final class AppState {
             // Foreground catch-up is a best-effort safety net. The live
             // subscription and NSE path continue to handle notification flow.
         }
+    }
+
+    func setAppSceneActive(_ active: Bool) {
+        isAppSceneActive = active
+    }
+
+    func prepareForBackgroundSuspension() async {
+        isAppSceneActive = false
+        guard phase == .ready,
+              !runtimeSuspendedForBackground,
+              !isRuntimeSuspending
+        else { return }
+
+        isRuntimeSuspending = true
+        stopNotificationSubscription()
+        await marmot.shutdown()
+        runtimeSuspendedForBackground = true
+        isRuntimeSuspending = false
+    }
+
+    func resumeAfterForegroundActivation() async {
+        isAppSceneActive = true
+        while isRuntimeSuspending {
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+        guard phase == .ready else { return }
+
+        if runtimeSuspendedForBackground {
+            do {
+                try await marmot.start()
+                runtimeSuspendedForBackground = false
+                runtimeGeneration += 1
+                startNotificationSubscription()
+            } catch {
+                phase = .failed(error.localizedDescription)
+                return
+            }
+        }
+
+        await catchUpAfterForegroundActivation()
     }
 
     private func nativePushEnabledAccountRefs() -> [String] {
@@ -561,6 +619,32 @@ final class AppState {
         pendingChatId = nil
         pendingChatAccountRef = nil
         pendingChatMessageIdHex = nil
+    }
+
+    @MainActor
+    @discardableResult
+    func beginViewingChat(groupIdHex: String) -> VisibleChatRoute? {
+        guard let accountRef = activeAccountRef else { return nil }
+        let route = VisibleChatRoute(accountRef: accountRef, groupIdHex: groupIdHex)
+        visibleChat = route
+        return route
+    }
+
+    @MainActor
+    func endViewingChat(_ route: VisibleChatRoute) {
+        if visibleChat == route {
+            visibleChat = nil
+        }
+    }
+
+    func isViewingNotificationDestination(accountRef: String, groupIdHex: String) -> Bool {
+        !LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: isAppSceneActive,
+            updateAccountRef: accountRef,
+            updateGroupIdHex: groupIdHex,
+            visibleChat: visibleChat
+        )
     }
 
     /// Route an inbound deep link (from `.onOpenURL`).

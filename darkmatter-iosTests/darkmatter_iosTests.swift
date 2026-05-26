@@ -38,6 +38,60 @@ struct AppStateBootstrapTests {
         await MainActor.run { appState.dismissToast() }
         #expect(appState.activeToast == nil)
     }
+
+    @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-a"
+
+        let route = appState.beginViewingChat(groupIdHex: "group-a")
+
+        #expect(route == VisibleChatRoute(accountRef: "account-a", groupIdHex: "group-a"))
+        #expect(appState.visibleChat == route)
+        #expect(appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-a"))
+        #expect(!appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-b"))
+
+        appState.setAppSceneActive(false)
+        #expect(!appState.isViewingNotificationDestination(accountRef: "account-a", groupIdHex: "group-a"))
+
+        appState.setAppSceneActive(true)
+        appState.endViewingChat(VisibleChatRoute(accountRef: "account-b", groupIdHex: "group-a"))
+        #expect(appState.visibleChat == route)
+
+        if let route {
+            appState.endViewingChat(route)
+        }
+        #expect(appState.visibleChat == nil)
+    }
+
+    @Test func backgroundSuspensionWaitsUntilRuntimeIsReady() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+
+        await appState.prepareForBackgroundSuspension()
+
+        #expect(!appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == 0)
+    }
+
+    @Test func readyRuntimeSuspendsForBackgroundAndResumesForForeground() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        await appState.bootstrap()
+        try await appState.createIdentity()
+
+        let generation = appState.runtimeGeneration
+        await appState.prepareForBackgroundSuspension()
+
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == generation)
+
+        await appState.resumeAfterForegroundActivation()
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == generation + 1)
+        #expect(appState.phase == .ready)
+    }
 }
 
 @MainActor
@@ -203,6 +257,62 @@ struct NotificationPresentationTests {
     }
 }
 
+struct LocalNotificationSuppressionPolicyTests {
+
+    @Test func visibleDestinationChatSuppressesMatchingNotificationOnly() {
+        let visibleChat = VisibleChatRoute(accountRef: "account-a", groupIdHex: "group-a")
+
+        #expect(!LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: true,
+            updateAccountRef: "account-a",
+            updateGroupIdHex: "group-a",
+            visibleChat: visibleChat
+        ))
+        #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: true,
+            updateAccountRef: "account-a",
+            updateGroupIdHex: "group-b",
+            visibleChat: visibleChat
+        ))
+        #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: true,
+            updateAccountRef: "account-b",
+            updateGroupIdHex: "group-a",
+            visibleChat: visibleChat
+        ))
+        #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: true,
+            updateAccountRef: "account-a",
+            updateGroupIdHex: "group-a",
+            visibleChat: nil
+        ))
+    }
+
+    @Test func inactiveAppScenePresentsNotificationsEvenWhenChatRouteMatches() {
+        #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: true,
+            appSceneActive: false,
+            updateAccountRef: "account-a",
+            updateGroupIdHex: "group-a",
+            visibleChat: VisibleChatRoute(accountRef: "account-a", groupIdHex: "group-a")
+        ))
+    }
+
+    @Test func disabledLocalNotificationsAreNeverPresented() {
+        #expect(!LocalNotificationSuppressionPolicy.shouldPresent(
+            localNotificationsEnabled: false,
+            appSceneActive: false,
+            updateAccountRef: "account-a",
+            updateGroupIdHex: "group-a",
+            visibleChat: nil
+        ))
+    }
+}
+
 struct NativePushRegistrationPolicyTests {
 
     @Test func enabledAccountsAreSyncedAcrossAllLocalAccounts() {
@@ -274,6 +384,64 @@ struct ForegroundNotificationSyncPolicyTests {
             appPhase: .failed("offline"),
             isCatchUpRunning: false
         ))
+    }
+}
+
+@MainActor
+struct NotificationServiceProjectionTests {
+
+    @Test func newDataCollectionUsesNewestPresentableNotification() {
+        let older = notificationUpdate(
+            notificationKey: "older",
+            senderName: "Alice",
+            previewText: "first",
+            timestampMs: 1_000
+        )
+        let newer = notificationUpdate(
+            notificationKey: "newer",
+            senderName: "Bob",
+            previewText: "second",
+            timestampMs: 2_000
+        )
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: [older, newer],
+            error: nil
+        )
+
+        let decision = NotificationServiceProjection.decision(for: collection)
+
+        #expect(decision == .decorate(LocalNotificationProjection.makePresentation(for: newer)!))
+    }
+
+    @Test func noDataCollectionSuppressesProviderFallback() {
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .noData,
+            notifications: [],
+            error: nil
+        )
+
+        #expect(NotificationServiceProjection.decision(for: collection) == .suppress)
+    }
+
+    @Test func selfOnlyCollectionSuppressesProviderFallback() {
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: [notificationUpdate(isFromSelf: true)],
+            error: nil
+        )
+
+        #expect(NotificationServiceProjection.decision(for: collection) == .suppress)
+    }
+
+    @Test func failedCollectionKeepsGenericFallback() {
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .failed,
+            notifications: [],
+            error: "relay timeout"
+        )
+
+        #expect(NotificationServiceProjection.decision(for: collection) == .fallback)
     }
 }
 
@@ -1264,7 +1432,8 @@ private func notificationUpdate(
     senderName: String? = "Alice",
     previewText: String? = "Hello",
     messageIdHex: String? = "message-a",
-    isFromSelf: Bool = false
+    isFromSelf: Bool = false,
+    timestampMs: Int64 = 1_700_000_000_123
 ) -> NotificationUpdateFfi {
     NotificationUpdateFfi(
         notificationKey: notificationKey,
@@ -1287,7 +1456,7 @@ private func notificationUpdate(
             pictureUrl: nil
         ),
         previewText: previewText,
-        timestampMs: 1_700_000_000_123,
+        timestampMs: timestampMs,
         isFromSelf: isFromSelf
     )
 }

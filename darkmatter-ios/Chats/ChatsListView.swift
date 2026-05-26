@@ -66,13 +66,13 @@ struct ChatsListView: View {
             .sheet(isPresented: $showSwitcher) {
                 AccountSwitcherSheet()
             }
-            .task(id: appState.activeAccountRef) {
+            .task(id: subscriptionScope) {
                 // Own both creation and binding here so bind() can't be skipped
                 // by a nil viewModel: the lazy-creation task could fire after
                 // this one, leaving the list permanently empty and unbound.
                 let vm = viewModel ?? ChatsListViewModel(appState: appState)
                 if viewModel == nil { viewModel = vm }
-                await vm.bind(accountRef: appState.activeAccountRef)
+                await vm.bind(accountRef: appState.activeAccountRef, force: true)
             }
             .onAppear {
                 // Reflect messages we sent from a conversation (which emit no
@@ -100,6 +100,18 @@ struct ChatsListView: View {
         scope = .active
         path = [target]
         appState.clearPendingChat()
+    }
+
+    private var subscriptionScope: SubscriptionScope {
+        SubscriptionScope(
+            accountRef: appState.activeAccountRef,
+            runtimeGeneration: appState.runtimeGeneration
+        )
+    }
+
+    private struct SubscriptionScope: Hashable {
+        let accountRef: String?
+        let runtimeGeneration: Int
     }
 
     // MARK: - Active / Archived pills

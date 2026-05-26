@@ -6,6 +6,7 @@ final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?
     private var collectionTask: Task<Void, Never>?
+    private let maxNotificationServiceWaitMs = NotificationServiceProjection.maxWakeWaitMs
 
     override func didReceive(
         _ request: UNNotificationRequest,
@@ -35,33 +36,61 @@ final class NotificationService: UNNotificationServiceExtension {
                 rootPath: AppContainerConfig.productionMarmotRoot().path,
                 relayUrls: AppContainerConfig.seedRelays
             )
-            try await marmot.start()
-            let result = try await marmot.collectNotificationsAfterWake(
-                maxWaitMs: 25_000,
-                source: .apnsNse
-            )
-
-            if let update = result.notifications
-                .filter({ !$0.isFromSelf })
-                .max(by: { $0.timestampMs < $1.timestampMs }) {
-                decorate(content, with: update)
+            do {
+                try await marmot.start()
+                let result = try await marmot.collectNotificationsAfterWake(
+                    maxWaitMs: maxNotificationServiceWaitMs,
+                    source: .apnsNse
+                )
+                apply(NotificationServiceProjection.decision(for: result), to: content)
+            } catch {
+                applyFallback(to: content)
             }
+            await marmot.shutdown()
         } catch {
             // Keep the provider payload generic when collection fails. The main
             // app will catch up when it next starts or receives a local event.
+            applyFallback(to: content)
         }
 
         finish()
     }
 
-    private func decorate(_ content: UNMutableNotificationContent, with update: NotificationUpdateFfi) {
-        guard let presentation = LocalNotificationProjection.makePresentation(for: update) else {
-            return
+    private func apply(
+        _ decision: NotificationServiceRenderDecision,
+        to content: UNMutableNotificationContent
+    ) {
+        switch decision {
+        case .decorate(let presentation):
+            decorate(content, with: presentation)
+        case .suppress:
+            bestAttemptContent = UNMutableNotificationContent()
+        case .fallback:
+            applyFallback(to: content)
         }
+    }
+
+    private func decorate(
+        _ content: UNMutableNotificationContent,
+        with presentation: LocalNotificationPresentation
+    ) {
         content.title = presentation.title
         content.body = presentation.body
         content.threadIdentifier = presentation.threadIdentifier
-        content.userInfo = presentation.userInfo
+        var userInfo = content.userInfo
+        for (key, value) in presentation.userInfo {
+            userInfo[key] = value
+        }
+        content.userInfo = userInfo
+    }
+
+    private func applyFallback(to content: UNMutableNotificationContent) {
+        if content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.title = "Darkmatter"
+        }
+        if content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            content.body = "New encrypted message"
+        }
     }
 
     private func finish() {

@@ -159,6 +159,7 @@ final class ConversationViewModel {
 
     func start() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
+        stopLiveSubscriptions()
         isLoading = true
         defer { isLoading = false }
 
@@ -200,6 +201,17 @@ final class ConversationViewModel {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func stopLiveSubscriptions() {
+        messagesTask?.cancel()
+        messagesTask = nil
+        groupStateTask?.cancel()
+        groupStateTask = nil
+        for task in streamWatchTasks.values {
+            task.cancel()
+        }
+        streamWatchTasks.removeAll()
     }
 
     private func watchSnapshotStartIfNeeded(_ record: AppMessageRecordFfi) {

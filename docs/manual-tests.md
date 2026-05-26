@@ -89,6 +89,22 @@ before every release tag.
 - [ ] Sign out only changes the active account locally; identities
       remain in keychain — verified by switching back from Accounts.
 
+## Notifications
+
+- [ ] Settings → Notifications: enabling Local notifications prompts for
+      system notification permission and persists the enabled state.
+- [ ] Settings → Notifications: enabling Native push requests an APNS token,
+      syncs a redacted token fingerprint, and does not expose the raw token.
+- [ ] While device B is outside the app, sending a message from device A
+      causes device B to receive a generic APNS wake that is rewritten by the
+      Notification Service Extension into sender/message text.
+- [ ] Tapping that notification opens the matching chat for the matching
+      account.
+- [ ] Sending a message in a chat that device B is already viewing does not
+      show a duplicate local banner while the app is foreground-active.
+- [ ] A generic APNS wake with no local notification update does not leave a
+      visible generic fallback notification behind.
+
 ## Diagnostics
 
 - [ ] Settings → Show diagnostics → Diagnostics. **Live** indicator

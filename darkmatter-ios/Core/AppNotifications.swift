@@ -103,7 +103,15 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        if let route = LocalNotificationProjection.route(
+            from: notification.request.content.userInfo
+        ), appState?.isViewingNotificationDestination(
+            accountRef: route.accountRef,
+            groupIdHex: route.groupIdHex
+        ) == true {
+            return []
+        }
+        return [.banner, .list, .sound]
     }
 
     func userNotificationCenter(

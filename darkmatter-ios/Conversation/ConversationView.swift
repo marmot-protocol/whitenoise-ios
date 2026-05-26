@@ -102,6 +102,7 @@ struct ConversationView: View {
     @State private var composerFocusRequest = 0
     @State private var isAtTimelineBottom = true
     @State private var didPerformInitialBottomScroll = false
+    @State private var visibleChatRoute: VisibleChatRoute?
     /// Global Y bounds of the visible timeline (between nav bar and composer).
     /// The bottom shrinks when the keyboard rises, so placement accounts for it.
     @State private var contentTopY: CGFloat = 0
@@ -174,7 +175,7 @@ struct ConversationView: View {
                     })
                 }
             }
-            .task {
+            .task(id: appState.runtimeGeneration) {
                 if viewModel == nil {
                     viewModel = ConversationViewModel(
                         appState: appState,
@@ -184,6 +185,14 @@ struct ConversationView: View {
                     )
                 }
                 await viewModel?.start()
+            }
+            .onAppear {
+                visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
+            }
+            .onDisappear {
+                if let visibleChatRoute {
+                    appState.endViewingChat(visibleChatRoute)
+                }
             }
     }
 
