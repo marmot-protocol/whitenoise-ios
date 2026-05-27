@@ -1024,511 +1024,511 @@ void ffi_marmot_uniffi_rust_future_complete_void(uint64_t handle, RustCallStatus
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_AGENTSTREAMSUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_AGENTSTREAMSUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_agentstreamsubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_AGENTSTREAMSUBSCRIPTION_STREAM_ID_HEX
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_AGENTSTREAMSUBSCRIPTION_STREAM_ID_HEX
 uint16_t uniffi_marmot_uniffi_checksum_method_agentstreamsubscription_stream_id_hex(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_CHATSSUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_CHATSSUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_chatssubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_CHATSSUBSCRIPTION_SNAPSHOT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_CHATSSUBSCRIPTION_SNAPSHOT
 uint16_t uniffi_marmot_uniffi_checksum_method_chatssubscription_snapshot(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_EVENTSSUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_EVENTSSUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_eventssubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_GROUPSTATESUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_GROUPSTATESUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_groupstatesubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_GROUPSTATESUBSCRIPTION_SNAPSHOT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_GROUPSTATESUBSCRIPTION_SNAPSHOT
 uint16_t uniffi_marmot_uniffi_checksum_method_groupstatesubscription_snapshot(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCEPT_GROUP_INVITE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCEPT_GROUP_INVITE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_accept_group_invite(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_ID_HEX
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_ID_HEX
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_id_hex(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_INBOX_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_INBOX_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_inbox_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_KEY_PACKAGE_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_KEY_PACKAGE_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_key_package_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_KEY_PACKAGES
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_KEY_PACKAGES
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_key_packages(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_NIP65_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_NIP65_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_nip65_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_RELAY_LISTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_ACCOUNT_RELAY_LISTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CATCH_UP_ACCOUNTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CATCH_UP_ACCOUNTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_catch_up_accounts(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CLEAR_PUSH_REGISTRATION
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CLEAR_PUSH_REGISTRATION
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_clear_push_registration(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_COLLECT_NOTIFICATIONS_AFTER_WAKE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_COLLECT_NOTIFICATIONS_AFTER_WAKE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_collect_notifications_after_wake(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CREATE_GROUP
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CREATE_GROUP
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_create_group(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CREATE_IDENTITY
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_CREATE_IDENTITY
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_create_identity(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DECLINE_GROUP_INVITE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DECLINE_GROUP_INVITE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_decline_group_invite(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DELETE_ACCOUNT_KEY_PACKAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DELETE_ACCOUNT_KEY_PACKAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_delete_account_key_package(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DELETE_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DELETE_MESSAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_delete_message(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_demote_admin(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN_DETAILED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DEMOTE_ADMIN_DETAILED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_demote_admin_detailed(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DISPLAY_NAME
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_display_name(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DOWNLOAD_MEDIA
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_DOWNLOAD_MEDIA
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_download_media(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_DETAILS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_DETAILS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_details(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_FORENSICS_JSON
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_FORENSICS_JSON
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_forensics_json(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MANAGEMENT_STATE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MANAGEMENT_STATE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_management_state(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_members(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MLS_STATE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_MLS_STATE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_mls_state(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_PUSH_DEBUG_INFO
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_GROUP_PUSH_DEBUG_INFO
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_group_push_debug_info(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_INVITE_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_INVITE_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_invite_members(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_INVITE_MEMBERS_DETAILED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_INVITE_MEMBERS_DETAILED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_invite_members_detailed(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_IS_STOPPING
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_IS_STOPPING
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_is_stopping(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LEAVE_GROUP
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LEAVE_GROUP
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_leave_group(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LIST_ACCOUNTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LIST_ACCOUNTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_list_accounts(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LIST_MEDIA
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LIST_MEDIA
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_list_media(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LOGIN
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_LOGIN
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_login(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_MESSAGES
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_MESSAGES
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_messages(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NORMALIZE_MEMBER_REF
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NORMALIZE_MEMBER_REF
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_normalize_member_ref(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NOTIFICATION_SETTINGS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NOTIFICATION_SETTINGS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_notification_settings(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NPUB
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_NPUB
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_npub(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_promote_admin(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN_DETAILED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PROMOTE_ADMIN_DETAILED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_promote_admin_detailed(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_NEW_KEY_PACKAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_NEW_KEY_PACKAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_new_key_package(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_RELAY_LISTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_USER_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUBLISH_USER_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUSH_REGISTRATION
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_PUSH_REGISTRATION
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_push_registration(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REACT_TO_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REACT_TO_MESSAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_react_to_message(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REFRESH_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_refresh_profile(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_RELAY_HEALTH
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_RELAY_HEALTH
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_relay_health(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_remove_members(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS_DETAILED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REMOVE_MEMBERS_DETAILED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_remove_members_detailed(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPLY_TO_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPLY_TO_MESSAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_reply_to_message(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPUBLISH_KEY_PACKAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_REPUBLISH_KEY_PACKAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_republish_key_package(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN_DETAILED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SELF_DEMOTE_ADMIN_DETAILED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin_detailed(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_MEDIA_REFERENCE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_MEDIA_REFERENCE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_send_media_reference(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_TEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SEND_TEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_send_text(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_INBOX_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_INBOX_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_account_inbox_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_KEY_PACKAGE_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_KEY_PACKAGE_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_account_key_package_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_NIP65_RELAYS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_ACCOUNT_NIP65_RELAYS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_account_nip65_relays(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_GROUP_ARCHIVED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_GROUP_ARCHIVED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_LOCAL_NOTIFICATIONS_ENABLED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_LOCAL_NOTIFICATIONS_ENABLED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_local_notifications_enabled(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_NATIVE_PUSH_ENABLED
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SET_NATIVE_PUSH_ENABLED
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_set_native_push_enabled(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SHUTDOWN
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SHUTDOWN
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_shutdown(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_START
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_START
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_start(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_START_AGENT_TEXT_STREAM
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_START_AGENT_TEXT_STREAM
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_start_agent_text_stream(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_CHATS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_CHATS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_chats(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_EVENTS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_EVENTS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_events(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_GROUP_STATE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_GROUP_STATE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_group_state(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_MESSAGES
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_NOTIFICATIONS
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_SUBSCRIBE_NOTIFICATIONS
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_subscribe_notifications(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UNREACT_FROM_MESSAGE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UNREACT_FROM_MESSAGE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPDATE_GROUP_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPDATE_GROUP_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_update_group_profile(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPLOAD_MEDIA
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPLOAD_MEDIA
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_upload_media(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPSERT_PUSH_REGISTRATION
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_UPSERT_PUSH_REGISTRATION
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_upsert_push_registration(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_USER_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_USER_PROFILE
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_user_profile(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_WATCH_AGENT_TEXT_STREAM
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MARMOT_WATCH_AGENT_TEXT_STREAM
 uint16_t uniffi_marmot_uniffi_checksum_method_marmot_watch_agent_text_stream(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MESSAGESSUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MESSAGESSUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_messagessubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MESSAGESSUBSCRIPTION_SNAPSHOT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_MESSAGESSUBSCRIPTION_SNAPSHOT
 uint16_t uniffi_marmot_uniffi_checksum_method_messagessubscription_snapshot(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_NOTIFICATIONSSUBSCRIPTION_NEXT
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_METHOD_NOTIFICATIONSSUBSCRIPTION_NEXT
 uint16_t uniffi_marmot_uniffi_checksum_method_notificationssubscription_next(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_CONSTRUCTOR_MARMOT_NEW
 #define UNIFFI_FFIDEF_UNIFFI_MARMOT_UNIFFI_CHECKSUM_CONSTRUCTOR_MARMOT_NEW
 uint16_t uniffi_marmot_uniffi_checksum_constructor_marmot_new(void
-
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_MARMOT_UNIFFI_UNIFFI_CONTRACT_VERSION
 #define UNIFFI_FFIDEF_FFI_MARMOT_UNIFFI_UNIFFI_CONTRACT_VERSION
 uint32_t ffi_marmot_uniffi_uniffi_contract_version(void
-
+    
 );
 #endif
 

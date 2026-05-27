@@ -1210,7 +1210,8 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
                 MessageTagFfi(values: [MessageSemantics.streamBrokerTag, AppState.agentTextStreamQuicBrokerCandidate]),
-            ]
+            ],
+            recordedAt: 0
         )
 
         #expect(ConversationViewModel.agentStreamId(from: start) == streamId)
@@ -1229,7 +1230,8 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["stream-type", "text"]),
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
-            ]
+            ],
+            recordedAt: 0
         )
         let audioProfile = ReceivedMessageFfi(
             messageIdHex: hex("dd"),
@@ -1243,7 +1245,8 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["stream-type", "audio"]),
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
-            ]
+            ],
+            recordedAt: 0
         )
         let missingRoute = ReceivedMessageFfi(
             messageIdHex: hex("ee"),
@@ -1256,7 +1259,8 @@ struct AgentStreamTests {
                 MessageTagFfi(values: [MessageSemantics.streamTag, hex("ab")]),
                 MessageTagFfi(values: ["stream-type", "text"]),
                 MessageTagFfi(values: ["final-kind", "9"]),
-            ]
+            ],
+            recordedAt: 0
         )
         let websocketProfile = ReceivedMessageFfi(
             messageIdHex: hex("ff"),
@@ -1270,7 +1274,8 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["stream-type", "text"]),
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "websocket"]),
-            ]
+            ],
+            recordedAt: 0
         )
 
         #expect(ConversationViewModel.agentStreamId(from: invalidId) == nil)
@@ -1384,6 +1389,77 @@ struct AgentStreamTests {
         )
 
         #expect(viewModel.timeline.isEmpty)
+    }
+}
+
+@MainActor
+struct ReceivedMessageTimestampTests {
+
+    /// Regression for the timeline-sort bug: live messages must keep the
+    /// event's own send time as `recordedAt`, not the device clock at receipt.
+    /// Otherwise a late-arriving message (e.g. after a reconnect) would sort
+    /// after messages sent moments ago.
+    @Test func liveMessageUsesEventTimestampForRecordedAt() {
+        let eventTime: UInt64 = 1_700_000_000
+        let now: UInt64 = 1_700_000_500
+        let runtime = RuntimeMessageReceivedFfi(
+            accountIdHex: hex("11"),
+            accountLabel: "account-a",
+            message: receivedMessage(recordedAt: eventTime)
+        )
+
+        let record = ConversationViewModel.receivedToRecord(runtime, now: now)
+
+        #expect(record.recordedAt == eventTime)
+        #expect(record.receivedAt == now)
+    }
+
+    /// If the FFI omits a timestamp (zero sentinel — possible for very old
+    /// stored events or a future relay that drops it), fall back to the local
+    /// receipt time so the message still has a sensible ordering anchor.
+    @Test func liveMessageFallsBackToNowWhenEventTimestampMissing() {
+        let now: UInt64 = 1_700_000_500
+        let runtime = RuntimeMessageReceivedFfi(
+            accountIdHex: hex("11"),
+            accountLabel: "account-a",
+            message: receivedMessage(recordedAt: 0)
+        )
+
+        let record = ConversationViewModel.receivedToRecord(runtime, now: now)
+
+        #expect(record.recordedAt == now)
+        #expect(record.receivedAt == now)
+    }
+
+    @Test func receivedRecordCopiesIdentityAndPayloadFields() {
+        let runtime = RuntimeMessageReceivedFfi(
+            accountIdHex: hex("11"),
+            accountLabel: "account-a",
+            message: receivedMessage(recordedAt: 42)
+        )
+
+        let record = ConversationViewModel.receivedToRecord(runtime, now: 99)
+
+        #expect(record.direction == "received")
+        #expect(record.messageIdHex == runtime.message.messageIdHex)
+        #expect(record.groupIdHex == runtime.message.groupIdHex)
+        #expect(record.sender == runtime.message.sender)
+        #expect(record.plaintext == runtime.message.plaintext)
+        #expect(record.kind == runtime.message.kind)
+        #expect(record.tags == runtime.message.tags)
+    }
+
+    private func receivedMessage(recordedAt: UInt64) -> ReceivedMessageFfi {
+        ReceivedMessageFfi(
+            messageIdHex: hex("cc"),
+            groupIdHex: hex("aa"),
+            sender: hex("11"),
+            senderDisplayName: nil,
+            plaintext: "hello",
+            kind: MessageSemantics.kindChat,
+            tags: [MessageTagFfi(values: ["e", hex("dd")])],
+            recordedAt: recordedAt
+        )
     }
 }
 

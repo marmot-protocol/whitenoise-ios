@@ -239,7 +239,7 @@ final class ConversationViewModel {
     private func fold(_ update: MessageUpdateFfi) {
         switch update {
         case .message(let m):
-            ingest(receivedToRecord(m))
+            ingest(Self.receivedToRecord(m, now: UInt64(Date().timeIntervalSince1970)))
         case .agentStreamStarted(let m):
             // A kind-1200 start: open a live bubble and watch the QUIC stream as
             // it fills in. The stream id lives on the inner event's `stream` tag.
@@ -372,7 +372,9 @@ final class ConversationViewModel {
         reactions = result
     }
 
-    private func receivedToRecord(_ r: RuntimeMessageReceivedFfi) -> AppMessageRecordFfi {
+    /// Prefer the event's own `recordedAt` so the timeline sorts by send time;
+    /// fall back to `now` only when the FFI omitted it (zero sentinel).
+    static func receivedToRecord(_ r: RuntimeMessageReceivedFfi, now: UInt64) -> AppMessageRecordFfi {
         AppMessageRecordFfi(
             messageIdHex: r.message.messageIdHex,
             direction: "received",
@@ -381,8 +383,8 @@ final class ConversationViewModel {
             plaintext: r.message.plaintext,
             kind: r.message.kind,
             tags: r.message.tags,
-            recordedAt: UInt64(Date().timeIntervalSince1970),
-            receivedAt: UInt64(Date().timeIntervalSince1970)
+            recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
+            receivedAt: now
         )
     }
 
