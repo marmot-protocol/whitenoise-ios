@@ -654,14 +654,18 @@ final class ConversationViewModel {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         if let streamIdHex, streamWatchTasks[streamIdHex] != nil { return }
         do {
+            let insecureLocal = AgentStreamSecurity.insecureLocalEnabled(
+                developerMode: appState.developerMode
+            )
             let subscription = try await appState.marmot.watchAgentTextStream(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex,
                 streamIdHex: streamIdHex,
                 serverCertDer: nil,
-                // Developer mode points at a loopback broker (insecure); release
-                // builds use the platform TLS verifier against a real cert.
-                insecureLocal: appState.developerMode
+                // Release builds always pass false here regardless of the
+                // developer-mode toggle, so a Settings switch can't disable
+                // TLS verification in production. See AgentStreamSecurity.
+                insecureLocal: insecureLocal
             )
             let streamId = subscription.streamIdHex()
             if streamWatchTasks[streamId] != nil { return }
