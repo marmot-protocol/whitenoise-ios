@@ -1682,6 +1682,72 @@ struct ReplyPreviewLayoutTests {
     }
 }
 
+@MainActor
+struct SensitiveClipboardTests {
+
+    @Test func clearWipesPasteboardWhenItStillHoldsTheSecret() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let secret = "nsec1examplesecretkeythatshouldnotleak"
+        pasteboard.string = secret
+
+        SensitiveClipboard.clear(secret, from: pasteboard)
+
+        #expect(pasteboard.string == nil || pasteboard.string?.isEmpty == true)
+        #expect(!pasteboard.hasStrings)
+    }
+
+    @Test func clearLeavesPasteboardAloneWhenContentsDifferFromSecret() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let secret = "nsec1examplesecretkeythatshouldnotleak"
+        let unrelated = "https://example.com/some-link"
+        pasteboard.string = unrelated
+
+        SensitiveClipboard.clear(secret, from: pasteboard)
+
+        #expect(pasteboard.string == unrelated)
+    }
+
+    @Test func clearIgnoresWhitespaceAroundSecretWhenComparing() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let secret = "nsec1examplesecretkeythatshouldnotleak"
+        pasteboard.string = secret
+
+        SensitiveClipboard.clear("  \n\(secret)\n  ", from: pasteboard)
+
+        #expect(!pasteboard.hasStrings)
+    }
+
+    @Test func clearIsNoOpWhenSecretIsEmpty() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let unrelated = "something else"
+        pasteboard.string = unrelated
+
+        SensitiveClipboard.clear("", from: pasteboard)
+        SensitiveClipboard.clear("   \n  ", from: pasteboard)
+
+        #expect(pasteboard.string == unrelated)
+    }
+
+    @Test func clearIsNoOpWhenPasteboardHasNoString() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        pasteboard.items = []
+
+        SensitiveClipboard.clear("nsec1secret", from: pasteboard)
+
+        #expect(!pasteboard.hasStrings)
+    }
+
+    private func makeIsolatedPasteboard() -> UIPasteboard {
+        let name = UIPasteboard.Name("dev.ipf.darkmatter.tests.sensitive-clipboard-\(UUID().uuidString)")
+        return UIPasteboard(name: name, create: true)!
+    }
+}
+
 // MARK: - Test scaffolding
 
 private func unsignedEventRecord(

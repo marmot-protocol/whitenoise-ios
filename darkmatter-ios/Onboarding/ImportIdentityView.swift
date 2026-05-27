@@ -24,6 +24,7 @@ struct ImportIdentityView: View {
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
                     .lineLimit(3...6)
+                    .privacySensitive()
             } header: {
                 Text("Identity")
             } footer: {
@@ -69,6 +70,8 @@ struct ImportIdentityView: View {
         error = nil
         do {
             try await appState.importIdentity(trimmed)
+            SensitiveClipboard.clear(trimmed)
+            identity = ""
             Haptics.success()
             appState.present(.success(L10n.string("Welcome back"), message: L10n.string("Identity imported.")))
             dismiss()
