@@ -17,6 +17,10 @@ struct GroupDetailsView: View {
     @State private var mlsState: AppGroupMlsStateFfi?
     @State private var pushDebugInfo: GroupPushDebugInfoFfi?
     @State private var pushDebugError: String?
+    @State private var forensicsDump: GroupForensicsDump?
+    @State private var forensicsDumpError: String?
+    @State private var forensicsDumpInFlight = false
+    @State private var showPrivateDumpConfirm = false
     @State private var pendingRemoval: GroupMemberDetailsFfi?
     @State private var showSelfDemoteConfirm = false
     @State private var membershipActionInFlight = false
@@ -120,6 +124,20 @@ struct GroupDetailsView: View {
             Button("OK", role: .cancel) { actionHelp = nil }
         } message: {
             Text(actionHelp?.message ?? "")
+        }
+        .confirmationDialog(
+            String("Generate private debug dump?"),
+            isPresented: $showPrivateDumpConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                Task { await generateForensicsDump(mode: .sensitive) }
+            } label: {
+                Text(verbatim: "Generate Private Debug Dump")
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(verbatim: "Private dumps include unredacted local group state, plaintext messages, identifiers, relay URLs, and payload bytes. Share only with people you trust to debug this group.")
         }
         .task(id: appState.developerMode) {
             await viewModel.refreshGroupManagement()
@@ -323,7 +341,7 @@ struct GroupDetailsView: View {
     }
 
     private var developerSection: some View {
-        Section("MLS group (developer)") {
+        Section {
             copyableDeveloperValueRow(
                 title: "MLS group ID",
                 value: mlsState?.groupIdHex ?? viewModel.group.groupIdHex
@@ -341,6 +359,84 @@ struct GroupDetailsView: View {
                     .foregroundStyle(.secondary)
             }
             LabeledContent("Admins", value: "\(viewModel.group.admins.count)")
+
+            groupForensicsDeveloperControls
+        } header: {
+            Text("MLS group (developer)")
+        } footer: {
+            Text(verbatim: "Public dumps are redacted. Private dumps include unredacted local group state.")
+        }
+    }
+
+    @ViewBuilder
+    private var groupForensicsDeveloperControls: some View {
+        Button {
+            Task { await generateForensicsDump(mode: .`public`) }
+        } label: {
+            Label {
+                Text(verbatim: "Generate Public Debug Dump")
+            } icon: {
+                Image(systemName: "doc.badge.gearshape")
+            }
+        }
+        .disabled(forensicsDumpInFlight)
+
+        Button(role: .destructive) {
+            showPrivateDumpConfirm = true
+        } label: {
+            Label {
+                Text(verbatim: "Generate Private Debug Dump")
+            } icon: {
+                Image(systemName: "lock.doc")
+            }
+        }
+        .disabled(forensicsDumpInFlight)
+
+        if forensicsDumpInFlight {
+            ProgressView {
+                Text(verbatim: "Generating dump…")
+            }
+        }
+
+        if let forensicsDump {
+            LabeledContent {
+                Text(forensicsDump.generatedAt, style: .time)
+            } label: {
+                Text(verbatim: "Generated")
+            }
+            LabeledContent {
+                Text(verbatim: GroupForensicsPresentation.modeLabel(forensicsDump.mode))
+            } label: {
+                Text(verbatim: "Type")
+            }
+            LabeledContent {
+                Text(verbatim: forensicsDump.sizeLabel)
+            } label: {
+                Text(verbatim: "Size")
+            }
+            ShareLink(item: forensicsDump.url) {
+                Label {
+                    Text(verbatim: "Share JSON File")
+                } icon: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+            Button {
+                UIPasteboard.general.string = forensicsDump.json
+                Haptics.selection()
+                appState.present(.success(L10n.string("Copied to clipboard"), message: "Forensics JSON"))
+            } label: {
+                Label {
+                    Text(verbatim: "Copy JSON")
+                } icon: {
+                    Image(systemName: "doc.on.doc")
+                }
+            }
+        }
+
+        if let forensicsDumpError {
+            Label(forensicsDumpError, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
         }
     }
 
@@ -445,6 +541,11 @@ struct GroupDetailsView: View {
     }
 
     // MARK: - Actions
+
+    private func clearGeneratedForensicsDump() {
+        forensicsDump = nil
+        forensicsDumpError = nil
+    }
 
     @ViewBuilder
     private func memberActionsMenu(for member: GroupMemberDetailsFfi) -> some View {
@@ -723,6 +824,59 @@ struct GroupDetailsView: View {
         }
     }
 
+    private func generateForensicsDump(mode: ForensicsDumpModeFfi) async {
+        guard let accountRef = appState.activeAccountRef else { return }
+
+        forensicsDumpInFlight = true
+        clearGeneratedForensicsDump()
+        defer { forensicsDumpInFlight = false }
+        do {
+            let json = try await appState.marmot.groupForensicsJson(
+                accountRef: accountRef,
+                groupIdHex: viewModel.group.groupIdHex,
+                mode: mode,
+                publicRedactionSaltHex: nil
+            )
+            let generatedAt = Date()
+            let url = try writeForensicsDump(json: json, mode: mode, generatedAt: generatedAt)
+            forensicsDump = GroupForensicsDump(
+                json: json,
+                url: url,
+                mode: mode,
+                generatedAt: generatedAt
+            )
+            forensicsDumpError = nil
+            Haptics.success()
+            appState.present(.success(
+                "\(GroupForensicsPresentation.modeLabel(mode)) debug dump ready",
+                message: "Share or copy it from group details."
+            ))
+        } catch {
+            forensicsDump = nil
+            forensicsDumpError = error.localizedDescription
+            Haptics.error()
+            appState.present(.error("Couldn't generate dump", message: error.localizedDescription))
+        }
+    }
+
+    private func writeForensicsDump(
+        json: String,
+        mode: ForensicsDumpModeFfi,
+        generatedAt: Date
+    ) throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MarmotForensics", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let filename = GroupForensicsPresentation.fileName(
+            groupTitle: viewModel.displayTitle,
+            groupIdHex: viewModel.group.groupIdHex,
+            mode: mode,
+            generatedAt: generatedAt
+        )
+        let url = directory.appendingPathComponent(filename)
+        try json.write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
     private func handleActionError(_ error: Error, title: String) {
         let message = actionMessage(for: error)
         Haptics.error()
@@ -790,6 +944,18 @@ struct GroupDetailsView: View {
             pushDebugInfo = nil
             pushDebugError = error.localizedDescription
         }
+    }
+}
+
+private struct GroupForensicsDump: Identifiable {
+    let id = UUID()
+    let json: String
+    let url: URL
+    let mode: ForensicsDumpModeFfi
+    let generatedAt: Date
+
+    var sizeLabel: String {
+        ByteCountFormatter.string(fromByteCount: Int64(json.utf8.count), countStyle: .file)
     }
 }
 

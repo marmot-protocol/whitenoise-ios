@@ -413,6 +413,34 @@ struct GroupPushDebugPresentationTests {
     }
 }
 
+struct GroupForensicsPresentationTests {
+    @Test func sensitiveModeIsPresentedAsPrivate() {
+        #expect(GroupForensicsPresentation.modeLabel(.sensitive) == "Private")
+    }
+
+    @Test func exportFilenameIsStableAndFilesystemSafe() {
+        let filename = GroupForensicsPresentation.fileName(
+            groupTitle: "Marmot / QA: incident",
+            groupIdHex: "abcdef1234567890",
+            mode: .`public`,
+            generatedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(filename == "marmot-qa-incident-abcdef12-public-forensics-19700101-000000.json")
+    }
+
+    @Test func privateExportFilenameUsesPrivateLabel() {
+        let filename = GroupForensicsPresentation.fileName(
+            groupTitle: "Marmot / QA: incident",
+            groupIdHex: "abcdef1234567890",
+            mode: .sensitive,
+            generatedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(filename == "marmot-qa-incident-abcdef12-private-forensics-19700101-000000.json")
+    }
+}
+
 @MainActor
 struct IdentityFormatterTests {
 
