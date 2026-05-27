@@ -30,6 +30,11 @@ final class AppState {
         didSet {
             if let ref = activeAccountRef {
                 UserDefaults.standard.set(ref, forKey: Self.activeAccountKey)
+            } else {
+                // Clearing the ref (e.g. signing out of the only account)
+                // must remove the persisted value, otherwise the next launch
+                // resurrects the signed-out account from UserDefaults.
+                UserDefaults.standard.removeObject(forKey: Self.activeAccountKey)
             }
         }
     }
@@ -257,6 +262,22 @@ final class AppState {
             try await marmot.clearPushRegistration(accountRef: accountRef)
             return try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: false)
         }
+    }
+
+    /// Signs out of the active account: clears its native push registration
+    /// (so the push server stops delivering its notifications to this device)
+    /// and disables its `nativePushEnabled` preference, then switches the
+    /// active account to the next available local account (or `nil`).
+    ///
+    /// Push cleanup is best-effort — a transient marmot error here must not
+    /// block the user from signing out. The account's key material stays in
+    /// the Keychain so they can sign back in later.
+    @MainActor
+    func signOut() async {
+        guard let signingOut = activeAccountRef else { return }
+        try? await marmot.clearPushRegistration(accountRef: signingOut)
+        _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
+        activeAccountRef = accounts.first { $0.label != signingOut }?.label
     }
 
     @discardableResult

@@ -67,9 +67,7 @@ struct IdentityView: View {
             titleVisibility: .visible
         ) {
             Button("Sign out", role: .destructive) {
-                appState.activeAccountRef = appState.accounts
-                    .first(where: { $0.label != appState.activeAccountRef })?
-                    .label
+                Task { await appState.signOut() }
             }
             Button("Cancel", role: .cancel) { }
         }
