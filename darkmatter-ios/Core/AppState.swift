@@ -30,6 +30,11 @@ final class AppState {
         didSet {
             if let ref = activeAccountRef {
                 UserDefaults.standard.set(ref, forKey: Self.activeAccountKey)
+            } else {
+                // Clearing the ref (e.g. signing out of the only account)
+                // must remove the persisted value, otherwise the next launch
+                // resurrects the signed-out account from UserDefaults.
+                UserDefaults.standard.removeObject(forKey: Self.activeAccountKey)
             }
         }
     }

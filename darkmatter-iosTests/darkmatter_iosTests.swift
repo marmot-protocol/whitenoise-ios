@@ -146,6 +146,25 @@ struct AppStateBootstrapTests {
         #expect(appState.activeAccountRef == nil)
         #expect(appState.notificationSettings(for: only.label)?.nativePushEnabled == false)
     }
+
+    @Test func signOutOfOnlyAccountClearsPersistedActiveAccountRef() async throws {
+        // Without this, the next launch reads the stale label from
+        // UserDefaults and bootstrap silently resurrects the signed-out
+        // account (key material stays in the Keychain).
+        UserDefaults.standard.removeObject(forKey: "marmot.activeAccountRef")
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        await appState.bootstrap()
+        let only = try await appState.createIdentity()
+        appState.activeAccountRef = only.label
+        #expect(UserDefaults.standard.string(forKey: "marmot.activeAccountRef") == only.label)
+
+        await appState.signOut()
+
+        #expect(UserDefaults.standard.string(forKey: "marmot.activeAccountRef") == nil)
+        let reborn = AppState(client: try client.freshRuntime())
+        #expect(reborn.activeAccountRef == nil)
+    }
 }
 
 @MainActor
