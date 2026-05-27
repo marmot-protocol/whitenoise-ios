@@ -1720,6 +1720,17 @@ struct SensitiveClipboardTests {
         #expect(!pasteboard.hasStrings)
     }
 
+    @Test func clearIgnoresWhitespaceAroundPasteboardValueWhenComparing() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let secret = "nsec1examplesecretkeythatshouldnotleak"
+        pasteboard.string = "  \n\(secret)\n  "
+
+        SensitiveClipboard.clear(secret, from: pasteboard)
+
+        #expect(!pasteboard.hasStrings)
+    }
+
     @Test func clearIsNoOpWhenSecretIsEmpty() {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }

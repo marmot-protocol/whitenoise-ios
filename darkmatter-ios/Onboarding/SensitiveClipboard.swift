@@ -19,9 +19,12 @@ enum SensitiveClipboard {
     /// pasteboard isn't republished as an empty string that other apps would
     /// see as a fresh copy event.
     static func clear(_ secret: String, from pasteboard: UIPasteboard = .general) {
-        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard pasteboard.hasStrings, pasteboard.string == trimmed else { return }
+        let trimmedSecret = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSecret.isEmpty else { return }
+        guard pasteboard.hasStrings,
+              let current = pasteboard.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+              current == trimmedSecret
+        else { return }
         pasteboard.setItems([], options: [.expirationDate: Date()])
     }
 }
