@@ -259,6 +259,9 @@ struct LocalizationCatalogTests {
         let cameraUsage = try #require(strings["NSCameraUsageDescription"] as? [String: Any])
         let localizations = try #require(cameraUsage["localizations"] as? [String: Any])
 
+        let english = try localizedValue("NSCameraUsageDescription", locale: "en", in: strings)
+        #expect(english != "NSCameraUsageDescription")
+        #expect(english == "Dark Matter uses the camera to scan profile QR codes so you can add people to encrypted chats.")
         #expect(localizations["fr"] != nil)
         #expect(localizations["zh-Hant"] != nil)
     }
@@ -268,7 +271,7 @@ struct LocalizationCatalogTests {
         let strings = try #require(catalog["strings"] as? [String: Any])
 
         for key in ["CFBundleDisplayName", "CFBundleName", "NSCameraUsageDescription"] {
-            for locale in expectedLocales {
+            for locale in ["en"] + expectedLocales {
                 #expect(!(try localizedValue(key, locale: locale, in: strings)).isEmpty)
             }
         }

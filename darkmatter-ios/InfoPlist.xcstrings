@@ -136,6 +136,12 @@
     "NSCameraUsageDescription": {
       "extractionState": "manual",
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark Matter uses the camera to scan profile QR codes so you can add people to encrypted chats."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
