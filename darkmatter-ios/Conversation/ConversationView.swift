@@ -83,9 +83,11 @@ enum ReplyPreviewLayout {
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
     let chat: AppGroupRecordFfi
+    let initialTitle: String?
     let initialOtherMember: String?
     let initialMemberCount: Int?
     let initialTargetMessageIdHex: String?
+    let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
 
     @State private var viewModel: ConversationViewModel?
     @State private var draft: String = ""
@@ -117,13 +119,17 @@ struct ConversationView: View {
 
     init(
         chat: AppGroupRecordFfi,
+        initialTitle: String? = nil,
         initialOtherMember: String? = nil,
         initialMemberCount: Int? = nil,
-        initialTargetMessageIdHex: String? = nil
+        initialTargetMessageIdHex: String? = nil,
+        onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil
     ) {
         self.chat = chat
+        self.initialTitle = initialTitle
         self.initialOtherMember = initialOtherMember
         self.initialMemberCount = initialMemberCount
+        self.onChatListRowUpdated = onChatListRowUpdated
         let targetMessageId = initialTargetMessageIdHex?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialTargetMessageIdHex = targetMessageId?.isEmpty == false ? targetMessageId : nil
     }
@@ -182,8 +188,10 @@ struct ConversationView: View {
                     viewModel = ConversationViewModel(
                         appState: appState,
                         group: chat,
+                        initialTitle: initialTitle,
                         initialOtherMember: initialOtherMember,
-                        initialMemberCount: initialMemberCount
+                        initialMemberCount: initialMemberCount,
+                        onChatListRowUpdated: onChatListRowUpdated
                     )
                 }
                 await viewModel?.start()
@@ -305,6 +313,7 @@ struct ConversationView: View {
                         ScrollView {
                             VStack(spacing: 0) {
                                 LazyVStack(alignment: .leading, spacing: 4) {
+                                    olderTimelineTrigger(viewModel: viewModel)
                                     ForEach(viewModel.timeline) { item in
                                         row(for: item, viewModel: viewModel)
                                     }
@@ -403,6 +412,9 @@ struct ConversationView: View {
             ) {
                 actionsMenu(for: record, viewModel: viewModel)
             }
+            .onAppear {
+                Task { await viewModel.markReadIfVisible(record) }
+            }
         case .systemEvent(let event):
             SystemEventRow(event: event)
                 .id(item.id)
@@ -413,6 +425,24 @@ struct ConversationView: View {
         Color.clear
             .frame(height: 1)
             .id(Self.timelineBottomID)
+    }
+
+    @ViewBuilder
+    private func olderTimelineTrigger(viewModel: ConversationViewModel) -> some View {
+        if viewModel.hasMoreBefore || viewModel.isLoadingOlder {
+            HStack {
+                Spacer()
+                ProgressView()
+                    .controlSize(.small)
+                    .opacity(viewModel.isLoadingOlder ? 1 : 0.01)
+                Spacer()
+            }
+            .frame(height: 28)
+            .onAppear {
+                guard viewModel.hasMoreBefore else { return }
+                Task { await viewModel.loadOlderTimelinePage() }
+            }
+        }
     }
 
     @ViewBuilder

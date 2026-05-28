@@ -36,6 +36,10 @@ rsync -a --delete \
     "$VENDOR_DIR/MarmotKit.xcframework/"
 cp "$OUTPUT_DIR/MarmotKit.swift" "$VENDOR_DIR/Sources/MarmotKit/MarmotKit.swift"
 
+echo "==> Tidying generated text artifacts"
+find "$VENDOR_DIR" \( -name '*.swift' -o -name '*.h' \) -print0 \
+    | xargs -0 perl -pi -e 's/[ \t]+$//'
+
 echo "==> Stamping MARMOT_VERSION"
 DM_SHA="$(git -C "$DARKMATTER_DIR" rev-parse --short HEAD)"
 DM_BRANCH="$(git -C "$DARKMATTER_DIR" rev-parse --abbrev-ref HEAD)"

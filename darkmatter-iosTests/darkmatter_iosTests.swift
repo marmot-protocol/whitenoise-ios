@@ -1046,6 +1046,223 @@ struct ConversationChromeTests {
 }
 
 @MainActor
+struct ChatsListProjectionTests {
+
+    @Test func projectedRowsDriveActiveArchivedUnreadAndOrdering() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let older = chatListRow(
+            groupIdHex: hex("a1"),
+            title: "Older",
+            lastMessage: chatListPreview(messageIdHex: hex("b1"), plaintext: "older", timelineAt: 10),
+            updatedAt: 10
+        )
+        let newerUnread = chatListRow(
+            groupIdHex: hex("a2"),
+            title: "Newer",
+            lastMessage: chatListPreview(messageIdHex: hex("b2"), plaintext: "newer", timelineAt: 20),
+            unreadCount: 3,
+            firstUnreadMessageIdHex: hex("c2"),
+            updatedAt: 20
+        )
+        let archived = chatListRow(
+            groupIdHex: hex("a3"),
+            archived: true,
+            title: "Archived",
+            lastMessage: chatListPreview(messageIdHex: hex("b3"), plaintext: "archived", timelineAt: 30),
+            updatedAt: 30
+        )
+
+        viewModel.applyChatListSnapshot([older, archived, newerUnread])
+
+        #expect(viewModel.items.map(\.id) == [newerUnread.groupIdHex, older.groupIdHex])
+        #expect(viewModel.archivedItems.map(\.id) == [archived.groupIdHex])
+        #expect(viewModel.items.first?.title == "Newer")
+        #expect(viewModel.items.first?.previewText == "newer")
+        #expect(viewModel.items.first?.unreadCount == 3)
+        #expect(viewModel.items.first?.firstUnreadMessageIdHex == hex("c2"))
+    }
+
+    @Test func localArchiveChangeMovesProjectedRowBetweenScopes() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let row = chatListRow(groupIdHex: hex("d1"), title: "General")
+        viewModel.applyChatListSnapshot([row])
+
+        viewModel.applyLocalGroupChange(group(name: "General", id: row.groupIdHex, archived: true))
+
+        #expect(viewModel.items.isEmpty)
+        #expect(viewModel.archivedItems.map(\.id) == [row.groupIdHex])
+        #expect(viewModel.archivedItems.first?.group.archived == true)
+    }
+}
+
+@MainActor
+struct ConversationTimelineProjectionTests {
+
+    @Test func readMarkersApplyOnlyToVisibleKindNineMessagesOnce() throws {
+        let chatRecord = message(id: hex("11"), kind: MessageSemantics.kindChat)
+        let reactionRecord = message(id: hex("22"), kind: MessageSemantics.kindReaction)
+        let emptyId = message(id: "", kind: MessageSemantics.kindChat)
+
+        #expect(ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
+        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
+        #expect(!ConversationViewModel.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationViewModel.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
+    }
+
+    @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let parentSender = hex("11")
+        appState.cacheProfile(
+            UserProfileMetadataFfi(
+                name: nil,
+                displayName: "Alice",
+                about: nil,
+                picture: nil,
+                nip05: nil,
+                lud16: nil
+            ),
+            for: parentSender
+        )
+        let viewModel = ConversationViewModel(appState: appState, group: group(name: ""))
+        let parent = timelineRecord(
+            messageIdHex: hex("a1"),
+            sender: parentSender,
+            plaintext: "the parent text",
+            timelineAt: 1
+        )
+        let reply = timelineRecord(
+            messageIdHex: hex("b2"),
+            sender: hex("22"),
+            plaintext: "replying",
+            timelineAt: 2,
+            replyToMessageIdHex: parent.messageIdHex,
+            replyPreview: TimelineReplyPreviewFfi(
+                messageIdHex: parent.messageIdHex,
+                sender: parent.sender,
+                plaintext: parent.plaintext,
+                kind: MessageSemantics.kindChat,
+                mediaJson: nil,
+                agentTextStreamJson: nil,
+                deleted: false
+            ),
+            reactions: TimelineReactionSummaryFfi(
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", senders: [hex("33"), hex("44")])],
+                userReactions: []
+            )
+        )
+        let deleted = timelineRecord(
+            messageIdHex: hex("c3"),
+            sender: hex("33"),
+            plaintext: "",
+            timelineAt: 3,
+            deleted: true
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [parent, reply, deleted], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        #expect(viewModel.timeline.count == 3)
+        #expect(viewModel.reactions(for: reply.messageIdHex) == [
+            ConversationViewModel.ReactionTally(emoji: "👍", count: 2, mine: false)
+        ])
+        #expect(viewModel.isDeleted(deleted.messageIdHex))
+        let replyRecord = try #require(viewModel.record(for: reply.messageIdHex))
+        #expect(viewModel.replyPreview(for: replyRecord)?.name == "Alice")
+        #expect(viewModel.replyPreview(for: replyRecord)?.text == "the parent text")
+    }
+
+    @Test func liveTailRefreshPreservesLoadedScrollback() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let latest = timelineRecord(messageIdHex: hex("f2"), plaintext: "latest", timelineAt: 20)
+        let older = timelineRecord(messageIdHex: hex("e1"), plaintext: "older", timelineAt: 10)
+        let latestWithReaction = timelineRecord(
+            messageIdHex: latest.messageIdHex,
+            plaintext: latest.plaintext,
+            timelineAt: latest.timelineAt,
+            reactions: TimelineReactionSummaryFfi(
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "🔥", senders: [hex("33")])],
+                userReactions: []
+            )
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [latest], hasMoreBefore: true, hasMoreAfter: false),
+            placement: .tail
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [older], hasMoreBefore: false, hasMoreAfter: true),
+            placement: .older
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [latestWithReaction], hasMoreBefore: true, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        let messageIds = viewModel.timeline.compactMap { item -> String? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record.messageIdHex
+        }
+        #expect(messageIds == [older.messageIdHex, latest.messageIdHex])
+        #expect(viewModel.reactions(for: latest.messageIdHex) == [
+            ConversationViewModel.ReactionTally(emoji: "🔥", count: 1, mine: false)
+        ])
+        #expect(!viewModel.hasMoreBefore)
+    }
+
+    @Test func projectionDeltaMergesTimelineAndForwardsChatListRow() throws {
+        var forwardedRows: [ChatListRowFfi] = []
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: ""),
+            onChatListRowUpdated: { forwardedRows.append($0) }
+        )
+        let existing = timelineRecord(messageIdHex: hex("a1"), plaintext: "existing", timelineAt: 10)
+        let projected = timelineRecord(messageIdHex: hex("b2"), plaintext: "projected", timelineAt: 20)
+        let row = chatListRow(
+            groupIdHex: existing.groupIdHex,
+            title: "Projected",
+            lastMessage: chatListPreview(messageIdHex: projected.messageIdHex, plaintext: projected.plaintext, timelineAt: projected.timelineAt),
+            unreadCount: 1,
+            firstUnreadMessageIdHex: projected.messageIdHex,
+            updatedAt: projected.timelineAt
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [existing], hasMoreBefore: true, hasMoreAfter: false),
+            placement: .tail
+        )
+        viewModel.applyTimelineSubscriptionUpdate(
+            .projection(
+                update: RuntimeProjectionUpdateFfi(
+                    accountIdHex: hex("ff"),
+                    accountLabel: "account-a",
+                    update: TimelineProjectionUpdateFfi(
+                        groupIdHex: existing.groupIdHex,
+                        messages: [projected],
+                        chatListRow: row
+                    )
+                )
+            )
+        )
+
+        let messageIds = viewModel.timeline.compactMap { item -> String? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record.messageIdHex
+        }
+        #expect(messageIds == [existing.messageIdHex, projected.messageIdHex])
+        #expect(viewModel.hasMoreBefore)
+        #expect(forwardedRows.map(\.groupIdHex) == [row.groupIdHex])
+        #expect(forwardedRows.first?.firstUnreadMessageIdHex == projected.messageIdHex)
+    }
+}
+
+@MainActor
 struct GroupManagementPresentationTests {
 
     @Test func adminCanPromoteAndRemoveNonAdminMember() {
@@ -1300,7 +1517,7 @@ struct AgentStreamTests {
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
                 MessageTagFfi(values: [MessageSemantics.streamBrokerTag, AppState.agentTextStreamQuicBrokerCandidate]),
             ],
-            recordedAt: 0
+            recordedAt: 1
         )
 
         #expect(ConversationViewModel.agentStreamId(from: start) == streamId)
@@ -1320,7 +1537,7 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
             ],
-            recordedAt: 0
+            recordedAt: 1
         )
         let audioProfile = ReceivedMessageFfi(
             messageIdHex: hex("dd"),
@@ -1335,7 +1552,7 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
             ],
-            recordedAt: 0
+            recordedAt: 1
         )
         let missingRoute = ReceivedMessageFfi(
             messageIdHex: hex("ee"),
@@ -1349,7 +1566,7 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["stream-type", "text"]),
                 MessageTagFfi(values: ["final-kind", "9"]),
             ],
-            recordedAt: 0
+            recordedAt: 1
         )
         let websocketProfile = ReceivedMessageFfi(
             messageIdHex: hex("ff"),
@@ -1364,7 +1581,7 @@ struct AgentStreamTests {
                 MessageTagFfi(values: ["final-kind", "9"]),
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "websocket"]),
             ],
-            recordedAt: 0
+            recordedAt: 1
         )
 
         #expect(ConversationViewModel.agentStreamId(from: invalidId) == nil)
@@ -1944,23 +2161,140 @@ private func unsignedEventRecord(
     )
 }
 
+private func timelineRecord(
+    messageIdHex: String,
+    direction: String = "received",
+    groupIdHex: String = hex("aa"),
+    sender: String = hex("11"),
+    plaintext: String = "hello",
+    kind: UInt64 = MessageSemantics.kindChat,
+    tags: [MessageTagFfi] = [],
+    timelineAt: UInt64,
+    receivedAt: UInt64? = nil,
+    replyToMessageIdHex: String? = nil,
+    replyPreview: TimelineReplyPreviewFfi? = nil,
+    mediaJson: String? = nil,
+    agentTextStreamJson: String? = nil,
+    reactions: TimelineReactionSummaryFfi = TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+    deleted: Bool = false,
+    deletedByMessageIdHex: String? = nil
+) -> TimelineMessageRecordFfi {
+    TimelineMessageRecordFfi(
+        messageIdHex: messageIdHex,
+        sourceMessageIdHex: nil,
+        direction: direction,
+        groupIdHex: groupIdHex,
+        sender: sender,
+        plaintext: plaintext,
+        kind: kind,
+        tags: tags,
+        timelineAt: timelineAt,
+        receivedAt: receivedAt ?? timelineAt,
+        replyToMessageIdHex: replyToMessageIdHex,
+        replyPreview: replyPreview,
+        mediaJson: mediaJson,
+        agentTextStreamJson: agentTextStreamJson,
+        reactions: reactions,
+        deleted: deleted,
+        deletedByMessageIdHex: deletedByMessageIdHex
+    )
+}
+
+private func message(
+    id: String,
+    kind: UInt64 = MessageSemantics.kindChat,
+    groupIdHex: String = hex("aa"),
+    sender: String = hex("11"),
+    plaintext: String = "hello",
+    tags: [MessageTagFfi] = [],
+    recordedAt: UInt64 = 1
+) -> AppMessageRecordFfi {
+    AppMessageRecordFfi(
+        messageIdHex: id,
+        direction: "received",
+        groupIdHex: groupIdHex,
+        sender: sender,
+        plaintext: plaintext,
+        kind: kind,
+        tags: tags,
+        recordedAt: recordedAt,
+        receivedAt: recordedAt
+    )
+}
+
 private func hex(_ byte: String) -> String {
     String(repeating: byte, count: 32)
 }
 
-private func group(name: String, admins: [String] = []) -> AppGroupRecordFfi {
+private func group(
+    name: String,
+    id: String = hex("aa"),
+    admins: [String] = [],
+    archived: Bool = false
+) -> AppGroupRecordFfi {
     AppGroupRecordFfi(
-        groupIdHex: hex("aa"),
+        groupIdHex: id,
         endpoint: "",
         name: name,
         description: "",
         admins: admins,
         relays: [],
         nostrGroupIdHex: "",
-        archived: false,
+        archived: archived,
         pendingConfirmation: false,
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil
+    )
+}
+
+private func chatListPreview(
+    messageIdHex: String,
+    sender: String = hex("11"),
+    senderDisplayName: String? = nil,
+    plaintext: String = "hello",
+    kind: UInt64 = MessageSemantics.kindChat,
+    timelineAt: UInt64 = 1,
+    deleted: Bool = false
+) -> ChatListMessagePreviewFfi {
+    ChatListMessagePreviewFfi(
+        messageIdHex: messageIdHex,
+        sender: sender,
+        senderDisplayName: senderDisplayName,
+        plaintext: plaintext,
+        kind: kind,
+        timelineAt: timelineAt,
+        deleted: deleted
+    )
+}
+
+private func chatListRow(
+    groupIdHex: String,
+    archived: Bool = false,
+    pendingConfirmation: Bool = false,
+    title: String,
+    groupName: String? = nil,
+    avatar: ChatListAvatarFfi? = nil,
+    lastMessage: ChatListMessagePreviewFfi? = nil,
+    unreadCount: UInt64 = 0,
+    firstUnreadMessageIdHex: String? = nil,
+    lastReadMessageIdHex: String? = nil,
+    lastReadTimelineAt: UInt64? = nil,
+    updatedAt: UInt64 = 1
+) -> ChatListRowFfi {
+    ChatListRowFfi(
+        groupIdHex: groupIdHex,
+        archived: archived,
+        pendingConfirmation: pendingConfirmation,
+        title: title,
+        groupName: groupName ?? title,
+        avatar: avatar,
+        lastMessage: lastMessage,
+        unreadCount: unreadCount,
+        hasUnread: unreadCount > 0,
+        firstUnreadMessageIdHex: firstUnreadMessageIdHex,
+        lastReadMessageIdHex: lastReadMessageIdHex,
+        lastReadTimelineAt: lastReadTimelineAt,
+        updatedAt: updatedAt
     )
 }
 

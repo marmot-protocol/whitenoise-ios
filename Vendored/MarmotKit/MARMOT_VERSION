@@ -1,6 +1,6 @@
-darkmatter-sha: ce81667-dirty
-darkmatter-branch: fix/expose-received-message-timestamp
-built-at: 2026-05-27T16:52:40Z
+darkmatter-sha: 6a69dee
+darkmatter-branch: master
+built-at: 2026-05-28T10:05:29Z
 uniffi-version: 0.28.3
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0

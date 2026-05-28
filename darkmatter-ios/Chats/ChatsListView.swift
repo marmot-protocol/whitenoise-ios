@@ -79,7 +79,7 @@ struct ChatsListView: View {
             .onAppear {
                 // Reflect messages we sent from a conversation (which emit no
                 // event) when returning to the list.
-                Task { await viewModel?.refreshLatest() }
+                Task { await viewModel?.refreshRows() }
             }
         }
         // Warm path: a chat created / deep-linked while the list is on screen.
@@ -162,7 +162,12 @@ struct ChatsListView: View {
                     // (the trailing slot shows the message timestamp instead).
                     ZStack {
                         ChatRow(item: item)
-                        NavigationLink(value: ChatNavigationTarget(groupIdHex: item.group.groupIdHex)) { EmptyView() }
+                        NavigationLink(
+                            value: ChatNavigationTarget(
+                                groupIdHex: item.group.groupIdHex,
+                                messageIdHex: item.firstUnreadMessageIdHex
+                            )
+                        ) { EmptyView() }
                             .opacity(0)
                     }
                     .swipeActions(edge: .trailing) {
@@ -181,7 +186,7 @@ struct ChatsListView: View {
             .overlay {
                 if rows.isEmpty { emptyState }
             }
-            .refreshable { await viewModel.refreshLatest() }
+            .refreshable { await viewModel.refreshRows() }
         }
     }
 
@@ -208,13 +213,8 @@ struct ChatsListView: View {
     }
 
     private func searchHaystack(for item: ChatsListViewModel.Item) -> String {
-        let title = GroupDisplay.title(
-            group: item.group,
-            otherMember: item.otherMemberAccount,
-            memberCount: item.memberCount,
-            appState: appState
-        )
-        let preview = item.latest.map { MessagePreview.body($0) } ?? ""
+        let title = item.title
+        let preview = item.previewText ?? ""
         return title + " " + preview
     }
 
@@ -323,9 +323,9 @@ private struct ChatDestination: View {
         if let item {
             ConversationView(
                 chat: item.group,
-                initialOtherMember: item.otherMemberAccount,
-                initialMemberCount: item.memberCount,
-                initialTargetMessageIdHex: target.messageIdHex
+                initialTitle: item.title,
+                initialTargetMessageIdHex: target.messageIdHex,
+                onChatListRowUpdated: { viewModel.applyChatListRow($0) }
             )
         } else if timedOut {
             ContentUnavailableView("Chat unavailable", systemImage: "questionmark.circle")

@@ -9,59 +9,74 @@ struct ChatRow: View {
     @Environment(AppState.self) private var appState
     let item: ChatsListViewModel.Item
 
-    private var chat: AppGroupRecordFfi { item.group }
-
     var body: some View {
         HStack(spacing: 12) {
             AvatarBubble(
-                seed: GroupDisplay.avatarSeed(group: chat, otherMember: item.otherMemberAccount, memberCount: item.memberCount),
+                seed: item.id,
                 title: title,
-                pictureURL: GroupDisplay.avatarURL(group: chat, otherMember: item.otherMemberAccount, memberCount: item.memberCount, appState: appState)
+                pictureURL: nil
             )
             .frame(width: 52, height: 52)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.headline)
+                    .font(item.hasUnread ? .headline.weight(.semibold) : .headline)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(item.hasUnread ? .semibold : .regular)
+                    .foregroundStyle(item.hasUnread ? .primary : .secondary)
                     .lineLimit(1)
             }
 
             Spacer(minLength: 8)
 
-            if let timestamp {
-                Text(timestamp)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+            VStack(alignment: .trailing, spacing: 6) {
+                if let timestamp {
+                    Text(timestamp)
+                        .font(.caption)
+                        .foregroundStyle(item.hasUnread ? Color.accentColor : .secondary)
+                        .fontWeight(item.hasUnread ? .semibold : .regular)
+                        .monospacedDigit()
+                }
+                if item.hasUnread {
+                    Text(unreadBadgeText)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                        .monospacedDigit()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.accentColor))
+                        .accessibilityLabel("\(item.unreadCount) unread messages")
+                }
             }
         }
         .padding(.vertical, 2)
     }
 
     private var title: String {
-        GroupDisplay.title(group: chat, otherMember: item.otherMemberAccount, memberCount: item.memberCount, appState: appState)
+        item.title
     }
 
-    /// Latest message preview. Sent messages are prefixed with "You:". Renders
-    /// structured payloads cleanly so raw agent-stream JSON never leaks here.
+    /// Latest message preview. Sent messages are prefixed with "You:".
     private var subtitle: String {
-        guard let latest = item.latest else {
+        guard let latest = item.lastMessage else {
             return L10n.string("No messages yet")
         }
         let body = ProfileSanitizer.singleLine(MessagePreview.body(latest), maxLength: 140) ?? ""
-        if latest.direction == "sent" {
+        if latest.sender == appState.activeAccount?.accountIdHex {
             return body.isEmpty ? L10n.string("You sent a message") : L10n.string("You: \(body)")
         }
         return body.isEmpty ? L10n.string("New message") : body
     }
 
     private var timestamp: String? {
-        guard let latest = item.latest else { return nil }
-        return RelativeTime.short(Date(timeIntervalSince1970: TimeInterval(latest.recordedAt)))
+        guard let latest = item.lastMessage else { return nil }
+        return RelativeTime.short(Date(timeIntervalSince1970: TimeInterval(latest.timelineAt)))
+    }
+
+    private var unreadBadgeText: String {
+        item.unreadCount > 99 ? "99+" : "\(item.unreadCount)"
     }
 }
 

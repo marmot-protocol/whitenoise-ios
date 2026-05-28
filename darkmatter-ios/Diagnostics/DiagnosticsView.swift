@@ -97,6 +97,8 @@ struct DiagnosticsView: View {
             return "[\(label)] group state ↺ \(IdentityFormatter.short(groupIdHex))"
         case .messageReceived(let received):
             return "[\(received.accountLabel)] msg from \(IdentityFormatter.short(received.message.sender)): \(received.message.plaintext)"
+        case .projectionUpdated(let update):
+            return "[\(update.accountLabel)] projection \(IdentityFormatter.short(update.update.groupIdHex))"
         case .groupEvent(_, let label):
             return "[\(label)] group event"
         case .accountError(_, let label, let message):
