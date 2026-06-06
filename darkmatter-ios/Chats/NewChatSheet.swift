@@ -98,8 +98,9 @@ struct NewChatSheet: View {
     }
 
     private func addPending() {
-        let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: pendingMember)
-        guard !memberRef.isEmpty, !members.contains(memberRef) else { return }
+        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: pendingMember),
+              !members.contains(memberRef)
+        else { return }
         members.append(memberRef)
         pendingMember = ""
     }
