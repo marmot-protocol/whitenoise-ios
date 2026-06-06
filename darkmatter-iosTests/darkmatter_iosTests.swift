@@ -147,7 +147,8 @@ struct AppStateBootstrapTests {
         await appState.signOut()
 
         #expect(appState.activeAccountRef == accountB.label)
-        #expect(appState.notificationSettings(for: accountA.label)?.nativePushEnabled == false)
+        #expect(appState.accounts.map(\.label) == [accountB.label])
+        #expect(appState.notificationSettings(for: accountA.label) == nil)
         // A remaining account means we stay in the main interface.
         #expect(appState.phase == .ready)
     }
@@ -161,16 +162,29 @@ struct AppStateBootstrapTests {
         await appState.signOut()
 
         #expect(appState.activeAccountRef == nil)
-        #expect(appState.notificationSettings(for: only.label)?.nativePushEnabled == false)
+        #expect(appState.notificationSettings(for: only.label) == nil)
         // Signing out of the last account must route back to onboarding
         // rather than leaving the main UI up with no active account.
         #expect(appState.phase == .onboarding)
     }
 
+    @Test func signOutOfOnlyAccountRemovesAccountAndReturnsToOnboarding() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        await appState.bootstrap()
+        let only = try await appState.createIdentity()
+        appState.activeAccountRef = only.label
+
+        await appState.signOut()
+
+        #expect(appState.accounts.isEmpty)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+    }
+
     @Test func signOutOfOnlyAccountClearsPersistedActiveAccountRef() async throws {
         // Without this, the next launch reads the stale label from
-        // UserDefaults and bootstrap silently resurrects the signed-out
-        // account (key material stays in the Keychain).
+        // UserDefaults and bootstrap points at an account that was removed
+        // from local Marmot storage.
         UserDefaults.standard.removeObject(forKey: "marmot.activeAccountRef")
         let client = try MarmotClient.testClient()
         let appState = AppState(client: client)
@@ -1499,7 +1513,9 @@ struct ConversationTimelineProjectionTests {
                     update: TimelineProjectionUpdateFfi(
                         groupIdHex: existing.groupIdHex,
                         messages: [projected],
-                        chatListRow: row
+                        changes: [],
+                        chatListRow: row,
+                        chatListTrigger: .newLastMessage
                     )
                 )
             )

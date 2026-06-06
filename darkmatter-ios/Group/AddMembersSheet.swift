@@ -173,7 +173,7 @@ enum AddMembersPresentation {
         if case let .profile(memberRef) = DeepLink.parse(string: trimmed) {
             return memberRef
         }
-        return NostrProfileReference.memberRef(from: trimmed)
+        return NostrProfileReference.memberRef(fromReference: trimmed)
     }
 
     @MainActor

@@ -1517,6 +1517,11 @@ public protocol MarmotProtocol : AnyObject {
      */
     func relayHealth() async  -> RelayHealthFfi
 
+    /**
+     * Remove a local-signing account from this device.
+     */
+    func removeAccount(accountRef: String) async throws
+
     func removeMembers(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> SendSummaryFfi
 
     func removeMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws  -> GroupMutationResultFfi
@@ -2555,6 +2560,26 @@ open func relayHealth()async  -> RelayHealthFfi {
             liftFunc: FfiConverterTypeRelayHealthFfi.lift,
             errorHandler: nil
 
+        )
+}
+
+    /**
+     * Remove a local-signing account from this device.
+     */
+open func removeAccount(accountRef: String)async throws  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_remove_account(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
 
@@ -7720,14 +7745,18 @@ public func FfiConverterTypeTimelinePageFfi_lower(_ value: TimelinePageFfi) -> R
 public struct TimelineProjectionUpdateFfi {
     public var groupIdHex: String
     public var messages: [TimelineMessageRecordFfi]
+    public var changes: [TimelineMessageChangeFfi]
     public var chatListRow: ChatListRowFfi?
+    public var chatListTrigger: ChatListUpdateTriggerFfi
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupIdHex: String, messages: [TimelineMessageRecordFfi], chatListRow: ChatListRowFfi?) {
+    public init(groupIdHex: String, messages: [TimelineMessageRecordFfi], changes: [TimelineMessageChangeFfi], chatListRow: ChatListRowFfi?, chatListTrigger: ChatListUpdateTriggerFfi) {
         self.groupIdHex = groupIdHex
         self.messages = messages
+        self.changes = changes
         self.chatListRow = chatListRow
+        self.chatListTrigger = chatListTrigger
     }
 }
 
@@ -7741,7 +7770,13 @@ extension TimelineProjectionUpdateFfi: Equatable, Hashable {
         if lhs.messages != rhs.messages {
             return false
         }
+        if lhs.changes != rhs.changes {
+            return false
+        }
         if lhs.chatListRow != rhs.chatListRow {
+            return false
+        }
+        if lhs.chatListTrigger != rhs.chatListTrigger {
             return false
         }
         return true
@@ -7750,7 +7785,9 @@ extension TimelineProjectionUpdateFfi: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(groupIdHex)
         hasher.combine(messages)
+        hasher.combine(changes)
         hasher.combine(chatListRow)
+        hasher.combine(chatListTrigger)
     }
 }
 
@@ -7764,14 +7801,18 @@ public struct FfiConverterTypeTimelineProjectionUpdateFfi: FfiConverterRustBuffe
             try TimelineProjectionUpdateFfi(
                 groupIdHex: FfiConverterString.read(from: &buf),
                 messages: FfiConverterSequenceTypeTimelineMessageRecordFfi.read(from: &buf),
-                chatListRow: FfiConverterOptionTypeChatListRowFfi.read(from: &buf)
+                changes: FfiConverterSequenceTypeTimelineMessageChangeFfi.read(from: &buf),
+                chatListRow: FfiConverterOptionTypeChatListRowFfi.read(from: &buf),
+                chatListTrigger: FfiConverterTypeChatListUpdateTriggerFfi.read(from: &buf)
         )
     }
 
     public static func write(_ value: TimelineProjectionUpdateFfi, into buf: inout [UInt8]) {
         FfiConverterString.write(value.groupIdHex, into: &buf)
         FfiConverterSequenceTypeTimelineMessageRecordFfi.write(value.messages, into: &buf)
+        FfiConverterSequenceTypeTimelineMessageChangeFfi.write(value.changes, into: &buf)
         FfiConverterOptionTypeChatListRowFfi.write(value.chatListRow, into: &buf)
+        FfiConverterTypeChatListUpdateTriggerFfi.write(value.chatListTrigger, into: &buf)
     }
 }
 
@@ -8308,9 +8349,9 @@ extension AgentStreamUpdateFfi: Equatable, Hashable {}
 
 public enum ChatListSubscriptionUpdateFfi {
 
-    case row(row: ChatListRowFfi
+    case row(trigger: ChatListUpdateTriggerFfi, row: ChatListRowFfi
     )
-    case removeRow(groupIdHex: String
+    case removeRow(trigger: ChatListUpdateTriggerFfi, groupIdHex: String
     )
 }
 
@@ -8325,10 +8366,10 @@ public struct FfiConverterTypeChatListSubscriptionUpdateFfi: FfiConverterRustBuf
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        case 1: return .row(row: try FfiConverterTypeChatListRowFfi.read(from: &buf)
+        case 1: return .row(trigger: try FfiConverterTypeChatListUpdateTriggerFfi.read(from: &buf), row: try FfiConverterTypeChatListRowFfi.read(from: &buf)
         )
 
-        case 2: return .removeRow(groupIdHex: try FfiConverterString.read(from: &buf)
+        case 2: return .removeRow(trigger: try FfiConverterTypeChatListUpdateTriggerFfi.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -8339,13 +8380,15 @@ public struct FfiConverterTypeChatListSubscriptionUpdateFfi: FfiConverterRustBuf
         switch value {
 
 
-        case let .row(row):
+        case let .row(trigger,row):
             writeInt(&buf, Int32(1))
+            FfiConverterTypeChatListUpdateTriggerFfi.write(trigger, into: &buf)
             FfiConverterTypeChatListRowFfi.write(row, into: &buf)
 
 
-        case let .removeRow(groupIdHex):
+        case let .removeRow(trigger,groupIdHex):
             writeInt(&buf, Int32(2))
+            FfiConverterTypeChatListUpdateTriggerFfi.write(trigger, into: &buf)
             FfiConverterString.write(groupIdHex, into: &buf)
 
         }
@@ -8370,6 +8413,119 @@ public func FfiConverterTypeChatListSubscriptionUpdateFfi_lower(_ value: ChatLis
 
 
 extension ChatListSubscriptionUpdateFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ChatListUpdateTriggerFfi {
+
+    case newGroup
+    case newLastMessage
+    case lastMessageDeleted
+    case archiveChanged
+    case pendingConfirmationChanged
+    case membershipChanged
+    case unreadChanged
+    case snapshotRefresh
+    case removed
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListUpdateTriggerFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ChatListUpdateTriggerFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListUpdateTriggerFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .newGroup
+
+        case 2: return .newLastMessage
+
+        case 3: return .lastMessageDeleted
+
+        case 4: return .archiveChanged
+
+        case 5: return .pendingConfirmationChanged
+
+        case 6: return .membershipChanged
+
+        case 7: return .unreadChanged
+
+        case 8: return .snapshotRefresh
+
+        case 9: return .removed
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ChatListUpdateTriggerFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .newGroup:
+            writeInt(&buf, Int32(1))
+
+
+        case .newLastMessage:
+            writeInt(&buf, Int32(2))
+
+
+        case .lastMessageDeleted:
+            writeInt(&buf, Int32(3))
+
+
+        case .archiveChanged:
+            writeInt(&buf, Int32(4))
+
+
+        case .pendingConfirmationChanged:
+            writeInt(&buf, Int32(5))
+
+
+        case .membershipChanged:
+            writeInt(&buf, Int32(6))
+
+
+        case .unreadChanged:
+            writeInt(&buf, Int32(7))
+
+
+        case .snapshotRefresh:
+            writeInt(&buf, Int32(8))
+
+
+        case .removed:
+            writeInt(&buf, Int32(9))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListUpdateTriggerFfi_lift(_ buf: RustBuffer) throws -> ChatListUpdateTriggerFfi {
+    return try FfiConverterTypeChatListUpdateTriggerFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListUpdateTriggerFfi_lower(_ value: ChatListUpdateTriggerFfi) -> RustBuffer {
+    return FfiConverterTypeChatListUpdateTriggerFfi.lower(value)
+}
+
+
+
+extension ChatListUpdateTriggerFfi: Equatable, Hashable {}
 
 
 
@@ -9138,6 +9294,156 @@ extension PushPlatformFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum TimelineMessageChangeFfi {
+
+    case upsert(trigger: TimelineUpdateTriggerFfi, message: TimelineMessageRecordFfi
+    )
+    case remove(messageIdHex: String, reason: TimelineRemoveReasonFfi
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTimelineMessageChangeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = TimelineMessageChangeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TimelineMessageChangeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .upsert(trigger: try FfiConverterTypeTimelineUpdateTriggerFfi.read(from: &buf), message: try FfiConverterTypeTimelineMessageRecordFfi.read(from: &buf)
+        )
+
+        case 2: return .remove(messageIdHex: try FfiConverterString.read(from: &buf), reason: try FfiConverterTypeTimelineRemoveReasonFfi.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TimelineMessageChangeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .upsert(trigger,message):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeTimelineUpdateTriggerFfi.write(trigger, into: &buf)
+            FfiConverterTypeTimelineMessageRecordFfi.write(message, into: &buf)
+
+
+        case let .remove(messageIdHex,reason):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(messageIdHex, into: &buf)
+            FfiConverterTypeTimelineRemoveReasonFfi.write(reason, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineMessageChangeFfi_lift(_ buf: RustBuffer) throws -> TimelineMessageChangeFfi {
+    return try FfiConverterTypeTimelineMessageChangeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineMessageChangeFfi_lower(_ value: TimelineMessageChangeFfi) -> RustBuffer {
+    return FfiConverterTypeTimelineMessageChangeFfi.lower(value)
+}
+
+
+
+extension TimelineMessageChangeFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum TimelineRemoveReasonFfi {
+
+    case invalidated
+    case cleared
+    case pruned
+    case noLongerMatchesQuery
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTimelineRemoveReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = TimelineRemoveReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TimelineRemoveReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .invalidated
+
+        case 2: return .cleared
+
+        case 3: return .pruned
+
+        case 4: return .noLongerMatchesQuery
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TimelineRemoveReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .invalidated:
+            writeInt(&buf, Int32(1))
+
+
+        case .cleared:
+            writeInt(&buf, Int32(2))
+
+
+        case .pruned:
+            writeInt(&buf, Int32(3))
+
+
+        case .noLongerMatchesQuery:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineRemoveReasonFfi_lift(_ buf: RustBuffer) throws -> TimelineRemoveReasonFfi {
+    return try FfiConverterTypeTimelineRemoveReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineRemoveReasonFfi_lower(_ value: TimelineRemoveReasonFfi) -> RustBuffer {
+    return FfiConverterTypeTimelineRemoveReasonFfi.lower(value)
+}
+
+
+
+extension TimelineRemoveReasonFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum TimelineSubscriptionUpdateFfi {
 
     case page(page: TimelinePageFfi
@@ -9202,6 +9508,133 @@ public func FfiConverterTypeTimelineSubscriptionUpdateFfi_lower(_ value: Timelin
 
 
 extension TimelineSubscriptionUpdateFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum TimelineUpdateTriggerFfi {
+
+    case newMessage
+    case messageEditedOrReprojected
+    case reactionAdded
+    case reactionRemoved
+    case messageDeleted
+    case replyPreviewChanged
+    case agentStreamStarted
+    case agentStreamFinished
+    case deliveryOrSendStateChanged
+    case receiptChanged
+    case snapshotRefresh
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTimelineUpdateTriggerFfi: FfiConverterRustBuffer {
+    typealias SwiftType = TimelineUpdateTriggerFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TimelineUpdateTriggerFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .newMessage
+
+        case 2: return .messageEditedOrReprojected
+
+        case 3: return .reactionAdded
+
+        case 4: return .reactionRemoved
+
+        case 5: return .messageDeleted
+
+        case 6: return .replyPreviewChanged
+
+        case 7: return .agentStreamStarted
+
+        case 8: return .agentStreamFinished
+
+        case 9: return .deliveryOrSendStateChanged
+
+        case 10: return .receiptChanged
+
+        case 11: return .snapshotRefresh
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: TimelineUpdateTriggerFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .newMessage:
+            writeInt(&buf, Int32(1))
+
+
+        case .messageEditedOrReprojected:
+            writeInt(&buf, Int32(2))
+
+
+        case .reactionAdded:
+            writeInt(&buf, Int32(3))
+
+
+        case .reactionRemoved:
+            writeInt(&buf, Int32(4))
+
+
+        case .messageDeleted:
+            writeInt(&buf, Int32(5))
+
+
+        case .replyPreviewChanged:
+            writeInt(&buf, Int32(6))
+
+
+        case .agentStreamStarted:
+            writeInt(&buf, Int32(7))
+
+
+        case .agentStreamFinished:
+            writeInt(&buf, Int32(8))
+
+
+        case .deliveryOrSendStateChanged:
+            writeInt(&buf, Int32(9))
+
+
+        case .receiptChanged:
+            writeInt(&buf, Int32(10))
+
+
+        case .snapshotRefresh:
+            writeInt(&buf, Int32(11))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineUpdateTriggerFfi_lift(_ buf: RustBuffer) throws -> TimelineUpdateTriggerFfi {
+    return try FfiConverterTypeTimelineUpdateTriggerFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTimelineUpdateTriggerFfi_lower(_ value: TimelineUpdateTriggerFfi) -> RustBuffer {
+    return FfiConverterTypeTimelineUpdateTriggerFfi.lower(value)
+}
+
+
+
+extension TimelineUpdateTriggerFfi: Equatable, Hashable {}
 
 
 
@@ -10109,6 +10542,31 @@ fileprivate struct FfiConverterSequenceTypeTimelineUserReactionFfi: FfiConverter
         return seq
     }
 }
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTimelineMessageChangeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [TimelineMessageChangeFfi]
+
+    public static func write(_ value: [TimelineMessageChangeFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTimelineMessageChangeFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TimelineMessageChangeFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TimelineMessageChangeFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTimelineMessageChangeFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
 
@@ -10343,6 +10801,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_relay_health() != 9336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_remove_account() != 37396) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_members() != 32012) {

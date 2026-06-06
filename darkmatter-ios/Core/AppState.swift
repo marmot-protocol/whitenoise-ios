@@ -380,30 +380,37 @@ final class AppState {
 
     /// Signs out of the active account: clears its native push registration
     /// (so the push server stops delivering its notifications to this device)
-    /// and disables its `nativePushEnabled` preference, then switches the
-    /// active account to the next available local account (or `nil`).
+    /// and disables its `nativePushEnabled` preference, removes the local
+    /// account, then switches the active account to the next available local
+    /// account (or returns to onboarding when none remain).
     ///
     /// Push cleanup is best-effort — a transient marmot error here must not
-    /// block the user from signing out. The account's key material stays in
-    /// the Keychain so they can sign back in later.
+    /// block the user from signing out.
     @MainActor
     func signOut() async {
         guard let signingOut = activeAccountRef else { return }
         try? await marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
 
-        // Refresh before selecting the next account so we read the real
-        // post-sign-out list rather than one that still contains `signingOut`.
-        try? await refreshAccounts()
+        do {
+            try await marmot.removeAccount(accountRef: signingOut)
+        } catch {
+            present(.error(L10n.string("Couldn't sign out"), message: error.localizedDescription))
+            return
+        }
 
-        let next = accounts.first { $0.label != signingOut }?.label
-        activeAccountRef = next
+        do {
+            try await refreshAccounts()
+        } catch {
+            accounts.removeAll { $0.label == signingOut }
+            present(.error(L10n.string("Couldn't refresh accounts"), message: error.localizedDescription))
+        }
 
-        // Last account signed out: there's nothing left to display, so tear
-        // down the old account's notification subscription and route back to
-        // onboarding instead of leaving the main UI up with no active account.
-        if next == nil {
+        activeAccountRef = accounts.first?.label
+        if activeAccountRef == nil {
             stopNotificationSubscription()
+            nativePushRegistrationTask?.cancel()
+            nativePushRegistrationTask = nil
             phase = .onboarding
         }
     }
