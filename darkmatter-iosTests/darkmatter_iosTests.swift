@@ -86,7 +86,11 @@ struct AppStateBootstrapTests {
         #expect(!appState.isAppSceneActive)
         #expect(appState.runtimeSuspendedForBackground)
         #expect(appState.runtimeGeneration == generation)
-        #expect(appState.marmot.isStopping())
+        // The runtime handle is released on suspension so its SQLite storage in
+        // the shared App Group container is closed and its file lock freed
+        // (otherwise iOS kills the app at suspension with 0xdead10cc). Don't
+        // touch `marmot` here: the accessor would rebuild it on demand.
+        #expect(appState.client == nil)
 
         await appState.resumeAfterForegroundActivation()
 
@@ -94,6 +98,7 @@ struct AppStateBootstrapTests {
         #expect(!appState.runtimeSuspendedForBackground)
         #expect(appState.runtimeGeneration == generation + 1)
         #expect(appState.phase == .ready)
+        #expect(appState.client != nil)
         #expect(!appState.marmot.isStopping())
     }
 
@@ -107,7 +112,9 @@ struct AppStateBootstrapTests {
 
         #expect(!appState.isAppSceneActive)
         #expect(appState.runtimeSuspendedForBackground)
-        #expect(appState.marmot.isStopping())
+        // Runtime released (storage closed) rather than kept alive in a
+        // stopping state — see readyRuntimeSuspendsForBackgroundAndResumesForForeground.
+        #expect(appState.client == nil)
     }
 
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {

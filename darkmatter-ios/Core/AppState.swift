@@ -70,7 +70,14 @@ final class AppState {
         UserDefaults.standard.set(recentReactions, forKey: Self.recentReactionsKey)
     }
 
-    private(set) var client: MarmotClient
+    /// The live FFI runtime. Released (`nil`) while the app is suspended in the
+    /// background so its SQLite storage in the shared App Group container is
+    /// closed and its file lock freed — otherwise iOS terminates the app at
+    /// suspension with `0xdead10cc` ("held a file lock in a shared container").
+    /// Rebuilt on foreground in `resumeAfterForegroundActivation`.
+    @ObservationIgnored private(set) var client: MarmotClient?
+    private let runtimeRootPath: String
+    private let runtimeRelayUrls: [String]
     let notifications: AppNotifications
     private var notificationSubscriptionTask: Task<Void, Never>?
     private var foregroundActivationTask: Task<Void, Never>?
@@ -127,6 +134,8 @@ final class AppState {
 
     init(client: MarmotClient, notifications: AppNotifications) {
         self.client = client
+        self.runtimeRootPath = client.rootPath
+        self.runtimeRelayUrls = client.relayUrls
         self.notifications = notifications
         self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
@@ -150,7 +159,29 @@ final class AppState {
     }
 
     /// Convenience accessor for the underlying FFI handle.
-    var marmot: Marmot { client.marmot }
+    ///
+    /// Non-optional for call-site ergonomics: the runtime is only released
+    /// while the app is suspended, when no UI or view-model code runs. If
+    /// something does touch it during the foreground transition (before
+    /// `resumeAfterForegroundActivation` restores it), it is rebuilt on demand,
+    /// reopening on-disk storage. A rebuild failure is the same unrecoverable
+    /// Keychain/storage failure the app traps on at launch.
+    var marmot: Marmot {
+        if let client { return client.marmot }
+        do {
+            let restored = try makeRuntime()
+            client = restored
+            return restored.marmot
+        } catch {
+            fatalError("Failed to rebuild Keychain-backed Marmot runtime: \(error)")
+        }
+    }
+
+    /// Build a fresh runtime from the captured on-disk root and relay set. Used
+    /// to restore the runtime after a background suspension released it.
+    private func makeRuntime() throws -> MarmotClient {
+        try MarmotClient(rootPath: runtimeRootPath, relayUrls: runtimeRelayUrls)
+    }
 
     // MARK: - Bootstrap
 
@@ -421,6 +452,12 @@ final class AppState {
         isRuntimeSuspending = true
         stopNotificationSubscription()
         await marmot.shutdown()
+        // Release the FFI handle so Rust drops the runtime and closes its
+        // SQLite storage in the shared App Group container. Holding the handle
+        // alive across suspension (only swapping it on resume) keeps that
+        // file lock held, which is what iOS kills the app for with
+        // `0xdead10cc`. Rebuilt in `resumeAfterForegroundActivation`.
+        client = nil
         runtimeSuspendedForBackground = true
         isRuntimeSuspending = false
     }
@@ -434,7 +471,7 @@ final class AppState {
 
         if runtimeSuspendedForBackground {
             do {
-                client = try client.freshRuntime()
+                client = try makeRuntime()
                 try await marmot.start()
                 runtimeSuspendedForBackground = false
                 runtimeGeneration += 1

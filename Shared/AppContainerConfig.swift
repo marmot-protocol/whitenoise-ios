@@ -6,7 +6,9 @@ enum AppContainerConfig {
     static let seedRelays = [
         "wss://relay.damus.io",
         "wss://nos.lol",
-        "wss://relay.primal.net"
+        "wss://relay.primal.net",
+        "wss://relay.us.whitenoise.chat",
+        "wss://relay.eu.whitenoise.chat"
     ]
 
     static func marmotRoot(in baseURL: URL) -> URL {

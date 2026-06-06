@@ -114,6 +114,18 @@ before every release tag.
 - [ ] Clear empties the log; toggling Show diagnostics off hides the
       Settings entry.
 
+## Lifecycle / backgrounding
+
+- [ ] Background the app (Home/app switcher) and leave it for ~30s, then
+      reopen: it resumes without relaunching (chats/messages still bound,
+      no onboarding screen).
+- [ ] Repeat the background/foreground cycle several times in a row: the app
+      never crashes on backgrounding (regression for the `0xdead10cc`
+      suspension kill — the runtime must release its shared-container SQLite
+      storage on background and rebuild it on foreground).
+- [ ] After resuming from background, sending a message and receiving one
+      both still work (the runtime restarted, not just woke a dead handle).
+
 ## Offline / failure
 
 - [ ] Turning off Wi-Fi mid-conversation: sending a message shows an
