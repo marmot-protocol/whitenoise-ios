@@ -36,6 +36,36 @@ final class MarmotClient {
 
 }
 
+protocol AccountRelayListManaging {
+    func accountRelayLists(accountRef: String) throws -> AccountRelayListsFfi
+    func setAccountInboxRelays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi
+    func setAccountKeyPackageRelays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi
+    func setAccountNip65Relays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi
+}
+
+extension Marmot: AccountRelayListManaging {}
+
+struct RelaySettingsSaveFailure: LocalizedError {
+    let underlyingError: Error
+    let reloadedLists: AccountRelayListsFfi?
+
+    var errorDescription: String? {
+        underlyingError.localizedDescription
+    }
+}
+
 enum RelaySettings {
     static func editableRelays(from lists: AccountRelayListsFfi) -> [String] {
         normalizedRelayURLs(lists.defaultRelays.isEmpty ? lists.nip65.relays : lists.defaultRelays)
@@ -63,5 +93,39 @@ enum RelaySettings {
             normalized.append(url)
         }
         return normalized
+    }
+
+    static func saveAccountRelays(
+        accountRef: String,
+        relays: [String],
+        currentLists: AccountRelayListsFfi?,
+        manager: AccountRelayListManaging
+    ) async throws -> AccountRelayListsFfi {
+        let normalized = normalizedRelayURLs(relays)
+        let bootstrap = currentLists.map(bootstrapRelays(from:)) ?? MarmotClient.seedRelays
+
+        do {
+            _ = try await manager.setAccountInboxRelays(
+                accountRef: accountRef,
+                relays: normalized,
+                bootstrapRelays: bootstrap
+            )
+            _ = try await manager.setAccountKeyPackageRelays(
+                accountRef: accountRef,
+                relays: normalized,
+                bootstrapRelays: bootstrap
+            )
+            return try await manager.setAccountNip65Relays(
+                accountRef: accountRef,
+                relays: normalized,
+                bootstrapRelays: bootstrap
+            )
+        } catch {
+            let reloadedLists = try? manager.accountRelayLists(accountRef: accountRef)
+            throw RelaySettingsSaveFailure(
+                underlyingError: error,
+                reloadedLists: reloadedLists
+            )
+        }
     }
 }
