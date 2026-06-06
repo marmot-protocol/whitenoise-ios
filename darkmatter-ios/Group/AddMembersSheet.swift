@@ -86,12 +86,10 @@ struct AddMembersSheet: View {
     private func add(_ raw: String) {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) else {
-            Haptics.error()
-            self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
-            return
-        }
         do {
+            guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) else {
+                throw AddMembersInputError.invalidMemberRef
+            }
             let normalized = try normalize(memberRef)
             guard !members.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
                 pending = ""
@@ -115,12 +113,7 @@ struct AddMembersSheet: View {
     }
 
     private func addScanned(_ raw: String) {
-        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: raw) else {
-            Haptics.error()
-            self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
-            return
-        }
-        add(memberRef)
+        add(raw)
     }
 
     private func invite() async {
@@ -137,6 +130,10 @@ struct AddMembersSheet: View {
             self.error = error.localizedDescription
         }
     }
+}
+
+private enum AddMembersInputError: Error {
+    case invalidMemberRef
 }
 
 struct StagedGroupMemberRow: View {
@@ -171,7 +168,12 @@ struct StagedGroupMemberRow: View {
 
 enum AddMembersPresentation {
     static func memberRef(fromScannedPayload raw: String) -> String? {
-        NostrProfileReference.memberRef(from: raw)
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if case let .profile(memberRef) = DeepLink.parse(string: trimmed) {
+            return memberRef
+        }
+        return NostrProfileReference.memberRef(from: trimmed)
     }
 
     @MainActor

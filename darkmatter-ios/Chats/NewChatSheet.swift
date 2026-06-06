@@ -98,10 +98,17 @@ struct NewChatSheet: View {
     }
 
     private func addPending() {
-        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: pendingMember) else { return }
+        let trimmed = pendingMember.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) else {
+            Haptics.error()
+            error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
+            return
+        }
         guard !memberRef.isEmpty, !members.contains(memberRef) else { return }
         members.append(memberRef)
         pendingMember = ""
+        error = nil
     }
 
     /// Add a recipient from a scanned profile QR code.

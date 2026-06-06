@@ -603,7 +603,7 @@ final class AppState {
     }
 
     @MainActor
-    func refreshAccounts() async throws {
+    private func refreshAccounts() async throws {
         let listed = try await Task.detached { [marmot] in
             try marmot.listAccounts()
         }.value
