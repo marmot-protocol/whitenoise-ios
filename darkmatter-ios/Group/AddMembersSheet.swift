@@ -87,7 +87,9 @@ struct AddMembersSheet: View {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed)
+            guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) else {
+                throw AddMembersInputError.invalidMemberRef
+            }
             let normalized = try normalize(memberRef)
             guard !members.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
                 pending = ""
@@ -111,7 +113,7 @@ struct AddMembersSheet: View {
     }
 
     private func addScanned(_ raw: String) {
-        add(AddMembersPresentation.memberRef(fromScannedPayload: raw))
+        add(raw)
     }
 
     private func invite() async {
@@ -128,6 +130,10 @@ struct AddMembersSheet: View {
             self.error = error.localizedDescription
         }
     }
+}
+
+private enum AddMembersInputError: Error {
+    case invalidMemberRef
 }
 
 struct StagedGroupMemberRow: View {
@@ -161,11 +167,13 @@ struct StagedGroupMemberRow: View {
 }
 
 enum AddMembersPresentation {
-    static func memberRef(fromScannedPayload raw: String) -> String {
-        if case let .profile(memberRef) = DeepLink.parse(string: raw) {
+    static func memberRef(fromScannedPayload raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if case let .profile(memberRef) = DeepLink.parse(string: trimmed) {
             return memberRef
         }
-        return raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return NostrProfileReference.memberRef(from: trimmed)
     }
 
     @MainActor
