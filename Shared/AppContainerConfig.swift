@@ -30,21 +30,6 @@ enum AppContainerConfig {
         baseURL.appendingPathComponent(marmotDirectoryName, isDirectory: true)
     }
 
-    /// Resolves the per-app Application Support directory.
-    ///
-    /// Only used to locate the *legacy* Marmot root for one-time migration into
-    /// the shared App Group container — never as a live runtime root. Throws
-    /// rather than degrading to `NSTemporaryDirectory()`, which iOS purges under
-    /// storage pressure or after restarts.
-    static func applicationSupportBase(fileManager: FileManager = .default) throws -> URL {
-        try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-    }
-
     static func sharedBase(fileManager: FileManager = .default) -> URL? {
         fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)
     }
@@ -62,27 +47,8 @@ enum AppContainerConfig {
         }
 
         let sharedRoot = marmotRoot(in: sharedBase)
-        // One-time migration of data written to the legacy Application Support
-        // root by builds that predate the shared container. A failed move must
-        // propagate *before* we create the shared root — otherwise the next
-        // launch sees an existing (empty) shared root, skips migration, and the
-        // legacy data is stranded for good. A missing/unresolvable Application
-        // Support directory just means there is nothing to migrate.
-        if let legacyBase = try? applicationSupportBase(fileManager: fileManager) {
-            try migrateLegacyRootIfNeeded(from: marmotRoot(in: legacyBase), to: sharedRoot, fileManager: fileManager)
-        }
         ensureDirectoryExists(sharedRoot, fileManager: fileManager)
         return sharedRoot
-    }
-
-    static func migrateLegacyRootIfNeeded(from legacyRoot: URL, to sharedRoot: URL, fileManager: FileManager = .default) throws {
-        guard legacyRoot.path != sharedRoot.path,
-              fileManager.fileExists(atPath: legacyRoot.path),
-              !fileManager.fileExists(atPath: sharedRoot.path)
-        else { return }
-
-        ensureDirectoryExists(sharedRoot.deletingLastPathComponent(), fileManager: fileManager)
-        try fileManager.moveItem(at: legacyRoot, to: sharedRoot)
     }
 
     static func ensureDirectoryExists(_ url: URL, fileManager: FileManager = .default) {
