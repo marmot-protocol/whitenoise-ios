@@ -69,9 +69,9 @@ final class ProfileCache {
 
     func npub(forAccountIdHex id: String, projected: String?) -> String {
         if let cached = npubs[id] { return cached }
-        let value = projected ?? id
-        npubs[id] = value
-        return value
+        guard let projected else { return id }
+        npubs[id] = projected
+        return projected
     }
 
     private static func name(from profile: UserProfileMetadataFfi) -> String? {

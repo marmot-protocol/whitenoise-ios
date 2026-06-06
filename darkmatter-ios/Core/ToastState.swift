@@ -13,7 +13,7 @@ final class ToastState {
         activeToast = toast
         let id = toast.id
         toastDismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(toast.duration * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: Self.sleepNanoseconds(forDuration: toast.duration))
             await MainActor.run {
                 guard !Task.isCancelled,
                       let self,
@@ -31,5 +31,12 @@ final class ToastState {
 
     deinit {
         toastDismissTask?.cancel()
+    }
+
+    static func sleepNanoseconds(forDuration duration: TimeInterval) -> UInt64 {
+        guard !duration.isNaN, duration > 0 else { return 0 }
+        guard duration.isFinite else { return UInt64.max }
+        let maximumSeconds = TimeInterval(UInt64.max) / 1_000_000_000
+        return UInt64(min(duration, maximumSeconds) * 1_000_000_000)
     }
 }

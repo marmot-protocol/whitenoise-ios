@@ -62,6 +62,13 @@ struct AppStateBootstrapTests {
         #expect(appState.toastState.activeToast == nil)
     }
 
+    @Test func toastSleepDurationIsClampedBeforeNanosecondConversion() {
+        #expect(ToastState.sleepNanoseconds(forDuration: -1) == 0)
+        #expect(ToastState.sleepNanoseconds(forDuration: .nan) == 0)
+        #expect(ToastState.sleepNanoseconds(forDuration: .infinity) == UInt64.max)
+        #expect(ToastState.sleepNanoseconds(forDuration: 1.25) == 1_250_000_000)
+    }
+
     @Test func routingIsBackedByFocusedNavigationState() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
@@ -105,6 +112,18 @@ struct AppStateBootstrapTests {
         #expect(appState.profileCache.profiles[id]?.displayName == "Alice")
         #expect(appState.displayNames[id] == "Alice")
         #expect(appState.avatarURL(forAccountIdHex: id)?.absoluteString == "https://example.com/alice.png")
+    }
+
+    @Test func profileCacheDoesNotMemoizeRawHexNpubFallbacks() {
+        let cache = ProfileCache()
+        let id = String(repeating: "a", count: 64)
+        let npub = "npub1example"
+
+        #expect(cache.npub(forAccountIdHex: id, projected: nil) == id)
+        #expect(cache.npubs[id] == nil)
+
+        #expect(cache.npub(forAccountIdHex: id, projected: npub) == npub)
+        #expect(cache.npubs[id] == npub)
     }
 
     @Test func appInjectsFocusedStateStoresIntoEnvironment() throws {
