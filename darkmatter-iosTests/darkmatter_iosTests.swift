@@ -29,6 +29,14 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
+    @Test func lifecycleEntrypointsDeclareMainActorIsolation() throws {
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"@MainActor\s+func bootstrap\(\) async"#))
+        #expect(source.matches(#"@MainActor\s+@discardableResult\s+func createIdentity\(\) async throws -> AccountSummaryFfi"#))
+        #expect(source.matches(#"@MainActor\s+@discardableResult\s+func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi"#))
+    }
+
     @Test func presentingAToastUpdatesActiveToast() async throws {
         let appState = AppState()
         await MainActor.run {
@@ -177,6 +185,13 @@ struct AppStateBootstrapTests {
         let reborn = AppState(client: try client.freshRuntime())
         #expect(reborn.activeAccountRef == nil)
     }
+
+    private var appStateSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Core/AppState.swift")
+    }
 }
 
 struct NotificationSubscriptionRetryTests {
@@ -321,6 +336,12 @@ struct RelaySettingsTests {
         #expect(RelaySettings.normalizedRelayURL("wss://relay.example") == "wss://relay.example")
         #expect(RelaySettings.normalizedRelayURL("https://relay.example") == nil)
         #expect(RelaySettings.normalizedRelayURL("relay.example") == nil)
+    }
+}
+
+private extension String {
+    func matches(_ pattern: String) -> Bool {
+        range(of: pattern, options: .regularExpression) != nil
     }
 }
 

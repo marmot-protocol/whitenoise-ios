@@ -257,6 +257,7 @@ final class AppState {
 
     /// Brings the runtime online and refreshes the account list. Called once
     /// per app launch.
+    @MainActor
     func bootstrap() async {
         do {
             try await marmot.start()
@@ -601,6 +602,7 @@ final class AppState {
         }
     }
 
+    @MainActor
     func refreshAccounts() async throws {
         let listed = try await Task.detached { [marmot] in
             try marmot.listAccounts()
@@ -611,6 +613,7 @@ final class AppState {
     // MARK: - Identity management
 
     /// Generate a fresh Nostr identity. On success the new account becomes active.
+    @MainActor
     @discardableResult
     func createIdentity() async throws -> AccountSummaryFfi {
         let relays = MarmotClient.seedRelays
@@ -625,6 +628,7 @@ final class AppState {
     }
 
     /// Import an existing local-signing identity (nsec).
+    @MainActor
     @discardableResult
     func importIdentity(_ identity: String) async throws -> AccountSummaryFfi {
         let relays = MarmotClient.seedRelays
