@@ -55,7 +55,7 @@ struct IdentityView: View {
                 }
                 .disabled(appState.activeAccount == nil)
             } footer: {
-                Text("Signing out only forgets which account is active. Identities and their key material stay in the device keychain so you can sign back in.")
+                Text("Signing out removes this account and its local key material from this device.")
                     .font(.footnote)
             }
         }

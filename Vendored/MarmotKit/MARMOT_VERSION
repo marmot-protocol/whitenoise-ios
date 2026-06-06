@@ -1,6 +1,6 @@
-darkmatter-sha: 6a69dee
-darkmatter-branch: master
-built-at: 2026-05-28T10:05:29Z
+darkmatter-sha: a06b733
+darkmatter-branch: fix/ios-remove-account-binding
+built-at: 2026-06-06T16:02:58Z
 uniffi-version: 0.28.3
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
