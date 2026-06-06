@@ -308,7 +308,21 @@ final class AppState {
         guard let signingOut = activeAccountRef else { return }
         try? await marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
-        activeAccountRef = accounts.first { $0.label != signingOut }?.label
+
+        // Refresh before selecting the next account so we read the real
+        // post-sign-out list rather than one that still contains `signingOut`.
+        try? await refreshAccounts()
+
+        let next = accounts.first { $0.label != signingOut }?.label
+        activeAccountRef = next
+
+        // Last account signed out: there's nothing left to display, so tear
+        // down the old account's notification subscription and route back to
+        // onboarding instead of leaving the main UI up with no active account.
+        if next == nil {
+            stopNotificationSubscription()
+            phase = .onboarding
+        }
     }
 
     @discardableResult
