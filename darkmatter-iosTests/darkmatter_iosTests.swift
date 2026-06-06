@@ -351,6 +351,123 @@ struct RelaySettingsTests {
         #expect(RelaySettings.normalizedRelayURL("https://relay.example") == nil)
         #expect(RelaySettings.normalizedRelayURL("relay.example") == nil)
     }
+
+    @Test func savingRelaysReloadsAuthoritativeListsWhenFinalPublishFails() async throws {
+        let oldLists = relayLists(
+            bootstrapRelays: ["wss://source.example"],
+            nip65: ["wss://old.example"],
+            inbox: ["wss://old.example"],
+            keyPackage: ["wss://old.example"]
+        )
+        let manager = FakeAccountRelayListManager(lists: oldLists, failNip65: true)
+
+        do {
+            _ = try await RelaySettings.saveAccountRelays(
+                accountRef: "account-a",
+                relays: ["  wss://new.example  "],
+                currentLists: oldLists,
+                manager: manager
+            )
+            Issue.record("Expected relay save to fail")
+        } catch let failure as RelaySettingsSaveFailure {
+            #expect(failure.reloadedLists == relayLists(
+                bootstrapRelays: ["wss://source.example"],
+                nip65: ["wss://old.example"],
+                inbox: ["wss://new.example"],
+                keyPackage: ["wss://new.example"]
+            ))
+            #expect(manager.calls == [
+                .inbox(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
+                .keyPackage(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
+                .nip65(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
+                .reload(accountRef: "account-a")
+            ])
+        } catch {
+            Issue.record("Expected RelaySettingsSaveFailure, got \(error)")
+        }
+    }
+}
+
+private enum RelayManagerCall: Equatable {
+    case reload(accountRef: String)
+    case inbox(relays: [String], bootstrapRelays: [String])
+    case keyPackage(relays: [String], bootstrapRelays: [String])
+    case nip65(relays: [String], bootstrapRelays: [String])
+}
+
+private enum RelayManagerError: LocalizedError {
+    case nip65Rejected
+
+    var errorDescription: String? {
+        "NIP-65 relay update rejected"
+    }
+}
+
+private final class FakeAccountRelayListManager: AccountRelayListManaging {
+    var calls: [RelayManagerCall] = []
+
+    private var lists: AccountRelayListsFfi
+    private let failNip65: Bool
+
+    init(lists: AccountRelayListsFfi, failNip65: Bool) {
+        self.lists = lists
+        self.failNip65 = failNip65
+    }
+
+    func accountRelayLists(accountRef: String) throws -> AccountRelayListsFfi {
+        calls.append(.reload(accountRef: accountRef))
+        return lists
+    }
+
+    func setAccountInboxRelays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi {
+        calls.append(.inbox(relays: relays, bootstrapRelays: bootstrapRelays))
+        lists.inbox = RelayListFfi(kind: 39000, relays: relays)
+        return lists
+    }
+
+    func setAccountKeyPackageRelays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi {
+        calls.append(.keyPackage(relays: relays, bootstrapRelays: bootstrapRelays))
+        lists.keyPackage = RelayListFfi(kind: 39001, relays: relays)
+        return lists
+    }
+
+    func setAccountNip65Relays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi {
+        calls.append(.nip65(relays: relays, bootstrapRelays: bootstrapRelays))
+        if failNip65 {
+            throw RelayManagerError.nip65Rejected
+        }
+        lists.nip65 = RelayListFfi(kind: 10002, relays: relays)
+        return lists
+    }
+}
+
+private func relayLists(
+    bootstrapRelays: [String],
+    nip65: [String],
+    inbox: [String],
+    keyPackage: [String]
+) -> AccountRelayListsFfi {
+    AccountRelayListsFfi(
+        complete: true,
+        missing: [],
+        defaultRelays: [],
+        bootstrapRelays: bootstrapRelays,
+        nip65: RelayListFfi(kind: 10002, relays: nip65),
+        inbox: RelayListFfi(kind: 39000, relays: inbox),
+        keyPackage: RelayListFfi(kind: 39001, relays: keyPackage)
+    )
 }
 
 private extension String {

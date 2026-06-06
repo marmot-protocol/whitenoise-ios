@@ -195,27 +195,21 @@ struct RelaysView: View {
         defer { isSaving = false }
 
         do {
-            let bootstrap = lists.map(RelaySettings.bootstrapRelays(from:)) ?? MarmotClient.seedRelays
-            _ = try await appState.marmot.setAccountInboxRelays(
+            lists = try await RelaySettings.saveAccountRelays(
                 accountRef: accountRef,
                 relays: normalized,
-                bootstrapRelays: bootstrap
-            )
-            _ = try await appState.marmot.setAccountKeyPackageRelays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
-            )
-            lists = try await appState.marmot.setAccountNip65Relays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
+                currentLists: lists,
+                manager: appState.marmot
             )
             savedAt = Date()
             Haptics.success()
             appState.present(.success(L10n.string("Relay lists updated")))
             return true
         } catch {
+            if let failure = error as? RelaySettingsSaveFailure,
+               let reloadedLists = failure.reloadedLists {
+                lists = reloadedLists
+            }
             Haptics.error()
             saveError = error.localizedDescription
             appState.present(.error(L10n.string("Relay update failed"), message: error.localizedDescription))
