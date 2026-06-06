@@ -2,7 +2,11 @@ import Foundation
 
 /// Compact, glanceable timestamps for the chats list — recent times collapse
 /// to "now"/"4m"/"2h", this week shows the weekday, older shows the date.
+@MainActor
 enum RelativeTime {
+    private static var formatterCache: [String: DateFormatter] = [:]
+    private static var formatterCacheLocaleIdentifier = Locale.autoupdatingCurrent.identifier
+
     static func short(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
         let seconds = now.timeIntervalSince(date)
         if seconds < 0 { return L10n.string("now") }
@@ -19,9 +23,45 @@ enum RelativeTime {
     }
 
     private static func formatted(_ date: Date, _ template: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = .autoupdatingCurrent
-        formatter.dateFormat = template
+        let formatter = formatter(for: template)
         return formatter.string(from: date)
     }
+
+    private static func formatter(for template: String) -> DateFormatter {
+        let locale = Locale.autoupdatingCurrent
+        let localeIdentifier = locale.identifier
+        if formatterCacheLocaleIdentifier != localeIdentifier {
+            formatterCache.removeAll()
+            formatterCacheLocaleIdentifier = localeIdentifier
+        }
+
+        if let cached = formatterCache[template] {
+            return cached
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = template
+        formatterCache[template] = formatter
+        return formatter
+    }
+
+    #if DEBUG
+    static func resetFormatterCacheForTesting() {
+        formatterCache.removeAll()
+        formatterCacheLocaleIdentifier = Locale.autoupdatingCurrent.identifier
+    }
+
+    static var formatterCacheCountForTesting: Int {
+        formatterCache.count
+    }
+
+    static var formatterCacheLocaleIdentifierForTesting: String {
+        formatterCacheLocaleIdentifier
+    }
+
+    static func setFormatterCacheLocaleIdentifierForTesting(_ identifier: String) {
+        formatterCacheLocaleIdentifier = identifier
+    }
+    #endif
 }

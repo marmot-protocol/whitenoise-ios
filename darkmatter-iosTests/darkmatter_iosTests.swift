@@ -180,6 +180,52 @@ struct AppStateBootstrapTests {
 }
 
 @MainActor
+struct RelativeTimeTests {
+
+    @Test func shortReusesCachedDateFormattersForRepeatedListRows() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let weekdayDate = now.addingTimeInterval(-3 * 24 * 3600)
+        let olderDate = now.addingTimeInterval(-10 * 24 * 3600)
+
+        RelativeTime.resetFormatterCacheForTesting()
+        defer { RelativeTime.resetFormatterCacheForTesting() }
+
+        for _ in 0..<50 {
+            _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar)
+        }
+        #expect(RelativeTime.formatterCacheCountForTesting == 1)
+
+        for _ in 0..<50 {
+            _ = RelativeTime.short(olderDate, now: now, calendar: calendar)
+        }
+        #expect(RelativeTime.formatterCacheCountForTesting == 2)
+    }
+
+    @Test func shortRefreshesFormatterCacheWhenLocaleIdentifierChanges() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let weekdayDate = now.addingTimeInterval(-3 * 24 * 3600)
+        let olderDate = now.addingTimeInterval(-10 * 24 * 3600)
+
+        RelativeTime.resetFormatterCacheForTesting()
+        defer { RelativeTime.resetFormatterCacheForTesting() }
+
+        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar)
+        _ = RelativeTime.short(olderDate, now: now, calendar: calendar)
+        #expect(RelativeTime.formatterCacheCountForTesting == 2)
+
+        RelativeTime.setFormatterCacheLocaleIdentifierForTesting("stale-locale")
+        _ = RelativeTime.short(weekdayDate, now: now, calendar: calendar)
+
+        #expect(RelativeTime.formatterCacheCountForTesting == 1)
+        #expect(RelativeTime.formatterCacheLocaleIdentifierForTesting == Locale.autoupdatingCurrent.identifier)
+    }
+}
+
+@MainActor
 struct RelaySettingsTests {
 
     @Test func editableRelayListComesFromMarmotAccountRelayLists() {
