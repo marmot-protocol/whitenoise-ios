@@ -2,73 +2,6 @@ import Foundation
 import Observation
 import MarmotKit
 
-struct NotificationSubscriptionRunner {
-    let initialRetryDelayNanoseconds: UInt64
-    let maximumRetryDelayNanoseconds: UInt64
-    let subscribe: () async throws -> AsyncStream<NotificationUpdateFfi>
-    let present: (NotificationUpdateFfi) async -> Void
-    let reportError: (Error) async -> Void
-    let sleep: (UInt64) async throws -> Void
-
-    init(
-        initialRetryDelayNanoseconds: UInt64,
-        maximumRetryDelayNanoseconds: UInt64,
-        subscribe: @escaping () async throws -> AsyncStream<NotificationUpdateFfi>,
-        present: @escaping (NotificationUpdateFfi) async -> Void,
-        reportError: @escaping (Error) async -> Void,
-        sleep: @escaping (UInt64) async throws -> Void = { try await Task.sleep(nanoseconds: $0) }
-    ) {
-        self.initialRetryDelayNanoseconds = initialRetryDelayNanoseconds
-        self.maximumRetryDelayNanoseconds = maximumRetryDelayNanoseconds
-        self.subscribe = subscribe
-        self.present = present
-        self.reportError = reportError
-        self.sleep = sleep
-    }
-
-    func run() async {
-        var retryDelay = initialRetryDelayNanoseconds
-
-        while !Task.isCancelled {
-            var deliveredNotification = false
-
-            do {
-                let updates = try await subscribe()
-                for await update in updates {
-                    guard !Task.isCancelled else { return }
-                    deliveredNotification = true
-                    retryDelay = initialRetryDelayNanoseconds
-                    await present(update)
-                }
-            } catch is CancellationError {
-                return
-            } catch {
-                guard !Task.isCancelled else { return }
-                await reportError(error)
-            }
-
-            guard !Task.isCancelled else { return }
-
-            do {
-                try await sleep(retryDelay)
-            } catch {
-                return
-            }
-
-            if !deliveredNotification {
-                retryDelay = nextDelay(after: retryDelay)
-            }
-        }
-    }
-
-    private func nextDelay(after delay: UInt64) -> UInt64 {
-        guard delay < maximumRetryDelayNanoseconds else { return maximumRetryDelayNanoseconds }
-        let doubled = delay.multipliedReportingOverflow(by: 2)
-        guard !doubled.overflow else { return maximumRetryDelayNanoseconds }
-        return min(doubled.partialValue, maximumRetryDelayNanoseconds)
-    }
-}
-
 /// Root observable state for the app.
 ///
 /// Holds the `Marmot` handle, the current set of `AccountSummaryFfi`, and
@@ -84,6 +17,8 @@ final class AppState {
         case ready
         case failed(String)
     }
+
+    typealias ProfileLink = AppProfileLink
 
     /// Where the user is in the global flow. Drives the root router.
     private(set) var phase: Phase = .bootstrapping
@@ -146,7 +81,10 @@ final class AppState {
     private let runtimeRootPath: String
     private let runtimeRelayUrls: [String]
     let notifications: AppNotifications
-    private var notificationSubscriptionTask: Task<Void, Never>?
+    let toastState = ToastState()
+    let navigation = NavigationState()
+    let profileCache = ProfileCache()
+    private let notificationDriver = NotificationDriver()
     private var foregroundActivationTask: Task<Void, Never>?
     private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
@@ -158,40 +96,31 @@ final class AppState {
 
     /// Cache of best-known display names keyed by account id hex. Derived
     /// from `profiles` when available. Read-only from view code.
-    private(set) var displayNames: [String: String] = [:]
+    var displayNames: [String: String] { profileCache.displayNames }
 
     /// Cache of full Nostr kind:0 profiles keyed by account id hex. Populated
     /// on demand via `profile(forAccountIdHex:)`. Read-only from view code.
-    private(set) var profiles: [String: UserProfileMetadataFfi] = [:]
+    var profiles: [String: UserProfileMetadataFfi] { profileCache.profiles }
 
     /// Cache of npub (bech32) forms keyed by account id hex. Conversion is
     /// deterministic and offline, so these never go stale.
-    private(set) var npubs: [String: String] = [:]
+    var npubs: [String: String] { profileCache.npubs }
 
     /// Most recent transient banner. View code reads this via the
     /// `.toastHost()` modifier on the root view.
-    private(set) var activeToast: Toast?
-    private var toastDismissTask: Task<Void, Never>?
+    var activeToast: Toast? { toastState.activeToast }
 
     /// A profile to present (set by a scanned QR or an opened deep link).
     /// MainView binds a sheet to this.
-    private(set) var pendingProfile: ProfileLink?
-
-    struct ProfileLink: Identifiable, Equatable {
-        let npub: String
-        var id: String { npub }
-    }
+    var pendingProfile: ProfileLink? { navigation.pendingProfile }
 
     /// A chat (group id hex) to navigate to once any presenting sheets close —
     /// set right after creating a chat from the composer or a scanned profile.
     /// ChatsListView observes this to push the conversation.
-    private(set) var pendingChatId: String?
-    private(set) var pendingChatAccountRef: String?
-    private(set) var pendingChatMessageIdHex: String?
-    private(set) var visibleChat: VisibleChatRoute?
-
-    /// Tracks in-flight directory fetches so we don't pile up duplicate work.
-    private var directoryFetchesInFlight: Set<String> = []
+    var pendingChatId: String? { navigation.pendingChatId }
+    var pendingChatAccountRef: String? { navigation.pendingChatAccountRef }
+    var pendingChatMessageIdHex: String? { navigation.pendingChatMessageIdHex }
+    var visibleChat: VisibleChatRoute? { navigation.visibleChat }
 
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
@@ -286,21 +215,21 @@ final class AppState {
 
     @MainActor
     private func startNotificationSubscription() {
-        notificationSubscriptionTask?.cancel()
-        notificationSubscriptionTask = Task { [weak self] in
-            guard let self else { return }
-            let runner = NotificationSubscriptionRunner(
-                initialRetryDelayNanoseconds: Self.notificationSubscriptionInitialRetryDelayNanoseconds,
-                maximumRetryDelayNanoseconds: Self.notificationSubscriptionMaximumRetryDelayNanoseconds,
-                subscribe: {
-                    let subscription = try await self.marmot.subscribeNotifications()
-                    return SubscriptionDriver.notifications(subscription)
-                },
-                present: { update in
-                    guard self.shouldPresentLocalNotification(update) else { return }
-                    await self.notifications.present(update: update)
-                },
-                reportError: { error in
+        let runner = NotificationSubscriptionRunner(
+            initialRetryDelayNanoseconds: Self.notificationSubscriptionInitialRetryDelayNanoseconds,
+            maximumRetryDelayNanoseconds: Self.notificationSubscriptionMaximumRetryDelayNanoseconds,
+            subscribe: { [weak self] in
+                guard let self else { throw CancellationError() }
+                let subscription = try await self.marmot.subscribeNotifications()
+                return SubscriptionDriver.notifications(subscription)
+            },
+            present: { [weak self] update in
+                guard let self, self.shouldPresentLocalNotification(update) else { return }
+                await self.notifications.present(update: update)
+            },
+            reportError: { [weak self] error in
+                guard let self else { return }
+                await MainActor.run {
                     self.present(
                         .error(
                             L10n.string("Notifications unavailable"),
@@ -308,14 +237,13 @@ final class AppState {
                         )
                     )
                 }
-            )
-            await runner.run()
-        }
+            }
+        )
+        notificationDriver.start(runner: runner)
     }
 
     private func stopNotificationSubscription() {
-        notificationSubscriptionTask?.cancel()
-        notificationSubscriptionTask = nil
+        notificationDriver.stop()
     }
 
     private func shouldPresentLocalNotification(_ update: NotificationUpdateFfi) -> Bool {
@@ -682,217 +610,5 @@ final class AppState {
             streamIdHex: streamIdHex,
             quicCandidates: Self.agentTextStreamQuicCandidates
         )
-    }
-
-    // MARK: - Profiles & display names
-
-    /// Full Nostr profile for an account id. Returns the cached value
-    /// immediately if known; otherwise does a fast synchronous read from the
-    /// runtime's directory cache, and on a miss schedules a background relay
-    /// fetch so a later call hydrates. `nil` until something is known.
-    @MainActor
-    @discardableResult
-    func profile(forAccountIdHex id: String) -> UserProfileMetadataFfi? {
-        if let cached = profiles[id] { return cached }
-        if let local = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(local, for: id)
-            return local
-        }
-        Task { await refreshProfile(forAccountIdHex: id) }
-        return nil
-    }
-
-    /// A display name we actually *know* for an account: projected kind:0
-    /// display_name/name, then a cached name, then a local account's label.
-    /// `nil` when nothing better than the raw id is available, so callers can
-    /// choose their own fallback (e.g. an npub for a DM peer).
-    @MainActor
-    func knownDisplayName(forAccountIdHex id: String) -> String? {
-        if let p = profile(forAccountIdHex: id), let name = Self.name(from: p) {
-            return name
-        }
-        if let cached = displayNames[id] { return cached }
-        if let projected = marmot.displayName(accountIdHex: id),
-           let name = ProfileSanitizer.displayName(projected) {
-            displayNames[id] = name
-            return name
-        }
-        if let owned = accounts.first(where: { $0.accountIdHex == id }), !owned.label.isEmpty {
-            return owned.label
-        }
-        return nil
-    }
-
-    /// Best-effort display name. Prefers the projected kind:0 display_name /
-    /// name, then a local account's label, then short-hex.
-    @MainActor
-    func displayName(forAccountIdHex id: String) -> String {
-        knownDisplayName(forAccountIdHex: id) ?? IdentityFormatter.short(id)
-    }
-
-    /// Picture URL for an account id, if its profile has a *safe* one.
-    /// Untrusted: only http(s) URLs with a host pass the sanitizer.
-    @MainActor
-    func avatarURL(forAccountIdHex id: String) -> URL? {
-        ProfileSanitizer.imageURL(profile(forAccountIdHex: id)?.picture)
-    }
-
-    /// Store a profile in the cache and derive its display name. Called after
-    /// a successful publish so the editor and chrome update immediately.
-    @MainActor
-    func cacheProfile(_ profile: UserProfileMetadataFfi, for id: String) {
-        profiles[id] = profile
-        if let name = Self.name(from: profile) {
-            displayNames[id] = name
-        }
-    }
-
-    @MainActor
-    private func refreshProfile(forAccountIdHex id: String) async {
-        guard !directoryFetchesInFlight.contains(id) else { return }
-        directoryFetchesInFlight.insert(id)
-        defer { directoryFetchesInFlight.remove(id) }
-
-        if let local = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(local, for: id)
-            return
-        }
-
-        // Fetch this account's OWN kind:0 through the active account's relay
-        // lists. Marmot owns those lists; iOS only asks for the current view.
-        let relays = activeAccountRef.map(relayBootstrapRelays(for:)) ?? MarmotClient.seedRelays
-        try? await marmot.refreshProfile(accountIdHex: id, relays: relays)
-
-        if let fetched = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(fetched, for: id)
-        } else if let name = marmot.displayName(accountIdHex: id), !name.isEmpty {
-            displayNames[id] = name
-        }
-    }
-
-    private static func name(from profile: UserProfileMetadataFfi) -> String? {
-        // Untrusted kind:0 content — sanitize before it's used as a name.
-        ProfileSanitizer.displayName(profile.displayName ?? profile.name)
-    }
-
-    // MARK: - npub
-
-    /// The `npub…` bech32 form of an account id hex. Falls back to the hex
-    /// if conversion fails (shouldn't, for a valid pubkey).
-    @MainActor
-    func npub(forAccountIdHex id: String) -> String {
-        if let cached = npubs[id] { return cached }
-        let value = marmot.npub(accountIdHex: id) ?? id
-        npubs[id] = value
-        return value
-    }
-
-    /// Truncated npub for compact UI (e.g. `npub1abc…wxyz`).
-    @MainActor
-    func shortNpub(forAccountIdHex id: String) -> String {
-        IdentityFormatter.short(npub(forAccountIdHex: id))
-    }
-
-    // MARK: - Toasts
-
-    @MainActor
-    func present(_ toast: Toast) {
-        toastDismissTask?.cancel()
-        activeToast = toast
-        let id = toast.id
-        toastDismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(toast.duration * 1_000_000_000))
-            guard !Task.isCancelled,
-                  let self,
-                  self.activeToast?.id == id else { return }
-            self.activeToast = nil
-        }
-    }
-
-    @MainActor
-    func dismissToast() {
-        toastDismissTask?.cancel()
-        activeToast = nil
-    }
-
-    // MARK: - Profile routing (QR scan / deep link)
-
-    @MainActor
-    func presentProfile(npub: String) {
-        pendingProfile = ProfileLink(npub: npub)
-    }
-
-    @MainActor
-    func clearPendingProfile() {
-        pendingProfile = nil
-    }
-
-    /// Request navigation into a chat (e.g. just after creating one).
-    @MainActor
-    func presentChat(groupIdHex: String, accountRef: String? = nil, messageIdHex: String? = nil) {
-        if let accountRef, !accountRef.isEmpty {
-            activeAccountRef = accountRef
-            pendingChatAccountRef = accountRef
-        } else {
-            pendingChatAccountRef = nil
-        }
-        let messageId = messageIdHex?.trimmingCharacters(in: .whitespacesAndNewlines)
-        pendingChatMessageIdHex = messageId?.isEmpty == false ? messageId : nil
-        pendingChatId = groupIdHex
-    }
-
-    @MainActor
-    func presentNotification(route: LocalNotificationRoute) {
-        presentChat(
-            groupIdHex: route.groupIdHex,
-            accountRef: route.accountRef,
-            messageIdHex: route.messageIdHex
-        )
-    }
-
-    @MainActor
-    func clearPendingChat() {
-        pendingChatId = nil
-        pendingChatAccountRef = nil
-        pendingChatMessageIdHex = nil
-    }
-
-    @MainActor
-    @discardableResult
-    func beginViewingChat(groupIdHex: String) -> VisibleChatRoute? {
-        guard let accountRef = activeAccountRef else { return nil }
-        let route = VisibleChatRoute(accountRef: accountRef, groupIdHex: groupIdHex)
-        visibleChat = route
-        return route
-    }
-
-    @MainActor
-    func endViewingChat(_ route: VisibleChatRoute) {
-        if visibleChat == route {
-            visibleChat = nil
-        }
-    }
-
-    func isViewingNotificationDestination(accountRef: String, groupIdHex: String) -> Bool {
-        !LocalNotificationSuppressionPolicy.shouldPresent(
-            localNotificationsEnabled: true,
-            appSceneActive: isAppSceneActive,
-            updateAccountRef: accountRef,
-            updateGroupIdHex: groupIdHex,
-            visibleChat: visibleChat
-        )
-    }
-
-    /// Route an inbound deep link (from `.onOpenURL`).
-    @MainActor
-    func handle(url: URL) {
-        switch DeepLink.parse(url) {
-        case .profile(let npub):
-            presentProfile(npub: npub)
-        case .chat(let groupIdHex):
-            presentChat(groupIdHex: groupIdHex)
-        case nil:
-            break
-        }
     }
 }

@@ -49,6 +49,72 @@ struct AppStateBootstrapTests {
         #expect(appState.activeToast == nil)
     }
 
+    @Test func toastPresentationIsBackedByFocusedToastState() async throws {
+        let appState = AppState()
+        await MainActor.run {
+            appState.present(.success("Hello"))
+        }
+
+        #expect(appState.toastState.activeToast?.title == "Hello")
+        #expect(appState.activeToast == appState.toastState.activeToast)
+
+        await MainActor.run { appState.dismissToast() }
+        #expect(appState.toastState.activeToast == nil)
+    }
+
+    @Test func routingIsBackedByFocusedNavigationState() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-a"
+
+        appState.presentProfile(npub: "npub1example")
+        #expect(appState.navigation.pendingProfile == AppState.ProfileLink(npub: "npub1example"))
+        #expect(appState.pendingProfile == appState.navigation.pendingProfile)
+
+        appState.presentChat(
+            groupIdHex: "group-a",
+            accountRef: "account-b",
+            messageIdHex: "  message-a  "
+        )
+        #expect(appState.activeAccountRef == "account-b")
+        #expect(appState.navigation.pendingChatId == "group-a")
+        #expect(appState.navigation.pendingChatAccountRef == "account-b")
+        #expect(appState.navigation.pendingChatMessageIdHex == "message-a")
+
+        appState.clearPendingChat()
+        #expect(appState.navigation.pendingChatId == nil)
+        #expect(appState.navigation.pendingChatAccountRef == nil)
+        #expect(appState.navigation.pendingChatMessageIdHex == nil)
+    }
+
+    @Test func profileCachingIsBackedByFocusedProfileCache() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let id = String(repeating: "a", count: 64)
+
+        appState.cacheProfile(
+            UserProfileMetadataFfi(
+                name: nil,
+                displayName: "Alice",
+                about: nil,
+                picture: "https://example.com/alice.png",
+                nip05: nil,
+                lud16: nil
+            ),
+            for: id
+        )
+
+        #expect(appState.profileCache.profiles[id]?.displayName == "Alice")
+        #expect(appState.displayNames[id] == "Alice")
+        #expect(appState.avatarURL(forAccountIdHex: id)?.absoluteString == "https://example.com/alice.png")
+    }
+
+    @Test func appInjectsFocusedStateStoresIntoEnvironment() throws {
+        let source = try String(contentsOf: appSourceURL, encoding: .utf8)
+
+        #expect(source.contains(".environment(appState.toastState)"))
+        #expect(source.contains(".environment(appState.navigation)"))
+        #expect(source.contains(".environment(appState.profileCache)"))
+    }
+
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
@@ -205,6 +271,13 @@ struct AppStateBootstrapTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Core/AppState.swift")
+    }
+
+    private var appSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/darkmatter_iosApp.swift")
     }
 }
 
