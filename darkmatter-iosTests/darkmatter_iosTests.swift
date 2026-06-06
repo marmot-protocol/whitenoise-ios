@@ -140,6 +140,8 @@ struct AppStateBootstrapTests {
 
         #expect(appState.activeAccountRef == accountB.label)
         #expect(appState.notificationSettings(for: accountA.label)?.nativePushEnabled == false)
+        // A remaining account means we stay in the main interface.
+        #expect(appState.phase == .ready)
     }
 
     @Test func signOutOfOnlyAccountLeavesActiveAccountRefNil() async throws {
@@ -152,6 +154,9 @@ struct AppStateBootstrapTests {
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.notificationSettings(for: only.label)?.nativePushEnabled == false)
+        // Signing out of the last account must route back to onboarding
+        // rather than leaving the main UI up with no active account.
+        #expect(appState.phase == .onboarding)
     }
 
     @Test func signOutOfOnlyAccountClearsPersistedActiveAccountRef() async throws {
