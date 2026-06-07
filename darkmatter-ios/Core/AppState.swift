@@ -88,6 +88,7 @@ final class AppState {
     private var foregroundActivationTask: Task<Void, Never>?
     private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
+    private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
     private(set) var isAppSceneActive = true
@@ -526,6 +527,7 @@ final class AppState {
         else { return }
 
         isRuntimeSuspending = true
+        defer { finishRuntimeSuspensionWait() }
         stopNotificationSubscription()
         await marmot.shutdown()
         // Release the FFI handle so Rust drops the runtime and closes its
@@ -535,14 +537,11 @@ final class AppState {
         // `0xdead10cc`. Rebuilt in `resumeAfterForegroundActivation`.
         client = nil
         runtimeSuspendedForBackground = true
-        isRuntimeSuspending = false
     }
 
     func resumeAfterForegroundActivation() async {
         isAppSceneActive = true
-        while isRuntimeSuspending, !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 25_000_000)
-        }
+        await waitForRuntimeSuspensionToFinish()
         guard phase == .ready, !Task.isCancelled else { return }
 
         if runtimeSuspendedForBackground {
@@ -562,12 +561,44 @@ final class AppState {
         await catchUpAfterForegroundActivation()
     }
 
+    private func waitForRuntimeSuspensionToFinish() async {
+        guard isRuntimeSuspending else { return }
+        let waiterID = UUID()
+
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard isRuntimeSuspending, !Task.isCancelled else {
+                    continuation.resume()
+                    return
+                }
+                runtimeSuspensionWaiters[waiterID] = continuation
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.resumeRuntimeSuspensionWaiter(id: waiterID)
+            }
+        }
+    }
+
+    private func finishRuntimeSuspensionWait() {
+        isRuntimeSuspending = false
+        let waiters = Array(runtimeSuspensionWaiters.values)
+        runtimeSuspensionWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
+
+    private func resumeRuntimeSuspensionWaiter(id: UUID) {
+        runtimeSuspensionWaiters.removeValue(forKey: id)?.resume()
+    }
+
     @MainActor
     private func restartRuntimeForAuditLogSettingsChange() async throws {
         guard phase == .ready else { return }
         await cancelForegroundMaintenance()
         isRuntimeSuspending = true
-        defer { isRuntimeSuspending = false }
+        defer { finishRuntimeSuspensionWait() }
 
         stopNotificationSubscription()
         await marmot.shutdown()

@@ -226,6 +226,13 @@ struct AppStateBootstrapTests {
         #expect(appState.client == nil)
     }
 
+    @Test func foregroundActivationDoesNotPollForRuntimeSuspension() throws {
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+
+        #expect(!source.matches(#"(?s)func resumeAfterForegroundActivation\(\) async \{.*Task\.sleep"#))
+        #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
+    }
+
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
         // account's push registration so the push server stops delivering
