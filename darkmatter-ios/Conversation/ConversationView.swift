@@ -351,11 +351,24 @@ struct ConversationView: View {
     private var timeline: some View {
         if let viewModel {
             if viewModel.timeline.isEmpty {
-                ContentUnavailableView(
-                    "No messages yet",
-                    systemImage: "bubble.middle.bottom",
-                    description: Text("Send the first message to get started.")
-                )
+                if let error = viewModel.error {
+                    ContentUnavailableView {
+                        Label("Couldn't load conversation", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(error)
+                    } actions: {
+                        Button("Retry") {
+                            Task { await viewModel.start() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "No messages yet",
+                        systemImage: "bubble.middle.bottom",
+                        description: Text("Send the first message to get started.")
+                    )
+                }
             } else {
                 ScrollViewReader { proxy in
                     GeometryReader { outer in

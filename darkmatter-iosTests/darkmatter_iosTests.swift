@@ -1845,6 +1845,24 @@ struct ConversationTimelineProjectionTests {
         #expect(!ConversationViewModel.canDeleteMessage(emptyId, myAccountId: me, isSelfAdmin: true))
     }
 
+    @Test func failedTimelineSubscriptionRetriesWithBackoff() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"private func startLiveTimeline\(accountRef: String\)[\s\S]*while !Task\.isCancelled[\s\S]*subscribeTimelineMessages[\s\S]*Task\.sleep\(nanoseconds: retryDelay\)[\s\S]*Self\.nextLiveSubscriptionRetryDelay"#))
+    }
+
+    @Test func liveSubscriptionRetryDelayDoublesUntilCapped() {
+        #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 500_000_000) == 1_000_000_000)
+        #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 4_000_000_000) == 8_000_000_000)
+        #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 8_000_000_000) == 8_000_000_000)
+    }
+
+    @Test func conversationErrorStateOffersRetryAction() throws {
+        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"if let error = viewModel\.error[\s\S]*ContentUnavailableView[\s\S]*Couldn't load conversation[\s\S]*Button\(\"Retry\"\)[\s\S]*await viewModel\.start\(\)"#))
+    }
+
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let parentSender = hex("11")
@@ -2103,6 +2121,13 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
+
+    private var conversationViewSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
     }
 }
 

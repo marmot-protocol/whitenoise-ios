@@ -48,6 +48,8 @@ final class ConversationViewModel {
     private var readStateTask: Task<Void, Never>?
 
     private static let timelinePageLimit: UInt32 = 50
+    private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
+    private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
 
     /// Renderable timeline messages we've loaded by id.
     private var messageById: [String: AppMessageRecordFfi] = [:]
@@ -226,6 +228,7 @@ final class ConversationViewModel {
     func start() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         stopLiveSubscriptions()
+        error = nil
         startLiveTimeline(accountRef: accountRef)
         startLiveGroupState(accountRef: accountRef)
         startDeferredGroupDetails(accountRef: accountRef)
@@ -274,6 +277,15 @@ final class ConversationViewModel {
         return message.sender == myAccountId
     }
 
+    static func nextLiveSubscriptionRetryDelay(after delay: UInt64) -> UInt64 {
+        guard delay < liveSubscriptionMaximumRetryDelayNanoseconds else {
+            return liveSubscriptionMaximumRetryDelayNanoseconds
+        }
+        let doubled = delay.multipliedReportingOverflow(by: 2)
+        guard !doubled.overflow else { return liveSubscriptionMaximumRetryDelayNanoseconds }
+        return min(doubled.partialValue, liveSubscriptionMaximumRetryDelayNanoseconds)
+    }
+
     private func initializeReadState() {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         do {
@@ -307,23 +319,38 @@ final class ConversationViewModel {
         guard let appState else { return }
         let groupIdHex = group.groupIdHex
         timelineTask = Task { [weak self, weak appState] in
-            do {
-                guard let appState else { return }
-                let timelineSub = try await appState.marmot.subscribeTimelineMessages(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex,
-                    limit: Self.timelinePageLimit
-                )
-                guard !Task.isCancelled else { return }
-                if let snapshot = timelineSub.snapshot() {
-                    self?.applyTimelinePage(snapshot, placement: .tail)
+            var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
+            while !Task.isCancelled {
+                do {
+                    guard let appState else { return }
+                    let timelineSub = try await appState.marmot.subscribeTimelineMessages(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        limit: Self.timelinePageLimit
+                    )
+                    guard !Task.isCancelled else { return }
+                    self?.error = nil
+                    if let snapshot = timelineSub.snapshot() {
+                        self?.applyTimelinePage(snapshot, placement: .tail)
+                    }
+                    for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
+                        guard !Task.isCancelled else { return }
+                        retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
+                        self?.applyTimelineSubscriptionUpdate(update)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    self?.error = error.localizedDescription
                 }
-                for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
-                    self?.applyTimelineSubscriptionUpdate(update)
-                }
-            } catch {
                 guard !Task.isCancelled else { return }
-                self?.error = error.localizedDescription
+                do {
+                    try await Task.sleep(nanoseconds: retryDelay)
+                } catch {
+                    return
+                }
+                retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
             }
         }
     }
@@ -332,22 +359,36 @@ final class ConversationViewModel {
         guard let appState else { return }
         let groupIdHex = group.groupIdHex
         groupStateTask = Task { [weak self, weak appState] in
-            do {
-                guard let appState else { return }
-                let groupSub = try await appState.marmot.subscribeGroupState(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                )
-                guard !Task.isCancelled else { return }
-                if let initial = groupSub.snapshot() {
-                    self?.group = initial
+            var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
+            while !Task.isCancelled {
+                do {
+                    guard let appState else { return }
+                    let groupSub = try await appState.marmot.subscribeGroupState(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex
+                    )
+                    guard !Task.isCancelled else { return }
+                    if let initial = groupSub.snapshot() {
+                        self?.group = initial
+                    }
+                    for await record in SubscriptionDriver.groupState(groupSub) {
+                        guard !Task.isCancelled else { return }
+                        retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
+                        await self?.applyGroupUpdate(record)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    self?.error = error.localizedDescription
                 }
-                for await record in SubscriptionDriver.groupState(groupSub) {
-                    await self?.applyGroupUpdate(record)
-                }
-            } catch {
                 guard !Task.isCancelled else { return }
-                self?.error = error.localizedDescription
+                do {
+                    try await Task.sleep(nanoseconds: retryDelay)
+                } catch {
+                    return
+                }
+                retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
             }
         }
     }
