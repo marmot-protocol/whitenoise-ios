@@ -1468,6 +1468,22 @@ struct GroupDisplayTests {
     }
 }
 
+struct DeepLinkTests {
+
+    @Test func generatedURLKeepsDelimiterCharactersInsidePathComponent() {
+        let profileURL = DeepLink.profile(npub: "npub?query#fragment/child").url
+        let chatURL = DeepLink.chat(groupIdHex: "ABC?query#fragment/child").url
+
+        #expect(profileURL.absoluteString == "darkmatter://profile/npub%3Fquery%23fragment%2Fchild")
+        #expect(profileURL.query == nil)
+        #expect(profileURL.fragment == nil)
+
+        #expect(chatURL.absoluteString == "darkmatter://chat/ABC%3Fquery%23fragment%2Fchild")
+        #expect(chatURL.query == nil)
+        #expect(chatURL.fragment == nil)
+    }
+}
+
 @MainActor
 struct ConversationChromeTests {
 

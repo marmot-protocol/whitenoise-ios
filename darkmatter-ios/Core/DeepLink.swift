@@ -18,11 +18,31 @@ enum DeepLink: Equatable {
     var url: URL {
         switch self {
         case .profile(let npub):
-            return URL(string: "\(Self.scheme)://profile/\(npub)")!
+            return Self.url(host: "profile", pathComponent: npub)
         case .chat(let groupIdHex):
-            return URL(string: "\(Self.scheme)://chat/\(groupIdHex)")!
+            return Self.url(host: "chat", pathComponent: groupIdHex)
         }
     }
+
+    private static func url(host: String, pathComponent: String) -> URL {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.percentEncodedPath = "/" + encodedPathComponent(pathComponent)
+        guard let url = components.url else {
+            assertionFailure("Failed to build Dark Matter deep link")
+            return URL(fileURLWithPath: "/")
+        }
+        return url
+    }
+
+    private static func encodedPathComponent(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: pathComponentAllowed) ?? ""
+    }
+
+    private static let pathComponentAllowed = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
 
     /// Parse a `darkmatter://…` URL.
     static func parse(_ url: URL) -> DeepLink? {
