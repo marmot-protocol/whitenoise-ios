@@ -85,13 +85,15 @@ enum RelaySettings {
 
     static func normalizedRelayURL(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let components = URLComponents(string: trimmed),
+        guard var components = URLComponents(string: trimmed),
               let scheme = components.scheme?.lowercased(),
               scheme == "wss" || scheme == "ws",
               let host = components.host,
               !host.isEmpty
         else { return nil }
-        return trimmed
+        components.scheme = scheme
+        components.host = host.lowercased()
+        return components.url?.absoluteString
     }
 
     static func normalizedRelayURLs(_ relays: [String]) -> [String] {

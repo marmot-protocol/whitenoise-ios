@@ -547,6 +547,17 @@ struct RelaySettingsTests {
         #expect(RelaySettings.normalizedRelayURL("ws://\n") == nil)
     }
 
+    @Test func relayNormalizationDeduplicatesSchemeAndHostCase() {
+        #expect(
+            RelaySettings.normalizedRelayURL("WSS://Relay.DAMUS.IO/Nostr?Token=ABC")
+                == "wss://relay.damus.io/Nostr?Token=ABC"
+        )
+        #expect(RelaySettings.normalizedRelayURLs([
+            "WSS://Relay.DAMUS.IO",
+            "wss://relay.damus.io"
+        ]) == ["wss://relay.damus.io"])
+    }
+
     @Test func savingRelaysReloadsAuthoritativeListsWhenFinalPublishFails() async throws {
         let oldLists = relayLists(
             bootstrapRelays: ["wss://source.example"],
