@@ -68,9 +68,9 @@ struct ImportIdentityView: View {
         let trimmed = identity.trimmingCharacters(in: .whitespacesAndNewlines)
         isImporting = true
         error = nil
+        defer { SensitiveClipboard.clear(trimmed) }
         do {
             try await appState.importIdentity(trimmed)
-            SensitiveClipboard.clear(trimmed)
             identity = ""
             Haptics.success()
             appState.present(.success(L10n.string("Welcome back"), message: L10n.string("Identity imported.")))

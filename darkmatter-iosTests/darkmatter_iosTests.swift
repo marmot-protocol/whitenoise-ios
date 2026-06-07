@@ -3250,6 +3250,13 @@ struct SensitiveClipboardTests {
         #expect(!source.contains("UIPasteboard.general.string = viewModel.displayBody(of: record)"))
     }
 
+    @Test func importIdentityClearsPastedSecretOnEveryOutcome() throws {
+        let source = try String(contentsOf: importIdentityViewSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"defer\s*\{\s*SensitiveClipboard\.clear\(trimmed\)\s*\}"#))
+        #expect(!source.matches(#"try await appState\.importIdentity\(trimmed\)[\s\S]{0,200}SensitiveClipboard\.clear\(trimmed\)"#))
+    }
+
     private func makeIsolatedPasteboard() -> UIPasteboard {
         let name = UIPasteboard.Name("dev.ipf.darkmatter.tests.sensitive-clipboard-\(UUID().uuidString)")
         return UIPasteboard(name: name, create: true)!
@@ -3267,6 +3274,13 @@ struct SensitiveClipboardTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
+    }
+
+    private var importIdentityViewSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityView.swift")
     }
 }
 
