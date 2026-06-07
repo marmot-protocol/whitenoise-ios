@@ -29,6 +29,26 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
+    @Test func createIdentityFromOnboardingStartsNotificationSubscription() async throws {
+        let appState = AppState(client: try MarmotClient.testClient(), notifications: AppNotifications())
+        await appState.bootstrap()
+
+        #expect(appState.phase == .onboarding)
+        #expect(!appState.notificationSubscriptionActive)
+
+        try await appState.createIdentity()
+
+        #expect(appState.phase == .ready)
+        #expect(appState.notificationSubscriptionActive)
+    }
+
+    @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"func createIdentity\(\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(\)[\s\S]*?return summary"#))
+        #expect(source.matches(#"func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(\)[\s\S]*?return summary"#))
+    }
+
     @Test func lifecycleEntrypointsDeclareMainActorIsolation() throws {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
 

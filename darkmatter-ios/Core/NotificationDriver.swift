@@ -71,6 +71,8 @@ struct NotificationSubscriptionRunner {
 final class NotificationDriver {
     private var task: Task<Void, Never>?
 
+    var isRunning: Bool { task != nil }
+
     func start(runner: NotificationSubscriptionRunner) {
         stop()
         task = Task {

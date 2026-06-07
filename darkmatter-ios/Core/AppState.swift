@@ -129,6 +129,7 @@ final class AppState {
     var telemetryBuildConfig: TelemetryBuildConfig {
         client?.telemetryConfig ?? TelemetryBuildConfig.current()
     }
+    var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
 
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
@@ -216,13 +217,25 @@ final class AppState {
                 if let activeId = activeAccount?.accountIdHex {
                     _ = profile(forAccountIdHex: activeId)
                 }
-                notifications.configure(appState: self)
-                startNotificationSubscription()
-                scheduleNativePushRegistrationIfEnabled()
+                startReadyForegroundMaintenance()
             }
         } catch {
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    @MainActor
+    private func completeOnboardingAfterIdentityActivation() {
+        guard phase == .onboarding else { return }
+        phase = .ready
+        startReadyForegroundMaintenance()
+    }
+
+    @MainActor
+    private func startReadyForegroundMaintenance() {
+        notifications.configure(appState: self)
+        startNotificationSubscription()
+        scheduleNativePushRegistrationIfEnabled()
     }
 
     @MainActor
@@ -671,7 +684,7 @@ final class AppState {
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
-        if phase == .onboarding { phase = .ready }
+        completeOnboardingAfterIdentityActivation()
         return summary
     }
 
@@ -687,7 +700,7 @@ final class AppState {
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
-        if phase == .onboarding { phase = .ready }
+        completeOnboardingAfterIdentityActivation()
         return summary
     }
 
