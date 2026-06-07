@@ -2270,6 +2270,42 @@ struct AgentStreamTests {
     }
 
     @MainActor
+    @Test func streamChunksAreCappedToMessageBodyLimit() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        let almostFull = String(repeating: "a", count: ProfileSanitizer.maxMessageLength - 1)
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 1, text: almostFull)
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 2, text: "bcdef")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 3, text: "late")
+        )
+
+        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
+            Issue.record("Expected a capped stream preview message")
+            return
+        }
+        #expect(status == .streaming)
+        #expect(record.plaintext.count == ProfileSanitizer.maxMessageLength)
+        #expect(record.plaintext.hasSuffix("ab"))
+        #expect(!record.plaintext.contains("c"))
+        #expect(!record.plaintext.contains("late"))
+    }
+
+    @MainActor
     @Test func finishedUpdateReplacesPreviewAndIgnoresLateChunks() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),

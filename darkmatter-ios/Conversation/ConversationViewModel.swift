@@ -646,7 +646,7 @@ final class ConversationViewModel {
     /// QUIC `.finished` transcript is a provisional fill if it lands first. Both
     /// key the same `msg:stream:<id>` row, so whichever arrives later wins.
     private func finalizeStreamBubble(streamId: String, sender: String, text: String) {
-        streamText[streamId] = text
+        streamText[streamId] = Self.cappedStreamText(text)
         upsertStreamBubble(streamId: streamId, sender: sender, status: .received)
         finalizedStreamIds.insert(streamId)
         streamWatchTasks[streamId]?.cancel()
@@ -1055,7 +1055,7 @@ final class ConversationViewModel {
         if finalizedStreamIds.contains(streamId) { return }
         switch update {
         case .chunk(_, let text):
-            streamText[streamId, default: ""].append(text)
+            appendStreamChunk(text, to: streamId)
             upsertStreamBubble(streamId: streamId, sender: sender, status: .streaming)
         case .finished(let text, let transcriptHashHex, let chunkCount):
             // QUIC stream closed. Promote the preview to a permanent bubble using
@@ -1067,6 +1067,21 @@ final class ConversationViewModel {
             Self.streamLog.error("failed: streamId=\(streamId, privacy: .public) gotText=\(self.streamText[streamId]?.count ?? 0)B reason=\(message, privacy: .public) — dropping live preview")
             endStream(streamId: streamId)
         }
+    }
+
+    private func appendStreamChunk(_ text: String, to streamId: String) {
+        var current = streamText[streamId] ?? ""
+        let remaining = ProfileSanitizer.maxMessageLength - current.count
+        guard remaining > 0 else { return }
+        current.append(contentsOf: text.prefix(remaining))
+        streamText[streamId] = current
+    }
+
+    private static func cappedStreamText(_ text: String) -> String {
+        if text.count <= ProfileSanitizer.maxMessageLength {
+            return text
+        }
+        return String(text.prefix(ProfileSanitizer.maxMessageLength))
     }
 
     /// Create or update the synthetic bubble for a live stream (keyed by id).
