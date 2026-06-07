@@ -39,7 +39,7 @@ struct KeyPackagesView: View {
                     } header: {
                         Text("Published from this device")
                     } footer: {
-                        Text("Other accounts use these key packages to invite you into MLS groups. \"Synced\" means the package is also visible on your key-package relays; \"Local only\" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).")
+                        Text("Other accounts use these key packages to invite you into MLS groups. \"Synced\" means the package is also visible on your account outbox relays; \"Local only\" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).")
                             .font(.footnote)
                     }
                 }
@@ -52,7 +52,7 @@ struct KeyPackagesView: View {
                     } header: {
                         Text("Discovered on relays")
                     } footer: {
-                        Text("Found on your key-package relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.")
+                        Text("Found on your account outbox relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.")
                             .font(.footnote)
                     }
                 }
@@ -79,7 +79,7 @@ struct KeyPackagesView: View {
                     }
                     .disabled(isPublishing || appState.activeAccountRef == nil)
                 } footer: {
-                    Text("Publishes a fresh KeyPackage event to your configured key-package relays.")
+                    Text("Publishes a fresh KeyPackage event to your account outbox relays.")
                         .font(.footnote)
                 }
 

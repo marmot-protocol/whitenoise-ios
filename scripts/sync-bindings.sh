@@ -27,6 +27,7 @@ if [[ ! -d "$DARKMATTER_DIR/crates/marmot-uniffi" ]]; then
     exit 1
 fi
 
+export OTLP_EXPORT="${OTLP_EXPORT:-1}"
 echo "==> Building MarmotKit.xcframework from $DARKMATTER_DIR"
 "$DARKMATTER_DIR/crates/marmot-uniffi/xcframework.sh"
 
@@ -48,12 +49,17 @@ if ! git -C "$DARKMATTER_DIR" diff --quiet || ! git -C "$DARKMATTER_DIR" diff --
     DM_DIRTY="-dirty"
 fi
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+FEATURES="default"
+if [[ "${OTLP_EXPORT:-0}" == "1" || "${OTLP_EXPORT:-}" == "true" ]]; then
+    FEATURES="otlp-export"
+fi
 
 cat > "$VENDOR_DIR/MARMOT_VERSION" <<EOF
 darkmatter-sha: ${DM_SHA}${DM_DIRTY}
 darkmatter-branch: ${DM_BRANCH}
 built-at: ${BUILT_AT}
 uniffi-version: 0.28.3
+features: ${FEATURES}
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
 
@@ -74,11 +80,12 @@ public enum MarmotKitVersion {
     public static let darkmatterSHA = "${DM_SHA}${DM_DIRTY}"
     public static let builtAt = "${BUILT_AT}"
     public static let uniffiVersion = "0.28.3"
+    public static let features = "${FEATURES}"
 }
 EOF
 
 echo ""
-echo "Done. Vendored MarmotKit @ ${DM_SHA}${DM_DIRTY} (${DM_BRANCH})."
+echo "Done. Vendored MarmotKit @ ${DM_SHA}${DM_DIRTY} (${DM_BRANCH}, features: ${FEATURES})."
 echo "Next: build & run the app in Xcode (Cmd+R)."
 echo "If Xcode shows stale symbols, reset the package cache:"
 echo "  File > Packages > Reset Package Caches, then clean build (Shift+Cmd+K)."

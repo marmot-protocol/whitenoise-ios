@@ -1298,8 +1298,6 @@ public protocol MarmotProtocol : AnyObject {
 
     func accountInboxRelays(accountRef: String) throws  -> [String]
 
-    func accountKeyPackageRelays(accountRef: String) throws  -> [String]
-
     /**
      * List the local and relay-discovered Marmot KeyPackage publications for
      * `account_ref`.
@@ -1313,6 +1311,17 @@ public protocol MarmotProtocol : AnyObject {
      * account has published, plus the configured default/bootstrap sets.
      */
     func accountRelayLists(accountRef: String) throws  -> AccountRelayListsFfi
+
+    /**
+     * Local JSONL audit logs available for explicit forensic upload.
+     */
+    func auditLogFiles() throws  -> [AuditLogFileFfi]
+
+    /**
+     * Local forensic audit-log recording settings. Recording is opt-in and only
+     * applies to account sessions opened after the setting is enabled.
+     */
+    func auditLogSettings() throws  -> AuditLogSettingsFfi
 
     func catchUpAccounts() async throws
 
@@ -1377,14 +1386,6 @@ public protocol MarmotProtocol : AnyObject {
      * Group plus enriched member rows for detail screens.
      */
     func groupDetails(accountRef: String, groupIdHex: String) async throws  -> GroupDetailsFfi
-
-    /**
-     * Export a forensic JSON bundle for this account/device's local view of a
-     * group. Public mode redacts operational identifiers, payload bytes, and
-     * stable payload digests. Pass the same public salt across devices when
-     * comparing public dumps from one incident.
-     */
-    func groupForensicsJson(accountRef: String, groupIdHex: String, mode: ForensicsDumpModeFfi, publicRedactionSaltHex: String?) async throws  -> String
 
     /**
      * Current caller permissions plus per-member action availability.
@@ -1472,6 +1473,11 @@ public protocol MarmotProtocol : AnyObject {
     func npub(accountIdHex: String)  -> String?
 
     /**
+     * POST one selected JSONL audit log to a forensic analyzer endpoint.
+     */
+    func postAuditLogFile(path: String, endpoint: String) async throws  -> AuditLogUploadResultFfi
+
+    /**
      * Grant admin rights to `member_ref` (npub or hex). Requires the caller
      * to be an admin; publishes a group state update.
      */
@@ -1485,7 +1491,7 @@ public protocol MarmotProtocol : AnyObject {
     func publishNewKeyPackage(accountRef: String) async throws  -> UInt64
 
     /**
-     * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
+     * Publish (or re-publish) the NIP-65 and inbox relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
     func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String]) async throws
@@ -1516,6 +1522,13 @@ public protocol MarmotProtocol : AnyObject {
      * disconnected counts, etc.) for the relay diagnostics view.
      */
     func relayHealth() async  -> RelayHealthFfi
+
+    /**
+     * Device-wide relay telemetry export settings. Export is opt-in and stays
+     * inert until `export_enabled` is true and the runtime config supplies a
+     * valid OTLP endpoint, bearer token, and resource attributes.
+     */
+    func relayTelemetrySettings() throws  -> RelayTelemetrySettingsFfi
 
     /**
      * Remove a local-signing account from this device.
@@ -1558,9 +1571,13 @@ public protocol MarmotProtocol : AnyObject {
 
     func setAccountInboxRelays(accountRef: String, relays: [String], bootstrapRelays: [String]) async throws  -> AccountRelayListsFfi
 
-    func setAccountKeyPackageRelays(accountRef: String, relays: [String], bootstrapRelays: [String]) async throws  -> AccountRelayListsFfi
-
     func setAccountNip65Relays(accountRef: String, relays: [String], bootstrapRelays: [String]) async throws  -> AccountRelayListsFfi
+
+    /**
+     * Persist local forensic audit-log recording settings and return the stored
+     * value.
+     */
+    func setAuditLogSettings(settings: AuditLogSettingsFfi) throws  -> AuditLogSettingsFfi
 
     /**
      * Flag a group archived (or restore it). Local-only projection state —
@@ -1572,6 +1589,19 @@ public protocol MarmotProtocol : AnyObject {
     func setLocalNotificationsEnabled(accountRef: String, enabled: Bool) throws  -> NotificationSettingsFfi
 
     func setNativePushEnabled(accountRef: String, enabled: Bool) async throws  -> NotificationSettingsFfi
+
+    /**
+     * Supply non-persisted OTLP runtime metadata: full metrics URL, bearer
+     * token from the host app's build-time secret, and resource attributes
+     * from the platform shell.
+     */
+    func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi) throws
+
+    /**
+     * Persist device-wide relay telemetry export settings and return the
+     * normalized settings that were stored.
+     */
+    func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi) throws  -> RelayTelemetrySettingsFfi
 
     /**
      * Tear the runtime down. Drops all subscriptions; long-lived
@@ -1638,6 +1668,13 @@ public protocol MarmotProtocol : AnyObject {
      * The snapshot and each update are full pages for the supplied query.
      */
     func subscribeTimelineMessages(accountRef: String, groupIdHex: String?, limit: UInt32?) async throws  -> TimelineMessagesSubscription
+
+    /**
+     * Stable random identifier for this app install, suitable for the OTLP
+     * `service.instance.id` resource attribute. Separate from audit-log device
+     * identity.
+     */
+    func telemetryInstallId() throws  -> String
 
     /**
      * Materialized conversation timeline for a group or account-wide tail.
@@ -1797,14 +1834,6 @@ open func accountInboxRelays(accountRef: String)throws  -> [String] {
 })
 }
 
-open func accountKeyPackageRelays(accountRef: String)throws  -> [String] {
-    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
-    uniffi_marmot_uniffi_fn_method_marmot_account_key_package_relays(self.uniffiClonePointer(),
-        FfiConverterString.lower(accountRef),$0
-    )
-})
-}
-
     /**
      * List the local and relay-discovered Marmot KeyPackage publications for
      * `account_ref`.
@@ -1842,6 +1871,27 @@ open func accountRelayLists(accountRef: String)throws  -> AccountRelayListsFfi {
     return try  FfiConverterTypeAccountRelayListsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_method_marmot_account_relay_lists(self.uniffiClonePointer(),
         FfiConverterString.lower(accountRef),$0
+    )
+})
+}
+
+    /**
+     * Local JSONL audit logs available for explicit forensic upload.
+     */
+open func auditLogFiles()throws  -> [AuditLogFileFfi] {
+    return try  FfiConverterSequenceTypeAuditLogFileFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_audit_log_files(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+    /**
+     * Local forensic audit-log recording settings. Recording is opt-in and only
+     * applies to account sessions opened after the setting is enabled.
+     */
+open func auditLogSettings()throws  -> AuditLogSettingsFfi {
+    return try  FfiConverterTypeAuditLogSettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_audit_log_settings(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -2099,29 +2149,6 @@ open func groupDetails(accountRef: String, groupIdHex: String)async throws  -> G
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeGroupDetailsFfi.lift,
-            errorHandler: FfiConverterTypeMarmotKitError.lift
-        )
-}
-
-    /**
-     * Export a forensic JSON bundle for this account/device's local view of a
-     * group. Public mode redacts operational identifiers, payload bytes, and
-     * stable payload digests. Pass the same public salt across devices when
-     * comparing public dumps from one incident.
-     */
-open func groupForensicsJson(accountRef: String, groupIdHex: String, mode: ForensicsDumpModeFfi, publicRedactionSaltHex: String?)async throws  -> String {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_group_forensics_json(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeForensicsDumpModeFfi.lower(mode),FfiConverterOptionString.lower(publicRedactionSaltHex)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterString.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -2391,6 +2418,26 @@ open func npub(accountIdHex: String) -> String? {
 }
 
     /**
+     * POST one selected JSONL audit log to a forensic analyzer endpoint.
+     */
+open func postAuditLogFile(path: String, endpoint: String)async throws  -> AuditLogUploadResultFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_post_audit_log_file(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(path),FfiConverterString.lower(endpoint)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAuditLogUploadResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * Grant admin rights to `member_ref` (npub or hex). Requires the caller
      * to be an admin; publishes a group state update.
      */
@@ -2449,7 +2496,7 @@ open func publishNewKeyPackage(accountRef: String)async throws  -> UInt64 {
 }
 
     /**
-     * Publish (or re-publish) NIP-65, inbox, and key-package relay lists for
+     * Publish (or re-publish) the NIP-65 and inbox relay lists for
      * `account_ref`. Idempotent — safe to call on every launch.
      */
 open func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String])async throws  {
@@ -2561,6 +2608,18 @@ open func relayHealth()async  -> RelayHealthFfi {
             errorHandler: nil
 
         )
+}
+
+    /**
+     * Device-wide relay telemetry export settings. Export is opt-in and stays
+     * inert until `export_enabled` is true and the runtime config supplies a
+     * valid OTLP endpoint, bearer token, and resource attributes.
+     */
+open func relayTelemetrySettings()throws  -> RelayTelemetrySettingsFfi {
+    return try  FfiConverterTypeRelayTelemetrySettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_relay_telemetry_settings(self.uniffiClonePointer(),$0
+    )
+})
 }
 
     /**
@@ -2754,23 +2813,6 @@ open func setAccountInboxRelays(accountRef: String, relays: [String], bootstrapR
         )
 }
 
-open func setAccountKeyPackageRelays(accountRef: String, relays: [String], bootstrapRelays: [String])async throws  -> AccountRelayListsFfi {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_marmot_uniffi_fn_method_marmot_set_account_key_package_relays(
-                    self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(relays),FfiConverterSequenceString.lower(bootstrapRelays)
-                )
-            },
-            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeAccountRelayListsFfi.lift,
-            errorHandler: FfiConverterTypeMarmotKitError.lift
-        )
-}
-
 open func setAccountNip65Relays(accountRef: String, relays: [String], bootstrapRelays: [String])async throws  -> AccountRelayListsFfi {
     return
         try  await uniffiRustCallAsync(
@@ -2786,6 +2828,18 @@ open func setAccountNip65Relays(accountRef: String, relays: [String], bootstrapR
             liftFunc: FfiConverterTypeAccountRelayListsFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+
+    /**
+     * Persist local forensic audit-log recording settings and return the stored
+     * value.
+     */
+open func setAuditLogSettings(settings: AuditLogSettingsFfi)throws  -> AuditLogSettingsFfi {
+    return try  FfiConverterTypeAuditLogSettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_audit_log_settings(self.uniffiClonePointer(),
+        FfiConverterTypeAuditLogSettingsFfi.lower(settings),$0
+    )
+})
 }
 
     /**
@@ -2827,6 +2881,30 @@ open func setNativePushEnabled(accountRef: String, enabled: Bool)async throws  -
             liftFunc: FfiConverterTypeNotificationSettingsFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+
+    /**
+     * Supply non-persisted OTLP runtime metadata: full metrics URL, bearer
+     * token from the host app's build-time secret, and resource attributes
+     * from the platform shell.
+     */
+open func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi)throws  {try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_relay_telemetry_runtime_config(self.uniffiClonePointer(),
+        FfiConverterTypeRelayTelemetryRuntimeConfigFfi.lower(config),$0
+    )
+}
+}
+
+    /**
+     * Persist device-wide relay telemetry export settings and return the
+     * normalized settings that were stored.
+     */
+open func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi)throws  -> RelayTelemetrySettingsFfi {
+    return try  FfiConverterTypeRelayTelemetrySettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_relay_telemetry_settings(self.uniffiClonePointer(),
+        FfiConverterTypeRelayTelemetrySettingsFfi.lower(settings),$0
+    )
+})
 }
 
     /**
@@ -3034,6 +3112,18 @@ open func subscribeTimelineMessages(accountRef: String, groupIdHex: String?, lim
             liftFunc: FfiConverterTypeTimelineMessagesSubscription.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+
+    /**
+     * Stable random identifier for this app install, suitable for the OTLP
+     * `service.instance.id` resource attribute. Separate from audit-log device
+     * identity.
+     */
+open func telemetryInstallId()throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_telemetry_install_id(self.uniffiClonePointer(),$0
+    )
+})
 }
 
     /**
@@ -3797,18 +3887,16 @@ public struct AccountRelayListsFfi {
     public var bootstrapRelays: [String]
     public var nip65: RelayListFfi
     public var inbox: RelayListFfi
-    public var keyPackage: RelayListFfi
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(complete: Bool, missing: [String], defaultRelays: [String], bootstrapRelays: [String], nip65: RelayListFfi, inbox: RelayListFfi, keyPackage: RelayListFfi) {
+    public init(complete: Bool, missing: [String], defaultRelays: [String], bootstrapRelays: [String], nip65: RelayListFfi, inbox: RelayListFfi) {
         self.complete = complete
         self.missing = missing
         self.defaultRelays = defaultRelays
         self.bootstrapRelays = bootstrapRelays
         self.nip65 = nip65
         self.inbox = inbox
-        self.keyPackage = keyPackage
     }
 }
 
@@ -3834,9 +3922,6 @@ extension AccountRelayListsFfi: Equatable, Hashable {
         if lhs.inbox != rhs.inbox {
             return false
         }
-        if lhs.keyPackage != rhs.keyPackage {
-            return false
-        }
         return true
     }
 
@@ -3847,7 +3932,6 @@ extension AccountRelayListsFfi: Equatable, Hashable {
         hasher.combine(bootstrapRelays)
         hasher.combine(nip65)
         hasher.combine(inbox)
-        hasher.combine(keyPackage)
     }
 }
 
@@ -3864,8 +3948,7 @@ public struct FfiConverterTypeAccountRelayListsFfi: FfiConverterRustBuffer {
                 defaultRelays: FfiConverterSequenceString.read(from: &buf),
                 bootstrapRelays: FfiConverterSequenceString.read(from: &buf),
                 nip65: FfiConverterTypeRelayListFfi.read(from: &buf),
-                inbox: FfiConverterTypeRelayListFfi.read(from: &buf),
-                keyPackage: FfiConverterTypeRelayListFfi.read(from: &buf)
+                inbox: FfiConverterTypeRelayListFfi.read(from: &buf)
         )
     }
 
@@ -3876,7 +3959,6 @@ public struct FfiConverterTypeAccountRelayListsFfi: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.bootstrapRelays, into: &buf)
         FfiConverterTypeRelayListFfi.write(value.nip65, into: &buf)
         FfiConverterTypeRelayListFfi.write(value.inbox, into: &buf)
-        FfiConverterTypeRelayListFfi.write(value.keyPackage, into: &buf)
     }
 }
 
@@ -4481,6 +4563,228 @@ public func FfiConverterTypeAppMessageRecordFfi_lift(_ buf: RustBuffer) throws -
 #endif
 public func FfiConverterTypeAppMessageRecordFfi_lower(_ value: AppMessageRecordFfi) -> RustBuffer {
     return FfiConverterTypeAppMessageRecordFfi.lower(value)
+}
+
+
+public struct AuditLogFileFfi {
+    public var accountRef: String
+    public var path: String
+    public var fileName: String
+    public var sizeBytes: UInt64
+    public var modifiedAtMs: UInt64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountRef: String, path: String, fileName: String, sizeBytes: UInt64, modifiedAtMs: UInt64?) {
+        self.accountRef = accountRef
+        self.path = path
+        self.fileName = fileName
+        self.sizeBytes = sizeBytes
+        self.modifiedAtMs = modifiedAtMs
+    }
+}
+
+
+
+extension AuditLogFileFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogFileFfi, rhs: AuditLogFileFfi) -> Bool {
+        if lhs.accountRef != rhs.accountRef {
+            return false
+        }
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.fileName != rhs.fileName {
+            return false
+        }
+        if lhs.sizeBytes != rhs.sizeBytes {
+            return false
+        }
+        if lhs.modifiedAtMs != rhs.modifiedAtMs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountRef)
+        hasher.combine(path)
+        hasher.combine(fileName)
+        hasher.combine(sizeBytes)
+        hasher.combine(modifiedAtMs)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogFileFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogFileFfi {
+        return
+            try AuditLogFileFfi(
+                accountRef: FfiConverterString.read(from: &buf),
+                path: FfiConverterString.read(from: &buf),
+                fileName: FfiConverterString.read(from: &buf),
+                sizeBytes: FfiConverterUInt64.read(from: &buf),
+                modifiedAtMs: FfiConverterOptionUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogFileFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountRef, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterString.write(value.fileName, into: &buf)
+        FfiConverterUInt64.write(value.sizeBytes, into: &buf)
+        FfiConverterOptionUInt64.write(value.modifiedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogFileFfi_lift(_ buf: RustBuffer) throws -> AuditLogFileFfi {
+    return try FfiConverterTypeAuditLogFileFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogFileFfi_lower(_ value: AuditLogFileFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogFileFfi.lower(value)
+}
+
+
+public struct AuditLogSettingsFfi {
+    public var enabled: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(enabled: Bool) {
+        self.enabled = enabled
+    }
+}
+
+
+
+extension AuditLogSettingsFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogSettingsFfi, rhs: AuditLogSettingsFfi) -> Bool {
+        if lhs.enabled != rhs.enabled {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(enabled)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogSettingsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogSettingsFfi {
+        return
+            try AuditLogSettingsFfi(
+                enabled: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogSettingsFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.enabled, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogSettingsFfi_lift(_ buf: RustBuffer) throws -> AuditLogSettingsFfi {
+    return try FfiConverterTypeAuditLogSettingsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogSettingsFfi_lower(_ value: AuditLogSettingsFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogSettingsFfi.lower(value)
+}
+
+
+public struct AuditLogUploadResultFfi {
+    public var path: String
+    public var status: UInt16
+    public var bytesSent: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(path: String, status: UInt16, bytesSent: UInt64) {
+        self.path = path
+        self.status = status
+        self.bytesSent = bytesSent
+    }
+}
+
+
+
+extension AuditLogUploadResultFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogUploadResultFfi, rhs: AuditLogUploadResultFfi) -> Bool {
+        if lhs.path != rhs.path {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.bytesSent != rhs.bytesSent {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(path)
+        hasher.combine(status)
+        hasher.combine(bytesSent)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogUploadResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogUploadResultFfi {
+        return
+            try AuditLogUploadResultFfi(
+                path: FfiConverterString.read(from: &buf),
+                status: FfiConverterUInt16.read(from: &buf),
+                bytesSent: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogUploadResultFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterUInt16.write(value.status, into: &buf)
+        FfiConverterUInt64.write(value.bytesSent, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogUploadResultFfi_lift(_ buf: RustBuffer) throws -> AuditLogUploadResultFfi {
+    return try FfiConverterTypeAuditLogUploadResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogUploadResultFfi_lower(_ value: AuditLogUploadResultFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogUploadResultFfi.lower(value)
 }
 
 
@@ -7162,6 +7466,244 @@ public func FfiConverterTypeRelayListFfi_lower(_ value: RelayListFfi) -> RustBuf
 }
 
 
+public struct RelayTelemetryResourceFfi {
+    public var serviceVersion: String
+    public var serviceInstanceId: String
+    public var deploymentEnvironment: String
+    public var osType: String
+    public var osVersion: String
+    public var deviceModelIdentifier: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(serviceVersion: String, serviceInstanceId: String, deploymentEnvironment: String, osType: String, osVersion: String, deviceModelIdentifier: String?) {
+        self.serviceVersion = serviceVersion
+        self.serviceInstanceId = serviceInstanceId
+        self.deploymentEnvironment = deploymentEnvironment
+        self.osType = osType
+        self.osVersion = osVersion
+        self.deviceModelIdentifier = deviceModelIdentifier
+    }
+}
+
+
+
+extension RelayTelemetryResourceFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayTelemetryResourceFfi, rhs: RelayTelemetryResourceFfi) -> Bool {
+        if lhs.serviceVersion != rhs.serviceVersion {
+            return false
+        }
+        if lhs.serviceInstanceId != rhs.serviceInstanceId {
+            return false
+        }
+        if lhs.deploymentEnvironment != rhs.deploymentEnvironment {
+            return false
+        }
+        if lhs.osType != rhs.osType {
+            return false
+        }
+        if lhs.osVersion != rhs.osVersion {
+            return false
+        }
+        if lhs.deviceModelIdentifier != rhs.deviceModelIdentifier {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(serviceVersion)
+        hasher.combine(serviceInstanceId)
+        hasher.combine(deploymentEnvironment)
+        hasher.combine(osType)
+        hasher.combine(osVersion)
+        hasher.combine(deviceModelIdentifier)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayTelemetryResourceFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayTelemetryResourceFfi {
+        return
+            try RelayTelemetryResourceFfi(
+                serviceVersion: FfiConverterString.read(from: &buf),
+                serviceInstanceId: FfiConverterString.read(from: &buf),
+                deploymentEnvironment: FfiConverterString.read(from: &buf),
+                osType: FfiConverterString.read(from: &buf),
+                osVersion: FfiConverterString.read(from: &buf),
+                deviceModelIdentifier: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayTelemetryResourceFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.serviceVersion, into: &buf)
+        FfiConverterString.write(value.serviceInstanceId, into: &buf)
+        FfiConverterString.write(value.deploymentEnvironment, into: &buf)
+        FfiConverterString.write(value.osType, into: &buf)
+        FfiConverterString.write(value.osVersion, into: &buf)
+        FfiConverterOptionString.write(value.deviceModelIdentifier, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetryResourceFfi_lift(_ buf: RustBuffer) throws -> RelayTelemetryResourceFfi {
+    return try FfiConverterTypeRelayTelemetryResourceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetryResourceFfi_lower(_ value: RelayTelemetryResourceFfi) -> RustBuffer {
+    return FfiConverterTypeRelayTelemetryResourceFfi.lower(value)
+}
+
+
+public struct RelayTelemetryRuntimeConfigFfi {
+    public var otlpEndpoint: String?
+    public var authorizationBearerToken: String?
+    public var resource: RelayTelemetryResourceFfi?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(otlpEndpoint: String?, authorizationBearerToken: String?, resource: RelayTelemetryResourceFfi?) {
+        self.otlpEndpoint = otlpEndpoint
+        self.authorizationBearerToken = authorizationBearerToken
+        self.resource = resource
+    }
+}
+
+
+
+extension RelayTelemetryRuntimeConfigFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayTelemetryRuntimeConfigFfi, rhs: RelayTelemetryRuntimeConfigFfi) -> Bool {
+        if lhs.otlpEndpoint != rhs.otlpEndpoint {
+            return false
+        }
+        if lhs.authorizationBearerToken != rhs.authorizationBearerToken {
+            return false
+        }
+        if lhs.resource != rhs.resource {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(otlpEndpoint)
+        hasher.combine(authorizationBearerToken)
+        hasher.combine(resource)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayTelemetryRuntimeConfigFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayTelemetryRuntimeConfigFfi {
+        return
+            try RelayTelemetryRuntimeConfigFfi(
+                otlpEndpoint: FfiConverterOptionString.read(from: &buf),
+                authorizationBearerToken: FfiConverterOptionString.read(from: &buf),
+                resource: FfiConverterOptionTypeRelayTelemetryResourceFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayTelemetryRuntimeConfigFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.otlpEndpoint, into: &buf)
+        FfiConverterOptionString.write(value.authorizationBearerToken, into: &buf)
+        FfiConverterOptionTypeRelayTelemetryResourceFfi.write(value.resource, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetryRuntimeConfigFfi_lift(_ buf: RustBuffer) throws -> RelayTelemetryRuntimeConfigFfi {
+    return try FfiConverterTypeRelayTelemetryRuntimeConfigFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetryRuntimeConfigFfi_lower(_ value: RelayTelemetryRuntimeConfigFfi) -> RustBuffer {
+    return FfiConverterTypeRelayTelemetryRuntimeConfigFfi.lower(value)
+}
+
+
+public struct RelayTelemetrySettingsFfi {
+    public var exportEnabled: Bool
+    public var exportIntervalSeconds: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(exportEnabled: Bool, exportIntervalSeconds: UInt64) {
+        self.exportEnabled = exportEnabled
+        self.exportIntervalSeconds = exportIntervalSeconds
+    }
+}
+
+
+
+extension RelayTelemetrySettingsFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayTelemetrySettingsFfi, rhs: RelayTelemetrySettingsFfi) -> Bool {
+        if lhs.exportEnabled != rhs.exportEnabled {
+            return false
+        }
+        if lhs.exportIntervalSeconds != rhs.exportIntervalSeconds {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(exportEnabled)
+        hasher.combine(exportIntervalSeconds)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayTelemetrySettingsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayTelemetrySettingsFfi {
+        return
+            try RelayTelemetrySettingsFfi(
+                exportEnabled: FfiConverterBool.read(from: &buf),
+                exportIntervalSeconds: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayTelemetrySettingsFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.exportEnabled, into: &buf)
+        FfiConverterUInt64.write(value.exportIntervalSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetrySettingsFfi_lift(_ buf: RustBuffer) throws -> RelayTelemetrySettingsFfi {
+    return try FfiConverterTypeRelayTelemetrySettingsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayTelemetrySettingsFfi_lower(_ value: RelayTelemetrySettingsFfi) -> RustBuffer {
+    return FfiConverterTypeRelayTelemetrySettingsFfi.lower(value)
+}
+
+
 public struct RuntimeMessageReceivedFfi {
     public var accountIdHex: String
     public var accountLabel: String
@@ -8531,70 +9073,6 @@ extension ChatListUpdateTriggerFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-
-public enum ForensicsDumpModeFfi {
-
-    case `public`
-    case sensitive
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeForensicsDumpModeFfi: FfiConverterRustBuffer {
-    typealias SwiftType = ForensicsDumpModeFfi
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ForensicsDumpModeFfi {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-
-        case 1: return .`public`
-
-        case 2: return .sensitive
-
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: ForensicsDumpModeFfi, into buf: inout [UInt8]) {
-        switch value {
-
-
-        case .`public`:
-            writeInt(&buf, Int32(1))
-
-
-        case .sensitive:
-            writeInt(&buf, Int32(2))
-
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeForensicsDumpModeFfi_lift(_ buf: RustBuffer) throws -> ForensicsDumpModeFfi {
-    return try FfiConverterTypeForensicsDumpModeFfi.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeForensicsDumpModeFfi_lower(_ value: ForensicsDumpModeFfi) -> RustBuffer {
-    return FfiConverterTypeForensicsDumpModeFfi.lower(value)
-}
-
-
-
-extension ForensicsDumpModeFfi: Equatable, Hashable {}
-
-
-
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * Top-level event firehose, FFI-shaped. Agent streams collapse to a single
  * "agent stream activity" variant — host apps do not differentiate them at
@@ -9905,6 +10383,30 @@ fileprivate struct FfiConverterOptionTypePushRegistrationFfi: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeRelayTelemetryResourceFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayTelemetryResourceFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeRelayTelemetryResourceFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeRelayTelemetryResourceFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeSendSummaryFfi: FfiConverterRustBuffer {
     typealias SwiftType = SendSummaryFfi?
 
@@ -10296,6 +10798,31 @@ fileprivate struct FfiConverterSequenceTypeAppMessageRecordFfi: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAuditLogFileFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AuditLogFileFfi]
+
+    public static func write(_ value: [AuditLogFileFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAuditLogFileFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AuditLogFileFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AuditLogFileFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAuditLogFileFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeChatListRowFfi: FfiConverterRustBuffer {
     typealias SwiftType = [ChatListRowFfi]
 
@@ -10668,9 +11195,6 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_inbox_relays() != 4611) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_account_key_package_relays() != 12467) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_key_packages() != 23031) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10678,6 +11202,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 20645) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_files() != 25846) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_settings() != 34729) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_catch_up_accounts() != 28824) {
@@ -10720,9 +11250,6 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_details() != 55062) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_group_forensics_json() != 53970) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_management_state() != 47526) {
@@ -10776,6 +11303,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_npub() != 20744) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_post_audit_log_file() != 63080) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin() != 43119) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10785,7 +11315,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_new_key_package() != 11266) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 678) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 14063) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 48272) {
@@ -10801,6 +11331,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_relay_health() != 9336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_relay_telemetry_settings() != 30591) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_account() != 37396) {
@@ -10833,10 +11366,10 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_account_inbox_relays() != 12290) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_account_key_package_relays() != 35542) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_account_nip65_relays() != 61454) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_account_nip65_relays() != 61454) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 56917) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
@@ -10846,6 +11379,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_native_push_enabled() != 28116) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_runtime_config() != 32293) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_settings() != 54491) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 57342) {
@@ -10876,6 +11415,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_timeline_messages() != 20678) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_telemetry_install_id() != 40706) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_timeline_messages() != 13755) {

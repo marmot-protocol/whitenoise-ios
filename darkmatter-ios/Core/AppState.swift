@@ -121,6 +121,9 @@ final class AppState {
     var pendingChatAccountRef: String? { navigation.pendingChatAccountRef }
     var pendingChatMessageIdHex: String? { navigation.pendingChatMessageIdHex }
     var visibleChat: VisibleChatRoute? { navigation.visibleChat }
+    var telemetryBuildConfig: TelemetryBuildConfig {
+        client?.telemetryConfig ?? TelemetryBuildConfig.current()
+    }
 
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
@@ -416,6 +419,47 @@ final class AppState {
         }
     }
 
+    func relayTelemetrySettings() throws -> RelayTelemetrySettingsFfi {
+        try marmot.relayTelemetrySettings()
+    }
+
+    @discardableResult
+    func setRelayTelemetryExportEnabled(_ enabled: Bool) throws -> RelayTelemetrySettingsFfi {
+        if enabled && !telemetryBuildConfig.telemetryCredentialsAvailable {
+            throw TelemetrySettingsActionError.telemetryNotConfigured
+        }
+        let current = try marmot.relayTelemetrySettings()
+        return try marmot.setRelayTelemetrySettings(
+            settings: RelayTelemetrySettingsFfi(
+                exportEnabled: enabled,
+                exportIntervalSeconds: current.exportIntervalSeconds
+            )
+        )
+    }
+
+    func auditLogSettings() throws -> AuditLogSettingsFfi {
+        try marmot.auditLogSettings()
+    }
+
+    @MainActor
+    @discardableResult
+    func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi {
+        let settings = try marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: enabled))
+        try await restartRuntimeForAuditLogSettingsChange()
+        return settings
+    }
+
+    func auditLogFiles() throws -> [AuditLogFileFfi] {
+        try marmot.auditLogFiles()
+    }
+
+    func postAuditLogFile(_ file: AuditLogFileFfi) async throws -> AuditLogUploadResultFfi {
+        try await marmot.postAuditLogFile(
+            path: file.path,
+            endpoint: telemetryBuildConfig.auditUploadEndpoint
+        )
+    }
+
     func catchUpAfterForegroundActivation() async {
         guard ForegroundNotificationSyncPolicy.shouldCatchUp(
             appPhase: phase,
@@ -516,6 +560,34 @@ final class AppState {
 
         guard isAppSceneActive, !Task.isCancelled else { return }
         await catchUpAfterForegroundActivation()
+    }
+
+    @MainActor
+    private func restartRuntimeForAuditLogSettingsChange() async throws {
+        guard phase == .ready else { return }
+        await cancelForegroundMaintenance()
+        isRuntimeSuspending = true
+        defer { isRuntimeSuspending = false }
+
+        stopNotificationSubscription()
+        await marmot.shutdown()
+        client = nil
+
+        do {
+            let restored = try makeRuntime()
+            client = restored
+            try await restored.marmot.start()
+            runtimeSuspendedForBackground = false
+            runtimeGeneration += 1
+            try await refreshAccounts()
+            if isAppSceneActive {
+                startNotificationSubscription()
+                scheduleNativePushRegistrationIfEnabled()
+            }
+        } catch {
+            phase = .failed(error.localizedDescription)
+            throw error
+        }
     }
 
     private func cancelForegroundMaintenance() async {

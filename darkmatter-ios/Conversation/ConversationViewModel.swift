@@ -42,8 +42,9 @@ final class ConversationViewModel {
     private let initialMemberCount: Int?
     private let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
     private var timelineTask: Task<Void, Never>?
-    private var messagesTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
+    private var groupDetailsTask: Task<Void, Never>?
+    private var readStateTask: Task<Void, Never>?
 
     private static let timelinePageLimit: UInt32 = 50
 
@@ -216,71 +217,19 @@ final class ConversationViewModel {
 
     deinit {
         timelineTask?.cancel()
-        messagesTask?.cancel()
         groupStateTask?.cancel()
+        groupDetailsTask?.cancel()
+        readStateTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
 
     func start() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         stopLiveSubscriptions()
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let timelineSub = try await appState.marmot.subscribeTimelineMessages(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                limit: Self.timelinePageLimit
-            )
-            if let snapshot = timelineSub.snapshot() {
-                applyTimelinePage(snapshot, placement: .tail)
-            }
-            initializeReadState()
-
-            let messagesSub = try await appState.marmot.subscribeMessages(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            )
-            let snapshot = messagesSub.snapshot()
-            for record in snapshot { rememberSnapshotFinalIfNeeded(record) }
-            for record in snapshot { watchSnapshotStartIfNeeded(record) }
-
-            let groupSub = try await appState.marmot.subscribeGroupState(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            )
-            if let initial = groupSub.snapshot() {
-                group = initial
-            }
-
-            if !(await refreshGroupManagement()) {
-                members = try await appState.marmot.groupMembers(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex
-                )
-            }
-
-            timelineTask = Task { [weak self] in
-                for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
-                    self?.applyTimelineSubscriptionUpdate(update)
-                }
-            }
-
-            messagesTask = Task { [weak self] in
-                for await update in SubscriptionDriver.messages(messagesSub) {
-                    self?.fold(update)
-                }
-            }
-
-            groupStateTask = Task { [weak self] in
-                for await record in SubscriptionDriver.groupState(groupSub) {
-                    await self?.applyGroupUpdate(record)
-                }
-            }
-        } catch {
-            self.error = error.localizedDescription
-        }
+        startLiveTimeline(accountRef: accountRef)
+        startLiveGroupState(accountRef: accountRef)
+        startDeferredGroupDetails(accountRef: accountRef)
+        startDeferredReadState()
     }
 
     func markReadIfVisible(_ record: AppMessageRecordFfi) async {
@@ -331,32 +280,103 @@ final class ConversationViewModel {
     private func stopLiveSubscriptions() {
         timelineTask?.cancel()
         timelineTask = nil
-        messagesTask?.cancel()
-        messagesTask = nil
         groupStateTask?.cancel()
         groupStateTask = nil
+        groupDetailsTask?.cancel()
+        groupDetailsTask = nil
+        readStateTask?.cancel()
+        readStateTask = nil
         for task in streamWatchTasks.values {
             task.cancel()
         }
         streamWatchTasks.removeAll()
     }
 
-    private func watchSnapshotStartIfNeeded(_ record: AppMessageRecordFfi) {
-        guard let streamIdHex = Self.snapshotStartStreamIdToWatch(
+    private func startLiveTimeline(accountRef: String) {
+        guard let appState else { return }
+        let groupIdHex = group.groupIdHex
+        timelineTask = Task { [weak self, weak appState] in
+            do {
+                guard let appState else { return }
+                let timelineSub = try await appState.marmot.subscribeTimelineMessages(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    limit: Self.timelinePageLimit
+                )
+                guard !Task.isCancelled else { return }
+                if let snapshot = timelineSub.snapshot() {
+                    self?.applyTimelinePage(snapshot, placement: .tail)
+                }
+                for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
+                    self?.applyTimelineSubscriptionUpdate(update)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func startLiveGroupState(accountRef: String) {
+        guard let appState else { return }
+        let groupIdHex = group.groupIdHex
+        groupStateTask = Task { [weak self, weak appState] in
+            do {
+                guard let appState else { return }
+                let groupSub = try await appState.marmot.subscribeGroupState(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex
+                )
+                guard !Task.isCancelled else { return }
+                if let initial = groupSub.snapshot() {
+                    self?.group = initial
+                }
+                for await record in SubscriptionDriver.groupState(groupSub) {
+                    await self?.applyGroupUpdate(record)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                self?.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func startDeferredGroupDetails(accountRef: String) {
+        guard let appState else { return }
+        let groupIdHex = group.groupIdHex
+        groupDetailsTask = Task { [weak self, weak appState] in
+            guard let self, let appState else { return }
+            if await self.refreshGroupManagement() {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            do {
+                self.members = try await appState.marmot.groupMembers(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex
+                )
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    private func startDeferredReadState() {
+        readStateTask = Task { [weak self] in
+            self?.initializeReadState()
+        }
+    }
+
+    private func watchAgentStreamStartIfNeeded(_ record: AppMessageRecordFfi) {
+        guard let streamIdHex = Self.agentStreamStartIdToWatch(
             from: record,
             finalizedStreamIds: finalizedStreamIds
         ) else { return }
         Task { [weak self] in await self?.startWatching(sender: record.sender, streamIdHex: streamIdHex) }
     }
 
-    private func rememberSnapshotFinalIfNeeded(_ record: AppMessageRecordFfi) {
-        guard case .streamFinal(let streamId) = MessageSemantics.classify(record) else {
-            return
-        }
-        finalizedStreamIds.insert(streamId)
-    }
-
-    static func snapshotStartStreamIdToWatch(
+    static func agentStreamStartIdToWatch(
         from record: AppMessageRecordFfi,
         finalizedStreamIds: Set<String>
     ) -> String? {
@@ -394,13 +414,28 @@ final class ConversationViewModel {
 
     private func applyTimelineProjectionUpdate(_ update: TimelineProjectionUpdateFfi) {
         guard update.groupIdHex == group.groupIdHex else { return }
-        for record in update.messages {
-            applyTimelineRecord(record)
+        if update.changes.isEmpty {
+            for record in update.messages {
+                applyTimelineRecord(record)
+            }
+        } else {
+            for change in update.changes {
+                applyTimelineChange(change)
+            }
         }
         if let row = update.chatListRow {
             onChatListRowUpdated?(row)
         }
         rebuildProjectedState()
+    }
+
+    private func applyTimelineChange(_ change: TimelineMessageChangeFfi) {
+        switch change {
+        case .upsert(_, let message):
+            applyTimelineRecord(message)
+        case .remove(let messageIdHex, _):
+            removeTimelineRecord(messageIdHex: messageIdHex)
+        }
     }
 
     func loadOlderTimelinePage() async {
@@ -453,6 +488,16 @@ final class ConversationViewModel {
             streamText[streamId] = nil
             transientTimelineItems["msg:stream:\(streamId)"] = nil
         }
+        watchAgentStreamStartIfNeeded(appRecord)
+    }
+
+    private func removeTimelineRecord(messageIdHex: String) {
+        messageById[messageIdHex] = nil
+        messageStatusById[messageIdHex] = nil
+        replyTargetByMessageId[messageIdHex] = nil
+        replyPreviewsByMessageId[messageIdHex] = nil
+        projectedReactionSummaries[messageIdHex] = nil
+        projectedDeletedMessageIds.remove(messageIdHex)
     }
 
     private func oldestTimelineCursor() -> (messageIdHex: String, timelineAt: UInt64)? {
@@ -542,27 +587,6 @@ final class ConversationViewModel {
             return nil
         }
         return messageId
-    }
-
-    // MARK: - Ingestion
-
-    private func fold(_ update: MessageUpdateFfi) {
-        switch update {
-        case .message(let m):
-            if case .agentStreamStart = MessageSemantics.classify(m.message) {
-                let sender = m.message.sender
-                let streamIdHex = Self.agentStreamId(from: m.message)
-                Self.streamLog.info("start received as message: streamId=\(streamIdHex ?? "<latest>", privacy: .public) sender=\(IdentityFormatter.short(sender), privacy: .public)")
-                Task { [weak self] in await self?.startWatching(sender: sender, streamIdHex: streamIdHex) }
-            }
-        case .agentStreamStarted(let m):
-            // A kind-1200 start: open a live bubble and watch the QUIC stream as
-            // it fills in. The stream id lives on the inner event's `stream` tag.
-            let sender = m.message.sender
-            let streamIdHex = Self.agentStreamId(from: m.message)
-            Self.streamLog.info("start received: streamId=\(streamIdHex ?? "<latest>", privacy: .public) sender=\(IdentityFormatter.short(sender), privacy: .public)")
-            Task { [weak self] in await self?.startWatching(sender: sender, streamIdHex: streamIdHex) }
-        }
     }
 
     /// Tear down a live preview that produced no usable transcript (the stream

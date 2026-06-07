@@ -85,6 +85,15 @@ DARKMATTER_DIR=/path/to/darkmatter ./scripts/sync-bindings.sh
 
 Do not edit generated files in `Vendored/MarmotKit` by hand. Fix the Rust/UniFFI source, regenerate, then commit the regenerated bundle.
 
+## Telemetry Build Settings
+
+Telemetry is compiled into the vendored MarmotKit bundle with the `otlp-export` feature. The app reads these Xcode build settings through `Info.plist`:
+
+- `DARKMATTER_OTLP_ENDPOINT` - default `https://otlp.ipf.dev/v1/metrics`
+- `DARKMATTER_OTLP_BEARER_TOKEN` - supply from CI, an uncommitted private `.xcconfig`, or an `xcodebuild` override; do not commit the token
+- `DARKMATTER_TELEMETRY_ENVIRONMENT` - `staging` or `production`; TestFlight builds are staging
+- `DARKMATTER_AUDIT_UPLOAD_ENDPOINT` - default `https://goggles.ipf.dev/audits`
+
 ## Notifications
 
 Notification delivery has two paths:

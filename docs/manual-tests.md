@@ -82,7 +82,7 @@ before every release tag.
 - [ ] After publish, the profile name appears in conversation sender
       labels for that account on a fresh device.
 - [ ] Settings → Relays: adding `wss://…` or `ws://…` accepts, publishes
-      through Marmot, and refreshes the published NIP-65/inbox/key-package
+      through Marmot, and refreshes the published NIP-65/inbox
       lists; other schemes reject.
 - [ ] Settings → Identity: Share account ID surfaces the system share
       sheet with the hex id pre-filled.

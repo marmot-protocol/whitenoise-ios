@@ -195,6 +195,22 @@ struct AppStateBootstrapTests {
         #expect(!appState.marmot.isStopping())
     }
 
+    @Test func auditLogSettingChangeRestartsReadyRuntimeImmediately() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        await appState.bootstrap()
+        try await appState.createIdentity()
+
+        let generation = appState.runtimeGeneration
+        let settings = try await appState.setAuditLogEnabled(true)
+
+        #expect(settings.enabled)
+        #expect(try appState.auditLogSettings().enabled)
+        #expect(appState.runtimeGeneration == generation + 1)
+        #expect(appState.phase == .ready)
+        #expect(appState.client != nil)
+        #expect(!appState.marmot.isStopping())
+    }
+
     @Test func inactiveSceneStartsRuntimeSuspensionBeforeBackground() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         await appState.bootstrap()
@@ -373,6 +389,67 @@ struct NotificationSubscriptionRetryTests {
     }
 }
 
+struct TelemetryBuildConfigTests {
+
+    @Test func defaultsToStagingAndTreatsUnresolvedBuildSettingsAsMissing() {
+        let config = TelemetryBuildConfig.current(infoDictionary: [
+            "DarkmatterTelemetryOTLPEndpoint": "$(DARKMATTER_OTLP_ENDPOINT)",
+            "DarkmatterTelemetryBearerToken": "$(DARKMATTER_OTLP_BEARER_TOKEN)",
+            "DarkmatterTelemetryEnvironment": "",
+            "DarkmatterAuditUploadEndpoint": "$(DARKMATTER_AUDIT_UPLOAD_ENDPOINT)",
+            "CFBundleShortVersionString": "1.2.3",
+            "CFBundleVersion": "45"
+        ])
+
+        #expect(config.otlpEndpoint == TelemetryBuildConfig.defaultOtlpEndpoint)
+        #expect(config.bearerToken == nil)
+        #expect(!config.telemetryCredentialsAvailable)
+        #expect(config.deploymentEnvironment == "staging")
+        #expect(config.auditUploadEndpoint == TelemetryBuildConfig.defaultAuditUploadEndpoint)
+        #expect(config.serviceVersion == "1.2.3+45")
+    }
+
+    @Test func productionEnvironmentMustBeExplicitlyConfigured() {
+        let config = TelemetryBuildConfig.current(infoDictionary: [
+            "DarkmatterTelemetryOTLPEndpoint": "https://collector.example/v1/metrics",
+            "DarkmatterTelemetryBearerToken": "secret-token",
+            "DarkmatterTelemetryEnvironment": "production",
+            "DarkmatterAuditUploadEndpoint": "https://audits.example/upload",
+            "CFBundleShortVersionString": "2.0",
+            "CFBundleVersion": "9"
+        ])
+
+        #expect(config.otlpEndpoint == "https://collector.example/v1/metrics")
+        #expect(config.bearerToken == "secret-token")
+        #expect(config.telemetryCredentialsAvailable)
+        #expect(config.deploymentEnvironment == "production")
+        #expect(config.auditUploadEndpoint == "https://audits.example/upload")
+        #expect(config.serviceVersion == "2.0+9")
+    }
+
+    @Test func runtimeConfigCarriesInstallAndPlatformResource() {
+        let config = TelemetryBuildConfig(
+            otlpEndpoint: "https://collector.example/v1/metrics",
+            bearerToken: "secret-token",
+            deploymentEnvironment: "staging",
+            auditUploadEndpoint: "https://audits.example/upload",
+            serviceVersion: "2.0+9",
+            osVersion: "Version 18.0",
+            deviceModelIdentifier: "iPhone99,9"
+        )
+
+        let runtime = config.runtimeConfig(installId: "install-a")
+
+        #expect(runtime.otlpEndpoint == "https://collector.example/v1/metrics")
+        #expect(runtime.authorizationBearerToken == "secret-token")
+        #expect(runtime.resource?.serviceInstanceId == "install-a")
+        #expect(runtime.resource?.deploymentEnvironment == "staging")
+        #expect(runtime.resource?.osType == "ios")
+        #expect(runtime.resource?.osVersion == "Version 18.0")
+        #expect(runtime.resource?.deviceModelIdentifier == "iPhone99,9")
+    }
+}
+
 @MainActor
 struct RelativeTimeTests {
 
@@ -429,8 +506,7 @@ struct RelaySettingsTests {
             defaultRelays: ["wss://nip65.example"],
             bootstrapRelays: ["wss://source.example"],
             nip65: RelayListFfi(kind: 10002, relays: ["wss://nip65.example"]),
-            inbox: RelayListFfi(kind: 39000, relays: ["wss://inbox.example"]),
-            keyPackage: RelayListFfi(kind: 39001, relays: ["wss://keys.example"])
+            inbox: RelayListFfi(kind: 39000, relays: ["wss://inbox.example"])
         )
 
         #expect(RelaySettings.editableRelays(from: lists) == ["wss://nip65.example"])
@@ -448,8 +524,7 @@ struct RelaySettingsTests {
         let oldLists = relayLists(
             bootstrapRelays: ["wss://source.example"],
             nip65: ["wss://old.example"],
-            inbox: ["wss://old.example"],
-            keyPackage: ["wss://old.example"]
+            inbox: ["wss://old.example"]
         )
         let manager = FakeAccountRelayListManager(lists: oldLists, failNip65: true)
 
@@ -465,12 +540,10 @@ struct RelaySettingsTests {
             #expect(failure.reloadedLists == relayLists(
                 bootstrapRelays: ["wss://source.example"],
                 nip65: ["wss://old.example"],
-                inbox: ["wss://new.example"],
-                keyPackage: ["wss://new.example"]
+                inbox: ["wss://new.example"]
             ))
             #expect(manager.calls == [
                 .inbox(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
-                .keyPackage(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
                 .nip65(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
                 .reload(accountRef: "account-a")
             ])
@@ -483,7 +556,6 @@ struct RelaySettingsTests {
 private enum RelayManagerCall: Equatable {
     case reload(accountRef: String)
     case inbox(relays: [String], bootstrapRelays: [String])
-    case keyPackage(relays: [String], bootstrapRelays: [String])
     case nip65(relays: [String], bootstrapRelays: [String])
 }
 
@@ -521,16 +593,6 @@ private final class FakeAccountRelayListManager: AccountRelayListManaging {
         return lists
     }
 
-    func setAccountKeyPackageRelays(
-        accountRef: String,
-        relays: [String],
-        bootstrapRelays: [String]
-    ) async throws -> AccountRelayListsFfi {
-        calls.append(.keyPackage(relays: relays, bootstrapRelays: bootstrapRelays))
-        lists.keyPackage = RelayListFfi(kind: 39001, relays: relays)
-        return lists
-    }
-
     func setAccountNip65Relays(
         accountRef: String,
         relays: [String],
@@ -548,8 +610,7 @@ private final class FakeAccountRelayListManager: AccountRelayListManaging {
 private func relayLists(
     bootstrapRelays: [String],
     nip65: [String],
-    inbox: [String],
-    keyPackage: [String]
+    inbox: [String]
 ) -> AccountRelayListsFfi {
     AccountRelayListsFfi(
         complete: true,
@@ -557,8 +618,7 @@ private func relayLists(
         defaultRelays: [],
         bootstrapRelays: bootstrapRelays,
         nip65: RelayListFfi(kind: 10002, relays: nip65),
-        inbox: RelayListFfi(kind: 39000, relays: inbox),
-        keyPackage: RelayListFfi(kind: 39001, relays: keyPackage)
+        inbox: RelayListFfi(kind: 39000, relays: inbox)
     )
 }
 
@@ -887,34 +947,6 @@ struct GroupPushDebugPresentationTests {
         #expect(GroupPushDebugPresentation.tokenSummary(for: info) == "0 total, 0 active, 0 stale")
         #expect(GroupPushDebugPresentation.missingRelayHintSummary(for: info) == "2 missing relay hints")
         #expect(GroupPushDebugPresentation.localRegistrationSummary(for: info.localRegistration) == "Not registered, native push off, no local token")
-    }
-}
-
-struct GroupForensicsPresentationTests {
-    @Test func sensitiveModeIsPresentedAsPrivate() {
-        #expect(GroupForensicsPresentation.modeLabel(.sensitive) == "Private")
-    }
-
-    @Test func exportFilenameIsStableAndFilesystemSafe() {
-        let filename = GroupForensicsPresentation.fileName(
-            groupTitle: "Marmot / QA: incident",
-            groupIdHex: "abcdef1234567890",
-            mode: .`public`,
-            generatedAt: Date(timeIntervalSince1970: 0)
-        )
-
-        #expect(filename == "marmot-qa-incident-abcdef12-public-forensics-19700101-000000.json")
-    }
-
-    @Test func privateExportFilenameUsesPrivateLabel() {
-        let filename = GroupForensicsPresentation.fileName(
-            groupTitle: "Marmot / QA: incident",
-            groupIdHex: "abcdef1234567890",
-            mode: .sensitive,
-            generatedAt: Date(timeIntervalSince1970: 0)
-        )
-
-        #expect(filename == "marmot-qa-incident-abcdef12-private-forensics-19700101-000000.json")
     }
 }
 
@@ -1536,6 +1568,18 @@ struct ChatsListProjectionTests {
         #expect(viewModel.archivedItems.map(\.id) == [row.groupIdHex])
         #expect(viewModel.archivedItems.first?.group.archived == true)
     }
+
+    @Test func chatListRemoveUpdateDropsProjectedRow() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let kept = chatListRow(groupIdHex: hex("d1"), title: "Keep")
+        let removed = chatListRow(groupIdHex: hex("d2"), title: "Remove")
+        viewModel.applyChatListSnapshot([kept, removed])
+
+        viewModel.applyChatListUpdate(.removeRow(trigger: .removed, groupIdHex: removed.groupIdHex))
+
+        #expect(viewModel.items.map(\.id) == [kept.groupIdHex])
+        #expect(viewModel.archivedItems.isEmpty)
+    }
 }
 
 @MainActor
@@ -1704,6 +1748,37 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.hasMoreBefore)
         #expect(forwardedRows.map(\.groupIdHex) == [row.groupIdHex])
         #expect(forwardedRows.first?.firstUnreadMessageIdHex == projected.messageIdHex)
+    }
+
+    @Test func projectionRemoveRetractsTimelineRecord() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let existing = timelineRecord(messageIdHex: hex("a1"), plaintext: "existing", timelineAt: 10)
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [existing], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        viewModel.applyTimelineSubscriptionUpdate(
+            .projection(
+                update: RuntimeProjectionUpdateFfi(
+                    accountIdHex: hex("ff"),
+                    accountLabel: "account-a",
+                    update: TimelineProjectionUpdateFfi(
+                        groupIdHex: existing.groupIdHex,
+                        messages: [],
+                        changes: [.remove(messageIdHex: existing.messageIdHex, reason: .invalidated)],
+                        chatListRow: nil,
+                        chatListTrigger: .snapshotRefresh
+                    )
+                )
+            )
+        )
+
+        #expect(viewModel.timeline.isEmpty)
+        #expect(viewModel.record(for: existing.messageIdHex) == nil)
     }
 
     @Test func projectedOutgoingMessageReplacesMatchingPendingBubble() throws {
@@ -2109,7 +2184,7 @@ struct AgentStreamTests {
         #expect(AppState.agentTextStreamQuicCandidates == ["quic://quic-broker.ipf.dev:4450"])
     }
 
-    @Test func snapshotStartsAreWatchedOnlyUntilFinalAnchorArrives() {
+    @Test func agentStreamStartsAreWatchedOnlyUntilFinalAnchorArrives() {
         let streamId = hex("ab")
         let start = unsignedEventRecord(
             plaintext: "",
@@ -2122,8 +2197,8 @@ struct AgentStreamTests {
             ]
         )
 
-        #expect(ConversationViewModel.snapshotStartStreamIdToWatch(from: start, finalizedStreamIds: []) == streamId)
-        #expect(ConversationViewModel.snapshotStartStreamIdToWatch(from: start, finalizedStreamIds: [streamId]) == nil)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(from: start, finalizedStreamIds: []) == streamId)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(from: start, finalizedStreamIds: [streamId]) == nil)
     }
 
     @MainActor

@@ -516,8 +516,12 @@
 				CODE_SIGN_ENTITLEMENTS = "darkmatter-ios/darkmatter-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
+				DARKMATTER_AUDIT_UPLOAD_ENDPOINT = "https://goggles.ipf.dev/audits";
+				DARKMATTER_OTLP_BEARER_TOKEN = "";
+				DARKMATTER_OTLP_ENDPOINT = "https://otlp.ipf.dev/v1/metrics";
 				DARKMATTER_PUSH_RELAY_HINT = "wss://relay.primal.net";
 				DARKMATTER_PUSH_SERVER_PUBKEY_HEX = 73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04;
+				DARKMATTER_TELEMETRY_ENVIRONMENT = staging;
 				DEVELOPMENT_TEAM = V8U75D7Q49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -569,8 +573,12 @@
 				CODE_SIGN_ENTITLEMENTS = "darkmatter-ios/darkmatter-ios.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 6;
+				DARKMATTER_AUDIT_UPLOAD_ENDPOINT = "https://goggles.ipf.dev/audits";
+				DARKMATTER_OTLP_BEARER_TOKEN = "";
+				DARKMATTER_OTLP_ENDPOINT = "https://otlp.ipf.dev/v1/metrics";
 				DARKMATTER_PUSH_RELAY_HINT = "wss://relay.primal.net";
 				DARKMATTER_PUSH_SERVER_PUBKEY_HEX = 73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04;
+				DARKMATTER_TELEMETRY_ENVIRONMENT = staging;
 				DEVELOPMENT_TEAM = V8U75D7Q49;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;

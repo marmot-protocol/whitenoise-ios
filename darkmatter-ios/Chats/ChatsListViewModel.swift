@@ -59,30 +59,46 @@ final class ChatsListViewModel {
         if currentAccount == accountRef, !force { return }
         chatListTask?.cancel()
         chatListTask = nil
-        rows = []
-        items = []
-        archivedItems = []
+        if currentAccount != accountRef {
+            rows = []
+            items = []
+            archivedItems = []
+        }
         loadError = nil
         currentAccount = accountRef
 
         guard let accountRef, let appState else { return }
         isLoading = true
         do {
-            let chatListSub = try await appState.marmot.subscribeChatList(
-                accountRef: accountRef,
-                includeArchived: true
-            )
-            applyChatListSnapshot(chatListSub.snapshot())
-            isLoading = false
+            applyChatListSnapshot(try appState.marmot.chatList(accountRef: accountRef, includeArchived: true))
+        } catch {
+            loadError = error.localizedDescription
+        }
+        isLoading = false
+        startLiveUpdates(accountRef: accountRef)
+    }
 
-            chatListTask = Task { [weak self] in
-                for await row in SubscriptionDriver.chatList(chatListSub) {
-                    self?.applyChatListRow(row)
+    private func startLiveUpdates(accountRef: String) {
+        guard let appState else { return }
+        chatListTask = Task { [weak self, weak appState] in
+            do {
+                guard let appState else { return }
+                let chatListSub = try await appState.marmot.subscribeChatList(
+                    accountRef: accountRef,
+                    includeArchived: true
+                )
+                guard !Task.isCancelled else { return }
+                self?.applyChatListSnapshot(chatListSub.snapshot())
+
+                for await update in SubscriptionDriver.chatListUpdates(chatListSub) {
+                    self?.applyChatListUpdate(update)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                if self?.rows.isEmpty == true {
+                    self?.loadError = error.localizedDescription
                 }
             }
-        } catch {
-            isLoading = false
-            loadError = error.localizedDescription
         }
     }
 
@@ -108,6 +124,20 @@ final class ChatsListViewModel {
         } else {
             rows.append(row)
         }
+        recompute()
+    }
+
+    func applyChatListUpdate(_ update: ChatListSubscriptionUpdateFfi) {
+        switch update {
+        case .row(_, let row):
+            applyChatListRow(row)
+        case .removeRow(_, let groupIdHex):
+            removeChatListRow(groupIdHex: groupIdHex)
+        }
+    }
+
+    func removeChatListRow(groupIdHex: String) {
+        rows.removeAll { $0.groupIdHex == groupIdHex }
         recompute()
     }
 

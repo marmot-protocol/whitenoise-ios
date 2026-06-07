@@ -5,7 +5,7 @@ import MarmotKit
 ///
 /// Marmot owns the account relay lists. This screen reads the current
 /// projection and sends edits back through Marmot, which publishes the updated
-/// NIP-65, inbox, and key-package lists.
+/// NIP-65 and inbox lists.
 struct RelaysView: View {
     @Environment(AppState.self) private var appState
     @State private var pendingUrl: String = ""
@@ -81,7 +81,7 @@ struct RelaysView: View {
         } header: {
             Text("Account Relays")
         } footer: {
-            Text("Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65, inbox, and key-package relay lists.")
+            Text("Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists.")
                 .font(.footnote)
         }
     }
@@ -94,7 +94,6 @@ struct RelaysView: View {
             Section {
                 relayListRow("NIP-65", systemImage: "list.bullet", list: lists.nip65)
                 relayListRow("Inbox", systemImage: "tray.and.arrow.down", list: lists.inbox)
-                relayListRow("Key Package", systemImage: "key", list: lists.keyPackage)
             } header: {
                 Text("Published Relay Lists")
             } footer: {

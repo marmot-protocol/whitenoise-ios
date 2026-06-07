@@ -15,6 +15,7 @@ final class MarmotClient {
     let marmot: Marmot
     let rootPath: String
     let relayUrls: [String]
+    let telemetryConfig: TelemetryBuildConfig
 
     convenience init() throws {
         try self.init(rootPath: AppContainerConfig.productionMarmotRoot().path, relayUrls: Self.seedRelays)
@@ -27,23 +28,26 @@ final class MarmotClient {
     init(rootPath: String, relayUrls: [String]) throws {
         self.rootPath = rootPath
         self.relayUrls = relayUrls
+        self.telemetryConfig = TelemetryBuildConfig.current()
         self.marmot = try Marmot(rootPath: rootPath, relayUrls: relayUrls)
+        try configureTelemetryRuntime()
     }
 
     func freshRuntime() throws -> MarmotClient {
         try MarmotClient(rootPath: rootPath, relayUrls: relayUrls)
     }
 
+    private func configureTelemetryRuntime() throws {
+        let installId = try marmot.telemetryInstallId()
+        try marmot.setRelayTelemetryRuntimeConfig(
+            config: telemetryConfig.runtimeConfig(installId: installId)
+        )
+    }
 }
 
 protocol AccountRelayListManaging {
     func accountRelayLists(accountRef: String) throws -> AccountRelayListsFfi
     func setAccountInboxRelays(
-        accountRef: String,
-        relays: [String],
-        bootstrapRelays: [String]
-    ) async throws -> AccountRelayListsFfi
-    func setAccountKeyPackageRelays(
         accountRef: String,
         relays: [String],
         bootstrapRelays: [String]
@@ -106,11 +110,6 @@ enum RelaySettings {
 
         do {
             _ = try await manager.setAccountInboxRelays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
-            )
-            _ = try await manager.setAccountKeyPackageRelays(
                 accountRef: accountRef,
                 relays: normalized,
                 bootstrapRelays: bootstrap

@@ -6,6 +6,14 @@
 	<string>$(DARKMATTER_PUSH_RELAY_HINT)</string>
 	<key>DarkmatterPushServerPubkeyHex</key>
 	<string>$(DARKMATTER_PUSH_SERVER_PUBKEY_HEX)</string>
+	<key>DarkmatterTelemetryOTLPEndpoint</key>
+	<string>$(DARKMATTER_OTLP_ENDPOINT)</string>
+	<key>DarkmatterTelemetryBearerToken</key>
+	<string>$(DARKMATTER_OTLP_BEARER_TOKEN)</string>
+	<key>DarkmatterTelemetryEnvironment</key>
+	<string>$(DARKMATTER_TELEMETRY_ENVIRONMENT)</string>
+	<key>DarkmatterAuditUploadEndpoint</key>
+	<string>$(DARKMATTER_AUDIT_UPLOAD_ENDPOINT)</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

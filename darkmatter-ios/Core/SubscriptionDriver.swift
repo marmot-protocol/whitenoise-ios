@@ -29,10 +29,10 @@ enum SubscriptionDriver {
         }
     }
 
-    static func messages(_ sub: MessagesSubscription) -> AsyncStream<MessageUpdateFfi> {
+    static func chatListUpdates(_ sub: ChatListSubscription) -> AsyncStream<ChatListSubscriptionUpdateFfi> {
         AsyncStream { continuation in
             let task = Task {
-                while !Task.isCancelled, let next = await sub.next() {
+                while !Task.isCancelled, let next = await sub.nextUpdate() {
                     continuation.yield(next)
                 }
                 continuation.finish()

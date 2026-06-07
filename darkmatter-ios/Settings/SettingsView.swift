@@ -86,6 +86,12 @@ struct SettingsView: View {
                 } label: {
                     Label("Notifications", systemImage: "bell.badge.fill")
                 }
+
+                NavigationLink {
+                    PrivacySecuritySettingsView()
+                } label: {
+                    Label("Privacy & Security", systemImage: "hand.raised.fill")
+                }
             }
 
             Section("About") {
