@@ -1858,6 +1858,21 @@ struct ConversationTimelineProjectionTests {
         #expect(messages.first?.1 == .sent)
         #expect(messages.first?.2 == projected.timelineAt)
     }
+
+    @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"private func upsertTimelineItem\("#))
+        #expect(!source.matches(#"func applyPendingOutgoingMessage[\s\S]*?rebuildTimeline\("#))
+        #expect(!source.matches(#"private func upsertStreamBubble[\s\S]*?rebuildTimeline\("#))
+    }
+
+    private var conversationViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
 }
 
 @MainActor

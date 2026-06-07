@@ -414,25 +414,28 @@ final class ConversationViewModel {
 
     private func applyTimelineProjectionUpdate(_ update: TimelineProjectionUpdateFfi) {
         guard update.groupIdHex == group.groupIdHex else { return }
+        let rebuildTimelineAfterUpdate: Bool
         if update.changes.isEmpty {
             for record in update.messages {
-                applyTimelineRecord(record)
+                applyTimelineRecord(record, updateTimeline: update.messages.count == 1)
             }
+            rebuildTimelineAfterUpdate = update.messages.count != 1
         } else {
             for change in update.changes {
                 applyTimelineChange(change)
             }
+            rebuildTimelineAfterUpdate = false
         }
         if let row = update.chatListRow {
             onChatListRowUpdated?(row)
         }
-        rebuildProjectedState()
+        rebuildProjectedState(rebuildTimeline: rebuildTimelineAfterUpdate)
     }
 
     private func applyTimelineChange(_ change: TimelineMessageChangeFfi) {
         switch change {
         case .upsert(_, let message):
-            applyTimelineRecord(message)
+            applyTimelineRecord(message, updateTimeline: true)
         case .remove(let messageIdHex, _):
             removeTimelineRecord(messageIdHex: messageIdHex)
         }
@@ -465,7 +468,7 @@ final class ConversationViewModel {
         }
     }
 
-    private func applyTimelineRecord(_ record: TimelineMessageRecordFfi) {
+    private func applyTimelineRecord(_ record: TimelineMessageRecordFfi, updateTimeline: Bool = false) {
         let appRecord = Self.appMessageRecord(from: record)
         guard !appRecord.messageIdHex.isEmpty else { return }
 
@@ -487,6 +490,10 @@ final class ConversationViewModel {
             streamWatchTasks[streamId] = nil
             streamText[streamId] = nil
             transientTimelineItems["msg:stream:\(streamId)"] = nil
+            removeTimelineItem(id: "msg:stream:\(streamId)")
+        }
+        if updateTimeline {
+            upsertTimelineItem(TimelineItem.message(appRecord, status: messageStatusById[appRecord.messageIdHex]))
         }
         watchAgentStreamStartIfNeeded(appRecord)
     }
@@ -498,6 +505,7 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
+        removeTimelineItem(id: "msg:\(messageIdHex)")
     }
 
     private func oldestTimelineCursor() -> (messageIdHex: String, timelineAt: UInt64)? {
@@ -526,10 +534,12 @@ final class ConversationViewModel {
         )
     }
 
-    private func rebuildProjectedState() {
+    private func rebuildProjectedState(rebuildTimeline shouldRebuildTimeline: Bool = true) {
         rebuildDeletedMessageIds()
         recomputeReactions()
-        rebuildTimeline()
+        if shouldRebuildTimeline {
+            rebuildTimeline()
+        }
     }
 
     private func rebuildDeletedMessageIds() {
@@ -542,16 +552,45 @@ final class ConversationViewModel {
         }
         next.append(contentsOf: transientTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
-        next.sort {
-            if $0.timestamp == $1.timestamp { return $0.id < $1.id }
-            return $0.timestamp < $1.timestamp
-        }
+        next.sort(by: Self.timelineItemComesBefore)
         timeline = next
     }
 
+    private func upsertTimelineItem(_ item: TimelineItem) {
+        removeTimelineItem(id: item.id)
+        let insertionIndex = timelineInsertionIndex(for: item)
+        timeline.insert(item, at: insertionIndex)
+    }
+
+    private func removeTimelineItem(id: String) {
+        timeline.removeAll { $0.id == id }
+    }
+
+    private func timelineInsertionIndex(for item: TimelineItem) -> Int {
+        var lower = 0
+        var upper = timeline.count
+        while lower < upper {
+            let mid = lower + (upper - lower) / 2
+            if Self.timelineItemComesBefore(item, timeline[mid]) {
+                upper = mid
+            } else {
+                lower = mid + 1
+            }
+        }
+        return lower
+    }
+
+    private static func timelineItemComesBefore(_ lhs: TimelineItem, _ rhs: TimelineItem) -> Bool {
+        if lhs.timestamp == rhs.timestamp {
+            return lhs.id < rhs.id
+        }
+        return lhs.timestamp < rhs.timestamp
+    }
+
     func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi) {
-        transientTimelineItems["msg:\(tempId)"] = .pendingMessage(tempId: tempId, record: record)
-        rebuildTimeline()
+        let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
+        transientTimelineItems[item.id] = item
+        upsertTimelineItem(item)
     }
 
     private func reconcilePendingOutgoingMessage(with record: AppMessageRecordFfi, replyTargetId: String?) {
@@ -561,6 +600,7 @@ final class ConversationViewModel {
             Self.pendingOutgoingMessage(item, matches: record, replyTargetId: projectedReplyTarget)
         }) else { return }
         transientTimelineItems[match.key] = nil
+        removeTimelineItem(id: match.value.id)
     }
 
     private static func pendingOutgoingMessage(
@@ -614,8 +654,9 @@ final class ConversationViewModel {
     }
 
     private func removeStreamBubble(streamId: String) {
-        transientTimelineItems["msg:stream:\(streamId)"] = nil
-        rebuildTimeline()
+        let rowId = "msg:stream:\(streamId)"
+        transientTimelineItems[rowId] = nil
+        removeTimelineItem(id: rowId)
     }
 
     func isDeleted(_ messageIdHex: String) -> Bool {
@@ -801,8 +842,9 @@ final class ConversationViewModel {
 
     private func appendSystemEvent(_ event: SystemEvent) {
         let now = UInt64(Date().timeIntervalSince1970)
-        systemTimelineItems.append(.systemEvent(id: UUID().uuidString, event: event, timestamp: now))
-        rebuildTimeline()
+        let item = TimelineItem.systemEvent(id: UUID().uuidString, event: event, timestamp: now)
+        systemTimelineItems.append(item)
+        upsertTimelineItem(item)
     }
 
     private func refreshMembers() async {
@@ -912,26 +954,31 @@ final class ConversationViewModel {
         }
         let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
         transientTimelineItems["msg:\(tempId)"] = nil
+        removeTimelineItem(id: "msg:\(tempId)")
         if realId.isEmpty {
-            transientTimelineItems[rowId] = TimelineItem(
+            let item = TimelineItem(
                 id: rowId,
                 kind: .message(record: confirmed, status: .sent),
                 timestamp: confirmed.recordedAt
             )
+            transientTimelineItems[rowId] = item
+            upsertTimelineItem(item)
+        } else {
+            upsertTimelineItem(TimelineItem.message(confirmed, status: .sent))
         }
-        rebuildTimeline()
     }
 
     private func markFailed(tempId: String) {
         let rowId = "msg:\(tempId)"
         guard let item = transientTimelineItems[rowId],
               case .message(let record, _) = item.kind else { return }
-        transientTimelineItems[rowId] = TimelineItem(
+        let failedItem = TimelineItem(
             id: "msg:\(tempId)",
             kind: .message(record: record, status: .failed),
             timestamp: record.recordedAt
         )
-        rebuildTimeline()
+        transientTimelineItems[rowId] = failedItem
+        upsertTimelineItem(failedItem)
     }
 
     // MARK: - Reactions
@@ -1039,19 +1086,22 @@ final class ConversationViewModel {
         )
         if let idx = timeline.firstIndex(where: { $0.id == rowId }) {
             let timestamp = timeline[idx].timestamp
-            transientTimelineItems[rowId] = TimelineItem(
+            let item = TimelineItem(
                 id: rowId,
                 kind: .message(record: record, status: status),
                 timestamp: timestamp
             )
+            transientTimelineItems[rowId] = item
+            upsertTimelineItem(item)
         } else {
-            transientTimelineItems[rowId] = TimelineItem(
+            let item = TimelineItem(
                 id: rowId,
                 kind: .message(record: record, status: status),
                 timestamp: now
             )
+            transientTimelineItems[rowId] = item
+            upsertTimelineItem(item)
         }
-        rebuildTimeline()
     }
 
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
