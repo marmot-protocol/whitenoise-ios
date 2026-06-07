@@ -2084,6 +2084,21 @@ struct GroupManagementPresentationTests {
         #expect(AddMembersPresentation.secondaryIdentity(for: member).hasPrefix("npub1"))
     }
 
+    @Test func adminStatusIgnoresLocalAccountLabelFallback() throws {
+        let admin = hex("11")
+        let nonAdminMember = AppGroupMemberRecordFfi(
+            memberIdHex: hex("22"),
+            account: admin,
+            local: false
+        )
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", admins: [admin])
+        )
+
+        #expect(!viewModel.isAdmin(nonAdminMember))
+    }
+
     @Test func adminStatusCanUpdateOptimisticallyBeforePublishReturns() throws {
         let me = hex("11")
         let other = hex("22")

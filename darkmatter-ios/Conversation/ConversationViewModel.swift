@@ -150,7 +150,6 @@ final class ConversationViewModel {
             return detail.isAdmin
         }
         if group.admins.contains(member.memberIdHex) { return true }
-        if let account = member.account { return group.admins.contains(account) }
         return false
     }
 
