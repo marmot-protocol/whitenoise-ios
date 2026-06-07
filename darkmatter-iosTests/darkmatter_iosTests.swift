@@ -2620,6 +2620,35 @@ struct MessageSemanticsTests {
         #expect(!MessagePreview.isPreviewable(record))
     }
 
+    @Test func mediaReferenceRejectsUnsafeURLSchemes() {
+        let nonce = String(repeating: "22", count: 12)
+        for url in [
+            "http://media.example/a.png",
+            "ftp://media.example/a.png",
+            "file:///tmp/a.png",
+        ] {
+            let record = unsignedEventRecord(
+                plaintext: "caption",
+                kind: MessageSemantics.kindChat,
+                tags: [
+                    MessageTagFfi(values: [
+                        MessageSemantics.imetaTag,
+                        "url \(url)",
+                        "m image/png",
+                        "filename a.png",
+                        "x \(hex("33"))",
+                        "n \(nonce)",
+                        "v mip04-v2",
+                        "size 7",
+                    ])
+                ]
+            )
+
+            #expect(MessageSemantics.classify(record) == .unknown)
+            #expect(!MessagePreview.isPreviewable(record))
+        }
+    }
+
     @Test func mediaReferenceWithoutCaptionFallsBackToFileName() {
         let nonce = String(repeating: "22", count: 12)
         let record = unsignedEventRecord(

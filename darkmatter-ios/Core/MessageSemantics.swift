@@ -157,7 +157,7 @@ enum MessageSemantics {
             else if let value = field.dropPrefix("v ") { version = value }
             else if let value = field.dropPrefix("size ") { size = UInt64(value) ?? 0 }
         }
-        guard !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard let mediaURL = ProfileSanitizer.imageURL(url),
               !mediaType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               hash.isHexByteString(byteCount: 32),
@@ -166,7 +166,7 @@ enum MessageSemantics {
               size > 0
         else { return nil }
         return MediaReferenceFfi(
-            url: url,
+            url: mediaURL.absoluteString,
             fileHashHex: hash,
             nonceHex: nonce,
             fileName: name,
