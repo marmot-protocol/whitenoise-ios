@@ -6,6 +6,7 @@ import MarmotKit
 /// now driven by Marmot's durable chat-list projection instead of rebuilding
 /// previews from account-wide message snapshots on every appearance.
 @Observable
+@MainActor
 final class ChatsListViewModel {
 
     struct Item: Identifiable {
@@ -38,7 +39,7 @@ final class ChatsListViewModel {
         self.appState = appState
     }
 
-    deinit {
+    isolated deinit {
         chatListTask?.cancel()
     }
 

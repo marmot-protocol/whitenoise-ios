@@ -1919,6 +1919,13 @@ struct ChatsListProjectionTests {
         #expect(source.matches(#"ConversationView\(\s*chat: resolvedGroup"#))
     }
 
+    @Test func chatsListViewModelDeclaresMainActorIsolation() throws {
+        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"@Observable\s+@MainActor\s+final class ChatsListViewModel"#))
+        #expect(source.matches(#"isolated deinit\s*\{"#))
+    }
+
     private var chatsListViewModelSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
