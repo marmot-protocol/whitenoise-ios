@@ -549,7 +549,9 @@ struct GroupDetailsView: View {
             await refreshVisibleDebugState()
             Haptics.success()
             appState.present(.success(
-                refs.count == 1 ? L10n.string("Invited 1 member") : L10n.string("Invited \(refs.count) members"),
+                refs.count == 1
+                    ? L10n.string("Invited 1 member")
+                    : L10n.formatted("Invited %lld members", Int64(refs.count)),
                 message: publishMessage(for: result.summary)
             ))
         } catch {
@@ -760,7 +762,7 @@ struct GroupDetailsView: View {
         guard summary.published > 0 else { return L10n.string("Saved locally.") }
         return summary.published == 1
             ? L10n.string("Published 1 update.")
-            : L10n.string("Published \(summary.published) updates.")
+            : L10n.formatted("Published %lld updates.", Int64(clamping: summary.published))
     }
 
     private func refreshAfterFailedMutation() async {

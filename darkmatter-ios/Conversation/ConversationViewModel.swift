@@ -131,7 +131,7 @@ final class ConversationViewModel {
         if memberCount == 0 { return L10n.string("Just you") }
         return memberCount == 1
             ? L10n.string("1 member")
-            : L10n.string("\(memberCount) members")
+            : L10n.formatted("%lld members", Int64(memberCount))
     }
 
     var isSelfAdmin: Bool {

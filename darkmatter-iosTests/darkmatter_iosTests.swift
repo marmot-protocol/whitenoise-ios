@@ -826,6 +826,68 @@ struct LocalizationCatalogTests {
         }
     }
 
+    @Test func countLocalizationsUseStaticFormatKeysInSource() throws {
+        let dynamicCountKeys = [
+            (
+                "darkmatter-ios/Conversation/ConversationViewModel.swift",
+                #"L10n.string("\(memberCount) members")"#
+            ),
+            (
+                "darkmatter-ios/Conversation/ConversationView.swift",
+                #"L10n.string("\(memberCount) members")"#
+            ),
+            (
+                "darkmatter-ios/Group/GroupDetailsView.swift",
+                #"L10n.string("Invited \(refs.count) members")"#
+            ),
+            (
+                "darkmatter-ios/Group/GroupDetailsView.swift",
+                #"L10n.string("Published \(summary.published) updates.")"#
+            ),
+            (
+                "darkmatter-ios/Settings/ProfileEditView.swift",
+                #"L10n.string("Your kind:0 metadata is live on \(relays.count) relays.")"#
+            ),
+        ]
+
+        for (relativePath, dynamicKey) in dynamicCountKeys {
+            let source = try readSource(relativePath)
+
+            #expect(!source.contains(dynamicKey), "\(relativePath) still uses dynamic localization key \(dynamicKey)")
+        }
+    }
+
+    @Test func formattedLocalizationUsesStaticCatalogKeys() {
+        #expect(
+            L10n.formatted(
+                "%lld members",
+                arguments: [Int64(3)],
+                locale: Locale(identifier: "de")
+            ) == "3-Mitglieder"
+        )
+        #expect(
+            L10n.formatted(
+                "Invited %lld members",
+                arguments: [Int64(3)],
+                locale: Locale(identifier: "it")
+            ) == "Membri 3 invitati"
+        )
+        #expect(
+            L10n.formatted(
+                "Published %lld updates.",
+                arguments: [Int64(2)],
+                locale: Locale(identifier: "zh-Hans")
+            ) == "已发布 2 更新。"
+        )
+        #expect(
+            L10n.formatted(
+                "Your kind:0 metadata is live on %lld relays.",
+                arguments: [Int64(4)],
+                locale: Locale(identifier: "de")
+            ) == "Ihre kind:0-Metadaten sind live auf 4-Relays."
+        )
+    }
+
     @Test func infoPlistCatalogLocalizesCameraPermissionCopy() throws {
         let catalog = try readCatalog("darkmatter-ios/InfoPlist.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
@@ -858,6 +920,15 @@ struct LocalizationCatalogTests {
         let url = repoRoot.appendingPathComponent(relativePath)
         let data = try Data(contentsOf: url)
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func readSource(_ relativePath: String) throws -> String {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot = testFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let url = repoRoot.appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
     }
 
     private func localizedValue(_ key: String, locale: String, in strings: [String: Any]) throws -> String {
