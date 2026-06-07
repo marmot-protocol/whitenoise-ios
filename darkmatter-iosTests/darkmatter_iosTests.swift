@@ -1634,6 +1634,19 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("not a url") == nil)
     }
 
+    @Test func imageURLRejectsPrivateAndLoopbackHosts() {
+        #expect(ProfileSanitizer.imageURL("https://localhost/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://127.0.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://10.1.2.3/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://172.16.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://172.31.255.255/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://192.168.1.10/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://169.254.169.254/latest/meta-data/") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[::1]/avatar.png") == nil)
+
+        #expect(ProfileSanitizer.imageURL("https://172.32.0.1/avatar.png") != nil)
+    }
+
     // MARK: - Message bodies
 
     @Test func messageBodyStripsBidiButKeepsNewlines() {

@@ -67,9 +67,9 @@ enum ProfileSanitizer {
         return String(trimmed.prefix(maxMessageLength))
     }
 
-    /// Image URL allowlist: only HTTPS with a host. Rejects data:, file:,
-    /// javascript:, custom schemes, and host-less URLs so `AsyncImage` never
-    /// dereferences something dangerous.
+    /// Image URL allowlist: only HTTPS with a public host. Rejects data:,
+    /// file:, javascript:, custom schemes, host-less URLs, and local/private
+    /// addresses so `AsyncImage` never dereferences something dangerous.
     static func imageURL(_ raw: String?) -> URL? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -78,9 +78,68 @@ enum ProfileSanitizer {
               let scheme = comps.scheme?.lowercased(),
               scheme == "https",
               let host = comps.host,
-              !host.isEmpty
+              !host.isEmpty,
+              !isPrivateOrLoopbackHost(host)
         else { return nil }
         return comps.url
+    }
+
+    private static func isPrivateOrLoopbackHost(_ host: String) -> Bool {
+        let normalized = host
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+            .lowercased()
+
+        if normalized == "localhost" || normalized == "::1" {
+            return true
+        }
+
+        if let octets = ipv4Octets(normalized) {
+            if octets[0] == 10 || octets[0] == 127 {
+                return true
+            }
+            if octets[0] == 169 && octets[1] == 254 {
+                return true
+            }
+            if octets[0] == 172 && (16...31).contains(Int(octets[1])) {
+                return true
+            }
+            if octets[0] == 192 && octets[1] == 168 {
+                return true
+            }
+            return false
+        }
+
+        return isPrivateOrLoopbackIPv6(normalized)
+    }
+
+    private static func ipv4Octets(_ host: String) -> [UInt8]? {
+        let pieces = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard pieces.count == 4 else { return nil }
+
+        var octets: [UInt8] = []
+        for piece in pieces {
+            guard !piece.isEmpty,
+                  piece.unicodeScalars.allSatisfy({ (48...57).contains($0.value) }),
+                  let octet = UInt8(String(piece))
+            else { return nil }
+            octets.append(octet)
+        }
+        return octets
+    }
+
+    private static func isPrivateOrLoopbackIPv6(_ host: String) -> Bool {
+        guard host.contains(":") else { return false }
+
+        let address = host.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)[0]
+        if address == "::1" || address == "0:0:0:0:0:0:0:1" {
+            return true
+        }
+
+        guard let first = address.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: true).first,
+              let firstHextet = UInt16(first, radix: 16)
+        else { return false }
+
+        return (firstHextet & 0xfe00) == 0xfc00 || (firstHextet & 0xffc0) == 0xfe80
     }
 
     /// Remove Unicode control characters and bidirectional formatting /
