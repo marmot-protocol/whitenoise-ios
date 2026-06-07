@@ -1826,6 +1826,25 @@ struct ConversationTimelineProjectionTests {
         #expect(!ConversationViewModel.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
     }
 
+    @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*optimisticDeletedMessageIds\.insert"#))
+    }
+
+    @Test func canDeleteMessageRequiresSenderOrAdminPermission() {
+        let me = hex("11")
+        let mine = message(id: hex("a1"), sender: me)
+        let other = message(id: hex("a2"), sender: hex("22"))
+        let emptyId = message(id: "", sender: me)
+
+        #expect(ConversationViewModel.canDeleteMessage(mine, myAccountId: me, isSelfAdmin: false))
+        #expect(ConversationViewModel.canDeleteMessage(other, myAccountId: me, isSelfAdmin: true))
+        #expect(!ConversationViewModel.canDeleteMessage(other, myAccountId: me, isSelfAdmin: false))
+        #expect(!ConversationViewModel.canDeleteMessage(mine, myAccountId: nil, isSelfAdmin: false))
+        #expect(!ConversationViewModel.canDeleteMessage(emptyId, myAccountId: me, isSelfAdmin: true))
+    }
+
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let parentSender = hex("11")

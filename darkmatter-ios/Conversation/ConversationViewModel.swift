@@ -263,6 +263,17 @@ final class ConversationViewModel {
             && record.kind == MessageSemantics.kindChat
     }
 
+    static func canDeleteMessage(
+        _ message: AppMessageRecordFfi,
+        myAccountId: String?,
+        isSelfAdmin: Bool
+    ) -> Bool {
+        guard !message.messageIdHex.isEmpty else { return false }
+        if isSelfAdmin { return true }
+        guard let myAccountId, !myAccountId.isEmpty else { return false }
+        return message.sender == myAccountId
+    }
+
     private func initializeReadState() {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         do {
@@ -983,11 +994,13 @@ final class ConversationViewModel {
 
     // MARK: - Reactions
 
-    /// Tombstone our own message. Optimistically marks it deleted, then
-    /// publishes the delete payload (reverting on failure).
+    /// Tombstone a message we are allowed to delete. Optimistically marks it
+    /// deleted, then publishes the delete payload (reverting on failure).
     func deleteMessage(_ message: AppMessageRecordFfi) async {
         guard let appState, let accountRef = appState.activeAccountRef,
-              !message.messageIdHex.isEmpty else { return }
+              !message.messageIdHex.isEmpty,
+              Self.canDeleteMessage(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin)
+        else { return }
         optimisticDeletedMessageIds.insert(message.messageIdHex)
         rebuildDeletedMessageIds()
         do {
