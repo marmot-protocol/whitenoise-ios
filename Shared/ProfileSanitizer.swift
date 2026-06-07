@@ -17,6 +17,8 @@ enum ProfileSanitizer {
     static let maxAboutLength = 1000
     static let maxMessageLength = 8000
 
+    private static let blankLineRunRegex = try! NSRegularExpression(pattern: "\n{3,}")
+
     /// Single-line text: strip control/bidi characters, collapse all
     /// whitespace (including newlines) to single spaces, trim, cap length.
     /// Returns nil when nothing renderable remains.
@@ -58,10 +60,10 @@ enum ProfileSanitizer {
     /// handling at the call site.
     static func messageBody(_ raw: String) -> String {
         let stripped = stripUnsafe(raw)
-        let clamped = stripped.replacingOccurrences(
-            of: "\n{3,}",
-            with: "\n\n",
-            options: .regularExpression
+        let clamped = blankLineRunRegex.stringByReplacingMatches(
+            in: stripped,
+            range: NSRange(stripped.startIndex..., in: stripped),
+            withTemplate: "\n\n"
         )
         let trimmed = clamped.trimmingCharacters(in: .whitespacesAndNewlines)
         return String(trimmed.prefix(maxMessageLength))

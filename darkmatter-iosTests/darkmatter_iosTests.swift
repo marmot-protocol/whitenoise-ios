@@ -1672,6 +1672,13 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.messageBody("  \n hello \n  ") == "hello")
     }
 
+    @Test func messageBodyUsesCachedBlankLineRegex() throws {
+        let source = try String(contentsOf: profileSanitizerSourceURL, encoding: .utf8)
+
+        #expect(source.contains("private static let blankLineRunRegex"))
+        #expect(!source.matches(#"static func messageBody\(_ raw: String\) -> String \{[\s\S]*options:\s*\.regularExpression"#))
+    }
+
     // MARK: - Group names
 
     @Test func groupNameSingleLinesAndStripsBidi() {
@@ -1688,6 +1695,13 @@ struct ProfileSanitizerTests {
     @Test func groupNameEmptyIsNil() {
         #expect(ProfileSanitizer.groupName("") == nil)
         #expect(ProfileSanitizer.groupName("\u{202E}\u{200B}") == nil)
+    }
+
+    private var profileSanitizerSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Shared/ProfileSanitizer.swift")
     }
 }
 
