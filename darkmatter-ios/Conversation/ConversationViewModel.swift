@@ -228,6 +228,7 @@ final class ConversationViewModel {
     func start() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         stopLiveSubscriptions()
+        resetOptimisticState()
         error = nil
         startLiveTimeline(accountRef: accountRef)
         startLiveGroupState(accountRef: accountRef)
@@ -313,6 +314,14 @@ final class ConversationViewModel {
             task.cancel()
         }
         streamWatchTasks.removeAll()
+    }
+
+    private func resetOptimisticState() {
+        optimisticDeletedMessageIds.removeAll()
+        optimisticReactionRemovals.removeAll()
+        reactionRecords.removeAll()
+        rebuildDeletedMessageIds()
+        recomputeReactions()
     }
 
     private func startLiveTimeline(accountRef: String) {

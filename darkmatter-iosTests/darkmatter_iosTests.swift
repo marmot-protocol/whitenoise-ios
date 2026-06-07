@@ -2020,6 +2020,13 @@ struct ConversationTimelineProjectionTests {
         #expect(source.matches(#"if let error = viewModel\.error[\s\S]*ContentUnavailableView[\s\S]*Couldn't load conversation[\s\S]*Button\(\"Retry\"\)[\s\S]*await viewModel\.start\(\)"#))
     }
 
+    @Test func startClearsOptimisticOverlaysBeforeRebindingSubscriptions() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"func start\(\) async \{[\s\S]*stopLiveSubscriptions\(\)\s*resetOptimisticState\(\)[\s\S]*startLiveTimeline"#))
+        #expect(source.matches(#"private func resetOptimisticState\(\) \{[\s\S]*optimisticDeletedMessageIds\.removeAll\(\)[\s\S]*optimisticReactionRemovals\.removeAll\(\)[\s\S]*reactionRecords\.removeAll\(\)[\s\S]*rebuildDeletedMessageIds\(\)[\s\S]*recomputeReactions\(\)"#))
+    }
+
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let parentSender = hex("11")
