@@ -2763,9 +2763,44 @@ struct SensitiveClipboardTests {
         #expect(!pasteboard.hasStrings)
     }
 
+    @Test func copyStoresSensitiveTextWithExpirationOptions() throws {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let expiry = Date().addingTimeInterval(120)
+
+        SensitiveClipboard.copy("private message", to: pasteboard, expiresAt: expiry)
+
+        #expect(pasteboard.string == "private message")
+
+        let source = try String(contentsOf: sensitiveClipboardSourceURL, encoding: .utf8)
+        #expect(source.contains("options: [.expirationDate: expiresAt]"))
+        #expect(source.contains("UIPasteboard.typeAutomatic"))
+    }
+
+    @Test func messageCopyActionUsesExpiringSensitiveClipboard() throws {
+        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
+
+        #expect(source.contains("SensitiveClipboard.copy(viewModel.displayBody(of: record))"))
+        #expect(!source.contains("UIPasteboard.general.string = viewModel.displayBody(of: record)"))
+    }
+
     private func makeIsolatedPasteboard() -> UIPasteboard {
         let name = UIPasteboard.Name("dev.ipf.darkmatter.tests.sensitive-clipboard-\(UUID().uuidString)")
         return UIPasteboard(name: name, create: true)!
+    }
+
+    private var sensitiveClipboardSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Onboarding/SensitiveClipboard.swift")
+    }
+
+    private var conversationViewSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
     }
 }
 

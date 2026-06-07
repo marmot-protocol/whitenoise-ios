@@ -690,7 +690,7 @@ struct ConversationView: View {
                 beginReply(to: record, viewModel: viewModel)
             },
             onCopy: {
-                UIPasteboard.general.string = viewModel.displayBody(of: record)
+                SensitiveClipboard.copy(viewModel.displayBody(of: record))
                 Haptics.tap()
                 dismissActions()
             },

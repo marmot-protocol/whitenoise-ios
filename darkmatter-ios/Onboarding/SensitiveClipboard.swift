@@ -12,6 +12,18 @@ import UIKit
 /// secret — that way, if the user pasted, then copied something else, we
 /// don't blow away their newer clipboard contents.
 enum SensitiveClipboard {
+    static let defaultExpirationInterval: TimeInterval = 120
+
+    static func copy(
+        _ text: String,
+        to pasteboard: UIPasteboard = .general,
+        expiresAt: Date = Date().addingTimeInterval(defaultExpirationInterval)
+    ) {
+        pasteboard.setItems(
+            [[UIPasteboard.typeAutomatic: text]],
+            options: [.expirationDate: expiresAt]
+        )
+    }
 
     /// Wipe `secret` from `pasteboard` if (and only if) it currently holds it.
     ///
