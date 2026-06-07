@@ -67,7 +67,7 @@ enum ProfileSanitizer {
         return String(trimmed.prefix(maxMessageLength))
     }
 
-    /// Image URL allowlist: only http(s) with a host. Rejects data:, file:,
+    /// Image URL allowlist: only HTTPS with a host. Rejects data:, file:,
     /// javascript:, custom schemes, and host-less URLs so `AsyncImage` never
     /// dereferences something dangerous.
     static func imageURL(_ raw: String?) -> URL? {
@@ -76,7 +76,7 @@ enum ProfileSanitizer {
         guard !trimmed.isEmpty,
               let comps = URLComponents(string: trimmed),
               let scheme = comps.scheme?.lowercased(),
-              scheme == "https" || scheme == "http",
+              scheme == "https",
               let host = comps.host,
               !host.isEmpty
         else { return nil }

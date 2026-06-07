@@ -1339,7 +1339,7 @@ struct ProfileSanitizerTests {
 
     @Test func imageURLAllowsHttps() {
         #expect(ProfileSanitizer.imageURL("https://example.com/a.png") != nil)
-        #expect(ProfileSanitizer.imageURL("http://example.com/a.png") != nil)
+        #expect(ProfileSanitizer.imageURL("http://example.com/a.png") == nil)
     }
 
     @Test func imageURLRejectsDangerousSchemes() {
