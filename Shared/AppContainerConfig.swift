@@ -6,11 +6,14 @@ enum AppContainerError: Error, LocalizedError, Equatable {
     /// live in a single location shared by the app and its extensions, so we
     /// refuse to run rather than fork the store into a per-process path.
     case appGroupContainerUnavailable
+    case storageDirectoryCreationFailed(path: String, reason: String)
 
     var errorDescription: String? {
         switch self {
         case .appGroupContainerUnavailable:
             return "The shared App Group container (\(AppContainerConfig.appGroupIdentifier)) is unavailable, so Marmot storage cannot be opened safely."
+        case .storageDirectoryCreationFailed(let path, let reason):
+            return "Could not create Marmot storage directory at \(path): \(reason)"
         }
     }
 }
@@ -47,13 +50,20 @@ enum AppContainerConfig {
         }
 
         let sharedRoot = marmotRoot(in: sharedBase)
-        ensureDirectoryExists(sharedRoot, fileManager: fileManager)
+        try ensureDirectoryExists(sharedRoot, fileManager: fileManager)
         return sharedRoot
     }
 
-    static func ensureDirectoryExists(_ url: URL, fileManager: FileManager = .default) {
+    static func ensureDirectoryExists(_ url: URL, fileManager: FileManager = .default) throws {
         if !fileManager.fileExists(atPath: url.path) {
-            try? fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+            do {
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+            } catch {
+                throw AppContainerError.storageDirectoryCreationFailed(
+                    path: url.path,
+                    reason: error.localizedDescription
+                )
+            }
         }
     }
 }

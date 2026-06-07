@@ -757,18 +757,44 @@ struct AppContainerConfigTests {
         #expect(root.path == shared.appendingPathComponent("Marmot").path)
         #expect(fileManager.applicationSupportLookupCount == 0)
     }
+
+    @Test func productionRootSurfacesDirectoryCreationFailure() {
+        let shared = URL(fileURLWithPath: "/tmp/darkmatter-unwritable", isDirectory: true)
+        let root = shared.appendingPathComponent("Marmot", isDirectory: true)
+        let creationError = NSError(
+            domain: "AppContainerConfigTests",
+            code: 13,
+            userInfo: [NSLocalizedDescriptionKey: "permission denied"]
+        )
+        let fileManager = StubFileManager(
+            sharedContainerURL: shared,
+            createDirectoryError: creationError
+        )
+
+        #expect(throws: AppContainerError.storageDirectoryCreationFailed(
+            path: root.path,
+            reason: "permission denied"
+        )) {
+            _ = try AppContainerConfig.productionMarmotRoot(fileManager: fileManager)
+        }
+        #expect(fileManager.createdDirectories.map(\.path) == [root.path])
+    }
 }
 
 /// Test double that lets us drive `AppContainerConfig`'s storage resolution
 /// down its failure branches deterministically.
 private final class StubFileManager: FileManager {
     private let sharedContainerURL: URL?
+    private let createDirectoryError: Error?
     private(set) var applicationSupportLookupCount = 0
+    private(set) var createdDirectories: [URL] = []
 
     init(
-        sharedContainerURL: URL?
+        sharedContainerURL: URL?,
+        createDirectoryError: Error? = nil
     ) {
         self.sharedContainerURL = sharedContainerURL
+        self.createDirectoryError = createDirectoryError
         super.init()
     }
 
@@ -786,6 +812,27 @@ private final class StubFileManager: FileManager {
             applicationSupportLookupCount += 1
         }
         return try super.url(for: directory, in: domain, appropriateFor: url, create: shouldCreate)
+    }
+
+    override func fileExists(atPath path: String) -> Bool {
+        if createDirectoryError != nil { return false }
+        return super.fileExists(atPath: path)
+    }
+
+    override func createDirectory(
+        at url: URL,
+        withIntermediateDirectories createIntermediates: Bool,
+        attributes: [FileAttributeKey: Any]? = nil
+    ) throws {
+        createdDirectories.append(url)
+        if let createDirectoryError {
+            throw createDirectoryError
+        }
+        try super.createDirectory(
+            at: url,
+            withIntermediateDirectories: createIntermediates,
+            attributes: attributes
+        )
     }
 }
 
