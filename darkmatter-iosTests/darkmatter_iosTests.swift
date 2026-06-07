@@ -1306,6 +1306,19 @@ struct NotificationServiceProjectionTests {
 
         #expect(NotificationServiceProjection.decision(for: collection) == .fallback)
     }
+
+    @Test func decisionIsNotMainActorIsolatedForExtensionUse() throws {
+        let source = try String(contentsOf: notificationServiceProjectionSourceURL, encoding: .utf8)
+
+        #expect(!source.matches(#"@MainActor\s+static func decision\("#))
+    }
+
+    private var notificationServiceProjectionSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Shared/NotificationServiceProjection.swift")
+    }
 }
 
 @MainActor

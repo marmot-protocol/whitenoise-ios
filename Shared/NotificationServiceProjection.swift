@@ -12,7 +12,6 @@ enum NotificationServiceProjection {
     // the notification service extension.
     static let maxWakeWaitMs: UInt32 = 8_000
 
-    @MainActor
     static func decision(for collection: BackgroundNotificationCollectionFfi) -> NotificationServiceRenderDecision {
         switch collection.status {
         case .newData:
