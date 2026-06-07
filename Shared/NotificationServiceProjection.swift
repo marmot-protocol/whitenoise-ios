@@ -2,7 +2,7 @@ import Foundation
 import MarmotKit
 
 enum NotificationServiceRenderDecision: Equatable {
-    case decorate(LocalNotificationPresentation)
+    case decorate(LocalNotificationPresentation, additionalPresentations: [LocalNotificationPresentation])
     case suppress
     case fallback
 }
@@ -15,15 +15,18 @@ enum NotificationServiceProjection {
     static func decision(for collection: BackgroundNotificationCollectionFfi) -> NotificationServiceRenderDecision {
         switch collection.status {
         case .newData:
-            guard let presentation = collection.notifications
+            let presentations = collection.notifications
                 .filter({ !$0.isFromSelf })
                 .sorted(by: { $0.timestampMs > $1.timestampMs })
                 .compactMap(LocalNotificationProjection.makePresentation(for:))
-                .first
+            guard let presentation = presentations.first
             else {
                 return .suppress
             }
-            return .decorate(presentation)
+            return .decorate(
+                presentation,
+                additionalPresentations: Array(presentations.dropFirst())
+            )
         case .noData:
             return .suppress
         case .failed:

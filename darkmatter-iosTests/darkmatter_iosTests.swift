@@ -1435,7 +1435,46 @@ struct NotificationServiceProjectionTests {
 
         let decision = NotificationServiceProjection.decision(for: collection)
 
-        #expect(decision == .decorate(LocalNotificationProjection.makePresentation(for: newer)!))
+        #expect(decision == .decorate(
+            LocalNotificationProjection.makePresentation(for: newer)!,
+            additionalPresentations: [
+                LocalNotificationProjection.makePresentation(for: older)!
+            ]
+        ))
+    }
+
+    @Test func newDataCollectionCarriesRemainingPresentationsForSameWake() {
+        let older = notificationUpdate(
+            notificationKey: "older",
+            senderName: "Alice",
+            previewText: "first",
+            timestampMs: 1_000
+        )
+        let newer = notificationUpdate(
+            notificationKey: "newer",
+            senderName: "Bob",
+            previewText: "second",
+            timestampMs: 2_000
+        )
+        let selfMessage = notificationUpdate(
+            notificationKey: "self",
+            isFromSelf: true,
+            timestampMs: 3_000
+        )
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: [older, selfMessage, newer],
+            error: nil
+        )
+
+        let decision = NotificationServiceProjection.decision(for: collection)
+
+        #expect(decision == .decorate(
+            LocalNotificationProjection.makePresentation(for: newer)!,
+            additionalPresentations: [
+                LocalNotificationProjection.makePresentation(for: older)!
+            ]
+        ))
     }
 
     @Test func noDataCollectionSuppressesProviderFallback() {
@@ -1488,6 +1527,13 @@ struct NotificationServiceTests {
 
         #expect(source.matches(#"@MainActor\s+final class NotificationService"#))
         #expect(source.matches(#"private func finish\(\)[\s\S]*self\.contentHandler = nil[\s\S]*self\.bestAttemptContent = nil[\s\S]*contentHandler\(bestAttemptContent\)"#))
+    }
+
+    @Test func notificationServiceSchedulesAdditionalPresentationsBeforeFinish() throws {
+        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
+
+        #expect(source.contains("additionalPresentations"))
+        #expect(source.contains("UNUserNotificationCenter.current().add"))
     }
 
     private var notificationServiceSourceURL: URL {

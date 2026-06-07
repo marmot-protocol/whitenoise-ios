@@ -43,7 +43,7 @@ final class NotificationService: UNNotificationServiceExtension {
                     maxWaitMs: maxNotificationServiceWaitMs,
                     source: .apnsNse
                 )
-                apply(NotificationServiceProjection.decision(for: result), to: content)
+                await apply(NotificationServiceProjection.decision(for: result), to: content)
             } catch {
                 applyFallback(to: content)
             }
@@ -60,10 +60,11 @@ final class NotificationService: UNNotificationServiceExtension {
     private func apply(
         _ decision: NotificationServiceRenderDecision,
         to content: UNMutableNotificationContent
-    ) {
+    ) async {
         switch decision {
-        case .decorate(let presentation):
+        case .decorate(let presentation, let additionalPresentations):
             decorate(content, with: presentation)
+            await scheduleAdditionalPresentations(additionalPresentations)
         case .suppress:
             bestAttemptContent = UNMutableNotificationContent()
         case .fallback:
@@ -83,6 +84,32 @@ final class NotificationService: UNNotificationServiceExtension {
             userInfo[key] = value
         }
         content.userInfo = userInfo
+    }
+
+    private func scheduleAdditionalPresentations(
+        _ additionalPresentations: [LocalNotificationPresentation]
+    ) async {
+        for presentation in additionalPresentations {
+            guard !Task.isCancelled else { return }
+            let request = UNNotificationRequest(
+                identifier: presentation.identifier,
+                content: notificationContent(for: presentation),
+                trigger: nil
+            )
+            try? await UNUserNotificationCenter.current().add(request)
+        }
+    }
+
+    private func notificationContent(
+        for presentation: LocalNotificationPresentation
+    ) -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = presentation.title
+        content.body = presentation.body
+        content.sound = .default
+        content.threadIdentifier = presentation.threadIdentifier
+        content.userInfo = presentation.userInfo
+        return content
     }
 
     private func applyFallback(to content: UNMutableNotificationContent) {
