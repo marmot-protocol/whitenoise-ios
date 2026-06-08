@@ -532,7 +532,16 @@ private struct ChatDestination: View {
                 await resolveGroup(for: item)
             }
         } else if timedOut {
-            ContentUnavailableView("Chat unavailable", systemImage: "questionmark.circle")
+            // A slow network can take longer than the spin-wait to deliver the
+            // chat-list row. Offer Retry instead of a dead end so the user can
+            // wait out another window rather than being told the chat is gone (#71).
+            ContentUnavailableView {
+                Label("Chat unavailable", systemImage: "questionmark.circle")
+            } description: {
+                Text("It may still be syncing. Try again in a moment.")
+            } actions: {
+                Button("Retry") { timedOut = false }
+            }
         } else {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
