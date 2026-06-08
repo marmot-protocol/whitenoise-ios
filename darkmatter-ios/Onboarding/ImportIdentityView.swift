@@ -12,8 +12,17 @@ struct ImportIdentityView: View {
     @State private var error: String?
 
     private var canSubmit: Bool {
-        let trimmed = identity.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !isImporting && trimmed.hasPrefix("nsec")
+        !isImporting && Self.isPlausibleNsec(identity)
+    }
+
+    /// A bech32 `nsec` is a fixed-width encoding of a 32-byte key: the `nsec1`
+    /// human-readable prefix plus 58 data/checksum characters, 63 in total.
+    /// Gating on `hasPrefix("nsec")` alone enabled Import for incomplete input
+    /// like `nsec` or `nsecfoo` (issue #40); require the full canonical shape so
+    /// the button only enables once a complete key has been entered.
+    static func isPlausibleNsec(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("nsec1") && trimmed.count == 63
     }
 
     var body: some View {
