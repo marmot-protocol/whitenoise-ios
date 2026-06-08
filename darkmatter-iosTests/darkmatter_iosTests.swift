@@ -1576,6 +1576,16 @@ struct NotificationServiceTests {
         #expect(source.contains("UNUserNotificationCenter.current().add"))
     }
 
+    @Test func serviceTimeoutShutsDownActiveMarmotBeforeFinishing() throws {
+        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"private var activeMarmot: Marmot\?"#))
+        #expect(source.matches(#"activeMarmot = marmot"#))
+        #expect(source.matches(#"await marmot\.shutdown\(\)[\s\S]*activeMarmot = nil"#))
+        #expect(source.matches(#"override func serviceExtensionTimeWillExpire\(\)[\s\S]*collectionTask\?\.cancel\(\)[\s\S]*guard let marmot = activeMarmot[\s\S]*activeMarmot = nil[\s\S]*expirationTask = Task[\s\S]*await marmot\.shutdown\(\)[\s\S]*await self\?\.finish\(\)"#))
+        #expect(!source.matches(#"override func serviceExtensionTimeWillExpire\(\)\s*\{\s*collectionTask\?\.cancel\(\)\s*finish\(\)\s*\}"#))
+    }
+
     private var notificationServiceSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()

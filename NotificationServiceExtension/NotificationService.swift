@@ -7,6 +7,8 @@ final class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?
     private var collectionTask: Task<Void, Never>?
+    private var expirationTask: Task<Void, Never>?
+    private var activeMarmot: Marmot?
     private let maxNotificationServiceWaitMs = NotificationServiceProjection.maxWakeWaitMs
 
     override func didReceive(
@@ -23,7 +25,15 @@ final class NotificationService: UNNotificationServiceExtension {
 
     override func serviceExtensionTimeWillExpire() {
         collectionTask?.cancel()
-        finish()
+        guard let marmot = activeMarmot else {
+            finish()
+            return
+        }
+        activeMarmot = nil
+        expirationTask = Task { [weak self] in
+            await marmot.shutdown()
+            await self?.finish()
+        }
     }
 
     private func collectAndDecorateNotification() async {
@@ -37,6 +47,7 @@ final class NotificationService: UNNotificationServiceExtension {
                 rootPath: AppContainerConfig.productionMarmotRoot().path,
                 relayUrls: AppContainerConfig.seedRelays
             )
+            activeMarmot = marmot
             do {
                 try await marmot.start()
                 let result = try await marmot.collectNotificationsAfterWake(
@@ -48,6 +59,9 @@ final class NotificationService: UNNotificationServiceExtension {
                 applyFallback(to: content)
             }
             await marmot.shutdown()
+            if activeMarmot === marmot {
+                activeMarmot = nil
+            }
         } catch {
             // Keep the provider payload generic when collection fails. The main
             // app will catch up when it next starts or receives a local event.
@@ -125,6 +139,8 @@ final class NotificationService: UNNotificationServiceExtension {
         guard let contentHandler, let bestAttemptContent else { return }
         self.contentHandler = nil
         self.bestAttemptContent = nil
+        self.collectionTask = nil
+        self.expirationTask = nil
         contentHandler(bestAttemptContent)
     }
 }
