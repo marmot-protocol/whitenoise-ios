@@ -42,6 +42,9 @@ final class MarmotClient {
         try marmot.setRelayTelemetryRuntimeConfig(
             config: telemetryConfig.runtimeConfig(installId: installId)
         )
+        try marmot.setAuditLogTrackerConfig(
+            config: telemetryConfig.auditTrackerConfig()
+        )
     }
 }
 

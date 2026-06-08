@@ -485,6 +485,27 @@ struct TelemetryBuildConfigTests {
         #expect(runtime.resource?.osVersion == "Version 18.0")
         #expect(runtime.resource?.deviceModelIdentifier == "iPhone99,9")
     }
+
+    @Test func auditTrackerConfigCarriesUploadEndpointCredentialsAndSource() {
+        let config = TelemetryBuildConfig(
+            otlpEndpoint: "https://collector.example/v1/metrics",
+            bearerToken: "secret-token",
+            deploymentEnvironment: "staging",
+            auditUploadEndpoint: "https://audits.example/upload",
+            serviceVersion: "2.0+9",
+            osVersion: "Version 18.0",
+            deviceModelIdentifier: "iPhone99,9"
+        )
+
+        let tracker = config.auditTrackerConfig()
+
+        #expect(tracker.endpoint == "https://audits.example/upload")
+        #expect(tracker.authorizationBearerToken == "secret-token")
+        #expect(tracker.source.accountLabel == nil)
+        #expect(tracker.source.deviceLabel == "iPhone99,9")
+        #expect(tracker.source.platform == "ios")
+        #expect(tracker.source.appVersion == "2.0+9")
+    }
 }
 
 @MainActor
@@ -709,6 +730,13 @@ private extension String {
 
 @MainActor
 struct AppContainerConfigTests {
+
+    @Test func seedRelaysUseWhiteNoiseRegionalRelaysOnly() {
+        #expect(AppContainerConfig.seedRelays == [
+            "wss://relay.eu.whitenoise.chat",
+            "wss://relay.us.whitenoise.chat"
+        ])
+    }
 
     @Test func productionPushServerConfigIsPresent() {
         let config = NativePushServerConfig.current()

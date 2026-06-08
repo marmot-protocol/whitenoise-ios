@@ -22,11 +22,8 @@ enum AppContainerConfig {
     static let appGroupIdentifier = "group.dev.ipf.darkmatter"
     static let marmotDirectoryName = "Marmot"
     static let seedRelays = [
-        "wss://relay.damus.io",
-        "wss://nos.lol",
-        "wss://relay.primal.net",
-        "wss://relay.us.whitenoise.chat",
-        "wss://relay.eu.whitenoise.chat"
+        "wss://relay.eu.whitenoise.chat",
+        "wss://relay.us.whitenoise.chat"
     ]
 
     static func marmotRoot(in baseURL: URL) -> URL {

@@ -70,6 +70,19 @@ struct TelemetryBuildConfig: Equatable {
         )
     }
 
+    func auditTrackerConfig() -> AuditLogTrackerConfigFfi {
+        AuditLogTrackerConfigFfi(
+            endpoint: auditUploadEndpoint,
+            authorizationBearerToken: bearerToken,
+            source: AuditLogUploadSourceFfi(
+                accountLabel: nil,
+                deviceLabel: deviceModelIdentifier,
+                platform: "ios",
+                appVersion: serviceVersion
+            )
+        )
+    }
+
     private static func stringValue(for key: String, in info: [String: Any]) -> String? {
         guard let raw = info[key] as? String else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

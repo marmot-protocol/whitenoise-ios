@@ -1478,6 +1478,13 @@ public protocol MarmotProtocol : AnyObject {
     func postAuditLogFile(path: String, endpoint: String) async throws  -> AuditLogUploadResultFfi
 
     /**
+     * POST all local audit logs to the configured tracker when audit logging is
+     * enabled. This is safe for host apps to call unconditionally; disabled or
+     * unconfigured states return a structured skip result.
+     */
+    func postAuditLogTrackerUpdate() async throws  -> AuditLogTrackerUpdateResultFfi
+
+    /**
      * Grant admin rights to `member_ref` (npub or hex). Requires the caller
      * to be an admin; publishes a group state update.
      */
@@ -1578,6 +1585,12 @@ public protocol MarmotProtocol : AnyObject {
      * value.
      */
     func setAuditLogSettings(settings: AuditLogSettingsFfi) throws  -> AuditLogSettingsFfi
+
+    /**
+     * Supply non-persisted audit tracker upload metadata: full Goggles upload
+     * URL, bearer token from the host app, and optional human source labels.
+     */
+    func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi) throws  -> AuditLogTrackerConfigFfi
 
     /**
      * Flag a group archived (or restore it). Local-only projection state —
@@ -2438,6 +2451,28 @@ open func postAuditLogFile(path: String, endpoint: String)async throws  -> Audit
 }
 
     /**
+     * POST all local audit logs to the configured tracker when audit logging is
+     * enabled. This is safe for host apps to call unconditionally; disabled or
+     * unconfigured states return a structured skip result.
+     */
+open func postAuditLogTrackerUpdate()async throws  -> AuditLogTrackerUpdateResultFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_post_audit_log_tracker_update(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAuditLogTrackerUpdateResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * Grant admin rights to `member_ref` (npub or hex). Requires the caller
      * to be an admin; publishes a group state update.
      */
@@ -2838,6 +2873,18 @@ open func setAuditLogSettings(settings: AuditLogSettingsFfi)throws  -> AuditLogS
     return try  FfiConverterTypeAuditLogSettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_method_marmot_set_audit_log_settings(self.uniffiClonePointer(),
         FfiConverterTypeAuditLogSettingsFfi.lower(settings),$0
+    )
+})
+}
+
+    /**
+     * Supply non-persisted audit tracker upload metadata: full Goggles upload
+     * URL, bearer token from the host app, and optional human source labels.
+     */
+open func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi)throws  -> AuditLogTrackerConfigFfi {
+    return try  FfiConverterTypeAuditLogTrackerConfigFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_audit_log_tracker_config(self.uniffiClonePointer(),
+        FfiConverterTypeAuditLogTrackerConfigFfi.lower(config),$0
     )
 })
 }
@@ -4714,6 +4761,154 @@ public func FfiConverterTypeAuditLogSettingsFfi_lower(_ value: AuditLogSettingsF
 }
 
 
+public struct AuditLogTrackerConfigFfi {
+    public var endpoint: String?
+    public var authorizationBearerToken: String?
+    public var source: AuditLogUploadSourceFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(endpoint: String?, authorizationBearerToken: String?, source: AuditLogUploadSourceFfi) {
+        self.endpoint = endpoint
+        self.authorizationBearerToken = authorizationBearerToken
+        self.source = source
+    }
+}
+
+
+
+extension AuditLogTrackerConfigFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogTrackerConfigFfi, rhs: AuditLogTrackerConfigFfi) -> Bool {
+        if lhs.endpoint != rhs.endpoint {
+            return false
+        }
+        if lhs.authorizationBearerToken != rhs.authorizationBearerToken {
+            return false
+        }
+        if lhs.source != rhs.source {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(endpoint)
+        hasher.combine(authorizationBearerToken)
+        hasher.combine(source)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogTrackerConfigFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogTrackerConfigFfi {
+        return
+            try AuditLogTrackerConfigFfi(
+                endpoint: FfiConverterOptionString.read(from: &buf),
+                authorizationBearerToken: FfiConverterOptionString.read(from: &buf),
+                source: FfiConverterTypeAuditLogUploadSourceFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogTrackerConfigFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.endpoint, into: &buf)
+        FfiConverterOptionString.write(value.authorizationBearerToken, into: &buf)
+        FfiConverterTypeAuditLogUploadSourceFfi.write(value.source, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogTrackerConfigFfi_lift(_ buf: RustBuffer) throws -> AuditLogTrackerConfigFfi {
+    return try FfiConverterTypeAuditLogTrackerConfigFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogTrackerConfigFfi_lower(_ value: AuditLogTrackerConfigFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogTrackerConfigFfi.lower(value)
+}
+
+
+public struct AuditLogTrackerUpdateResultFfi {
+    public var enabled: Bool
+    public var uploaded: [AuditLogUploadResultFfi]
+    public var skippedReason: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(enabled: Bool, uploaded: [AuditLogUploadResultFfi], skippedReason: String?) {
+        self.enabled = enabled
+        self.uploaded = uploaded
+        self.skippedReason = skippedReason
+    }
+}
+
+
+
+extension AuditLogTrackerUpdateResultFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogTrackerUpdateResultFfi, rhs: AuditLogTrackerUpdateResultFfi) -> Bool {
+        if lhs.enabled != rhs.enabled {
+            return false
+        }
+        if lhs.uploaded != rhs.uploaded {
+            return false
+        }
+        if lhs.skippedReason != rhs.skippedReason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(enabled)
+        hasher.combine(uploaded)
+        hasher.combine(skippedReason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogTrackerUpdateResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogTrackerUpdateResultFfi {
+        return
+            try AuditLogTrackerUpdateResultFfi(
+                enabled: FfiConverterBool.read(from: &buf),
+                uploaded: FfiConverterSequenceTypeAuditLogUploadResultFfi.read(from: &buf),
+                skippedReason: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogTrackerUpdateResultFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.enabled, into: &buf)
+        FfiConverterSequenceTypeAuditLogUploadResultFfi.write(value.uploaded, into: &buf)
+        FfiConverterOptionString.write(value.skippedReason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogTrackerUpdateResultFfi_lift(_ buf: RustBuffer) throws -> AuditLogTrackerUpdateResultFfi {
+    return try FfiConverterTypeAuditLogTrackerUpdateResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogTrackerUpdateResultFfi_lower(_ value: AuditLogTrackerUpdateResultFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogTrackerUpdateResultFfi.lower(value)
+}
+
+
 public struct AuditLogUploadResultFfi {
     public var path: String
     public var status: UInt16
@@ -4785,6 +4980,88 @@ public func FfiConverterTypeAuditLogUploadResultFfi_lift(_ buf: RustBuffer) thro
 #endif
 public func FfiConverterTypeAuditLogUploadResultFfi_lower(_ value: AuditLogUploadResultFfi) -> RustBuffer {
     return FfiConverterTypeAuditLogUploadResultFfi.lower(value)
+}
+
+
+public struct AuditLogUploadSourceFfi {
+    public var accountLabel: String?
+    public var deviceLabel: String?
+    public var platform: String?
+    public var appVersion: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountLabel: String?, deviceLabel: String?, platform: String?, appVersion: String?) {
+        self.accountLabel = accountLabel
+        self.deviceLabel = deviceLabel
+        self.platform = platform
+        self.appVersion = appVersion
+    }
+}
+
+
+
+extension AuditLogUploadSourceFfi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogUploadSourceFfi, rhs: AuditLogUploadSourceFfi) -> Bool {
+        if lhs.accountLabel != rhs.accountLabel {
+            return false
+        }
+        if lhs.deviceLabel != rhs.deviceLabel {
+            return false
+        }
+        if lhs.platform != rhs.platform {
+            return false
+        }
+        if lhs.appVersion != rhs.appVersion {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountLabel)
+        hasher.combine(deviceLabel)
+        hasher.combine(platform)
+        hasher.combine(appVersion)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditLogUploadSourceFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogUploadSourceFfi {
+        return
+            try AuditLogUploadSourceFfi(
+                accountLabel: FfiConverterOptionString.read(from: &buf),
+                deviceLabel: FfiConverterOptionString.read(from: &buf),
+                platform: FfiConverterOptionString.read(from: &buf),
+                appVersion: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AuditLogUploadSourceFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.accountLabel, into: &buf)
+        FfiConverterOptionString.write(value.deviceLabel, into: &buf)
+        FfiConverterOptionString.write(value.platform, into: &buf)
+        FfiConverterOptionString.write(value.appVersion, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogUploadSourceFfi_lift(_ buf: RustBuffer) throws -> AuditLogUploadSourceFfi {
+    return try FfiConverterTypeAuditLogUploadSourceFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditLogUploadSourceFfi_lower(_ value: AuditLogUploadSourceFfi) -> RustBuffer {
+    return FfiConverterTypeAuditLogUploadSourceFfi.lower(value)
 }
 
 
@@ -10823,6 +11100,31 @@ fileprivate struct FfiConverterSequenceTypeAuditLogFileFfi: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAuditLogUploadResultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AuditLogUploadResultFfi]
+
+    public static func write(_ value: [AuditLogUploadResultFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAuditLogUploadResultFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AuditLogUploadResultFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AuditLogUploadResultFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAuditLogUploadResultFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeChatListRowFfi: FfiConverterRustBuffer {
     typealias SwiftType = [ChatListRowFfi]
 
@@ -11306,6 +11608,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_post_audit_log_file() != 63080) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_post_audit_log_tracker_update() != 48289) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin() != 43119) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11370,6 +11675,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 56917) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_tracker_config() != 36902) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
