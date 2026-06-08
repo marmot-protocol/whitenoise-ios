@@ -55,7 +55,7 @@ enum DeepLink: Equatable {
                 return .profile(npub: memberRef)
             }
         case "chat":
-            if let id = parts.first, isHex(id) { return .chat(groupIdHex: id.lowercased()) }
+            if let id = parts.first, Hex.isHex(id) { return .chat(groupIdHex: id.lowercased()) }
         default:
             break
         }
@@ -65,10 +65,6 @@ enum DeepLink: Equatable {
             return .profile(npub: memberRef)
         }
         return nil
-    }
-
-    private static func isHex(_ s: String) -> Bool {
-        !s.isEmpty && s.range(of: "^[0-9a-fA-F]+$", options: .regularExpression) != nil
     }
 
     /// Parse any scanned/pasted string: a deep-link URL, a `nostr:` URI, or a

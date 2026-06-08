@@ -2,6 +2,16 @@ import Foundation
 
 enum NostrProfileReference {
     private static let bech32Charset = Array("qpzry9x8gf2tvdw0s3jn54khce6mua7l")
+    /// O(1) reverse lookup for `bech32Charset`, built once. Decoding scans every
+    /// character of every reference, so a linear `firstIndex(of:)` per character
+    /// was O(n) per lookup (issue #33).
+    private static let bech32CharsetIndex: [Character: UInt8] = {
+        var index: [Character: UInt8] = [:]
+        for (position, character) in bech32Charset.enumerated() {
+            index[character] = UInt8(position)
+        }
+        return index
+    }()
     private static let bech32Generators = [
         0x3b6a57b2,
         0x26508e6d,
@@ -36,7 +46,7 @@ enum NostrProfileReference {
         if lower.hasPrefix("npub1") {
             return trimmed
         }
-        if isHexPubkey(trimmed) {
+        if Hex.is32Bytes(trimmed) {
             return lower
         }
         return nil
@@ -97,8 +107,8 @@ enum NostrProfileReference {
         var values: [UInt8] = []
         values.reserveCapacity(dataPart.count)
         for char in dataPart {
-            guard let value = bech32Charset.firstIndex(of: char) else { return nil }
-            values.append(UInt8(value))
+            guard let value = bech32CharsetIndex[char] else { return nil }
+            values.append(value)
         }
 
         guard bech32VerifyChecksum(hrp: hrp, values: values) else { return nil }
@@ -151,7 +161,4 @@ enum NostrProfileReference {
         return result
     }
 
-    private static func isHexPubkey(_ s: String) -> Bool {
-        s.count == 64 && s.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil
-    }
 }

@@ -131,8 +131,8 @@ enum MessageSemantics {
     /// and `stream-chunks`; partial stream-ish tags are just normal chat text.
     private static func streamFinalId(from tags: [MessageTagFfi]) -> String? {
         guard let streamId = normalizedStreamId(firstValue(of: streamTag, in: tags)),
-              normalizedHex32(firstValue(of: streamStartTag, in: tags)) != nil,
-              normalizedHex32(firstValue(of: streamHashTag, in: tags)) != nil,
+              Hex.normalized32Bytes(firstValue(of: streamStartTag, in: tags)) != nil,
+              Hex.normalized32Bytes(firstValue(of: streamHashTag, in: tags)) != nil,
               validUnsignedDecimal(firstValue(of: streamChunksTag, in: tags))
         else { return nil }
         return streamId
@@ -190,15 +190,7 @@ enum MessageSemantics {
     }
 
     static func normalizedStreamId(_ raw: String?) -> String? {
-        normalizedHex32(raw)
-    }
-
-    private static func normalizedHex32(_ raw: String?) -> String? {
-        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              value.count == 64,
-              value.range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil
-        else { return nil }
-        return value.lowercased()
+        Hex.normalized32Bytes(raw)
     }
 
     private static func validUnsignedDecimal(_ raw: String?) -> Bool {
