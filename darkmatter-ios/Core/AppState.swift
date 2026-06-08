@@ -340,6 +340,29 @@ final class AppState {
         }
     }
 
+    private func enableNotificationsByDefault(for accountRef: String) async {
+        do {
+            let granted = try await notifications.requestAuthorization()
+            guard granted else { return }
+
+            _ = try marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: true)
+
+            guard NativePushServerConfig.current() != nil else { return }
+            notifications.registerForRemoteNotifications()
+            _ = try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)
+
+            do {
+                _ = try await syncNativePushRegistration(accountRef: accountRef)
+            } catch NotificationSettingsActionError.missingApnsToken {
+                // APNS token delivery is asynchronous; the app delegate will
+                // retry registration as soon as iOS provides the token.
+            }
+        } catch {
+            // Notification defaults are best-effort: account activation should
+            // still succeed if iOS permission or push registration is blocked.
+        }
+    }
+
     /// Signs out of the active account: clears its native push registration
     /// (so the push server stops delivering its notifications to this device)
     /// and disables its `nativePushEnabled` preference, removes the local
@@ -693,6 +716,7 @@ final class AppState {
         try await refreshAccounts()
         activeAccountRef = summary.label
         completeOnboardingAfterIdentityActivation()
+        await enableNotificationsByDefault(for: summary.label)
         return summary
     }
 
@@ -709,6 +733,7 @@ final class AppState {
         try await refreshAccounts()
         activeAccountRef = summary.label
         completeOnboardingAfterIdentityActivation()
+        await enableNotificationsByDefault(for: summary.label)
         return summary
     }
 

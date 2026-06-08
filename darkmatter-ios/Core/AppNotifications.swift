@@ -8,14 +8,25 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     static let shared = AppNotifications()
 
     private let center: UNUserNotificationCenter
+    private let requestAuthorizationHandler: (() async throws -> Bool)?
+    private let authorizationStatusProvider: (() async -> UNAuthorizationStatus)?
+    private let remoteNotificationRegistrar: (() -> Void)?
     private weak var appState: AppState?
     private var pendingRoutes: [LocalNotificationRoute] = []
 
     private(set) var apnsTokenHex: String?
     private(set) var lastRegistrationError: String?
 
-    init(center: UNUserNotificationCenter = .current()) {
+    init(
+        center: UNUserNotificationCenter = .current(),
+        requestAuthorizationHandler: (() async throws -> Bool)? = nil,
+        authorizationStatusProvider: (() async -> UNAuthorizationStatus)? = nil,
+        remoteNotificationRegistrar: (() -> Void)? = nil
+    ) {
         self.center = center
+        self.requestAuthorizationHandler = requestAuthorizationHandler
+        self.authorizationStatusProvider = authorizationStatusProvider
+        self.remoteNotificationRegistrar = remoteNotificationRegistrar
         super.init()
     }
 
@@ -38,14 +49,24 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorization() async throws -> Bool {
-        try await center.requestAuthorization(options: [.alert, .badge, .sound])
+        if let requestAuthorizationHandler {
+            return try await requestAuthorizationHandler()
+        }
+        return try await center.requestAuthorization(options: [.alert, .badge, .sound])
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
-        await center.notificationSettings().authorizationStatus
+        if let authorizationStatusProvider {
+            return await authorizationStatusProvider()
+        }
+        return await center.notificationSettings().authorizationStatus
     }
 
     func registerForRemoteNotifications() {
+        if let remoteNotificationRegistrar {
+            remoteNotificationRegistrar()
+            return
+        }
         UIApplication.shared.registerForRemoteNotifications()
     }
 

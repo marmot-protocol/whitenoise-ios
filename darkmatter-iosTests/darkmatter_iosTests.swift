@@ -51,6 +51,52 @@ struct AppStateBootstrapTests {
         #expect(appState.notificationSubscriptionActive)
     }
 
+    @Test func createIdentityDefaultsNotificationsOnWhenPermissionIsGranted() async throws {
+        var authorizationRequestCount = 0
+        var remoteRegistrationRequestCount = 0
+        let notifications = AppNotifications(
+            requestAuthorizationHandler: {
+                authorizationRequestCount += 1
+                return true
+            },
+            authorizationStatusProvider: { .authorized },
+            remoteNotificationRegistrar: {
+                remoteRegistrationRequestCount += 1
+            }
+        )
+        let appState = AppState(client: try MarmotClient.testClient(), notifications: notifications)
+        await appState.bootstrap()
+
+        let account = try await appState.createIdentity()
+
+        let settings = try #require(appState.notificationSettings(for: account.label))
+        #expect(settings.localNotificationsEnabled)
+        #expect(settings.nativePushEnabled)
+        #expect(authorizationRequestCount == 1)
+        #expect(remoteRegistrationRequestCount == 1)
+    }
+
+    @Test func createIdentityKeepsNotificationDefaultsOffWhenPermissionIsDenied() async throws {
+        var remoteRegistrationRequestCount = 0
+        let notifications = AppNotifications(
+            requestAuthorizationHandler: { false },
+            authorizationStatusProvider: { .denied },
+            remoteNotificationRegistrar: {
+                remoteRegistrationRequestCount += 1
+            }
+        )
+        let appState = AppState(client: try MarmotClient.testClient(), notifications: notifications)
+        await appState.bootstrap()
+
+        let account = try await appState.createIdentity()
+
+        let settings = try #require(appState.notificationSettings(for: account.label))
+        #expect(!settings.localNotificationsEnabled)
+        #expect(!settings.nativePushEnabled)
+        #expect(remoteRegistrationRequestCount == 0)
+        #expect(appState.phase == .ready)
+    }
+
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
 
