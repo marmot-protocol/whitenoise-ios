@@ -17,6 +17,7 @@ enum ProfileSanitizer {
     static let maxGroupNameLength = 100
     static let maxAboutLength = 1000
     static let maxMessageLength = 8000
+    static let maxReactionLength = 8
 
     private static let blankLineRunRegex = try! NSRegularExpression(pattern: "\n{3,}")
 
@@ -76,6 +77,16 @@ enum ProfileSanitizer {
         )
         let trimmed = clamped.trimmingCharacters(in: .whitespacesAndNewlines)
         return String(trimmed.prefix(maxMessageLength))
+    }
+
+    /// Reaction "emoji" arrive from peers and may not be emoji at all. Strip
+    /// spoofing characters (bidi / zero-width / control), trim, and cap length
+    /// before display, while preserving legitimate ZWJ and variation-selector
+    /// emoji sequences (#70). Non-optional so the reaction chip renders without
+    /// optional handling.
+    static func reactionEmoji(_ raw: String) -> String {
+        let stripped = stripUnsafe(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(stripped.prefix(maxReactionLength))
     }
 
     /// Image URL allowlist: only HTTPS with a public host. Rejects data:,

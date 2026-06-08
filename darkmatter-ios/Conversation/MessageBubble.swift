@@ -124,7 +124,7 @@ struct MessageBubble: View {
                     onTapReaction(tally.emoji)
                 } label: {
                     HStack(spacing: 2) {
-                        Text(tally.emoji)
+                        Text(ProfileSanitizer.reactionEmoji(tally.emoji))
                         if tally.count > 1 {
                             Text("\(tally.count)")
                                 .font(.caption2)
