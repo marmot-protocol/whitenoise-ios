@@ -186,10 +186,18 @@ struct MessageBubble: View {
             )
         } else {
             Color(UIColor { traits in
-                traits.userInterfaceStyle == .dark
-                    ? UIColor.tertiarySystemBackground
-                    : UIColor.secondarySystemBackground
+                Self.receivedBubbleColor(dark: traits.userInterfaceStyle == .dark)
             })
         }
+    }
+
+    /// Fill for an incoming (other-user) message bubble. In dark mode the old
+    /// `tertiarySystemBackground` sat too close to the elevated conversation
+    /// background, so received bubbles barely stood out (#4). Use a lighter
+    /// system gray that clearly separates the bubble while keeping the white
+    /// message text well above the WCAG AA contrast ratio. Light mode is
+    /// unchanged.
+    static func receivedBubbleColor(dark: Bool) -> UIColor {
+        dark ? .systemGray5 : .secondarySystemBackground
     }
 }
