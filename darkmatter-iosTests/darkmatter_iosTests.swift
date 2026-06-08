@@ -2280,6 +2280,80 @@ struct ConversationTimelineProjectionTests {
         #expect(messages.first?.2 == projected.timelineAt)
     }
 
+    @Test func projectedOutgoingMessageReconcilesClosestPendingBubbleWhenContentMatches() throws {
+        let sender = hex("11")
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: groupIdHex)
+        )
+        let plaintext = "same text twice"
+        let olderPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: plaintext,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let newerPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: plaintext,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 20,
+            receivedAt: 20
+        )
+        let tempIds = try #require(
+            tempIdsWhereTransientTimelinePrefersNewerPendingFirst(older: olderPending, newer: newerPending)
+        )
+        let projectedOlder = timelineRecord(
+            messageIdHex: hex("c3"),
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: plaintext,
+            timelineAt: olderPending.recordedAt
+        )
+
+        viewModel.applyPendingOutgoingMessage(tempId: tempIds.older, record: olderPending)
+        viewModel.applyPendingOutgoingMessage(tempId: tempIds.newer, record: newerPending)
+        viewModel.applyTimelineSubscriptionUpdate(
+            .projection(
+                update: RuntimeProjectionUpdateFfi(
+                    accountIdHex: sender,
+                    accountLabel: "account-a",
+                    update: TimelineProjectionUpdateFfi(
+                        groupIdHex: groupIdHex,
+                        messages: [projectedOlder],
+                        changes: [],
+                        chatListRow: nil,
+                        chatListTrigger: .newLastMessage
+                    )
+                )
+            )
+        )
+
+        let messages = viewModel.timeline.compactMap { item -> (id: String, status: MessageStatus, timestamp: UInt64)? in
+            guard case .message(let record, let status) = item.kind else { return nil }
+            return (record.messageIdHex, status, item.timestamp)
+        }
+
+        #expect(messages.count == 2)
+        #expect(messages.first?.id == projectedOlder.messageIdHex)
+        #expect(messages.first?.status == .sent)
+        #expect(messages.first?.timestamp == projectedOlder.timelineAt)
+        #expect(messages.last?.id == "")
+        #expect(messages.last?.status == .sending)
+        #expect(messages.last?.timestamp == newerPending.recordedAt)
+    }
+
     @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
@@ -2306,6 +2380,27 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
+    }
+
+    private func tempIdsWhereTransientTimelinePrefersNewerPendingFirst(
+        older olderRecord: AppMessageRecordFfi,
+        newer newerRecord: AppMessageRecordFfi
+    ) -> (older: String, newer: String)? {
+        for olderIndex in 0..<256 {
+            for newerIndex in 0..<256 where newerIndex != olderIndex {
+                let older = "duplicate-older-\(olderIndex)"
+                let newer = "duplicate-newer-\(newerIndex)"
+                let olderItem = TimelineItem.pendingMessage(tempId: older, record: olderRecord)
+                let newerItem = TimelineItem.pendingMessage(tempId: newer, record: newerRecord)
+                var values: [String: TimelineItem] = [:]
+                values[olderItem.id] = olderItem
+                values[newerItem.id] = newerItem
+                if values.first?.key == newerItem.id {
+                    return (older, newer)
+                }
+            }
+        }
+        return nil
     }
 }
 

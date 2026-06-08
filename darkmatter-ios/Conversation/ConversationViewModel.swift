@@ -657,8 +657,11 @@ final class ConversationViewModel {
     private func reconcilePendingOutgoingMessage(with record: AppMessageRecordFfi, replyTargetId: String?) {
         guard record.direction == "sent" else { return }
         let projectedReplyTarget = replyTargetId ?? Self.replyTargetMessageId(in: record)
-        guard let match = transientTimelineItems.first(where: { _, item in
+        let matchingPendingMessages = transientTimelineItems.filter { _, item in
             Self.pendingOutgoingMessage(item, matches: record, replyTargetId: projectedReplyTarget)
+        }
+        guard let match = matchingPendingMessages.min(by: { lhs, rhs in
+            Self.pendingOutgoingMessage(lhs.value, isCloserTo: record, than: rhs.value)
         }) else { return }
         transientTimelineItems[match.key] = nil
         removeTimelineItem(id: match.value.id)
@@ -681,6 +684,28 @@ final class ConversationViewModel {
             && pending.plaintext == record.plaintext
             && pending.kind == record.kind
             && replyTargetMessageId(in: pending) == replyTargetId
+    }
+
+    private static func pendingOutgoingMessage(
+        _ lhs: TimelineItem,
+        isCloserTo record: AppMessageRecordFfi,
+        than rhs: TimelineItem
+    ) -> Bool {
+        let lhsDistance = pendingOutgoingRecordedAtDistance(lhs, to: record.recordedAt)
+        let rhsDistance = pendingOutgoingRecordedAtDistance(rhs, to: record.recordedAt)
+        if lhsDistance == rhsDistance {
+            return lhs.id < rhs.id
+        }
+        return lhsDistance < rhsDistance
+    }
+
+    private static func pendingOutgoingRecordedAtDistance(_ item: TimelineItem, to recordedAt: UInt64) -> UInt64 {
+        guard case .message(let pending, _) = item.kind else {
+            return .max
+        }
+        return pending.recordedAt > recordedAt
+            ? pending.recordedAt - recordedAt
+            : recordedAt - pending.recordedAt
     }
 
     private static func replyTargetMessageId(in record: AppMessageRecordFfi) -> String? {
