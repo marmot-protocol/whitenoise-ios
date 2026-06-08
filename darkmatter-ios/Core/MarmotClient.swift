@@ -108,9 +108,10 @@ enum RelaySettings {
     }
 
     static func normalizedRelayURLs(_ relays: [String]) -> [String] {
+        var seen = Set<String>()
         var normalized: [String] = []
         for relay in relays {
-            guard let url = normalizedRelayURL(relay), !normalized.contains(url) else { continue }
+            guard let url = normalizedRelayURL(relay), seen.insert(url).inserted else { continue }
             normalized.append(url)
         }
         return normalized
