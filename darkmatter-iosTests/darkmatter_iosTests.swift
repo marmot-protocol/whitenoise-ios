@@ -1170,6 +1170,35 @@ struct ToastPresentationTests {
     }
 }
 
+struct DiagnosticsPresentationTests {
+    @Test func messageReceivedDiagnosticRedactsPlaintextButKeepsEventShape() {
+        let secret = "secret launch code"
+        let sender = hex("11")
+        let event = MarmotEventFfi.messageReceived(
+            received: RuntimeMessageReceivedFfi(
+                accountIdHex: hex("aa"),
+                accountLabel: "alice",
+                message: ReceivedMessageFfi(
+                    messageIdHex: hex("bb"),
+                    groupIdHex: hex("cc"),
+                    sender: sender,
+                    senderDisplayName: nil,
+                    plaintext: secret,
+                    kind: MessageSemantics.kindChat,
+                    tags: [],
+                    recordedAt: 42
+                )
+            )
+        )
+
+        let text = DiagnosticsView.diagnosticText(for: event)
+
+        #expect(text.contains("[alice] msg from \(IdentityFormatter.short(sender))"))
+        #expect(text.contains("(\(secret.count) chars)"))
+        #expect(!text.contains(secret))
+    }
+}
+
 struct GroupPushDebugPresentationTests {
     @Test func tokenSummaryIncludesTotalActiveAndStaleCounts() {
         let info = GroupPushDebugInfoFfi(

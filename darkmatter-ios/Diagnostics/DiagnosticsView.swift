@@ -79,7 +79,7 @@ struct DiagnosticsView: View {
             defer { streaming = false }
             let sub = appState.marmot.subscribeEvents()
             for await event in SubscriptionDriver.events(sub) {
-                append(describe(event))
+                append(Self.diagnosticText(for: event))
             }
         }
     }
@@ -89,14 +89,14 @@ struct DiagnosticsView: View {
         if entries.count > 500 { entries.removeFirst(entries.count - 500) }
     }
 
-    private func describe(_ event: MarmotEventFfi) -> String {
+    static func diagnosticText(for event: MarmotEventFfi) -> String {
         switch event {
         case .groupJoined(_, let label, let groupIdHex):
             return "[\(label)] joined group \(IdentityFormatter.short(groupIdHex))"
         case .groupStateUpdated(_, let label, let groupIdHex):
             return "[\(label)] group state ↺ \(IdentityFormatter.short(groupIdHex))"
         case .messageReceived(let received):
-            return "[\(received.accountLabel)] msg from \(IdentityFormatter.short(received.message.sender)): \(received.message.plaintext)"
+            return "[\(received.accountLabel)] msg from \(IdentityFormatter.short(received.message.sender)): \(plaintextSummary(received.message.plaintext))"
         case .projectionUpdated(let update):
             return "[\(update.accountLabel)] projection \(IdentityFormatter.short(update.update.groupIdHex))"
         case .groupEvent(_, let label):
@@ -106,6 +106,10 @@ struct DiagnosticsView: View {
         case .agentStreamActivity(_, let label):
             return "[\(label)] agent stream activity"
         }
+    }
+
+    private static func plaintextSummary(_ plaintext: String) -> String {
+        plaintext.isEmpty ? "(empty)" : "(\(plaintext.count) chars)"
     }
 
     @MainActor
