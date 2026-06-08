@@ -38,12 +38,21 @@ struct darkmatter_iosApp: App {
     }
 
     private func beginBackgroundRuntimeSuspension() {
-        let taskID = UIApplication.shared.beginBackgroundTask(withName: "Suspend Marmot runtime")
+        var taskID: UIBackgroundTaskIdentifier = .invalid
+        taskID = UIApplication.shared.beginBackgroundTask(withName: "Suspend Marmot runtime") {
+            // iOS is about to reclaim our remaining background time. End the task
+            // ourselves so the app isn't terminated uncleanly mid-suspension (#81).
+            if taskID != .invalid {
+                UIApplication.shared.endBackgroundTask(taskID)
+                taskID = .invalid
+            }
+        }
         let suspensionTask = appState.startRuntimeSuspension()
         Task {
             await suspensionTask.value
             if taskID != .invalid {
                 UIApplication.shared.endBackgroundTask(taskID)
+                taskID = .invalid
             }
         }
     }
