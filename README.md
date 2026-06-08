@@ -90,7 +90,7 @@ Do not edit generated files in `Vendored/MarmotKit` by hand. Fix the Rust/UniFFI
 Telemetry is compiled into the vendored MarmotKit bundle with the `otlp-export` feature. The app reads these Xcode build settings through `Info.plist`:
 
 - `DARKMATTER_OTLP_ENDPOINT` - default `https://otlp.ipf.dev/v1/metrics`
-- `DARKMATTER_OTLP_BEARER_TOKEN` - supply from CI, an uncommitted private `.xcconfig`, or an `xcodebuild` override; do not commit the token
+- `DARKMATTER_OTLP_BEARER_TOKEN` - defaults to `$(OTLP_TOKEN_DARKMATTER_IOS)`; supply `OTLP_TOKEN_DARKMATTER_IOS` from CI or your local shell, or override this build setting directly; do not commit the token
 - `DARKMATTER_TELEMETRY_ENVIRONMENT` - `staging` or `production`; TestFlight builds are staging
 - `DARKMATTER_AUDIT_UPLOAD_ENDPOINT` - default `https://goggles.ipf.dev/audits`
 

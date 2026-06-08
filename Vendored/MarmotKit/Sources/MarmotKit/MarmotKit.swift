@@ -1532,8 +1532,8 @@ public protocol MarmotProtocol : AnyObject {
 
     /**
      * Device-wide relay telemetry export settings. Export is opt-in and stays
-     * inert until `export_enabled` is true and the runtime config supplies a
-     * valid OTLP endpoint, bearer token, and resource attributes.
+     * inert until `export_enabled` is true and runtime/default config supplies
+     * a valid OTLP endpoint, bearer token, and resource attributes.
      */
     func relayTelemetrySettings() throws  -> RelayTelemetrySettingsFfi
 
@@ -1587,8 +1587,9 @@ public protocol MarmotProtocol : AnyObject {
     func setAuditLogSettings(settings: AuditLogSettingsFfi) throws  -> AuditLogSettingsFfi
 
     /**
-     * Supply non-persisted audit tracker upload metadata: full Goggles upload
-     * URL, bearer token from the host app, and optional human source labels.
+     * Supply non-persisted audit tracker upload metadata: optional Goggles
+     * upload URL override, bearer token from the host app, and optional human
+     * source labels.
      */
     func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi) throws  -> AuditLogTrackerConfigFfi
 
@@ -1604,9 +1605,9 @@ public protocol MarmotProtocol : AnyObject {
     func setNativePushEnabled(accountRef: String, enabled: Bool) async throws  -> NotificationSettingsFfi
 
     /**
-     * Supply non-persisted OTLP runtime metadata: full metrics URL, bearer
-     * token from the host app's build-time secret, and resource attributes
-     * from the platform shell.
+     * Supply non-persisted OTLP runtime metadata: optional metrics URL
+     * override, bearer token from the host app's build-time secret, and
+     * resource attributes from the platform shell.
      */
     func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi) throws
 
@@ -2647,8 +2648,8 @@ open func relayHealth()async  -> RelayHealthFfi {
 
     /**
      * Device-wide relay telemetry export settings. Export is opt-in and stays
-     * inert until `export_enabled` is true and the runtime config supplies a
-     * valid OTLP endpoint, bearer token, and resource attributes.
+     * inert until `export_enabled` is true and runtime/default config supplies
+     * a valid OTLP endpoint, bearer token, and resource attributes.
      */
 open func relayTelemetrySettings()throws  -> RelayTelemetrySettingsFfi {
     return try  FfiConverterTypeRelayTelemetrySettingsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
@@ -2878,8 +2879,9 @@ open func setAuditLogSettings(settings: AuditLogSettingsFfi)throws  -> AuditLogS
 }
 
     /**
-     * Supply non-persisted audit tracker upload metadata: full Goggles upload
-     * URL, bearer token from the host app, and optional human source labels.
+     * Supply non-persisted audit tracker upload metadata: optional Goggles
+     * upload URL override, bearer token from the host app, and optional human
+     * source labels.
      */
 open func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi)throws  -> AuditLogTrackerConfigFfi {
     return try  FfiConverterTypeAuditLogTrackerConfigFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
@@ -2931,9 +2933,9 @@ open func setNativePushEnabled(accountRef: String, enabled: Bool)async throws  -
 }
 
     /**
-     * Supply non-persisted OTLP runtime metadata: full metrics URL, bearer
-     * token from the host app's build-time secret, and resource attributes
-     * from the platform shell.
+     * Supply non-persisted OTLP runtime metadata: optional metrics URL
+     * override, bearer token from the host app's build-time secret, and
+     * resource attributes from the platform shell.
      */
 open func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi)throws  {try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_method_marmot_set_relay_telemetry_runtime_config(self.uniffiClonePointer(),
@@ -11638,7 +11640,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_relay_health() != 9336) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_relay_telemetry_settings() != 30591) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_relay_telemetry_settings() != 36605) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_remove_account() != 37396) {
@@ -11677,7 +11679,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 56917) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_tracker_config() != 36902) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_tracker_config() != 30506) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_group_archived() != 3813) {
@@ -11689,7 +11691,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_native_push_enabled() != 28116) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_runtime_config() != 32293) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_runtime_config() != 203) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_settings() != 54491) {
