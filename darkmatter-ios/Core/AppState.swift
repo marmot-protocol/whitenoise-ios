@@ -146,6 +146,10 @@ final class AppState {
     }
 
     deinit {
+        foregroundActivationTask?.cancel()
+        nativePushRegistrationTask?.cancel()
+        runtimeSuspensionTask?.cancel()
+        notificationDriver.stop()
         profileFetchQueueTask?.cancel()
     }
 

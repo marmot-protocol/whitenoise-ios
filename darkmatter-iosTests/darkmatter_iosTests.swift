@@ -14,7 +14,7 @@ import UIKit
 struct AppStateBootstrapTests {
 
     @Test func freshAppStateStartsBootstrapping() async throws {
-        let appState = AppState()
+        let appState = try testAppState()
         #expect(appState.phase == .bootstrapping)
         #expect(appState.accounts.isEmpty)
         #expect(appState.activeToast == nil)
@@ -23,14 +23,14 @@ struct AppStateBootstrapTests {
     @Test func bootstrapWithoutAccountsTransitionsToOnboarding() async throws {
         // Use a fresh AppState backed by a tempdir-based MarmotClient so
         // we don't collide with the user's real Application Support data.
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = try testAppState()
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         #expect(appState.accounts.isEmpty)
     }
 
     @Test func telemetryExportSettingPersistsThroughAppState() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = try testAppState()
 
         let saved = try await appState.setRelayTelemetryExportEnabled(false)
 
@@ -39,7 +39,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func createIdentityFromOnboardingStartsNotificationSubscription() async throws {
-        let appState = AppState(client: try MarmotClient.testClient(), notifications: AppNotifications())
+        let appState = try testAppState()
         await appState.bootstrap()
 
         #expect(appState.phase == .onboarding)
@@ -49,22 +49,22 @@ struct AppStateBootstrapTests {
 
         #expect(appState.phase == .ready)
         #expect(appState.notificationSubscriptionActive)
+
+        await stopReadyRuntime(appState)
     }
 
     @Test func createIdentityDefaultsNotificationsOnWhenPermissionIsGranted() async throws {
         var authorizationRequestCount = 0
         var remoteRegistrationRequestCount = 0
-        let notifications = AppNotifications(
-            requestAuthorizationHandler: {
+        let notifications = grantedNotifications(
+            onAuthorizationRequest: {
                 authorizationRequestCount += 1
-                return true
             },
-            authorizationStatusProvider: { .authorized },
             remoteNotificationRegistrar: {
                 remoteRegistrationRequestCount += 1
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient(), notifications: notifications)
+        let appState = try testAppState(notifications: notifications)
         await appState.bootstrap()
 
         let account = try await appState.createIdentity()
@@ -74,18 +74,16 @@ struct AppStateBootstrapTests {
         #expect(settings.nativePushEnabled)
         #expect(authorizationRequestCount == 1)
         #expect(remoteRegistrationRequestCount == 1)
+
+        await stopReadyRuntime(appState)
     }
 
     @Test func createIdentityKeepsNotificationDefaultsOffWhenPermissionIsDenied() async throws {
         var remoteRegistrationRequestCount = 0
-        let notifications = AppNotifications(
-            requestAuthorizationHandler: { false },
-            authorizationStatusProvider: { .denied },
-            remoteNotificationRegistrar: {
-                remoteRegistrationRequestCount += 1
-            }
-        )
-        let appState = AppState(client: try MarmotClient.testClient(), notifications: notifications)
+        let notifications = deniedNotifications {
+            remoteRegistrationRequestCount += 1
+        }
+        let appState = try testAppState(notifications: notifications)
         await appState.bootstrap()
 
         let account = try await appState.createIdentity()
@@ -95,6 +93,8 @@ struct AppStateBootstrapTests {
         #expect(!settings.nativePushEnabled)
         #expect(remoteRegistrationRequestCount == 0)
         #expect(appState.phase == .ready)
+
+        await stopReadyRuntime(appState)
     }
 
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
@@ -113,7 +113,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func presentingAToastUpdatesActiveToast() async throws {
-        let appState = AppState()
+        let appState = try testAppState()
         await MainActor.run {
             appState.present(.success("Hello"))
         }
@@ -125,7 +125,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func toastPresentationIsBackedByFocusedToastState() async throws {
-        let appState = AppState()
+        let appState = try testAppState()
         await MainActor.run {
             appState.present(.success("Hello"))
         }
@@ -145,7 +145,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func routingIsBackedByFocusedNavigationState() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = try testAppState()
         appState.activeAccountRef = "account-a"
 
         appState.presentProfile(npub: "npub1example")
@@ -176,7 +176,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = try testAppState()
         appState.activeAccountRef = "account-a"
 
         let route = appState.beginViewingChat(groupIdHex: "group-a")
@@ -200,7 +200,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func backgroundSuspensionWaitsUntilRuntimeIsReady() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = try testAppState()
 
         await appState.prepareForBackgroundSuspension()
 
@@ -210,9 +210,8 @@ struct AppStateBootstrapTests {
     }
 
     @Test func readyRuntimeSuspendsForBackgroundAndResumesForForeground() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        await appState.bootstrap()
-        try await appState.createIdentity()
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
 
         let generation = appState.runtimeGeneration
         await appState.prepareForBackgroundSuspension()
@@ -234,12 +233,13 @@ struct AppStateBootstrapTests {
         #expect(appState.phase == .ready)
         #expect(appState.client != nil)
         #expect(!appState.marmot.isStopping())
+
+        await stopReadyRuntime(appState)
     }
 
     @Test func auditLogSettingChangeRestartsReadyRuntimeImmediately() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        await appState.bootstrap()
-        try await appState.createIdentity()
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
 
         let generation = appState.runtimeGeneration
         let settings = try await appState.setAuditLogEnabled(true)
@@ -250,6 +250,8 @@ struct AppStateBootstrapTests {
         #expect(appState.phase == .ready)
         #expect(appState.client != nil)
         #expect(!appState.marmot.isStopping())
+
+        await stopReadyRuntime(appState)
     }
 
     @Test func inactiveSceneDoesNotStartRuntimeSuspensionBeforeBackground() throws {
@@ -273,10 +275,10 @@ struct AppStateBootstrapTests {
         // its notifications to this device. Previously sign-out only mutated
         // `activeAccountRef`, leaving the registration (and the
         // `nativePushEnabled` preference) intact.
-        let appState = AppState(client: try MarmotClient.testClient())
-        await appState.bootstrap()
-        let accountA = try await appState.createIdentity()
-        let accountB = try await appState.createIdentity()
+        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
+        let appState = seeded.appState
+        let accountA = seeded.accounts[0]
+        let accountB = seeded.accounts[1]
         appState.activeAccountRef = accountA.label
 
         // Simulate the app having enabled native push for A. The production
@@ -293,33 +295,23 @@ struct AppStateBootstrapTests {
         #expect(appState.notificationSettings(for: accountA.label) == nil)
         // A remaining account means we stay in the main interface.
         #expect(appState.phase == .ready)
+
+        await stopReadyRuntime(appState)
     }
 
-    @Test func signOutOfOnlyAccountLeavesActiveAccountRefNil() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        await appState.bootstrap()
-        let only = try await appState.createIdentity()
-        appState.activeAccountRef = only.label
-
-        await appState.signOut()
-
-        #expect(appState.activeAccountRef == nil)
-        #expect(appState.notificationSettings(for: only.label) == nil)
-        // Signing out of the last account must route back to onboarding
-        // rather than leaving the main UI up with no active account.
-        #expect(appState.phase == .onboarding)
-    }
-
-    @Test func signOutOfOnlyAccountRemovesAccountAndReturnsToOnboarding() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        await appState.bootstrap()
-        let only = try await appState.createIdentity()
+    @Test func signOutOfOnlyAccountClearsAccountStateAndReturnsToOnboarding() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let only = seeded.accounts[0]
         appState.activeAccountRef = only.label
 
         await appState.signOut()
 
         #expect(appState.accounts.isEmpty)
         #expect(appState.activeAccountRef == nil)
+        #expect(appState.notificationSettings(for: only.label) == nil)
+        // Signing out of the last account must route back to onboarding
+        // rather than leaving the main UI up with no active account.
         #expect(appState.phase == .onboarding)
     }
 
@@ -329,7 +321,7 @@ struct AppStateBootstrapTests {
         // from local Marmot storage.
         UserDefaults.standard.removeObject(forKey: "marmot.activeAccountRef")
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState(client: client, notifications: deniedNotifications())
         await appState.bootstrap()
         let only = try await appState.createIdentity()
         appState.activeAccountRef = only.label
@@ -338,8 +330,66 @@ struct AppStateBootstrapTests {
         await appState.signOut()
 
         #expect(UserDefaults.standard.string(forKey: "marmot.activeAccountRef") == nil)
-        let reborn = AppState(client: try client.freshRuntime())
+        let reborn = AppState(client: try client.freshRuntime(), notifications: deniedNotifications())
         #expect(reborn.activeAccountRef == nil)
+    }
+
+    private func testAppState(notifications: AppNotifications? = nil) throws -> AppState {
+        resetPersistedActiveAccountRef()
+        return AppState(
+            client: try MarmotClient.testClient(),
+            notifications: notifications ?? deniedNotifications()
+        )
+    }
+
+    private func readyAppStateWithCreatedIdentities(
+        accountCount: Int = 1,
+        notifications: AppNotifications? = nil
+    ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
+        let appState = try testAppState(notifications: notifications)
+        await appState.bootstrap()
+        #expect(appState.phase == .onboarding)
+        var accounts: [AccountSummaryFfi] = []
+        for _ in 0..<accountCount {
+            let account = try await appState.createIdentity()
+            accounts.append(account)
+        }
+        #expect(appState.phase == .ready)
+        return (appState, accounts)
+    }
+
+    private func deniedNotifications(
+        remoteNotificationRegistrar: @escaping () -> Void = {}
+    ) -> AppNotifications {
+        AppNotifications(
+            requestAuthorizationHandler: { false },
+            authorizationStatusProvider: { .denied },
+            remoteNotificationRegistrar: remoteNotificationRegistrar
+        )
+    }
+
+    private func grantedNotifications(
+        onAuthorizationRequest: @escaping () -> Void = {},
+        remoteNotificationRegistrar: @escaping () -> Void = {}
+    ) -> AppNotifications {
+        AppNotifications(
+            requestAuthorizationHandler: {
+                onAuthorizationRequest()
+                return true
+            },
+            authorizationStatusProvider: { .authorized },
+            remoteNotificationRegistrar: remoteNotificationRegistrar
+        )
+    }
+
+    private func stopReadyRuntime(_ appState: AppState) async {
+        guard appState.phase == .ready || appState.notificationSubscriptionActive else { return }
+        await appState.prepareForBackgroundSuspension()
+        resetPersistedActiveAccountRef()
+    }
+
+    private func resetPersistedActiveAccountRef() {
+        UserDefaults.standard.removeObject(forKey: "marmot.activeAccountRef")
     }
 
     private var appStateSourceURL: URL {
@@ -3589,7 +3639,8 @@ private func timelineRecord(
         agentTextStreamJson: agentTextStreamJson,
         reactions: reactions,
         deleted: deleted,
-        deletedByMessageIdHex: deletedByMessageIdHex
+        deletedByMessageIdHex: deletedByMessageIdHex,
+        invalidationStatus: nil
     )
 }
 
@@ -3633,6 +3684,9 @@ private func group(
         admins: admins,
         relays: [],
         nostrGroupIdHex: "",
+        avatarUrl: nil,
+        avatarDim: nil,
+        avatarThumbhash: nil,
         archived: archived,
         pendingConfirmation: false,
         welcomerAccountIdHex: nil,

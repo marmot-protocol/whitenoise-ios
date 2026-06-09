@@ -1706,6 +1706,13 @@ public protocol MarmotProtocol : AnyObject {
      */
     func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws  -> SendSummaryFfi
 
+    /**
+     * Set (or clear, with `url = None`) the group's URL-based avatar
+     * (`marmot.group.avatar-url.v1`). The URL is validated (https-only, no
+     * localhost/private hosts) and normalized before it is committed.
+     */
+    func updateGroupAvatarUrl(accountRef: String, groupIdHex: String, url: String?, dim: String?, thumbhash: String?) async throws  -> SendSummaryFfi
+
     func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws  -> SendSummaryFfi
 
     /**
@@ -3232,6 +3239,28 @@ open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessa
         )
 }
 
+    /**
+     * Set (or clear, with `url = None`) the group's URL-based avatar
+     * (`marmot.group.avatar-url.v1`). The URL is validated (https-only, no
+     * localhost/private hosts) and normalized before it is committed.
+     */
+open func updateGroupAvatarUrl(accountRef: String, groupIdHex: String, url: String?, dim: String?, thumbhash: String?)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_update_group_avatar_url(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterOptionString.lower(url),FfiConverterOptionString.lower(dim),FfiConverterOptionString.lower(thumbhash)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
 open func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?)async throws  -> SendSummaryFfi {
     return
         try  await uniffiRustCallAsync(
@@ -4370,6 +4399,13 @@ public struct AppGroupRecordFfi {
     public var admins: [String]
     public var relays: [String]
     public var nostrGroupIdHex: String
+    /**
+     * URL-based group avatar (`marmot.group.avatar-url.v1`), `None` when absent.
+     * When set it takes precedence over a Blossom image avatar.
+     */
+    public var avatarUrl: String?
+    public var avatarDim: String?
+    public var avatarThumbhash: String?
     public var archived: Bool
     public var pendingConfirmation: Bool
     public var welcomerAccountIdHex: String?
@@ -4377,7 +4413,11 @@ public struct AppGroupRecordFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupIdHex: String, endpoint: String, name: String, description: String, admins: [String], relays: [String], nostrGroupIdHex: String, archived: Bool, pendingConfirmation: Bool, welcomerAccountIdHex: String?, viaWelcomeMessageIdHex: String?) {
+    public init(groupIdHex: String, endpoint: String, name: String, description: String, admins: [String], relays: [String], nostrGroupIdHex: String,
+        /**
+         * URL-based group avatar (`marmot.group.avatar-url.v1`), `None` when absent.
+         * When set it takes precedence over a Blossom image avatar.
+         */avatarUrl: String?, avatarDim: String?, avatarThumbhash: String?, archived: Bool, pendingConfirmation: Bool, welcomerAccountIdHex: String?, viaWelcomeMessageIdHex: String?) {
         self.groupIdHex = groupIdHex
         self.endpoint = endpoint
         self.name = name
@@ -4385,6 +4425,9 @@ public struct AppGroupRecordFfi {
         self.admins = admins
         self.relays = relays
         self.nostrGroupIdHex = nostrGroupIdHex
+        self.avatarUrl = avatarUrl
+        self.avatarDim = avatarDim
+        self.avatarThumbhash = avatarThumbhash
         self.archived = archived
         self.pendingConfirmation = pendingConfirmation
         self.welcomerAccountIdHex = welcomerAccountIdHex
@@ -4417,6 +4460,15 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         if lhs.nostrGroupIdHex != rhs.nostrGroupIdHex {
             return false
         }
+        if lhs.avatarUrl != rhs.avatarUrl {
+            return false
+        }
+        if lhs.avatarDim != rhs.avatarDim {
+            return false
+        }
+        if lhs.avatarThumbhash != rhs.avatarThumbhash {
+            return false
+        }
         if lhs.archived != rhs.archived {
             return false
         }
@@ -4440,6 +4492,9 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         hasher.combine(admins)
         hasher.combine(relays)
         hasher.combine(nostrGroupIdHex)
+        hasher.combine(avatarUrl)
+        hasher.combine(avatarDim)
+        hasher.combine(avatarThumbhash)
         hasher.combine(archived)
         hasher.combine(pendingConfirmation)
         hasher.combine(welcomerAccountIdHex)
@@ -4462,6 +4517,9 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
                 admins: FfiConverterSequenceString.read(from: &buf),
                 relays: FfiConverterSequenceString.read(from: &buf),
                 nostrGroupIdHex: FfiConverterString.read(from: &buf),
+                avatarUrl: FfiConverterOptionString.read(from: &buf),
+                avatarDim: FfiConverterOptionString.read(from: &buf),
+                avatarThumbhash: FfiConverterOptionString.read(from: &buf),
                 archived: FfiConverterBool.read(from: &buf),
                 pendingConfirmation: FfiConverterBool.read(from: &buf),
                 welcomerAccountIdHex: FfiConverterOptionString.read(from: &buf),
@@ -4477,6 +4535,9 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.admins, into: &buf)
         FfiConverterSequenceString.write(value.relays, into: &buf)
         FfiConverterString.write(value.nostrGroupIdHex, into: &buf)
+        FfiConverterOptionString.write(value.avatarUrl, into: &buf)
+        FfiConverterOptionString.write(value.avatarDim, into: &buf)
+        FfiConverterOptionString.write(value.avatarThumbhash, into: &buf)
         FfiConverterBool.write(value.archived, into: &buf)
         FfiConverterBool.write(value.pendingConfirmation, into: &buf)
         FfiConverterOptionString.write(value.welcomerAccountIdHex, into: &buf)
@@ -8348,10 +8409,23 @@ public struct TimelineMessageRecordFfi {
     public var reactions: TimelineReactionSummaryFfi
     public var deleted: Bool
     public var deletedByMessageIdHex: String?
+    /**
+     * Set when convergence invalidated this message (it landed on a losing
+     * branch). The message is kept as a "did not reach the group" tombstone
+     * instead of disappearing; the value is the engine invalidation reason
+     * (e.g. `LosingBranch`). `None` for delivered messages.
+     */
+    public var invalidationStatus: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?) {
+    public init(messageIdHex: String, sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?,
+        /**
+         * Set when convergence invalidated this message (it landed on a losing
+         * branch). The message is kept as a "did not reach the group" tombstone
+         * instead of disappearing; the value is the engine invalidation reason
+         * (e.g. `LosingBranch`). `None` for delivered messages.
+         */invalidationStatus: String?) {
         self.messageIdHex = messageIdHex
         self.sourceMessageIdHex = sourceMessageIdHex
         self.direction = direction
@@ -8369,6 +8443,7 @@ public struct TimelineMessageRecordFfi {
         self.reactions = reactions
         self.deleted = deleted
         self.deletedByMessageIdHex = deletedByMessageIdHex
+        self.invalidationStatus = invalidationStatus
     }
 }
 
@@ -8427,6 +8502,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.deletedByMessageIdHex != rhs.deletedByMessageIdHex {
             return false
         }
+        if lhs.invalidationStatus != rhs.invalidationStatus {
+            return false
+        }
         return true
     }
 
@@ -8448,6 +8526,7 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(reactions)
         hasher.combine(deleted)
         hasher.combine(deletedByMessageIdHex)
+        hasher.combine(invalidationStatus)
     }
 }
 
@@ -8475,7 +8554,8 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf),
-                deletedByMessageIdHex: FfiConverterOptionString.read(from: &buf)
+                deletedByMessageIdHex: FfiConverterOptionString.read(from: &buf),
+                invalidationStatus: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -8497,6 +8577,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
         FfiConverterOptionString.write(value.deletedByMessageIdHex, into: &buf)
+        FfiConverterOptionString.write(value.invalidationStatus, into: &buf)
     }
 }
 
@@ -11761,6 +11842,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message() != 11846) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_avatar_url() != 57913) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_profile() != 53035) {
