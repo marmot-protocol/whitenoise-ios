@@ -83,33 +83,16 @@ final class AppState {
     let notifications: AppNotifications
     let toastState = ToastState()
     let navigation = NavigationState()
-    let profileCache = ProfileCache()
     private let notificationDriver = NotificationDriver()
     private var foregroundActivationTask: Task<Void, Never>?
     private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
-    @ObservationIgnored var profileFetchQueueTask: Task<Void, Never>?
-    @ObservationIgnored var queuedProfileFetchIDs: [String] = []
-    @ObservationIgnored var scheduledProfileFetchIDs: Set<String> = []
-    @ObservationIgnored var activeProfileFetchID: String?
     private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
     private(set) var isAppSceneActive = true
     private(set) var runtimeSuspendedForBackground = false
     private(set) var runtimeGeneration = 0
-
-    /// Cache of best-known display names keyed by account id hex. Derived
-    /// from `profiles` when available. Read-only from view code.
-    var displayNames: [String: String] { profileCache.displayNames }
-
-    /// Cache of full Nostr kind:0 profiles keyed by account id hex. Populated
-    /// on demand via `profile(forAccountIdHex:)`. Read-only from view code.
-    var profiles: [String: UserProfileMetadataFfi] { profileCache.profiles }
-
-    /// Cache of npub (bech32) forms keyed by account id hex. Conversion is
-    /// deterministic and offline, so these never go stale.
-    var npubs: [String: String] { profileCache.npubs }
 
     /// Most recent transient banner. View code reads this via the
     /// `.toastHost()` modifier on the root view.
@@ -167,10 +150,6 @@ final class AppState {
             // enough to triage which failure mode trapped.
             fatalError("Failed to initialize durable Marmot storage (\(type(of: error)))")
         }
-    }
-
-    deinit {
-        profileFetchQueueTask?.cancel()
     }
 
     /// Convenience accessor for the underlying FFI handle.
@@ -379,7 +358,6 @@ final class AppState {
     @MainActor
     func signOut() async {
         guard let signingOut = activeAccountRef else { return }
-        cancelProfileFetchQueue()
         try? await marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
 
@@ -581,7 +559,6 @@ final class AppState {
     func prepareForBackgroundSuspension() async {
         defer { runtimeSuspensionTask = nil }
         isAppSceneActive = false
-        cancelProfileFetchQueue()
         await cancelForegroundMaintenance()
         guard phase == .ready,
               !runtimeSuspendedForBackground,

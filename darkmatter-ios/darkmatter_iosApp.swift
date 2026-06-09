@@ -13,7 +13,6 @@ struct darkmatter_iosApp: App {
                 .environment(appState)
                 .environment(appState.toastState)
                 .environment(appState.navigation)
-                .environment(appState.profileCache)
                 .appAppearance()
                 .task {
                     appState.setAppSceneActive(scenePhase == .active)

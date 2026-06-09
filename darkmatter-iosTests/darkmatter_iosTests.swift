@@ -168,45 +168,11 @@ struct AppStateBootstrapTests {
         #expect(appState.navigation.pendingChatMessageIdHex == nil)
     }
 
-    @Test func profileCachingIsBackedByFocusedProfileCache() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        let id = String(repeating: "a", count: 64)
-
-        appState.cacheProfile(
-            UserProfileMetadataFfi(
-                name: nil,
-                displayName: "Alice",
-                about: nil,
-                picture: "https://example.com/alice.png",
-                nip05: nil,
-                lud16: nil
-            ),
-            for: id
-        )
-
-        #expect(appState.profileCache.profiles[id]?.displayName == "Alice")
-        #expect(appState.displayNames[id] == "Alice")
-        #expect(appState.avatarURL(forAccountIdHex: id)?.absoluteString == "https://example.com/alice.png")
-    }
-
-    @Test func profileCacheDoesNotMemoizeRawHexNpubFallbacks() {
-        let cache = ProfileCache()
-        let id = String(repeating: "a", count: 64)
-        let npub = "npub1example"
-
-        #expect(cache.npub(forAccountIdHex: id, projected: nil) == id)
-        #expect(cache.npubs[id] == nil)
-
-        #expect(cache.npub(forAccountIdHex: id, projected: npub) == npub)
-        #expect(cache.npubs[id] == npub)
-    }
-
     @Test func appInjectsFocusedStateStoresIntoEnvironment() throws {
         let source = try String(contentsOf: appSourceURL, encoding: .utf8)
 
         #expect(source.contains(".environment(appState.toastState)"))
         #expect(source.contains(".environment(appState.navigation)"))
-        #expect(source.contains(".environment(appState.profileCache)"))
     }
 
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
@@ -301,16 +267,6 @@ struct AppStateBootstrapTests {
         #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
     }
 
-    @Test func profileMissesUseTrackedFetchQueue() throws {
-        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-        let profilesSource = try String(contentsOf: appStateProfilesSourceURL, encoding: .utf8)
-
-        #expect(profilesSource.contains("scheduleProfileRefresh(forAccountIdHex: id)"))
-        #expect(profilesSource.contains("profileFetchQueueTask = Task"))
-        #expect(!profilesSource.matches(#"Task\s*\{\s*await\s+refreshProfile\(forAccountIdHex:\s*id\)\s*\}"#))
-        #expect(appStateSource.contains("cancelProfileFetchQueue()"))
-    }
-
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
         // account's push registration so the push server stops delivering
@@ -400,12 +356,6 @@ struct AppStateBootstrapTests {
             .appendingPathComponent("darkmatter-ios/darkmatter_iosApp.swift")
     }
 
-    private var appStateProfilesSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Core/AppState+Profiles.swift")
-    }
 }
 
 struct NotificationSubscriptionRetryTests {
@@ -1919,20 +1869,9 @@ struct GroupDisplayTests {
     }
 
     @MainActor
-    @Test func unnamedTwoPersonGroupShowsOtherDisplayName() throws {
+    @Test func unnamedTwoPersonGroupFallsBackToOtherIdentity() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let other = hex("22")
-        appState.cacheProfile(
-            UserProfileMetadataFfi(
-                name: nil,
-                displayName: "Alice",
-                about: nil,
-                picture: nil,
-                nip05: nil,
-                lud16: nil
-            ),
-            for: other
-        )
 
         let title = GroupDisplay.title(
             group: group(name: ""),
@@ -1941,7 +1880,10 @@ struct GroupDisplayTests {
             appState: appState
         )
 
-        #expect(title == "Alice")
+        // With no known profile for the peer, a 2-person group resolves to the
+        // other member's npub. Name resolution is covered by
+        // ResolvedDisplayNameTests now that iOS reads profiles from the binding.
+        #expect(title == appState.shortNpub(forAccountIdHex: other))
     }
 
     @MainActor
@@ -2002,17 +1944,6 @@ struct ConversationChromeTests {
     @Test func directMessageTitleUsesInitialChatListHintsBeforeRosterLoads() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let other = hex("22")
-        appState.cacheProfile(
-            UserProfileMetadataFfi(
-                name: nil,
-                displayName: "Alice",
-                about: nil,
-                picture: nil,
-                nip05: nil,
-                lud16: nil
-            ),
-            for: other
-        )
 
         let viewModel = ConversationViewModel(
             appState: appState,
@@ -2021,7 +1952,9 @@ struct ConversationChromeTests {
             initialMemberCount: 2
         )
 
-        #expect(viewModel.displayTitle == "Alice")
+        // The initial-member-count hint drives the 2-person title/subtitle before
+        // the roster loads; with no known profile the title is the peer's npub.
+        #expect(viewModel.displayTitle == appState.shortNpub(forAccountIdHex: other))
         #expect(viewModel.displaySubtitle == "2 members")
     }
 }
@@ -2236,17 +2169,6 @@ struct ConversationTimelineProjectionTests {
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let parentSender = hex("11")
-        appState.cacheProfile(
-            UserProfileMetadataFfi(
-                name: nil,
-                displayName: "Alice",
-                about: nil,
-                picture: nil,
-                nip05: nil,
-                lud16: nil
-            ),
-            for: parentSender
-        )
         let viewModel = ConversationViewModel(appState: appState, group: group(name: ""))
         let parent = timelineRecord(
             messageIdHex: hex("a1"),
@@ -2293,7 +2215,8 @@ struct ConversationTimelineProjectionTests {
         ])
         #expect(viewModel.isDeleted(deleted.messageIdHex))
         let replyRecord = try #require(viewModel.record(for: reply.messageIdHex))
-        #expect(viewModel.replyPreview(for: replyRecord)?.name == "Alice")
+        // The reply preview's resolved name now comes from the binding (covered by
+        // ResolvedDisplayNameTests); here we assert the hydrated preview text.
         #expect(viewModel.replyPreview(for: replyRecord)?.text == "the parent text")
     }
 
@@ -2737,7 +2660,7 @@ struct GroupManagementPresentationTests {
         )
     }
 
-    @Test func stagedMembersUseCachedDisplayNameAndNpubSubtitle() throws {
+    @Test func stagedMembersFallBackToShortIdWithNpubSubtitle() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let account = hex("33")
         let member = MemberRefFfi(
@@ -2745,19 +2668,11 @@ struct GroupManagementPresentationTests {
             accountIdHex: account,
             npub: "npub1abcdefghijklmnopqrstuvwxyz0123456789"
         )
-        appState.cacheProfile(
-            UserProfileMetadataFfi(
-                name: nil,
-                displayName: "Nadia",
-                about: nil,
-                picture: nil,
-                nip05: nil,
-                lud16: nil
-            ),
-            for: account
-        )
 
-        #expect(AddMembersPresentation.displayName(for: member, appState: appState) == "Nadia")
+        // With no known profile, the staged-member name falls back to the short
+        // account id; the subtitle is the npub. (Name resolution from a profile
+        // is covered by ResolvedDisplayNameTests.)
+        #expect(AddMembersPresentation.displayName(for: member, appState: appState) == IdentityFormatter.short(account))
         #expect(AddMembersPresentation.secondaryIdentity(for: member).hasPrefix("npub1"))
     }
 

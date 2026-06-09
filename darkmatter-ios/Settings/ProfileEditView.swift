@@ -119,15 +119,14 @@ struct ProfileEditView: View {
         do {
             let relays = appState.relayPublishRelays(for: accountRef)
             let bootstrapRelays = appState.relayBootstrapRelays(for: accountRef)
-            let published = try await appState.marmot.publishUserProfile(
+            _ = try await appState.marmot.publishUserProfile(
                 accountRef: accountRef,
                 profile: metadata,
                 defaultRelays: relays,
                 bootstrapRelays: bootstrapRelays
             )
-            if let id = appState.activeAccount?.accountIdHex {
-                appState.cacheProfile(published, for: id)
-            }
+            // No iOS-side cache to update: publishUserProfile updates Marmot's
+            // own directory, which the editor and chrome read back directly (#17).
             success = true
             Haptics.success()
             appState.present(.success(

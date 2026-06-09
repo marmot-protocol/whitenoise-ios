@@ -2,144 +2,71 @@ import Foundation
 import MarmotKit
 
 extension AppState {
-    /// Full Nostr profile for an account id. Returns the cached value
-    /// immediately if known; otherwise does a fast synchronous read from the
-    /// runtime's directory cache, and on a miss schedules a background relay
-    /// fetch so a later call hydrates. `nil` until something is known.
+    /// Full Nostr profile for an account id, read straight from Marmot's
+    /// directory each time. iOS keeps no profile cache of its own — the binding
+    /// owns fetching and freshness — so values are never stale here (#17).
     @MainActor
-    @discardableResult
     func profile(forAccountIdHex id: String) -> UserProfileMetadataFfi? {
-        if let cached = profileCache.cachedProfile(forAccountIdHex: id) { return cached }
-        if let local = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(local, for: id)
-            return local
-        }
-        scheduleProfileRefresh(forAccountIdHex: id)
-        return nil
+        (try? marmot.userProfile(accountIdHex: id)) ?? nil
     }
 
     /// A display name we actually *know* for an account: projected kind:0
-    /// display_name/name, then a cached name, then a local account's label.
-    /// `nil` when nothing better than the raw id is available, so callers can
-    /// choose their own fallback (e.g. an npub for a DM peer).
+    /// display_name/name, then a local account's label. `nil` when nothing
+    /// better than the raw id is available, so callers can choose their own
+    /// fallback (e.g. an npub for a DM peer).
     @MainActor
     func knownDisplayName(forAccountIdHex id: String) -> String? {
-        profileCache.knownDisplayName(
-            forAccountIdHex: id,
+        Self.resolvedKnownDisplayName(
             profile: profile(forAccountIdHex: id),
             projectedName: marmot.displayName(accountIdHex: id),
             localAccountLabel: accounts.first(where: { $0.accountIdHex == id })?.label
         )
     }
 
-    /// Best-effort display name. Prefers the projected kind:0 display_name /
-    /// name, then a local account's label, then short-hex.
+    /// Pure resolution of the best known display name from its three sources, in
+    /// priority order: the fetched kind:0 profile, the runtime's projected name,
+    /// then a local account's own label. Extracted so the precedence is unit
+    /// testable without a profile store.
+    static func resolvedKnownDisplayName(
+        profile: UserProfileMetadataFfi?,
+        projectedName: String?,
+        localAccountLabel: String?
+    ) -> String? {
+        if let profile, let name = ProfileSanitizer.displayName(profile.displayName ?? profile.name) {
+            return name
+        }
+        if let name = ProfileSanitizer.displayName(projectedName) {
+            return name
+        }
+        if let localAccountLabel, !localAccountLabel.isEmpty {
+            return localAccountLabel
+        }
+        return nil
+    }
+
+    /// Best-effort display name. Prefers the known name, then short-hex.
     @MainActor
     func displayName(forAccountIdHex id: String) -> String {
-        profileCache.displayName(forAccountIdHex: id, knownName: knownDisplayName(forAccountIdHex: id))
+        knownDisplayName(forAccountIdHex: id) ?? IdentityFormatter.short(id)
     }
 
     /// Picture URL for an account id, if its profile has a *safe* one.
     /// Untrusted: only http(s) URLs with a host pass the sanitizer.
     @MainActor
     func avatarURL(forAccountIdHex id: String) -> URL? {
-        profileCache.avatarURL(for: profile(forAccountIdHex: id))
+        ProfileSanitizer.imageURL(profile(forAccountIdHex: id)?.picture)
     }
 
-    /// Store a profile in the cache and derive its display name. Called after
-    /// a successful publish so the editor and chrome update immediately.
-    @MainActor
-    func cacheProfile(_ profile: UserProfileMetadataFfi, for id: String) {
-        profileCache.cacheProfile(profile, for: id)
-    }
-
-    /// The `npub...` bech32 form of an account id hex. Falls back to the hex
-    /// if conversion fails (shouldn't, for a valid pubkey).
+    /// The `npub...` bech32 form of an account id hex, read from the binding.
+    /// Falls back to the hex if conversion fails (shouldn't, for a valid pubkey).
     @MainActor
     func npub(forAccountIdHex id: String) -> String {
-        profileCache.npub(forAccountIdHex: id, projected: marmot.npub(accountIdHex: id))
+        marmot.npub(accountIdHex: id) ?? id
     }
 
     /// Truncated npub for compact UI (e.g. `npub1abc...wxyz`).
     @MainActor
     func shortNpub(forAccountIdHex id: String) -> String {
         IdentityFormatter.short(npub(forAccountIdHex: id))
-    }
-
-    @MainActor
-    private func scheduleProfileRefresh(forAccountIdHex id: String) {
-        guard !scheduledProfileFetchIDs.contains(id) else { return }
-        scheduledProfileFetchIDs.insert(id)
-        queuedProfileFetchIDs.append(id)
-        startProfileFetchQueueIfNeeded()
-    }
-
-    @MainActor
-    private func startProfileFetchQueueIfNeeded() {
-        guard profileFetchQueueTask == nil, !queuedProfileFetchIDs.isEmpty else { return }
-        profileFetchQueueTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runProfileFetchQueue()
-        }
-    }
-
-    @MainActor
-    private func runProfileFetchQueue() async {
-        defer {
-            profileFetchQueueTask = nil
-            if !queuedProfileFetchIDs.isEmpty {
-                startProfileFetchQueueIfNeeded()
-            }
-        }
-
-        while !Task.isCancelled, let id = nextQueuedProfileFetchID() {
-            activeProfileFetchID = id
-            await refreshProfile(forAccountIdHex: id)
-            activeProfileFetchID = nil
-            scheduledProfileFetchIDs.remove(id)
-        }
-    }
-
-    @MainActor
-    private func nextQueuedProfileFetchID() -> String? {
-        guard !queuedProfileFetchIDs.isEmpty else { return nil }
-        return queuedProfileFetchIDs.removeFirst()
-    }
-
-    @MainActor
-    func cancelProfileFetchQueue() {
-        queuedProfileFetchIDs.removeAll()
-        if let activeProfileFetchID {
-            scheduledProfileFetchIDs = [activeProfileFetchID]
-        } else {
-            scheduledProfileFetchIDs.removeAll()
-        }
-        profileFetchQueueTask?.cancel()
-    }
-
-    @MainActor
-    private func refreshProfile(forAccountIdHex id: String) async {
-        guard !Task.isCancelled else { return }
-        guard profileCache.beginDirectoryFetch(for: id) else { return }
-        defer { profileCache.finishDirectoryFetch(for: id) }
-
-        guard !Task.isCancelled else { return }
-        if let local = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(local, for: id)
-            return
-        }
-
-        guard !Task.isCancelled else { return }
-        // Fetch this account's OWN kind:0 through the active account's relay
-        // lists. Marmot owns those lists; iOS only asks for the current view.
-        let relays = activeAccountRef.map(relayBootstrapRelays(for:)) ?? MarmotClient.seedRelays
-        try? await marmot.refreshProfile(accountIdHex: id, relays: relays)
-
-        guard !Task.isCancelled else { return }
-        if let fetched = (try? marmot.userProfile(accountIdHex: id)) ?? nil {
-            cacheProfile(fetched, for: id)
-        } else if let name = marmot.displayName(accountIdHex: id), !name.isEmpty {
-            profileCache.cacheProjectedDisplayName(name, for: id)
-        }
     }
 }
