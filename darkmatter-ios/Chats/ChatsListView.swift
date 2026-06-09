@@ -273,12 +273,17 @@ struct ChatsListView: View {
             let rows = currentRows(viewModel)
             List {
                 ForEach(rows) { item in
-                    // A plain button keeps the whole row tappable while the
-                    // trailing slot remains available for the message timestamp.
+                    // A plain button keeps the trailing slot available for the
+                    // message timestamp (no disclosure chevron). Its tap target
+                    // is only the label's opaque content, so the explicit
+                    // content shape is required: without it the transparent
+                    // Spacer gap between a short title/preview and the
+                    // timestamp swallows taps.
                     Button {
                         navigate(to: item)
                     } label: {
                         ChatRow(item: item)
+                            .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
