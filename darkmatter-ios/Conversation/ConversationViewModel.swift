@@ -46,6 +46,7 @@ final class ConversationViewModel {
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
     private var readStateTask: Task<Void, Never>?
+    private var mediaRefreshTask: Task<Void, Never>?
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
@@ -62,6 +63,8 @@ final class ConversationViewModel {
     private var loadedOlderTimelinePages = false
     private var systemTimelineItems: [TimelineItem] = []
     private var transientTimelineItems: [String: TimelineItem] = [:]
+    private var pendingMediaByRowId: [String: [MessageMediaAttachment]] = [:]
+    private var mediaRecordsByMessageId: [String: [MediaRecordFfi]] = [:]
     /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
     private var reactionRecords: [String: AppMessageRecordFfi] = [:]
     private var optimisticReactionRemovals: Set<ReactionRemoval> = []
@@ -75,6 +78,7 @@ final class ConversationViewModel {
     /// Streams whose final anchor message has arrived. Once finalized, the
     /// anchor's full text is authoritative and late live updates are ignored.
     private var finalizedStreamIds: Set<String> = []
+    private var streamSenderById: [String: String] = [:]
     private var markedReadMessageIds: Set<String> = []
 
     /// Live diagnostics for the agent-text-stream watch. Visible in the Xcode
@@ -94,6 +98,22 @@ final class ConversationViewModel {
         let targetMessageIdHex: String
         let emoji: String
         let sender: String
+    }
+
+    private struct AgentTextStreamProjection: Decodable {
+        var streamIdHex: String?
+        var status: String?
+
+        enum CodingKeys: String, CodingKey {
+            case streamIdHex = "stream_id_hex"
+            case status
+        }
+    }
+
+    private enum AgentTextStreamRecordType {
+        static let checkpoint: UInt8 = 0x04
+        static let abort: UInt8 = 0x05
+        static let finalNotice: UInt8 = 0x06
     }
 
     var myAccountId: String? { appState?.activeAccount?.accountIdHex }
@@ -149,6 +169,12 @@ final class ConversationViewModel {
     var isLastAdmin: Bool {
         if let managementState { return managementState.isLastAdmin }
         return isSelfAdmin && group.admins.count <= 1
+    }
+
+    var canSendMediaAttachments: Bool {
+        group.encryptedMedia.required
+            && group.encryptedMedia.mediaFormat == MessageSemantics.encryptedMediaVersion
+            && group.encryptedMedia.allowedLocatorKinds.contains("blossom-v1")
     }
 
     func isAdmin(_ member: AppGroupMemberRecordFfi) -> Bool {
@@ -225,6 +251,7 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
+        mediaRefreshTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
 
@@ -313,6 +340,8 @@ final class ConversationViewModel {
         groupDetailsTask = nil
         readStateTask?.cancel()
         readStateTask = nil
+        mediaRefreshTask?.cancel()
+        mediaRefreshTask = nil
         for task in streamWatchTasks.values {
             task.cancel()
         }
@@ -323,6 +352,7 @@ final class ConversationViewModel {
         optimisticDeletedMessageIds.removeAll()
         optimisticReactionRemovals.removeAll()
         reactionRecords.removeAll()
+        pendingMediaByRowId.removeAll()
         rebuildDeletedMessageIds()
         recomputeReactions()
     }
@@ -432,19 +462,22 @@ final class ConversationViewModel {
         }
     }
 
-    private func watchAgentStreamStartIfNeeded(_ record: AppMessageRecordFfi) {
+    private func watchAgentStreamStartIfNeeded(_ record: AppMessageRecordFfi, trigger: TimelineUpdateTriggerFfi?) {
         guard let streamIdHex = Self.agentStreamStartIdToWatch(
             from: record,
-            finalizedStreamIds: finalizedStreamIds
+            finalizedStreamIds: finalizedStreamIds,
+            trigger: trigger
         ) else { return }
         Task { [weak self] in await self?.startWatching(sender: record.sender, streamIdHex: streamIdHex) }
     }
 
     static func agentStreamStartIdToWatch(
         from record: AppMessageRecordFfi,
-        finalizedStreamIds: Set<String>
+        finalizedStreamIds: Set<String>,
+        trigger: TimelineUpdateTriggerFfi?
     ) -> String? {
-        guard case .agentStreamStart(let start) = MessageSemantics.classify(record),
+        guard trigger == .agentStreamStarted,
+              case .agentStreamStart(let start) = MessageSemantics.classify(record),
               let streamIdHex = MessageSemantics.normalizedStreamId(start.streamId),
               !finalizedStreamIds.contains(streamIdHex)
         else { return nil }
@@ -452,6 +485,7 @@ final class ConversationViewModel {
     }
 
     func applyTimelinePage(_ page: TimelinePageFfi, placement: TimelinePagePlacement) {
+        recordFinalizedStreams(in: page.messages)
         for record in page.messages {
             applyTimelineRecord(record)
         }
@@ -480,11 +514,13 @@ final class ConversationViewModel {
         guard update.groupIdHex == group.groupIdHex else { return }
         let rebuildTimelineAfterUpdate: Bool
         if update.changes.isEmpty {
+            recordFinalizedStreams(in: update.messages)
             for record in update.messages {
                 applyTimelineRecord(record, updateTimeline: update.messages.count == 1)
             }
             rebuildTimelineAfterUpdate = update.messages.count != 1
         } else {
+            recordFinalizedStreams(in: update.changes.compactMap(Self.upsertedMessage))
             for change in update.changes {
                 applyTimelineChange(change)
             }
@@ -498,8 +534,8 @@ final class ConversationViewModel {
 
     private func applyTimelineChange(_ change: TimelineMessageChangeFfi) {
         switch change {
-        case .upsert(_, let message):
-            applyTimelineRecord(message, updateTimeline: true)
+        case .upsert(let trigger, let message):
+            applyTimelineRecord(message, updateTimeline: true, trigger: trigger)
         case .remove(let messageIdHex, _):
             removeTimelineRecord(messageIdHex: messageIdHex)
         }
@@ -532,9 +568,17 @@ final class ConversationViewModel {
         }
     }
 
-    private func applyTimelineRecord(_ record: TimelineMessageRecordFfi, updateTimeline: Bool = false) {
+    private func applyTimelineRecord(
+        _ record: TimelineMessageRecordFfi,
+        updateTimeline: Bool = false,
+        trigger: TimelineUpdateTriggerFfi? = nil
+    ) {
         let appRecord = Self.appMessageRecord(from: record)
         guard !appRecord.messageIdHex.isEmpty else { return }
+        let semantics = MessageSemantics.classify(appRecord)
+        if case .media = semantics {
+            scheduleMediaRecordsRefresh()
+        }
 
         messageById[appRecord.messageIdHex] = appRecord
         messageStatusById[appRecord.messageIdHex] = appRecord.direction == "sent" ? .sent : .received
@@ -554,18 +598,21 @@ final class ConversationViewModel {
         }
         reconcilePendingOutgoingMessage(with: appRecord, replyTargetId: record.replyToMessageIdHex)
 
-        if case .streamFinal(let streamId) = MessageSemantics.classify(appRecord) {
-            finalizedStreamIds.insert(streamId)
-            streamWatchTasks[streamId]?.cancel()
-            streamWatchTasks[streamId] = nil
-            streamText[streamId] = nil
-            transientTimelineItems["msg:stream:\(streamId)"] = nil
-            removeTimelineItem(id: "msg:stream:\(streamId)")
+        if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
+            resolveFinalizedStream(streamId: streamId)
         }
         if updateTimeline {
-            upsertTimelineItem(TimelineItem.message(appRecord, status: messageStatusById[appRecord.messageIdHex]))
+            if let item = Self.visibleTimelineItem(
+                for: appRecord,
+                status: messageStatusById[appRecord.messageIdHex]
+            ) {
+                upsertTimelineItem(item)
+            } else {
+                removeTimelineItem(id: "msg:\(appRecord.messageIdHex)")
+            }
         }
-        watchAgentStreamStartIfNeeded(appRecord)
+        dropMatchingStreamPreviewIfNeeded(for: appRecord, semantics: semantics, trigger: trigger)
+        watchAgentStreamStartIfNeeded(appRecord, trigger: trigger)
     }
 
     private func removeTimelineRecord(messageIdHex: String) {
@@ -617,19 +664,33 @@ final class ConversationViewModel {
     }
 
     private func rebuildTimeline() {
-        var next: [TimelineItem] = messageById.values.map { record in
-            TimelineItem.message(record, status: messageStatusById[record.messageIdHex])
+        var next: [TimelineItem] = messageById.values.compactMap { record in
+            Self.visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
         }
         next.append(contentsOf: transientTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
         next.sort(by: Self.timelineItemComesBefore)
         timeline = next
+        normalizeReplyOrdering()
+    }
+
+    private static func visibleTimelineItem(
+        for record: AppMessageRecordFfi,
+        status: MessageStatus?
+    ) -> TimelineItem? {
+        switch MessageSemantics.classify(record) {
+        case .chat, .reply, .media, .streamFinal:
+            return TimelineItem.message(record, status: status)
+        case .reaction, .delete, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
+            return nil
+        }
     }
 
     private func upsertTimelineItem(_ item: TimelineItem) {
         removeTimelineItem(id: item.id)
         let insertionIndex = timelineInsertionIndex(for: item)
         timeline.insert(item, at: insertionIndex)
+        normalizeReplyOrdering()
     }
 
     private func removeTimelineItem(id: String) {
@@ -657,10 +718,136 @@ final class ConversationViewModel {
         return lhs.timestamp < rhs.timestamp
     }
 
+    private func normalizeReplyOrdering() {
+        var remainingPasses = timeline.count
+        var moved = true
+        while moved, remainingPasses > 0 {
+            moved = false
+            remainingPasses -= 1
+            let indexByMessageId = timelineMessageIndexById()
+            for childIndex in timeline.indices {
+                guard case .message(let child, _) = timeline[childIndex].kind,
+                      !child.messageIdHex.isEmpty,
+                      let parentId = replyTargetId(for: child),
+                      parentId != child.messageIdHex,
+                      let parentIndex = indexByMessageId[parentId],
+                      parentIndex >= childIndex
+                else { continue }
+
+                let childItem = timeline.remove(at: childIndex)
+                let adjustedParentIndex = parentIndex > childIndex ? parentIndex - 1 : parentIndex
+                timeline.insert(childItem, at: min(adjustedParentIndex + 1, timeline.count))
+                moved = true
+                break
+            }
+        }
+    }
+
+    private func timelineMessageIndexById() -> [String: Int] {
+        var indexByMessageId: [String: Int] = [:]
+        for (index, item) in timeline.enumerated() {
+            guard case .message(let record, _) = item.kind,
+                  !record.messageIdHex.isEmpty
+            else { continue }
+            indexByMessageId[record.messageIdHex] = index
+        }
+        return indexByMessageId
+    }
+
+    private func replyTargetId(for record: AppMessageRecordFfi) -> String? {
+        replyTargetByMessageId[record.messageIdHex] ?? Self.replyTargetMessageId(in: record)
+    }
+
     func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi) {
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
         upsertTimelineItem(item)
+    }
+
+    func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
+        if let pending = pendingMediaByRowId[item.id] {
+            return pending
+        }
+        guard case .message(let record, _) = item.kind else {
+            return []
+        }
+        return mediaItems(for: record)
+    }
+
+    func mediaItems(for record: AppMessageRecordFfi) -> [MessageMediaAttachment] {
+        if let records = mediaRecordsByMessageId[record.messageIdHex], !records.isEmpty {
+            let references = records
+                .sorted { $0.attachmentIndex < $1.attachmentIndex }
+                .map(\.reference)
+            return MessageMediaAttachment.displayItems(from: references)
+        }
+        guard case .media(let references) = MessageSemantics.classify(record) else {
+            return []
+        }
+        return MessageMediaAttachment.displayItems(from: references)
+    }
+
+    func data(for media: MessageMediaAttachment) async throws -> Data {
+        if let localData = media.localData {
+            return localData
+        }
+        guard let reference = media.reference else {
+            throw MediaDataError.missingReference
+        }
+        if let cached = MessageMediaCache.cachedData(for: reference) {
+            return cached
+        }
+        guard let appState, let accountRef = appState.activeAccountRef else {
+            throw MediaDataError.missingAccount
+        }
+        let result = try await appState.marmot.downloadMedia(
+            accountRef: accountRef,
+            groupIdHex: group.groupIdHex,
+            reference: reference
+        )
+        MessageMediaCache.store(result.plaintext, for: reference)
+        return result.plaintext
+    }
+
+    private enum MediaDataError: LocalizedError {
+        case missingReference
+        case missingAccount
+
+        var errorDescription: String? {
+            switch self {
+            case .missingReference:
+                return L10n.string("This attachment is not ready yet.")
+            case .missingAccount:
+                return L10n.string("No active account.")
+            }
+        }
+    }
+
+    private func scheduleMediaRecordsRefresh() {
+        mediaRefreshTask?.cancel()
+        mediaRefreshTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 150_000_000)
+            } catch {
+                return
+            }
+            await self?.refreshMediaRecords()
+        }
+    }
+
+    func refreshMediaRecords(limit: UInt32 = 500) async {
+        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        do {
+            let records = try appState.marmot.listMedia(
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex,
+                limit: limit
+            )
+            mediaRecordsByMessageId = Dictionary(grouping: records, by: \.messageIdHex)
+        } catch {
+            // Media rows are a display accelerator for decrypt/download. The
+            // timeline remains usable and future updates retry the refresh.
+        }
     }
 
     private func reconcilePendingOutgoingMessage(with record: AppMessageRecordFfi, replyTargetId: String?) {
@@ -673,6 +860,7 @@ final class ConversationViewModel {
             Self.pendingOutgoingMessage(lhs.value, isCloserTo: record, than: rhs.value)
         }) else { return }
         transientTimelineItems[match.key] = nil
+        pendingMediaByRowId[match.key] = nil
         removeTimelineItem(id: match.value.id)
     }
 
@@ -733,6 +921,7 @@ final class ConversationViewModel {
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
         streamText[streamId] = nil
+        streamSenderById[streamId] = nil
         removeStreamBubble(streamId: streamId)
     }
 
@@ -742,10 +931,24 @@ final class ConversationViewModel {
     /// key the same `msg:stream:<id>` row, so whichever arrives later wins.
     private func finalizeStreamBubble(streamId: String, sender: String, text: String) {
         streamText[streamId] = Self.cappedStreamText(text)
+        guard hasStreamPreviewText(streamId: streamId) else {
+            endStream(streamId: streamId)
+            return
+        }
+        streamSenderById[streamId] = sender
         upsertStreamBubble(streamId: streamId, sender: sender, status: .received)
         finalizedStreamIds.insert(streamId)
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
+    }
+
+    private func resolveFinalizedStream(streamId: String) {
+        finalizedStreamIds.insert(streamId)
+        streamWatchTasks[streamId]?.cancel()
+        streamWatchTasks[streamId] = nil
+        streamText[streamId] = nil
+        streamSenderById[streamId] = nil
+        removeStreamBubble(streamId: streamId)
     }
 
     private func removeStreamBubble(streamId: String) {
@@ -1055,6 +1258,85 @@ final class ConversationViewModel {
         }
     }
 
+    func sendMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
+        guard !attachments.isEmpty,
+              canSendMediaAttachments,
+              let appState,
+              let accountRef = appState.activeAccountRef else { return }
+
+        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let outgoingCaption = trimmedCaption.isEmpty ? "" : Self.cappedOutgoingText(trimmedCaption)
+        let captionForRust = outgoingCaption.isEmpty ? nil : outgoingCaption
+        let tempId = UUID().uuidString
+        let tempRowId = "msg:\(tempId)"
+        let now = UInt64(Date().timeIntervalSince1970)
+        let optimistic = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: group.groupIdHex,
+            sender: appState.activeAccount?.accountIdHex ?? "",
+            plaintext: outgoingCaption,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: now,
+            receivedAt: now
+        )
+        pendingMediaByRowId[tempRowId] = attachments.map(\.displayItem)
+        applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
+        replyingTo = nil
+
+        sendInFlight = true
+        defer { sendInFlight = false }
+        do {
+            let result = try await appState.marmot.uploadMedia(
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex,
+                request: MediaUploadRequestFfi(
+                    attachments: attachments.map(\.uploadRequest),
+                    caption: captionForRust,
+                    send: true,
+                    blossomServer: nil
+                )
+            )
+            let references = result.attachments.map(\.reference)
+            let confirmed = AppMessageRecordFfi(
+                messageIdHex: "",
+                direction: "sent",
+                groupIdHex: group.groupIdHex,
+                sender: optimistic.sender,
+                plaintext: outgoingCaption,
+                kind: MessageSemantics.kindChat,
+                tags: references.map(MessageSemantics.imetaTag(for:)),
+                recordedAt: now,
+                receivedAt: now
+            )
+            let messageId = result.sent?.messageIds.first
+            confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
+            if let messageId, !messageId.isEmpty {
+                mediaRecordsByMessageId[messageId] = references.enumerated().map { index, reference in
+                    MediaRecordFfi(
+                        messageIdHex: messageId,
+                        attachmentIndex: UInt32(index),
+                        direction: "sent",
+                        groupIdHex: group.groupIdHex,
+                        sender: optimistic.sender,
+                        reference: reference,
+                        caption: captionForRust,
+                        recordedAt: now,
+                        receivedAt: now
+                    )
+                }
+            }
+        } catch {
+            markFailed(tempId: tempId)
+            self.error = error.localizedDescription
+            await MainActor.run {
+                Haptics.error()
+                appState.present(.error(L10n.string("Send failed"), message: error.localizedDescription))
+            }
+        }
+    }
+
     private func replyTargetMessageId() -> String? {
         guard let replyingTo, !replyingTo.messageIdHex.isEmpty else { return nil }
         return replyingTo.messageIdHex
@@ -1081,6 +1363,7 @@ final class ConversationViewModel {
         }
         let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
         transientTimelineItems["msg:\(tempId)"] = nil
+        pendingMediaByRowId["msg:\(tempId)"] = nil
         removeTimelineItem(id: "msg:\(tempId)")
         if realId.isEmpty {
             let item = TimelineItem(
@@ -1170,9 +1453,10 @@ final class ConversationViewModel {
             )
             let streamId = subscription.streamIdHex()
             if streamWatchTasks[streamId] != nil { return }
+            if finalizedStreamIds.contains(streamId) { return }
             streamText[streamId] = ""
-            upsertStreamBubble(streamId: streamId, sender: sender, status: .streaming)
-            Self.streamLog.info("watch opened: streamId=\(streamId, privacy: .public) developerMode=\(appState.developerMode, privacy: .public); bubble shown as Streaming")
+            streamSenderById[streamId] = sender
+            Self.streamLog.info("watch opened: streamId=\(streamId, privacy: .public) developerMode=\(appState.developerMode, privacy: .public); waiting for text preview")
             let task = Task { [weak self] in
                 while !Task.isCancelled, let update = await subscription.next() {
                     self?.applyStreamUpdate(streamId: streamId, sender: sender, update: update)
@@ -1191,7 +1475,23 @@ final class ConversationViewModel {
         switch update {
         case .chunk(_, let text):
             appendStreamChunk(text, to: streamId)
-            upsertStreamBubble(streamId: streamId, sender: sender, status: .streaming)
+            upsertStreamBubbleIfNeeded(streamId: streamId, sender: sender, status: .streaming)
+        case .status:
+            break
+        case .progress:
+            break
+        case .record(_, let recordType, let text):
+            switch recordType {
+            case AgentTextStreamRecordType.checkpoint:
+                replaceStreamPreviewText(text, to: streamId)
+                upsertStreamBubbleIfNeeded(streamId: streamId, sender: sender, status: .streaming)
+            case AgentTextStreamRecordType.abort:
+                endStream(streamId: streamId)
+            case AgentTextStreamRecordType.finalNotice:
+                break
+            default:
+                break
+            }
         case .finished(let text, let transcriptHashHex, let chunkCount):
             // QUIC stream closed. Promote the preview to a permanent bubble using
             // the streamed transcript; the authoritative MLS Final anchor will
@@ -1212,6 +1512,15 @@ final class ConversationViewModel {
         streamText[streamId] = current
     }
 
+    private func replaceStreamPreviewText(_ text: String, to streamId: String) {
+        streamText[streamId] = Self.cappedStreamText(text)
+    }
+
+    private func hasStreamPreviewText(streamId: String) -> Bool {
+        guard let text = streamText[streamId] else { return false }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private static func cappedStreamText(_ text: String) -> String {
         if text.count <= ProfileSanitizer.maxMessageLength {
             return text
@@ -1225,8 +1534,14 @@ final class ConversationViewModel {
     }
 
     /// Create or update the synthetic bubble for a live stream (keyed by id).
+    private func upsertStreamBubbleIfNeeded(streamId: String, sender: String, status: MessageStatus) {
+        guard hasStreamPreviewText(streamId: streamId) else { return }
+        upsertStreamBubble(streamId: streamId, sender: sender, status: status)
+    }
+
     private func upsertStreamBubble(streamId: String, sender: String, status: MessageStatus) {
         let rowId = "msg:stream:\(streamId)"
+        streamSenderById[streamId] = sender
         let now = UInt64(Date().timeIntervalSince1970)
         let record = AppMessageRecordFfi(
             messageIdHex: "",
@@ -1256,6 +1571,63 @@ final class ConversationViewModel {
             )
             transientTimelineItems[rowId] = item
             upsertTimelineItem(item)
+        }
+    }
+
+    private func recordFinalizedStreams(in records: [TimelineMessageRecordFfi]) {
+        for record in records {
+            let appRecord = Self.appMessageRecord(from: record)
+            if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
+                finalizedStreamIds.insert(streamId)
+            }
+        }
+    }
+
+    private static func upsertedMessage(from change: TimelineMessageChangeFfi) -> TimelineMessageRecordFfi? {
+        if case .upsert(_, let message) = change { return message }
+        return nil
+    }
+
+    private static func finalizedStreamId(
+        from record: TimelineMessageRecordFfi,
+        appRecord: AppMessageRecordFfi
+    ) -> String? {
+        if let projection = agentTextStreamProjection(from: record),
+           projection.status == "finalized",
+           let streamId = MessageSemantics.normalizedStreamId(projection.streamIdHex) {
+            return streamId
+        }
+        if case .streamFinal(let streamId) = MessageSemantics.classify(appRecord) {
+            return streamId
+        }
+        return nil
+    }
+
+    private static func agentTextStreamProjection(from record: TimelineMessageRecordFfi) -> AgentTextStreamProjection? {
+        guard let json = record.agentTextStreamJson,
+              let data = json.data(using: .utf8)
+        else { return nil }
+        return try? JSONDecoder().decode(AgentTextStreamProjection.self, from: data)
+    }
+
+    private func dropMatchingStreamPreviewIfNeeded(
+        for record: AppMessageRecordFfi,
+        semantics: MessageSemantics.Kind,
+        trigger: TimelineUpdateTriggerFfi?
+    ) {
+        guard trigger != nil,
+              record.direction == "received"
+        else { return }
+        switch semantics {
+        case .chat, .reply, .media:
+            let streamIds = streamSenderById
+                .filter { $0.value == record.sender }
+                .map(\.key)
+            for streamId in streamIds {
+                endStream(streamId: streamId)
+            }
+        case .streamFinal, .reaction, .delete, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
+            return
         }
     }
 

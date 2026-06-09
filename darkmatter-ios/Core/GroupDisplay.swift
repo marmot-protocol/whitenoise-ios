@@ -35,14 +35,17 @@ enum GroupDisplay {
         return IdentityFormatter.short(group.groupIdHex)
     }
 
-    /// Avatar picture for the row/header — the other member's picture for an
-    /// unnamed 2-member DM, otherwise none (the generated initials/color stand in).
+    /// Avatar picture for the row/header: a group avatar URL wins when present,
+    /// then unnamed 2-member DMs fall back to the other member's picture.
     static func avatarURL(
         group: AppGroupRecordFfi,
         otherMember: String?,
         memberCount: Int,
         appState: AppState
     ) -> URL? {
+        if let groupAvatar = ProfileSanitizer.imageURL(group.avatarUrl) {
+            return groupAvatar
+        }
         guard isDirectMessage(group: group, memberCount: memberCount),
               let other = otherMember else { return nil }
         return appState.avatarURL(forAccountIdHex: other)

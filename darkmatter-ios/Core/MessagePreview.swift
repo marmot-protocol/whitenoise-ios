@@ -12,7 +12,7 @@ enum MessagePreview {
     /// stream-final is a real message and previews like any other chat.
     static func isPreviewable(_ record: AppMessageRecordFfi) -> Bool {
         switch MessageSemantics.classify(record) {
-        case .reaction, .delete, .agentStreamStart, .unknown:
+        case .reaction, .delete, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
         case .chat, .reply, .media, .streamFinal:
             return true
@@ -23,9 +23,11 @@ enum MessagePreview {
     /// filename, or the plaintext for a plain message.
     static func body(_ record: AppMessageRecordFfi) -> String {
         switch MessageSemantics.classify(record) {
-        case .media(let info):
+        case .media(let attachments):
             if !record.plaintext.isEmpty { return record.plaintext }
-            return "📎 \(info.fileName)"
+            return mediaFallback(attachments)
+        case .agentActivity, .agentOperation, .groupSystem:
+            return typedEventText(from: record.plaintext) ?? ""
         case .chat, .reply, .streamFinal, .reaction, .delete, .agentStreamStart, .unknown:
             // Reply text, stream transcript, and plain chat all live in plaintext.
             return record.plaintext
@@ -37,10 +39,13 @@ enum MessagePreview {
             return L10n.string("This message was deleted")
         }
         if !preview.plaintext.isEmpty {
+            if MessageSemantics.isTypedAgentEventKind(preview.kind) {
+                return typedEventText(from: preview.plaintext) ?? ""
+            }
             return preview.plaintext
         }
         if let mediaJson = preview.mediaJson {
-            return "📎 \(timelineMediaFileName(from: mediaJson) ?? L10n.string("Attachment"))"
+            return mediaFallback(timelineMediaFileNames(from: mediaJson))
         }
         return preview.plaintext
     }
@@ -50,23 +55,56 @@ enum MessagePreview {
             return L10n.string("This message was deleted")
         }
         if !preview.plaintext.isEmpty {
+            if MessageSemantics.isTypedAgentEventKind(preview.kind) {
+                return typedEventText(from: preview.plaintext) ?? ""
+            }
             return preview.plaintext
         }
         return L10n.string("New message")
     }
 
-    private static func timelineMediaFileName(from mediaJson: String) -> String? {
+    static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {
+        mediaFallback(attachments.map(\.fileName))
+    }
+
+    private static func mediaFallback(_ fileNames: [String]) -> String {
+        let names = fileNames
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if names.count == 1 {
+            return "📎 \(names[0])"
+        }
+        if names.count > 1 {
+            return L10n.formatted("📎 %lld attachments", Int64(names.count))
+        }
+        return "📎 \(L10n.string("Attachment"))"
+    }
+
+    private static func typedEventText(from plaintext: String) -> String? {
+        guard let data = plaintext.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let text = root["text"] as? String
+        else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func timelineMediaFileNames(from mediaJson: String) -> [String] {
         guard let data = mediaJson.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let imeta = root["imeta"] as? [[String]]
-        else { return nil }
+        else { return [] }
+        var fileNames: [String] = []
         for tag in imeta {
             for field in tag.dropFirst() where field.hasPrefix("filename ") {
                 let name = String(field.dropFirst("filename ".count))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
-                if !name.isEmpty { return name }
+                if !name.isEmpty {
+                    fileNames.append(name)
+                    break
+                }
             }
         }
-        return nil
+        return fileNames
     }
 }

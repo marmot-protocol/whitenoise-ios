@@ -14,7 +14,7 @@ struct ChatRow: View {
             AvatarBubble(
                 seed: item.id,
                 title: title,
-                pictureURL: nil
+                pictureURL: item.avatarURL
             )
             .frame(width: 52, height: 52)
 

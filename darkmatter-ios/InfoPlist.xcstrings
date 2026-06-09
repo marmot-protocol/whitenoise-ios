@@ -139,61 +139,61 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter uses the camera to scan profile QR codes so you can add people to encrypted chats."
+            "value": "Dark Matter uses the camera to scan profile QR codes and take photos for encrypted chats."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter verwendet die Kamera, um den Profil-QR-Code eines Kontakts zu scannen."
+            "value": "Dark Matter verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter usa la cámara para escanear el código QR del perfil de un contacto."
+            "value": "Dark Matter usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter utilise l’appareil photo pour scanner le code QR du profil d’un contact."
+            "value": "Dark Matter utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter usa la fotocamera per scansionare il codice QR del profilo di un contatto."
+            "value": "Dark Matter usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
           }
         },
         "pt": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Dark Matter usa a câmera para escanear o QR code do perfil de um contato."
+            "value": "O Dark Matter usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter использует камеру для сканирования QR-кода профиля контакта."
+            "value": "Dark Matter использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
           }
         },
         "tr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter, bir kişinin profil QR kodunu taramak için kamerayı kullanır."
+            "value": "Dark Matter, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter 使用相机扫描联系人的个人资料二维码。"
+            "value": "Dark Matter 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dark Matter 會使用相機掃描聯絡人的個人檔案 QR 碼。"
+            "value": "Dark Matter 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
           }
         }
       }

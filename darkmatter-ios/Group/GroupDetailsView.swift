@@ -8,10 +8,12 @@ struct GroupDetailsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @Bindable var viewModel: ConversationViewModel
+    var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
 
     @State private var showAddMembers = false
     @State private var showLeaveConfirm = false
     @State private var showRename = false
+    @State private var showGroupImageEditor = false
     @State private var renameDraft = ""
     @State private var actionError: String?
     @State private var mlsState: AppGroupMlsStateFfi?
@@ -69,6 +71,12 @@ struct GroupDetailsView: View {
             )
             .appAppearance()
         }
+        .sheet(isPresented: $showGroupImageEditor) {
+            GroupImageURLSheet(initialURL: viewModel.group.avatarUrl) { url in
+                try await updateGroupImage(url: url)
+            }
+            .appAppearance()
+        }
         .alert("Group name", isPresented: $showRename) {
             TextField("Group name", text: $renameDraft)
             Button("Save") { Task { await rename() } }
@@ -123,7 +131,7 @@ struct GroupDetailsView: View {
             Text(actionHelp?.message ?? "")
         }
         .task(id: appState.developerMode) {
-            await viewModel.refreshGroupManagement()
+            await refreshGroupManagementAndNotify()
             await refreshVisibleDebugState()
         }
         .task(id: mlsRefreshKey) {
@@ -169,6 +177,13 @@ struct GroupDetailsView: View {
                 } label: {
                     Label(viewModel.group.name.isEmpty ? "Set group name" : "Edit group name",
                           systemImage: "pencil")
+                }
+
+                Button {
+                    showGroupImageEditor = true
+                } label: {
+                    Label(viewModel.group.avatarUrl == nil ? "Set group image" : "Edit group image",
+                          systemImage: "photo")
                 }
             }
         }
@@ -663,7 +678,7 @@ struct GroupDetailsView: View {
                 name: name,
                 description: nil
             )
-            await viewModel.refreshGroupManagement()
+            await refreshGroupManagementAndNotify()
             await refreshVisibleDebugState()
             Haptics.success()
             appState.present(.success(L10n.string("Group name updated"), message: publishMessage(for: summary)))
@@ -672,6 +687,43 @@ struct GroupDetailsView: View {
             Haptics.error()
             actionError = error.localizedDescription
             appState.present(.error(L10n.string("Couldn't rename group"), message: error.localizedDescription))
+        }
+    }
+
+    private func updateGroupImage(url: String?) async throws {
+        guard let accountRef = appState.activeAccountRef else { throw GroupDetailsActionError.noActiveAccount }
+        let normalizedURL: String?
+        if let url {
+            guard let sanitized = GroupImageURLSheet.validatedImageURL(url) else {
+                throw GroupDetailsActionError.invalidImageURL
+            }
+            normalizedURL = sanitized.absoluteString
+        } else {
+            normalizedURL = nil
+        }
+
+        do {
+            appState.present(.warning(L10n.string("Updating group image…"), message: L10n.string("Publishing group update.")))
+            let summary = try await appState.marmot.updateGroupAvatarUrl(
+                accountRef: accountRef,
+                groupIdHex: viewModel.group.groupIdHex,
+                url: normalizedURL,
+                dim: nil,
+                thumbhash: nil
+            )
+            await refreshGroupManagementAndNotify()
+            await refreshVisibleDebugState()
+            Haptics.success()
+            appState.present(.success(
+                normalizedURL == nil ? L10n.string("Group image removed") : L10n.string("Group image updated"),
+                message: publishMessage(for: summary)
+            ))
+        } catch {
+            await refreshAfterFailedMutation()
+            Haptics.error()
+            actionError = error.localizedDescription
+            appState.present(.error(L10n.string("Couldn't update group image"), message: error.localizedDescription))
+            throw error
         }
     }
 
@@ -684,6 +736,7 @@ struct GroupDetailsView: View {
                 archived: archived
             )
             viewModel.applyGroupRecord(record)
+            onGroupChanged(record)
             await refreshVisibleDebugState()
             Haptics.success()
             appState.present(archived ? .warning(L10n.string("Group archived")) : .success(L10n.string("Group unarchived")))
@@ -778,6 +831,12 @@ struct GroupDetailsView: View {
         await refreshVisibleDebugState()
     }
 
+    private func refreshGroupManagementAndNotify() async {
+        if await viewModel.refreshGroupManagement() {
+            onGroupChanged(viewModel.group)
+        }
+    }
+
     private func refreshVisibleDebugState() async {
         guard appState.developerMode else {
             mlsState = nil
@@ -807,11 +866,14 @@ struct GroupDetailsView: View {
 
 private enum GroupDetailsActionError: LocalizedError {
     case noActiveAccount
+    case invalidImageURL
 
     var errorDescription: String? {
         switch self {
         case .noActiveAccount:
             L10n.string("No active account is selected.")
+        case .invalidImageURL:
+            L10n.string("Use a public HTTPS image URL.")
         }
     }
 }

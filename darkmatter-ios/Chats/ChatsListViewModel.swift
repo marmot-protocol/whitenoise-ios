@@ -11,6 +11,7 @@ final class ChatsListViewModel {
 
     struct Item: Identifiable {
         let row: ChatListRowFfi
+        let avatarURL: URL?
         var id: String { row.groupIdHex }
         var title: String { ProfileSanitizer.groupName(row.title) ?? IdentityFormatter.short(row.groupIdHex) }
         @MainActor var previewText: String? {
@@ -32,8 +33,11 @@ final class ChatsListViewModel {
 
     private weak var appState: AppState?
     private var chatListTask: Task<Void, Never>?
+    private var avatarURLTask: Task<Void, Never>?
     private var currentAccount: String?
     private var rows: [ChatListRowFfi] = []
+    private var avatarURLByGroupId: [String: String] = [:]
+    private var avatarURLLoadedGroupIds: Set<String> = []
 
     init(appState: AppState) {
         self.appState = appState
@@ -41,6 +45,7 @@ final class ChatsListViewModel {
 
     isolated deinit {
         chatListTask?.cancel()
+        avatarURLTask?.cancel()
     }
 
     /// Begin (or rebind, when `accountRef` changes) the projected chat-list
@@ -49,10 +54,14 @@ final class ChatsListViewModel {
         if currentAccount == accountRef, !force { return }
         chatListTask?.cancel()
         chatListTask = nil
+        avatarURLTask?.cancel()
+        avatarURLTask = nil
         if currentAccount != accountRef {
             rows = []
             items = []
             archivedItems = []
+            avatarURLByGroupId = [:]
+            avatarURLLoadedGroupIds = []
         }
         loadError = nil
         currentAccount = accountRef
@@ -106,6 +115,7 @@ final class ChatsListViewModel {
     func applyChatListSnapshot(_ snapshot: [ChatListRowFfi]) {
         rows = snapshot
         recompute()
+        scheduleAvatarURLRefresh()
     }
 
     func applyChatListRow(_ row: ChatListRowFfi) {
@@ -115,6 +125,7 @@ final class ChatsListViewModel {
             rows.append(row)
         }
         recompute()
+        scheduleAvatarURLRefresh()
     }
 
     func applyChatListUpdate(_ update: ChatListSubscriptionUpdateFfi) {
@@ -140,6 +151,7 @@ final class ChatsListViewModel {
             row.archived = record.archived
             row.pendingConfirmation = record.pendingConfirmation
             row.groupName = record.name
+            row.avatarUrl = record.avatarUrl
             if let name = ProfileSanitizer.groupName(record.name) {
                 row.title = name
             }
@@ -147,13 +159,53 @@ final class ChatsListViewModel {
         } else {
             rows.append(Self.row(from: record))
         }
+        avatarURLByGroupId[record.groupIdHex] = record.avatarUrl
+        avatarURLLoadedGroupIds.insert(record.groupIdHex)
         recompute()
     }
 
     private func recompute() {
-        let all = rows.map(Item.init(row:))
+        let all = rows.map { row in
+            Item(
+                row: row,
+                avatarURL: ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
+            )
+        }
         items = all.filter { !$0.row.archived }.sorted(by: Self.sortRule)
         archivedItems = all.filter { $0.row.archived }.sorted(by: Self.sortRule)
+    }
+
+    private func scheduleAvatarURLRefresh() {
+        guard let accountRef = currentAccount, let appState else { return }
+        let groupIds = rows
+            .filter { $0.avatarUrl == nil }
+            .map(\.groupIdHex)
+            .filter { !avatarURLLoadedGroupIds.contains($0) }
+        guard !groupIds.isEmpty else { return }
+
+        avatarURLTask?.cancel()
+        avatarURLTask = Task { [weak self, weak appState] in
+            guard let self, let appState else { return }
+            var loaded = Set<String>()
+            var updates: [String: String] = [:]
+            for groupId in groupIds where !Task.isCancelled {
+                if let details = try? await appState.marmot.groupDetails(
+                    accountRef: accountRef,
+                    groupIdHex: groupId
+                ) {
+                    loaded.insert(groupId)
+                    if let avatarUrl = details.group.avatarUrl {
+                        updates[groupId] = avatarUrl
+                    }
+                }
+            }
+            guard !Task.isCancelled, !loaded.isEmpty else { return }
+            self.avatarURLLoadedGroupIds.formUnion(loaded)
+            for (groupId, avatarURL) in updates {
+                self.avatarURLByGroupId[groupId] = avatarURL
+            }
+            self.recompute()
+        }
     }
 
     /// Newest projected activity first; rows without messages fall back to the
@@ -182,6 +234,7 @@ final class ChatsListViewModel {
             pendingConfirmation: group.pendingConfirmation,
             title: title,
             groupName: group.name,
+            avatarUrl: group.avatarUrl,
             avatar: nil,
             lastMessage: nil,
             unreadCount: 0,

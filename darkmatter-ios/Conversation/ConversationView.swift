@@ -9,8 +9,12 @@ enum TimelineBottom {
         bottomY <= viewportBottomY + pinnedThreshold
     }
 
-    static func distanceToBottom(contentHeight: CGFloat, visibleBottomY: CGFloat) -> CGFloat {
-        max(0, contentHeight - visibleBottomY)
+    static func distanceToBottom(
+        contentHeight: CGFloat,
+        visibleBottomY: CGFloat,
+        bottomContentInset: CGFloat = 0
+    ) -> CGFloat {
+        max(0, contentHeight + bottomContentInset - visibleBottomY)
     }
 
     static func shouldShowScrollToBottomButton(distanceToBottom: CGFloat) -> Bool {
@@ -22,7 +26,36 @@ enum TimelineBottom {
     }
 
     static func pinnedStateAfterScrollButtonTap(currentIsPinned: Bool) -> Bool {
-        currentIsPinned
+        true
+    }
+
+    static func shouldPreservePinAfterContentGrowth(
+        previous: TimelineBottomViewport,
+        current: TimelineBottomViewport
+    ) -> Bool {
+        previous.isPinned && current.contentHeight > previous.contentHeight
+    }
+}
+
+struct TimelineBottomViewport: Equatable {
+    let contentHeight: CGFloat
+    let visibleBottomY: CGFloat
+    let bottomContentInset: CGFloat
+
+    var distanceToBottom: CGFloat {
+        TimelineBottom.distanceToBottom(
+            contentHeight: contentHeight,
+            visibleBottomY: visibleBottomY,
+            bottomContentInset: bottomContentInset
+        )
+    }
+
+    var shouldShowScrollToBottomButton: Bool {
+        TimelineBottom.shouldShowScrollToBottomButton(distanceToBottom: distanceToBottom)
+    }
+
+    var isPinned: Bool {
+        !shouldShowScrollToBottomButton
     }
 }
 
@@ -113,9 +146,13 @@ struct ConversationView: View {
     let initialMemberCount: Int?
     let initialTargetMessageIdHex: String?
     let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
+    let onGroupChanged: ((AppGroupRecordFfi) -> Void)?
 
     @State private var viewModel: ConversationViewModel?
     @State private var draft: String = ""
+    @State private var mediaDrafts: [MediaDraftAttachment] = []
+    @State private var showCameraCapture = false
+    @State private var showPhotoLibraryPicker = false
     @State private var showDetails = false
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
@@ -149,13 +186,15 @@ struct ConversationView: View {
         initialMemberCount: Int? = nil,
         initialTargetMessageIdHex: String? = nil,
         initialAppState: AppState? = nil,
-        onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil
+        onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil,
+        onGroupChanged: ((AppGroupRecordFfi) -> Void)? = nil
     ) {
         self.chat = chat
         self.initialTitle = initialTitle
         self.initialOtherMember = initialOtherMember
         self.initialMemberCount = initialMemberCount
         self.onChatListRowUpdated = onChatListRowUpdated
+        self.onGroupChanged = onGroupChanged
         let targetMessageId = initialTargetMessageIdHex?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.initialTargetMessageIdHex = targetMessageId?.isEmpty == false ? targetMessageId : nil
         _viewModel = State(
@@ -207,7 +246,12 @@ struct ConversationView: View {
             .sheet(isPresented: $showDetails) {
                 if let viewModel {
                     NavigationStack {
-                        GroupDetailsView(viewModel: viewModel)
+                        GroupDetailsView(
+                            viewModel: viewModel,
+                            onGroupChanged: { group in
+                                onGroupChanged?(group)
+                            }
+                        )
                     }
                     .appAppearance()
                 }
@@ -220,6 +264,31 @@ struct ConversationView: View {
                     })
                     .appAppearance()
                 }
+            }
+            .sheet(isPresented: $showCameraCapture) {
+                CameraCaptureView(
+                    onImage: { image in
+                        showCameraCapture = false
+                        addCameraImage(image)
+                    },
+                    onCancel: {
+                        showCameraCapture = false
+                    }
+                )
+                .ignoresSafeArea()
+            }
+            .sheet(isPresented: $showPhotoLibraryPicker) {
+                PhotoLibraryPickerView(
+                    selectionLimit: remainingMediaDraftSlots,
+                    onSelection: addPhotoLibrarySelections,
+                    onError: { error in
+                        appState.present(.error(L10n.string("Couldn't add photo"), message: error.localizedDescription))
+                    },
+                    onDismiss: {
+                        showPhotoLibraryPicker = false
+                    }
+                )
+                .ignoresSafeArea()
             }
             .task(id: appState.runtimeGeneration) {
                 if viewModel == nil {
@@ -252,10 +321,19 @@ struct ConversationView: View {
             if let viewModel, let replyingTo = viewModel.replyingTo {
                 replyBar(for: replyingTo, viewModel: viewModel)
             }
+            if !mediaDrafts.isEmpty {
+                MediaDraftStrip(attachments: mediaDrafts) { id in
+                    mediaDrafts.removeAll { $0.id == id }
+                }
+            }
             ComposerBar(
                 draft: $draft,
                 isSending: viewModel?.sendInFlight ?? false,
+                hasAttachments: !mediaDrafts.isEmpty,
+                mediaEnabled: viewModel?.canSendMediaAttachments ?? false,
                 focusRequest: composerFocusRequest,
+                onTakePhoto: takePhoto,
+                onPhotoLibrary: openPhotoLibrary,
                 onSend: send
             )
         }
@@ -393,15 +471,22 @@ struct ConversationView: View {
                         .scrollDismissesKeyboard(.interactively)
                         .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
                         .onPreferenceChange(RowFramesKey.self) { rowFrames.frames = $0 }
-                        .onScrollGeometryChange(for: Bool.self) { geometry in
-                            TimelineBottom.shouldShowScrollToBottomButton(
-                                distanceToBottom: TimelineBottom.distanceToBottom(
-                                    contentHeight: geometry.contentSize.height,
-                                    visibleBottomY: geometry.visibleRect.maxY
-                                )
+                        .onScrollGeometryChange(for: TimelineBottomViewport.self) { geometry in
+                            TimelineBottomViewport(
+                                contentHeight: geometry.contentSize.height,
+                                visibleBottomY: geometry.visibleRect.maxY,
+                                bottomContentInset: geometry.contentInsets.bottom
                             )
-                        } action: { _, shouldShowButton in
-                            isAtTimelineBottom = !shouldShowButton
+                        } action: { previous, current in
+                            if TimelineBottom.shouldPreservePinAfterContentGrowth(
+                                previous: previous,
+                                current: current
+                            ) {
+                                isAtTimelineBottom = true
+                                scrollToBottom(proxy: proxy, animated: true)
+                            } else {
+                                isAtTimelineBottom = current.isPinned
+                            }
                         }
                         .onChange(of: viewModel.timeline.last?.id) { _, newId in
                             guard newId != nil else { return }
@@ -443,10 +528,14 @@ struct ConversationView: View {
                 status: status,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
                 replyPreview: viewModel.replyPreview(for: record),
+                mediaItems: viewModel.mediaItems(for: item),
                 reactions: viewModel.reactions(for: record.messageIdHex),
                 onTapReaction: { emoji in
                     Task { await viewModel.toggleReaction(emoji, on: record) }
                     appState.addRecentReaction(emoji)
+                },
+                onLoadMedia: { media in
+                    try await viewModel.data(for: media)
                 }
             )
             .replySwipeToReply(isEnabled: canReply(to: record, viewModel: viewModel)) {
@@ -621,10 +710,84 @@ struct ConversationView: View {
         // view model were nil at dispatch time (#49).
         guard let viewModel else { return }
         let text = draft
-        draft = ""
-        Task {
-            await viewModel.send(text)
+        let attachments = mediaDrafts
+        guard !attachments.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
         }
+        draft = ""
+        mediaDrafts = []
+        Task {
+            if attachments.isEmpty {
+                await viewModel.send(text)
+            } else {
+                await viewModel.sendMedia(attachments, caption: text)
+            }
+        }
+    }
+
+    private func takePhoto() {
+        guard canBeginMediaSelection() else { return }
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            appState.present(.warning(L10n.string("Camera is not available on this device")))
+            return
+        }
+        showCameraCapture = true
+    }
+
+    private func openPhotoLibrary() {
+        guard canBeginMediaSelection() else { return }
+        showPhotoLibraryPicker = true
+    }
+
+    private func addCameraImage(_ image: UIImage) {
+        do {
+            try appendMediaDraft(MediaDraftProcessor.attachment(from: image, fileName: nil))
+        } catch {
+            appState.present(.error(L10n.string("Couldn't add photo"), message: error.localizedDescription))
+        }
+    }
+
+    private func addPhotoLibrarySelections(_ selections: [PhotoLibrarySelection]) {
+        guard let viewModel, viewModel.canSendMediaAttachments else {
+            appState.present(.warning(L10n.string("Media is not available in this group")))
+            return
+        }
+        for selection in selections {
+            do {
+                try appendMediaDraft(MediaDraftProcessor.attachment(from: selection.data, fileName: selection.fileName))
+            } catch {
+                appState.present(.error(L10n.string("Couldn't add photo"), message: error.localizedDescription))
+            }
+        }
+    }
+
+    private var remainingMediaDraftSlots: Int {
+        max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
+    }
+
+    private func canBeginMediaSelection() -> Bool {
+        guard let viewModel, viewModel.canSendMediaAttachments else {
+            appState.present(.warning(L10n.string("Media is not available in this group")))
+            return false
+        }
+        guard remainingMediaDraftSlots > 0 else {
+            presentMaxAttachmentWarning()
+            return false
+        }
+        return true
+    }
+
+    private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws {
+        guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
+            presentMaxAttachmentWarning()
+            return
+        }
+        mediaDrafts.append(attachment)
+        composerFocusRequest += 1
+    }
+
+    private func presentMaxAttachmentWarning() {
+        appState.present(.warning(L10n.formatted("You can send up to %lld photos at once", Int64(MediaDraftProcessor.maxAttachmentCount))))
     }
 
     private func dismissKeyboard() {

@@ -15,3 +15,26 @@ struct ReceivedBubbleContrastTests {
         #expect(MessageBubble.receivedBubbleColor(dark: false) == UIColor.secondarySystemBackground)
     }
 }
+
+@MainActor
+struct MessageBubbleReplyChromeTests {
+
+    @Test func replyHeaderUsesBalancedPaddingAndExtraBodyGap() {
+        #expect(MessageBubbleReplyLayout.headerVerticalInset > 0)
+        #expect(MessageBubbleReplyLayout.headerHorizontalInset == MessageBubbleReplyLayout.bodyHorizontalInset)
+        #expect(MessageBubbleReplyLayout.bodyTopInsetAfterReply > MessageBubbleReplyLayout.bodyTopInset)
+        #expect(MessageBubbleReplyLayout.bodyBottomInset == MessageBubbleReplyLayout.bodyTopInset)
+    }
+
+    @Test func receivedReplyHeaderContrastsWithBubbleFill() {
+        #expect(MessageBubble.receivedReplyHeaderColor(dark: true) == UIColor.systemGray4)
+        #expect(MessageBubble.receivedReplyHeaderColor(dark: false) == UIColor.systemGray5)
+        #expect(MessageBubble.receivedReplyHeaderColor(dark: true) != MessageBubble.receivedBubbleColor(dark: true))
+        #expect(MessageBubble.receivedReplyHeaderColor(dark: false) != MessageBubble.receivedBubbleColor(dark: false))
+    }
+
+    @Test func sentReplyHeaderUsesSubtleOverlay() {
+        #expect(MessageBubbleReplyLayout.sentHeaderOverlayOpacity > 0)
+        #expect(MessageBubbleReplyLayout.sentHeaderOverlayOpacity < 0.25)
+    }
+}

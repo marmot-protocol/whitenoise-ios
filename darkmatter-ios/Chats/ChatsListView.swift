@@ -511,7 +511,8 @@ private struct ChatDestination: View {
                         initialTitle: item.title,
                         initialTargetMessageIdHex: target.messageIdHex,
                         initialAppState: appState,
-                        onChatListRowUpdated: { viewModel.applyChatListRow($0) }
+                        onChatListRowUpdated: { viewModel.applyChatListRow($0) },
+                        onGroupChanged: { viewModel.applyLocalGroupChange($0) }
                     )
                 } else if let loadError, loadingGroupId == item.id {
                     ContentUnavailableView {

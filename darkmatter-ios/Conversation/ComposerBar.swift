@@ -42,7 +42,11 @@ struct ComposerBar: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var draft: String
     let isSending: Bool
+    let hasAttachments: Bool
+    let mediaEnabled: Bool
     let focusRequest: Int
+    let onTakePhoto: () -> Void
+    let onPhotoLibrary: () -> Void
     let onSend: () -> Void
     @FocusState private var focused: Bool
 
@@ -50,6 +54,26 @@ struct ComposerBar: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
+            Menu {
+                Button(action: onTakePhoto) {
+                    Label("Take Photo", systemImage: "camera")
+                }
+
+                Button(action: onPhotoLibrary) {
+                    Label("Photo Library", systemImage: "photo.on.rectangle")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(mediaEnabled ? Color.primary : Color.secondary)
+                    .frame(width: controlHeight, height: controlHeight)
+                    .background {
+                        Circle().fill(Color(.tertiarySystemFill))
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Add photo")
+
             TextField("Message", text: $draft, axis: .vertical)
                 .focused($focused)
                 .lineLimit(1...5)
@@ -104,7 +128,7 @@ struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        !isSending && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isSending && (hasAttachments || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     private func triggerSend() {

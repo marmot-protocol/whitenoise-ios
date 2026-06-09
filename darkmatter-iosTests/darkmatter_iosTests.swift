@@ -1103,7 +1103,7 @@ struct LocalizationCatalogTests {
 
         let english = try localizedValue("NSCameraUsageDescription", locale: "en", in: strings)
         #expect(english != "NSCameraUsageDescription")
-        #expect(english == "Dark Matter uses the camera to scan profile QR codes so you can add people to encrypted chats.")
+        #expect(english == "Dark Matter uses the camera to scan profile QR codes and take photos for encrypted chats.")
         #expect(localizations["fr"] != nil)
         #expect(localizations["zh-Hant"] != nil)
     }
@@ -1948,6 +1948,105 @@ struct GroupDisplayTests {
 
         #expect(title.hasPrefix("npub1"))
     }
+
+    @MainActor
+    @Test func groupAvatarURLWinsOverDirectMessageFallback() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let avatar = GroupDisplay.avatarURL(
+            group: group(name: "", avatarUrl: "https://cdn.example.com/group.png"),
+            otherMember: hex("22"),
+            memberCount: 2,
+            appState: appState
+        )
+
+        #expect(avatar?.absoluteString == "https://cdn.example.com/group.png")
+    }
+
+    @MainActor
+    @Test func groupAvatarURLRejectsUnsafeGroupURL() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let avatar = GroupDisplay.avatarURL(
+            group: group(name: "Unsafe", avatarUrl: "http://127.0.0.1/group.png"),
+            otherMember: hex("22"),
+            memberCount: 3,
+            appState: appState
+        )
+
+        #expect(avatar == nil)
+    }
+}
+
+struct GroupImageSearchTests {
+    @Test func duckDuckGoVQDParserHandlesKnownEmbeddings() throws {
+        #expect(DuckDuckGoImageSearchClient.vqdToken(in: #"DDG.duckbar.load('images', {vqd:'4-1234567890'});"#) == "4-1234567890")
+        #expect(DuckDuckGoImageSearchClient.vqdToken(in: #""vqd":"3-abc&amp;def""#) == "3-abc&def")
+        #expect(DuckDuckGoImageSearchClient.vqdToken(in: #"https://duckduckgo.com/i.js?q=cats&vqd=2-token&ia=images"#) == "2-token")
+    }
+
+    @Test func duckDuckGoResultDecoderKeepsOnlyPublicHTTPSImages() throws {
+        let json = """
+        {
+          "results": [
+            {
+              "title": "Safe",
+              "image": "https://images.example.com/a.jpg",
+              "thumbnail": "//external-content.duckduckgo.com/thumb.jpg",
+              "url": "https://example.com/page",
+              "width": 640,
+              "height": 480
+            },
+            {
+              "title": "Duplicate",
+              "image": "https://images.example.com/a.jpg",
+              "thumbnail": "https://example.com/other-thumb.jpg",
+              "url": "https://example.com/page",
+              "width": 640,
+              "height": 480
+            },
+            {
+              "title": "Unsafe",
+              "image": "http://127.0.0.1/a.jpg",
+              "thumbnail": "https://example.com/thumb.jpg",
+              "url": "https://example.com/page",
+              "width": 1,
+              "height": 1
+            }
+          ]
+        }
+        """
+
+        let results = try DuckDuckGoImageSearchClient.decodeResults(from: Data(json.utf8))
+
+        #expect(results.count == 1)
+        #expect(results.first?.imageURL.absoluteString == "https://images.example.com/a.jpg")
+        #expect(results.first?.thumbnailURL?.absoluteString == "https://external-content.duckduckgo.com/thumb.jpg")
+        #expect(results.first?.sourceHost == "example.com")
+        #expect(results.first?.dimensionsLabel == "640x480")
+    }
+
+    @Test func groupImageSheetUsesProfileImageURLPolicy() {
+        #expect(GroupImageURLSheet.validatedImageURL("https://example.com/a.png")?.absoluteString == "https://example.com/a.png")
+        #expect(GroupImageURLSheet.validatedImageURL("http://example.com/a.png") == nil)
+        #expect(GroupImageURLSheet.validatedImageURL("https://localhost/a.png") == nil)
+    }
+
+    @Test func groupDetailsSourceWiresAvatarMutationAndEditor() throws {
+        let source = try String(contentsOf: groupDetailsSourceURL, encoding: .utf8)
+
+        #expect(source.contains("onGroupChanged"))
+        #expect(source.contains("refreshGroupManagementAndNotify"))
+        #expect(source.contains("showGroupImageEditor"))
+        #expect(source.contains("GroupImageURLSheet(initialURL: viewModel.group.avatarUrl)"))
+        #expect(source.contains("updateGroupAvatarUrl"))
+        #expect(source.contains(#"Label(viewModel.group.avatarUrl == nil ? "Set group image" : "Edit group image""#))
+    }
+
+    private var groupDetailsSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Group/GroupDetailsView.swift")
+    }
 }
 
 struct DeepLinkTests {
@@ -2057,9 +2156,27 @@ struct ChatsListProjectionTests {
             )
         )
 
-        let item = ChatsListViewModel.Item(row: unsafe)
+        let item = ChatsListViewModel.Item(row: unsafe, avatarURL: nil)
 
         #expect(item.previewText == "hello there")
+    }
+
+    @Test func itemAvatarURLUsesProjectedGroupAvatarURL() throws {
+        let item = ChatsListViewModel.Item(
+            row: chatListRow(groupIdHex: hex("d4"), title: "Avatar"),
+            avatarURL: URL(string: "https://cdn.example.com/group.png")
+        )
+
+        #expect(item.avatarURL?.absoluteString == "https://cdn.example.com/group.png")
+    }
+
+    @Test func itemAvatarURLRejectsUnsafeProjectedGroupAvatarURL() throws {
+        let item = ChatsListViewModel.Item(
+            row: chatListRow(groupIdHex: hex("d5"), title: "Unsafe Avatar"),
+            avatarURL: nil
+        )
+
+        #expect(item.avatarURL == nil)
     }
 
     @Test func localArchiveChangeMovesProjectedRowBetweenScopes() throws {
@@ -2072,6 +2189,20 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.isEmpty)
         #expect(viewModel.archivedItems.map(\.id) == [row.groupIdHex])
         #expect(viewModel.archivedItems.first?.isArchived == true)
+    }
+
+    @Test func localGroupChangeUpdatesProjectedAvatarURL() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let row = chatListRow(groupIdHex: hex("d6"), title: "General")
+        viewModel.applyChatListSnapshot([row])
+
+        viewModel.applyLocalGroupChange(group(
+            name: "General",
+            id: row.groupIdHex,
+            avatarUrl: "https://cdn.example.com/group.png"
+        ))
+
+        #expect(viewModel.items.first?.avatarURL?.absoluteString == "https://cdn.example.com/group.png")
     }
 
     @Test func chatListRemoveUpdateDropsProjectedRow() throws {
@@ -2100,6 +2231,12 @@ struct ChatsListProjectionTests {
         #expect(source.contains("@State private var resolvedGroup"))
         #expect(source.contains("groupDetails(accountRef: accountRef, groupIdHex: item.id)"))
         #expect(source.matches(#"ConversationView\(\s*chat: resolvedGroup"#))
+    }
+
+    @Test func chatDestinationForwardsConversationGroupChangesToChatList() throws {
+        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
+
+        #expect(source.contains("onGroupChanged: { viewModel.applyLocalGroupChange($0) }"))
     }
 
     @Test func chatListUsesMessagesStyleSearchAndComposeChrome() throws {
@@ -2268,6 +2405,90 @@ struct ConversationTimelineProjectionTests {
         // The reply preview's resolved name now comes from the binding (covered by
         // ResolvedDisplayNameTests); here we assert the hydrated preview text.
         #expect(viewModel.replyPreview(for: replyRecord)?.text == "the parent text")
+    }
+
+    @Test func replyResponseStaysBelowParentWhenSameTimestampWouldSortByIdFirst() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let approve = timelineRecord(
+            messageIdHex: hex("ff"),
+            direction: "sent",
+            sender: hex("22"),
+            plaintext: "/approve",
+            timelineAt: 1
+        )
+        let response = timelineRecord(
+            messageIdHex: hex("aa"),
+            sender: hex("11"),
+            plaintext: "Command approved.",
+            timelineAt: 1,
+            replyToMessageIdHex: approve.messageIdHex,
+            replyPreview: TimelineReplyPreviewFfi(
+                messageIdHex: approve.messageIdHex,
+                sender: approve.sender,
+                plaintext: approve.plaintext,
+                kind: MessageSemantics.kindChat,
+                mediaJson: nil,
+                agentTextStreamJson: nil,
+                deleted: false
+            )
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [response, approve], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        let ids = viewModel.timeline.compactMap { item -> String? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record.messageIdHex
+        }
+        #expect(ids == [approve.messageIdHex, response.messageIdHex])
+    }
+
+    @Test func liveReplyResponseStaysBelowParentWhenSameTimestampWouldInsertAbove() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let approve = timelineRecord(
+            messageIdHex: hex("ff"),
+            direction: "sent",
+            sender: hex("22"),
+            plaintext: "/approve",
+            timelineAt: 1
+        )
+        let response = timelineRecord(
+            messageIdHex: hex("aa"),
+            sender: hex("11"),
+            plaintext: "Command approved.",
+            timelineAt: 1,
+            replyToMessageIdHex: approve.messageIdHex
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [approve], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
+            accountIdHex: hex("22"),
+            accountLabel: "account",
+            update: TimelineProjectionUpdateFfi(
+                groupIdHex: hex("aa"),
+                messages: [],
+                changes: [.upsert(trigger: .newMessage, message: response)],
+                chatListRow: nil,
+                chatListTrigger: .newLastMessage
+            )
+        )))
+
+        let ids = viewModel.timeline.compactMap { item -> String? in
+            guard case .message(let record, _) = item.kind else { return nil }
+            return record.messageIdHex
+        }
+        #expect(ids == [approve.messageIdHex, response.messageIdHex])
     }
 
     @Test func liveTailRefreshPreservesLoadedScrollback() throws {
@@ -2936,8 +3157,133 @@ struct AgentStreamTests {
             ]
         )
 
-        #expect(ConversationViewModel.agentStreamStartIdToWatch(from: start, finalizedStreamIds: []) == streamId)
-        #expect(ConversationViewModel.agentStreamStartIdToWatch(from: start, finalizedStreamIds: [streamId]) == nil)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(
+            from: start,
+            finalizedStreamIds: [],
+            trigger: .agentStreamStarted
+        ) == streamId)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(
+            from: start,
+            finalizedStreamIds: [streamId],
+            trigger: .agentStreamStarted
+        ) == nil)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(
+            from: start,
+            finalizedStreamIds: [],
+            trigger: nil
+        ) == nil)
+        #expect(ConversationViewModel.agentStreamStartIdToWatch(
+            from: start,
+            finalizedStreamIds: [],
+            trigger: .snapshotRefresh
+        ) == nil)
+    }
+
+    @MainActor
+    @Test func historicalStreamStartsRenderNoBlankBubble() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        let start = timelineRecord(
+            messageIdHex: hex("cc"),
+            plaintext: "",
+            kind: MessageSemantics.kindAgentStreamStart,
+            tags: streamStartTags(streamId),
+            timelineAt: 1,
+            agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"started"}"#
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [start], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        #expect(viewModel.timeline.isEmpty)
+    }
+
+    @MainActor
+    @Test func finalizedStreamProjectionRemovesSyntheticPreview() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 1, text: "partial")
+        )
+        let final = timelineRecord(
+            messageIdHex: hex("ef"),
+            sender: hex("11"),
+            plaintext: "complete",
+            kind: MessageSemantics.kindChat,
+            tags: [
+                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
+                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("cc")]),
+            ],
+            timelineAt: 2,
+            agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"finalized","start_event_id":"\#(hex("cc"))"}"#
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [final], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        #expect(viewModel.timeline.count == 1)
+        #expect(viewModel.timeline.first?.id == "msg:\(hex("ef"))")
+        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
+            Issue.record("Expected the finalized timeline message")
+            return
+        }
+        #expect(status == .received)
+        #expect(record.plaintext == "complete")
+    }
+
+    @MainActor
+    @Test func fallbackChatUpdateDropsMatchingLivePreview() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 1, text: "partial")
+        )
+        let fallback = timelineRecord(
+            messageIdHex: hex("ef"),
+            sender: hex("11"),
+            plaintext: "fallback complete",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            timelineAt: 2
+        )
+
+        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
+            accountIdHex: hex("22"),
+            accountLabel: "account",
+            update: TimelineProjectionUpdateFfi(
+                groupIdHex: hex("aa"),
+                messages: [],
+                changes: [.upsert(trigger: .newMessage, message: fallback)],
+                chatListRow: nil,
+                chatListTrigger: .newLastMessage
+            )
+        )))
+
+        #expect(viewModel.timeline.count == 1)
+        #expect(viewModel.timeline.first?.id == "msg:\(hex("ef"))")
+        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
+            Issue.record("Expected the fallback chat message")
+            return
+        }
+        #expect(status == .received)
+        #expect(record.plaintext == "fallback complete")
     }
 
     @MainActor
@@ -2968,6 +3314,82 @@ struct AgentStreamTests {
         #expect(status == .streaming)
         #expect(record.plaintext == "Hello")
         #expect(MessagePreview.body(record) == "Hello")
+    }
+
+    @MainActor
+    @Test func streamStatusAndProgressDoNotChangePreviewText() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .status(seq: 1, status: "thinking")
+        )
+        #expect(viewModel.timeline.isEmpty)
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 2, text: "answer")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .progress(seq: 3, text: "searched 3 sources")
+        )
+
+        #expect(viewModel.timeline.count == 1)
+        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
+            Issue.record("Expected a stream preview message")
+            return
+        }
+        #expect(status == .streaming)
+        #expect(record.plaintext == "answer")
+    }
+
+    @MainActor
+    @Test func checkpointRecordReplacesPreviewText() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 1, text: "partial")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .record(seq: 2, recordType: 0x04, text: "replacement")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 3, text: " continued")
+        )
+
+        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
+            Issue.record("Expected a stream preview message")
+            return
+        }
+        #expect(status == .streaming)
+        #expect(record.plaintext == "replacement continued")
+    }
+
+    private func streamStartTags(_ streamId: String) -> [MessageTagFfi] {
+        [
+            MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
+            MessageTagFfi(values: ["stream-type", "text"]),
+            MessageTagFfi(values: ["final-kind", "9"]),
+            MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
+        ]
     }
 
     @MainActor
@@ -3038,6 +3460,55 @@ struct AgentStreamTests {
         #expect(status == .received)
         #expect(record.plaintext == "complete")
         #expect(MessagePreview.body(record) == "complete")
+    }
+
+    @MainActor
+    @Test func emptyFinishedUpdateDoesNotCreateBlankBubble() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .status(seq: 1, status: "thinking")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .progress(seq: 2, text: "tool started")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .finished(text: "", transcriptHashHex: hex("55"), chunkCount: 2)
+        )
+
+        #expect(viewModel.timeline.isEmpty)
+    }
+
+    @MainActor
+    @Test func abortRecordDropsLivePreview() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .chunk(seq: 1, text: "partial")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: hex("11"),
+            update: .record(seq: 2, recordType: 0x05, text: "")
+        )
+
+        #expect(viewModel.timeline.isEmpty)
     }
 
     @MainActor
@@ -3172,12 +3643,50 @@ struct MessageSemanticsTests {
                 MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
             ]
         )
+        let agentActivity = unsignedEventRecord(
+            plaintext: #"{"v":1,"status":"thinking","text":"Thinking"}"#,
+            kind: MessageSemantics.kindAgentActivity,
+            tags: [MessageTagFfi(values: ["status", "thinking"])]
+        )
+        let agentOperation = unsignedEventRecord(
+            plaintext: #"{"v":1,"event_type":"tool_call","status":"started","text":"Searching"}"#,
+            kind: MessageSemantics.kindAgentOperation,
+            tags: [MessageTagFfi(values: ["operation", "tool_call"])]
+        )
+        let groupSystem = unsignedEventRecord(
+            plaintext: #"{"v":1,"system_type":"member_added","text":"Member added"}"#,
+            kind: MessageSemantics.kindGroupSystem,
+            tags: [MessageTagFfi(values: ["system", "member_added"])]
+        )
 
         #expect(MessageSemantics.classify(reaction) == .reaction(targetMessageId: target))
         #expect(MessageSemantics.classify(deletion) == .delete(targetMessageId: target))
+        #expect(MessageSemantics.classify(agentActivity) == .agentActivity)
+        #expect(MessageSemantics.classify(agentOperation) == .agentOperation)
+        #expect(MessageSemantics.classify(groupSystem) == .groupSystem)
         #expect(!MessagePreview.isPreviewable(reaction))
         #expect(!MessagePreview.isPreviewable(deletion))
         #expect(!MessagePreview.isPreviewable(streamStart))
+        #expect(!MessagePreview.isPreviewable(agentActivity))
+        #expect(!MessagePreview.isPreviewable(agentOperation))
+        #expect(!MessagePreview.isPreviewable(groupSystem))
+        #expect(MessagePreview.body(agentActivity) == "Thinking")
+        #expect(MessagePreview.body(agentOperation) == "Searching")
+        #expect(MessagePreview.body(groupSystem) == "Member added")
+    }
+
+    @Test func typedAgentReplyPreviewDoesNotExposeRawJson() {
+        let preview = TimelineReplyPreviewFfi(
+            messageIdHex: hex("bb"),
+            sender: hex("11"),
+            plaintext: #"{"v":1,"event_type":"tool_call","status":"started","text":"Searching"}"#,
+            kind: MessageSemantics.kindAgentOperation,
+            mediaJson: nil,
+            agentTextStreamJson: nil,
+            deleted: false
+        )
+
+        #expect(MessagePreview.body(preview) == "Searching")
     }
 
     @Test func decodedUnsignedEventStreamFinalPreviewsTranscript() {
@@ -3212,7 +3721,7 @@ struct MessageSemanticsTests {
         #expect(MessageSemantics.classify(record) == .chat)
     }
 
-    @Test func mediaReferenceParsesMip04V2ImetaFields() {
+    @Test func mediaReferenceParsesEncryptedMediaV1ImetaFields() {
         let nonce = String(repeating: "22", count: 12)
         let record = AppMessageRecordFfi(
             messageIdHex: hex("dd"),
@@ -3224,13 +3733,14 @@ struct MessageSemanticsTests {
             tags: [
                 MessageTagFfi(values: [
                     MessageSemantics.imetaTag,
-                    "url https://media.example/a.png",
+                    "v encrypted-media-v1",
+                    "locator blossom-v1 https://media.example/a.png",
+                    "ciphertext_sha256 \(hex("44"))",
+                    "plaintext_sha256 \(hex("33"))",
+                    "nonce \(nonce)",
                     "m image/png",
                     "filename a.png",
-                    "x \(hex("33"))",
-                    "n \(nonce)",
-                    "v mip04-v2",
-                    "size 7",
+                    "dim 640x480",
                 ])
             ],
             recordedAt: 1,
@@ -3242,13 +3752,36 @@ struct MessageSemanticsTests {
             return
         }
 
-        #expect(info.url == "https://media.example/a.png")
-        #expect(info.mediaType == "image/png")
-        #expect(info.fileName == "a.png")
-        #expect(info.fileHashHex == hex("33"))
-        #expect(info.nonceHex == nonce)
-        #expect(info.version == "mip04-v2")
+        #expect(info.count == 1)
+        #expect(info[0].locators == [MediaLocatorFfi(kind: "blossom-v1", value: "https://media.example/a.png")])
+        #expect(info[0].mediaType == "image/png")
+        #expect(info[0].fileName == "a.png")
+        #expect(info[0].plaintextSha256 == hex("33"))
+        #expect(info[0].ciphertextSha256 == hex("44"))
+        #expect(info[0].nonceHex == nonce)
+        #expect(info[0].version == "encrypted-media-v1")
+        #expect(info[0].dim == "640x480")
         #expect(MessagePreview.body(record) == "caption")
+    }
+
+    @Test func mediaReferenceParsesMultipleEncryptedMediaAttachmentsInOrder() {
+        let nonce = String(repeating: "22", count: 12)
+        let record = unsignedEventRecord(
+            plaintext: "",
+            kind: MessageSemantics.kindChat,
+            tags: [
+                encryptedMediaTag(fileName: "first.jpg", plaintextByte: "31", ciphertextByte: "41", nonce: nonce),
+                encryptedMediaTag(fileName: "second.jpg", plaintextByte: "32", ciphertextByte: "42", nonce: nonce),
+            ]
+        )
+
+        guard case .media(let info) = MessageSemantics.classify(record) else {
+            #expect(Bool(false))
+            return
+        }
+
+        #expect(info.map(\.fileName) == ["first.jpg", "second.jpg"])
+        #expect(MessagePreview.body(record) == "📎 2 attachments")
     }
 
     @Test func malformedMediaReferenceIsNotPreviewable() {
@@ -3262,11 +3795,12 @@ struct MessageSemanticsTests {
             tags: [
                 MessageTagFfi(values: [
                     MessageSemantics.imetaTag,
-                    "url https://media.example/a.png",
+                    "v encrypted-media-v1",
+                    "locator blossom-v1 https://media.example/a.png",
+                    "ciphertext_sha256 \(hex("44"))",
+                    "plaintext_sha256 \(hex("33"))",
                     "m image/png",
                     "filename a.png",
-                    "x \(hex("33"))",
-                    "size 7",
                 ])
             ],
             recordedAt: 1,
@@ -3277,39 +3811,10 @@ struct MessageSemanticsTests {
         #expect(!MessagePreview.isPreviewable(record))
     }
 
-    @Test func mediaReferenceRejectsUnsafeURLSchemes() {
-        let nonce = String(repeating: "22", count: 12)
-        for url in [
-            "http://media.example/a.png",
-            "ftp://media.example/a.png",
-            "file:///tmp/a.png",
-        ] {
-            let record = unsignedEventRecord(
-                plaintext: "caption",
-                kind: MessageSemantics.kindChat,
-                tags: [
-                    MessageTagFfi(values: [
-                        MessageSemantics.imetaTag,
-                        "url \(url)",
-                        "m image/png",
-                        "filename a.png",
-                        "x \(hex("33"))",
-                        "n \(nonce)",
-                        "v mip04-v2",
-                        "size 7",
-                    ])
-                ]
-            )
-
-            #expect(MessageSemantics.classify(record) == .unknown)
-            #expect(!MessagePreview.isPreviewable(record))
-        }
-    }
-
-    @Test func mediaReferenceWithoutCaptionFallsBackToFileName() {
+    @Test func mediaReferenceRejectsLegacyMip04Fields() {
         let nonce = String(repeating: "22", count: 12)
         let record = unsignedEventRecord(
-            plaintext: "",
+            plaintext: "caption",
             kind: MessageSemantics.kindChat,
             tags: [
                 MessageTagFfi(values: [
@@ -3322,6 +3827,20 @@ struct MessageSemanticsTests {
                     "v mip04-v2",
                     "size 7",
                 ])
+            ]
+        )
+
+        #expect(MessageSemantics.classify(record) == .unknown)
+        #expect(!MessagePreview.isPreviewable(record))
+    }
+
+    @Test func mediaReferenceWithoutCaptionFallsBackToFileName() {
+        let nonce = String(repeating: "22", count: 12)
+        let record = unsignedEventRecord(
+            plaintext: "",
+            kind: MessageSemantics.kindChat,
+            tags: [
+                encryptedMediaTag(fileName: "a.png", plaintextByte: "33", ciphertextByte: "44", nonce: nonce)
             ]
         )
 
@@ -3335,16 +3854,7 @@ struct MessageSemanticsTests {
             plaintext: "",
             kind: MessageSemantics.kindChat,
             tags: [
-                MessageTagFfi(values: [
-                    MessageSemantics.imetaTag,
-                    "url https://media.example/a.png",
-                    "m image/png",
-                    "filename a.png",
-                    "x \(hex("33"))",
-                    "n \(nonce)",
-                    "v mip04-v2",
-                    "size 7",
-                ])
+                encryptedMediaTag(fileName: "a.png", plaintextByte: "33", ciphertextByte: "44", nonce: nonce)
             ]
         )
         let viewModel = ConversationViewModel(
@@ -3353,6 +3863,50 @@ struct MessageSemanticsTests {
         )
 
         #expect(viewModel.displayBody(of: record) == "📎 a.png")
+    }
+}
+
+@MainActor
+struct MediaComposerAvailabilityTests {
+
+    @Test func mediaComponentEnablesAttachments() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "media-ready")
+        )
+
+        #expect(viewModel.canSendMediaAttachments)
+    }
+
+    @Test func legacyGroupWithoutMediaComponentDisablesAttachments() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "legacy", encryptedMedia: legacyEncryptedMediaComponent())
+        )
+
+        #expect(!viewModel.canSendMediaAttachments)
+    }
+}
+
+struct MessageMediaGridPresentationTests {
+
+    @Test func gridShowsAtMostFourTilesAndCountsHiddenAttachments() {
+        #expect(MessageMediaGridPresentation.visibleCount(totalCount: 1) == 1)
+        #expect(MessageMediaGridPresentation.visibleCount(totalCount: 4) == 4)
+        #expect(MessageMediaGridPresentation.visibleCount(totalCount: 6) == 4)
+        #expect(MessageMediaGridPresentation.hiddenCount(totalCount: 4) == 0)
+        #expect(MessageMediaGridPresentation.hiddenCount(totalCount: 6) == 2)
+    }
+
+    @Test func gridUsesSingleTileOneRowOrTwoByTwoLayouts() {
+        #expect(MessageMediaGridPresentation.columnCount(totalCount: 1) == 1)
+        #expect(MessageMediaGridPresentation.rowCount(totalCount: 1) == 1)
+        #expect(MessageMediaGridPresentation.columnCount(totalCount: 2) == 2)
+        #expect(MessageMediaGridPresentation.rowCount(totalCount: 2) == 1)
+        #expect(MessageMediaGridPresentation.columnCount(totalCount: 3) == 2)
+        #expect(MessageMediaGridPresentation.rowCount(totalCount: 3) == 2)
+        #expect(MessageMediaGridPresentation.columnCount(totalCount: 10) == 2)
+        #expect(MessageMediaGridPresentation.rowCount(totalCount: 10) == 2)
     }
 }
 
@@ -3436,13 +3990,65 @@ struct TimelineBottomTests {
         #expect(TimelineBottom.shouldShowScrollToBottomButton(distanceToBottom: 90))
     }
 
+    @Test func bottomDistanceAccountsForScrollContentInset() {
+        let distance = TimelineBottom.distanceToBottom(
+            contentHeight: 1_000,
+            visibleBottomY: 1_000,
+            bottomContentInset: 50
+        )
+
+        #expect(distance == 50)
+        #expect(TimelineBottom.shouldShowScrollToBottomButton(distanceToBottom: distance))
+
+        let insetAdjustedBottom = TimelineBottom.distanceToBottom(
+            contentHeight: 1_000,
+            visibleBottomY: 1_050,
+            bottomContentInset: 50
+        )
+        #expect(insetAdjustedBottom == 0)
+        #expect(!TimelineBottom.shouldShowScrollToBottomButton(distanceToBottom: insetAdjustedBottom))
+    }
+
+    @Test func pinnedContentGrowthKeepsTimelinePinned() {
+        let previous = TimelineBottomViewport(
+            contentHeight: 1_000,
+            visibleBottomY: 995,
+            bottomContentInset: 0
+        )
+        let current = TimelineBottomViewport(
+            contentHeight: 1_080,
+            visibleBottomY: 995,
+            bottomContentInset: 0
+        )
+
+        #expect(previous.isPinned)
+        #expect(!current.isPinned)
+        #expect(TimelineBottom.shouldPreservePinAfterContentGrowth(previous: previous, current: current))
+    }
+
+    @Test func scrolledUpContentGrowthDoesNotForceTimelinePinned() {
+        let previous = TimelineBottomViewport(
+            contentHeight: 1_000,
+            visibleBottomY: 800,
+            bottomContentInset: 0
+        )
+        let current = TimelineBottomViewport(
+            contentHeight: 1_080,
+            visibleBottomY: 800,
+            bottomContentInset: 0
+        )
+
+        #expect(!previous.isPinned)
+        #expect(!TimelineBottom.shouldPreservePinAfterContentGrowth(previous: previous, current: current))
+    }
+
     @Test func viewportChangesFollowOnlyWhenAlreadyPinned() {
         #expect(TimelineBottom.shouldFollowViewportChange(wasPinned: true))
         #expect(!TimelineBottom.shouldFollowViewportChange(wasPinned: false))
     }
 
-    @Test func scrollButtonTapDoesNotHideButtonBeforeGeometryConfirmsBottom() {
-        #expect(!TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: false))
+    @Test func scrollButtonTapOptimisticallyPinsTimeline() {
+        #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: false))
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: true))
     }
 }
@@ -3670,11 +4276,56 @@ private func hex(_ byte: String) -> String {
     String(repeating: byte, count: 32)
 }
 
+private func encryptedMediaTag(
+    fileName: String,
+    plaintextByte: String,
+    ciphertextByte: String,
+    nonce: String = String(repeating: "22", count: 12)
+) -> MessageTagFfi {
+    MessageTagFfi(values: [
+        MessageSemantics.imetaTag,
+        "v encrypted-media-v1",
+        "locator blossom-v1 https://media.example/\(fileName)",
+        "ciphertext_sha256 \(hex(ciphertextByte))",
+        "plaintext_sha256 \(hex(plaintextByte))",
+        "nonce \(nonce)",
+        "m image/jpeg",
+        "filename \(fileName)",
+        "dim 640x480",
+    ])
+}
+
+private func encryptedMediaComponent() -> AppGroupEncryptedMediaComponentFfi {
+    AppGroupEncryptedMediaComponentFfi(
+        componentId: 0x8008,
+        component: "marmot.group.encrypted-media.v1",
+        required: true,
+        mediaFormat: MessageSemantics.encryptedMediaVersion,
+        allowedLocatorKinds: ["blossom-v1"],
+        defaultBlobEndpoints: [
+            AppBlobEndpointFfi(locatorKind: "blossom-v1", baseUrl: "https://blossom.primal.net")
+        ]
+    )
+}
+
+private func legacyEncryptedMediaComponent() -> AppGroupEncryptedMediaComponentFfi {
+    AppGroupEncryptedMediaComponentFfi(
+        componentId: 0,
+        component: "",
+        required: false,
+        mediaFormat: "",
+        allowedLocatorKinds: [],
+        defaultBlobEndpoints: []
+    )
+}
+
 private func group(
     name: String,
     id: String = hex("aa"),
     admins: [String] = [],
-    archived: Bool = false
+    avatarUrl: String? = nil,
+    archived: Bool = false,
+    encryptedMedia: AppGroupEncryptedMediaComponentFfi = encryptedMediaComponent()
 ) -> AppGroupRecordFfi {
     AppGroupRecordFfi(
         groupIdHex: id,
@@ -3684,9 +4335,10 @@ private func group(
         admins: admins,
         relays: [],
         nostrGroupIdHex: "",
-        avatarUrl: nil,
+        avatarUrl: avatarUrl,
         avatarDim: nil,
         avatarThumbhash: nil,
+        encryptedMedia: encryptedMedia,
         archived: archived,
         pendingConfirmation: false,
         welcomerAccountIdHex: nil,
@@ -3721,6 +4373,7 @@ private func chatListRow(
     title: String,
     groupName: String? = nil,
     avatar: ChatListAvatarFfi? = nil,
+    avatarUrl: String? = nil,
     lastMessage: ChatListMessagePreviewFfi? = nil,
     unreadCount: UInt64 = 0,
     firstUnreadMessageIdHex: String? = nil,
@@ -3734,6 +4387,7 @@ private func chatListRow(
         pendingConfirmation: pendingConfirmation,
         title: title,
         groupName: groupName ?? title,
+        avatarUrl: avatarUrl,
         avatar: avatar,
         lastMessage: lastMessage,
         unreadCount: unreadCount,

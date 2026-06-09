@@ -2,6 +2,16 @@ import SwiftUI
 import UIKit
 import MarmotKit
 
+enum MessageBubbleReplyLayout {
+    static let bodyHorizontalInset: CGFloat = 14
+    static let bodyTopInset: CGFloat = 9
+    static let bodyTopInsetAfterReply: CGFloat = 11
+    static let bodyBottomInset: CGFloat = 9
+    static let headerHorizontalInset = bodyHorizontalInset
+    static let headerVerticalInset: CGFloat = 8
+    static let sentHeaderOverlayOpacity = 0.16
+}
+
 /// One chat bubble. Aligned right for our own messages, left for everyone
 /// else. Renders an optional quoted reply header, the message body, a
 /// time/delivery caption, and any reaction chips.
@@ -12,8 +22,12 @@ struct MessageBubble: View {
     let status: MessageStatus
     var isDeleted: Bool = false
     var replyPreview: (name: String, text: String)? = nil
+    var mediaItems: [MessageMediaAttachment] = []
     var reactions: [ConversationViewModel.ReactionTally] = []
     var onTapReaction: (String) -> Void = { _ in }
+    var onLoadMedia: (MessageMediaAttachment) async throws -> Data = { _ in Data() }
+
+    @State private var mediaGallery: MessageMediaGallery?
 
     private var isFromMe: Bool { record.direction == "sent" }
 
@@ -30,7 +44,18 @@ struct MessageBubble: View {
     /// Body text projected from the decoded unsigned Nostr app event's kind,
     /// tags, and content.
     private var bodyText: String {
-        MessagePreview.body(record)
+        if !mediaItems.isEmpty {
+            return record.plaintext
+        }
+        return MessagePreview.body(record)
+    }
+
+    private var sanitizedBodyText: String {
+        ProfileSanitizer.messageBody(bodyText)
+    }
+
+    private var hasVisibleBodyText: Bool {
+        !sanitizedBodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     var body: some View {
@@ -47,23 +72,11 @@ struct MessageBubble: View {
 
                 if isDeleted {
                     deletedBubble
+                } else if !mediaItems.isEmpty {
+                    mediaMessageContent
                 } else {
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let replyPreview {
-                            quoted(replyPreview)
-                        }
-                        Text(ProfileSanitizer.messageBody(bodyText))
-                            .foregroundStyle(isFromMe ? Color.white : Color.primary)
-                    }
-                    .font(.body)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(bubbleBackground)
-                    .clipShape(.rect(cornerRadius: 18))
-                    // No .textSelection here: it installs its own long-press
-                    // recognizer that swallows the bubble's long-press (the
-                    // actions menu). Copy is offered in the actions sheet.
-                    .opacity(status == .sending ? 0.7 : 1)
+                    textBubble
+                        .opacity(status == .sending ? 0.7 : 1)
 
                     if !reactions.isEmpty {
                         reactionChips
@@ -78,6 +91,14 @@ struct MessageBubble: View {
             if !isFromMe { Spacer(minLength: oppositeInset) }
         }
         .padding(.horizontal, 12)
+        .fullScreenCover(item: $mediaGallery) { gallery in
+            MessageMediaFullscreenGalleryView(
+                gallery: gallery,
+                onLoadMedia: onLoadMedia
+            ) {
+                mediaGallery = nil
+            }
+        }
     }
 
     private var deletedBubble: some View {
@@ -96,6 +117,70 @@ struct MessageBubble: View {
         )
     }
 
+    private func replyHeader(_ preview: (name: String, text: String)) -> some View {
+        quoted(preview)
+            .padding(.horizontal, MessageBubbleReplyLayout.headerHorizontalInset)
+            .padding(.vertical, MessageBubbleReplyLayout.headerVerticalInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(replyHeaderBackground)
+    }
+
+    private var textBubble: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let replyPreview {
+                replyHeader(replyPreview)
+            }
+            messageBodyText(hasReply: replyPreview != nil)
+        }
+        .font(.body)
+        .background(bubbleBackground)
+        .clipShape(.rect(cornerRadius: 18))
+        // No .textSelection here: it installs its own long-press recognizer
+        // that swallows the bubble's long-press. Copy is in the actions sheet.
+    }
+
+    @ViewBuilder
+    private var mediaMessageContent: some View {
+        VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
+            MessageMediaGrid(
+                items: mediaItems,
+                isFromMe: isFromMe,
+                maxWidth: mediaGridWidth,
+                onLoadMedia: onLoadMedia,
+                onOpenImage: { item, data in
+                    mediaGallery = MessageMediaGallery(
+                        items: mediaItems,
+                        initialItem: item,
+                        initialImageData: data
+                    )
+                }
+            )
+
+            if let replyPreview {
+                VStack(alignment: .leading, spacing: 0) {
+                    replyHeader(replyPreview)
+                    if hasVisibleBodyText {
+                        messageBodyText(hasReply: true)
+                    }
+                }
+                .font(.body)
+                .background(bubbleBackground)
+                .clipShape(.rect(cornerRadius: 18))
+            } else if hasVisibleBodyText {
+                textBubble
+            }
+        }
+        .opacity(status == .sending ? 0.7 : 1)
+
+        if !reactions.isEmpty {
+            reactionChips
+        }
+    }
+
+    private var mediaGridWidth: CGFloat {
+        sizeClass == .regular ? 340 : 276
+    }
+
     private func quoted(_ preview: (name: String, text: String)) -> some View {
         HStack(spacing: 6) {
             Capsule()
@@ -104,17 +189,36 @@ struct MessageBubble: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(preview.name)
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(isFromMe ? Color.white.opacity(0.95) : Color.primary)
                 Text(preview.text)
                     .font(.caption)
+                    .foregroundStyle(isFromMe ? Color.white.opacity(0.82) : Color.secondary)
                     .lineLimit(1)
             }
-            .foregroundStyle(isFromMe ? Color.white.opacity(0.9) : Color.secondary)
             Spacer(minLength: 0)
         }
         // Without this the width-only Capsule is greedy vertically and stretches
         // the whole bubble; fixedSize pins the quote to its content height.
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.bottom, 1)
+    }
+
+    private func messageBodyText(hasReply: Bool) -> some View {
+        Text(sanitizedBodyText)
+            .foregroundStyle(isFromMe ? Color.white : Color.primary)
+            .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
+            .padding(.top, hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : MessageBubbleReplyLayout.bodyTopInset)
+            .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
+    }
+
+    @ViewBuilder
+    private var replyHeaderBackground: some View {
+        if isFromMe {
+            Color.white.opacity(MessageBubbleReplyLayout.sentHeaderOverlayOpacity)
+        } else {
+            Color(UIColor { traits in
+                Self.receivedReplyHeaderColor(dark: traits.userInterfaceStyle == .dark)
+            })
+        }
     }
 
     private var reactionChips: some View {
@@ -199,5 +303,380 @@ struct MessageBubble: View {
     /// unchanged.
     static func receivedBubbleColor(dark: Bool) -> UIColor {
         dark ? .systemGray5 : .secondarySystemBackground
+    }
+
+    static func receivedReplyHeaderColor(dark: Bool) -> UIColor {
+        dark ? .systemGray4 : .systemGray5
+    }
+}
+
+private struct MessageMediaGrid: View {
+    let items: [MessageMediaAttachment]
+    let isFromMe: Bool
+    let maxWidth: CGFloat
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+    let onOpenImage: (MessageMediaAttachment, Data) -> Void
+
+    private let spacing: CGFloat = 3
+    private let cornerRadius: CGFloat = 14
+
+    private var visibleItems: [MessageMediaAttachment] {
+        Array(items.prefix(MessageMediaGridPresentation.visibleCount(totalCount: items.count)))
+    }
+
+    private var hiddenCount: Int {
+        MessageMediaGridPresentation.hiddenCount(totalCount: items.count)
+    }
+
+    private var columnCount: Int {
+        MessageMediaGridPresentation.columnCount(totalCount: items.count)
+    }
+
+    private var rowCount: Int {
+        MessageMediaGridPresentation.rowCount(totalCount: items.count)
+    }
+
+    private var tileSize: CGFloat {
+        let totalSpacing = CGFloat(columnCount - 1) * spacing
+        return (maxWidth - totalSpacing) / CGFloat(columnCount)
+    }
+
+    private var gridHeight: CGFloat {
+        CGFloat(rowCount) * tileSize + CGFloat(rowCount - 1) * spacing
+    }
+
+    private var rowStarts: [Int] {
+        rowCount == 1 ? [0] : [0, columnCount]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            ForEach(rowStarts, id: \.self) { rowStart in
+                HStack(spacing: spacing) {
+                    ForEach(0..<columnCount, id: \.self) { column in
+                        tile(at: rowStart + column)
+                    }
+                }
+                .frame(width: maxWidth, alignment: .leading)
+            }
+        }
+        .frame(width: maxWidth, height: gridHeight, alignment: .topLeading)
+        .clipShape(.rect(cornerRadius: cornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(Color.primary.opacity(isFromMe ? 0.16 : 0.08), lineWidth: 1)
+        }
+    }
+
+    @ViewBuilder
+    private func tile(at index: Int) -> some View {
+        if index < visibleItems.count {
+            MessageMediaTile(
+                item: visibleItems[index],
+                isFromMe: isFromMe,
+                sideLength: tileSize,
+                hiddenCount: index == MessageMediaGridPresentation.maxVisibleItems - 1 ? hiddenCount : 0,
+                onLoadMedia: onLoadMedia,
+                onOpenImage: onOpenImage
+            )
+        } else {
+            Color.clear
+                .frame(width: tileSize, height: tileSize)
+        }
+    }
+}
+
+enum MessageMediaGridPresentation {
+    static let maxVisibleItems = 4
+
+    static func visibleCount(totalCount: Int) -> Int {
+        min(max(totalCount, 0), maxVisibleItems)
+    }
+
+    static func hiddenCount(totalCount: Int) -> Int {
+        max(0, totalCount - maxVisibleItems)
+    }
+
+    static func columnCount(totalCount: Int) -> Int {
+        totalCount <= 1 ? 1 : 2
+    }
+
+    static func rowCount(totalCount: Int) -> Int {
+        if totalCount <= 2 { return 1 }
+        return 2
+    }
+}
+
+private struct MessageMediaTile: View {
+    let item: MessageMediaAttachment
+    let isFromMe: Bool
+    let sideLength: CGFloat
+    let hiddenCount: Int
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+    let onOpenImage: (MessageMediaAttachment, Data) -> Void
+
+    @State private var imageData: Data?
+    @State private var isLoading = false
+    @State private var didFail = false
+
+    var body: some View {
+        ZStack {
+            if item.isImage, let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: sideLength, height: sideLength)
+                    .clipped()
+            } else if item.isImage {
+                imagePlaceholder
+            } else {
+                filePlaceholder
+            }
+
+            if hiddenCount > 0 {
+                Color.black.opacity(0.48)
+                Text("+\(hiddenCount)")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: sideLength, height: sideLength)
+        .clipped()
+        .contentShape(Rectangle())
+        .task(id: item.id) {
+            await loadImageIfNeeded()
+        }
+        .onTapGesture {
+            if didFail {
+                Task { await loadImageIfNeeded(force: true) }
+            } else if let imageData {
+                onOpenImage(item, imageData)
+            } else {
+                Task {
+                    if let data = await loadImageIfNeeded(force: true) {
+                        onOpenImage(item, data)
+                    }
+                }
+            }
+        }
+        .frame(width: sideLength, height: sideLength)
+    }
+
+    @ViewBuilder
+    private var imagePlaceholder: some View {
+        ZStack {
+            Color(.tertiarySystemFill)
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else if didFail {
+                VStack(spacing: 5) {
+                    Image(systemName: "arrow.clockwise")
+                    Text("Retry")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "photo")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var filePlaceholder: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "doc")
+                .font(.title3)
+            Text(item.fileName)
+                .font(.caption2)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(.secondary)
+        .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.tertiarySystemFill))
+    }
+
+    private func loadImageIfNeeded(force: Bool = false) async -> Data? {
+        guard item.isImage else { return nil }
+        if let imageData, !force { return imageData }
+        isLoading = true
+        didFail = false
+        defer { isLoading = false }
+        do {
+            let data = try await onLoadMedia(item)
+            imageData = data
+            return data
+        } catch {
+            didFail = true
+            return nil
+        }
+    }
+}
+
+private struct MessageMediaGallery: Identifiable {
+    let id = UUID()
+    let items: [MessageMediaAttachment]
+    let initialItemID: String
+    let initialImageData: Data
+
+    init(item: MessageMediaAttachment, imageData: Data) {
+        self.init(items: [item], initialItem: item, initialImageData: imageData)
+    }
+
+    init(items: [MessageMediaAttachment], initialItem: MessageMediaAttachment, initialImageData: Data) {
+        let imageItems = items.filter(\.isImage)
+        if imageItems.contains(where: { $0.id == initialItem.id }) {
+            self.items = imageItems
+        } else {
+            self.items = [initialItem] + imageItems
+        }
+        self.initialItemID = initialItem.id
+        self.initialImageData = initialImageData
+    }
+
+    func initialData(for item: MessageMediaAttachment) -> Data? {
+        if item.id == initialItemID {
+            return initialImageData
+        }
+        return item.localData
+    }
+}
+
+private struct MessageMediaFullscreenGalleryView: View {
+    let gallery: MessageMediaGallery
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+    let onDismiss: () -> Void
+
+    @State private var selectedItemID: String
+
+    init(
+        gallery: MessageMediaGallery,
+        onLoadMedia: @escaping (MessageMediaAttachment) async throws -> Data,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.gallery = gallery
+        self.onLoadMedia = onLoadMedia
+        self.onDismiss = onDismiss
+        _selectedItemID = State(initialValue: gallery.initialItemID)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            TabView(selection: $selectedItemID) {
+                ForEach(gallery.items) { item in
+                    MessageMediaFullscreenPage(
+                        item: item,
+                        initialImageData: gallery.initialData(for: item),
+                        onLoadMedia: onLoadMedia
+                    )
+                    .tag(item.id)
+                }
+            }
+            .tabViewStyle(
+                .page(indexDisplayMode: .never)
+            )
+            .ignoresSafeArea()
+
+            if gallery.items.count > 1 {
+                Text(pageCountLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, 34)
+            }
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close")
+            .padding(.top, 14)
+            .padding(.trailing, 14)
+        }
+    }
+
+    private var pageCountLabel: String {
+        guard let index = gallery.items.firstIndex(where: { $0.id == selectedItemID }) else {
+            return ""
+        }
+        return "\(index + 1) of \(gallery.items.count)"
+    }
+}
+
+private struct MessageMediaFullscreenPage: View {
+    let item: MessageMediaAttachment
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+
+    @State private var imageData: Data?
+    @State private var isLoading = false
+    @State private var didFail = false
+
+    init(
+        item: MessageMediaAttachment,
+        initialImageData: Data?,
+        onLoadMedia: @escaping (MessageMediaAttachment) async throws -> Data
+    ) {
+        self.item = item
+        self.onLoadMedia = onLoadMedia
+        _imageData = State(initialValue: initialImageData)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+            } else if didFail {
+                Button {
+                    Task { await loadImageIfNeeded(force: true) }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                ProgressView()
+                    .tint(.white)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task(id: item.id) {
+            await loadImageIfNeeded()
+        }
+    }
+
+    private func loadImageIfNeeded(force: Bool = false) async {
+        guard imageData == nil || force else { return }
+        isLoading = true
+        didFail = false
+        defer { isLoading = false }
+        do {
+            imageData = try await onLoadMedia(item)
+        } catch {
+            didFail = true
+        }
     }
 }
