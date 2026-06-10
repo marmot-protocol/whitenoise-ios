@@ -111,8 +111,11 @@ enum MediaDraftProcessor {
     }
 
     private static func normalizedImage(_ image: UIImage) -> UIImage {
-        let pixelWidth = image.cgImage.map { CGFloat($0.width) } ?? image.size.width * image.scale
-        let pixelHeight = image.cgImage.map { CGFloat($0.height) } ?? image.size.height * image.scale
+        // Canvas must use the oriented size: cgImage dimensions are pre-EXIF-rotation
+        // (camera portraits are landscape bitmaps tagged .right), while draw(in:)
+        // renders rotation-applied content. Mixing the two squashes the photo.
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
         let longest = max(pixelWidth, pixelHeight)
         let scale = longest > maxLongEdge ? maxLongEdge / longest : 1
         let size = CGSize(

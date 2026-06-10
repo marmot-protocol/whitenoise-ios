@@ -83,6 +83,15 @@ final class ConversationViewModel {
     private var finalizedStreamIds: Set<String> = []
     private var streamSenderById: [String: String] = [:]
     private var markedReadMessageIds: Set<String> = []
+    /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
+    private var streamDebugTimelineItems: [String: TimelineItem] = [:]
+    /// Monotonic insert order for QUIC debug rows; zero-padded in ids so
+    /// same-second ties sort correctly.
+    private var streamDebugEventSequence: UInt64 = 0
+
+    private var streamingDebugEnabled: Bool {
+        appState?.streamingDebugEnabled == true
+    }
 
     /// Live diagnostics for the agent-text-stream watch. Visible in the Xcode
     /// console (and Console.app) under category "agent-stream". We log sizes and
@@ -605,7 +614,7 @@ final class ConversationViewModel {
             resolveFinalizedStream(streamId: streamId)
         }
         if updateTimeline {
-            if let item = Self.visibleTimelineItem(
+            if let item = visibleTimelineItem(
                 for: appRecord,
                 status: messageStatusById[appRecord.messageIdHex]
             ) {
@@ -668,16 +677,25 @@ final class ConversationViewModel {
 
     private func rebuildTimeline() {
         var next: [TimelineItem] = messageById.values.compactMap { record in
-            Self.visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
+            visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
         }
         next.append(contentsOf: transientTimelineItems.values)
+        next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
         next.sort(by: Self.timelineItemComesBefore)
         timeline = next
         normalizeReplyOrdering()
     }
 
-    private static func visibleTimelineItem(
+    func refreshStreamingDebugPresentation() {
+        if !streamingDebugEnabled {
+            streamDebugTimelineItems.removeAll()
+            streamDebugEventSequence = 0
+        }
+        rebuildTimeline()
+    }
+
+    private func visibleTimelineItem(
         for record: AppMessageRecordFfi,
         status: MessageStatus?
     ) -> TimelineItem? {
@@ -685,7 +703,8 @@ final class ConversationViewModel {
         case .chat, .reply, .media, .streamFinal:
             return TimelineItem.message(record, status: status)
         case .reaction, .delete, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
-            return nil
+            guard streamingDebugEnabled else { return nil }
+            return TimelineItem.message(record, status: status)
         }
     }
 
@@ -1509,13 +1528,19 @@ final class ConversationViewModel {
         if finalizedStreamIds.contains(streamId) { return }
         switch update {
         case .chunk(_, let text):
+            appendStreamDebugEvent(streamId: streamId, eventKind: "chunk", detail: streamDebugTextSummary(text))
             appendStreamChunk(text, to: streamId)
             upsertStreamBubbleIfNeeded(streamId: streamId, sender: sender, status: .streaming)
-        case .status:
-            break
-        case .progress:
-            break
+        case .status(let seq, let status):
+            appendStreamDebugEvent(streamId: streamId, eventKind: "status", detail: "seq=\(seq) \(status)")
+        case .progress(let seq, let text):
+            appendStreamDebugEvent(streamId: streamId, eventKind: "progress", detail: "seq=\(seq) \(streamDebugTextSummary(text))")
         case .record(_, let recordType, let text):
+            appendStreamDebugEvent(
+                streamId: streamId,
+                eventKind: "record(\(recordType))",
+                detail: streamDebugTextSummary(text)
+            )
             switch recordType {
             case AgentTextStreamRecordType.checkpoint:
                 streamsWithCheckpointPreview.insert(streamId)
@@ -1529,6 +1554,11 @@ final class ConversationViewModel {
                 break
             }
         case .finished(let text, let transcriptHashHex, let chunkCount):
+            appendStreamDebugEvent(
+                streamId: streamId,
+                eventKind: "finished",
+                detail: "chunks=\(chunkCount) textLen=\(text.count)B hashLen=\(transcriptHashHex.count)"
+            )
             // QUIC stream closed. Promote the preview to a permanent bubble using
             // the streamed transcript; the authoritative MLS Final anchor will
             // overwrite the same row if it arrives afterwards.
@@ -1539,9 +1569,33 @@ final class ConversationViewModel {
                 text: finishedPreviewText(streamId: streamId, text: text)
             )
         case .failed(let message):
+            appendStreamDebugEvent(streamId: streamId, eventKind: "failed", detail: message)
             Self.streamLog.error("failed: streamId=\(streamId, privacy: .public) gotText=\(self.streamText[streamId]?.count ?? 0)B reason=\(message, privacy: .public) — dropping live preview")
             endStream(streamId: streamId)
         }
+    }
+
+    private func appendStreamDebugEvent(streamId: String, eventKind: String, detail: String) {
+        guard streamingDebugEnabled else { return }
+        streamDebugEventSequence += 1
+        let sequence = streamDebugEventSequence
+        let now = UInt64(Date().timeIntervalSince1970)
+        let item = TimelineItem.streamDebugEvent(
+            id: "dbg:stream:\(streamId):\(now):\(String(format: "%010llu", sequence))",
+            streamId: streamId,
+            eventKind: eventKind,
+            detail: detail,
+            timestamp: now
+        )
+        streamDebugTimelineItems[item.id] = item
+        upsertTimelineItem(item)
+    }
+
+    private func streamDebugTextSummary(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return "(empty)" }
+        if trimmed.count <= 120 { return trimmed }
+        return "\(trimmed.prefix(120))… (\(trimmed.count) chars)"
     }
 
     private func appendStreamChunk(_ text: String, to streamId: String) {

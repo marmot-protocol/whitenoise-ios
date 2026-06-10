@@ -49,6 +49,19 @@ final class AppState {
         }
     }
 
+    /// When developer mode is on, show every MLS/stream event in the
+    /// conversation timeline with debug styling (kinds 1200+, reactions, etc.).
+    var streamingDebugMode: Bool {
+        didSet {
+            UserDefaults.standard.set(streamingDebugMode, forKey: Self.streamingDebugModeKey)
+        }
+    }
+
+    /// Effective streaming-debug flag: requires developer mode.
+    var streamingDebugEnabled: Bool {
+        developerMode && streamingDebugMode
+    }
+
     /// Recently-used reaction emojis, most-recent first. Drives the quick row
     /// in the message actions overlay.
     private(set) var recentReactions: [String]
@@ -124,6 +137,7 @@ final class AppState {
 
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
+    private static let streamingDebugModeKey = "marmot.streamingDebugMode"
     private static let recentReactionsKey = "marmot.recentReactions"
     private static let notificationSubscriptionInitialRetryDelayNanoseconds: UInt64 = 1_000_000_000
     private static let notificationSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 60_000_000_000
@@ -137,6 +151,7 @@ final class AppState {
         self.notifications = notifications
         self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
+        self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
     }

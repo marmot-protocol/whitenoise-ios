@@ -20,6 +20,7 @@ struct MessageBubble: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let record: AppMessageRecordFfi
     let status: MessageStatus
+    var debugStyle: MessageDebugStyle? = nil
     var isDeleted: Bool = false
     var replyPreview: (name: String, text: String)? = nil
     var mediaItems: [MessageMediaAttachment] = []
@@ -55,7 +56,19 @@ struct MessageBubble: View {
     }
 
     private var hasVisibleBodyText: Bool {
-        !sanitizedBodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if debugStyle != nil, debugStyle?.isUserVisibleBubble == false {
+            return true
+        }
+        return !sanitizedBodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var showsStandardBody: Bool {
+        debugStyle?.isUserVisibleBubble ?? true
+    }
+
+    /// White-on-gradient text is only appropriate for our own user-visible bubbles.
+    private var usesSentBubbleForeground: Bool {
+        isFromMe && showsStandardBody
     }
 
     var body: some View {
@@ -72,13 +85,13 @@ struct MessageBubble: View {
 
                 if isDeleted {
                     deletedBubble
-                } else if !mediaItems.isEmpty {
+                } else if !mediaItems.isEmpty, showsStandardBody {
                     mediaMessageContent
                 } else {
                     textBubble
                         .opacity(status == .sending ? 0.7 : 1)
 
-                    if !reactions.isEmpty {
+                    if !reactions.isEmpty, showsStandardBody {
                         reactionChips
                     }
                 }
@@ -127,16 +140,81 @@ struct MessageBubble: View {
 
     private var textBubble: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let replyPreview {
+            if let debugStyle {
+                debugHeader(debugStyle)
+            }
+            if let replyPreview, showsStandardBody {
                 replyHeader(replyPreview)
             }
-            messageBodyText(hasReply: replyPreview != nil)
+            if showsStandardBody {
+                messageBodyText(hasReply: replyPreview != nil)
+                if let debugStyle, debugStyle.isUserVisibleBubble {
+                    debugTagsFooter(debugStyle)
+                }
+            } else if let debugStyle {
+                debugPayload(debugStyle)
+            }
         }
         .font(.body)
         .background(bubbleBackground)
         .clipShape(.rect(cornerRadius: 18))
+        .overlay {
+            if let debugStyle {
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(debugStyle.category.accentColor.opacity(0.75), lineWidth: 2)
+            }
+        }
         // No .textSelection here: it installs its own long-press recognizer
         // that swallows the bubble's long-press. Copy is in the actions sheet.
+    }
+
+    private func debugHeader(_ style: MessageDebugStyle) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text(style.category.label)
+                    .font(.caption2.weight(.semibold))
+                Spacer(minLength: 0)
+                Text(style.kindLabel)
+                    .font(.caption2.monospaced())
+            }
+            .foregroundStyle(style.category.accentColor)
+        }
+        .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
+        .padding(.top, MessageBubbleReplyLayout.bodyTopInset)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(style.category.accentColor.opacity(0.12))
+    }
+
+    private func debugTagsFooter(_ style: MessageDebugStyle) -> some View {
+        Text(style.tagsSummary)
+            .font(.caption2.monospaced())
+            .foregroundStyle(usesSentBubbleForeground ? Color.white.opacity(0.78) : Color.secondary)
+            .textSelection(.enabled)
+            .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
+            .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
+    }
+
+    private func debugPayload(_ style: MessageDebugStyle) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(style.detailText)
+                .font(.caption.monospaced())
+                .foregroundStyle(usesSentBubbleForeground ? Color.white.opacity(0.95) : Color.primary)
+                .textSelection(.enabled)
+            Text(style.tagsSummary)
+                .font(.caption2.monospaced())
+                .foregroundStyle(usesSentBubbleForeground ? Color.white.opacity(0.82) : Color.secondary)
+                .textSelection(.enabled)
+            if !record.messageIdHex.isEmpty {
+                Text("id: \(record.messageIdHex)")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(usesSentBubbleForeground ? Color.white.opacity(0.72) : Color.secondary.opacity(0.8))
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
+        .padding(.top, MessageBubbleReplyLayout.bodyTopInsetAfterReply)
+        .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
     }
 
     @ViewBuilder
@@ -282,7 +360,13 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleBackground: some View {
-        if isFromMe {
+        if let debugStyle, !debugStyle.isUserVisibleBubble {
+            Color(UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor.systemGray5
+                    : UIColor.secondarySystemBackground
+            })
+        } else if isFromMe {
             LinearGradient(
                 colors: [.blue, .indigo],
                 startPoint: .topLeading,
