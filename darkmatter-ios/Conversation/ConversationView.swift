@@ -303,6 +303,9 @@ struct ConversationView: View {
                 }
                 await viewModel?.start()
             }
+            .onChange(of: appState.streamingDebugEnabled) { _, _ in
+                viewModel?.refreshStreamingDebugPresentation()
+            }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
             }
@@ -523,9 +526,14 @@ struct ConversationView: View {
     private func row(for item: TimelineItem, viewModel: ConversationViewModel) -> some View {
         switch item.kind {
         case .message(let record, let status):
+            let debugStyle = appState.streamingDebugEnabled
+                ? MessageSemantics.debugStyle(for: record)
+                : nil
+            let allowsActions = debugStyle?.isUserVisibleBubble ?? true
             MessageBubble(
                 record: record,
                 status: status,
+                debugStyle: debugStyle,
                 isDeleted: viewModel.isDeleted(record.messageIdHex),
                 replyPreview: viewModel.replyPreview(for: record),
                 mediaItems: viewModel.mediaItems(for: item),
@@ -538,7 +546,7 @@ struct ConversationView: View {
                     try await viewModel.data(for: media)
                 }
             )
-            .replySwipeToReply(isEnabled: canReply(to: record, viewModel: viewModel)) {
+            .replySwipeToReply(isEnabled: allowsActions && canReply(to: record, viewModel: viewModel)) {
                 beginReply(to: record, viewModel: viewModel)
             }
             .background(
@@ -551,7 +559,8 @@ struct ConversationView: View {
             )
             .id(item.id)
             .onLongPressGesture {
-                guard !record.messageIdHex.isEmpty,
+                guard allowsActions,
+                      !record.messageIdHex.isEmpty,
                       !viewModel.isDeleted(record.messageIdHex) else { return }
                 Haptics.tap()
                 presentActions(for: record)
@@ -564,10 +573,14 @@ struct ConversationView: View {
                 actionsMenu(for: record, viewModel: viewModel)
             }
             .onAppear {
+                guard allowsActions else { return }
                 Task { await viewModel.markReadIfVisible(record) }
             }
         case .systemEvent(let event):
             SystemEventRow(event: event)
+                .id(item.id)
+        case .streamDebugEvent(let event):
+            StreamDebugEventRow(event: event)
                 .id(item.id)
         }
     }

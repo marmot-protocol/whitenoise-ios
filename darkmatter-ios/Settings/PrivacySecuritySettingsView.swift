@@ -42,6 +42,13 @@ struct PrivacySecuritySettingsView: View {
                 }
 
                 if appState.developerMode {
+                    Toggle(isOn: Binding(
+                        get: { appState.streamingDebugMode },
+                        set: { appState.streamingDebugMode = $0 }
+                    )) {
+                        Label("Streaming debug", systemImage: "waveform.path.ecg")
+                    }
+
                     NavigationLink {
                         DiagnosticsView()
                     } label: {
@@ -51,7 +58,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 Text("Developer")
             } footer: {
-                Text("Adds debugging tools, including MLS group internals and diagnostics. The diagnostics console can log message text and account activity on this device.")
+                Text("Adds debugging tools, including MLS group internals and diagnostics. Streaming debug shows every agent-stream MLS event and live QUIC update in the conversation timeline. The diagnostics console can log message text and account activity on this device.")
             }
 
             Section {

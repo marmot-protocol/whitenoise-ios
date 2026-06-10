@@ -18,11 +18,19 @@ struct TimelineItem: Identifiable, Hashable {
     enum Kind: Hashable {
         case message(record: AppMessageRecordFfi, status: MessageStatus)
         case systemEvent(SystemEvent)
+        case streamDebugEvent(StreamDebugTimelineEvent)
     }
 
     let id: String
     let kind: Kind
     let timestamp: UInt64
+}
+
+/// A live QUIC agent-stream update surfaced in streaming-debug mode.
+struct StreamDebugTimelineEvent: Hashable {
+    let streamId: String
+    let eventKind: String
+    let detail: String
 }
 
 /// System-rendered timeline events. We don't carry a full enum from the FFI
@@ -73,6 +81,24 @@ extension TimelineItem {
         TimelineItem(
             id: "evt:\(id)",
             kind: .systemEvent(event),
+            timestamp: timestamp
+        )
+    }
+
+    static func streamDebugEvent(
+        id: String,
+        streamId: String,
+        eventKind: String,
+        detail: String,
+        timestamp: UInt64
+    ) -> TimelineItem {
+        TimelineItem(
+            id: id,
+            kind: .streamDebugEvent(StreamDebugTimelineEvent(
+                streamId: streamId,
+                eventKind: eventKind,
+                detail: detail
+            )),
             timestamp: timestamp
         )
     }
