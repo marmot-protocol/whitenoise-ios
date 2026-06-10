@@ -12,11 +12,15 @@ final class ChatsListViewModel {
     struct Item: Identifiable {
         let row: ChatListRowFfi
         let avatarURL: URL?
+        var mentionDisplayName: MarkdownMentionResolver?
         var id: String { row.groupIdHex }
         var title: String { ProfileSanitizer.groupName(row.title) ?? IdentityFormatter.short(row.groupIdHex) }
         @MainActor var previewText: String? {
             row.lastMessage.flatMap { preview in
-                ProfileSanitizer.singleLine(MessagePreview.body(preview), maxLength: 140)
+                ProfileSanitizer.singleLine(
+                    MessagePreview.body(preview, mentionDisplayName: mentionDisplayName),
+                    maxLength: 140
+                )
             }
         }
         var unreadCount: UInt64 { row.unreadCount }
@@ -168,7 +172,10 @@ final class ChatsListViewModel {
         let all = rows.map { row in
             Item(
                 row: row,
-                avatarURL: ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
+                avatarURL: ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex]),
+                mentionDisplayName: { [weak appState] entity in
+                    appState?.mentionDisplayName(for: entity)
+                }
             )
         }
         items = all.filter { !$0.row.archived }.sorted(by: Self.sortRule)

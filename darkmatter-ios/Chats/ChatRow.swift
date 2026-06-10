@@ -63,7 +63,10 @@ struct ChatRow: View {
         guard let latest = item.lastMessage else {
             return L10n.string("No messages yet")
         }
-        let body = ProfileSanitizer.singleLine(MessagePreview.body(latest), maxLength: 140) ?? ""
+        let body = ProfileSanitizer.singleLine(
+            MessagePreview.body(latest, mentionDisplayName: { appState.mentionDisplayName(for: $0) }),
+            maxLength: 140
+        ) ?? ""
         if latest.sender == appState.activeAccount?.accountIdHex {
             return body.isEmpty ? L10n.string("You sent a message") : L10n.string("You: \(body)")
         }

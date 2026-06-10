@@ -36,6 +36,26 @@ enum NostrProfileReference {
         return memberRef(fromReference: trimmed)
     }
 
+    /// Hex pubkey from an `npub1…` or `nprofile1…` reference, checksum
+    /// validated. nil for anything else (including bad checksums) so callers
+    /// keep their bech32 fallback.
+    static func pubkeyHex(fromBech32 reference: String) -> String? {
+        let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = trimmed.lowercased()
+        if lower.hasPrefix("npub1") {
+            guard let decoded = bech32Decode(trimmed),
+                  decoded.hrp == "npub",
+                  let bytes = convertBits(decoded.data, from: 5, to: 8, pad: false),
+                  bytes.count == 32
+            else { return nil }
+            return bytes.map { String(format: "%02x", $0) }.joined()
+        }
+        if lower.hasPrefix("nprofile1") {
+            return nprofilePubkeyHex(trimmed)
+        }
+        return nil
+    }
+
     static func memberRef(fromReference reference: String) -> String? {
         let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = trimmed.lowercased()

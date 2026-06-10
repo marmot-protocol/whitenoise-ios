@@ -82,6 +82,14 @@ enum ProfileSanitizer {
         return String(trimmed.prefix(maxMessageLength))
     }
 
+    /// Strip-only variant for markdown text runs: removes control/bidi/
+    /// zero-width characters but does not trim, collapse whitespace, or cap.
+    /// Markdown structure owns whitespace, and the markdown builder enforces
+    /// the total length budget across all runs of a message.
+    static func textRun(_ raw: String) -> String {
+        stripUnsafe(raw)
+    }
+
     /// Reaction "emoji" arrive from peers and may not be emoji at all. Strip
     /// spoofing characters (bidi / zero-width / control), trim, and cap length
     /// before display, while preserving legitimate ZWJ and variation-selector

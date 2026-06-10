@@ -21,20 +21,36 @@ enum MessagePreview {
 
     /// The display text for a previewable record: reply text, a media caption /
     /// filename, or the plaintext for a plain message.
-    static func body(_ record: AppMessageRecordFfi) -> String {
+    static func body(
+        _ record: AppMessageRecordFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String {
         switch MessageSemantics.classify(record) {
         case .media(let attachments):
-            if !record.plaintext.isEmpty { return record.plaintext }
+            if !record.plaintext.isEmpty {
+                return flattenedBody(
+                    plaintext: record.plaintext,
+                    tokens: record.contentTokens,
+                    mentionDisplayName: mentionDisplayName
+                )
+            }
             return mediaFallback(attachments)
         case .agentActivity, .agentOperation, .groupSystem:
             return typedEventText(from: record.plaintext) ?? ""
         case .chat, .reply, .streamFinal, .reaction, .delete, .agentStreamStart, .unknown:
             // Reply text, stream transcript, and plain chat all live in plaintext.
-            return record.plaintext
+            return flattenedBody(
+                plaintext: record.plaintext,
+                tokens: record.contentTokens,
+                mentionDisplayName: mentionDisplayName
+            )
         }
     }
 
-    static func body(_ preview: TimelineReplyPreviewFfi) -> String {
+    static func body(
+        _ preview: TimelineReplyPreviewFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String {
         if preview.deleted {
             return L10n.string("This message was deleted")
         }
@@ -42,7 +58,11 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return typedEventText(from: preview.plaintext) ?? ""
             }
-            return preview.plaintext
+            return flattenedBody(
+                plaintext: preview.plaintext,
+                tokens: preview.contentTokens,
+                mentionDisplayName: mentionDisplayName
+            )
         }
         if let mediaJson = preview.mediaJson {
             return mediaFallback(timelineMediaFileNames(from: mediaJson))
@@ -50,7 +70,10 @@ enum MessagePreview {
         return preview.plaintext
     }
 
-    static func body(_ preview: ChatListMessagePreviewFfi) -> String {
+    static func body(
+        _ preview: ChatListMessagePreviewFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String {
         if preview.deleted {
             return L10n.string("This message was deleted")
         }
@@ -58,9 +81,25 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return typedEventText(from: preview.plaintext) ?? ""
             }
-            return preview.plaintext
+            return flattenedBody(
+                plaintext: preview.plaintext,
+                tokens: preview.contentTokens,
+                mentionDisplayName: mentionDisplayName
+            )
         }
         return L10n.string("New message")
+    }
+
+    /// Previews show markdown stripped of syntax when parsed tokens exist.
+    /// Records without tokens (non-chat kinds, pre-markdown history) keep
+    /// returning the exact plaintext so existing fallbacks are unchanged.
+    private static func flattenedBody(
+        plaintext: String,
+        tokens: MarkdownDocumentFfi,
+        mentionDisplayName: MarkdownMentionResolver?
+    ) -> String {
+        guard !tokens.blocks.isEmpty else { return plaintext }
+        return MarkdownPlainText.flatten(tokens, mentionDisplayName: mentionDisplayName) ?? plaintext
     }
 
     static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {

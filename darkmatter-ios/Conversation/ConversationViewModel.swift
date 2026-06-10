@@ -225,7 +225,10 @@ final class ConversationViewModel {
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
             let name = appState?.displayName(forAccountIdHex: preview.sender) ?? L10n.string("Unknown")
-            let text = ProfileSanitizer.singleLine(MessagePreview.body(preview), maxLength: 120) ?? ""
+            let text = ProfileSanitizer.singleLine(
+                MessagePreview.body(preview, mentionDisplayName: mentionDisplayNameResolver),
+                maxLength: 120
+            ) ?? ""
             return (name, text)
         }
         guard let target = messageById[targetId] else {
@@ -239,7 +242,13 @@ final class ConversationViewModel {
     /// The visible body for a message, projected from the decoded unsigned
     /// Nostr app event's kind/tags/content.
     func displayBody(of record: AppMessageRecordFfi) -> String {
-        MessagePreview.body(record)
+        MessagePreview.body(record, mentionDisplayName: mentionDisplayNameResolver)
+    }
+
+    private var mentionDisplayNameResolver: MarkdownMentionResolver {
+        { [weak appState] entity in
+            appState?.mentionDisplayName(for: entity)
+        }
     }
 
     init(
@@ -649,13 +658,14 @@ final class ConversationViewModel {
             .map { ($0.messageIdHex, $0.recordedAt) }
     }
 
-    private static func appMessageRecord(from record: TimelineMessageRecordFfi) -> AppMessageRecordFfi {
+    static func appMessageRecord(from record: TimelineMessageRecordFfi) -> AppMessageRecordFfi {
         AppMessageRecordFfi(
             messageIdHex: record.messageIdHex,
             direction: record.direction,
             groupIdHex: record.groupIdHex,
             sender: record.sender,
             plaintext: record.plaintext,
+            contentTokens: record.contentTokens,
             kind: record.kind,
             tags: record.tags,
             recordedAt: record.timelineAt,
@@ -1109,6 +1119,7 @@ final class ConversationViewModel {
             groupIdHex: r.message.groupIdHex,
             sender: r.message.sender,
             plaintext: r.message.plaintext,
+            contentTokens: r.message.contentTokens,
             kind: r.message.kind,
             tags: r.message.tags,
             recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
@@ -1275,6 +1286,7 @@ final class ConversationViewModel {
             groupIdHex: group.groupIdHex,
             sender: appState.activeAccount?.accountIdHex ?? "",
             plaintext: outgoing,
+            contentTokens: appState.marmot.parseMarkdown(text: outgoing),
             kind: MessageSemantics.kindChat,
             tags: optimisticTags,
             recordedAt: now,
@@ -1324,12 +1336,16 @@ final class ConversationViewModel {
         let tempId = UUID().uuidString
         let tempRowId = "msg:\(tempId)"
         let now = UInt64(Date().timeIntervalSince1970)
+        let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
+            ? .emptyDocument
+            : appState.marmot.parseMarkdown(text: outgoingCaption)
         let optimistic = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",
             groupIdHex: group.groupIdHex,
             sender: appState.activeAccount?.accountIdHex ?? "",
             plaintext: outgoingCaption,
+            contentTokens: captionTokens,
             kind: MessageSemantics.kindChat,
             tags: [],
             recordedAt: now,
@@ -1359,6 +1375,7 @@ final class ConversationViewModel {
                 groupIdHex: group.groupIdHex,
                 sender: optimistic.sender,
                 plaintext: outgoingCaption,
+                contentTokens: captionTokens,
                 kind: MessageSemantics.kindChat,
                 tags: references.map(MessageSemantics.imetaTag(for:)),
                 recordedAt: now,
@@ -1396,7 +1413,7 @@ final class ConversationViewModel {
         return replyingTo.messageIdHex
     }
 
-    private func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
+    func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
         let realId = messageId ?? ""
         let confirmed = AppMessageRecordFfi(
             messageIdHex: realId,
@@ -1404,6 +1421,7 @@ final class ConversationViewModel {
             groupIdHex: record.groupIdHex,
             sender: record.sender,
             plaintext: record.plaintext,
+            contentTokens: record.contentTokens,
             kind: record.kind,
             tags: record.tags,
             recordedAt: record.recordedAt,

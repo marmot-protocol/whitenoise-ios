@@ -281,11 +281,42 @@ struct MessageBubble: View {
     }
 
     private func messageBodyText(hasReply: Bool) -> some View {
-        Text(sanitizedBodyText)
-            .foregroundStyle(isFromMe ? Color.white : Color.primary)
-            .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
-            .padding(.top, hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : MessageBubbleReplyLayout.bodyTopInset)
-            .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
+        Group {
+            if let blocks = MarkdownMessageBuilder.displayBlocks(
+                for: record.contentTokens,
+                mentionDisplayName: { appState.mentionDisplayName(for: $0) }
+            ) {
+                MarkdownMessageView(
+                    blocks: blocks,
+                    quoteBar: isFromMe ? Color.white.opacity(0.8) : Color.accentColor
+                )
+                .tint(isFromMe ? Color.white : Color.accentColor)
+                .environment(\.openURL, OpenURLAction(handler: handleMessageLink))
+            } else {
+                // Records without parsed tokens (non-chat kinds, optimistic
+                // stream bubbles, pre-markdown history) keep the plain path.
+                Text(sanitizedBodyText)
+            }
+        }
+        .foregroundStyle(isFromMe ? Color.white : Color.primary)
+        .padding(.horizontal, MessageBubbleReplyLayout.bodyHorizontalInset)
+        .padding(.top, hasReply ? MessageBubbleReplyLayout.bodyTopInsetAfterReply : MessageBubbleReplyLayout.bodyTopInset)
+        .padding(.bottom, MessageBubbleReplyLayout.bodyBottomInset)
+    }
+
+    private func handleMessageLink(_ url: URL) -> OpenURLAction.Result {
+        switch MessageLinkPolicy.action(for: url) {
+        case .openProfile(let npub):
+            appState.presentProfile(npub: npub)
+            return .handled
+        case .openChat(let groupIdHex):
+            appState.presentChat(groupIdHex: groupIdHex)
+            return .handled
+        case .openExternal(let external):
+            return .systemAction(external)
+        case .blocked:
+            return .discarded
+        }
     }
 
     @ViewBuilder

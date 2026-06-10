@@ -54,6 +54,30 @@ before every release tag.
 - [ ] Force-quit + relaunch device A; conversation history reappears
       from local SQLCipher storage.
 
+## Markdown rendering
+
+- [ ] Send `**bold** _italic_ ~~strike~~ \`code\``: both sides render
+      styled text (no literal asterisks); the sent bubble stays white-on-
+      gradient, received stays primary-on-gray, in light and dark mode.
+- [ ] Send a fenced code block, a `> quote`, a bulleted + numbered list,
+      and a `- [x]` task list: block chrome renders (code background,
+      quote bar, markers) and the bubble does not balloon to full width.
+- [ ] Send `[label](https://example.com)`: link is underlined; tapping
+      opens Safari; long-press on the bubble still opens the actions
+      sheet.
+- [ ] Send `[x](javascript:alert(1))`: renders as plain text, nothing
+      happens on tap.
+- [ ] Send a message with an image attachment plus a markdown caption:
+      caption renders styled under the media grid.
+- [ ] Chat list row and reply quote show the message with markdown
+      syntax stripped (`bold text`, not `**bold** _text_`).
+- [ ] An npub mention of a group member renders as bold `@Display Name`
+      and opens their profile on tap; an unknown npub shows the truncated
+      `@npub1…` form (and upgrades to the name once the profile fetch
+      lands); a `nostr:note1…` reference renders monospaced and inert.
+- [ ] Chat-list preview and reply quote show `@Display Name` for
+      mentions, not the npub.
+
 ## Groups (3+ members)
 
 - [ ] Device A creates a 3-member group (B + C). Roster on A shows

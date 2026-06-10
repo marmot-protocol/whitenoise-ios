@@ -59,6 +59,18 @@ extension AppState {
         knownDisplayName(forAccountIdHex: id) ?? IdentityFormatter.short(id)
     }
 
+    /// Display name for a markdown mention entity (npub/nprofile). nil when
+    /// the reference is invalid or the profile is unknown, so the caller
+    /// keeps its truncated-bech32 fallback. A miss schedules a relay profile
+    /// fetch, and the resulting refresh re-renders observers with the name.
+    @MainActor
+    func mentionDisplayName(for entity: MarkdownNostrEntityFfi) -> String? {
+        guard let pubkeyHex = NostrProfileReference.pubkeyHex(fromBech32: entity.bech32) else {
+            return nil
+        }
+        return knownDisplayName(forAccountIdHex: pubkeyHex)
+    }
+
     /// Picture URL for an account id, if its profile has a *safe* one.
     /// Untrusted: only http(s) URLs with a host pass the sanitizer.
     @MainActor
