@@ -105,6 +105,10 @@ struct CameraCaptureView: UIViewControllerRepresentable {
 struct PhotoLibrarySelection: Hashable {
     let data: Data
     let fileName: String?
+
+    static func compactPreservingPickerOrder(_ selectionsByPickerIndex: [PhotoLibrarySelection?]) -> [PhotoLibrarySelection] {
+        selectionsByPickerIndex.compactMap { $0 }
+    }
 }
 
 private enum PhotoLibraryPickerError: LocalizedError {
@@ -162,10 +166,10 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             guard !results.isEmpty else { return }
 
             let group = DispatchGroup()
-            var selections: [PhotoLibrarySelection] = []
+            var selectionsByPickerIndex = [PhotoLibrarySelection?](repeating: nil, count: results.count)
             var firstError: Error?
 
-            for result in results {
+            for (index, result) in results.enumerated() {
                 let provider = result.itemProvider
                 guard let typeIdentifier = Self.imageTypeIdentifier(from: provider) else { continue }
                 let fileName = Self.fileName(
@@ -177,7 +181,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                 provider.loadDataRepresentation(forTypeIdentifier: typeIdentifier) { data, error in
                     self.resultQueue.async {
                         if let data, !data.isEmpty {
-                            selections.append(PhotoLibrarySelection(data: data, fileName: fileName))
+                            selectionsByPickerIndex[index] = PhotoLibrarySelection(data: data, fileName: fileName)
                         } else if let error, firstError == nil {
                             firstError = error
                         }
@@ -187,6 +191,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
             }
 
             group.notify(queue: .main) {
+                let selections = PhotoLibrarySelection.compactPreservingPickerOrder(selectionsByPickerIndex)
                 if selections.isEmpty {
                     self.onError(firstError ?? PhotoLibraryPickerError.noReadableImage)
                 } else {

@@ -3987,6 +3987,32 @@ struct MediaComposerAvailabilityTests {
     }
 }
 
+struct PhotoLibrarySelectionOrderingTests {
+
+    @Test func compactingLoadedSelectionsPreservesPickerOrder() {
+        let first = PhotoLibrarySelection(data: Data([1]), fileName: "first.jpg")
+        let second = PhotoLibrarySelection(data: Data([2]), fileName: "second.jpg")
+        let third = PhotoLibrarySelection(data: Data([3]), fileName: "third.jpg")
+        var slots = [PhotoLibrarySelection?](repeating: nil, count: 3)
+
+        slots[2] = third
+        slots[0] = first
+        slots[1] = second
+
+        let selections = PhotoLibrarySelection.compactPreservingPickerOrder(slots)
+
+        #expect(selections.map(\.fileName) == ["first.jpg", "second.jpg", "third.jpg"])
+    }
+
+    @Test func compactingLoadedSelectionsDropsUnreadableSlotsWithoutReordering() {
+        let first = PhotoLibrarySelection(data: Data([1]), fileName: "first.jpg")
+        let third = PhotoLibrarySelection(data: Data([3]), fileName: "third.jpg")
+        let selections = PhotoLibrarySelection.compactPreservingPickerOrder([first, nil, third])
+
+        #expect(selections.map(\.fileName) == ["first.jpg", "third.jpg"])
+    }
+}
+
 struct MessageMediaGridPresentationTests {
 
     @Test func gridShowsAtMostFourTilesAndCountsHiddenAttachments() {
