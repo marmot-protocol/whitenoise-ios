@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import MarmotKit
+import ImageIO
 
 enum MessageBubbleReplyLayout {
     static let bodyHorizontalInset: CGFloat = 14
@@ -531,12 +532,14 @@ private struct MessageMediaTile: View {
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
 
     @State private var imageData: Data?
+    @State private var image: UIImage?
+    @State private var loadedImageID: String?
     @State private var isLoading = false
     @State private var didFail = false
 
     var body: some View {
         ZStack {
-            if item.isImage, let imageData, let image = UIImage(data: imageData) {
+            if item.isImage, loadedImageID == item.id, let image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -559,7 +562,7 @@ private struct MessageMediaTile: View {
         .clipped()
         .contentShape(Rectangle())
         .task(id: item.id) {
-            await loadImageIfNeeded()
+            _ = await loadImageIfNeeded()
         }
         .onTapGesture {
             if didFail {
@@ -616,18 +619,88 @@ private struct MessageMediaTile: View {
 
     private func loadImageIfNeeded(force: Bool = false) async -> Data? {
         guard item.isImage else { return nil }
-        if let imageData, !force { return imageData }
+        let maxPixelSize = max(1, Int(ceil(sideLength * UIScreen.main.scale)))
+        if !force {
+            if loadedImageID == item.id, let imageData { return imageData }
+            if let cachedImage = MessageMediaThumbnailDecoder.cachedImage(for: item.id, maxPixelSize: maxPixelSize) {
+                image = cachedImage
+                loadedImageID = item.id
+                didFail = false
+                return nil
+            }
+        }
         isLoading = true
         didFail = false
         defer { isLoading = false }
         do {
             let data = try await onLoadMedia(item)
+            guard !Task.isCancelled else { return nil }
+            guard let decoded = await MessageMediaThumbnailDecoder.image(
+                data: data,
+                maxPixelSize: maxPixelSize,
+                scale: UIScreen.main.scale
+            ) else {
+                imageData = nil
+                image = nil
+                loadedImageID = item.id
+                didFail = true
+                return nil
+            }
             imageData = data
+            image = decoded
+            loadedImageID = item.id
+            MessageMediaThumbnailDecoder.store(decoded, for: item.id, maxPixelSize: maxPixelSize)
             return data
         } catch {
+            imageData = nil
+            image = nil
+            loadedImageID = item.id
             didFail = true
             return nil
         }
+    }
+}
+
+enum MessageMediaThumbnailDecoder {
+    private struct SendableImage: @unchecked Sendable {
+        let image: UIImage
+    }
+
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func cachedImage(for itemID: String, maxPixelSize: Int) -> UIImage? {
+        cache.object(forKey: cacheKey(for: itemID, maxPixelSize: maxPixelSize))
+    }
+
+    static func store(_ image: UIImage, for itemID: String, maxPixelSize: Int) {
+        cache.setObject(image, forKey: cacheKey(for: itemID, maxPixelSize: maxPixelSize))
+    }
+
+    static func image(data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
+        let targetPixelSize = max(1, maxPixelSize)
+        let imageScale = max(1, scale)
+        let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+                guard let image = UIImage(data: data) else { return nil }
+                return SendableImage(image: image)
+            }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceShouldCacheImmediately: true,
+                kCGImageSourceThumbnailMaxPixelSize: targetPixelSize,
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                guard let image = UIImage(data: data) else { return nil }
+                return SendableImage(image: image)
+            }
+            return SendableImage(image: UIImage(cgImage: cgImage, scale: imageScale, orientation: .up))
+        }.value
+        return decoded?.image
+    }
+
+    private static func cacheKey(for itemID: String, maxPixelSize: Int) -> NSString {
+        "\(itemID):\(maxPixelSize)" as NSString
     }
 }
 

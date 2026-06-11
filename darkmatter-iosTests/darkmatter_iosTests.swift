@@ -4036,6 +4036,27 @@ struct MessageMediaGridPresentationTests {
 }
 
 @MainActor
+struct MessageMediaThumbnailDecoderTests {
+
+    @Test func decoderDownsamplesImageToPixelBudget() async throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 120))
+        let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 120))
+        }
+
+        let image = try #require(await MessageMediaThumbnailDecoder.image(
+            data: data,
+            maxPixelSize: 48,
+            scale: 1
+        ))
+        let largestPixelEdge = max(image.size.width * image.scale, image.size.height * image.scale)
+
+        #expect(largestPixelEdge <= 48)
+    }
+}
+
+@MainActor
 struct ReplySwipeTests {
 
     @Test func horizontalDragPastThresholdActivatesReply() {
