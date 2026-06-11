@@ -43,8 +43,8 @@ struct MediaDraftStrip: View {
 
     @ViewBuilder
     private func thumbnail(for attachment: MediaDraftAttachment) -> some View {
-        if let image = UIImage(data: attachment.data) {
-            Image(uiImage: image)
+        if let thumbnail = attachment.thumbnail {
+            Image(uiImage: thumbnail)
                 .resizable()
                 .scaledToFill()
         } else {

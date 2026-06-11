@@ -34,13 +34,22 @@ struct MediaDraftAttachment: Identifiable, Hashable {
     let mediaType: String
     let data: Data
     let dim: String?
+    let thumbnail: UIImage?
 
-    init(id: UUID = UUID(), fileName: String, mediaType: String, data: Data, dim: String?) {
+    init(
+        id: UUID = UUID(),
+        fileName: String,
+        mediaType: String,
+        data: Data,
+        dim: String?,
+        thumbnail: UIImage? = nil
+    ) {
         self.id = id
         self.fileName = fileName
         self.mediaType = mediaType
         self.data = data
         self.dim = dim
+        self.thumbnail = thumbnail
     }
 
     var uploadRequest: MediaUploadAttachmentRequestFfi {
@@ -63,12 +72,29 @@ struct MediaDraftAttachment: Identifiable, Hashable {
             localData: data
         )
     }
+
+    static func == (lhs: MediaDraftAttachment, rhs: MediaDraftAttachment) -> Bool {
+        lhs.id == rhs.id
+            && lhs.fileName == rhs.fileName
+            && lhs.mediaType == rhs.mediaType
+            && lhs.data == rhs.data
+            && lhs.dim == rhs.dim
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(fileName)
+        hasher.combine(mediaType)
+        hasher.combine(data)
+        hasher.combine(dim)
+    }
 }
 
 enum MediaDraftProcessor {
     static let maxAttachmentCount = 10
     static let maxLongEdge: CGFloat = 2048
     static let maxAttachmentBytes = 10 * 1024 * 1024
+    static let draftThumbnailPixelSize: CGFloat = 160
 
     enum Failure: LocalizedError {
         case unsupportedImage
@@ -106,7 +132,8 @@ enum MediaDraftProcessor {
             fileName: sanitizedFileName(fileName),
             mediaType: "image/jpeg",
             data: encoded,
-            dim: "\(width)x\(height)"
+            dim: "\(width)x\(height)",
+            thumbnail: thumbnailImage(from: normalized)
         )
     }
 
@@ -143,6 +170,24 @@ enum MediaDraftProcessor {
             throw Failure.encodingFailed
         }
         return data
+    }
+
+    private static func thumbnailImage(from image: UIImage) -> UIImage {
+        let pixelWidth = image.size.width * image.scale
+        let pixelHeight = image.size.height * image.scale
+        let longest = max(pixelWidth, pixelHeight)
+        let scale = longest > draftThumbnailPixelSize ? draftThumbnailPixelSize / longest : 1
+        let size = CGSize(
+            width: max(1, (pixelWidth * scale).rounded()),
+            height: max(1, (pixelHeight * scale).rounded())
+        )
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     private static func sanitizedFileName(_ fileName: String?) -> String {

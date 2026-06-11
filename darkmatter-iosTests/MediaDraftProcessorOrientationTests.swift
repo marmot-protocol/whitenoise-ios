@@ -88,6 +88,36 @@ struct MediaDraftProcessorOrientationTests {
         #expect(attachment.dim == "1024x2048")
     }
 
+    @Test func attachmentCarriesPrecomputedThumbnail() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(
+            size: CGSize(width: 640, height: 320),
+            format: format
+        ).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 640, height: 320))
+        }
+
+        let attachment = try MediaDraftProcessor.attachment(from: image, fileName: nil)
+        let thumbnail = try #require(attachment.thumbnail)
+        let largestPixelEdge = max(
+            thumbnail.size.width * thumbnail.scale,
+            thumbnail.size.height * thumbnail.scale
+        )
+
+        #expect(largestPixelEdge <= MediaDraftProcessor.draftThumbnailPixelSize)
+    }
+
+    @Test func mediaDraftStripRendersPrecomputedThumbnail() throws {
+        let source = try String(contentsOf: mediaComposerViewsSourceURL, encoding: .utf8)
+
+        #expect(source.contains("if let thumbnail = attachment.thumbnail"))
+        #expect(source.contains("Image(uiImage: thumbnail)"))
+        #expect(!source.contains("UIImage(data: attachment.data)"))
+    }
+
     private struct SampledColor {
         let red: CGFloat
         let blue: CGFloat
@@ -121,5 +151,12 @@ struct MediaDraftProcessorOrientationTests {
             red: CGFloat(red) / CGFloat(width),
             blue: CGFloat(blue) / CGFloat(width)
         )
+    }
+
+    private var mediaComposerViewsSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/MediaComposerViews.swift")
     }
 }
