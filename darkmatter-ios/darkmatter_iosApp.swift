@@ -1,6 +1,25 @@
 import SwiftUI
 import UIKit
 
+@MainActor
+private final class BackgroundRuntimeSuspensionTask {
+    private var taskID: UIBackgroundTaskIdentifier = .invalid
+
+    init(name: String) {
+        taskID = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            Task { @MainActor in
+                self?.endIfNeeded()
+            }
+        }
+    }
+
+    func endIfNeeded() {
+        guard taskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(taskID)
+        taskID = .invalid
+    }
+}
+
 @main
 struct darkmatter_iosApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -36,23 +55,13 @@ struct darkmatter_iosApp: App {
         }
     }
 
+    @MainActor
     private func beginBackgroundRuntimeSuspension() {
-        var taskID: UIBackgroundTaskIdentifier = .invalid
-        taskID = UIApplication.shared.beginBackgroundTask(withName: "Suspend Marmot runtime") {
-            // iOS is about to reclaim our remaining background time. End the task
-            // ourselves so the app isn't terminated uncleanly mid-suspension (#81).
-            if taskID != .invalid {
-                UIApplication.shared.endBackgroundTask(taskID)
-                taskID = .invalid
-            }
-        }
+        let backgroundTask = BackgroundRuntimeSuspensionTask(name: "Suspend Marmot runtime")
         let suspensionTask = appState.startRuntimeSuspension()
-        Task {
+        Task { @MainActor in
             await suspensionTask.value
-            if taskID != .invalid {
-                UIApplication.shared.endBackgroundTask(taskID)
-                taskID = .invalid
-            }
+            backgroundTask.endIfNeeded()
         }
     }
 

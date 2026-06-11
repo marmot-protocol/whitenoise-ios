@@ -15,11 +15,31 @@ struct BackgroundSuspensionTests {
             .appendingPathComponent("darkmatter-ios/darkmatter_iosApp.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        // The handler-less form takes no trailing closure; require the closure form.
-        #expect(source.contains("beginBackgroundTask(withName: \"Suspend Marmot runtime\") {"))
-        // ...and it must end the task it created.
+        #expect(source.contains("BackgroundRuntimeSuspensionTask(name: \"Suspend Marmot runtime\")"))
+        // The handler-less form takes no trailing closure; require the helper to
+        // keep the closure form.
+        #expect(source.contains("beginBackgroundTask(withName: name) {"))
+        // ...and it must end the task it created through the idempotent helper.
         #expect(source.range(
-            of: #"beginBackgroundTask\(withName: "Suspend Marmot runtime"\) \{[\s\S]*?endBackgroundTask\(taskID\)"#,
+            of: #"func endIfNeeded\(\) \{[\s\S]*?endBackgroundTask\(taskID\)"#,
+            options: .regularExpression
+        ) != nil)
+    }
+
+    @Test func backgroundTaskEndIsSerializedOnMainActor() throws {
+        let url = URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/darkmatter_iosApp.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        #expect(source.contains("@MainActor\nprivate final class BackgroundRuntimeSuspensionTask"))
+        #expect(source.range(
+            of: #"beginBackgroundTask\(withName: name\) \{ \[weak self\] in[\s\S]*?Task \{ @MainActor in[\s\S]*?self\?\.endIfNeeded\(\)"#,
+            options: .regularExpression
+        ) != nil)
+        #expect(source.range(
+            of: #"Task \{ @MainActor in[\s\S]*?await suspensionTask\.value[\s\S]*?backgroundTask\.endIfNeeded\(\)"#,
             options: .regularExpression
         ) != nil)
     }
