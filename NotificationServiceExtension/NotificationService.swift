@@ -8,6 +8,7 @@ final class NotificationService: UNNotificationServiceExtension {
     private var bestAttemptContent: UNMutableNotificationContent?
     private var collectionTask: Task<Void, Never>?
     private var expirationTask: Task<Void, Never>?
+    private var additionalPresentationTask: Task<Void, Never>?
     private var activeMarmot: Marmot?
     private var activeMarmotStarted = false
     private var didApplyRenderDecision = false
@@ -21,6 +22,7 @@ final class NotificationService: UNNotificationServiceExtension {
         bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
         activeMarmot = nil
         activeMarmotStarted = false
+        additionalPresentationTask = nil
         didApplyRenderDecision = false
 
         collectionTask = Task { [weak self] in
@@ -30,12 +32,24 @@ final class NotificationService: UNNotificationServiceExtension {
 
     override func serviceExtensionTimeWillExpire() {
         collectionTask?.cancel()
+        let additionalPresentationTask = additionalPresentationTask
         guard let marmot = takeActiveMarmotForShutdown() else {
-            finish(applyingFallbackForTimeout: true)
+            if let additionalPresentationTask {
+                expirationTask = Task { [weak self] in
+                    await additionalPresentationTask.value
+                    await self?.finish(applyingFallbackForTimeout: true)
+                }
+            } else {
+                finish(applyingFallbackForTimeout: true)
+            }
             return
         }
         expirationTask = Task { [weak self] in
-            await marmot.shutdown()
+            let shutdownTask = Task {
+                await marmot.shutdown()
+            }
+            await additionalPresentationTask?.value
+            await shutdownTask.value
             await self?.finish(applyingFallbackForTimeout: true)
         }
     }
@@ -101,8 +115,10 @@ final class NotificationService: UNNotificationServiceExtension {
         didApplyRenderDecision = true
         switch decision {
         case .decorate(let presentation, let additionalPresentations):
+            let additionalPresentationTask = startAdditionalPresentations(additionalPresentations)
             decorate(content, with: presentation)
-            await scheduleAdditionalPresentations(additionalPresentations)
+            await additionalPresentationTask?.value
+            self.additionalPresentationTask = nil
         case .fallback:
             applyFallback(to: content)
         }
@@ -122,18 +138,22 @@ final class NotificationService: UNNotificationServiceExtension {
         content.userInfo = userInfo
     }
 
-    private func scheduleAdditionalPresentations(
+    private func startAdditionalPresentations(
         _ additionalPresentations: [LocalNotificationPresentation]
-    ) async {
-        for presentation in additionalPresentations {
-            guard !Task.isCancelled else { return }
-            let request = UNNotificationRequest(
-                identifier: presentation.identifier,
-                content: notificationContent(for: presentation),
-                trigger: nil
-            )
-            try? await UNUserNotificationCenter.current().add(request)
+    ) -> Task<Void, Never>? {
+        guard !additionalPresentations.isEmpty else { return nil }
+        let task = Task { [additionalPresentations] in
+            for presentation in additionalPresentations {
+                let request = UNNotificationRequest(
+                    identifier: presentation.identifier,
+                    content: notificationContent(for: presentation),
+                    trigger: nil
+                )
+                try? await UNUserNotificationCenter.current().add(request)
+            }
         }
+        additionalPresentationTask = task
+        return task
     }
 
     private func notificationContent(
@@ -166,6 +186,7 @@ final class NotificationService: UNNotificationServiceExtension {
         self.bestAttemptContent = nil
         self.collectionTask = nil
         self.expirationTask = nil
+        self.additionalPresentationTask = nil
         self.didApplyRenderDecision = false
         contentHandler(bestAttemptContent)
     }

@@ -1869,6 +1869,23 @@ struct NotificationServiceTests {
         #expect(source.contains("UNUserNotificationCenter.current().add"))
     }
 
+    @Test func additionalPresentationsAreTrackedAcrossTimeoutCancellation() throws {
+        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"private var additionalPresentationTask: Task<Void, Never>\?"#))
+        #expect(source.matches(#"let additionalPresentationTask = startAdditionalPresentations\(additionalPresentations\)[\s\S]*decorate\(content, with: presentation\)[\s\S]*await additionalPresentationTask\?\.value[\s\S]*self\.additionalPresentationTask = nil"#))
+        #expect(source.matches(#"private func startAdditionalPresentations\([\s\S]*\) -> Task<Void, Never>\? \{[\s\S]*let task = Task \{ \[additionalPresentations\][\s\S]*UNUserNotificationCenter\.current\(\)\.add\(request\)[\s\S]*additionalPresentationTask = task[\s\S]*return task"#))
+        #expect(!source.contains("guard !Task.isCancelled else { return }"))
+    }
+
+    @Test func serviceTimeoutWaitsForAdditionalPresentationsBeforeFinishing() throws {
+        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
+
+        #expect(source.matches(#"override func serviceExtensionTimeWillExpire\(\)[\s\S]*let additionalPresentationTask = additionalPresentationTask"#))
+        #expect(source.matches(#"guard let marmot = takeActiveMarmotForShutdown\(\) else \{[\s\S]*await additionalPresentationTask\.value[\s\S]*await self\?\.finish\(applyingFallbackForTimeout: true\)"#))
+        #expect(source.matches(#"expirationTask = Task[\s\S]*let shutdownTask = Task[\s\S]*await marmot\.shutdown\(\)[\s\S]*await additionalPresentationTask\?\.value[\s\S]*await shutdownTask\.value[\s\S]*await self\?\.finish\(applyingFallbackForTimeout: true\)"#))
+    }
+
     @Test func serviceTimeoutShutsDownActiveMarmotBeforeFinishing() throws {
         let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
 

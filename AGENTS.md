@@ -54,6 +54,7 @@ Rules for notification work:
 - The Notification Service Extension may enrich the visible notification only from local Marmot state after `collectNotificationsAfterWake`.
 - The Notification Service Extension must honor each account's `localNotificationsEnabled` setting before rendering decrypted sender or preview content.
 - The Notification Service Extension cannot suppress an alert that already woke it. If no local presentation exists, deliver the generic fallback content rather than blank content.
+- Do not abandon additional NSE presentations after `collectNotificationsAfterWake`; those records have already been consumed from Marmot's background notification cursor.
 - The main app should not keep the Marmot runtime alive indefinitely in the background. It suspends the runtime on background and restarts it on foreground.
 
 If notifications are flaky, check token registration, group push-token gossip, relay hints, transponder visibility on the relay, and NSE timeout behavior before changing UI code.
