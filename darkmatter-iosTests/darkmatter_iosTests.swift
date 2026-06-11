@@ -3498,6 +3498,21 @@ struct AgentStreamTests {
         ) == nil)
     }
 
+    @Test func streamPreviewTimestampPrefersStartRecordTime() {
+        #expect(ConversationViewModel.streamPreviewTimestamp(startedAt: 42, fallback: 99) == 42)
+        #expect(ConversationViewModel.streamPreviewTimestamp(startedAt: 0, fallback: 99) == 99)
+        #expect(ConversationViewModel.streamPreviewTimestamp(startedAt: nil, fallback: 99) == 99)
+    }
+
+    @Test func streamStartRecordedAtIsCarriedIntoLivePreview() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.contains("startedAt: record.recordedAt"))
+        #expect(source.contains("streamStartedAtById[streamId] = startedAt"))
+        #expect(source.contains("recordedAt: timestamp"))
+        #expect(source.contains("receivedAt: timestamp"))
+    }
+
     @MainActor
     @Test func historicalStreamStartsRenderNoBlankBubble() throws {
         let viewModel = ConversationViewModel(
@@ -3746,6 +3761,13 @@ struct AgentStreamTests {
             MessageTagFfi(values: ["final-kind", "9"]),
             MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
         ]
+    }
+
+    private var conversationViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
     }
 
     @MainActor

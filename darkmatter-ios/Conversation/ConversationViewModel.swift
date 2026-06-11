@@ -81,6 +81,8 @@ final class ConversationViewModel {
     /// Streams whose final anchor message has arrived. Once finalized, the
     /// anchor's full text is authoritative and late live updates are ignored.
     private var finalizedStreamIds: Set<String> = []
+    /// Start-record timestamps for live previews, keyed by stream id.
+    private var streamStartedAtById: [String: UInt64] = [:]
     private var streamSenderById: [String: String] = [:]
     private var markedReadMessageIds: Set<String> = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
@@ -512,7 +514,13 @@ final class ConversationViewModel {
             finalizedStreamIds: finalizedStreamIds,
             trigger: trigger
         ) else { return }
-        Task { [weak self] in await self?.startWatching(sender: record.sender, streamIdHex: streamIdHex) }
+        Task { [weak self] in
+            await self?.startWatching(
+                sender: record.sender,
+                streamIdHex: streamIdHex,
+                startedAt: record.recordedAt
+            )
+        }
     }
 
     static func agentStreamStartIdToWatch(
@@ -1041,6 +1049,7 @@ final class ConversationViewModel {
         streamWatchTasks[streamId] = nil
         streamText[streamId] = nil
         streamsWithCheckpointPreview.remove(streamId)
+        streamStartedAtById[streamId] = nil
         streamSenderById[streamId] = nil
         removeStreamBubble(streamId: streamId)
     }
@@ -1061,6 +1070,7 @@ final class ConversationViewModel {
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
         streamsWithCheckpointPreview.remove(streamId)
+        streamStartedAtById[streamId] = nil
         streamSenderById[streamId] = nil
     }
 
@@ -1070,6 +1080,7 @@ final class ConversationViewModel {
         streamWatchTasks[streamId] = nil
         streamText[streamId] = nil
         streamsWithCheckpointPreview.remove(streamId)
+        streamStartedAtById[streamId] = nil
         streamSenderById[streamId] = nil
         removeStreamBubble(streamId: streamId)
     }
@@ -1578,7 +1589,7 @@ final class ConversationViewModel {
 
     /// Watch a concrete live agent stream when the start payload names one;
     /// otherwise fall back to the latest live stream in this group.
-    private func startWatching(sender: String, streamIdHex: String?) async {
+    private func startWatching(sender: String, streamIdHex: String?, startedAt: UInt64? = nil) async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         if let streamIdHex {
             if streamWatchTasks[streamIdHex] != nil { return }
@@ -1604,6 +1615,9 @@ final class ConversationViewModel {
             let streamId = subscription.streamIdHex()
             if streamWatchTasks[streamId] != nil { return }
             if finalizedStreamIds.contains(streamId) { return }
+            if let startedAt, startedAt > 0 {
+                streamStartedAtById[streamId] = startedAt
+            }
             streamText[streamId] = ""
             streamSenderById[streamId] = sender
             Self.streamLog.info("watch opened: streamId=\(streamId, privacy: .public) developerMode=\(appState.developerMode, privacy: .public); waiting for text preview")
@@ -1728,6 +1742,21 @@ final class ConversationViewModel {
         return String(text.prefix(ProfileSanitizer.maxMessageLength))
     }
 
+    nonisolated static func streamPreviewTimestamp(startedAt: UInt64?, fallback: UInt64) -> UInt64 {
+        guard let startedAt, startedAt > 0 else { return fallback }
+        return startedAt
+    }
+
+    private func streamPreviewTimestamp(for streamId: String) -> UInt64 {
+        let now = UInt64(Date().timeIntervalSince1970)
+        let timestamp = Self.streamPreviewTimestamp(
+            startedAt: streamStartedAtById[streamId],
+            fallback: now
+        )
+        streamStartedAtById[streamId] = timestamp
+        return timestamp
+    }
+
     /// Clamp outbound message text to the protocol's max length (#54).
     nonisolated static func cappedOutgoingText(_ text: String) -> String {
         String(text.prefix(ProfileSanitizer.maxMessageLength))
@@ -1742,7 +1771,7 @@ final class ConversationViewModel {
     private func upsertStreamBubble(streamId: String, sender: String, status: MessageStatus) {
         let rowId = "msg:stream:\(streamId)"
         streamSenderById[streamId] = sender
-        let now = UInt64(Date().timeIntervalSince1970)
+        let timestamp = streamPreviewTimestamp(for: streamId)
         let record = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "received",
@@ -1751,8 +1780,8 @@ final class ConversationViewModel {
             plaintext: streamText[streamId] ?? "",
             kind: MessageSemantics.kindChat,
             tags: [],
-            recordedAt: now,
-            receivedAt: now
+            recordedAt: timestamp,
+            receivedAt: timestamp
         )
         if let idx = timeline.firstIndex(where: { $0.id == rowId }) {
             let timestamp = timeline[idx].timestamp
@@ -1767,7 +1796,7 @@ final class ConversationViewModel {
             let item = TimelineItem(
                 id: rowId,
                 kind: .message(record: record, status: status),
-                timestamp: now
+                timestamp: timestamp
             )
             transientTimelineItems[rowId] = item
             upsertTimelineItem(item)
