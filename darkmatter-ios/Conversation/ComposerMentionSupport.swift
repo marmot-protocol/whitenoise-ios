@@ -11,10 +11,12 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
     init(details: GroupMemberDetailsFfi, appState: AppState) {
         memberIdHex = details.memberIdHex
         npub = details.npub
-        displayName = ProfileSanitizer.displayName(details.displayName)
-            ?? appState.knownDisplayName(forAccountIdHex: details.memberIdHex)
-            ?? IdentityFormatter.short(details.memberIdHex)
-        avatarPictureURL = appState.avatarURL(forAccountIdHex: details.memberIdHex)
+        let accountIdHex = GroupMemberDetailsPresentation.profileAccountIdHex(for: details)
+        displayName =
+            ProfileSanitizer.displayName(details.displayName)
+            ?? appState.knownDisplayName(forAccountIdHex: accountIdHex)
+            ?? IdentityFormatter.short(accountIdHex)
+        avatarPictureURL = appState.avatarURL(forAccountIdHex: accountIdHex)
         id = memberIdHex
     }
 
@@ -22,7 +24,7 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
         guard !member.local else { return nil }
         let accountHex = member.account ?? member.memberIdHex
         guard let npub = appState.marmot.npub(accountIdHex: accountHex),
-              npub.hasPrefix("npub1")
+            npub.hasPrefix("npub1")
         else { return nil }
         memberIdHex = member.memberIdHex
         self.npub = npub
@@ -63,7 +65,9 @@ enum ComposerMentionQuery {
         query.hasPrefix("npub1") && query.count >= 5 + completeNpubBodyLength
     }
 
-    static func filter(_ candidates: [ComposerMentionCandidate], matching query: String) -> [ComposerMentionCandidate] {
+    static func filter(_ candidates: [ComposerMentionCandidate], matching query: String)
+        -> [ComposerMentionCandidate]
+    {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let filtered: [ComposerMentionCandidate]
         if trimmed.isEmpty {

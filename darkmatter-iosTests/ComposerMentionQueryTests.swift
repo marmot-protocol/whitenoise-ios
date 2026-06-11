@@ -1,6 +1,7 @@
 import Foundation
 import MarmotKit
 import Testing
+
 @testable import darkmatter_ios
 
 struct ComposerMentionQueryTests {
@@ -31,8 +32,12 @@ struct ComposerMentionQueryTests {
             mentionCandidate(name: "Jeff", npub: jeffNpub, hex: "111"),
             mentionCandidate(name: "Alice", npub: aliceNpub, hex: "222"),
         ]
-        #expect(ComposerMentionQuery.filter(candidates, matching: "je").map(\.displayName) == ["Jeff"])
-        #expect(ComposerMentionQuery.filter(candidates, matching: "npub1a").map(\.displayName) == ["Alice"])
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "je").map(\.displayName) == ["Jeff"])
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "npub1a").map(\.displayName) == [
+                "Alice"
+            ])
         #expect(ComposerMentionQuery.filter(candidates, matching: "").count == 2)
     }
 
@@ -47,6 +52,49 @@ struct ComposerMentionQueryTests {
         let partial = "npub1" + String(repeating: "q", count: 57)
         #expect(!ComposerMentionQuery.looksLikeCompleteNpub(partial))
         #expect(ComposerMentionQuery.looksLikeCompleteNpub(jeffNpub))
+    }
+
+    @Test func groupMemberDetailsProfileLookupsUseMappedAccountId() {
+        let member = GroupMemberDetailsFfi(
+            memberIdHex: "mls-member-id",
+            account: "nostr-account-id",
+            local: false,
+            isAdmin: false,
+            isSelf: false,
+            npub: aliceNpub,
+            displayName: nil
+        )
+
+        #expect(
+            GroupMemberDetailsPresentation.profileAccountIdHex(for: member) == "nostr-account-id")
+    }
+
+    @Test func groupMemberDetailsProfileLookupsFallBackToMemberIdWithoutAccount() {
+        let missingAccount = GroupMemberDetailsFfi(
+            memberIdHex: "mls-member-id",
+            account: nil,
+            local: false,
+            isAdmin: false,
+            isSelf: false,
+            npub: aliceNpub,
+            displayName: nil
+        )
+        let emptyAccount = GroupMemberDetailsFfi(
+            memberIdHex: "mls-member-id",
+            account: "",
+            local: false,
+            isAdmin: false,
+            isSelf: false,
+            npub: aliceNpub,
+            displayName: nil
+        )
+
+        #expect(
+            GroupMemberDetailsPresentation.profileAccountIdHex(for: missingAccount)
+                == "mls-member-id")
+        #expect(
+            GroupMemberDetailsPresentation.profileAccountIdHex(for: emptyAccount) == "mls-member-id"
+        )
     }
 }
 

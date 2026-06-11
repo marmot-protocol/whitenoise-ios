@@ -1,5 +1,5 @@
-import SwiftUI
 import MarmotKit
+import SwiftUI
 
 struct GroupMemberRow: View {
     @Environment(AppState.self) private var appState
@@ -103,14 +103,34 @@ struct GroupMemberDetailsRow: View {
     }
 
     private var displayName: String {
-        if let name = ProfileSanitizer.displayName(member.displayName) {
-            return name
-        }
-        return appState.knownDisplayName(forAccountIdHex: member.memberIdHex)
-            ?? IdentityFormatter.short(member.memberIdHex)
+        GroupMemberDetailsPresentation.displayName(for: member, appState: appState)
     }
 
     private var avatarURL: URL? {
-        appState.avatarURL(forAccountIdHex: member.memberIdHex)
+        GroupMemberDetailsPresentation.avatarURL(for: member, appState: appState)
+    }
+}
+
+enum GroupMemberDetailsPresentation {
+    static func profileAccountIdHex(for member: GroupMemberDetailsFfi) -> String {
+        guard let account = member.account, !account.isEmpty else {
+            return member.memberIdHex
+        }
+        return account
+    }
+
+    @MainActor
+    static func displayName(for member: GroupMemberDetailsFfi, appState: AppState) -> String {
+        if let name = ProfileSanitizer.displayName(member.displayName) {
+            return name
+        }
+        let accountIdHex = profileAccountIdHex(for: member)
+        return appState.knownDisplayName(forAccountIdHex: accountIdHex)
+            ?? IdentityFormatter.short(accountIdHex)
+    }
+
+    @MainActor
+    static func avatarURL(for member: GroupMemberDetailsFfi, appState: AppState) -> URL? {
+        appState.avatarURL(forAccountIdHex: profileAccountIdHex(for: member))
     }
 }
