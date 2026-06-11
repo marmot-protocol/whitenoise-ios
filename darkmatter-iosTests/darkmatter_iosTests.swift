@@ -3576,6 +3576,59 @@ struct AgentStreamTests {
     }
 
     @MainActor
+    @Test func normalMessageAfterFinishedStreamKeepsFinalizedTranscript() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        let sender = hex("11")
+
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: sender,
+            update: .chunk(seq: 1, text: "partial")
+        )
+        viewModel.applyStreamUpdate(
+            streamId: streamId,
+            sender: sender,
+            update: .finished(text: "complete", transcriptHashHex: hex("55"), chunkCount: 1)
+        )
+
+        let nextMessage = timelineRecord(
+            messageIdHex: hex("ef"),
+            sender: sender,
+            plaintext: "next message",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            timelineAt: 2
+        )
+        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
+            accountIdHex: hex("22"),
+            accountLabel: "account",
+            update: TimelineProjectionUpdateFfi(
+                groupIdHex: hex("aa"),
+                messages: [],
+                changes: [.upsert(trigger: .newMessage, message: nextMessage)],
+                chatListRow: nil,
+                chatListTrigger: .newLastMessage
+            )
+        )))
+
+        let ids = Set(viewModel.timeline.map(\.id))
+        #expect(ids.contains("msg:stream:\(streamId)"))
+        #expect(ids.contains("msg:\(hex("ef"))"))
+
+        let streamItem = try #require(viewModel.timeline.first { $0.id == "msg:stream:\(streamId)" })
+        guard case .message(let record, let status) = streamItem.kind else {
+            Issue.record("Expected a finalized stream message")
+            return
+        }
+        #expect(status == .received)
+        #expect(record.plaintext == "complete")
+    }
+
+    @MainActor
     @Test func emptyFinishedUpdateDoesNotCreateBlankBubble() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),

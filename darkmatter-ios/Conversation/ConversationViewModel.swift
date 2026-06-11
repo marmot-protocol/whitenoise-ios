@@ -1061,6 +1061,7 @@ final class ConversationViewModel {
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
         streamsWithCheckpointPreview.remove(streamId)
+        streamSenderById[streamId] = nil
     }
 
     private func resolveFinalizedStream(streamId: String) {
