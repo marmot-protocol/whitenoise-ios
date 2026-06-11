@@ -175,6 +175,23 @@ struct AppStateBootstrapTests {
         #expect(source.contains(".environment(appState.navigation)"))
     }
 
+    @Test func notificationPresentationPolicyRunsOnMainActor() throws {
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let presentationPattern =
+            #"present:\s*\{ \[weak self\] update in[\s\S]*"#
+            + #"let shouldPresent = await MainActor\.run \{[\s\S]*"#
+            + #"self\.shouldPresentLocalNotification\(update\)[\s\S]*"#
+            + #"guard shouldPresent else \{ return \}[\s\S]*"#
+            + #"await self\.notifications\.present\(update: update\)"#
+        let oldPresentationPattern =
+            #"present:\s*\{ \[weak self\] update in\s*"#
+            + #"guard let self, self\.shouldPresentLocalNotification"#
+
+        #expect(source.matches(#"@MainActor\s+private func shouldPresentLocalNotification"#))
+        #expect(source.matches(presentationPattern))
+        #expect(!source.matches(oldPresentationPattern))
+    }
+
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
         let appState = try testAppState()
         appState.activeAccountRef = "account-a"

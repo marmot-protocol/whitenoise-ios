@@ -277,7 +277,11 @@ final class AppState {
                 return SubscriptionDriver.notifications(subscription)
             },
             present: { [weak self] update in
-                guard let self, self.shouldPresentLocalNotification(update) else { return }
+                guard let self else { return }
+                let shouldPresent = await MainActor.run {
+                    self.shouldPresentLocalNotification(update)
+                }
+                guard shouldPresent else { return }
                 await self.notifications.present(update: update)
             },
             reportError: { [weak self] error in
@@ -299,6 +303,7 @@ final class AppState {
         notificationDriver.stop()
     }
 
+    @MainActor
     private func shouldPresentLocalNotification(_ update: NotificationUpdateFfi) -> Bool {
         LocalNotificationSuppressionPolicy.shouldPresent(
             localNotificationsEnabled: (try? marmot.notificationSettings(
