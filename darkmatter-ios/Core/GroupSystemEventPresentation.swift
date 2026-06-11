@@ -72,7 +72,7 @@ enum GroupSystemEventPresentation {
             let subjectHex = normalizedHex(subject)
             let actorName = actorHex.map(displayName)
             let subjectName = subjectHex.map(displayName)
-            let groupName = trimmed(name)
+            let groupName = ProfileSanitizer.groupName(name)
 
             if let systemType = trimmed(systemType) {
                 switch systemType {

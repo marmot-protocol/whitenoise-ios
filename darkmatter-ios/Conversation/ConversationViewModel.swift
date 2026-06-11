@@ -1197,7 +1197,9 @@ final class ConversationViewModel {
         }
 
         if !previousName.isEmpty && previousName != record.name {
-            appendSystemEvent(.groupRenamed(record.name))
+            if let name = ProfileSanitizer.groupName(record.name) {
+                appendSystemEvent(.groupRenamed(name))
+            }
             appState?.present(.success(L10n.string("Group renamed"), message: ProfileSanitizer.groupName(record.name)))
         }
         if record.archived && !wasArchived {

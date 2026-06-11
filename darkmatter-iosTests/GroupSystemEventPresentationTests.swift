@@ -41,6 +41,15 @@ struct GroupSystemEventPresentationTests {
         #expect(text == "Alice made Bob an admin")
     }
 
+    @Test func displayTextSanitizesGroupRenameName() {
+        let text = GroupSystemEventPresentation.displayText(
+            from: #"{"v":1,"system_type":"group_renamed","data":{"name":"Secret\u202Eevil\nClub"}}"#,
+            displayName: testDisplayName
+        )
+
+        #expect(text == "Group renamed to Secretevil Club")
+    }
+
     @Test func displayTextFallsBackToSystemType() {
         let text = GroupSystemEventPresentation.displayText(
             from: #"{"v":1,"system_type":"member_removed"}"#,
@@ -76,6 +85,25 @@ struct GroupSystemEventPresentationTests {
         }
         #expect(record.kind == MessageSemantics.kindGroupSystem)
         #expect(GroupSystemEventPresentation.isDisplayable(record))
+    }
+
+    @Test func transientGroupRenameRowsSanitizeAndUseStaticFormatKey() throws {
+        let root = URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewModel = try String(
+            contentsOf: root.appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift"),
+            encoding: .utf8
+        )
+        let row = try String(
+            contentsOf: root.appendingPathComponent("darkmatter-ios/Conversation/SystemEventRow.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewModel.contains("ProfileSanitizer.groupName(record.name)"))
+        #expect(!viewModel.contains("appendSystemEvent(.groupRenamed(record.name))"))
+        #expect(row.contains(#"L10n.formatted("Renamed to %@", new)"#))
+        #expect(!row.contains(#"L10n.string("Renamed to \(new)")"#))
     }
 }
 
