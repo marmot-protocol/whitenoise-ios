@@ -3330,20 +3330,47 @@ struct GroupManagementPresentationTests {
         )
     }
 
+    @Test func addMembersPendingRecipientRejectsInvalidInputWithoutChangingMembers() {
+        let existing = stagedMember(accountIdHex: hex("11"))
+        let result = AddMembersPresentation.pendingMemberAddResult(
+            "not a profile",
+            existingMembers: [existing],
+            normalize: { stagedMember(accountIdHex: $0) }
+        )
+
+        #expect(result == .invalid)
+    }
+
+    @Test func addMembersPendingRecipientAppendsValidInput() {
+        let existing = stagedMember(accountIdHex: hex("11"))
+        let candidate = stagedMember(accountIdHex: hex("22"))
+        let result = AddMembersPresentation.pendingMemberAddResult(
+            candidate.accountIdHex,
+            existingMembers: [existing],
+            normalize: { stagedMember(accountIdHex: $0) }
+        )
+
+        #expect(result == .added([existing, candidate], candidate))
+    }
+
     @Test func stagedMembersFallBackToShortIdWithNpubSubtitle() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let account = hex("33")
-        let member = MemberRefFfi(
-            memberRef: account,
-            accountIdHex: account,
-            npub: "npub1abcdefghijklmnopqrstuvwxyz0123456789"
-        )
+        let member = stagedMember(accountIdHex: account)
 
         // With no known profile, the staged-member name falls back to the short
         // account id; the subtitle is the npub. (Name resolution from a profile
         // is covered by ResolvedDisplayNameTests.)
         #expect(AddMembersPresentation.displayName(for: member, appState: appState) == IdentityFormatter.short(account))
         #expect(AddMembersPresentation.secondaryIdentity(for: member).hasPrefix("npub1"))
+    }
+
+    private func stagedMember(accountIdHex: String) -> MemberRefFfi {
+        MemberRefFfi(
+            memberRef: accountIdHex,
+            accountIdHex: accountIdHex,
+            npub: "npub1abcdefghijklmnopqrstuvwxyz0123456789"
+        )
     }
 
     @Test func adminStatusIgnoresLocalAccountLabelFallback() throws {

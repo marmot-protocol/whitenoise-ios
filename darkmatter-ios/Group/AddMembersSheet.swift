@@ -83,32 +83,36 @@ struct AddMembersSheet: View {
         }
     }
 
-    private func add(_ raw: String) {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        do {
-            guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) else {
-                throw AddMembersInputError.invalidMemberRef
-            }
-            let normalized = try normalize(memberRef)
-            guard !members.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
-                pending = ""
-                error = nil
-                Haptics.selection()
-                return
-            }
-            members.append(normalized)
+    @discardableResult
+    private func add(_ raw: String) -> Bool {
+        switch AddMembersPresentation.pendingMemberAddResult(
+            raw,
+            existingMembers: members,
+            normalize: normalize
+        ) {
+        case .empty:
+            return true
+        case .invalid:
+            Haptics.error()
+            self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
+            return false
+        case .duplicate:
+            pending = ""
+            error = nil
+            Haptics.selection()
+            return true
+        case .added(let updatedMembers, let addedMember):
+            members = updatedMembers
             pending = ""
             error = nil
             Haptics.success()
-            _ = appState.profile(forAccountIdHex: normalized.accountIdHex)
-        } catch {
-            Haptics.error()
-            self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
+            _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
+            return true
         }
     }
 
-    private func addPending() {
+    @discardableResult
+    private func addPending() -> Bool {
         add(pending)
     }
 
@@ -117,7 +121,7 @@ struct AddMembersSheet: View {
     }
 
     private func invite() async {
-        addPending()
+        guard addPending() else { return }
         guard !members.isEmpty else { return }
         isInviting = true
         error = nil
@@ -130,10 +134,6 @@ struct AddMembersSheet: View {
             self.error = error.localizedDescription
         }
     }
-}
-
-private enum AddMembersInputError: Error {
-    case invalidMemberRef
 }
 
 struct StagedGroupMemberRow: View {
@@ -167,13 +167,41 @@ struct StagedGroupMemberRow: View {
 }
 
 enum AddMembersPresentation {
+    enum PendingMemberAddResult: Equatable {
+        case empty
+        case invalid
+        case duplicate
+        case added([MemberRefFfi], MemberRefFfi)
+    }
+
     static func memberRef(fromScannedPayload raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        if case let .profile(memberRef) = DeepLink.parse(string: trimmed) {
+        if case .profile(let memberRef) = DeepLink.parse(string: trimmed) {
             return memberRef
         }
         return NostrProfileReference.memberRef(fromReference: trimmed)
+    }
+
+    static func pendingMemberAddResult(
+        _ raw: String,
+        existingMembers: [MemberRefFfi],
+        normalize: (String) throws -> MemberRefFfi
+    ) -> PendingMemberAddResult {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .empty }
+        do {
+            guard let memberRef = memberRef(fromScannedPayload: trimmed) else {
+                return .invalid
+            }
+            let normalized = try normalize(memberRef)
+            guard !existingMembers.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
+                return .duplicate
+            }
+            return .added(existingMembers + [normalized], normalized)
+        } catch {
+            return .invalid
+        }
     }
 
     @MainActor
