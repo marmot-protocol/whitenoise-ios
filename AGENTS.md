@@ -54,6 +54,7 @@ Rules for notification work:
 - The Notification Service Extension may enrich the visible notification only from local Marmot state after `collectNotificationsAfterWake`.
 - The Notification Service Extension must honor each account's `localNotificationsEnabled` setting before rendering decrypted sender or preview content.
 - The Notification Service Extension cannot suppress an alert that already woke it. If no local presentation exists, deliver the generic fallback content rather than blank content.
+- The Notification Service Extension should keep primary and additional local presentations alert-consistent, including `UNNotificationSound.default` when rendering visible message content.
 - Do not abandon additional NSE presentations after `collectNotificationsAfterWake`; those records have already been consumed from Marmot's background notification cursor.
 - Sign-out must cancel and await any in-flight native-push registration sync before clearing the removed account's push registration.
 - Main-app local notification presentation must fail open if a settings read throws; only an explicit disabled setting should suppress.

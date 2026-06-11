@@ -1885,6 +1885,17 @@ struct NotificationServiceTests {
         #expect(source.contains("UNUserNotificationCenter.current().add"))
     }
 
+    @Test func notificationServicePrimaryDecorationSetsDefaultSound() throws {
+        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
+        let decoratePattern =
+            #"private func decorate\([\s\S]*"# +
+            #"content\.body = presentation\.body[\s\S]*"# +
+            #"content\.sound = \.default[\s\S]*"# +
+            #"content\.threadIdentifier = presentation\.threadIdentifier"#
+
+        #expect(source.matches(decoratePattern))
+    }
+
     @Test func additionalPresentationsAreTrackedAcrossTimeoutCancellation() throws {
         let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
 

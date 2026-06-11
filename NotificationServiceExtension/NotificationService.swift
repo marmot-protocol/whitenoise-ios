@@ -130,6 +130,7 @@ final class NotificationService: UNNotificationServiceExtension {
     ) {
         content.title = presentation.title
         content.body = presentation.body
+        content.sound = .default
         content.threadIdentifier = presentation.threadIdentifier
         var userInfo = content.userInfo
         for (key, value) in presentation.userInfo {
