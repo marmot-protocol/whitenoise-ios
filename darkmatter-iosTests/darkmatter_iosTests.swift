@@ -38,6 +38,29 @@ struct AppStateBootstrapTests {
         #expect(try appState.relayTelemetrySettings().exportEnabled == false)
     }
 
+    @Test func suspendedRuntimeTelemetryBuildConfigUsesCachedFallback() async throws {
+        let fallback = TelemetryBuildConfig(
+            otlpEndpoint: "https://cached.example/v1/metrics",
+            bearerToken: "cached-token",
+            auditLogBearerToken: "cached-audit-token",
+            deploymentEnvironment: "test",
+            serviceVersion: "cached-version",
+            osVersion: "cached-os",
+            deviceModelIdentifier: "cached-device"
+        )
+        let appState = try testAppState(suspendedRuntimeTelemetryBuildConfig: fallback)
+
+        await appState.bootstrap()
+        _ = try await appState.createIdentity()
+        #expect(appState.telemetryBuildConfig != fallback)
+
+        await appState.prepareForBackgroundSuspension()
+
+        #expect(appState.client == nil)
+        #expect(appState.telemetryBuildConfig == fallback)
+        #expect(appState.telemetryBuildConfig == fallback)
+    }
+
     @Test func createIdentityFromOnboardingStartsNotificationSubscription() async throws {
         let appState = try testAppState()
         await appState.bootstrap()
@@ -414,12 +437,20 @@ struct AppStateBootstrapTests {
         #expect(reborn.activeAccountRef == nil)
     }
 
-    private func testAppState(notifications: AppNotifications? = nil) throws -> AppState {
+    private func testAppState(
+        notifications: AppNotifications? = nil,
+        suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil
+    ) throws -> AppState {
         resetPersistedActiveAccountRef()
-        return AppState(
-            client: try MarmotClient.testClient(),
-            notifications: notifications ?? deniedNotifications()
-        )
+        let client = try MarmotClient.testClient()
+        if let suspendedRuntimeTelemetryBuildConfig {
+            return AppState(
+                client: client,
+                notifications: notifications ?? deniedNotifications(),
+                suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig
+            )
+        }
+        return AppState(client: client, notifications: notifications ?? deniedNotifications())
     }
 
     private func readyAppStateWithCreatedIdentities(

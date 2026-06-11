@@ -112,6 +112,7 @@ final class AppState {
     private(set) var runtimeSuspendedForBackground = false
     private(set) var runtimeGeneration = 0
     private(set) var profileRefreshGeneration = 0
+    @ObservationIgnored private let suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig
 
     /// Most recent transient banner. View code reads this via the
     /// `.toastHost()` modifier on the root view.
@@ -129,7 +130,7 @@ final class AppState {
     var pendingChatMessageIdHex: String? { navigation.pendingChatMessageIdHex }
     var visibleChat: VisibleChatRoute? { navigation.visibleChat }
     var telemetryBuildConfig: TelemetryBuildConfig {
-        client?.telemetryConfig ?? TelemetryBuildConfig.current()
+        client?.telemetryConfig ?? suspendedRuntimeTelemetryBuildConfig
     }
     var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
     var canRefreshProfiles: Bool {
@@ -142,14 +143,20 @@ final class AppState {
     private static let recentReactionsKey = "marmot.recentReactions"
     private static let notificationSubscriptionInitialRetryDelayNanoseconds: UInt64 = 1_000_000_000
     private static let notificationSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 60_000_000_000
+    private static let defaultSuspendedRuntimeTelemetryBuildConfig = TelemetryBuildConfig.current()
     static let agentTextStreamQuicBrokerCandidate = "quic://quic-broker.ipf.dev:4450"
     static let agentTextStreamQuicCandidates = [agentTextStreamQuicBrokerCandidate]
 
-    init(client: MarmotClient, notifications: AppNotifications) {
+    init(
+        client: MarmotClient,
+        notifications: AppNotifications,
+        suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig
+    ) {
         self.client = client
         self.runtimeRootPath = client.rootPath
         self.runtimeRelayUrls = client.relayUrls
         self.notifications = notifications
+        self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
         self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)

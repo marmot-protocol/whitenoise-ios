@@ -81,6 +81,9 @@ Do not add a second storage path for data Marmot already owns.
 - Follow the existing SwiftUI and Observation patterns.
 - Keep feature state in view models when it is screen-specific.
 - Put cross-screen app state in `AppState`.
+- `AppState.telemetryBuildConfig` must use the live runtime config when present
+  and a cached fallback while the runtime is suspended; do not recompute
+  `TelemetryBuildConfig.current()` from the accessor.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
