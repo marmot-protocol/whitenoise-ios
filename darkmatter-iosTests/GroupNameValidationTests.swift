@@ -14,4 +14,11 @@ struct GroupNameValidationTests {
     @Test func trimsAndAcceptsNonEmptyName() {
         #expect(GroupDetailsView.validatedGroupName("  Team Rocket  ") == "Team Rocket")
     }
+
+    @Test func newChatGroupDescriptionTrimsAndDropsBlankValues() {
+        #expect(NewChatSheet.normalizedGroupDescription("") == nil)
+        #expect(NewChatSheet.normalizedGroupDescription(" \n\t ") == nil)
+        let description = NewChatSheet.normalizedGroupDescription("  Mission notes  ")
+        #expect(description == "Mission notes")
+    }
 }

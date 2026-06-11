@@ -20,6 +20,11 @@ struct NewChatSheet: View {
         !members.isEmpty && !isCreating && appState.activeAccountRef != nil
     }
 
+    static func normalizedGroupDescription(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -134,7 +139,7 @@ struct NewChatSheet: View {
                 accountRef: accountRef,
                 name: groupName.trimmingCharacters(in: .whitespacesAndNewlines),
                 memberRefs: members,
-                description: description.isEmpty ? nil : description
+                description: Self.normalizedGroupDescription(description)
             )
             Haptics.success()
             dismiss()
