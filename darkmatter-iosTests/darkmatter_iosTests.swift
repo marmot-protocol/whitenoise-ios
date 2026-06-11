@@ -1369,6 +1369,34 @@ struct AppearancePreferencesTests {
         #expect(localeIDs == ["en", "de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"])
     }
 
+    @Test func languageChangeNotificationCarriesLanguageInUserInfoNotObject() throws {
+        let defaults = AppLanguage.defaults
+        let previousValue = defaults.object(forKey: AppLanguage.storageKey)
+        defer {
+            if let previousValue {
+                defaults.set(previousValue, forKey: AppLanguage.storageKey)
+            } else {
+                defaults.removeObject(forKey: AppLanguage.storageKey)
+            }
+        }
+
+        var received: Notification?
+        let observer = NotificationCenter.default.addObserver(
+            forName: AppLanguage.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { notification in
+            received = notification
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        AppLanguage.setCurrentRawValue(AppLanguage.french.rawValue)
+
+        let notification = try #require(received)
+        #expect(notification.object == nil)
+        #expect(notification.userInfo?[AppLanguage.didChangeLanguageUserInfoKey] as? String == "fr")
+    }
+
     @Test func appAppearanceSelectionResolvesThemeAndLanguageTogether() {
         let selected = AppAppearanceSelection(themeRawValue: "dark", languageRawValue: "fr")
         let fallback = AppAppearanceSelection(themeRawValue: "unknown", languageRawValue: "unknown")

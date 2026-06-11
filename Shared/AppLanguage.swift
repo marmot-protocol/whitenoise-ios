@@ -15,6 +15,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
 
     static let storageKey = "appearance.language"
     static let didChangeNotification = Notification.Name("AppLanguageDidChange")
+    static let didChangeLanguageUserInfoKey = "language"
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier) ?? .standard
@@ -58,7 +59,11 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     static func setCurrentRawValue(_ rawValue: String) {
         let resolved = resolved(rawValue: rawValue).rawValue
         defaults.set(resolved, forKey: storageKey)
-        NotificationCenter.default.post(name: didChangeNotification, object: resolved)
+        NotificationCenter.default.post(
+            name: didChangeNotification,
+            object: nil,
+            userInfo: [didChangeLanguageUserInfoKey: resolved]
+        )
     }
 
     var id: String { rawValue }

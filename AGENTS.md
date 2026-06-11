@@ -85,6 +85,9 @@ Do not add a second storage path for data Marmot already owns.
 - `AppState.telemetryBuildConfig` must use the live runtime config when present
   and a cached fallback while the runtime is suspended; do not recompute
   `TelemetryBuildConfig.current()` from the accessor.
+- `AppLanguage.didChangeNotification` carries the selected language in
+  `userInfo`; leave `object` nil so future sender-scoped observers keep
+  working.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
