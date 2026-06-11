@@ -8,7 +8,12 @@ enum RelativeTime {
     private static var formatterCacheLocaleIdentifier = Locale.autoupdatingCurrent.identifier
     private static let shortTimeFormatterKey = "style:time:short"
 
-    static func short(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+    static func short(
+        _ date: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
         let seconds = now.timeIntervalSince(date)
         if seconds < 0 { return L10n.string("now") }
         if seconds < 60 { return L10n.string("now") }
@@ -17,36 +22,36 @@ enum RelativeTime {
         if calendar.isDateInYesterday(date) { return L10n.string("Yesterday") }
 
         if seconds < 7 * 24 * 3600 {
-            return formatted(date, "EEEE") // full weekday, e.g. "Monday"
+            return formatted(date, "EEEE", locale: locale) // full weekday, e.g. "Monday"
         }
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        return formatted(date, sameYear ? "d MMM" : "d MMM yyyy")
+        return formatted(date, sameYear ? "d MMM" : "d MMM yyyy", locale: locale)
     }
 
-    static func shortTime(_ date: Date) -> String {
-        let formatter = formatter(for: shortTimeFormatterKey) { formatter in
+    static func shortTime(_ date: Date, locale: Locale = .autoupdatingCurrent) -> String {
+        let formatter = formatter(for: shortTimeFormatterKey, locale: locale) { formatter in
             formatter.timeStyle = .short
             formatter.dateStyle = .none
         }
         return formatter.string(from: date)
     }
 
-    private static func formatted(_ date: Date, _ template: String) -> String {
-        let formatter = formatter(for: template)
+    private static func formatted(_ date: Date, _ template: String, locale: Locale) -> String {
+        let formatter = formatter(for: template, locale: locale)
         return formatter.string(from: date)
     }
 
-    private static func formatter(for template: String) -> DateFormatter {
-        formatter(for: "template:\(template)") { formatter in
-            formatter.dateFormat = template
+    private static func formatter(for template: String, locale: Locale) -> DateFormatter {
+        formatter(for: "template:\(template)", locale: locale) { formatter in
+            formatter.setLocalizedDateFormatFromTemplate(template)
         }
     }
 
     private static func formatter(
         for key: String,
+        locale: Locale,
         configure: (DateFormatter) -> Void
     ) -> DateFormatter {
-        let locale = Locale.autoupdatingCurrent
         let localeIdentifier = locale.identifier
         if formatterCacheLocaleIdentifier != localeIdentifier {
             formatterCache.removeAll()
@@ -81,5 +86,6 @@ enum RelativeTime {
     static func setFormatterCacheLocaleIdentifierForTesting(_ identifier: String) {
         formatterCacheLocaleIdentifier = identifier
     }
+
     #endif
 }

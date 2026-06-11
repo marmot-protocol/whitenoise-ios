@@ -735,6 +735,36 @@ struct RelativeTimeTests {
         #expect(RelativeTime.formatterCacheLocaleIdentifierForTesting == Locale.autoupdatingCurrent.identifier)
     }
 
+    @Test func shortUsesLocalizedDateTemplateOrderingForOlderDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = try #require(calendar.date(from: DateComponents(
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: 2026,
+            month: 2,
+            day: 10,
+            hour: 12
+        )))
+        let now = try #require(calendar.date(from: DateComponents(
+            timeZone: TimeZone(secondsFromGMT: 0),
+            year: 2026,
+            month: 2,
+            day: 20,
+            hour: 12
+        )))
+        let locale = Locale(identifier: "en_US")
+        let expectedFormatter = DateFormatter()
+        expectedFormatter.locale = locale
+        expectedFormatter.setLocalizedDateFormatFromTemplate("d MMM")
+
+        RelativeTime.resetFormatterCacheForTesting()
+        defer { RelativeTime.resetFormatterCacheForTesting() }
+
+        let rendered = RelativeTime.short(date, now: now, calendar: calendar, locale: locale)
+        let expected = expectedFormatter.string(from: date)
+        #expect(rendered == expected)
+    }
+
     @Test func messageBubbleTimeLabelUsesCachedFormatter() throws {
         let source = try String(contentsOf: messageBubbleSourceURL, encoding: .utf8)
 

@@ -88,6 +88,7 @@ Do not add a second storage path for data Marmot already owns.
 - Sanitize peer-controlled group names with `ProfileSanitizer.groupName` before storing or rendering timeline/system-event display strings, and use static `L10n.formatted` keys for dynamic text.
 - Route peer-controlled profile and group image URLs through `ProfileSanitizer.imageURL`; it only allows HTTPS public hosts and rejects local/private hosts plus legacy IPv4 literal spellings.
 - Media attachment display IDs must include the owning message or timeline-row identity; do not key SwiftUI media views solely by the encrypted media reference.
+- Build user-visible date formats from localized templates rather than raw `DateFormatter.dateFormat` patterns.
 - When synthesizing timeline rows from protocol records, carry the source record timestamp when one is available; use the client wall clock only for local-only UI events or missing timestamp fallbacks.
 - For SwiftUI scroll timing, prefer cancellable main-actor tasks and layout-driven callbacks over `DispatchQueue.main` hop chains.
 - Keep comments short and only where they explain a non-obvious constraint.
