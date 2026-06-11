@@ -59,6 +59,30 @@ struct TimelineBottomViewport: Equatable {
     }
 }
 
+struct ConversationSendPayload {
+    let viewModel: ConversationViewModel
+    let text: String
+    let attachments: [MediaDraftAttachment]
+}
+
+enum ConversationSendPreparation {
+    static func prepare(
+        draft: inout String,
+        mediaDrafts: inout [MediaDraftAttachment],
+        viewModel: ConversationViewModel?
+    ) -> ConversationSendPayload? {
+        guard let viewModel else { return nil }
+        let text = draft
+        let attachments = mediaDrafts
+        guard !attachments.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        draft = ""
+        mediaDrafts = []
+        return ConversationSendPayload(viewModel: viewModel, text: text, attachments: attachments)
+    }
+}
+
 enum TimelineInitialScroll {
     static func shouldStartAtBottom(hasItems: Bool, didPerformInitialScroll: Bool) -> Bool {
         destination(
@@ -784,22 +808,16 @@ struct ConversationView: View {
     }
 
     private func send() {
-        // Capture the view model first: clearing the draft before confirming we
-        // have something to send to would silently discard the message if the
-        // view model were nil at dispatch time (#49).
-        guard let viewModel else { return }
-        let text = draft
-        let attachments = mediaDrafts
-        guard !attachments.isEmpty || !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
-        }
-        draft = ""
-        mediaDrafts = []
+        guard let payload = ConversationSendPreparation.prepare(
+            draft: &draft,
+            mediaDrafts: &mediaDrafts,
+            viewModel: viewModel
+        ) else { return }
         Task {
-            if attachments.isEmpty {
-                await viewModel.send(text)
+            if payload.attachments.isEmpty {
+                await payload.viewModel.send(payload.text)
             } else {
-                await viewModel.sendMedia(attachments, caption: text)
+                await payload.viewModel.sendMedia(payload.attachments, caption: payload.text)
             }
         }
     }

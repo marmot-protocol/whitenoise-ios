@@ -26,6 +26,11 @@ Keep lightweight popovers/sheets, such as the emoji picker, out of navigation
 containers unless they actually need navigation state. Stable option models and
 grid metadata should be precomputed outside `body`.
 
+Prefer behavior-level regression tests over `String(contentsOf:)` source
+scrapes. When a private SwiftUI or async path needs coverage, extract a small
+pure helper for the decision point first; reserve source checks for constraints
+that truly cannot be observed otherwise.
+
 `Shared/` is compiled into both the main app and the Notification Service Extension. Keep code there extension-safe. Do not use `UIApplication`, app delegates, SwiftUI views, or APIs unavailable to extensions from shared files.
 
 ## Rust Bindings

@@ -3,6 +3,19 @@ import Observation
 import MarmotKit
 import os
 
+enum AgentStreamWatchAdmission {
+    static func canStart(
+        streamIdHex: String?,
+        activeStreamIds: Set<String>,
+        latestStreamWatchInFlight: Bool
+    ) -> Bool {
+        if let streamIdHex {
+            return !activeStreamIds.contains(streamIdHex)
+        }
+        return !latestStreamWatchInFlight
+    }
+}
+
 /// Owns the live state of a single conversation: the merged timeline of
 /// message bubbles + system events, aggregated reactions, the group roster,
 /// the in-progress reply, and the send pipeline.
@@ -1595,11 +1608,11 @@ final class ConversationViewModel {
     /// otherwise fall back to the latest live stream in this group.
     private func startWatching(sender: String, streamIdHex: String?, startedAt: UInt64? = nil) async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
-        if let streamIdHex {
-            if streamWatchTasks[streamIdHex] != nil { return }
-        } else if latestStreamWatchInFlight {
-            return
-        }
+        guard AgentStreamWatchAdmission.canStart(
+            streamIdHex: streamIdHex,
+            activeStreamIds: Set(streamWatchTasks.keys),
+            latestStreamWatchInFlight: latestStreamWatchInFlight
+        ) else { return }
         if streamIdHex == nil { latestStreamWatchInFlight = true }
         defer { if streamIdHex == nil { latestStreamWatchInFlight = false } }
         do {

@@ -823,19 +823,17 @@ struct RelativeTimeTests {
         #expect(rendered == expected)
     }
 
-    @Test func messageBubbleTimeLabelUsesCachedFormatter() throws {
-        let source = try String(contentsOf: messageBubbleSourceURL, encoding: .utf8)
+    @Test func messageBubbleTimeLabelUsesCachedFormatter() {
+        let timestamp: UInt64 = 1_700_000_000
 
-        #expect(source.matches(#"private var timeLabel: String\s*\{[\s\S]*RelativeTime\.shortTime\("#))
-        #expect(!source.matches(#"private var timeLabel: String\s*\{[\s\S]*DateFormatter\("#))
-    }
+        RelativeTime.resetFormatterCacheForTesting()
+        defer { RelativeTime.resetFormatterCacheForTesting() }
 
-    private var messageBubbleSourceURL: URL {
-        let testFile = URL(fileURLWithPath: #filePath)
-        return testFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Conversation/MessageBubble.swift")
+        for _ in 0..<50 {
+            _ = MessageBubble.timeLabel(recordedAt: timestamp)
+        }
+
+        #expect(RelativeTime.formatterCacheCountForTesting == 1)
     }
 }
 

@@ -65,20 +65,28 @@ struct OptimisticReactionPruneTests {
 
 /// #48 — a concurrent "latest" (nil stream id) watch must be guarded so it can't
 /// race past the post-await duplicate check and open an orphaned subscription.
-/// Driven at the source level: startWatching is private and does real I/O.
 struct StreamWatchRaceGuardTests {
 
-    @Test func startWatchingGuardsConcurrentLatestWatch() throws {
-        let url = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
-
-        #expect(source.contains("private var latestStreamWatchInFlight = false"))
-        #expect(source.range(
-            of: #"else if latestStreamWatchInFlight \{[\s\S]*?return"#,
-            options: .regularExpression
-        ) != nil)
+    @Test func startWatchingGuardsConcurrentLatestWatch() {
+        #expect(!AgentStreamWatchAdmission.canStart(
+            streamIdHex: nil,
+            activeStreamIds: [],
+            latestStreamWatchInFlight: true
+        ))
+        #expect(AgentStreamWatchAdmission.canStart(
+            streamIdHex: nil,
+            activeStreamIds: [],
+            latestStreamWatchInFlight: false
+        ))
+        #expect(!AgentStreamWatchAdmission.canStart(
+            streamIdHex: "stream-a",
+            activeStreamIds: ["stream-a"],
+            latestStreamWatchInFlight: false
+        ))
+        #expect(AgentStreamWatchAdmission.canStart(
+            streamIdHex: "stream-b",
+            activeStreamIds: ["stream-a"],
+            latestStreamWatchInFlight: true
+        ))
     }
 }

@@ -2,34 +2,34 @@ import Testing
 import Foundation
 @testable import darkmatter_ios
 
-/// Source-level regressions for two fixes whose runtime surfaces (a SwiftUI View
-/// method's ordering, and an async cancellation path inside a real-IO loop)
-/// can't be exercised directly in a unit test.
 struct SendDispatchAndCancellationTests {
 
     /// #49 — send() must confirm it has a view model before clearing the draft,
     /// otherwise a nil view model at dispatch time silently discards the message.
-    @Test func sendGuardsViewModelBeforeClearingDraft() throws {
-        let source = try sourceString("darkmatter-ios/Conversation/ConversationView.swift")
-        let pattern = #"private func send\(\) \{[\s\S]*?guard let viewModel else \{ return \}[\s\S]*?draft = """#
-        #expect(source.range(of: pattern, options: .regularExpression) != nil)
+    @MainActor
+    @Test func sendPreparationKeepsDraftWhenViewModelIsMissing() {
+        var draft = "hello"
+        var attachments: [MediaDraftAttachment] = []
+
+        let payload = ConversationSendPreparation.prepare(
+            draft: &draft,
+            mediaDrafts: &attachments,
+            viewModel: nil
+        )
+
+        #expect(payload == nil)
+        #expect(draft == "hello")
+        #expect(attachments.isEmpty)
     }
 
     /// #76 — push registration must treat CancellationError as a non-failure and
     /// not surface it as "Push registration failed".
-    @Test func pushRegistrationIgnoresCancellation() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState.swift")
-        // The CancellationError branch must exist and must NOT surface the error
-        // toast — assert the failure string is absent from that catch block, yet
-        // present elsewhere (the generic catch).
-        let cancellationPattern = #"catch is CancellationError\s*\{[\s\S]*?\}"#
-        guard let range = source.range(of: cancellationPattern, options: .regularExpression) else {
-            Issue.record("Expected an explicit CancellationError catch block")
-            return
-        }
-        let cancellationBody = String(source[range])
-        #expect(!cancellationBody.contains("Push registration failed"))
-        #expect(source.contains("Push registration failed"))
+    @Test func pushRegistrationIgnoresCancellation() {
+        #expect(NativePushRegistrationErrorDisposition.disposition(for: CancellationError()) == .stopSync)
+        #expect(NativePushRegistrationErrorDisposition.disposition(
+            for: NotificationSettingsActionError.missingApnsToken
+        ) == .stopSync)
+        #expect(NativePushRegistrationErrorDisposition.disposition(for: NativePushTestError.generic) == .recordFailure)
     }
 
     /// #111 — signing out must drain stale push-sync work before it clears the
@@ -67,5 +67,9 @@ struct SendDispatchAndCancellationTests {
 
     private func sourceContains(_ pattern: String, in source: String) -> Bool {
         source.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    private enum NativePushTestError: Error {
+        case generic
     }
 }

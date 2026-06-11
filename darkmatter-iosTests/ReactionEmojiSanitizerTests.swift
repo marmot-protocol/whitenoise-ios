@@ -21,6 +21,9 @@ struct ReactionEmojiSanitizerTests {
 
     @Test func capsAbusivelyLongReactions() {
         let long = String(repeating: "🎉", count: 50)
-        #expect(ProfileSanitizer.reactionEmoji(long).count <= ProfileSanitizer.maxReactionLength)
+        let sanitized = ProfileSanitizer.reactionEmoji(long)
+
+        #expect(sanitized == String(repeating: "🎉", count: ProfileSanitizer.maxReactionLength))
+        #expect(!sanitized.isEmpty)
     }
 }

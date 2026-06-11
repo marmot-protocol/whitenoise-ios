@@ -18,6 +18,20 @@ struct NativePushDisableCoordinator {
     }
 }
 
+enum NativePushRegistrationErrorDisposition {
+    case stopSync
+    case recordFailure
+
+    static func disposition(for error: Error) -> Self {
+        if error is CancellationError { return .stopSync }
+        if let settingsError = error as? NotificationSettingsActionError,
+           case .missingApnsToken = settingsError {
+            return .stopSync
+        }
+        return .recordFailure
+    }
+}
+
 /// Root observable state for the app.
 ///
 /// Holds the `Marmot` handle, the current set of `AccountSummaryFfi`, and
@@ -539,14 +553,13 @@ final class AppState {
 
             do {
                 _ = try await syncNativePushRegistration(accountRef: accountRef)
-            } catch NotificationSettingsActionError.missingApnsToken {
-                return
-            } catch is CancellationError {
-                // Cancellation (backgrounding, account switch) isn't a real
-                // failure, so it must not reach the error toast below (#76).
-                return
             } catch {
-                lastError = error
+                switch NativePushRegistrationErrorDisposition.disposition(for: error) {
+                case .stopSync:
+                    return
+                case .recordFailure:
+                    lastError = error
+                }
             }
         }
 

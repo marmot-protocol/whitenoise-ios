@@ -402,8 +402,7 @@ struct MessageBubble: View {
     }
 
     private var timeLabel: String {
-        let date = Date(timeIntervalSince1970: TimeInterval(record.recordedAt))
-        return RelativeTime.shortTime(date)
+        Self.timeLabel(recordedAt: record.recordedAt)
     }
 
     private var statusLabel: String? {
@@ -449,6 +448,11 @@ struct MessageBubble: View {
 
     static func receivedReplyHeaderColor(dark: Bool) -> UIColor {
         dark ? .systemGray4 : .systemGray5
+    }
+
+    static func timeLabel(recordedAt: UInt64, locale: Locale = .autoupdatingCurrent) -> String {
+        let date = Date(timeIntervalSince1970: TimeInterval(recordedAt))
+        return RelativeTime.shortTime(date, locale: locale)
     }
 }
 
