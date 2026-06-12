@@ -9,10 +9,10 @@ struct NativePushServerConfigValidationTests {
     @Test func acceptsValid64CharHexPubkeyAndNormalizesCase() {
         let config = NativePushServerConfig.current(
             rawPubkey: "  \(validPubkey.uppercased())  ",
-            rawRelayHint: " wss://relay.example "
+            rawRelayHint: " WSS://Relay.Example/Nostr?Token=ABC "
         )
         #expect(config?.serverPubkeyHex == validPubkey)
-        #expect(config?.relayHint == "wss://relay.example")
+        #expect(config?.relayHint == "wss://relay.example/Nostr?Token=ABC")
     }
 
     @Test func rejectsMissingEmptyOrMalformedPubkey() {
@@ -25,8 +25,23 @@ struct NativePushServerConfigValidationTests {
     }
 
     @Test func dropsBlankRelayHintToNil() {
-        let config = NativePushServerConfig.current(rawPubkey: validPubkey, rawRelayHint: "   ")
+        let config = NativePushServerConfig.current(
+            rawPubkey: validPubkey,
+            rawRelayHint: "   "
+        )
         #expect(config?.serverPubkeyHex == validPubkey)
         #expect(config?.relayHint == nil)
+    }
+
+    @Test func dropsMalformedRelayHintToNil() {
+        for relayHint in ["https://relay.example", "relay.example", "wss://", "ws://\n", "not a relay"] {
+            let config = NativePushServerConfig.current(
+                rawPubkey: validPubkey,
+                rawRelayHint: relayHint
+            )
+
+            #expect(config?.serverPubkeyHex == validPubkey)
+            #expect(config?.relayHint == nil)
+        }
     }
 }

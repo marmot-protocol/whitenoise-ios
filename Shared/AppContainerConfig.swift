@@ -90,16 +90,24 @@ struct NativePushServerConfig: Equatable {
         // here so the app cleanly behaves as if push were unconfigured.
         guard let pubkey = Hex.normalized32Bytes(rawPubkey) else { return nil }
 
-        let relayHint = rawRelayHint?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .nilIfEmpty
+        let relayHint = rawRelayHint.flatMap(RelayURL.normalized)
 
         return NativePushServerConfig(serverPubkeyHex: pubkey, relayHint: relayHint)
     }
 }
 
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
+enum RelayURL {
+    static func normalized(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard var components = URLComponents(string: trimmed),
+              let scheme = components.scheme?.lowercased(),
+              scheme == "wss" || scheme == "ws",
+              let host = components.host,
+              !host.isEmpty
+        else { return nil }
+
+        components.scheme = scheme
+        components.host = host.lowercased()
+        return components.url?.absoluteString
     }
 }

@@ -69,6 +69,7 @@ Rules for notification work:
 - The Notification Service Extension cannot suppress an alert that already woke it. If no local presentation exists, deliver the generic fallback content rather than blank content.
 - The Notification Service Extension should keep primary and additional local presentations alert-consistent, including `UNNotificationSound.default` when rendering visible message content.
 - Do not abandon additional NSE presentations after `collectNotificationsAfterWake`; those records have already been consumed from Marmot's background notification cursor.
+- Native push relay hints from configuration must be validated with the shared `RelayURL` normalizer; malformed hints should behave like an omitted hint.
 - Sign-out must cancel and await any in-flight native-push registration sync before clearing the removed account's push registration.
 - Disabling native push must flip the local preference off before clearing the server registration, and roll the preference back on if registration cleanup fails.
 - Main-app local notification presentation must fail open if a settings read throws; only an explicit disabled setting should suppress.
