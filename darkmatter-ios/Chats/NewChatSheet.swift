@@ -8,7 +8,7 @@ struct NewChatSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var members: [String] = []
+    @State private var members: [MemberRefFfi] = []
     @State private var pendingMember: String = ""
     @State private var groupName: String = ""
     @State private var description: String = ""
@@ -25,38 +25,29 @@ struct NewChatSheet: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    enum PendingMemberAddResult: Equatable {
-        case empty
-        case invalid
-        case duplicate
-        case added([String])
-    }
+    typealias PendingMemberAddResult = AddMembersPresentation.PendingMemberAddResult
 
     static func pendingMemberAddResult(
         _ raw: String,
-        existingMembers: [String]
+        existingMembers: [MemberRefFfi],
+        normalize: (String) throws -> MemberRefFfi
     ) -> PendingMemberAddResult {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return .empty }
-        guard let memberRef = AddMembersPresentation.memberRef(fromScannedPayload: trimmed),
-              !memberRef.isEmpty else {
-            return .invalid
-        }
-        guard !existingMembers.contains(memberRef) else { return .duplicate }
-        return .added(existingMembers + [memberRef])
+        AddMembersPresentation.pendingMemberAddResult(
+            raw,
+            existingMembers: existingMembers,
+            normalize: normalize
+        )
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Recipients") {
-                    ForEach(members, id: \.self) { member in
+                    ForEach(members, id: \.accountIdHex) { member in
                         HStack {
-                            Text(IdentityFormatter.short(member))
-                                .font(.system(.body, design: .monospaced))
-                            Spacer()
+                            StagedGroupMemberRow(member: member)
                             Button(role: .destructive) {
-                                members.removeAll { $0 == member }
+                                members.removeAll { $0.accountIdHex == member.accountIdHex }
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.red)
@@ -125,30 +116,43 @@ struct NewChatSheet: View {
 
     @discardableResult
     private func addPending() -> Bool {
-        switch Self.pendingMemberAddResult(pendingMember, existingMembers: members) {
-        case .empty, .duplicate:
+        add(
+            pendingMember,
+            invalidMessage: L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
+        )
+    }
+
+    @discardableResult
+    private func add(_ raw: String, invalidMessage: String) -> Bool {
+        switch Self.pendingMemberAddResult(
+            raw,
+            existingMembers: members,
+            normalize: { try appState.marmot.normalizeMemberRef(memberRef: $0) }
+        ) {
+        case .empty:
+            return true
+        case .duplicate:
+            pendingMember = ""
+            error = nil
+            Haptics.selection()
             return true
         case .invalid:
             Haptics.error()
-            error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
+            error = invalidMessage
             return false
-        case .added(let updatedMembers):
+        case .added(let updatedMembers, let addedMember):
             members = updatedMembers
             pendingMember = ""
             error = nil
+            Haptics.success()
+            _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
             return true
         }
     }
 
     /// Add a recipient from a scanned profile QR code.
     private func handleScan(_ raw: String) {
-        guard let memberRef = NostrProfileReference.memberRef(from: raw) else {
-            error = L10n.string("That QR code isn't a Dark Matter profile.")
-            Haptics.error()
-            return
-        }
-        if !members.contains(memberRef) { members.append(memberRef) }
-        Haptics.success()
+        add(raw, invalidMessage: L10n.string("That QR code isn't a Dark Matter profile."))
     }
 
     @MainActor
@@ -163,7 +167,7 @@ struct NewChatSheet: View {
             let groupIdHex = try await appState.marmot.createGroup(
                 accountRef: accountRef,
                 name: groupName.trimmingCharacters(in: .whitespacesAndNewlines),
-                memberRefs: members,
+                memberRefs: members.map(\.memberRef),
                 description: Self.normalizedGroupDescription(description)
             )
             Haptics.success()
