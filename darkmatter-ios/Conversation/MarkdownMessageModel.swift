@@ -32,6 +32,32 @@ struct MarkdownDisplayListItem: Equatable {
     let blocks: [MarkdownDisplayBlock]
 }
 
+struct MessageMarkdownDisplayProjection: Equatable {
+    let blocks: [MarkdownDisplayBlock]?
+    let mentionedAccountIds: Set<String>
+
+    static func build(
+        for record: AppMessageRecordFfi,
+        mentionDisplayName: MarkdownMentionResolver?
+    ) -> MessageMarkdownDisplayProjection {
+        var mentionedAccountIds = Set<String>()
+        let trackingResolver: MarkdownMentionResolver = { entity in
+            if let accountIdHex = NostrProfileReference.pubkeyHex(fromBech32: entity.bech32) {
+                mentionedAccountIds.insert(accountIdHex)
+            }
+            return mentionDisplayName?(entity)
+        }
+        let blocks = MarkdownMessageBuilder.displayBlocks(
+            for: record.contentTokens,
+            mentionDisplayName: trackingResolver
+        )
+        return MessageMarkdownDisplayProjection(
+            blocks: blocks,
+            mentionedAccountIds: mentionedAccountIds
+        )
+    }
+}
+
 /// Walks the Rust-parsed markdown AST (`MarkdownDocumentFfi`) into the display
 /// model. Pure and synchronous; testable without a Marmot runtime.
 ///

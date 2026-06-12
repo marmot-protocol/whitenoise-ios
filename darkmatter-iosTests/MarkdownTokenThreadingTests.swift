@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import darkmatter_ios
 @testable import MarmotKit
@@ -69,6 +70,47 @@ struct MarkdownTokenThreadingTests {
         }
         #expect(confirmed.count == 1)
         #expect(confirmed.first?.contentTokens == tokens)
+    }
+
+    @Test func timelinePagePrecomputesMarkdownBlocksForMessageRows() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: testGroup()
+        )
+        let record = TimelineMessageRecordFfi(
+            messageIdHex: "01",
+            sourceMessageIdHex: nil,
+            direction: "received",
+            groupIdHex: "aa",
+            sender: "11",
+            plaintext: "**hi**",
+            contentTokens: tokens,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            timelineAt: 1,
+            receivedAt: 1,
+            replyToMessageIdHex: nil,
+            replyPreview: nil,
+            mediaJson: nil,
+            agentTextStreamJson: nil,
+            reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            deleted: false,
+            deletedByMessageIdHex: nil,
+            invalidationStatus: nil
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .tail
+        )
+
+        let item = try #require(viewModel.timeline.first)
+        let blocks = try #require(viewModel.markdownDisplayBlocks(for: item))
+        guard case .paragraph(let attributed) = try #require(blocks.first) else {
+            Issue.record("Expected a precomputed paragraph block")
+            return
+        }
+        #expect(String(attributed.characters) == "hi")
     }
 
     private func testGroup() -> AppGroupRecordFfi {

@@ -385,6 +385,9 @@ struct ConversationView: View {
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
             }
+            .onChange(of: appState.profileRefreshGeneration) { _, _ in
+                viewModel?.refreshProfileDependentTimelineProjections()
+            }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
             }
@@ -699,6 +702,7 @@ struct ConversationView: View {
             isDeleted: viewModel.isDeleted(record.messageIdHex),
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
+            markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
             reactions: viewModel.reactions(for: record.messageIdHex),
             onTapReaction: { emoji in
                 Task { await viewModel.toggleReaction(emoji, on: record) }

@@ -114,6 +114,7 @@ final class ConversationViewModel {
     @ObservationIgnored private var replyTargetByMessageId: [String: String] = [:]
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
     @ObservationIgnored private var projectedReactionSummaries: [String: TimelineReactionSummaryFfi] = [:]
+    @ObservationIgnored private var markdownDisplayProjectionsByRowId: [String: MessageMarkdownDisplayProjection] = [:]
     @ObservationIgnored private var projectedDeletedMessageIds: Set<String> = []
     @ObservationIgnored private var optimisticDeletedMessageIds: Set<String> = []
     private var loadedOlderTimelinePages = false
@@ -325,6 +326,11 @@ final class ConversationViewModel {
     func reactions(for messageIdHex: String) -> [ReactionTally] {
         _ = timelineProjectionGeneration
         return reactions[messageIdHex] ?? []
+    }
+
+    func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
+        _ = timelineProjectionGeneration
+        return markdownDisplayProjectionsByRowId[item.id]?.blocks
     }
 
     func record(for messageIdHex: String) -> AppMessageRecordFfi? {
@@ -909,7 +915,11 @@ final class ConversationViewModel {
             next,
             replyTargetId: { replyTargetId(for: $0) }
         )
-        return assignTimeline(next)
+        let markdownChanged = rebuildMarkdownDisplayProjections(
+            for: next,
+            onlyRowsWithMentions: false
+        )
+        return assignTimeline(next) || markdownChanged
     }
 
     func refreshStreamingDebugPresentation() {
@@ -921,6 +931,12 @@ final class ConversationViewModel {
         }
         changed = rebuildTimeline() || changed
         if changed {
+            noteTimelineProjectionChanged()
+        }
+    }
+
+    func refreshProfileDependentTimelineProjections() {
+        if rebuildMarkdownDisplayProjections(for: timeline, onlyRowsWithMentions: true) {
             noteTimelineProjectionChanged()
         }
     }
@@ -953,13 +969,15 @@ final class ConversationViewModel {
             next,
             replyTargetId: { replyTargetId(for: $0) }
         )
-        return assignTimeline(next)
+        let markdownChanged = updateMarkdownDisplayProjection(for: item)
+        return assignTimeline(next) || markdownChanged
     }
 
     @discardableResult
     private func removeTimelineItem(id: String) -> Bool {
         let next = timeline.filter { $0.id != id }
-        return assignTimeline(next)
+        let markdownChanged = removeMarkdownDisplayProjection(rowId: id)
+        return assignTimeline(next) || markdownChanged
     }
 
     private func assignTimeline(_ next: [TimelineItem]) -> Bool {
@@ -970,6 +988,66 @@ final class ConversationViewModel {
 
     private func noteTimelineProjectionChanged() {
         timelineProjectionGeneration += 1
+    }
+
+    @discardableResult
+    private func updateMarkdownDisplayProjection(for item: TimelineItem) -> Bool {
+        guard case .message(let record, _) = item.kind else {
+            return removeMarkdownDisplayProjection(rowId: item.id)
+        }
+        guard usesMessageBubbleMarkdownProjection(for: record) else {
+            return removeMarkdownDisplayProjection(rowId: item.id)
+        }
+        let next = MessageMarkdownDisplayProjection.build(
+            for: record,
+            mentionDisplayName: mentionDisplayNameResolver
+        )
+        if next.blocks == nil, next.mentionedAccountIds.isEmpty {
+            return removeMarkdownDisplayProjection(rowId: item.id)
+        }
+        guard markdownDisplayProjectionsByRowId[item.id] != next else { return false }
+        markdownDisplayProjectionsByRowId[item.id] = next
+        return true
+    }
+
+    @discardableResult
+    private func removeMarkdownDisplayProjection(rowId: String) -> Bool {
+        markdownDisplayProjectionsByRowId.removeValue(forKey: rowId) != nil
+    }
+
+    @discardableResult
+    private func rebuildMarkdownDisplayProjections(
+        for items: [TimelineItem],
+        onlyRowsWithMentions: Bool
+    ) -> Bool {
+        var changed = false
+        var activeMessageRowIds = Set<String>()
+        for item in items {
+            guard case .message = item.kind else { continue }
+            activeMessageRowIds.insert(item.id)
+            if onlyRowsWithMentions,
+               markdownDisplayProjectionsByRowId[item.id]?.mentionedAccountIds.isEmpty != false {
+                continue
+            }
+            changed = updateMarkdownDisplayProjection(for: item) || changed
+        }
+        if !onlyRowsWithMentions {
+            for rowId in Array(markdownDisplayProjectionsByRowId.keys) where !activeMessageRowIds.contains(rowId) {
+                markdownDisplayProjectionsByRowId[rowId] = nil
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    private func usesMessageBubbleMarkdownProjection(for record: AppMessageRecordFfi) -> Bool {
+        if GroupSystemEventPresentation.isDisplayable(record) {
+            return false
+        }
+        if AgentEventPresentation.display(for: record) != nil {
+            return false
+        }
+        return true
     }
 
     private func timelineInsertionIndex(for item: TimelineItem, in items: [TimelineItem]) -> Int {

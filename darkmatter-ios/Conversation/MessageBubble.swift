@@ -13,45 +13,6 @@ enum MessageBubbleReplyLayout {
     static let sentHeaderOverlayOpacity = 0.16
 }
 
-struct MessageMarkdownDisplayCacheKey: Equatable {
-    let messageIdHex: String
-    let plaintext: String
-    let kind: UInt64
-    let tags: [MessageTagFfi]
-    let profileRefreshGeneration: Int
-
-    init(record: AppMessageRecordFfi, profileRefreshGeneration: Int) {
-        self.messageIdHex = record.messageIdHex
-        self.plaintext = record.plaintext
-        self.kind = record.kind
-        self.tags = record.tags
-        self.profileRefreshGeneration = profileRefreshGeneration
-    }
-}
-
-final class MessageMarkdownDisplayCache {
-    private var key: MessageMarkdownDisplayCacheKey?
-    private var blocks: [MarkdownDisplayBlock]?
-
-    func displayBlocks(
-        for record: AppMessageRecordFfi,
-        profileRefreshGeneration: Int,
-        mentionDisplayName: MarkdownMentionResolver?
-    ) -> [MarkdownDisplayBlock]? {
-        let nextKey = MessageMarkdownDisplayCacheKey(
-            record: record,
-            profileRefreshGeneration: profileRefreshGeneration
-        )
-        guard key != nextKey else { return blocks }
-        blocks = MarkdownMessageBuilder.displayBlocks(
-            for: record.contentTokens,
-            mentionDisplayName: mentionDisplayName
-        )
-        key = nextKey
-        return blocks
-    }
-}
-
 /// One chat bubble. Aligned right for our own messages, left for everyone
 /// else. Renders an optional quoted reply header, the message body, a
 /// time/delivery caption, and any reaction chips.
@@ -65,13 +26,13 @@ struct MessageBubble: View {
     var isDeleted: Bool = false
     var replyPreview: (name: String, text: String)? = nil
     var mediaItems: [MessageMediaAttachment] = []
+    var markdownBlocks: [MarkdownDisplayBlock]? = nil
     var reactions: [ConversationViewModel.ReactionTally] = []
     var onTapReaction: (String) -> Void = { _ in }
     var onLoadMedia: (MessageMediaAttachment) async throws -> Data = { _ in Data() }
 
     @State private var mediaGallery: MessageMediaGallery?
     @State private var pendingExternalLink: PendingMessageExternalLink?
-    @State private var markdownCache = MessageMarkdownDisplayCache()
 
     private var isFromMe: Bool { record.direction == "sent" }
 
@@ -349,11 +310,7 @@ struct MessageBubble: View {
 
     private func messageBodyText(hasReply: Bool) -> some View {
         Group {
-            if let blocks = markdownCache.displayBlocks(
-                for: record,
-                profileRefreshGeneration: appState.profileRefreshGeneration,
-                mentionDisplayName: { appState.mentionDisplayName(for: $0) }
-            ) {
+            if let blocks = markdownBlocks {
                 MarkdownMessageView(
                     blocks: blocks,
                     quoteBar: isFromMe ? Color.white.opacity(0.8) : Color.accentColor

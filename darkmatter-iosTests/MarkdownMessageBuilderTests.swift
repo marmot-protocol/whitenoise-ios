@@ -199,60 +199,46 @@ struct MarkdownMessageBuilderTests {
         #expect(try #require(attributed.runs.first).font == Font.body.monospaced())
     }
 
-    @Test func displayCacheReusesBlocksUntilMessageOrProfileGenerationChanges() throws {
+    @Test func displayProjectionBuildsBlocksAndTracksMentionedProfiles() throws {
+        let bech32 = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+        let tokens = doc([para([
+            .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32))
+        ])])
+        var resolverCalls = 0
+
+        let projection = MessageMarkdownDisplayProjection.build(
+            for: record(plaintext: "hello", tokens: tokens),
+            mentionDisplayName: { _ in
+                resolverCalls += 1
+                return "Jeff"
+            }
+        )
+
+        #expect(try firstParagraphText(projection.blocks) == "@Jeff")
+        #expect(resolverCalls == 1)
+        #expect(projection.mentionedAccountIds == Set([
+            "7e7e9c42a91bfef19fa929e5fda1b72e0ebc1a4c1141673e2794234d86addf4e"
+        ]))
+    }
+
+    @Test func displayProjectionDoesNotTrackInvalidMentions() throws {
         let bech32 = "npub1" + String(repeating: "q", count: 58)
         let tokens = doc([para([
             .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32))
         ])])
-        let cache = MessageMarkdownDisplayCache()
         var resolverCalls = 0
-        var displayName = "Jeff"
 
-        let first = cache.displayBlocks(
+        let projection = MessageMarkdownDisplayProjection.build(
             for: record(plaintext: "hello", tokens: tokens),
-            profileRefreshGeneration: 1
-        ) { _ in
-            resolverCalls += 1
-            return displayName
-        }
+            mentionDisplayName: { _ in
+                resolverCalls += 1
+                return "Jeff"
+            }
+        )
 
-        #expect(try firstParagraphText(first) == "@Jeff")
+        #expect(try firstParagraphText(projection.blocks) == "@Jeff")
         #expect(resolverCalls == 1)
-
-        displayName = "Other"
-        let cached = cache.displayBlocks(
-            for: record(plaintext: "hello", tokens: tokens),
-            profileRefreshGeneration: 1
-        ) { _ in
-            resolverCalls += 1
-            return displayName
-        }
-
-        #expect(try firstParagraphText(cached) == "@Jeff")
-        #expect(resolverCalls == 1)
-
-        let refreshed = cache.displayBlocks(
-            for: record(plaintext: "hello", tokens: tokens),
-            profileRefreshGeneration: 2
-        ) { _ in
-            resolverCalls += 1
-            return displayName
-        }
-
-        #expect(try firstParagraphText(refreshed) == "@Other")
-        #expect(resolverCalls == 2)
-
-        displayName = "Updated"
-        let changedRecord = cache.displayBlocks(
-            for: record(plaintext: "hello edited", tokens: tokens),
-            profileRefreshGeneration: 2
-        ) { _ in
-            resolverCalls += 1
-            return displayName
-        }
-
-        #expect(try firstParagraphText(changedRecord) == "@Updated")
-        #expect(resolverCalls == 3)
+        #expect(projection.mentionedAccountIds.isEmpty)
     }
 
     @Test func pubkeyHexDecodesValidProfileReferencesOnly() {
