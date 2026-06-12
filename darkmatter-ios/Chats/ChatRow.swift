@@ -142,6 +142,11 @@ struct AvatarBubble: View {
     private var color: Color {
         let palette: [Color] = [.indigo, .blue, .teal, .green, .orange, .pink, .purple, .red]
         let hash = seed.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
-        return palette[abs(hash) % palette.count]
+        return palette[Self.paletteIndex(forHash: hash, paletteCount: palette.count)]
+    }
+
+    static func paletteIndex(forHash hash: Int, paletteCount: Int) -> Int {
+        precondition(paletteCount > 0)
+        return Int(hash.magnitude % UInt(paletteCount))
     }
 }

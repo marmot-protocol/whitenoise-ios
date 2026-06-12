@@ -115,6 +115,7 @@ Do not add a second storage path for data Marmot already owns.
 - Build user-visible date formats from localized templates rather than raw `DateFormatter.dateFormat` patterns.
 - When a sheet folds typed pending input into a submit action, abort on invalid pending input before clearing validation errors or starting async work.
 - Recipient-staging sheets should parse with `AddMembersPresentation`, normalize through Marmot to `MemberRefFfi`, and deduplicate staged recipients by `accountIdHex` rather than raw input text.
+- Do not use `abs` on wrapped or peer-influenced integer hashes; use magnitude or unsigned modulo helpers that are safe for `Int.min`.
 - Import identity flows should consume and clear pasted nsec state before awaiting Marmot, while still clearing matching pasteboard contents on every outcome.
 - Conversation reply-order normalization runs during timeline rebuilds and single-row inserts; keep it linear over the timeline and avoid fixpoint loops that rebuild message indexes per pass.
 - Profile refresh queue drains must leave queued IDs intact when `canRefreshProfiles` is false, then re-arm when foreground/runtime state allows refresh again.
