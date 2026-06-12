@@ -72,6 +72,27 @@ struct ConversationTranscriptExportTests {
             laterId,
         ])
     }
+
+    @Test func temporaryFileWriteUsesCompleteFileProtection() throws {
+        let data = Data("private transcript".utf8)
+        let url = try ConversationTranscriptExport.writeTemporaryFile(
+            data: data,
+            groupIdHex: String(repeating: "ab", count: 32),
+            exportedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        #expect(try Data(contentsOf: url) == data)
+
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Core/ConversationTranscriptExport.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        #expect(source.contains(".protectionKey: FileProtectionType.complete"))
+        #expect(source.contains("data.write(to: url, options: [.atomic, .completeFileProtection])"))
+        #expect(source.contains("setAttributes(protectedAttributes, ofItemAtPath: url.path)"))
+    }
 }
 
 private func testExportGroup(

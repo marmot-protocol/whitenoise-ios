@@ -4,6 +4,9 @@ import MarmotKit
 /// Builds a chronological JSON dump of inner Marmot/Nostr app events for debugging.
 enum ConversationTranscriptExport {
     static let pageLimit: UInt32 = 200
+    private static let protectedAttributes: [FileAttributeKey: Any] = [
+        .protectionKey: FileProtectionType.complete
+    ]
 
     struct Document: Encodable {
         var v: Int = 1
@@ -139,7 +142,8 @@ enum ConversationTranscriptExport {
             .replacingOccurrences(of: ":", with: "-")
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("darkmatter-transcript-\(prefix)-\(stamp).json")
-        try data.write(to: url, options: .atomic)
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        try? FileManager.default.setAttributes(protectedAttributes, ofItemAtPath: url.path)
         return url
     }
 
