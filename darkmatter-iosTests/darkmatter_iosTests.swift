@@ -5647,6 +5647,58 @@ struct TimelineBottomTests {
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: false))
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: true))
     }
+
+    @Test func bottomScrollRequestsCoalesceToLatestNonAnimatedTarget() {
+        let timelineChange = TimelineBottomScrollRequest(
+            animated: true,
+            reason: .timelineChange,
+            targetID: "message-a"
+        )
+        let viewportChange = TimelineBottomScrollRequest(
+            animated: false,
+            reason: .viewportChange,
+            targetID: "message-b"
+        )
+
+        let result = TimelineBottomScrollCoordinator.coalesced(timelineChange, with: viewportChange)
+
+        #expect(result.animated == false)
+        #expect(result.reason == .viewportChange)
+        #expect(result.targetID == "message-b")
+    }
+
+    @Test func timelineScrollRequestsSkipAlreadyHandledTarget() {
+        #expect(TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll(
+            lastAutomaticTargetID: "message-a",
+            nextTargetID: "message-a"
+        ))
+        #expect(!TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll(
+            lastAutomaticTargetID: "message-a",
+            nextTargetID: "message-b"
+        ))
+        #expect(!TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll(
+            lastAutomaticTargetID: nil,
+            nextTargetID: "message-a"
+        ))
+    }
+
+    @Test func conversationViewCoalescesAutomaticScrollAndKeyboardFollowUps() throws {
+        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
+
+        #expect(source.contains("@State private var pendingBottomScrollRequest"))
+        #expect(source.contains("private func scheduleScrollToBottom"))
+        #expect(source.contains("TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll"))
+        #expect(source.contains("private func scheduleKeyboardDismiss"))
+        #expect(source.contains("cancelPendingTimelineFollowUpWork()"))
+        #expect(source.contains(".simultaneousGesture(TapGesture().onEnded { scheduleKeyboardDismiss() })"))
+    }
+
+    private var conversationViewSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
+    }
 }
 
 @MainActor

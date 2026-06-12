@@ -59,6 +59,44 @@ struct TimelineBottomViewport: Equatable {
     }
 }
 
+enum TimelineBottomScrollReason: Equatable {
+    case contentGrowth
+    case timelineChange
+    case viewportChange
+}
+
+struct TimelineBottomScrollRequest: Equatable {
+    let animated: Bool
+    let reason: TimelineBottomScrollReason
+    let targetID: String?
+
+    func coalesced(with next: TimelineBottomScrollRequest) -> TimelineBottomScrollRequest {
+        TimelineBottomScrollRequest(
+            animated: animated && next.animated,
+            reason: next.reason,
+            targetID: next.targetID ?? targetID
+        )
+    }
+}
+
+enum TimelineBottomScrollCoordinator {
+    static func coalesced(
+        _ current: TimelineBottomScrollRequest?,
+        with next: TimelineBottomScrollRequest
+    ) -> TimelineBottomScrollRequest {
+        guard let current else { return next }
+        return current.coalesced(with: next)
+    }
+
+    static func shouldSkipTimelineChangeScroll(
+        lastAutomaticTargetID: String?,
+        nextTargetID: String?
+    ) -> Bool {
+        guard let nextTargetID else { return false }
+        return nextTargetID == lastAutomaticTargetID
+    }
+}
+
 struct ConversationSendPayload {
     let viewModel: ConversationViewModel
     let text: String
@@ -203,6 +241,10 @@ struct ConversationView: View {
     @State private var didPerformInitialBottomScroll = false
     @State private var isInitialTimelinePositionSettled = false
     @State private var initialScrollFollowUpTask: Task<Void, Never>?
+    @State private var pendingBottomScrollRequest: TimelineBottomScrollRequest?
+    @State private var pendingBottomScrollTask: Task<Void, Never>?
+    @State private var lastAutomaticBottomScrollTargetID: String?
+    @State private var pendingKeyboardDismissTask: Task<Void, Never>?
     @State private var visibleChatRoute: VisibleChatRoute?
     /// Global Y bounds of the visible timeline (between nav bar and composer).
     /// The bottom shrinks when the keyboard rises, so placement accounts for it.
@@ -350,6 +392,7 @@ struct ConversationView: View {
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
+                cancelPendingTimelineFollowUpWork()
                 dismissKeyboard()
             }
     }
@@ -523,7 +566,7 @@ struct ConversationView: View {
                         .defaultScrollAnchor(.bottom)
                         .compatibleBottomScrollEdgeEffect()
                         .scrollDismissesKeyboard(.interactively)
-                        .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
+                        .simultaneousGesture(TapGesture().onEnded { scheduleKeyboardDismiss() })
                         .onPreferenceChange(RowFramesKey.self) { rowFrames.frames = $0 }
                         .onScrollGeometryChange(for: TimelineBottomViewport.self) { geometry in
                             TimelineBottomViewport(
@@ -537,7 +580,12 @@ struct ConversationView: View {
                                 current: current
                             ) {
                                 isAtTimelineBottom = true
-                                scrollToBottom(proxy: proxy, animated: true)
+                                scheduleScrollToBottom(
+                                    proxy: proxy,
+                                    animated: true,
+                                    reason: .contentGrowth,
+                                    targetID: viewModel.timeline.last?.id
+                                )
                             } else {
                                 isAtTimelineBottom = current.isPinned
                             }
@@ -549,7 +597,12 @@ struct ConversationView: View {
                             }
                             settleInitialTimelinePositionIfNoScrollNeeded(viewModel: viewModel)
                             if isAtTimelineBottom {
-                                scrollToBottom(proxy: proxy, animated: true)
+                                scheduleScrollToBottom(
+                                    proxy: proxy,
+                                    animated: true,
+                                    reason: .timelineChange,
+                                    targetID: newId
+                                )
                             }
                         }
                         .onChange(of: outer.size.height) { _, _ in
@@ -557,7 +610,12 @@ struct ConversationView: View {
                             contentTopY = outer.frame(in: .global).minY
                             contentBottomY = outer.frame(in: .global).maxY
                             if TimelineBottom.shouldFollowViewportChange(wasPinned: wasAtBottom) {
-                                scrollToBottom(proxy: proxy, animated: false)
+                                scheduleScrollToBottom(
+                                    proxy: proxy,
+                                    animated: false,
+                                    reason: .viewportChange,
+                                    targetID: viewModel.timeline.last?.id
+                                )
                             }
                         }
                         .onAppear {
@@ -570,6 +628,7 @@ struct ConversationView: View {
                         .onDisappear {
                             initialScrollFollowUpTask?.cancel()
                             initialScrollFollowUpTask = nil
+                            cancelPendingBottomScroll()
                         }
                     }
                 }
@@ -750,11 +809,52 @@ struct ConversationView: View {
         }
     }
 
+    private func scheduleScrollToBottom(
+        proxy: ScrollViewProxy,
+        animated: Bool,
+        reason: TimelineBottomScrollReason,
+        targetID: String? = nil
+    ) {
+        if reason == .timelineChange,
+           TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll(
+               lastAutomaticTargetID: lastAutomaticBottomScrollTargetID,
+               nextTargetID: targetID
+           ) {
+            return
+        }
+
+        let request = TimelineBottomScrollRequest(
+            animated: animated,
+            reason: reason,
+            targetID: targetID
+        )
+        pendingBottomScrollRequest = TimelineBottomScrollCoordinator.coalesced(
+            pendingBottomScrollRequest,
+            with: request
+        )
+        pendingBottomScrollTask?.cancel()
+        pendingBottomScrollTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled, let request = pendingBottomScrollRequest else { return }
+            pendingBottomScrollRequest = nil
+            pendingBottomScrollTask = nil
+            scrollToBottom(proxy: proxy, animated: request.animated)
+            lastAutomaticBottomScrollTargetID = request.targetID
+        }
+    }
+
+    private func cancelPendingBottomScroll() {
+        pendingBottomScrollTask?.cancel()
+        pendingBottomScrollTask = nil
+        pendingBottomScrollRequest = nil
+    }
+
     private func jumpToBottom(proxy: ScrollViewProxy) {
         // The scroll-to-bottom button is a user action, so animate it for a
         // fluid feel instead of the old instant triple-dispatch jump. The
         // ScrollView's .defaultScrollAnchor(.bottom) keeps the view pinned once
         // we arrive, so a single animated scroll lands reliably (#44).
+        cancelPendingBottomScroll()
         scrollToBottom(proxy: proxy, animated: true)
     }
 
@@ -939,6 +1039,28 @@ struct ConversationView: View {
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
         )
+    }
+
+    private func scheduleKeyboardDismiss() {
+        pendingKeyboardDismissTask?.cancel()
+        pendingKeyboardDismissTask = Task { @MainActor in
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            pendingKeyboardDismissTask = nil
+            dismissKeyboard()
+        }
+    }
+
+    private func cancelPendingKeyboardDismiss() {
+        pendingKeyboardDismissTask?.cancel()
+        pendingKeyboardDismissTask = nil
+    }
+
+    private func cancelPendingTimelineFollowUpWork() {
+        initialScrollFollowUpTask?.cancel()
+        initialScrollFollowUpTask = nil
+        cancelPendingBottomScroll()
+        cancelPendingKeyboardDismiss()
     }
 
     // MARK: - Message actions placement
