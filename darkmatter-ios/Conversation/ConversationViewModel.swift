@@ -75,6 +75,7 @@ final class ConversationViewModel {
     private(set) var group: AppGroupRecordFfi
     private(set) var members: [AppGroupMemberRecordFfi] = []
     private(set) var groupMemberDetails: [GroupMemberDetailsFfi] = []
+    private(set) var groupMlsRefreshGeneration: UInt64 = 0
     private(set) var managementState: GroupManagementStateFfi?
     /// targetMessageId -> emoji tallies, derived from materialized timeline rows
     /// plus local optimistic reaction edits.
@@ -171,6 +172,41 @@ final class ConversationViewModel {
         let targetMessageIdHex: String
         let emoji: String
         let sender: String
+    }
+
+    private struct GroupMlsRefreshIdentity: Equatable {
+        let groupIdHex: String
+        let admins: [String]
+        let memberIds: [String]
+        let memberAdminStates: [GroupMemberAdminIdentity]
+    }
+
+    private struct GroupMemberAdminIdentity: Equatable {
+        let memberIdHex: String
+        let isAdmin: Bool
+    }
+
+    private var groupMlsRefreshIdentity: GroupMlsRefreshIdentity {
+        GroupMlsRefreshIdentity(
+            groupIdHex: group.groupIdHex,
+            admins: group.admins,
+            memberIds: members.map(\.memberIdHex),
+            memberAdminStates: groupMemberDetails.map {
+                GroupMemberAdminIdentity(memberIdHex: $0.memberIdHex, isAdmin: $0.isAdmin)
+            }
+        )
+    }
+
+    private func applyGroupMlsTrackedChanges(_ update: () -> Void) {
+        let previousIdentity = groupMlsRefreshIdentity
+        update()
+        bumpGroupMlsRefreshGenerationIfNeeded(previousIdentity: previousIdentity)
+    }
+
+    private func bumpGroupMlsRefreshGenerationIfNeeded(previousIdentity: GroupMlsRefreshIdentity) {
+        if groupMlsRefreshIdentity != previousIdentity {
+            groupMlsRefreshGeneration &+= 1
+        }
     }
 
     private struct AgentTextStreamProjection: Decodable {
@@ -519,7 +555,7 @@ final class ConversationViewModel {
                     )
                     guard !Task.isCancelled else { return }
                     if let initial = groupSub.snapshot() {
-                        self?.group = initial
+                        self?.applyGroupRecord(initial)
                     }
                     for await record in SubscriptionDriver.groupState(groupSub) {
                         guard !Task.isCancelled else { return }
@@ -553,10 +589,13 @@ final class ConversationViewModel {
             }
             guard !Task.isCancelled else { return }
             do {
-                self.members = try await appState.marmot.groupMembers(
+                let next = try await appState.marmot.groupMembers(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex
                 )
+                self.applyGroupMlsTrackedChanges {
+                    self.members = next
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 self.error = error.localizedDescription
@@ -1313,7 +1352,9 @@ final class ConversationViewModel {
         let previousName = group.name
         let wasArchived = group.archived
         let previousAdmins = Set(group.admins)
-        group = record
+        applyGroupMlsTrackedChanges {
+            group = record
+        }
 
         if Set(record.admins) != previousAdmins {
             await refreshTimelineTail()
@@ -1336,7 +1377,9 @@ final class ConversationViewModel {
     }
 
     func applyGroupRecord(_ record: AppGroupRecordFfi) {
-        group = record
+        applyGroupMlsTrackedChanges {
+            group = record
+        }
     }
 
     func applyGroupMutation(_ result: GroupMutationResultFfi) {
@@ -1350,6 +1393,7 @@ final class ConversationViewModel {
     }
 
     func applyOptimisticAdminStatus(memberIdHex: String, isAdmin: Bool) {
+        let previousIdentity = groupMlsRefreshIdentity
         var updatedGroup = group
         if isAdmin {
             if !updatedGroup.admins.contains(memberIdHex) {
@@ -1366,6 +1410,7 @@ final class ConversationViewModel {
             updated.isAdmin = isAdmin
             return updated
         }
+        bumpGroupMlsRefreshGenerationIfNeeded(previousIdentity: previousIdentity)
 
         guard var state = managementState else { return }
         if memberIdHex == state.myAccountIdHex {
@@ -1411,6 +1456,7 @@ final class ConversationViewModel {
     ) {
         let previousAdmins = Set(group.admins)
         let previousMemberIds = members.map(\.memberIdHex)
+        let previousIdentity = groupMlsRefreshIdentity
         let nextMembers = details.members.map {
             AppGroupMemberRecordFfi(
                 memberIdHex: $0.memberIdHex,
@@ -1427,6 +1473,7 @@ final class ConversationViewModel {
         groupMemberDetails = details.members
         managementState = state
         members = nextMembers
+        bumpGroupMlsRefreshGenerationIfNeeded(previousIdentity: previousIdentity)
         if Set(details.group.admins) != previousAdmins || nextMemberIds != previousMemberIds {
             scheduleTimelineTailRefresh()
         }
@@ -1452,7 +1499,9 @@ final class ConversationViewModel {
             if next.map(\.memberIdHex) != members.map(\.memberIdHex) {
                 appendSystemEvent(.rosterChanged)
             }
-            members = next
+            applyGroupMlsTrackedChanges {
+                members = next
+            }
         } catch {
             // Silent; the next subscription tick will retry.
         }

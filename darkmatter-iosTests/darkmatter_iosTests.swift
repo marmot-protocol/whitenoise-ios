@@ -4013,6 +4013,48 @@ struct GroupManagementPresentationTests {
         #expect(viewModel.managementState?.requiresSelfDemoteBeforeLeave == false)
         #expect(viewModel.managementState?.canLeave == true)
     }
+
+    @Test func groupMlsRefreshGenerationTracksMembershipInputsOnly() throws {
+        let me = hex("11")
+        let other = hex("22")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", admins: [me])
+        )
+        let initialGeneration = viewModel.groupMlsRefreshGeneration
+
+        viewModel.applyGroupRecord(group(name: "Renamed", admins: [me]))
+
+        #expect(viewModel.groupMlsRefreshGeneration == initialGeneration)
+
+        viewModel.applyGroupRecord(group(name: "Renamed", admins: [me, other]))
+
+        #expect(viewModel.groupMlsRefreshGeneration == initialGeneration + 1)
+
+        viewModel.applyGroupMutation(
+            GroupMutationResultFfi(
+                summary: SendSummaryFfi(published: 0, messageIds: []),
+                details: GroupDetailsFfi(
+                    group: group(name: "Renamed", admins: [me, other]),
+                    members: [
+                        groupMember(memberIdHex: me, isAdmin: true, isSelf: true),
+                        groupMember(memberIdHex: other, isAdmin: false, isSelf: false)
+                    ]
+                ),
+                managementState: GroupManagementStateFfi(
+                    myAccountIdHex: me,
+                    isSelfAdmin: true,
+                    isLastAdmin: false,
+                    canInvite: true,
+                    canLeave: true,
+                    requiresSelfDemoteBeforeLeave: false,
+                    memberActions: []
+                )
+            )
+        )
+
+        #expect(viewModel.groupMlsRefreshGeneration == initialGeneration + 2)
+    }
 }
 
 @MainActor

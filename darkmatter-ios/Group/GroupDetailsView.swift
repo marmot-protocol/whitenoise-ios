@@ -33,14 +33,6 @@ struct GroupDetailsView: View {
     private var memberCount: Int {
         viewModel.groupMemberDetails.isEmpty ? viewModel.members.count : viewModel.groupMemberDetails.count
     }
-    private var mlsRefreshKey: String {
-        [
-            viewModel.group.groupIdHex,
-            viewModel.group.admins.joined(separator: ","),
-            viewModel.members.map(\.memberIdHex).joined(separator: ","),
-            viewModel.groupMemberDetails.map { "\($0.memberIdHex):\($0.isAdmin)" }.joined(separator: ",")
-        ].joined(separator: "|")
-    }
 
     var body: some View {
         Form {
@@ -155,7 +147,7 @@ struct GroupDetailsView: View {
             await refreshGroupManagementAndNotify()
             await refreshVisibleDebugState()
         }
-        .task(id: mlsRefreshKey) {
+        .task(id: viewModel.groupMlsRefreshGeneration) {
             await refreshVisibleDebugState()
         }
     }
