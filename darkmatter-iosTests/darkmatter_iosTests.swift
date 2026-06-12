@@ -2496,6 +2496,8 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("https://172.31.255.255/avatar.png") == nil)
         #expect(ProfileSanitizer.imageURL("https://192.168.1.10/avatar.png") == nil)
         #expect(ProfileSanitizer.imageURL("https://169.254.169.254/latest/meta-data/") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[::]/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[0:0:0:0:0:0:0:0]/avatar.png") == nil)
         #expect(ProfileSanitizer.imageURL("https://[::1]/avatar.png") == nil)
 
         #expect(ProfileSanitizer.imageURL("https://172.32.0.1/avatar.png") != nil)

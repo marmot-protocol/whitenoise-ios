@@ -223,6 +223,10 @@ enum ProfileSanitizer {
         let address = String(host.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)[0])
         guard let bytes = ipv6Bytes(address), bytes.count == 16 else { return false }
 
+        if bytes.allSatisfy({ $0 == 0 }) {
+            return true
+        }
+
         if bytes[0..<15].allSatisfy({ $0 == 0 }) && bytes[15] == 1 {
             return true
         }
