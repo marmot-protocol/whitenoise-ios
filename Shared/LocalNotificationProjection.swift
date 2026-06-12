@@ -18,7 +18,7 @@ struct LocalNotificationPresentation: Equatable {
     let userInfo: [String: String]
 }
 
-enum LocalNotificationProjection {
+nonisolated enum LocalNotificationProjection {
     static let accountRefKey = "dm_account_ref"
     static let groupIdHexKey = "dm_group_id_hex"
     static let notificationKeyKey = "dm_notification_key"

@@ -95,7 +95,7 @@ final class MarmotClient {
     }
 
     private func configureAuditLogTracker() throws {
-        try marmot.setAuditLogTrackerConfig(
+        _ = try marmot.setAuditLogTrackerConfig(
             config: telemetryConfig.auditTrackerConfig()
         )
     }

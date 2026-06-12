@@ -6,7 +6,7 @@ enum NotificationServiceRenderDecision: Equatable {
     case fallback
 }
 
-enum NotificationServiceProjection {
+nonisolated enum NotificationServiceProjection {
     // Keep room for extension startup and fallback delivery before iOS expires
     // the notification service extension.
     static let maxWakeWaitMs: UInt32 = 8_000

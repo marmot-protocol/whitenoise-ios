@@ -11,7 +11,7 @@ import Darwin
 /// The local user's *own* profile in the editor deliberately bypasses this so
 /// they can round-trip their real values; sanitization applies only on the
 /// display path.
-enum ProfileSanitizer {
+nonisolated enum ProfileSanitizer {
 
     static let maxNameLength = 80
     static let maxGroupNameLength = 100

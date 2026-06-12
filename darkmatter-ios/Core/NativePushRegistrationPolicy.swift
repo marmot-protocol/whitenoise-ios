@@ -1,6 +1,6 @@
 import MarmotKit
 
-enum NativePushRegistrationPolicy {
+nonisolated enum NativePushRegistrationPolicy {
     static func enabledAccountRefs(
         accounts: [AccountSummaryFfi],
         settingsFor: (String) -> NotificationSettingsFfi?

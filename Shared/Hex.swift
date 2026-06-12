@@ -12,7 +12,7 @@ import Foundation
 /// `Character.isHexDigit`, which also matches non-ASCII forms such as fullwidth
 /// or mathematical digits — peer-controlled input must not slip past as a valid
 /// identifier.
-enum Hex {
+nonisolated enum Hex {
     /// True when `value` is a non-empty hex string of any length.
     static func isHex(_ value: String) -> Bool {
         let bytes = value.utf8

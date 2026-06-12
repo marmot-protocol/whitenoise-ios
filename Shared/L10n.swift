@@ -1,6 +1,6 @@
 import Foundation
 
-enum L10n {
+nonisolated enum L10n {
     static func string(_ value: String.LocalizationValue) -> String {
         let language = AppLanguage.current
         let locale = language.locale ?? .autoupdatingCurrent

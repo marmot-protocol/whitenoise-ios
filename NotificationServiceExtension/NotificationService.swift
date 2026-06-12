@@ -35,7 +35,7 @@ final class NotificationService: UNNotificationServiceExtension {
         let additionalPresentationTask = additionalPresentationTask
         guard let marmot = takeActiveMarmotForShutdown() else {
             if let additionalPresentationTask {
-                expirationTask = Task { [weak self] in
+                expirationTask = Task.detached { [weak self] in
                     await additionalPresentationTask.value
                     await self?.finish(applyingFallbackForTimeout: true)
                 }
@@ -44,8 +44,8 @@ final class NotificationService: UNNotificationServiceExtension {
             }
             return
         }
-        expirationTask = Task { [weak self] in
-            let shutdownTask = Task {
+        expirationTask = Task.detached { [weak self] in
+            let shutdownTask = Task.detached {
                 await marmot.shutdown()
             }
             await additionalPresentationTask?.value

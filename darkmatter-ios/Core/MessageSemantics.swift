@@ -11,7 +11,7 @@ import MarmotKit
 /// and bubble all classify a record identically.
 ///
 /// The kind/tag names mirror `crates/traits/src/app_event.rs`.
-enum MessageSemantics {
+nonisolated enum MessageSemantics {
 
     // Nostr kinds used as Marmot inner app events.
     static let kindDelete: UInt64 = 5
@@ -328,7 +328,7 @@ enum MessageSemantics {
     }
 }
 
-private extension String {
+nonisolated private extension String {
     /// Returns the remainder after `prefix`, or nil if the string doesn't start with it.
     func dropPrefix(_ prefix: String) -> String? {
         guard hasPrefix(prefix) else { return nil }

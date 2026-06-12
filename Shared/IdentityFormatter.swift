@@ -2,7 +2,7 @@ import Foundation
 
 /// Static helpers for rendering Nostr identities (npub) and group ids in a
 /// way that's human-recognizable without overwhelming the UI.
-enum IdentityFormatter {
+nonisolated enum IdentityFormatter {
 
     /// Truncates a long hex/bech32 string with an ellipsis in the middle.
     /// Used in chat rows, member rows, and the identity card.

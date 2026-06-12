@@ -188,7 +188,7 @@ enum ReplyPreviewLayout {
     static let outerBottomInset: CGFloat = 2
 }
 
-struct ConversationChromePresentation: Equatable {
+nonisolated struct ConversationChromePresentation: Equatable {
     let title: String
     let subtitle: String?
 

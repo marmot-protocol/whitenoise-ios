@@ -1,7 +1,7 @@
 import Foundation
 
 /// Failures resolving the on-disk location for the Marmot store.
-enum AppContainerError: Error, LocalizedError, Equatable {
+nonisolated enum AppContainerError: Error, LocalizedError, Equatable {
     /// The shared App Group container could not be resolved. Marmot data must
     /// live in a single location shared by the app and its extensions, so we
     /// refuse to run rather than fork the store into a per-process path.
@@ -18,7 +18,7 @@ enum AppContainerError: Error, LocalizedError, Equatable {
     }
 }
 
-enum AppContainerConfig {
+nonisolated enum AppContainerConfig {
     static let appGroupIdentifier = "group.dev.ipf.darkmatter"
     static let marmotDirectoryName = "Marmot"
     static let seedRelays = [
@@ -69,7 +69,7 @@ enum AppContainerConfig {
     }
 }
 
-struct NativePushServerConfig: Equatable {
+nonisolated struct NativePushServerConfig: Equatable {
     static let serverPubkeyInfoKey = "DarkmatterPushServerPubkeyHex"
     static let relayHintInfoKey = "DarkmatterPushRelayHint"
 
@@ -96,7 +96,7 @@ struct NativePushServerConfig: Equatable {
     }
 }
 
-enum RelayURL {
+nonisolated enum RelayURL {
     static func normalized(_ raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard var components = URLComponents(string: trimmed),
