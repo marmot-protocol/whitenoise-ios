@@ -269,6 +269,7 @@ final class AppState {
     func bootstrap() async {
         do {
             try await startCurrentRuntime()
+            noteRuntimeForegroundReadyAfterSuspension()
             try await refreshAccounts()
             if accounts.isEmpty {
                 phase = .onboarding
@@ -722,8 +723,7 @@ final class AppState {
                 let restored = try makeRuntime()
                 client = restored
                 try await restored.startRuntime()
-                runtimeSuspendedForBackground = false
-                runtimeGeneration += 1
+                noteRuntimeForegroundReadyAfterSuspension()
                 startNotificationSubscription()
             } catch {
                 phase = .failed(error.localizedDescription)
@@ -734,6 +734,13 @@ final class AppState {
         guard isAppSceneActive, !Task.isCancelled else { return }
         await catchUpAfterForegroundActivation()
         resumeProfileFetchQueueIfNeeded()
+    }
+
+    private func noteRuntimeForegroundReadyAfterSuspension() {
+        guard runtimeSuspendedForBackground || isRuntimeSuspending else { return }
+        runtimeSuspendedForBackground = false
+        finishRuntimeSuspensionWait()
+        runtimeGeneration += 1
     }
 
     private func waitForRuntimeSuspensionToFinish() async {

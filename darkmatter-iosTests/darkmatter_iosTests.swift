@@ -313,6 +313,28 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func bootstrapRetryAfterSuspendedRuntimeClearsForegroundGates() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let generation = appState.runtimeGeneration
+
+        await appState.prepareForBackgroundSuspension()
+        appState.setAppSceneActive(true)
+
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(!appState.canRefreshProfiles)
+
+        await appState.bootstrap()
+
+        #expect(appState.phase == .ready)
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.canRefreshProfiles)
+        #expect(appState.runtimeGeneration == generation + 1)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func auditLogSettingChangeHotSwapsWithoutRestartingRuntime() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
