@@ -31,6 +31,35 @@ struct MarkdownMessageBuilderTests {
         return attributed
     }
 
+    private func firstParagraphText(
+        _ blocks: [MarkdownDisplayBlock]?,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) throws -> String {
+        let blocks = try #require(blocks, sourceLocation: sourceLocation)
+        guard case .paragraph(let attributed) = try #require(blocks.first, sourceLocation: sourceLocation) else {
+            throw TestFailure("expected paragraph, got \(blocks[0])")
+        }
+        return String(attributed.characters)
+    }
+
+    private func record(
+        plaintext: String,
+        tokens: MarkdownDocumentFfi
+    ) -> AppMessageRecordFfi {
+        AppMessageRecordFfi(
+            messageIdHex: "message",
+            direction: "received",
+            groupIdHex: "group",
+            sender: "sender",
+            plaintext: plaintext,
+            contentTokens: tokens,
+            kind: 9,
+            tags: [],
+            recordedAt: 1,
+            receivedAt: 1
+        )
+    }
+
     private struct TestFailure: Error {
         let message: String
         init(_ message: String) { self.message = message }
@@ -168,6 +197,62 @@ struct MarkdownMessageBuilderTests {
 
         #expect(String(attributed.characters) == "@npub1qqq…qqqq")
         #expect(try #require(attributed.runs.first).font == Font.body.monospaced())
+    }
+
+    @Test func displayCacheReusesBlocksUntilMessageOrProfileGenerationChanges() throws {
+        let bech32 = "npub1" + String(repeating: "q", count: 58)
+        let tokens = doc([para([
+            .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32))
+        ])])
+        let cache = MessageMarkdownDisplayCache()
+        var resolverCalls = 0
+        var displayName = "Jeff"
+
+        let first = cache.displayBlocks(
+            for: record(plaintext: "hello", tokens: tokens),
+            profileRefreshGeneration: 1
+        ) { _ in
+            resolverCalls += 1
+            return displayName
+        }
+
+        #expect(try firstParagraphText(first) == "@Jeff")
+        #expect(resolverCalls == 1)
+
+        displayName = "Other"
+        let cached = cache.displayBlocks(
+            for: record(plaintext: "hello", tokens: tokens),
+            profileRefreshGeneration: 1
+        ) { _ in
+            resolverCalls += 1
+            return displayName
+        }
+
+        #expect(try firstParagraphText(cached) == "@Jeff")
+        #expect(resolverCalls == 1)
+
+        let refreshed = cache.displayBlocks(
+            for: record(plaintext: "hello", tokens: tokens),
+            profileRefreshGeneration: 2
+        ) { _ in
+            resolverCalls += 1
+            return displayName
+        }
+
+        #expect(try firstParagraphText(refreshed) == "@Other")
+        #expect(resolverCalls == 2)
+
+        displayName = "Updated"
+        let changedRecord = cache.displayBlocks(
+            for: record(plaintext: "hello edited", tokens: tokens),
+            profileRefreshGeneration: 2
+        ) { _ in
+            resolverCalls += 1
+            return displayName
+        }
+
+        #expect(try firstParagraphText(changedRecord) == "@Updated")
+        #expect(resolverCalls == 3)
     }
 
     @Test func pubkeyHexDecodesValidProfileReferencesOnly() {

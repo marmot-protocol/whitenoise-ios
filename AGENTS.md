@@ -113,6 +113,7 @@ Do not add a second storage path for data Marmot already owns.
 - Route peer-controlled profile and group image URLs through `ProfileSanitizer.imageURL`; it only allows HTTPS public hosts and rejects local/private hosts plus legacy IPv4 literal spellings.
 - Media attachment display IDs must include the owning message or timeline-row identity; do not key SwiftUI media views solely by the encrypted media reference.
 - Fullscreen media galleries are image-only. Reject non-image initial items before presentation and surface undecodable image bytes as an explicit failure state rather than an idle spinner.
+- Markdown display blocks are cacheable per message content and profile refresh generation; do not call `MarkdownMessageBuilder.displayBlocks` directly from bubble body paths.
 - Build user-visible date formats from localized templates rather than raw `DateFormatter.dateFormat` patterns.
 - When a sheet folds typed pending input into a submit action, abort on invalid pending input before clearing validation errors or starting async work.
 - Recipient-staging sheets should parse with `AddMembersPresentation`, normalize through Marmot to `MemberRefFfi`, and deduplicate staged recipients by `accountIdHex` rather than raw input text.
