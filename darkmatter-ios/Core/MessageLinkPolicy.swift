@@ -1,7 +1,7 @@
 import Foundation
 
 /// What tapping a link inside a message bubble does.
-enum MessageLinkAction: Equatable {
+nonisolated enum MessageLinkAction: Equatable {
     case openProfile(npub: String)
     case openChat(groupIdHex: String)
     case confirmExternal(URL)
@@ -10,7 +10,7 @@ enum MessageLinkAction: Equatable {
 
 /// Tap-time gate for message links. The markdown builder already refuses to
 /// attach disallowed schemes at render time; this second gate decides routing.
-enum MessageLinkPolicy {
+nonisolated enum MessageLinkPolicy {
 
     private static let externalSchemes: Set<String> = [
         "http", "https", "mailto", "tel", "whitenoise", "whitenoise-staging",

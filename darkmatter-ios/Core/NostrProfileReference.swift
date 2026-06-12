@@ -1,6 +1,6 @@
 import Foundation
 
-enum NostrProfileReference {
+nonisolated enum NostrProfileReference {
     private static let bech32Charset = Array("qpzry9x8gf2tvdw0s3jn54khce6mua7l")
     /// O(1) reverse lookup for `bech32Charset`, built once. Decoding scans every
     /// character of every reference, so a linear `firstIndex(of:)` per character

@@ -7,7 +7,7 @@ import Foundation
 /// links — whether from the in-app scanner (which reads the raw string) or
 /// the system (via `.onOpenURL`, once the URL scheme is registered in
 /// Info.plist).
-enum DeepLink: Equatable {
+nonisolated enum DeepLink: Equatable {
     /// Profile reference accepted by Marmot. This is usually an `npub`, but
     /// may be hex when the source was an `nprofile` pointer.
     case profile(npub: String)

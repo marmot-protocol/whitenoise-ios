@@ -5,7 +5,7 @@ import MarmotKit
 ///
 /// UniFFI only parses markdown for kind 9, so these kinds arrive with empty
 /// `content_tokens` and JSON in `plaintext`. Tags carry operation metadata.
-enum AgentEventPresentation {
+nonisolated enum AgentEventPresentation {
 
     enum RowKind: Equatable {
         case activity

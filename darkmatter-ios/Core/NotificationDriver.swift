@@ -1,7 +1,7 @@
 import Foundation
 import MarmotKit
 
-struct NotificationSubscriptionRunner {
+nonisolated struct NotificationSubscriptionRunner {
     let initialRetryDelayNanoseconds: UInt64
     let maximumRetryDelayNanoseconds: UInt64
     let subscribe: () async throws -> AsyncStream<NotificationUpdateFfi>

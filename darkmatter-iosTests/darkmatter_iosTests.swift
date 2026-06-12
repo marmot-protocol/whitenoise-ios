@@ -565,6 +565,7 @@ struct AppStateBootstrapTests {
 }
 
 struct NotificationSubscriptionRetryTests {
+    @MainActor
     @Test func driverClearsRunningStateWhenRunnerCompletes() async throws {
         let driver = NotificationDriver()
         let runner = NotificationSubscriptionRunner(
@@ -1255,7 +1256,7 @@ struct LocalizationCatalogTests {
         let strings = try #require(catalog["strings"] as? [String: Any])
 
         for (key, rawEntry) in strings {
-            let entry = try #require(rawEntry as? [String: Any], "Invalid localization entry: \(key)")
+            _ = try #require(rawEntry as? [String: Any], "Invalid localization entry: \(key)")
             let expectedPlaceholders = placeholders(in: key)
             for locale in expectedLocales {
                 let values = try localizedLeafValues(key, locale: locale, in: strings)
@@ -5151,7 +5152,7 @@ struct MessageSemanticsTests {
 
     @Test func mediaDownloadInFlightKeyNormalizesCryptoIdentity() {
         var uppercase = encryptedMediaReference(sourceEpoch: 0)
-        var lowercase = uppercase
+        let lowercase = uppercase
         uppercase.plaintextSha256 = uppercase.plaintextSha256.uppercased()
         uppercase.ciphertextSha256 = uppercase.ciphertextSha256.uppercased()
         uppercase.nonceHex = uppercase.nonceHex.uppercased()

@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum ComposerInputChrome {
+nonisolated enum ComposerInputChrome {
     enum FillBase: Equatable {
         case systemBackground
         case black

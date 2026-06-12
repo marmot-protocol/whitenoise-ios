@@ -18,7 +18,7 @@ struct NativePushDisableCoordinator {
     }
 }
 
-enum NativePushRegistrationErrorDisposition {
+nonisolated enum NativePushRegistrationErrorDisposition {
     case stopSync
     case recordFailure
 

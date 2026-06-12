@@ -146,7 +146,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     /// Notification taps that arrive before `appState` is wired up are buffered.
     /// Bound the buffer so a notification flood during startup can't grow memory
     /// unboundedly; keep the most recent routes (#18).
-    static let maxPendingRoutes = 32
+    nonisolated static let maxPendingRoutes = 32
 
     nonisolated static func appendingBounded<T>(_ element: T, to array: [T], limit: Int) -> [T] {
         var next = array
