@@ -8172,6 +8172,124 @@
         }
       }
     },
+    "Enter a valid Lightning address like name@example.com.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib eine gültige Lightning-Adresse wie name@example.com ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce una dirección Lightning válida como name@example.com."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez une adresse Lightning valide comme name@example.com."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci un indirizzo Lightning valido come name@example.com."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insira um endereço Lightning válido como name@example.com."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите действительный адрес Lightning, например name@example.com."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "name@example.com gibi geçerli bir Lightning adresi girin."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入有效的 Lightning 地址，例如 name@example.com。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輸入有效的 Lightning 地址，例如 name@example.com。"
+          }
+        }
+      }
+    },
+    "Enter a valid NIP-05 address like name@example.com.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib eine gültige NIP-05-Adresse wie name@example.com ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce una dirección NIP-05 válida como name@example.com."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez une adresse NIP-05 valide comme name@example.com."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci un indirizzo NIP-05 valido come name@example.com."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insira um endereço NIP-05 válido como name@example.com."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите действительный адрес NIP-05, например name@example.com."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "name@example.com gibi geçerli bir NIP-05 adresi girin."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入有效的 NIP-05 地址，例如 name@example.com。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輸入有效的 NIP-05 地址，例如 name@example.com。"
+          }
+        }
+      }
+    },
     "Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.": {
       "extractionState": "manual",
       "localizations": {

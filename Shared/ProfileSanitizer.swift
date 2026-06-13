@@ -8,14 +8,14 @@ import Darwin
 /// This is the rendering boundary: it strips spoofing characters, enforces a
 /// URL-scheme allowlist for images, and caps lengths.
 ///
-/// The local user's *own* profile in the editor deliberately bypasses this so
-/// they can round-trip their real values; sanitization applies only on the
-/// display path.
+/// The profile editor also reuses these bounds before publishing our own
+/// metadata so malformed local drafts are not propagated to relays.
 nonisolated enum ProfileSanitizer {
 
     static let maxNameLength = 80
     static let maxGroupNameLength = 100
     static let maxAboutLength = 1000
+    static let maxProfileAddressLength = 254
     static let maxMessageLength = 8000
     static let maxReactionLength = 8
 
@@ -118,6 +118,25 @@ nonisolated enum ProfileSanitizer {
         return comps.url
     }
 
+    static func profileAddress(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let collapsed = stripUnsafe(raw)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !collapsed.isEmpty, collapsed.count <= maxProfileAddressLength else { return nil }
+
+        let parts = collapsed.split(separator: "@", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return nil }
+        let local = String(parts[0]).lowercased()
+        let domain = String(parts[1]).lowercased()
+        guard isValidProfileAddressLocalPart(local),
+              isValidProfileAddressDomain(domain)
+        else { return nil }
+        return "\(local)@\(domain)"
+    }
+
     private static func isPrivateOrLoopbackHost(_ host: String) -> Bool {
         let normalized = host
             .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
@@ -215,6 +234,36 @@ nonisolated enum ProfileSanitizer {
     private static func isASCIIHexDigit(_ scalar: UnicodeScalar) -> Bool {
         (48...57).contains(scalar.value) ||
             (97...102).contains(scalar.value)
+    }
+
+    private static func isValidProfileAddressLocalPart(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 64 else { return false }
+        return value.unicodeScalars.allSatisfy { scalar in
+            isASCIIDigit(scalar) ||
+                (97...122).contains(scalar.value) ||
+                scalar == "." ||
+                scalar == "_" ||
+                scalar == "-" ||
+                scalar == "+"
+        }
+    }
+
+    private static func isValidProfileAddressDomain(_ value: String) -> Bool {
+        guard !value.isEmpty, value.count <= 253, value.contains(".") else { return false }
+        let labels = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2 else { return false }
+        return labels.allSatisfy { label in
+            guard !label.isEmpty,
+                  label.count <= 63,
+                  label.first != "-",
+                  label.last != "-"
+            else { return false }
+            return label.unicodeScalars.allSatisfy { scalar in
+                isASCIIDigit(scalar) ||
+                    (97...122).contains(scalar.value) ||
+                    scalar == "-"
+            }
+        }
     }
 
     private static func isPrivateOrLoopbackIPv6(_ host: String) -> Bool {

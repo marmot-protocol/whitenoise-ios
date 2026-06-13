@@ -58,9 +58,19 @@ struct ProfileEditView: View {
                 TextField("NIP-05 (name@domain)", text: $nip05)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                if let invalidNip05Message {
+                    Label(invalidNip05Message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
                 TextField("Lightning (lud16)", text: $lud16)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                if let invalidLud16Message {
+                    Label(invalidLud16Message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                }
             }
 
             Section {
@@ -97,6 +107,16 @@ struct ProfileEditView: View {
         picture.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var currentDraft: ProfileEditMetadataDraft {
+        ProfileEditMetadataDraft(
+            displayName: displayName,
+            about: about,
+            picture: picture,
+            nip05: nip05,
+            lud16: lud16
+        )
+    }
+
     private var normalizedPictureURL: String? {
         ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString
     }
@@ -104,12 +124,31 @@ struct ProfileEditView: View {
     private var saveDisabled: Bool {
         isPublishing
             || appState.activeAccountRef == nil
-            || (!trimmedPicture.isEmpty && normalizedPictureURL == nil)
+            || currentDraft.validationError != nil
     }
 
     private var invalidPictureMessage: String? {
-        guard !trimmedPicture.isEmpty, normalizedPictureURL == nil else { return nil }
-        return L10n.string("Only public HTTPS image URLs are allowed.")
+        validationMessage(for: .picture)
+    }
+
+    private var invalidNip05Message: String? {
+        validationMessage(for: .nip05)
+    }
+
+    private var invalidLud16Message: String? {
+        validationMessage(for: .lud16)
+    }
+
+    private func validationMessage(for field: ProfileEditMetadataField) -> String? {
+        guard currentDraft.validationError == field else { return nil }
+        switch field {
+        case .picture:
+            return L10n.string("Only public HTTPS image URLs are allowed.")
+        case .nip05:
+            return L10n.string("Enter a valid NIP-05 address like name@example.com.")
+        case .lud16:
+            return L10n.string("Enter a valid Lightning address like name@example.com.")
+        }
     }
 
     @MainActor
@@ -131,33 +170,25 @@ struct ProfileEditView: View {
         guard let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex
         else { return }
+
+        let draft = currentDraft
+        if let validationError = draft.validationError {
+            Haptics.error()
+            error = validationMessage(for: validationError)
+            return
+        }
+        guard let normalizedMetadata = draft.normalizedMetadata else { return }
+
         isPublishing = true
         error = nil
         success = false
-
-        let normalizedPictureURL = self.normalizedPictureURL
-        if !trimmedPicture.isEmpty, normalizedPictureURL == nil {
-            Haptics.error()
-            let message = L10n.string("Only public HTTPS image URLs are allowed.")
-            self.error = message
-            isPublishing = false
-            return
-        }
-        let metadata = UserProfileMetadataFfi(
-            name: displayName.isEmpty ? nil : displayName,
-            displayName: displayName.isEmpty ? nil : displayName,
-            about: about.isEmpty ? nil : about,
-            picture: trimmedPicture.isEmpty ? nil : normalizedPictureURL,
-            nip05: nip05.isEmpty ? nil : nip05,
-            lud16: lud16.isEmpty ? nil : lud16
-        )
 
         do {
             let relays = appState.relayPublishRelays(for: accountRef)
             let bootstrapRelays = appState.relayBootstrapRelays(for: accountRef)
             _ = try await appState.marmot.publishUserProfile(
                 accountRef: accountRef,
-                profile: metadata,
+                profile: normalizedMetadata.ffi,
                 defaultRelays: relays,
                 bootstrapRelays: bootstrapRelays
             )
@@ -174,5 +205,89 @@ struct ProfileEditView: View {
             appState.present(.error(L10n.string("Couldn't publish profile"), message: error.localizedDescription))
         }
         isPublishing = false
+    }
+}
+
+nonisolated enum ProfileEditMetadataField: Equatable {
+    case picture
+    case nip05
+    case lud16
+}
+
+nonisolated struct ProfileEditMetadataDraft: Equatable {
+    var displayName: String
+    var about: String
+    var picture: String
+    var nip05: String
+    var lud16: String
+
+    var validationError: ProfileEditMetadataField? {
+        if !trimmedPicture.isEmpty, normalizedPictureURL == nil {
+            return .picture
+        }
+        if !trimmedNip05.isEmpty, normalizedNip05 == nil {
+            return .nip05
+        }
+        if !trimmedLud16.isEmpty, normalizedLud16 == nil {
+            return .lud16
+        }
+        return nil
+    }
+
+    var normalizedMetadata: ProfileEditMetadata? {
+        guard validationError == nil else { return nil }
+        let name = ProfileSanitizer.displayName(displayName)
+        return ProfileEditMetadata(
+            name: name,
+            displayName: name,
+            about: ProfileSanitizer.multilineText(about),
+            picture: normalizedPictureURL,
+            nip05: normalizedNip05,
+            lud16: normalizedLud16
+        )
+    }
+
+    private var trimmedPicture: String {
+        picture.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedNip05: String {
+        nip05.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var trimmedLud16: String {
+        lud16.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var normalizedPictureURL: String? {
+        ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString
+    }
+
+    private var normalizedNip05: String? {
+        ProfileSanitizer.profileAddress(trimmedNip05)
+    }
+
+    private var normalizedLud16: String? {
+        ProfileSanitizer.profileAddress(trimmedLud16)
+    }
+}
+
+nonisolated struct ProfileEditMetadata: Equatable {
+    var name: String?
+    var displayName: String?
+    var about: String?
+    var picture: String?
+    var nip05: String?
+    var lud16: String?
+
+    var ffi: UserProfileMetadataFfi {
+        UserProfileMetadataFfi(
+            name: name,
+            displayName: displayName,
+            about: about,
+            picture: picture,
+            nip05: nip05,
+            lud16: lud16
+        )
     }
 }

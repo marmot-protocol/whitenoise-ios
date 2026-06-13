@@ -2513,7 +2513,8 @@ struct ProfileEditViewTests {
         #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(picture)"))
         #expect(source.contains("private var normalizedPictureURL: String?"))
         #expect(source.contains("ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString"))
-        #expect(source.contains("picture: trimmedPicture.isEmpty ? nil : normalizedPictureURL"))
+        #expect(source.contains("picture: normalizedPictureURL"))
+        #expect(source.contains("profile: normalizedMetadata.ffi"))
         #expect(!source.contains("picture: picture.isEmpty ? nil : picture"))
     }
 
@@ -2521,8 +2522,46 @@ struct ProfileEditViewTests {
         let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
 
         #expect(source.contains(".disabled(saveDisabled)"))
-        #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*!trimmedPicture\.isEmpty && normalizedPictureURL == nil"#))
+        #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*currentDraft\.validationError != nil"#))
         #expect(source.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
+    }
+
+    @Test func profileMetadataDraftSanitizesAndBoundsOutgoingFields() throws {
+        let draft = ProfileEditMetadataDraft(
+            displayName: " Alice\u{202E}\nEvil ",
+            about: String(repeating: "a", count: ProfileSanitizer.maxAboutLength + 25),
+            picture: " https://example.com/avatar.png ",
+            nip05: " ALICE@Example.COM ",
+            lud16: " Sats+Tips@Lightning.Example "
+        )
+
+        let metadata = try #require(draft.normalizedMetadata)
+
+        #expect(metadata.name == "Alice Evil")
+        #expect(metadata.displayName == "Alice Evil")
+        #expect(metadata.about?.count == ProfileSanitizer.maxAboutLength)
+        #expect(metadata.picture == "https://example.com/avatar.png")
+        #expect(metadata.nip05 == "alice@example.com")
+        #expect(metadata.lud16 == "sats+tips@lightning.example")
+    }
+
+    @Test func profileMetadataDraftRejectsInvalidFieldsBeforePublish() {
+        let invalidPicture = ProfileEditMetadataDraft(
+            displayName: "", about: "", picture: "http://example.com/a.png", nip05: "", lud16: ""
+        )
+        let invalidNip05 = ProfileEditMetadataDraft(
+            displayName: "", about: "", picture: "", nip05: "alice example.com", lud16: ""
+        )
+        let invalidLud16 = ProfileEditMetadataDraft(
+            displayName: "", about: "", picture: "", nip05: "", lud16: "alice@"
+        )
+
+        #expect(invalidPicture.validationError == .picture)
+        #expect(invalidNip05.validationError == .nip05)
+        #expect(invalidLud16.validationError == .lud16)
+        #expect(invalidPicture.normalizedMetadata == nil)
+        #expect(invalidNip05.normalizedMetadata == nil)
+        #expect(invalidLud16.normalizedMetadata == nil)
     }
 
     private var profileEditSourceURL: URL {
@@ -2611,6 +2650,22 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("https://[0:0:0:0:0:ffff:169.254.169.254]/latest/meta-data/") == nil)
 
         #expect(ProfileSanitizer.imageURL("https://[::ffff:8.8.8.8]/avatar.png") != nil)
+    }
+
+    @Test func profileAddressNormalizesSimpleAddressFields() {
+        #expect(ProfileSanitizer.profileAddress(" Alice+Tips@Example.COM ") == "alice+tips@example.com")
+        #expect(ProfileSanitizer.profileAddress("alice@example.com") == "alice@example.com")
+    }
+
+    @Test func profileAddressRejectsMalformedOrOversizedValues() {
+        #expect(ProfileSanitizer.profileAddress("alice") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@localhost") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@-example.com") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@example-.com") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@exa_mple.com") == nil)
+        #expect(ProfileSanitizer.profileAddress("a b@example.com") == nil)
+        #expect(ProfileSanitizer.profileAddress(String(repeating: "a", count: 65) + "@example.com") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@" + String(repeating: "a", count: 250) + ".com") == nil)
     }
 
     // MARK: - Message bodies
