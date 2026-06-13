@@ -146,6 +146,7 @@ Do not add a second storage path for data Marmot already owns.
 - Conversation reply-order normalization runs during timeline rebuilds and single-row inserts; keep it linear over the timeline and avoid fixpoint loops that rebuild message indexes per pass.
 - Profile refresh queue drains must leave queued IDs intact when `canRefreshProfiles` is false, then re-arm when foreground/runtime state allows refresh again.
 - When synthesizing timeline rows from protocol records, carry the source record timestamp when one is available; use the client wall clock only for local-only UI events or missing timestamp fallbacks.
+- Session-only system timeline rows should stay bounded, deduplicate consecutive identical event kinds, and clear when conversation state resets; durable protocol rows come from Marmot records.
 - For SwiftUI scroll timing, prefer cancellable main-actor tasks and layout-driven callbacks over `DispatchQueue.main` hop chains.
 - Keep comments short and only where they explain a non-obvious constraint.
 

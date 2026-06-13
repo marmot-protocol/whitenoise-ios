@@ -107,6 +107,7 @@ final class ConversationViewModel {
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
+    static let maxSystemTimelineItems = 64
 
     /// Renderable timeline messages we've loaded by id.
     @ObservationIgnored private var messageById: [String: AppMessageRecordFfi] = [:]
@@ -505,18 +506,27 @@ final class ConversationViewModel {
         let backingChanged = !optimisticDeletedMessageIds.isEmpty ||
             !optimisticReactionRemovals.isEmpty ||
             !reactionRecords.isEmpty ||
+            !systemTimelineItems.isEmpty ||
             !pendingMediaByRowId.isEmpty
         optimisticDeletedMessageIds.removeAll()
         optimisticReactionRemovals.removeAll()
         reactionRecords.removeAll()
+        systemTimelineItems.removeAll()
         pendingMediaByRowId.removeAll()
         let deletedChanged = rebuildDeletedMessageIds()
         let reactionsChanged = recomputeReactions()
-        let changed = backingChanged || deletedChanged || reactionsChanged
+        let timelineChanged = backingChanged ? rebuildTimeline() : false
+        let changed = backingChanged || deletedChanged || reactionsChanged || timelineChanged
         if changed {
             noteTimelineProjectionChanged()
         }
     }
+
+#if DEBUG
+    func resetOptimisticStateForTesting() {
+        resetOptimisticState()
+    }
+#endif
 
     private func startLiveTimeline(accountRef: String) {
         guard let appState else { return }
@@ -1652,12 +1662,55 @@ final class ConversationViewModel {
     }
 
     private func appendSystemEvent(_ event: SystemEvent) {
-        let now = UInt64(Date().timeIntervalSince1970)
-        let item = TimelineItem.systemEvent(id: UUID().uuidString, event: event, timestamp: now)
-        systemTimelineItems.append(item)
-        if upsertTimelineItem(item) {
+        appendSystemEvent(event, timestamp: UInt64(Date().timeIntervalSince1970))
+    }
+
+    private func appendSystemEvent(_ event: SystemEvent, timestamp: UInt64) {
+        let item = TimelineItem.systemEvent(id: UUID().uuidString, event: event, timestamp: timestamp)
+        let previousItems = systemTimelineItems
+        systemTimelineItems = Self.retainedSystemTimelineItems(
+            systemTimelineItems,
+            appending: item,
+            limit: Self.maxSystemTimelineItems
+        )
+
+        let retainedIds = Set(systemTimelineItems.map(\.id))
+        var changed = false
+        for previousItem in previousItems where !retainedIds.contains(previousItem.id) {
+            changed = removeTimelineItem(id: previousItem.id) || changed
+        }
+        if systemTimelineItems.contains(where: { $0.id == item.id }) {
+            changed = upsertTimelineItem(item) || changed
+        }
+        if changed {
             noteTimelineProjectionChanged()
         }
+    }
+
+#if DEBUG
+    func appendSystemEventForTesting(_ event: SystemEvent, timestamp: UInt64) {
+        appendSystemEvent(event, timestamp: timestamp)
+    }
+#endif
+
+    static func retainedSystemTimelineItems(
+        _ current: [TimelineItem],
+        appending item: TimelineItem,
+        limit: Int = maxSystemTimelineItems
+    ) -> [TimelineItem] {
+        let boundedLimit = max(0, limit)
+        guard boundedLimit > 0 else { return [] }
+
+        var next = current
+        if next.last?.kind == item.kind {
+            next[next.count - 1] = item
+        } else {
+            next.append(item)
+        }
+        if next.count > boundedLimit {
+            next.removeFirst(next.count - boundedLimit)
+        }
+        return next
     }
 
     private func refreshMembers() async {
