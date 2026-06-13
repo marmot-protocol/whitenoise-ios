@@ -470,10 +470,145 @@ private struct PendingMessageExternalLink: Equatable {
     let url: URL
 
     var displayText: String {
-        if let host = url.host(percentEncoded: false), !host.isEmpty {
-            return "This link opens \(host):\n\(url.absoluteString)"
+        MessageExternalLinkConfirmation.displayText(for: url)
+    }
+}
+
+nonisolated enum MessageExternalLinkConfirmation {
+    private static let maxDisplayedHostCharacters = 96
+    private static let maxDisplayedURLCharacters = 180
+
+    static func displayText(for url: URL) -> String {
+        let displayedURL = elided(ProfileSanitizer.textRun(url.absoluteString), maxCharacters: maxDisplayedURLCharacters)
+        if let host = hostDisplay(for: url) {
+            return L10n.formatted("This link opens %@:\n%@", host, displayedURL)
         }
-        return "This link opens:\n\(url.absoluteString)"
+        return L10n.formatted("This link opens:\n%@", displayedURL)
+    }
+
+    private static func hostDisplay(for url: URL) -> String? {
+        guard let rawHost = url.host(percentEncoded: false), !rawHost.isEmpty else {
+            return nil
+        }
+
+        let sanitizedHost = ProfileSanitizer.textRun(rawHost)
+        let decoded = decodedInternationalizedHost(sanitizedHost)
+        let primary = elided(decoded.host, maxCharacters: maxDisplayedHostCharacters)
+        guard decoded.isInternationalized else { return primary }
+
+        let raw = elided(sanitizedHost, maxCharacters: maxDisplayedHostCharacters)
+        if raw.caseInsensitiveCompare(decoded.host) == .orderedSame {
+            return L10n.formatted("%@ (IDN/punycode)", primary)
+        }
+        return L10n.formatted("%@ (IDN/punycode: %@)", primary, raw)
+    }
+
+    private static func decodedInternationalizedHost(_ host: String) -> (host: String, isInternationalized: Bool) {
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        var decodedLabels: [String] = []
+        var isInternationalized = host.unicodeScalars.contains { $0.value > 0x7f }
+
+        for label in labels {
+            let labelString = String(label)
+            if labelString.lowercased().hasPrefix("xn--"),
+               let decoded = decodePunycodeLabel(String(labelString.dropFirst(4))) {
+                decodedLabels.append(decoded)
+                isInternationalized = true
+            } else {
+                decodedLabels.append(labelString)
+            }
+        }
+
+        return (decodedLabels.joined(separator: "."), isInternationalized)
+    }
+
+    private static func elided(_ text: String, maxCharacters: Int) -> String {
+        guard text.count > maxCharacters, maxCharacters > 8 else { return text }
+        let prefixCount = maxCharacters / 2
+        let suffixCount = maxCharacters - prefixCount - 1
+        return "\(text.prefix(prefixCount))…\(text.suffix(suffixCount))"
+    }
+
+    private static func decodePunycodeLabel(_ input: String) -> String? {
+        let scalars = Array(input.unicodeScalars)
+        var output: [UInt32] = []
+        var index = 0
+
+        if let delimiterIndex = scalars.lastIndex(where: { $0 == "-" }) {
+            for scalar in scalars[..<delimiterIndex] {
+                guard scalar.value < 0x80 else { return nil }
+                output.append(scalar.value)
+            }
+            index = delimiterIndex + 1
+        }
+
+        var n = 128
+        var i = 0
+        var bias = 72
+
+        while index < scalars.count {
+            let oldi = i
+            var w = 1
+            var k = 36
+
+            while true {
+                guard index < scalars.count,
+                      let digit = punycodeDigitValue(scalars[index])
+                else { return nil }
+                index += 1
+                guard digit <= (Int.max - i) / w else { return nil }
+                i += digit * w
+
+                let t: Int
+                if k <= bias {
+                    t = 1
+                } else if k >= bias + 26 {
+                    t = 26
+                } else {
+                    t = k - bias
+                }
+
+                if digit < t { break }
+                guard w <= Int.max / (36 - t) else { return nil }
+                w *= 36 - t
+                k += 36
+            }
+
+            let outputCount = output.count + 1
+            bias = adaptPunycodeBias(delta: i - oldi, numPoints: outputCount, firstTime: oldi == 0)
+            n += i / outputCount
+            let insertionIndex = i % outputCount
+            guard let scalar = UnicodeScalar(n) else { return nil }
+            output.insert(scalar.value, at: insertionIndex)
+            i = insertionIndex + 1
+        }
+
+        var view = String.UnicodeScalarView()
+        for value in output {
+            guard let scalar = UnicodeScalar(value) else { return nil }
+            view.append(scalar)
+        }
+        return String(view)
+    }
+
+    private static func punycodeDigitValue(_ scalar: UnicodeScalar) -> Int? {
+        switch scalar.value {
+        case 48...57: Int(scalar.value - 22) // 0...9 => 26...35
+        case 65...90: Int(scalar.value - 65)
+        case 97...122: Int(scalar.value - 97)
+        default: nil
+        }
+    }
+
+    private static func adaptPunycodeBias(delta: Int, numPoints: Int, firstTime: Bool) -> Int {
+        var delta = firstTime ? delta / 700 : delta / 2
+        delta += delta / numPoints
+        var k = 0
+        while delta > ((36 - 1) * 26) / 2 {
+            delta /= 36 - 1
+            k += 36
+        }
+        return k + (((36 - 1 + 1) * delta) / (delta + 38))
     }
 }
 

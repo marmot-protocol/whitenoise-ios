@@ -46,6 +46,39 @@ struct MessageLinkPolicyTests {
         }
     }
 
+    @Test func externalConfirmationBoundsLongPeerURLs() {
+        withAppLanguage(.english) {
+            let run = String(repeating: "a", count: 260)
+            let url = URL(string: "https://example.com/\(run)?token=\(run)")!
+            let text = MessageExternalLinkConfirmation.displayText(for: url)
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+
+            #expect(lines.count == 2)
+            #expect(lines[0] == "This link opens example.com:")
+            #expect(lines[1].count == 180)
+            #expect(lines[1].contains("…"))
+            #expect(!text.contains(run))
+        }
+    }
+
+    @Test func externalConfirmationFlagsPunycodeHosts() {
+        withAppLanguage(.english) {
+            let url = URL(string: "https://xn--bcher-kva.example/path")!
+            let text = MessageExternalLinkConfirmation.displayText(for: url)
+
+            #expect(text.contains("b\u{00FC}cher.example (IDN/punycode: xn--bcher-kva.example)"))
+            #expect(text.contains("https://xn--bcher-kva.example/path"))
+        }
+    }
+
+    @Test func externalConfirmationHandlesHostlessExternalURLs() {
+        withAppLanguage(.english) {
+            let url = URL(string: "mailto:a@b.com")!
+
+            #expect(MessageExternalLinkConfirmation.displayText(for: url) == "This link opens:\nmailto:a@b.com")
+        }
+    }
+
     @Test func dangerousAndUnknownSchemesAreBlocked() {
         for raw in ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,x", "ftp://h/x", "ssh://h"] {
             #expect(action(raw) == .blocked, "url: \(raw)")
