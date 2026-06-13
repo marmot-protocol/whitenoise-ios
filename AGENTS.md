@@ -152,6 +152,7 @@ Do not add a second storage path for data Marmot already owns.
 - Profile refresh queue drains must leave queued IDs intact when `canRefreshProfiles` is false, then re-arm when foreground/runtime state allows refresh again.
 - When synthesizing timeline rows from protocol records, carry the source record timestamp when one is available; use the client wall clock only for local-only UI events or missing timestamp fallbacks.
 - Session-only system timeline rows should stay bounded, deduplicate consecutive identical event kinds, and clear when conversation state resets; durable protocol rows come from Marmot records.
+- Conversation timeline sync Marmot reads, including pagination, media listing, read-state initialization, and read marking, should go through `MarmotClient` async wrappers so generated synchronous FFI does not block the MainActor. Coalesce row-appearance read marks before flushing them to Marmot.
 - For SwiftUI scroll timing, prefer cancellable main-actor tasks and layout-driven callbacks over `DispatchQueue.main` hop chains.
 - Conversation bottom-follow requests, including the scroll-to-bottom button, should route through the timeline scroll coordinator instead of calling `scrollToBottom` directly from SwiftUI event handlers.
 - Keep comments short and only where they explain a non-obvious constraint.

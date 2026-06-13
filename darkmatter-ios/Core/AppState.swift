@@ -254,6 +254,10 @@ final class AppState {
         }
     }
 
+    func currentMarmotClient() throws -> MarmotClient {
+        try runtimeClient()
+    }
+
     private func runtimeClient() throws -> MarmotClient {
         if let client { return client }
         let restored = try makeRuntime()

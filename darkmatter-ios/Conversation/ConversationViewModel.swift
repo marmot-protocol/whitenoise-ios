@@ -102,11 +102,13 @@ final class ConversationViewModel {
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
     private var readStateTask: Task<Void, Never>?
+    private var readMarkTask: Task<Void, Never>?
     private var mediaRefreshTask: Task<Void, Never>?
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
+    private static let readMarkCoalescingDelayNanoseconds: UInt64 = 100_000_000
     static let maxSystemTimelineItems = 64
 
     /// Renderable timeline messages we've loaded by id.
@@ -149,6 +151,8 @@ final class ConversationViewModel {
     private var streamStartedAtById: [String: UInt64] = [:]
     private var streamSenderById: [String: String] = [:]
     private var markedReadMessageIds: Set<String> = []
+    private var pendingReadMessageIds: [String] = []
+    private var pendingReadMessageIdSet: Set<String> = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
     @ObservationIgnored private var streamDebugTimelineItems: [String: TimelineItem] = [:]
     /// Monotonic insert order for QUIC debug rows; zero-padded in ids so
@@ -402,6 +406,7 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
+        readMarkTask?.cancel()
         mediaRefreshTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
@@ -431,17 +436,7 @@ final class ConversationViewModel {
         else { return }
 
         markedReadMessageIds.insert(record.messageIdHex)
-        do {
-            if let row = try appState.marmot.markTimelineMessageRead(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                messageIdHex: record.messageIdHex
-            ) {
-                onChatListRowUpdated?(row)
-            }
-        } catch {
-            markedReadMessageIds.remove(record.messageIdHex)
-        }
+        enqueueReadMark(messageIdHex: record.messageIdHex, accountRef: accountRef)
     }
 
     static func shouldMarkRead(_ record: AppMessageRecordFfi, isDeleted: Bool, alreadyMarked: Bool) -> Bool {
@@ -471,18 +466,82 @@ final class ConversationViewModel {
         return min(doubled.partialValue, liveSubscriptionMaximumRetryDelayNanoseconds)
     }
 
-    private func initializeReadState() {
+    private func initializeReadState() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         do {
-            if let row = try appState.marmot.initializeChatReadState(
+            let client = try appState.currentMarmotClient()
+            if let row = try await client.initializeChatReadState(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             ) {
+                guard !Task.isCancelled else { return }
                 onChatListRowUpdated?(row)
             }
         } catch {
             // Read-state setup is opportunistic; the conversation itself still works.
         }
+    }
+
+    private func enqueueReadMark(messageIdHex: String, accountRef: String) {
+        guard pendingReadMessageIdSet.insert(messageIdHex).inserted else { return }
+        pendingReadMessageIds.append(messageIdHex)
+        scheduleReadMarkFlush(accountRef: accountRef)
+    }
+
+    private func scheduleReadMarkFlush(accountRef: String) {
+        guard readMarkTask == nil else { return }
+        readMarkTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.readMarkCoalescingDelayNanoseconds)
+            guard !Task.isCancelled else { return }
+            await self?.flushPendingReadMarks(accountRef: accountRef)
+        }
+    }
+
+    private func flushPendingReadMarks(accountRef: String) async {
+        readMarkTask = nil
+        let messageIds = pendingReadMessageIds
+        pendingReadMessageIds = []
+        pendingReadMessageIdSet = []
+        guard !messageIds.isEmpty else { return }
+        guard let appState else {
+            markedReadMessageIds.subtract(messageIds)
+            return
+        }
+        guard appState.activeAccountRef == accountRef else {
+            markedReadMessageIds.subtract(messageIds)
+            return
+        }
+
+        do {
+            let client = try appState.currentMarmotClient()
+            let results = await client.markTimelineMessagesRead(
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex,
+                messageIdHexes: messageIds
+            )
+            for result in results where !result.succeeded {
+                markedReadMessageIds.remove(result.messageIdHex)
+            }
+            if let row = results.compactMap(\.row).last {
+                onChatListRowUpdated?(row)
+            }
+        } catch {
+            markedReadMessageIds.subtract(messageIds)
+        }
+
+        if !pendingReadMessageIds.isEmpty, appState.activeAccountRef == accountRef {
+            scheduleReadMarkFlush(accountRef: accountRef)
+        }
+    }
+
+    private func cancelPendingReadMarks() {
+        readMarkTask?.cancel()
+        readMarkTask = nil
+        if !pendingReadMessageIdSet.isEmpty {
+            markedReadMessageIds.subtract(pendingReadMessageIdSet)
+        }
+        pendingReadMessageIds = []
+        pendingReadMessageIdSet = []
     }
 
     private func stopLiveSubscriptions() {
@@ -494,6 +553,7 @@ final class ConversationViewModel {
         groupDetailsTask = nil
         readStateTask?.cancel()
         readStateTask = nil
+        cancelPendingReadMarks()
         mediaRefreshTask?.cancel()
         mediaRefreshTask = nil
         for task in streamWatchTasks.values {
@@ -634,7 +694,7 @@ final class ConversationViewModel {
 
     private func startDeferredReadState() {
         readStateTask = Task { [weak self] in
-            self?.initializeReadState()
+            await self?.initializeReadState()
         }
     }
 
@@ -744,7 +804,8 @@ final class ConversationViewModel {
     func refreshTimelineTail() async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         do {
-            let page = try appState.marmot.timelineMessages(
+            let client = try appState.currentMarmotClient()
+            let page = try await client.timelineMessages(
                 accountRef: accountRef,
                 query: TimelineMessageQueryFfi(
                     groupIdHex: group.groupIdHex,
@@ -756,6 +817,7 @@ final class ConversationViewModel {
                     limit: Self.timelinePageLimit
                 )
             )
+            guard !Task.isCancelled else { return }
             applyTimelinePage(page, placement: .tail)
         } catch {
             // Timeline subscription remains the primary live path.
@@ -775,7 +837,8 @@ final class ConversationViewModel {
         isLoadingOlder = true
         defer { isLoadingOlder = false }
         do {
-            let page = try appState.marmot.timelineMessages(
+            let client = try appState.currentMarmotClient()
+            let page = try await client.timelineMessages(
                 accountRef: accountRef,
                 query: TimelineMessageQueryFfi(
                     groupIdHex: group.groupIdHex,
@@ -787,6 +850,7 @@ final class ConversationViewModel {
                     limit: Self.timelinePageLimit
                 )
             )
+            guard !Task.isCancelled else { return }
             applyTimelinePage(page, placement: .older)
         } catch {
             self.error = error.localizedDescription
@@ -1284,11 +1348,13 @@ final class ConversationViewModel {
     func refreshMediaRecords(limit: UInt32 = 500) async {
         guard let appState, let accountRef = appState.activeAccountRef else { return }
         do {
-            let records = try appState.marmot.listMedia(
+            let client = try appState.currentMarmotClient()
+            let records = try await client.listMedia(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex,
                 limit: limit
             )
+            guard !Task.isCancelled else { return }
             let next = Dictionary(grouping: records, by: \.messageIdHex)
             guard mediaRecordsByMessageId != next else { return }
             mediaRecordsByMessageId = next

@@ -1,6 +1,12 @@
 import Foundation
 import MarmotKit
 
+struct TimelineReadMarkResult {
+    let messageIdHex: String
+    let row: ChatListRowFfi?
+    let succeeded: Bool
+}
+
 /// Thin wrapper around the UniFFI-generated `Marmot` handle.
 ///
 /// Centralizes the on-disk root path, bootstrap relay set, and the few places
@@ -88,6 +94,62 @@ final class MarmotClient {
                 telemetrySettings: marmot.relayTelemetrySettings(),
                 auditSettings: marmot.auditLogSettings(),
                 auditFiles: marmot.auditLogFiles()
+            )
+        }.value
+    }
+
+    func markTimelineMessagesRead(
+        accountRef: String,
+        groupIdHex: String,
+        messageIdHexes: [String]
+    ) async -> [TimelineReadMarkResult] {
+        await Task.detached(priority: .utility) { [marmot, accountRef, groupIdHex, messageIdHexes] in
+            messageIdHexes.map { messageIdHex in
+                do {
+                    let row = try marmot.markTimelineMessageRead(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        messageIdHex: messageIdHex
+                    )
+                    return TimelineReadMarkResult(messageIdHex: messageIdHex, row: row, succeeded: true)
+                } catch {
+                    return TimelineReadMarkResult(messageIdHex: messageIdHex, row: nil, succeeded: false)
+                }
+            }
+        }.value
+    }
+
+    func initializeChatReadState(
+        accountRef: String,
+        groupIdHex: String
+    ) async throws -> ChatListRowFfi? {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, groupIdHex] in
+            try marmot.initializeChatReadState(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex
+            )
+        }.value
+    }
+
+    func timelineMessages(
+        accountRef: String,
+        query: TimelineMessageQueryFfi
+    ) async throws -> TimelinePageFfi {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, query] in
+            try marmot.timelineMessages(accountRef: accountRef, query: query)
+        }.value
+    }
+
+    func listMedia(
+        accountRef: String,
+        groupIdHex: String,
+        limit: UInt32
+    ) async throws -> [MediaRecordFfi] {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, groupIdHex, limit] in
+            try marmot.listMedia(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                limit: limit
             )
         }.value
     }

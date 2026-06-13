@@ -3915,6 +3915,25 @@ struct ConversationTimelineProjectionTests {
         #expect(source.contains("let updateTimelineIncrementally = update.changes.count == 1"))
     }
 
+    @Test func synchronousConversationMarmotReadsUseAsyncClientWrappers() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let clientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
+
+        #expect(source.contains("pendingReadMessageIds"))
+        #expect(source.contains("flushPendingReadMarks(accountRef:"))
+        #expect(source.contains("await client.markTimelineMessagesRead("))
+        #expect(source.contains("try await client.initializeChatReadState("))
+        #expect(source.contains("try await client.timelineMessages("))
+        #expect(source.contains("try await client.listMedia("))
+        #expect(!source.contains("appState.marmot.markTimelineMessageRead("))
+        #expect(!source.contains("appState.marmot.initializeChatReadState("))
+        #expect(!source.contains("appState.marmot.timelineMessages("))
+        #expect(!source.contains("appState.marmot.listMedia("))
+        #expect(clientSource.matches(#"func markTimelineMessagesRead[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?markTimelineMessageRead"#))
+        #expect(clientSource.matches(#"func timelineMessages[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?timelineMessages"#))
+        #expect(clientSource.matches(#"func listMedia[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?listMedia"#))
+    }
+
     @Test func conversationViewModelDeclaresMainActorIsolation() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
@@ -3933,6 +3952,13 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
+    }
+
+    private var marmotClientSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Core/MarmotClient.swift")
     }
 
     private func messageIds(in items: [TimelineItem]) -> [String] {
