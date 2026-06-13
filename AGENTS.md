@@ -26,6 +26,8 @@ Bootstrap retry is user-visible from the startup failure screen and may happen
 after the runtime was released for background suspension. Starting the runtime
 from bootstrap must clear foreground/suspension gates and increment runtime
 generation just like foreground resume.
+If bootstrap fails after creating or starting a runtime, release that partial
+runtime before showing the failure screen so Retry rebuilds a fresh runtime.
 
 Background task identifiers used during runtime suspension must be owned and
 ended on the MainActor; UIKit expiration and completion paths should share an

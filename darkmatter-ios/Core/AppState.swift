@@ -314,7 +314,20 @@ final class AppState {
                 startReadyForegroundMaintenance()
             }
         } catch {
+            await releaseRuntimeAfterBootstrapFailure()
             phase = .failed(error.localizedDescription)
+        }
+    }
+
+    private func releaseRuntimeAfterBootstrapFailure() async {
+        stopNotificationSubscription()
+        let pushTask = nativePushRegistrationTask
+        nativePushRegistrationTask = nil
+        pushTask?.cancel()
+        await pushTask?.value
+        if let client {
+            await client.marmot.shutdown()
+            self.client = nil
         }
     }
 

@@ -158,6 +158,24 @@ struct AppStateBootstrapTests {
         #expect(source.matches(bootstrapPattern))
     }
 
+    @Test func bootstrapFailureReleasesPartialRuntimeBeforeRetry() throws {
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let catchPattern =
+            #"private func performBootstrap\(\) async \{[\s\S]*"#
+            + #"catch \{[\s\S]*"#
+            + #"await releaseRuntimeAfterBootstrapFailure\(\)[\s\S]*"#
+            + #"phase = \.failed\(error\.localizedDescription\)"#
+        let cleanupPattern =
+            #"private func releaseRuntimeAfterBootstrapFailure\(\) async \{[\s\S]*"#
+            + #"pushTask\?\.cancel\(\)[\s\S]*"#
+            + #"await pushTask\?\.value[\s\S]*"#
+            + #"await client\.marmot\.shutdown\(\)[\s\S]*"#
+            + #"self\.client = nil"#
+
+        #expect(source.matches(catchPattern))
+        #expect(source.matches(cleanupPattern))
+    }
+
     @Test func presentingAToastUpdatesActiveToast() async throws {
         let appState = try testAppState()
         await MainActor.run {
