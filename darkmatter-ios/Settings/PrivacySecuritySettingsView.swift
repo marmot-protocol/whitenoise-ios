@@ -1,12 +1,11 @@
 import SwiftUI
-import MarmotKit
 
 struct PrivacySecuritySettingsView: View {
     @Environment(AppState.self) private var appState
 
-    @State private var telemetrySettings: RelayTelemetrySettingsFfi?
-    @State private var auditSettings: AuditLogSettingsFfi?
-    @State private var auditFiles: [AuditLogFileFfi] = []
+    @State private var telemetrySettings: PrivacyTelemetrySettingsProjection?
+    @State private var auditSettings: PrivacyAuditSettingsProjection?
+    @State private var auditFileRows: [AuditFileRow] = []
     @State private var telemetrySaving = false
     @State private var auditSaving = false
     @State private var auditDeleting = false
@@ -82,19 +81,19 @@ struct PrivacySecuritySettingsView: View {
             }
 
             Section {
-                if filesLoading && auditFiles.isEmpty {
+                if filesLoading && auditFileRows.isEmpty {
                     HStack {
                         Spacer()
                         ProgressView("Loading audit logs")
                         Spacer()
                     }
                     .padding(.vertical, 16)
-                } else if auditFiles.isEmpty {
+                } else if auditFileRows.isEmpty {
                     Text("No audit logs on this device.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(auditFiles, id: \.path) { file in
-                        auditFileRow(file)
+                    ForEach(auditFileRows) { row in
+                        auditFileRow(row)
                     }
 
                     Button(role: .destructive) {
@@ -111,7 +110,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 Text("Audit Log Files")
             } footer: {
-                if !auditFiles.isEmpty {
+                if !auditFileRows.isEmpty {
                     Text("Deletes every local audit JSONL file on this device. Live recorders rotate to fresh files when audit logging is still on.")
                 }
             }
@@ -161,16 +160,16 @@ struct PrivacySecuritySettingsView: View {
     }
 
     @ViewBuilder
-    private func auditFileRow(_ file: AuditLogFileFfi) -> some View {
+    private func auditFileRow(_ row: AuditFileRow) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(file.fileName)
+            Text(row.fileName)
                 .font(.body.monospaced())
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text(auditFileDetails(file))
+            Text(row.detailText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(file.path)
+            Text(row.path)
                 .font(.caption2.monospaced())
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
@@ -181,12 +180,15 @@ struct PrivacySecuritySettingsView: View {
 
     @MainActor
     private func reload() async {
+        filesLoading = true
         errorMessage = nil
+        defer { filesLoading = false }
 
         do {
-            telemetrySettings = try appState.relayTelemetrySettings()
-            auditSettings = try appState.auditLogSettings()
-            auditFiles = try appState.auditLogFiles()
+            let projection = try await appState.privacySecuritySettingsProjection()
+            telemetrySettings = projection.telemetrySettings
+            auditSettings = projection.auditSettings
+            auditFileRows = projection.auditFileRows
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -199,7 +201,7 @@ struct PrivacySecuritySettingsView: View {
         defer { filesLoading = false }
 
         do {
-            auditFiles = try appState.auditLogFiles()
+            auditFileRows = try await appState.auditLogFileRows()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -210,14 +212,13 @@ struct PrivacySecuritySettingsView: View {
         guard let current = telemetrySettings else { return }
         telemetrySaving = true
         errorMessage = nil
-        telemetrySettings = RelayTelemetrySettingsFfi(
-            exportEnabled: enabled,
-            exportIntervalSeconds: current.exportIntervalSeconds
-        )
+        telemetrySettings = current.updatingExportEnabled(enabled)
         defer { telemetrySaving = false }
 
         do {
-            telemetrySettings = try await appState.setRelayTelemetryExportEnabled(enabled)
+            telemetrySettings = PrivacyTelemetrySettingsProjection(
+                settings: try await appState.setRelayTelemetryExportEnabled(enabled)
+            )
             savedAt = Date()
             Haptics.success()
         } catch {
@@ -249,11 +250,13 @@ struct PrivacySecuritySettingsView: View {
         guard let current = auditSettings else { return }
         auditSaving = true
         errorMessage = nil
-        auditSettings = AuditLogSettingsFfi(enabled: enabled)
+        auditSettings = PrivacyAuditSettingsProjection(enabled: enabled)
         defer { auditSaving = false }
 
         do {
-            auditSettings = try await appState.setAuditLogEnabled(enabled)
+            auditSettings = PrivacyAuditSettingsProjection(
+                settings: try await appState.setAuditLogEnabled(enabled)
+            )
             savedAt = Date()
             Haptics.success()
             await reloadAuditFiles()
@@ -262,25 +265,5 @@ struct PrivacySecuritySettingsView: View {
             Haptics.error()
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func auditFileDetails(_ file: AuditLogFileFfi) -> String {
-        var parts = [byteCount(file.sizeBytes)]
-        if let modifiedAtMs = file.modifiedAtMs {
-            let date = Date(timeIntervalSince1970: TimeInterval(modifiedAtMs) / 1_000)
-            parts.append(date.formatted(date: .abbreviated, time: .shortened))
-        }
-        parts.append(shortAccountRef(file.accountRef))
-        return parts.joined(separator: " - ")
-    }
-
-    private func byteCount(_ bytes: UInt64) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
-    }
-
-    private func shortAccountRef(_ ref: String) -> String {
-        let capped = String(ref.prefix(64))
-        guard capped.count > 14 else { return capped }
-        return "\(capped.prefix(8))...\(capped.suffix(6))"
     }
 }

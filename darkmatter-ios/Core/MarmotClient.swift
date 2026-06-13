@@ -58,6 +58,40 @@ final class MarmotClient {
         }.value
     }
 
+    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.relayTelemetrySettings()
+        }.value
+    }
+
+    func auditLogSettings() async throws -> AuditLogSettingsFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.auditLogSettings()
+        }.value
+    }
+
+    func auditLogFiles() async throws -> [AuditLogFileFfi] {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.auditLogFiles()
+        }.value
+    }
+
+    func auditFileRows() async throws -> [AuditFileRow] {
+        try await Task.detached(priority: .utility) { [marmot] in
+            AuditFileRowProjection.rows(from: try marmot.auditLogFiles())
+        }.value
+    }
+
+    func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try PrivacySecuritySettingsProjection(
+                telemetrySettings: marmot.relayTelemetrySettings(),
+                auditSettings: marmot.auditLogSettings(),
+                auditFiles: marmot.auditLogFiles()
+            )
+        }.value
+    }
+
     /// Reads profile/display-name projections off the main actor so SwiftUI row
     /// rendering can consume an app-owned cache instead of synchronously
     /// touching Marmot storage.

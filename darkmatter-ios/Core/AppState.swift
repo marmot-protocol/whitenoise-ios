@@ -637,6 +637,10 @@ final class AppState {
         try marmot.relayTelemetrySettings()
     }
 
+    func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
+        try await runtimeClient().privacySecuritySettingsProjection()
+    }
+
     @MainActor
     @discardableResult
     func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
@@ -647,7 +651,7 @@ final class AppState {
         if enabled {
             try await client.configureTelemetryRuntime()
         }
-        let current = try client.marmot.relayTelemetrySettings()
+        let current = try await client.relayTelemetrySettings()
         return try await client.marmot.setRelayTelemetrySettings(
             settings: RelayTelemetrySettingsFfi(
                 exportEnabled: enabled,
@@ -670,12 +674,17 @@ final class AppState {
         try marmot.auditLogFiles()
     }
 
+    func auditLogFileRows() async throws -> [AuditFileRow] {
+        try await runtimeClient().auditFileRows()
+    }
+
     @MainActor
     func deleteAllAuditLogFiles() async throws {
         guard phase == .ready else { return }
-        let files = try auditLogFiles()
+        let client = try runtimeClient()
+        let files = try await client.auditLogFiles()
         for file in files {
-            _ = try await marmot.deleteAuditLogFile(path: file.path)
+            _ = try await client.marmot.deleteAuditLogFile(path: file.path)
         }
     }
 
