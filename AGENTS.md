@@ -124,7 +124,7 @@ Do not add a second storage path for data Marmot already owns.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Audit-log uploads and OTLP metrics use separate bearer-token settings. Do not reuse the OTLP token for Goggles audit-log uploads.
-- Normalize optional group metadata before handing it to Marmot; trim descriptions and pass `nil` for blank values.
+- Normalize optional group metadata before handing it to Marmot. Group names and descriptions go through `ProfileSanitizer`; blank descriptions pass `nil`, unnamed group creates use MarmotKit's empty-string sentinel, and blank renames are rejected.
 - Sanitize peer-controlled group names with `ProfileSanitizer.groupName` before storing or rendering timeline/system-event display strings, and use static `L10n.formatted` keys for dynamic text.
 - Use `L10n.plural` for dynamic counts and static `L10n.formatted` keys for formatted strings so the string catalog can carry plural variations and translations.
 - Route peer-controlled profile and group image URLs through `ProfileSanitizer.imageURL`; it only allows HTTPS public hosts and rejects local/private IPv4/IPv6 hosts, loopback/unspecified/link-local forms, and legacy IPv4 literal spellings.

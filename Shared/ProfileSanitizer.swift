@@ -8,12 +8,13 @@ import Darwin
 /// This is the rendering boundary: it strips spoofing characters, enforces a
 /// URL-scheme allowlist for images, and caps lengths.
 ///
-/// The profile editor also reuses these bounds before publishing our own
+/// Local profile and group editors also reuse these bounds before publishing
 /// metadata so malformed local drafts are not propagated to relays.
 nonisolated enum ProfileSanitizer {
 
     static let maxNameLength = 80
     static let maxGroupNameLength = 100
+    static let maxGroupDescriptionLength = 280
     static let maxAboutLength = 1000
     static let maxProfileAddressLength = 254
     static let maxMessageLength = 8000

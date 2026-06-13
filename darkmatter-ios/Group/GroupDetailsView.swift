@@ -173,7 +173,10 @@ struct GroupDetailsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(viewModel.displayTitle)
                         .font(.title3.weight(.semibold))
-                    if let description = ProfileSanitizer.multilineText(viewModel.group.description, maxLength: 280) {
+                    if let description = ProfileSanitizer.multilineText(
+                        viewModel.group.description,
+                        maxLength: ProfileSanitizer.maxGroupDescriptionLength
+                    ) {
                         Text(description)
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -185,7 +188,7 @@ struct GroupDetailsView: View {
 
             if isAdmin {
                 Button {
-                    renameDraft = viewModel.group.name
+                    renameDraft = ProfileSanitizer.groupName(viewModel.group.name) ?? ""
                     showRename = true
                 } label: {
                     Label(viewModel.group.name.isEmpty ? "Set group name" : "Edit group name",
@@ -690,11 +693,11 @@ struct GroupDetailsView: View {
         }
     }
 
-    /// A group rename must have a non-empty name; an empty/whitespace value
-    /// would silently blank the shared group name (#80).
+    /// A group rename must publish a non-empty sanitized name; an empty value
+    /// would silently blank the shared group name (#80), and raw text would
+    /// propagate spoofing characters to Marmot/relays (#195).
     static func validatedGroupName(_ draft: String) -> String? {
-        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        ProfileSanitizer.groupName(draft)
     }
 
     private func rename() async {

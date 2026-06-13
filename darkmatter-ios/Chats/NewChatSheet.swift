@@ -20,9 +20,12 @@ struct NewChatSheet: View {
         !members.isEmpty && !isCreating && appState.activeAccountRef != nil
     }
 
+    static func normalizedGroupName(_ raw: String) -> String {
+        ProfileSanitizer.groupName(raw) ?? ""
+    }
+
     static func normalizedGroupDescription(_ raw: String) -> String? {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        ProfileSanitizer.multilineText(raw, maxLength: ProfileSanitizer.maxGroupDescriptionLength)
     }
 
     typealias PendingMemberAddResult = AddMembersPresentation.PendingMemberAddResult
@@ -166,7 +169,7 @@ struct NewChatSheet: View {
         do {
             let groupIdHex = try await appState.marmot.createGroup(
                 accountRef: accountRef,
-                name: groupName.trimmingCharacters(in: .whitespacesAndNewlines),
+                name: Self.normalizedGroupName(groupName),
                 memberRefs: members.map(\.memberRef),
                 description: Self.normalizedGroupDescription(description)
             )
