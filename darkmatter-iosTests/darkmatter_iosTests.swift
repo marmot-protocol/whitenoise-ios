@@ -1473,6 +1473,17 @@ struct LocalizationCatalogTests {
         }
     }
 
+    @Test func sharedSourcesStayExtensionSafe() throws {
+        for relativePath in try swiftSourcePaths(in: ["Shared"]) {
+            let source = try readSource(relativePath)
+
+            #expect(!source.contains("import SwiftUI"), "\(relativePath) imports SwiftUI")
+            #expect(!source.contains("import UIKit"), "\(relativePath) imports UIKit")
+            #expect(!source.contains("UIApplication"), "\(relativePath) references UIApplication")
+            #expect(!source.contains("UIScreen"), "\(relativePath) references UIScreen")
+        }
+    }
+
     @Test func countLocalizationsUsePluralVariations() throws {
         let catalog = try readCatalog("Shared/Localizable.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])

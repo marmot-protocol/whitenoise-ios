@@ -47,6 +47,7 @@ pure helper for the decision point first; reserve source checks for constraints
 that truly cannot be observed otherwise.
 
 `Shared/` is compiled into both the main app and the Notification Service Extension. Keep code there extension-safe. Do not use `UIApplication`, app delegates, SwiftUI views, or APIs unavailable to extensions from shared files.
+Keep keyboard notification adapters and other SwiftUI/UIKit-only helpers in the app target; `Shared/` may hold CoreGraphics-only layout constants that the extension can compile safely.
 
 ## Rust Bindings
 
