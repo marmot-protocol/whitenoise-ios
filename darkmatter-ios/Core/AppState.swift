@@ -317,12 +317,18 @@ final class AppState {
                 startReadyForegroundMaintenance()
             }
         } catch {
-            await releaseRuntimeAfterBootstrapFailure()
+            await releaseRuntimeAfterStartupFailure()
             phase = .failed(error.localizedDescription)
         }
     }
 
-    private func releaseRuntimeAfterBootstrapFailure() async {
+    /// Tear down a partially-created runtime after a failed start so the next
+    /// Retry rebuilds a fresh one. Shared by the bootstrap and foreground-resume
+    /// failure paths: both set `client` to a new instance and then start it, so
+    /// both must release that instance (shutdown + `client = nil`) on failure —
+    /// otherwise `runtimeClient()` returns the stale, broken client and Retry
+    /// re-invokes `startRuntime()` on a runtime whose `start()` already failed.
+    private func releaseRuntimeAfterStartupFailure() async {
         stopNotificationSubscription()
         let pushTask = nativePushRegistrationTask
         nativePushRegistrationTask = nil
@@ -789,6 +795,10 @@ final class AppState {
                 noteRuntimeForegroundReadyAfterSuspension()
                 startNotificationSubscription()
             } catch {
+                // Release the partial runtime before showing the failure screen
+                // so Retry → bootstrap() → runtimeClient() rebuilds a fresh
+                // runtime instead of reusing this instance whose start() failed.
+                await releaseRuntimeAfterStartupFailure()
                 phase = .failed(error.localizedDescription)
                 return
             }
