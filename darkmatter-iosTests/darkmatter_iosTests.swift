@@ -2737,6 +2737,7 @@ struct ProfileEditViewTests {
 
     @Test func profileMetadataDraftSanitizesAndBoundsOutgoingFields() throws {
         let draft = ProfileEditMetadataDraft(
+            name: " alice\u{202E}\n ",
             displayName: " Alice\u{202E}\nEvil ",
             about: String(repeating: "a", count: ProfileSanitizer.maxAboutLength + 25),
             picture: " https://example.com/avatar.png ",
@@ -2746,7 +2747,7 @@ struct ProfileEditViewTests {
 
         let metadata = try #require(draft.normalizedMetadata)
 
-        #expect(metadata.name == "Alice Evil")
+        #expect(metadata.name == "alice")
         #expect(metadata.displayName == "Alice Evil")
         #expect(metadata.about?.count == ProfileSanitizer.maxAboutLength)
         #expect(metadata.picture == "https://example.com/avatar.png")
@@ -2756,13 +2757,13 @@ struct ProfileEditViewTests {
 
     @Test func profileMetadataDraftRejectsInvalidFieldsBeforePublish() {
         let invalidPicture = ProfileEditMetadataDraft(
-            displayName: "", about: "", picture: "http://example.com/a.png", nip05: "", lud16: ""
+            name: nil, displayName: "", about: "", picture: "http://example.com/a.png", nip05: "", lud16: ""
         )
         let invalidNip05 = ProfileEditMetadataDraft(
-            displayName: "", about: "", picture: "", nip05: "alice example.com", lud16: ""
+            name: nil, displayName: "", about: "", picture: "", nip05: "alice example.com", lud16: ""
         )
         let invalidLud16 = ProfileEditMetadataDraft(
-            displayName: "", about: "", picture: "", nip05: "", lud16: "alice@"
+            name: nil, displayName: "", about: "", picture: "", nip05: "", lud16: "alice@"
         )
 
         #expect(invalidPicture.validationError == .picture)

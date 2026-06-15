@@ -7,6 +7,7 @@ struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
+    @State private var existingName: String?
     @State private var displayName: String = ""
     @State private var about: String = ""
     @State private var picture: String = ""
@@ -109,6 +110,7 @@ struct ProfileEditView: View {
 
     private var currentDraft: ProfileEditMetadataDraft {
         ProfileEditMetadataDraft(
+            name: existingName,
             displayName: displayName,
             about: about,
             picture: picture,
@@ -157,12 +159,14 @@ struct ProfileEditView: View {
         let cachedProfile = appState.profile(forAccountIdHex: id)
         let loadedProfile = await appState.reloadProfileProjection(forAccountIdHex: id)?.profile
         guard let profile = loadedProfile ?? cachedProfile else { return }
+        let formFields = ProfileEditFormFields(profile: profile)
+        existingName = formFields.name
         // Only seed empty fields so we don't clobber in-progress edits.
-        if displayName.isEmpty { displayName = profile.displayName ?? profile.name ?? "" }
-        if about.isEmpty { about = profile.about ?? "" }
-        if picture.isEmpty { picture = profile.picture ?? "" }
-        if nip05.isEmpty { nip05 = profile.nip05 ?? "" }
-        if lud16.isEmpty { lud16 = profile.lud16 ?? "" }
+        if displayName.isEmpty { displayName = formFields.displayName }
+        if about.isEmpty { about = formFields.about }
+        if picture.isEmpty { picture = formFields.picture }
+        if nip05.isEmpty { nip05 = formFields.nip05 }
+        if lud16.isEmpty { lud16 = formFields.lud16 }
     }
 
     @MainActor
@@ -208,6 +212,24 @@ struct ProfileEditView: View {
     }
 }
 
+nonisolated struct ProfileEditFormFields: Equatable {
+    var name: String?
+    var displayName: String
+    var about: String
+    var picture: String
+    var nip05: String
+    var lud16: String
+
+    init(profile: UserProfileMetadataFfi) {
+        name = profile.name
+        displayName = profile.displayName ?? ""
+        about = profile.about ?? ""
+        picture = profile.picture ?? ""
+        nip05 = profile.nip05 ?? ""
+        lud16 = profile.lud16 ?? ""
+    }
+}
+
 nonisolated enum ProfileEditMetadataField: Equatable {
     case picture
     case nip05
@@ -215,6 +237,7 @@ nonisolated enum ProfileEditMetadataField: Equatable {
 }
 
 nonisolated struct ProfileEditMetadataDraft: Equatable {
+    var name: String?
     var displayName: String
     var about: String
     var picture: String
@@ -236,10 +259,11 @@ nonisolated struct ProfileEditMetadataDraft: Equatable {
 
     var normalizedMetadata: ProfileEditMetadata? {
         guard validationError == nil else { return nil }
-        let name = ProfileSanitizer.displayName(displayName)
+        let name = ProfileSanitizer.displayName(self.name)
+        let displayName = ProfileSanitizer.displayName(self.displayName)
         return ProfileEditMetadata(
             name: name,
-            displayName: name,
+            displayName: displayName,
             about: ProfileSanitizer.multilineText(about),
             picture: normalizedPictureURL,
             nip05: normalizedNip05,
