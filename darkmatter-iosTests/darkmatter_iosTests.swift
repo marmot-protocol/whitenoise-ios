@@ -5753,6 +5753,78 @@ struct MediaAttachmentPolicyTests {
         #expect(attachment.mediaType == "text/plain")
         #expect(attachment.data == data)
         #expect(attachment.kind == .document)
+        #expect(attachment.thumbhash == nil)
+    }
+
+    @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 120))
+        let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 240, height: 60))
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 60, width: 240, height: 60))
+        }
+
+        let attachment = try MediaDraftProcessor.attachment(
+            from: data,
+            fileName: "photo.jpg",
+            typeIdentifier: "public.jpeg"
+        )
+
+        #expect(attachment.mediaType == "image/jpeg")
+        #expect(attachment.dim == "240x120")
+
+        let thumbhash = try #require(attachment.thumbhash)
+        #expect(!thumbhash.isEmpty)
+        // A ThumbHash is ~25 bytes -> ~34 base64 chars; comfortably under the
+        // 128-char encrypted-media bound and standard-base64 alphabet.
+        #expect(thumbhash.count <= 128)
+        #expect(Data(base64Encoded: thumbhash) != nil)
+
+        // The upload request must carry the generated render hints through to
+        // the binding layer.
+        let request = attachment.uploadRequest
+        #expect(request.dim == "240x120")
+        #expect(request.thumbhash == thumbhash)
+    }
+
+    @Test func imageThumbhashSurvivesImetaRoundTrip() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+        let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+
+        let attachment = try MediaDraftProcessor.attachment(
+            from: data,
+            fileName: "photo.jpg",
+            typeIdentifier: "public.jpeg"
+        )
+        let thumbhash = try #require(attachment.thumbhash)
+
+        let reference = MediaAttachmentReferenceFfi(
+            locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://example.com/blob")],
+            ciphertextSha256: String(repeating: "a", count: 64),
+            plaintextSha256: String(repeating: "b", count: 64),
+            nonceHex: String(repeating: "c", count: 24),
+            fileName: attachment.fileName,
+            mediaType: attachment.mediaType,
+            version: "encrypted-media-v1",
+            sourceEpoch: 7,
+            dim: attachment.dim,
+            thumbhash: thumbhash
+        )
+
+        let tag = MessageSemantics.imetaTag(for: reference)
+        #expect(tag.values.contains("thumbhash \(thumbhash)"))
+
+        let decoded = try #require(MessageSemantics.mediaAttachments(
+            from: [tag],
+            sourceEpoch: 7
+        ))
+        #expect(decoded.count == 1)
+        #expect(decoded[0].thumbhash == thumbhash)
+        #expect(decoded[0].dim == attachment.dim)
     }
 
     @Test func voiceGestureOnlyLocksAfterSlideUpThreshold() {
