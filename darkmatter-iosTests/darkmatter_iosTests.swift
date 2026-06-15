@@ -164,10 +164,10 @@ struct AppStateBootstrapTests {
         let catchPattern =
             #"private func performBootstrap\(\) async \{[\s\S]*"#
             + #"catch \{[\s\S]*"#
-            + #"await releaseRuntimeAfterBootstrapFailure\(\)[\s\S]*"#
+            + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
             + #"phase = \.failed\(error\.localizedDescription\)"#
         let cleanupPattern =
-            #"private func releaseRuntimeAfterBootstrapFailure\(\) async \{[\s\S]*"#
+            #"private func releaseRuntimeAfterStartupFailure\(\) async \{[\s\S]*"#
             + #"pushTask\?\.cancel\(\)[\s\S]*"#
             + #"await pushTask\?\.value[\s\S]*"#
             + #"await client\.marmot\.shutdown\(\)[\s\S]*"#
@@ -175,6 +175,32 @@ struct AppStateBootstrapTests {
 
         #expect(source.matches(catchPattern))
         #expect(source.matches(cleanupPattern))
+    }
+
+    @Test func foregroundResumeFailureReleasesPartialRuntimeBeforeRetry() throws {
+        // #200: the foreground-resume catch must release the partial runtime
+        // (shutdown + client = nil) before showing the failure screen, mirroring
+        // the bootstrap-path fix in #183. Otherwise `client` is left pointing at
+        // the instance whose `startRuntime()` already failed, and Retry →
+        // bootstrap() → runtimeClient() reuses that broken client instead of
+        // rebuilding a fresh one. No injectable runtime seam exists to fail
+        // `startRuntime()` after `client` is set without a real failing FFI, so
+        // (as with #183) the catch contract is asserted at the source level.
+        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let resumeStart = try #require(
+            source.range(of: "func resumeAfterForegroundActivation() async {")
+        )
+        let resumeEnd = try #require(
+            source.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()")
+        )
+        let resumeBody = String(source[resumeStart.lowerBound..<resumeEnd.lowerBound])
+
+        let catchPattern =
+            #"catch \{[\s\S]*"#
+            + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
+            + #"phase = \.failed\(error\.localizedDescription\)[\s\S]*"#
+            + #"return"#
+        #expect(resumeBody.matches(catchPattern))
     }
 
     @Test func presentingAToastUpdatesActiveToast() async throws {
