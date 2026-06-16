@@ -435,6 +435,7 @@ struct ConversationView: View {
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
+                voiceRecorder.cancelIfActive()
                 cancelPendingTimelineFollowUpWork()
                 dismissKeyboard()
             }
