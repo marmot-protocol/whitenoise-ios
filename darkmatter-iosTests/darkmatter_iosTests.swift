@@ -7725,6 +7725,29 @@ struct TimelineBottomTests {
         #expect(!TimelineBottom.shouldFollowViewportChange(wasPinned: false))
     }
 
+    @Test func projectionChangesFollowPinnedOrInitialBottomPlacementOnly() {
+        #expect(TimelineBottom.shouldFollowProjectionChange(
+            isPinned: true,
+            isInitialBottomPositioning: false,
+            hasTargetMessage: false
+        ))
+        #expect(TimelineBottom.shouldFollowProjectionChange(
+            isPinned: false,
+            isInitialBottomPositioning: true,
+            hasTargetMessage: false
+        ))
+        #expect(!TimelineBottom.shouldFollowProjectionChange(
+            isPinned: false,
+            isInitialBottomPositioning: false,
+            hasTargetMessage: false
+        ))
+        #expect(!TimelineBottom.shouldFollowProjectionChange(
+            isPinned: false,
+            isInitialBottomPositioning: true,
+            hasTargetMessage: true
+        ))
+    }
+
     @Test func scrollButtonTapOptimisticallyPinsTimeline() {
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: false))
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: true))
@@ -7806,6 +7829,8 @@ struct TimelineBottomTests {
         #expect(source.contains("@State private var pendingBottomScrollRequest"))
         #expect(source.contains("private func scheduleScrollToBottom"))
         #expect(source.contains("TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll"))
+        #expect(source.contains(".onChange(of: viewModel.timelineProjectionGeneration)"))
+        #expect(source.contains("private func handleTimelineProjectionChange"))
         #expect(source.contains("private func scheduleKeyboardDismiss"))
         #expect(source.contains("reason: .buttonTap"))
         #expect(source.contains("cancelPendingTimelineFollowUpWork()"))

@@ -26,6 +26,14 @@ enum TimelineBottom {
         wasPinned
     }
 
+    static func shouldFollowProjectionChange(
+        isPinned: Bool,
+        isInitialBottomPositioning: Bool,
+        hasTargetMessage: Bool
+    ) -> Bool {
+        isPinned || (isInitialBottomPositioning && !hasTargetMessage)
+    }
+
     static func pinnedStateAfterScrollButtonTap(currentIsPinned: Bool) -> Bool {
         true
     }
@@ -686,6 +694,9 @@ struct ConversationView: View {
                                 )
                             }
                         }
+                        .onChange(of: viewModel.timelineProjectionGeneration) { _, _ in
+                            handleTimelineProjectionChange(proxy: proxy, viewModel: viewModel)
+                        }
                         .onChange(of: outer.size.height) { _, _ in
                             let wasAtBottom = isAtTimelineBottom
                             contentTopY = outer.frame(in: .global).minY
@@ -1016,6 +1027,23 @@ struct ConversationView: View {
             scheduleInitialScrollFollowUp(.item(itemId), proxy: proxy)
         }
         return true
+    }
+
+    private func handleTimelineProjectionChange(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
+        guard !viewModel.timeline.isEmpty else { return }
+        let shouldFollow = TimelineBottom.shouldFollowProjectionChange(
+            isPinned: isAtTimelineBottom,
+            isInitialBottomPositioning: didPerformInitialBottomScroll && !isInitialTimelinePositionSettled,
+            hasTargetMessage: initialTargetMessageIdHex != nil
+        )
+        guard shouldFollow else { return }
+        isAtTimelineBottom = true
+        scheduleScrollToBottom(
+            proxy: proxy,
+            animated: false,
+            reason: .contentGrowth,
+            targetID: viewModel.timeline.last?.id
+        )
     }
 
     private func scheduleInitialScrollFollowUp(
