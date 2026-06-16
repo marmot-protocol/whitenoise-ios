@@ -1190,9 +1190,8 @@ final class ConversationViewModel {
         next.append(contentsOf: transientTimelineItems.values)
         next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
-        next.sort(by: Self.timelineItemComesBefore)
-        next = Self.normalizedReplyOrdering(
-            next,
+        next = Self.normalizedTimeline(
+            from: next,
             replyTargetId: { replyTargetId(for: $0) }
         )
         let markdownChanged = rebuildMarkdownDisplayProjections(
@@ -1243,10 +1242,9 @@ final class ConversationViewModel {
     @discardableResult
     private func upsertTimelineItem(_ item: TimelineItem) -> Bool {
         var next = timeline.filter { $0.id != item.id }
-        let insertionIndex = timelineInsertionIndex(for: item, in: next)
-        next.insert(item, at: insertionIndex)
-        next = Self.normalizedReplyOrdering(
-            next,
+        next.append(item)
+        next = Self.normalizedTimeline(
+            from: next,
             replyTargetId: { replyTargetId(for: $0) }
         )
         let markdownChanged = updateMarkdownDisplayProjection(for: item)
@@ -1330,18 +1328,20 @@ final class ConversationViewModel {
         return true
     }
 
-    private func timelineInsertionIndex(for item: TimelineItem, in items: [TimelineItem]) -> Int {
-        var lower = 0
-        var upper = items.count
-        while lower < upper {
-            let mid = lower + (upper - lower) / 2
-            if Self.timelineItemComesBefore(item, items[mid]) {
-                upper = mid
-            } else {
-                lower = mid + 1
-            }
-        }
-        return lower
+    /// Builds the canonical timeline ordering from an arbitrary set of rows:
+    /// sort by `timelineItemComesBefore` (timestamp, then id), then pull replies
+    /// directly under their parent via `normalizedReplyOrdering`. Both the full
+    /// `rebuildTimeline()` and the incremental single-row upsert path go through
+    /// here so they can never diverge — incrementally inserting into the already
+    /// reply-normalized (non-monotonic) array and binary-searching it produced an
+    /// order that disagreed with a full rebuild (#202).
+    static func normalizedTimeline(
+        from items: [TimelineItem],
+        replyTargetId: (AppMessageRecordFfi) -> String?
+    ) -> [TimelineItem] {
+        var sorted = items
+        sorted.sort(by: timelineItemComesBefore)
+        return normalizedReplyOrdering(sorted, replyTargetId: replyTargetId)
     }
 
     private static func timelineItemComesBefore(_ lhs: TimelineItem, _ rhs: TimelineItem) -> Bool {
