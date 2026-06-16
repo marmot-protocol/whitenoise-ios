@@ -65,6 +65,12 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
     var isActive: Bool { state.isActive }
     var isLocked: Bool { state.isLocked }
 
+    isolated deinit {
+        if state.isActive || recorder != nil || recordingURL != nil || holdTask != nil || meterTask != nil {
+            reset(deleteFile: true)
+        }
+    }
+
     func beginPress(onError: @escaping (Error) -> Void) {
         guard state == .idle else { return }
         state = .pressing
@@ -72,17 +78,19 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         durationSeconds = 0
         waveformSamples = []
         holdTask?.cancel()
-        holdTask = Task { @MainActor in
+        holdTask = Task { @MainActor [weak self] in
             do {
                 try await Task.sleep(nanoseconds: VoiceRecordingGesturePolicy.holdDelayNanoseconds)
             } catch {
                 return
             }
-            guard !Task.isCancelled, state == .pressing else { return }
+            guard let self, !Task.isCancelled, self.state == .pressing else { return }
             do {
-                try await startRecording()
+                try await self.startRecording()
+            } catch is CancellationError {
+                self.reset(deleteFile: true)
             } catch {
-                reset(deleteFile: true)
+                self.reset(deleteFile: true)
                 onError(error)
             }
         }
@@ -122,8 +130,21 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         reset(deleteFile: true)
     }
 
+    func cancelIfActive() {
+        guard state.isActive else { return }
+        cancel()
+    }
+
+#if DEBUG
+    func startMeteringForTesting() {
+        startMetering()
+    }
+#endif
+
     private func startRecording() async throws {
-        guard await requestRecordPermission() else {
+        let hasPermission = await requestRecordPermission()
+        try Task.checkCancellation()
+        guard hasPermission else {
             throw Failure.permissionDenied
         }
 
@@ -186,17 +207,21 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
     private func startMetering() {
         meterTask?.cancel()
-        meterTask = Task { @MainActor in
+        meterTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 70_000_000)
-                guard let recorder else { return }
+                do {
+                    try await Task.sleep(nanoseconds: 70_000_000)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, let self, let recorder = self.recorder else { return }
                 recorder.updateMeters()
-                durationSeconds = recorder.currentTime
+                self.durationSeconds = recorder.currentTime
                 let power = recorder.averagePower(forChannel: 0)
                 let normalized = max(0.05, min(1, CGFloat(pow(10, power / 36))))
-                waveformSamples.append(normalized)
-                if waveformSamples.count > MediaWaveformAnalyzer.sampleCount {
-                    waveformSamples.removeFirst(waveformSamples.count - MediaWaveformAnalyzer.sampleCount)
+                self.waveformSamples.append(normalized)
+                if self.waveformSamples.count > MediaWaveformAnalyzer.sampleCount {
+                    self.waveformSamples.removeFirst(self.waveformSamples.count - MediaWaveformAnalyzer.sampleCount)
                 }
             }
         }
