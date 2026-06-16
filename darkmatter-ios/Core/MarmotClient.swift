@@ -152,6 +152,26 @@ final class MarmotClient {
         }.value
     }
 
+    func exportConversationTranscript(
+        accountRef: String,
+        group: AppGroupRecordFfi
+    ) async throws -> URL {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, group] in
+            let messages = try ConversationTranscriptExport.fetchAllMessages(
+                marmot: marmot,
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex
+            )
+            try Task.checkCancellation()
+            let document = ConversationTranscriptExport.makeDocument(group: group, messages: messages)
+            let data = try ConversationTranscriptExport.encodeJSON(document)
+            return try ConversationTranscriptExport.writeTemporaryFile(
+                data: data,
+                groupIdHex: group.groupIdHex
+            )
+        }.value
+    }
+
     func listMedia(
         accountRef: String,
         groupIdHex: String,
