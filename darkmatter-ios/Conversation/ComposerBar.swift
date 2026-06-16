@@ -88,14 +88,6 @@ private enum ComposerAttachmentPopover: String, Identifiable {
 }
 
 nonisolated enum ComposerAudioDraftPreviewPresentation {
-    static func sendButtonBottomPadding(hasAudioDraft: Bool) -> CGFloat {
-        hasAudioDraft ? 0 : 2
-    }
-
-    static func sendButtonOffset(hasAudioDraft: Bool) -> CGSize {
-        CGSize(width: 3, height: hasAudioDraft ? 0 : 1)
-    }
-
     static func playIconName(isPlaying: Bool, didFail: Bool) -> String {
         if isPlaying { return "pause.fill" }
         if didFail { return "arrow.clockwise" }
@@ -149,7 +141,7 @@ struct ComposerBar: View {
                 bottomInputGlassContainer {
                     HStack(alignment: .bottom, spacing: BottomInputChromeLayout.rowSpacing) {
                         inputCapsule
-                        micSlot
+                        trailingActionSlot
                     }
                 }
             }
@@ -251,17 +243,6 @@ struct ComposerBar: View {
                 emojiButton
             }
 
-            if showsSend {
-                inlineSendButton
-                    .padding(.trailing, 4)
-                    .padding(.bottom, ComposerAudioDraftPreviewPresentation.sendButtonBottomPadding(
-                        hasAudioDraft: audioDraft != nil
-                    ))
-                    .offset(ComposerAudioDraftPreviewPresentation.sendButtonOffset(
-                        hasAudioDraft: audioDraft != nil
-                    ))
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
         }
         .frame(minHeight: controlSize)
         .frame(maxWidth: .infinity)
@@ -279,11 +260,11 @@ struct ComposerBar: View {
                 .frame(width: BottomInputChromeLayout.inlineAccessoryWidth, height: controlSize)
         }
         .buttonStyle(.plain)
-        .padding(.trailing, showsSend ? 0 : 4)
+        .padding(.trailing, 4)
         .accessibilityLabel("Emoji and stickers")
     }
 
-    private var inlineSendButton: some View {
+    private var sendButton: some View {
         Button(action: triggerSend) {
             Group {
                 if isSending {
@@ -307,8 +288,12 @@ struct ComposerBar: View {
     }
 
     @ViewBuilder
-    private var micSlot: some View {
-        if showsMic {
+    private var trailingActionSlot: some View {
+        if showsSend {
+            sendButton
+                .frame(width: controlSize, height: controlSize)
+                .transition(.scale(scale: 0.88).combined(with: .opacity))
+        } else if showsMic {
             sideCircleIcon(
                 "mic.fill",
                 weight: .semibold,

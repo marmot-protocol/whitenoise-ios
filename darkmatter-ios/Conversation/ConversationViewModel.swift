@@ -119,6 +119,7 @@ final class ConversationViewModel {
     private let initialMemberCount: Int?
     private let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
     private var timelineTask: Task<Void, Never>?
+    private var initialTimelineSnapshotTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
     private var readStateTask: Task<Void, Never>?
@@ -426,6 +427,7 @@ final class ConversationViewModel {
 
     isolated deinit {
         timelineTask?.cancel()
+        initialTimelineSnapshotTask?.cancel()
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
@@ -442,6 +444,7 @@ final class ConversationViewModel {
         error = nil
         if timeline.isEmpty {
             isLoading = true
+            startInitialTimelineSnapshot(accountRef: accountRef)
         }
         startLiveTimeline(accountRef: accountRef)
         startLiveGroupState(accountRef: accountRef)
@@ -571,6 +574,8 @@ final class ConversationViewModel {
     private func stopLiveSubscriptions() {
         timelineTask?.cancel()
         timelineTask = nil
+        initialTimelineSnapshotTask?.cancel()
+        initialTimelineSnapshotTask = nil
         timelineSubscription = nil
         groupStateTask?.cancel()
         groupStateTask = nil
@@ -664,6 +669,45 @@ final class ConversationViewModel {
                     return
                 }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
+            }
+        }
+    }
+
+    private func startInitialTimelineSnapshot(accountRef: String) {
+        initialTimelineSnapshotTask?.cancel()
+        guard let appState else { return }
+        let groupIdHex = group.groupIdHex
+        initialTimelineSnapshotTask = Task { [weak self, weak appState] in
+            do {
+                guard let self, let appState else { return }
+                let client = try appState.currentMarmotClient()
+                let page = try await client.timelineMessages(
+                    accountRef: accountRef,
+                    query: TimelineMessageQueryFfi(
+                        groupIdHex: groupIdHex,
+                        search: nil,
+                        before: nil,
+                        beforeMessageId: nil,
+                        after: nil,
+                        afterMessageId: nil,
+                        limit: Self.timelinePageLimit
+                    )
+                )
+                guard !Task.isCancelled else { return }
+                initialTimelineSnapshotTask = nil
+                if timeline.isEmpty {
+                    applyTimelinePage(page, placement: .window)
+                } else {
+                    isLoading = false
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                self.initialTimelineSnapshotTask = nil
+                if self.timeline.isEmpty {
+                    self.isLoading = false
+                    self.error = error.localizedDescription
+                }
             }
         }
     }
@@ -972,12 +1016,20 @@ final class ConversationViewModel {
     func loadOlderTimelinePage() async {
         guard hasMoreBefore, !isLoadingOlder, let timelineSubscription else { return }
 
+        let previousOldestMessageId = oldestLoadedTimelineMessageId
         isLoadingOlder = true
         defer { isLoadingOlder = false }
         do {
             let page = try await timelineSubscription.paginateBackwards(count: Self.timelinePageLimit)
             guard !Task.isCancelled else { return }
+            let movedOlder = Self.paginationMovedOlder(
+                previousOldestMessageId: previousOldestMessageId,
+                nextMessageIds: page.messages.map(\.messageIdHex)
+            )
             applyTimelinePage(page, placement: .window)
+            if !movedOlder, page.hasMoreBefore {
+                hasMoreBefore = false
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -986,15 +1038,41 @@ final class ConversationViewModel {
     func loadNewerTimelinePage() async {
         guard hasMoreAfter, !isLoadingNewer, let timelineSubscription else { return }
 
+        let previousNewestMessageId = newestLoadedTimelineMessageId
         isLoadingNewer = true
         defer { isLoadingNewer = false }
         do {
             let page = try await timelineSubscription.paginateForwards(count: Self.timelinePageLimit)
             guard !Task.isCancelled else { return }
+            let movedNewer = Self.paginationMovedNewer(
+                previousNewestMessageId: previousNewestMessageId,
+                nextMessageIds: page.messages.map(\.messageIdHex)
+            )
             applyTimelinePage(page, placement: .window)
+            if !movedNewer, page.hasMoreAfter {
+                hasMoreAfter = false
+            }
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    nonisolated static func paginationMovedOlder(
+        previousOldestMessageId: String?,
+        nextMessageIds: [String]
+    ) -> Bool {
+        guard let previousOldestMessageId else { return !nextMessageIds.isEmpty }
+        guard let nextOldestMessageId = nextMessageIds.first else { return false }
+        return nextOldestMessageId != previousOldestMessageId
+    }
+
+    nonisolated static func paginationMovedNewer(
+        previousNewestMessageId: String?,
+        nextMessageIds: [String]
+    ) -> Bool {
+        guard let previousNewestMessageId else { return !nextMessageIds.isEmpty }
+        guard let nextNewestMessageId = nextMessageIds.last else { return false }
+        return nextNewestMessageId != previousNewestMessageId
     }
 
     @discardableResult
@@ -1343,6 +1421,14 @@ final class ConversationViewModel {
               !record.messageIdHex.isEmpty
         else { return nil }
         return record.messageIdHex
+    }
+
+    private var oldestLoadedTimelineMessageId: String? {
+        timeline.lazy.compactMap(Self.messageId(in:)).first
+    }
+
+    private var newestLoadedTimelineMessageId: String? {
+        timeline.lazy.compactMap(Self.messageId(in:)).last
     }
 
     private func replyTargetId(for record: AppMessageRecordFfi) -> String? {

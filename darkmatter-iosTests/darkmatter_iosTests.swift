@@ -4124,6 +4124,9 @@ struct ConversationTimelineProjectionTests {
         #expect(source.contains("try await client.initializeChatReadState("))
         #expect(source.contains("try await client.timelineMessages("))
         #expect(source.contains("try await client.listMedia("))
+        #expect(source.contains("initialTimelineSnapshotTask"))
+        #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
+        #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
         #expect(source.contains("@ObservationIgnored private var timelineSubscription"))
         #expect(source.contains("SubscriptionDriver.timelineMessages(timelineSub)"))
         #expect(source.contains("timelineSubscription.paginateBackwards"))
@@ -4138,6 +4141,33 @@ struct ConversationTimelineProjectionTests {
         #expect(clientSource.matches(#"func markTimelineMessagesRead[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?markTimelineMessageRead"#))
         #expect(clientSource.matches(#"func timelineMessages[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?timelineMessages"#))
         #expect(clientSource.matches(#"func listMedia[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?listMedia"#))
+    }
+
+    @Test func paginationProgressRequiresWindowEdgeMovement() {
+        #expect(ConversationViewModel.paginationMovedOlder(
+            previousOldestMessageId: "message-b",
+            nextMessageIds: ["message-a", "message-b"]
+        ))
+        #expect(!ConversationViewModel.paginationMovedOlder(
+            previousOldestMessageId: "message-b",
+            nextMessageIds: ["message-b", "message-c"]
+        ))
+        #expect(!ConversationViewModel.paginationMovedOlder(
+            previousOldestMessageId: "message-b",
+            nextMessageIds: []
+        ))
+        #expect(ConversationViewModel.paginationMovedNewer(
+            previousNewestMessageId: "message-b",
+            nextMessageIds: ["message-b", "message-c"]
+        ))
+        #expect(!ConversationViewModel.paginationMovedNewer(
+            previousNewestMessageId: "message-b",
+            nextMessageIds: ["message-a", "message-b"]
+        ))
+        #expect(!ConversationViewModel.paginationMovedNewer(
+            previousNewestMessageId: "message-b",
+            nextMessageIds: []
+        ))
     }
 
     @Test func conversationViewModelDeclaresMainActorIsolation() throws {
@@ -6028,14 +6058,13 @@ struct MediaWaveformAnalyzerBoundsTests {
 
 struct ComposerAudioDraftPreviewPresentationTests {
 
-    @Test func sendButtonCentersWithoutBottomOffsetForAudioDrafts() {
-        #expect(ComposerAudioDraftPreviewPresentation.sendButtonBottomPadding(hasAudioDraft: true) == 0)
-        #expect(ComposerAudioDraftPreviewPresentation.sendButtonBottomPadding(hasAudioDraft: false) == 2)
-    }
+    @Test func sendButtonUsesTrailingActionSlotOutsideInputCapsule() throws {
+        let source = try String(contentsOf: composerBarSourceURL, encoding: .utf8)
 
-    @Test func sendButtonGetsStateSpecificVisualNudge() {
-        #expect(ComposerAudioDraftPreviewPresentation.sendButtonOffset(hasAudioDraft: true) == CGSize(width: 3, height: 0))
-        #expect(ComposerAudioDraftPreviewPresentation.sendButtonOffset(hasAudioDraft: false) == CGSize(width: 3, height: 1))
+        #expect(source.contains("private var trailingActionSlot"))
+        #expect(source.matches(#"private var trailingActionSlot[\s\S]*?if showsSend \{[\s\S]*?sendButton[\s\S]*?else if showsMic"#))
+        #expect(source.matches(#"private var inputCapsule[\s\S]*?emojiButton[\s\S]*?\.compatibleInputCapsuleChrome"#))
+        #expect(!source.matches(#"private var inputCapsule[\s\S]*?if showsSend[\s\S]*?sendButton[\s\S]*?\.compatibleInputCapsuleChrome"#))
     }
 
     @Test func playbackIconReflectsPreviewState() {
@@ -6048,6 +6077,13 @@ struct ComposerAudioDraftPreviewPresentationTests {
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(nil) == "")
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(2.9) == "0:02")
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(65) == "1:05")
+    }
+
+    private var composerBarSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ComposerBar.swift")
     }
 }
 
@@ -6718,6 +6754,21 @@ struct TimelineBottomTests {
     @Test func scrollButtonTapOptimisticallyPinsTimeline() {
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: false))
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: true))
+    }
+
+    @Test func paginationTriggerRequestsOnlyOncePerVisibleAppearance() {
+        #expect(TimelinePaginationTrigger.shouldRequestPage(
+            hasMore: true,
+            isTriggerAlreadyVisible: false
+        ))
+        #expect(!TimelinePaginationTrigger.shouldRequestPage(
+            hasMore: true,
+            isTriggerAlreadyVisible: true
+        ))
+        #expect(!TimelinePaginationTrigger.shouldRequestPage(
+            hasMore: false,
+            isTriggerAlreadyVisible: false
+        ))
     }
 
     @Test func bottomScrollRequestsCoalesceToLatestNonAnimatedTarget() {

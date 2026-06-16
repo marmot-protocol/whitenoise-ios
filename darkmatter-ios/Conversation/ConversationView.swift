@@ -129,6 +129,12 @@ enum TimelineBottomScrollCoordinator {
     }
 }
 
+enum TimelinePaginationTrigger {
+    static func shouldRequestPage(hasMore: Bool, isTriggerAlreadyVisible: Bool) -> Bool {
+        hasMore && !isTriggerAlreadyVisible
+    }
+}
+
 struct ConversationSendPayload {
     let viewModel: ConversationViewModel
     let text: String
@@ -277,6 +283,8 @@ struct ConversationView: View {
     @State private var initialScrollFollowUpTask: Task<Void, Never>?
     @State private var pendingBottomScrollRequest: TimelineBottomScrollRequest?
     @State private var pendingBottomScrollTask: Task<Void, Never>?
+    @State private var isOlderTimelineTriggerVisible = false
+    @State private var isNewerTimelineTriggerVisible = false
     @State private var lastAutomaticBottomScrollTargetID: String?
     @State private var pendingKeyboardDismissTask: Task<Void, Never>?
     @State private var visibleChatRoute: VisibleChatRoute?
@@ -831,8 +839,16 @@ struct ConversationView: View {
             }
             .frame(height: 28)
             .onAppear {
-                guard viewModel.hasMoreBefore else { return }
+                let shouldRequest = TimelinePaginationTrigger.shouldRequestPage(
+                    hasMore: viewModel.hasMoreBefore,
+                    isTriggerAlreadyVisible: isOlderTimelineTriggerVisible
+                )
+                isOlderTimelineTriggerVisible = true
+                guard shouldRequest else { return }
                 Task { await viewModel.loadOlderTimelinePage() }
+            }
+            .onDisappear {
+                isOlderTimelineTriggerVisible = false
             }
         }
     }
@@ -849,8 +865,16 @@ struct ConversationView: View {
             }
             .frame(height: 28)
             .onAppear {
-                guard viewModel.hasMoreAfter else { return }
+                let shouldRequest = TimelinePaginationTrigger.shouldRequestPage(
+                    hasMore: viewModel.hasMoreAfter,
+                    isTriggerAlreadyVisible: isNewerTimelineTriggerVisible
+                )
+                isNewerTimelineTriggerVisible = true
+                guard shouldRequest else { return }
                 Task { await viewModel.loadNewerTimelinePage() }
+            }
+            .onDisappear {
+                isNewerTimelineTriggerVisible = false
             }
         }
     }
