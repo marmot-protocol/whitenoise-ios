@@ -2,10 +2,47 @@ import Foundation
 import ImageIO
 import UIKit
 
+/// Re-validates every HTTP redirect target through the same SSRF allowlist that
+/// gates the initial URL (`ProfileSanitizer.imageURL`: HTTPS + public host).
+///
+/// `URLSession` follows `3xx` redirects automatically, so without this delegate
+/// a peer-controlled allowlisted HTTPS endpoint could `302` the fetch to
+/// `http://127.0.0.1:<port>/…`, `https://[::1]/…`, or any internal/link-local
+/// host — defeating the allowlist and downgrading HTTPS→HTTP. Refusing a
+/// disallowed redirect (completing with `nil`) terminates the redirect chain
+/// and surfaces the response of the refused hop rather than dereferencing it.
+nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelegate {
+    /// A redirect target is allowed only if it independently passes the image
+    /// URL allowlist (HTTPS scheme + non-private/non-loopback/non-link-local
+    /// host, including legacy IPv4 and IPv4-mapped IPv6 spellings).
+    static func isRedirectAllowed(to url: URL?) -> Bool {
+        guard let url else { return false }
+        return ProfileSanitizer.imageURL(url.absoluteString) != nil
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        // `nil` refuses the redirect; the original task completes with the
+        // redirect response instead of following it to an unvalidated host.
+        completionHandler(Self.isRedirectAllowed(to: request.url) ? request : nil)
+    }
+}
+
 nonisolated enum RemoteImageFetch {
     static let maximumImageBytes = 2 * 1024 * 1024
 
-    private static let session = URLSession(configuration: ephemeralConfiguration())
+    private static let redirectGuard = RemoteImageRedirectGuard()
+
+    private static let session = URLSession(
+        configuration: ephemeralConfiguration(),
+        delegate: redirectGuard,
+        delegateQueue: nil
+    )
 
     static func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         try await session.data(for: request)
