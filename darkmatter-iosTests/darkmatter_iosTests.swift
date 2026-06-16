@@ -5885,6 +5885,103 @@ struct AudioWaveformPresentationTests {
     }
 }
 
+/// Regression coverage for darkmatter-ios#208: received audio is peer-controlled
+/// and `MediaWaveformAnalyzer` must keep decoded-PCM memory bounded rather than
+/// allocating one buffer sized to the whole (attacker-influenced) file length.
+struct MediaWaveformAnalyzerBoundsTests {
+
+    @Test func analyzedFrameCountClampsHostileDeclaredLength() {
+        // A near-cap AAC file can declare a huge decoded length. The analyzer
+        // must never analyze more than the hard ceiling regardless.
+        let hostile: AVAudioFramePosition = 50_000_000_000
+        #expect(MediaWaveformAnalyzer.analyzedFrameCount(totalFrames: hostile)
+            == MediaWaveformAnalyzer.maxAnalyzedFrames)
+    }
+
+    @Test func analyzedFrameCountPassesShortFilesThrough() {
+        #expect(MediaWaveformAnalyzer.analyzedFrameCount(totalFrames: 1_000) == 1_000)
+        #expect(MediaWaveformAnalyzer.analyzedFrameCount(totalFrames: 0) == 0)
+        #expect(MediaWaveformAnalyzer.analyzedFrameCount(totalFrames: -5) == 0)
+    }
+
+    @Test func nextChunkNeverExceedsFixedCapacity() {
+        // The core memory invariant: no single read allocates more than the
+        // fixed chunk capacity, even when billions of frames remain.
+        let analyzed = MediaWaveformAnalyzer.maxAnalyzedFrames
+        let first = MediaWaveformAnalyzer.nextChunkFrameCount(
+            analyzedFrames: analyzed,
+            framesProcessed: 0
+        )
+        #expect(first == MediaWaveformAnalyzer.chunkFrameCapacity)
+    }
+
+    @Test func nextChunkShrinksToRemainderOnFinalRead() {
+        let cap = AVAudioFramePosition(MediaWaveformAnalyzer.chunkFrameCapacity)
+        let analyzed = cap + 100
+        let last = MediaWaveformAnalyzer.nextChunkFrameCount(
+            analyzedFrames: analyzed,
+            framesProcessed: cap
+        )
+        #expect(last == 100)
+    }
+
+    @Test func nextChunkReturnsZeroWhenComplete() {
+        let analyzed: AVAudioFramePosition = 1_000
+        #expect(MediaWaveformAnalyzer.nextChunkFrameCount(
+            analyzedFrames: analyzed,
+            framesProcessed: analyzed
+        ) == 0)
+        #expect(MediaWaveformAnalyzer.nextChunkFrameCount(
+            analyzedFrames: analyzed,
+            framesProcessed: analyzed + 50
+        ) == 0)
+    }
+
+    @Test func chunkedReadsCoverEveryFrameExactlyOnce() {
+        // Simulate the streaming loop and confirm it terminates and processes
+        // exactly `analyzedFrames` frames without overrun — no infinite loop on
+        // a hostile length, no double counting.
+        let analyzed = AVAudioFramePosition(MediaWaveformAnalyzer.chunkFrameCapacity) * 3 + 17
+        var processed: AVAudioFramePosition = 0
+        var iterations = 0
+        while true {
+            let toRead = MediaWaveformAnalyzer.nextChunkFrameCount(
+                analyzedFrames: analyzed,
+                framesProcessed: processed
+            )
+            if toRead == 0 { break }
+            #expect(toRead <= MediaWaveformAnalyzer.chunkFrameCapacity)
+            processed += AVAudioFramePosition(toRead)
+            iterations += 1
+            #expect(iterations < 10_000) // guard against a non-terminating loop
+        }
+        #expect(processed == analyzed)
+        #expect(iterations == 4)
+    }
+
+    @Test func bucketIndexSpreadsFramesAcrossBucketsInOrder() {
+        let analyzed: AVAudioFramePosition = 360
+        #expect(MediaWaveformAnalyzer.bucketIndex(forFrame: 0, analyzedFrames: analyzed) == 0)
+        #expect(MediaWaveformAnalyzer.bucketIndex(forFrame: 359, analyzedFrames: analyzed)
+            == MediaWaveformAnalyzer.sampleCount - 1)
+        // Monotonic non-decreasing mapping.
+        var previous = 0
+        for frame in stride(from: AVAudioFramePosition(0), to: analyzed, by: 1) {
+            let bucket = MediaWaveformAnalyzer.bucketIndex(forFrame: frame, analyzedFrames: analyzed)
+            #expect(bucket >= previous)
+            previous = bucket
+        }
+    }
+
+    @Test func bucketIndexClampsOutOfRangeFrames() {
+        let analyzed: AVAudioFramePosition = 100
+        #expect(MediaWaveformAnalyzer.bucketIndex(forFrame: -10, analyzedFrames: analyzed) == 0)
+        #expect(MediaWaveformAnalyzer.bucketIndex(forFrame: 10_000, analyzedFrames: analyzed)
+            == MediaWaveformAnalyzer.sampleCount - 1)
+        #expect(MediaWaveformAnalyzer.bucketIndex(forFrame: 5, analyzedFrames: 0) == 0)
+    }
+}
+
 struct ComposerAudioDraftPreviewPresentationTests {
 
     @Test func sendButtonCentersWithoutBottomOffsetForAudioDrafts() {

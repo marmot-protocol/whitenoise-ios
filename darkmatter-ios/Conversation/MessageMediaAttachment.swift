@@ -761,35 +761,107 @@ nonisolated enum MediaWaveformAnalyzer {
         }
     }
 
+    /// Frames decoded per streaming read. The analyzer reuses one buffer of
+    /// this capacity instead of sizing a buffer to the whole file, which keeps
+    /// peak PCM memory bounded (~chunkFrameCapacity * channels * 4 bytes)
+    /// regardless of the decoded file length. Received audio is peer-controlled
+    /// and decodes far larger than the compressed 50 MB cap, so a whole-file
+    /// buffer is remotely triggerable OOM (see darkmatter-ios#208).
+    static let chunkFrameCapacity: AVAudioFrameCount = 65_536
+
+    /// Hard ceiling on frames analyzed for the waveform, independent of the
+    /// file's declared length. ~30 minutes at 48 kHz. Defends against a hostile
+    /// declared length forcing unbounded decode work; the waveform only needs a
+    /// coarse 36-bucket shape, so truncating very long audio is acceptable.
+    static let maxAnalyzedFrames: AVAudioFramePosition = 48_000 * 60 * 30
+
+    /// Clamp the number of frames analyzed so a peer-controlled declared length
+    /// cannot force unbounded work. Pure helper for testability.
+    static func analyzedFrameCount(totalFrames: AVAudioFramePosition) -> AVAudioFramePosition {
+        guard totalFrames > 0 else { return 0 }
+        return min(totalFrames, maxAnalyzedFrames)
+    }
+
+    /// Frames to request on the next read, never exceeding the fixed chunk
+    /// capacity. This is the invariant that keeps memory bounded: even for a
+    /// multi-gigabyte declared length, no single read allocates more than
+    /// `chunkFrameCapacity` frames. Pure helper for testability.
+    static func nextChunkFrameCount(
+        analyzedFrames: AVAudioFramePosition,
+        framesProcessed: AVAudioFramePosition
+    ) -> AVAudioFrameCount {
+        let remaining = analyzedFrames - framesProcessed
+        guard remaining > 0 else { return 0 }
+        return AVAudioFrameCount(min(AVAudioFramePosition(chunkFrameCapacity), remaining))
+    }
+
+    /// Map an absolute frame index onto its waveform bucket, clamped into range.
+    /// Pure helper for testability.
+    static func bucketIndex(
+        forFrame frame: AVAudioFramePosition,
+        analyzedFrames: AVAudioFramePosition,
+        bucketCount: Int = sampleCount
+    ) -> Int {
+        guard analyzedFrames > 0, bucketCount > 0 else { return 0 }
+        let index = Int(frame * AVAudioFramePosition(bucketCount) / analyzedFrames)
+        return min(bucketCount - 1, max(0, index))
+    }
+
     static func metadata(from data: Data, mediaType: String) -> Metadata {
         TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
             do {
                 let file = try AVAudioFile(forReading: url)
-                let duration = Double(file.length) / file.processingFormat.sampleRate
+                let format = file.processingFormat
+                let sampleRate = format.sampleRate
+                let totalFrames = file.length
+                let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
+
+                let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
+                guard analyzedFrames > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                // One reusable, fixed-capacity buffer — never sized to the file.
                 guard let buffer = AVAudioPCMBuffer(
-                    pcmFormat: file.processingFormat,
-                    frameCapacity: AVAudioFrameCount(file.length)
+                    pcmFormat: format,
+                    frameCapacity: chunkFrameCapacity
                 ) else {
                     return Metadata(durationSeconds: duration, samples: fallback())
                 }
-                try file.read(into: buffer)
-                guard let channel = buffer.floatChannelData?[0] else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-                let frameLength = Int(buffer.frameLength)
-                guard frameLength > 0 else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-                let bucket = max(1, frameLength / sampleCount)
-                let samples = (0..<sampleCount).map { index -> CGFloat in
-                    let start = min(frameLength - 1, index * bucket)
-                    let end = min(frameLength, start + bucket)
-                    guard end > start else { return 0.08 }
-                    var peak: Float = 0
-                    for offset in start..<end {
-                        peak = max(peak, abs(channel[offset]))
+
+                var peaks = [Float](repeating: 0, count: sampleCount)
+                var counts = [Int](repeating: 0, count: sampleCount)
+                var framesProcessed: AVAudioFramePosition = 0
+
+                while true {
+                    let toRead = nextChunkFrameCount(
+                        analyzedFrames: analyzedFrames,
+                        framesProcessed: framesProcessed
+                    )
+                    guard toRead > 0 else { break }
+                    buffer.frameLength = 0
+                    try file.read(into: buffer, frameCount: toRead)
+                    let read = Int(buffer.frameLength)
+                    guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
+                    for offset in 0..<read {
+                        let bucket = bucketIndex(
+                            forFrame: framesProcessed + AVAudioFramePosition(offset),
+                            analyzedFrames: analyzedFrames
+                        )
+                        let value = abs(channel[offset])
+                        if value > peaks[bucket] { peaks[bucket] = value }
+                        counts[bucket] += 1
                     }
-                    return CGFloat(min(1, max(0.05, sqrt(peak))))
+                    framesProcessed += AVAudioFramePosition(read)
+                }
+
+                guard framesProcessed > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                let samples = (0..<sampleCount).map { index -> CGFloat in
+                    guard counts[index] > 0 else { return 0.08 }
+                    return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
                 }
                 return Metadata(durationSeconds: duration, samples: normalized(samples))
             } catch {
