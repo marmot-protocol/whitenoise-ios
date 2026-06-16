@@ -16,6 +16,24 @@ enum AgentStreamWatchAdmission {
     }
 }
 
+enum TimelineTailRefreshTaskLifetime {
+    static func nextGeneration(after generation: UInt64) -> UInt64 {
+        generation &+ 1
+    }
+
+    static func shouldClearStoredTask(currentGeneration: UInt64, completedGeneration: UInt64) -> Bool {
+        currentGeneration == completedGeneration
+    }
+}
+
+private struct TimelineTailRefreshRequest {
+    let client: MarmotClient
+    let accountRef: String
+    let groupIdHex: String
+}
+
+typealias TimelineTailRefreshOperation = @MainActor () async -> Void
+
 struct MediaDownloadInFlightKey: Hashable {
     let version: String
     let plaintextSha256: String
@@ -106,6 +124,8 @@ final class ConversationViewModel {
     private var readStateTask: Task<Void, Never>?
     private var readMarkTask: Task<Void, Never>?
     private var mediaRefreshTask: Task<Void, Never>?
+    private var tailRefreshTask: Task<Void, Never>?
+    private var tailRefreshGeneration: UInt64 = 0
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
@@ -411,6 +431,7 @@ final class ConversationViewModel {
         readStateTask?.cancel()
         readMarkTask?.cancel()
         mediaRefreshTask?.cancel()
+        tailRefreshTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
 
@@ -560,6 +581,7 @@ final class ConversationViewModel {
         cancelPendingReadMarks()
         mediaRefreshTask?.cancel()
         mediaRefreshTask = nil
+        cancelTimelineTailRefresh()
         for task in streamWatchTasks.values {
             task.cancel()
         }
@@ -845,31 +867,107 @@ final class ConversationViewModel {
     /// subscription update can race with group-state refresh — especially after
     /// catch-up on a second device/simulator.
     func refreshTimelineTail() async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let request = timelineTailRefreshRequest() else { return }
         do {
-            let client = try appState.currentMarmotClient()
-            let page = try await client.timelineMessages(
-                accountRef: accountRef,
-                query: TimelineMessageQueryFfi(
-                    groupIdHex: group.groupIdHex,
-                    search: nil,
-                    before: nil,
-                    beforeMessageId: nil,
-                    after: nil,
-                    afterMessageId: nil,
-                    limit: Self.timelinePageLimit
-                )
-            )
+            let page = try await Self.timelineTailPage(for: request)
             guard !Task.isCancelled else { return }
-            applyTimelinePage(page, placement: .tailRefresh)
+            applyTimelineTailRefreshPageIfCurrent(page, request: request)
         } catch {
             // Timeline subscription remains the primary live path.
         }
     }
 
     private func scheduleTimelineTailRefresh() {
-        Task { await refreshTimelineTail() }
+        guard let request = timelineTailRefreshRequest() else {
+            cancelTimelineTailRefresh()
+            return
+        }
+        scheduleTimelineTailRefresh { [weak self] in
+            do {
+                let page = try await Self.timelineTailPage(for: request)
+                guard !Task.isCancelled else { return }
+                self?.applyTimelineTailRefreshPageIfCurrent(page, request: request)
+            } catch {
+                // Timeline subscription remains the primary live path.
+            }
+        }
     }
+
+    private func scheduleTimelineTailRefresh(operation: @escaping TimelineTailRefreshOperation) {
+        cancelTimelineTailRefresh()
+        let generation = tailRefreshGeneration
+        tailRefreshTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled else { return }
+            await operation()
+            guard !Task.isCancelled else { return }
+            self?.clearTimelineTailRefreshTask(generation: generation)
+        }
+    }
+
+    private func cancelTimelineTailRefresh() {
+        tailRefreshGeneration = TimelineTailRefreshTaskLifetime.nextGeneration(after: tailRefreshGeneration)
+        tailRefreshTask?.cancel()
+        tailRefreshTask = nil
+    }
+
+    private func clearTimelineTailRefreshTask(generation: UInt64) {
+        guard TimelineTailRefreshTaskLifetime.shouldClearStoredTask(
+            currentGeneration: tailRefreshGeneration,
+            completedGeneration: generation
+        ) else { return }
+        tailRefreshTask = nil
+    }
+
+    private func timelineTailRefreshRequest() -> TimelineTailRefreshRequest? {
+        guard let appState, let accountRef = appState.activeAccountRef else { return nil }
+        do {
+            return TimelineTailRefreshRequest(
+                client: try appState.currentMarmotClient(),
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private static func timelineTailPage(for request: TimelineTailRefreshRequest) async throws -> TimelinePageFfi {
+        try await request.client.timelineMessages(
+            accountRef: request.accountRef,
+            query: TimelineMessageQueryFfi(
+                groupIdHex: request.groupIdHex,
+                search: nil,
+                before: nil,
+                beforeMessageId: nil,
+                after: nil,
+                afterMessageId: nil,
+                limit: Self.timelinePageLimit
+            )
+        )
+    }
+
+    private func applyTimelineTailRefreshPageIfCurrent(
+        _ page: TimelinePageFfi,
+        request: TimelineTailRefreshRequest
+    ) {
+        guard appState?.activeAccountRef == request.accountRef,
+              group.groupIdHex == request.groupIdHex else { return }
+        applyTimelinePage(page, placement: .tailRefresh)
+    }
+
+#if DEBUG
+    func scheduleTimelineTailRefreshForTesting(operation: @escaping TimelineTailRefreshOperation) {
+        scheduleTimelineTailRefresh(operation: operation)
+    }
+
+    func cancelTimelineTailRefreshForTesting() {
+        cancelTimelineTailRefresh()
+    }
+
+    var hasTimelineTailRefreshTaskForTesting: Bool {
+        tailRefreshTask != nil
+    }
+#endif
 
     func loadOlderTimelinePage() async {
         guard hasMoreBefore, !isLoadingOlder, let timelineSubscription else { return }
