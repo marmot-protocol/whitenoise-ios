@@ -303,6 +303,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     let mediaType: String
     let data: Data
     let dim: String?
+    let thumbhash: String?
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
@@ -313,6 +314,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         mediaType: String,
         data: Data,
         dim: String?,
+        thumbhash: String? = nil,
         thumbnail: UIImage? = nil,
         durationSeconds: Double? = nil,
         waveformSamples: [CGFloat] = []
@@ -322,6 +324,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         self.mediaType = mediaType
         self.data = data
         self.dim = dim
+        self.thumbhash = thumbhash
         self.thumbnail = thumbnail
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
@@ -337,7 +340,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
             mediaType: mediaType,
             plaintext: data,
             dim: dim,
-            thumbhash: nil
+            thumbhash: thumbhash
         )
     }
 
@@ -361,6 +364,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
             && lhs.mediaType == rhs.mediaType
             && lhs.data == rhs.data
             && lhs.dim == rhs.dim
+            && lhs.thumbhash == rhs.thumbhash
             && lhs.durationSeconds == rhs.durationSeconds
             && lhs.waveformSamples == rhs.waveformSamples
     }
@@ -371,6 +375,7 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
         hasher.combine(mediaType)
         hasher.combine(data)
         hasher.combine(dim)
+        hasher.combine(thumbhash)
         hasher.combine(durationSeconds)
         hasher.combine(waveformSamples)
     }
@@ -633,6 +638,7 @@ nonisolated enum MediaDraftProcessor {
             mediaType: "image/jpeg",
             data: encoded,
             dim: "\(width)x\(height)",
+            thumbhash: ThumbHash.encodedString(from: normalized),
             thumbnail: thumbnailImage(from: normalized)
         )
     }
