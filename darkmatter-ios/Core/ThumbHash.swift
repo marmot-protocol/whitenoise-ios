@@ -32,7 +32,7 @@ import UIKit
 //   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 //   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //   SOFTWARE.
-enum ThumbHash {
+nonisolated enum ThumbHash {
     // ThumbHash encoding requires a tiny image; the reference caps usable input
     // at 100x100 and there is no quality benefit above that.
     static let maxEncodeEdge = 100

@@ -5788,7 +5788,10 @@ struct MediaAttachmentPolicyTests {
     }
 
     @Test func imageDraftGeneratesDimAndThumbhashForUpload() throws {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 120))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 120), format: format)
         let data = renderer.jpegData(withCompressionQuality: 0.9) { context in
             UIColor.systemBlue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 240, height: 60))
@@ -7357,6 +7360,8 @@ private func notificationUpdate(
     groupName: String? = nil,
     senderName: String? = "Alice",
     previewText: String? = "Hello",
+    reactionEmoji: String? = nil,
+    reactedToPreview: String? = nil,
     messageIdHex: String? = "message-a",
     isFromSelf: Bool = false,
     timestampMs: Int64 = 1_700_000_000_123
@@ -7382,6 +7387,8 @@ private func notificationUpdate(
             pictureUrl: nil
         ),
         previewText: previewText,
+        reactionEmoji: reactionEmoji,
+        reactedToPreview: reactedToPreview,
         timestampMs: timestampMs,
         isFromSelf: isFromSelf
     )

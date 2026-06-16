@@ -8166,12 +8166,14 @@ public struct NotificationUpdateFfi {
     public var sender: NotificationUserFfi
     public var receiver: NotificationUserFfi
     public var previewText: String?
+    public var reactionEmoji: String?
+    public var reactedToPreview: String?
     public var timestampMs: Int64
     public var isFromSelf: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, timestampMs: Int64, isFromSelf: Bool) {
+    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, reactionEmoji: String?, reactedToPreview: String?, timestampMs: Int64, isFromSelf: Bool) {
         self.notificationKey = notificationKey
         self.conversationKey = conversationKey
         self.trigger = trigger
@@ -8184,6 +8186,8 @@ public struct NotificationUpdateFfi {
         self.sender = sender
         self.receiver = receiver
         self.previewText = previewText
+        self.reactionEmoji = reactionEmoji
+        self.reactedToPreview = reactedToPreview
         self.timestampMs = timestampMs
         self.isFromSelf = isFromSelf
     }
@@ -8229,6 +8233,12 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         if lhs.previewText != rhs.previewText {
             return false
         }
+        if lhs.reactionEmoji != rhs.reactionEmoji {
+            return false
+        }
+        if lhs.reactedToPreview != rhs.reactedToPreview {
+            return false
+        }
         if lhs.timestampMs != rhs.timestampMs {
             return false
         }
@@ -8251,6 +8261,8 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         hasher.combine(sender)
         hasher.combine(receiver)
         hasher.combine(previewText)
+        hasher.combine(reactionEmoji)
+        hasher.combine(reactedToPreview)
         hasher.combine(timestampMs)
         hasher.combine(isFromSelf)
     }
@@ -8276,6 +8288,8 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
                 sender: FfiConverterTypeNotificationUserFfi.read(from: &buf),
                 receiver: FfiConverterTypeNotificationUserFfi.read(from: &buf),
                 previewText: FfiConverterOptionString.read(from: &buf),
+                reactionEmoji: FfiConverterOptionString.read(from: &buf),
+                reactedToPreview: FfiConverterOptionString.read(from: &buf),
                 timestampMs: FfiConverterInt64.read(from: &buf),
                 isFromSelf: FfiConverterBool.read(from: &buf)
         )
@@ -8294,6 +8308,8 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
         FfiConverterTypeNotificationUserFfi.write(value.sender, into: &buf)
         FfiConverterTypeNotificationUserFfi.write(value.receiver, into: &buf)
         FfiConverterOptionString.write(value.previewText, into: &buf)
+        FfiConverterOptionString.write(value.reactionEmoji, into: &buf)
+        FfiConverterOptionString.write(value.reactedToPreview, into: &buf)
         FfiConverterInt64.write(value.timestampMs, into: &buf)
         FfiConverterBool.write(value.isFromSelf, into: &buf)
     }

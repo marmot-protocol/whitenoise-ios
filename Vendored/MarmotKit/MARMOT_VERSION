@@ -1,6 +1,6 @@
-darkmatter-sha: fa32b89
+darkmatter-sha: 02cefed
 darkmatter-branch: master
-built-at: 2026-06-14T19:30:42Z
+built-at: 2026-06-16T12:11:35Z
 uniffi-version: 0.28.3
 features: otlp-export
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
