@@ -51,6 +51,10 @@ final class ScannerViewController: UIViewController {
     weak var coordinator: QRScannerView.Coordinator?
     private let session = AVCaptureSession()
     private var preview: AVCaptureVideoPreviewLayer?
+    /// Serializes `startRunning()` / `stopRunning()` so a stop enqueued after a
+    /// start always runs after it. Avoids the race where a fast dismiss skips
+    /// the stop because `isRunning` hasn't flipped to `true` yet.
+    private let sessionQueue = DispatchQueue(label: "dev.ipf.darkmatter.qr-scanner.session")
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -92,7 +96,9 @@ final class ScannerViewController: UIViewController {
         view.layer.addSublayer(layer)
         preview = layer
 
-        Task.detached { [session] in session.startRunning() }
+        // Start on the dedicated serial queue so any stop enqueued later (e.g.
+        // a fast dismiss) is guaranteed to run after this start completes.
+        sessionQueue.async { [session] in session.startRunning() }
     }
 
     override func viewDidLayoutSubviews() {
@@ -102,8 +108,24 @@ final class ScannerViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        if session.isRunning {
-            Task.detached { [session] in session.stopRunning() }
+        // Serialize the stop behind any in-flight `startRunning()` on the same
+        // queue, so the camera is always released even on a fast dismiss that
+        // races the asynchronous start. By the time this runs the start has
+        // completed, so `isRunning` is observed reliably.
+        sessionQueue.async { [session] in
+            if session.isRunning {
+                session.stopRunning()
+            }
+        }
+    }
+
+    deinit {
+        // Backstop: ensure the capture session is torn down even if a lifecycle
+        // callback is skipped, so the camera hardware never leaks.
+        sessionQueue.async { [session] in
+            if session.isRunning {
+                session.stopRunning()
+            }
         }
     }
 }
