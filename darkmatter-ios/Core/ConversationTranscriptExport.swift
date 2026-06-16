@@ -1,6 +1,12 @@
 import Foundation
 import MarmotKit
 
+protocol ConversationTranscriptTimelineReading {
+    func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi) throws -> TimelinePageFfi
+}
+
+extension Marmot: ConversationTranscriptTimelineReading {}
+
 /// Builds a chronological JSON dump of inner Marmot/Nostr app events for debugging.
 enum ConversationTranscriptExport {
     static let pageLimit: UInt32 = 200
@@ -69,12 +75,25 @@ enum ConversationTranscriptExport {
         accountRef: String,
         groupIdHex: String
     ) throws -> [TimelineMessageRecordFfi] {
+        try fetchAllMessages(
+            timelineReader: marmot,
+            accountRef: accountRef,
+            groupIdHex: groupIdHex
+        )
+    }
+
+    static func fetchAllMessages(
+        timelineReader: ConversationTranscriptTimelineReading,
+        accountRef: String,
+        groupIdHex: String
+    ) throws -> [TimelineMessageRecordFfi] {
         var collected: [TimelineMessageRecordFfi] = []
         var before: UInt64?
         var beforeMessageId: String?
 
         while true {
-            let page = try marmot.timelineMessages(
+            try Task.checkCancellation()
+            let page = try timelineReader.timelineMessages(
                 accountRef: accountRef,
                 query: TimelineMessageQueryFfi(
                     groupIdHex: groupIdHex,
@@ -86,6 +105,7 @@ enum ConversationTranscriptExport {
                     limit: pageLimit
                 )
             )
+            try Task.checkCancellation()
             collected.append(contentsOf: page.messages)
             guard page.hasMoreBefore, let oldest = page.messages.last else { break }
             before = oldest.timelineAt

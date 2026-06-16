@@ -882,22 +882,15 @@ struct GroupDetailsView: View {
         cleanupTranscriptExportFile()
 
         do {
-            let messages = try ConversationTranscriptExport.fetchAllMessages(
-                marmot: appState.marmot,
+            let client = try appState.currentMarmotClient()
+            let url = try await client.exportConversationTranscript(
                 accountRef: accountRef,
-                groupIdHex: viewModel.group.groupIdHex
-            )
-            let document = ConversationTranscriptExport.makeDocument(
-                group: viewModel.group,
-                messages: messages
-            )
-            let data = try ConversationTranscriptExport.encodeJSON(document)
-            let url = try ConversationTranscriptExport.writeTemporaryFile(
-                data: data,
-                groupIdHex: viewModel.group.groupIdHex
+                group: viewModel.group
             )
             transcriptExportURL = url
             showTranscriptShareSheet = true
+        } catch is CancellationError {
+            // The export task can be cancelled while the detached worker is paging history.
         } catch {
             transcriptExportError = error.localizedDescription
         }

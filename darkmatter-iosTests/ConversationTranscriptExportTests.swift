@@ -73,6 +73,67 @@ struct ConversationTranscriptExportTests {
         ])
     }
 
+    @Test func fetchAllMessagesPaginatesByOldestMessageAndSortsChronologically() throws {
+        let newestId = String(repeating: "33", count: 32)
+        let middleId = String(repeating: "22", count: 32)
+        let oldestId = String(repeating: "11", count: 32)
+        let groupId = String(repeating: "aa", count: 32)
+        let reader = FakeTranscriptTimelineReader(pages: [
+            TimelinePageFfi(
+                messages: [
+                    timelineRecord(messageIdHex: newestId, timelineAt: 3),
+                    timelineRecord(messageIdHex: middleId, timelineAt: 2),
+                ],
+                hasMoreBefore: true,
+                hasMoreAfter: false
+            ),
+            TimelinePageFfi(
+                messages: [timelineRecord(messageIdHex: oldestId, timelineAt: 1)],
+                hasMoreBefore: false,
+                hasMoreAfter: false
+            ),
+        ])
+
+        let messages = try ConversationTranscriptExport.fetchAllMessages(
+            timelineReader: reader,
+            accountRef: "account-1",
+            groupIdHex: groupId
+        )
+
+        #expect(messages.map(\.messageIdHex) == [oldestId, middleId, newestId])
+        #expect(reader.accountRefs == ["account-1", "account-1"])
+        #expect(reader.queries.count == 2)
+        let firstQuery = try #require(reader.queries.first)
+        #expect(firstQuery.groupIdHex == groupId)
+        #expect(firstQuery.before == nil)
+        #expect(firstQuery.beforeMessageId == nil)
+        #expect(firstQuery.limit == ConversationTranscriptExport.pageLimit)
+        let secondQuery = try #require(reader.queries.last)
+        #expect(secondQuery.before == 2)
+        #expect(secondQuery.beforeMessageId == middleId)
+        #expect(secondQuery.limit == ConversationTranscriptExport.pageLimit)
+    }
+
+    @Test func exportActionUsesAsyncMarmotClientWrapper() throws {
+        let rootURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        let groupDetailsSource = try String(
+            contentsOf: rootURL.appendingPathComponent("darkmatter-ios/Group/GroupDetailsView.swift"),
+            encoding: .utf8
+        )
+        #expect(groupDetailsSource.contains("try await client.exportConversationTranscript("))
+        #expect(!groupDetailsSource.contains("ConversationTranscriptExport.fetchAllMessages(\n                marmot: appState.marmot"))
+
+        let marmotClientSource = try String(
+            contentsOf: rootURL.appendingPathComponent("darkmatter-ios/Core/MarmotClient.swift"),
+            encoding: .utf8
+        )
+        #expect(marmotClientSource.contains("func exportConversationTranscript("))
+        #expect(marmotClientSource.contains("Task.detached(priority: .utility)"))
+    }
+
     @Test func temporaryFileWriteUsesCompleteFileProtection() throws {
         let data = Data("private transcript".utf8)
         let url = try ConversationTranscriptExport.writeTemporaryFile(
@@ -158,4 +219,20 @@ private func timelineRecord(
         deletedByMessageIdHex: nil,
         invalidationStatus: nil
     )
+}
+
+private final class FakeTranscriptTimelineReader: ConversationTranscriptTimelineReading {
+    private var pages: [TimelinePageFfi]
+    private(set) var accountRefs: [String] = []
+    private(set) var queries: [TimelineMessageQueryFfi] = []
+
+    init(pages: [TimelinePageFfi]) {
+        self.pages = pages
+    }
+
+    func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi) throws -> TimelinePageFfi {
+        accountRefs.append(accountRef)
+        queries.append(query)
+        return pages.removeFirst()
+    }
 }
