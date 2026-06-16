@@ -761,35 +761,164 @@ nonisolated enum MediaWaveformAnalyzer {
         }
     }
 
+    /// Upper bound on frames decoded per streaming read. The analyzer reuses one
+    /// buffer instead of sizing a buffer to the whole file, which keeps peak PCM
+    /// memory bounded regardless of the decoded file length. Received audio is
+    /// peer-controlled and decodes far larger than the compressed 50 MB cap, so
+    /// a whole-file buffer is remotely triggerable OOM (see darkmatter-ios#208).
+    /// This is only a frame ceiling; the actual per-read capacity is also bounded
+    /// in *bytes* by `maxChunkBytes` so a hostile channel count cannot inflate the
+    /// allocation (a fixed frame count alone would still allocate
+    /// `frames * channelCount * bytesPerSample`).
+    static let chunkFrameCapacityCeiling: AVAudioFrameCount = 65_536
+
+    /// Hard ceiling on the bytes a single streaming read buffer may allocate,
+    /// independent of the peer-controlled channel count. The per-frame PCM cost
+    /// scales with channel count, so a fixed frame count does not bound memory;
+    /// the chunk frame capacity is derived from this budget instead. 4 MiB.
+    static let maxChunkBytes: Int = 4 * 1024 * 1024
+
+    /// Reject audio whose declared channel count is implausible. Real-world audio
+    /// messages are mono/stereo; a handful of channels covers legitimate
+    /// multichannel content, while a peer-supplied container can declare
+    /// thousands purely to force a large allocation. Defense in depth on top of
+    /// the byte budget so the streaming loop never degenerates into tiny reads.
+    static let maxChannelCount: AVAudioChannelCount = 32
+
+    /// Frames to allocate per streaming read, derived from a fixed PCM byte
+    /// budget so the buffer allocation (`frames * channelCount * bytesPerSample`)
+    /// stays bounded regardless of the peer-controlled channel count. Clamped to
+    /// at least one frame and at most `chunkFrameCapacityCeiling`. Pure helper for
+    /// testability — this is the byte-budget invariant the OOM fix depends on.
+    static func chunkFrameCapacity(
+        channelCount: AVAudioChannelCount,
+        bytesPerSample: Int
+    ) -> AVAudioFrameCount {
+        let channels = max(1, Int(channelCount))
+        let sampleBytes = max(1, bytesPerSample)
+        let perFrameBytes = channels * sampleBytes
+        let framesInBudget = max(1, maxChunkBytes / perFrameBytes)
+        let clamped = min(framesInBudget, Int(chunkFrameCapacityCeiling))
+        return AVAudioFrameCount(clamped)
+    }
+
+    /// Hard ceiling on frames analyzed for the waveform, independent of the
+    /// file's declared length. ~30 minutes at 48 kHz. Defends against a hostile
+    /// declared length forcing unbounded decode work; the waveform only needs a
+    /// coarse 36-bucket shape, so truncating very long audio is acceptable.
+    static let maxAnalyzedFrames: AVAudioFramePosition = 48_000 * 60 * 30
+
+    /// Clamp the number of frames analyzed so a peer-controlled declared length
+    /// cannot force unbounded work. Pure helper for testability.
+    static func analyzedFrameCount(totalFrames: AVAudioFramePosition) -> AVAudioFramePosition {
+        guard totalFrames > 0 else { return 0 }
+        return min(totalFrames, maxAnalyzedFrames)
+    }
+
+    /// Frames to request on the next read, never exceeding the per-read chunk
+    /// capacity. This is the invariant that keeps memory bounded: even for a
+    /// multi-gigabyte declared length, no single read allocates more than
+    /// `chunkCapacity` frames. Pure helper for testability.
+    static func nextChunkFrameCount(
+        analyzedFrames: AVAudioFramePosition,
+        framesProcessed: AVAudioFramePosition,
+        chunkCapacity: AVAudioFrameCount
+    ) -> AVAudioFrameCount {
+        let remaining = analyzedFrames - framesProcessed
+        guard remaining > 0 else { return 0 }
+        return AVAudioFrameCount(min(AVAudioFramePosition(chunkCapacity), remaining))
+    }
+
+    /// Map an absolute frame index onto its waveform bucket, clamped into range.
+    /// Pure helper for testability.
+    static func bucketIndex(
+        forFrame frame: AVAudioFramePosition,
+        analyzedFrames: AVAudioFramePosition,
+        bucketCount: Int = sampleCount
+    ) -> Int {
+        guard analyzedFrames > 0, bucketCount > 0 else { return 0 }
+        let index = Int(frame * AVAudioFramePosition(bucketCount) / analyzedFrames)
+        return min(bucketCount - 1, max(0, index))
+    }
+
     static func metadata(from data: Data, mediaType: String) -> Metadata {
         TemporaryMediaFile.withURL(data: data, fileExtension: MediaAttachmentPolicy.fileExtension(for: mediaType)) { url in
             do {
                 let file = try AVAudioFile(forReading: url)
-                let duration = Double(file.length) / file.processingFormat.sampleRate
+                let format = file.processingFormat
+                let sampleRate = format.sampleRate
+                let totalFrames = file.length
+                let duration = sampleRate > 0 ? Double(totalFrames) / sampleRate : nil
+
+                let analyzedFrames = analyzedFrameCount(totalFrames: totalFrames)
+                guard analyzedFrames > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                // Reject implausible channel counts: a peer-supplied container can
+                // declare thousands of channels purely to inflate the PCM buffer.
+                let channelCount = format.channelCount
+                guard channelCount > 0, channelCount <= maxChannelCount else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                // Derive the per-read frame capacity from a fixed PCM *byte*
+                // budget so the buffer allocation stays bounded regardless of the
+                // (peer-controlled) channel count. A fixed frame count alone would
+                // still allocate `frames * channelCount * bytesPerSample` bytes.
+                // `mBitsPerChannel` is the per-sample width (32 for the float
+                // processing format); fall back to Float size if it is unset.
+                let bitsPerChannel = Int(format.streamDescription.pointee.mBitsPerChannel)
+                let bytesPerSample = bitsPerChannel > 0
+                    ? (bitsPerChannel + 7) / 8
+                    : MemoryLayout<Float>.size
+                let chunkCapacity = chunkFrameCapacity(
+                    channelCount: channelCount,
+                    bytesPerSample: bytesPerSample
+                )
+
+                // One reusable, byte-budget-bounded buffer — never sized to the file.
                 guard let buffer = AVAudioPCMBuffer(
-                    pcmFormat: file.processingFormat,
-                    frameCapacity: AVAudioFrameCount(file.length)
+                    pcmFormat: format,
+                    frameCapacity: chunkCapacity
                 ) else {
                     return Metadata(durationSeconds: duration, samples: fallback())
                 }
-                try file.read(into: buffer)
-                guard let channel = buffer.floatChannelData?[0] else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-                let frameLength = Int(buffer.frameLength)
-                guard frameLength > 0 else {
-                    return Metadata(durationSeconds: duration, samples: fallback())
-                }
-                let bucket = max(1, frameLength / sampleCount)
-                let samples = (0..<sampleCount).map { index -> CGFloat in
-                    let start = min(frameLength - 1, index * bucket)
-                    let end = min(frameLength, start + bucket)
-                    guard end > start else { return 0.08 }
-                    var peak: Float = 0
-                    for offset in start..<end {
-                        peak = max(peak, abs(channel[offset]))
+
+                var peaks = [Float](repeating: 0, count: sampleCount)
+                var counts = [Int](repeating: 0, count: sampleCount)
+                var framesProcessed: AVAudioFramePosition = 0
+
+                while true {
+                    let toRead = nextChunkFrameCount(
+                        analyzedFrames: analyzedFrames,
+                        framesProcessed: framesProcessed,
+                        chunkCapacity: chunkCapacity
+                    )
+                    guard toRead > 0 else { break }
+                    buffer.frameLength = 0
+                    try file.read(into: buffer, frameCount: toRead)
+                    let read = Int(buffer.frameLength)
+                    guard read > 0, let channel = buffer.floatChannelData?[0] else { break }
+                    for offset in 0..<read {
+                        let bucket = bucketIndex(
+                            forFrame: framesProcessed + AVAudioFramePosition(offset),
+                            analyzedFrames: analyzedFrames
+                        )
+                        let value = abs(channel[offset])
+                        if value > peaks[bucket] { peaks[bucket] = value }
+                        counts[bucket] += 1
                     }
-                    return CGFloat(min(1, max(0.05, sqrt(peak))))
+                    framesProcessed += AVAudioFramePosition(read)
+                }
+
+                guard framesProcessed > 0 else {
+                    return Metadata(durationSeconds: duration, samples: fallback())
+                }
+
+                let samples = (0..<sampleCount).map { index -> CGFloat in
+                    guard counts[index] > 0 else { return 0.08 }
+                    return CGFloat(min(1, max(0.05, sqrt(peaks[index]))))
                 }
                 return Metadata(durationSeconds: duration, samples: normalized(samples))
             } catch {
