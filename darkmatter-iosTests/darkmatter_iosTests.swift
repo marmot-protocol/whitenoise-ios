@@ -2956,6 +2956,28 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("https://172.32.0.1/avatar.png") != nil)
     }
 
+    @Test func imageURLRejectsSharedAddressSpaceAndOtherReservedIPv4() {
+        // RFC 6598 Carrier-Grade-NAT / shared address space (100.64.0.0/10).
+        #expect(ProfileSanitizer.imageURL("https://100.64.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://100.64.0.0/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://100.100.50.25/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://100.127.255.255/avatar.png") == nil)
+        // RFC 6890 IETF protocol assignments (192.0.0.0/24).
+        #expect(ProfileSanitizer.imageURL("https://192.0.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://192.0.0.255/avatar.png") == nil)
+        // Multicast (224.0.0.0/4) and reserved/future-use (240.0.0.0/4).
+        #expect(ProfileSanitizer.imageURL("https://224.0.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://239.255.255.255/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://240.0.0.1/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://255.255.255.255/avatar.png") == nil)
+
+        // Boundaries just outside the blocked ranges remain reachable.
+        #expect(ProfileSanitizer.imageURL("https://100.63.255.255/avatar.png") != nil)
+        #expect(ProfileSanitizer.imageURL("https://100.128.0.1/avatar.png") != nil)
+        #expect(ProfileSanitizer.imageURL("https://192.0.1.1/avatar.png") != nil)
+        #expect(ProfileSanitizer.imageURL("https://223.255.255.255/avatar.png") != nil)
+    }
+
     @Test func imageURLRejectsLegacyIPv4LiteralBypasses() {
         #expect(ProfileSanitizer.imageURL("https://127.0.0.1./avatar.png") == nil)
         #expect(ProfileSanitizer.imageURL("https://2130706433/avatar.png") == nil)
