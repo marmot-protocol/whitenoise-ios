@@ -669,8 +669,16 @@ final class AppState {
               !runtimeSuspendedForBackground,
               !isRuntimeSuspending
         else { return }
-        nativePushRegistrationTask?.cancel()
+        let previousTask = nativePushRegistrationTask
+        previousTask?.cancel()
         nativePushRegistrationTask = Task { [weak self] in
+            // Drain the prior (now-cancelled) registration task before starting
+            // a fresh sync so overlapping per-account upsertPushRegistration FFI
+            // writes cannot run concurrently. The per-account loop only checks
+            // Task.isCancelled *between* accounts, so without this await a
+            // reschedule (e.g. on token arrival) could issue two concurrent
+            // upsertPushRegistration calls. Mirrors cancelNativePushRegistrationTask().
+            await previousTask?.value
             guard let self else { return }
             await syncNativePushRegistrationIfEnabled()
         }
