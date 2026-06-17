@@ -57,6 +57,25 @@ struct SendDispatchAndCancellationTests {
         #expect(sourceContains(cancelHelperPattern, in: source))
     }
 
+    /// #258 — scheduleNativePushRegistrationIfEnabled must drain the prior
+    /// (cancelled) registration task before starting a fresh sync, otherwise a
+    /// reschedule (e.g. on token arrival) mid per-account write can issue two
+    /// concurrent upsertPushRegistration FFI calls. The new task must capture
+    /// the previous task, cancel it, and `await` its value before invoking
+    /// syncNativePushRegistrationIfEnabled() — mirroring the drain in
+    /// cancelNativePushRegistrationTask().
+    @Test func scheduleNativePushDrainsPriorTaskBeforeNewSync() throws {
+        let source = try sourceString("darkmatter-ios/Core/AppState.swift")
+        let drainPattern =
+            #"func scheduleNativePushRegistrationIfEnabled\(\) \{[\s\S]*"# +
+            #"let previousTask = nativePushRegistrationTask[\s\S]*"# +
+            #"previousTask\?\.cancel\(\)[\s\S]*"# +
+            #"nativePushRegistrationTask = Task \{ \[weak self\] in[\s\S]*"# +
+            #"await previousTask\?\.value[\s\S]*"# +
+            #"await syncNativePushRegistrationIfEnabled\(\)"#
+        #expect(sourceContains(drainPattern, in: source))
+    }
+
     private func sourceString(_ relativePath: String) throws -> String {
         let url = URL(filePath: #filePath)
             .deletingLastPathComponent()
