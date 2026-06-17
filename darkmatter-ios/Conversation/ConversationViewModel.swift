@@ -1572,6 +1572,14 @@ final class ConversationViewModel {
         replaceMediaRecordsByMessageId(recordsByMessageId)
     }
 
+    func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
+        pendingMediaByRowId[rowId] = items
+    }
+
+    func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
+        pendingMediaByRowId[rowId]
+    }
+
     func mediaRecordReferenceForTesting(
         matching reference: MediaAttachmentReferenceFfi
     ) -> MediaAttachmentReferenceFfi? {
@@ -2230,9 +2238,18 @@ final class ConversationViewModel {
         }
         let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
         projectionChanged = (transientTimelineItems.removeValue(forKey: "msg:\(tempId)") != nil) || projectionChanged
-        projectionChanged = (pendingMediaByRowId.removeValue(forKey: "msg:\(tempId)") != nil) || projectionChanged
+        let removedPendingMedia = pendingMediaByRowId.removeValue(forKey: "msg:\(tempId)")
+        projectionChanged = (removedPendingMedia != nil) || projectionChanged
         projectionChanged = removeTimelineItem(id: "msg:\(tempId)") || projectionChanged
         if realId.isEmpty {
+            // No server message id: the row stays transient under "msg:\(tempId)".
+            // Restore the pending media we just removed so the just-sent
+            // attachments keep rendering — without a real message id there is no
+            // mediaRecordsByMessageId entry to fall back on, so dropping this
+            // would silently blank the bubble's images.
+            if let removedPendingMedia {
+                pendingMediaByRowId[rowId] = removedPendingMedia
+            }
             let item = TimelineItem(
                 id: rowId,
                 kind: .message(record: confirmed, status: .sent),

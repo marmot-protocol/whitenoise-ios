@@ -3985,6 +3985,52 @@ struct ConversationTimelineProjectionTests {
         #expect(messages.first?.2 == projected.timelineAt)
     }
 
+    @MainActor
+    @Test func confirmSentWithoutServerIdPreservesPendingMediaOnRecreatedRow() throws {
+        let sender = hex("11")
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: groupIdHex)
+        )
+        let tempId = "pending-media-1"
+        let tempRowId = "msg:\(tempId)"
+        let pending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: "",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let attachment = MessageMediaAttachment(
+            id: "\(tempRowId):0",
+            reference: nil,
+            fileName: "a.jpg",
+            mediaType: "image/jpeg",
+            dim: "640x480",
+            localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
+        )
+
+        // Mirror sendMedia's optimistic setup: stage the local attachment bytes
+        // under the temp row, then add the transient bubble.
+        viewModel.installPendingMediaForTesting(rowId: tempRowId, items: [attachment])
+        viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
+
+        // uploadMedia succeeded but returned no message id.
+        viewModel.confirmSent(tempId: tempId, record: pending, messageId: nil)
+
+        // The transient row is recreated under the same id (no server id), and the
+        // just-sent attachment must still resolve instead of vanishing.
+        #expect(viewModel.pendingMediaForTesting(rowId: tempRowId) == [attachment])
+
+        let mediaRow = try #require(viewModel.timeline.first { $0.id == tempRowId })
+        #expect(viewModel.mediaItems(for: mediaRow) == [attachment])
+    }
+
     @Test func projectedOutgoingMessageReconcilesClosestPendingBubbleWhenContentMatches() throws {
         let sender = hex("11")
         let groupIdHex = hex("aa")
