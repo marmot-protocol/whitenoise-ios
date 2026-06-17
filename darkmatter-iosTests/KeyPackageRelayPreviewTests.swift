@@ -22,4 +22,23 @@ struct KeyPackageRelayPreviewTests {
         let many = (0..<10).map { "wss://r\($0).example" }
         #expect(KeyPackagesView.sanitizedRelays(many).components(separatedBy: ", ").count == 4)
     }
+
+    /// #252 — relay-influenced numeric fields must clamp at the display boundary.
+    /// `Int64(bytes)` traps on hostile values near `UInt64.max`; clamping must
+    /// not crash and must match `ByteCountFormatter` on the clamped bound.
+    @Test func byteCountClampsHostileSizeWithoutTrapping() {
+        let hostile = KeyPackagesView.byteCount(UInt64.max)
+        let expected = ByteCountFormatter.string(fromByteCount: Int64.max, countStyle: .file)
+        #expect(hostile == expected)
+        // A normal value is unaffected by clamping.
+        #expect(KeyPackagesView.byteCount(1_536)
+            == ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file))
+    }
+
+    @Test func publishedDescriptionClampsHostileTimestampWithoutTrapping() {
+        // Must not trap on a hostile far-future timestamp near UInt64.max.
+        #expect(KeyPackagesView.publishedDescription(UInt64.max) != nil)
+        // Zero/empty timestamps render nothing.
+        #expect(KeyPackagesView.publishedDescription(0) == nil)
+    }
 }

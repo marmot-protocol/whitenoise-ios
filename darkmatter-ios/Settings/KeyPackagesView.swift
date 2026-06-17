@@ -132,13 +132,13 @@ struct KeyPackagesView: View {
                 badge(for: pkg)
             }
             HStack(spacing: 10) {
-                if let published = publishedDescription(pkg.publishedAt) {
+                if let published = Self.publishedDescription(pkg.publishedAt) {
                     Text(published)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if pkg.keyPackageBytes > 0 {
-                    Text(byteCount(pkg.keyPackageBytes))
+                    Text(Self.byteCount(pkg.keyPackageBytes))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
@@ -190,14 +190,22 @@ struct KeyPackagesView: View {
         return "\(capped.prefix(8))…\(capped.suffix(6))"
     }
 
-    private func publishedDescription(_ ts: UInt64) -> String? {
+    /// `ts` is a relay-influenced timestamp (seconds since epoch). Anyone can
+    /// publish anything to a relay, so clamp into the signed range before the
+    /// `TimeInterval` conversion rather than trusting the raw value — matching
+    /// the defensive `Int64(clamping:)` projection in
+    /// `PrivacySecuritySettingsProjection`.
+    static func publishedDescription(_ ts: UInt64) -> String? {
         guard ts > 0 else { return nil }
-        let date = Date(timeIntervalSince1970: TimeInterval(ts))
+        let date = Date(timeIntervalSince1970: TimeInterval(Int64(clamping: ts)))
         return L10n.formatted("Published %@", date.formatted(.relative(presentation: .named)))
     }
 
-    private func byteCount(_ bytes: UInt64) -> String {
-        ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
+    /// `bytes` is a relay-influenced size. `Int64(bytes)` traps on hostile
+    /// values near `UInt64.max`; clamp at the display boundary instead, as
+    /// `PrivacySecuritySettingsProjection.byteCount` already does.
+    static func byteCount(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
 
     /// Strip spoofing characters and cap length on relay-supplied strings.
