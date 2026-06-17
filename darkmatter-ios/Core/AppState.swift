@@ -766,13 +766,16 @@ final class AppState {
         }
     }
 
-    func startForegroundActivation() {
+    @discardableResult
+    func startForegroundActivation() -> Task<Void, Never> {
         isAppSceneActive = true
         foregroundActivationTask?.cancel()
-        foregroundActivationTask = Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
             await resumeAfterForegroundActivation()
         }
+        foregroundActivationTask = task
+        return task
     }
 
     @discardableResult
@@ -794,8 +797,19 @@ final class AppState {
 
     func prepareForBackgroundSuspension() async {
         defer { runtimeSuspensionTask = nil }
-        isAppSceneActive = false
         await cancelForegroundMaintenance()
+        // `isAppSceneActive` is owned by the synchronous scene-phase entry
+        // points (`startRuntimeSuspension` / `startForegroundActivation` /
+        // `setAppSceneActive`), which run in true scene-delivery order. After
+        // the `await` above a racing foreground activation may have flipped the
+        // scene back to active. Re-check the authoritative flag before the
+        // irreversible teardown: suspending now would strand the app
+        // foregrounded with `client == nil` and nothing to re-trigger resume
+        // (#222). Hand back to a fresh foreground activation instead.
+        guard !isAppSceneActive else {
+            startForegroundActivation()
+            return
+        }
         guard phase == .ready,
               !runtimeSuspendedForBackground,
               !isRuntimeSuspending
@@ -815,7 +829,6 @@ final class AppState {
     }
 
     func resumeAfterForegroundActivation() async {
-        isAppSceneActive = true
         await waitForRuntimeSuspensionToFinish()
         guard phase == .ready, !Task.isCancelled else { return }
 
@@ -983,4 +996,20 @@ final class AppState {
             quicCandidates: Self.agentTextStreamQuicCandidates
         )
     }
+
+    #if DEBUG
+    /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
+    /// drive the real scene-phase entry points (`startRuntimeSuspension` /
+    /// `startForegroundActivation`) and then await the terminal state. A
+    /// suspension that re-checks the scene and reschedules a resume (#222)
+    /// chains a fresh `foregroundActivationTask`; resume never reschedules a
+    /// suspension, so awaiting suspension, then the (possibly rescheduled)
+    /// foreground activation, then native-push registration drains the chain.
+    @MainActor
+    func drainRuntimeLifecycleTasksForTesting() async {
+        await runtimeSuspensionTask?.value
+        await foregroundActivationTask?.value
+        await nativePushRegistrationTask?.value
+    }
+    #endif
 }
