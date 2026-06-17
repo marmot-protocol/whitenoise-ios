@@ -2075,13 +2075,17 @@ final class ConversationViewModel {
                 MessageTagFfi(values: [MessageSemantics.quoteRefTag, $0]),
             ]
         } ?? []
+        // Parse markdown off the MainActor: `parseMarkdown` is a synchronous
+        // rustCall whose cost scales with message length, so building the
+        // optimistic record inline would stall the composer at send time (#226).
+        let contentTokens = await appState.parseMarkdown(text: outgoing)
         let optimistic = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",
             groupIdHex: group.groupIdHex,
             sender: appState.activeAccount?.accountIdHex ?? "",
             plaintext: outgoing,
-            contentTokens: appState.marmot.parseMarkdown(text: outgoing),
+            contentTokens: contentTokens,
             kind: MessageSemantics.kindChat,
             tags: optimisticTags,
             recordedAt: now,
@@ -2133,7 +2137,7 @@ final class ConversationViewModel {
         let now = UInt64(Date().timeIntervalSince1970)
         let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
             ? .emptyDocument
-            : appState.marmot.parseMarkdown(text: outgoingCaption)
+            : await appState.parseMarkdown(text: outgoingCaption)
         let optimistic = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",

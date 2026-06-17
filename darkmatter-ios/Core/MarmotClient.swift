@@ -66,6 +66,17 @@ final class MarmotClient {
         }.value
     }
 
+    /// Parses markdown off the main actor. `Marmot.parseMarkdown(text:)` is a
+    /// synchronous `rustCall()` binding whose cost scales with message length,
+    /// so running it inline on MainActor stalls the composer/send animation for
+    /// long messages. Offloading here keeps the send path's optimistic-record
+    /// build off the UI thread (#226).
+    func parseMarkdown(text: String) async -> MarkdownDocumentFfi {
+        await Task.detached(priority: .userInitiated) { [marmot] in
+            marmot.parseMarkdown(text: text)
+        }.value
+    }
+
     /// Reads notification settings off the main actor before deciding which
     /// local accounts should refresh native push registration.
     func nativePushEnabledAccountRefs(accountRefs: [String]) async -> [String] {
