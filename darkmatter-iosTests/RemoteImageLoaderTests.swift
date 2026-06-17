@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import UIKit
+import UniformTypeIdentifiers
 
 @testable import darkmatter_ios
 
@@ -36,6 +37,26 @@ struct RemoteImageLoaderTests {
         #expect(source.contains("CGImageSourceCreateThumbnailAtIndex"))
         #expect(source.contains("kCGImageSourceThumbnailMaxPixelSize"))
         #expect(!source.contains("UIImage(data: data)"))
+    }
+
+    @Test func remoteImageFetchDoesNotAdvertiseSVGContent() throws {
+        let request = RemoteImageFetch.request(
+            for: try #require(URL(string: "https://example.com/avatar.png")),
+            accept: RemoteImageFetch.remoteImageAcceptHeader
+        )
+        let accept = try #require(request.value(forHTTPHeaderField: "Accept"))
+
+        #expect(!accept.contains("image/svg+xml"))
+        #expect(accept.contains("image/png"))
+        #expect(accept.contains("image/jpeg"))
+        #expect(accept.contains("image/webp"))
+    }
+
+    @Test func remoteImageDecoderRejectsSVGTypes() {
+        #expect(RemoteImageDecoder.isAllowedRemoteImageType(UTType.png.identifier as CFString))
+        #expect(RemoteImageDecoder.isAllowedRemoteImageType(UTType.jpeg.identifier as CFString))
+        #expect(!RemoteImageDecoder.isAllowedRemoteImageType(UTType.svg.identifier as CFString))
+        #expect(!RemoteImageDecoder.isAllowedRemoteImageType(nil))
     }
 
     @Test func avatarLoaderCachesDecodedImagesByURLAndPixelSize() throws {

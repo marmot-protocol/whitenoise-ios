@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import UIKit
+import UniformTypeIdentifiers
 
 /// Re-validates every HTTP redirect target through the same SSRF allowlist that
 /// gates the initial URL (`ProfileSanitizer.imageURL`: HTTPS + public host).
@@ -35,6 +36,17 @@ nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelega
 
 nonisolated enum RemoteImageFetch {
     static let maximumImageBytes = 2 * 1024 * 1024
+    static let remoteImageAcceptHeader = [
+        "image/avif",
+        "image/webp",
+        "image/apng",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/heic",
+        "image/heif",
+        "*/*;q=0.8",
+    ].joined(separator: ",")
 
     private static let redirectGuard = RemoteImageRedirectGuard()
 
@@ -51,7 +63,7 @@ nonisolated enum RemoteImageFetch {
     static func imageData(for url: URL) async throws -> Data {
         let request = request(
             for: url,
-            accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+            accept: remoteImageAcceptHeader
         )
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse,
@@ -101,12 +113,22 @@ nonisolated enum RemoteImageDecoder {
         let image: UIImage
     }
 
+    static func isAllowedRemoteImageType(_ typeIdentifier: CFString?) -> Bool {
+        guard let typeIdentifier,
+              let type = UTType(typeIdentifier as String)
+        else { return false }
+        return type.conforms(to: .image) && !type.conforms(to: UTType.svg)
+    }
+
     static func downsampledImage(from data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
         let targetPixelSize = max(maxPixelSize, 1)
         let imageScale = max(scale, 1)
         let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
             let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
             guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+                return nil
+            }
+            guard Self.isAllowedRemoteImageType(CGImageSourceGetType(source)) else {
                 return nil
             }
             let options = [
