@@ -4737,6 +4737,83 @@ struct AgentStreamTests {
     }
 
     @MainActor
+    @Test func recordFinalizedStreamsSkipsAlreadyScannedRecordsAcrossPages() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        let final = timelineRecord(
+            messageIdHex: hex("ef"),
+            sender: hex("11"),
+            plaintext: "complete",
+            kind: MessageSemantics.kindChat,
+            tags: [
+                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
+                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("cc")]),
+            ],
+            timelineAt: 2,
+            agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"finalized","start_event_id":"\#(hex("cc"))"}"#
+        )
+        let page = TimelinePageFfi(messages: [final], hasMoreBefore: false, hasMoreAfter: false)
+
+        // Apply the same window page repeatedly, as heavy pagination would.
+        viewModel.applyTimelinePage(page, placement: .window)
+        viewModel.applyTimelinePage(page, placement: .window)
+        viewModel.applyTimelinePage(page, placement: .window)
+
+        // The record is scanned at most once per distinct message id, and the
+        // finalized-stream guard is populated exactly once.
+        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
+        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+    }
+
+    @MainActor
+    @Test func scannedFinalizedCacheIsBoundedToLoadedWindowButGuardPersists() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let streamId = hex("ab")
+        let final = timelineRecord(
+            messageIdHex: hex("ef"),
+            sender: hex("11"),
+            plaintext: "complete",
+            kind: MessageSemantics.kindChat,
+            tags: [
+                MessageTagFfi(values: [MessageSemantics.streamTag, streamId]),
+                MessageTagFfi(values: [MessageSemantics.streamStartTag, hex("cc")]),
+            ],
+            timelineAt: 2,
+            agentTextStreamJson: #"{"stream_id_hex":"\#(streamId)","status":"finalized","start_event_id":"\#(hex("cc"))"}"#
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [final], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
+        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+
+        // A later window scrolls the finalized anchor out of the loaded set.
+        let other = timelineRecord(
+            messageIdHex: hex("dd"),
+            sender: hex("11"),
+            plaintext: "later",
+            timelineAt: 3
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [other], hasMoreBefore: true, hasMoreAfter: false),
+            placement: .window
+        )
+
+        // The scan cache is bounded to records still in the window, but the
+        // finalized-stream guard is never pruned (re-watch suppression must
+        // survive the anchor leaving the window).
+        #expect(viewModel.scannedFinalizedMessageIdCountForTesting == 1)
+        #expect(viewModel.finalizedStreamIdCountForTesting == 1)
+    }
+
+    @MainActor
     @Test func streamChunksRenderIntoOnePreviewBubble() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),

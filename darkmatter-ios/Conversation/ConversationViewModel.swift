@@ -169,13 +169,27 @@ final class ConversationViewModel {
 #if DEBUG
     var streamTextEntryCountForTesting: Int { streamText.count }
     var streamTextLengthEntryCountForTesting: Int { streamTextLengthById.count }
+    var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
+    var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
 #endif
     /// Streams that received a checkpoint snapshot. Their QUIC `.finished`
     /// text is text-delta-only, so prefer the current preview at close.
     private var streamsWithCheckpointPreview: Set<String> = []
     /// Streams whose final anchor message has arrived. Once finalized, the
     /// anchor's full text is authoritative and late live updates are ignored.
+    /// Populated both by scanning loaded anchor records and by live-stream
+    /// resolution (endStream/finalizeStreamBubble/resolveFinalizedStream), so it
+    /// is intentionally *not* pruned: live-resolution entries have no anchor
+    /// record in the window to re-derive from, and dropping any entry would let
+    /// a finalized stream be re-watched. Bounded by the conversation's distinct
+    /// stream count.
     private var finalizedStreamIds: Set<String> = []
+    /// Message ids of anchor records already passed through
+    /// `recordFinalizedStreams`. Anchor records are immutable for a given
+    /// message id, so this lets us skip re-decoding `agentTextStreamJson` and
+    /// re-classifying the same record on every window/tail page. Bounded to the
+    /// currently loaded window via `pruneScannedFinalizedMessageIds()`.
+    private var scannedFinalizedMessageIds: Set<String> = []
     /// Start-record timestamps for live previews, keyed by stream id.
     private var streamStartedAtById: [String: UInt64] = [:]
     private var streamSenderById: [String: String] = [:]
@@ -833,6 +847,7 @@ final class ConversationViewModel {
             ) || projectionChanged
         }
         recordFinalizedStreams(in: page.messages)
+        pruneScannedFinalizedMessageIds(keeping: incomingMessageIds)
         for record in page.messages {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
         }
@@ -852,6 +867,7 @@ final class ConversationViewModel {
         for record in records {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
         }
+        pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         if !hasMoreAfter {
             hasMoreBefore = page.hasMoreBefore
             hasMoreAfter = page.hasMoreAfter
@@ -2540,11 +2556,28 @@ final class ConversationViewModel {
 
     private func recordFinalizedStreams(in records: [TimelineMessageRecordFfi]) {
         for record in records {
+            // Anchor records are immutable for a given message id, so once a
+            // record has been scanned its finalized-stream classification can't
+            // change. Skip the JSON decode + classification on later pages.
+            let messageId = record.messageIdHex
+            if !messageId.isEmpty {
+                guard scannedFinalizedMessageIds.insert(messageId).inserted else { continue }
+            }
             let appRecord = Self.appMessageRecord(from: record)
             if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
                 finalizedStreamIds.insert(streamId)
             }
         }
+    }
+
+    /// Bound `scannedFinalizedMessageIds` to the records still represented in
+    /// the loaded window. Records evicted from the window can reappear on a
+    /// later page, and re-scanning them then is idempotent (it only re-inserts
+    /// into `finalizedStreamIds`, which is never pruned), so dropping their
+    /// scan markers is safe and keeps the cache from growing without bound.
+    private func pruneScannedFinalizedMessageIds(keeping loadedMessageIds: Set<String>) {
+        guard !scannedFinalizedMessageIds.isEmpty else { return }
+        scannedFinalizedMessageIds.formIntersection(loadedMessageIds)
     }
 
     private static func finalizedStreamId(
