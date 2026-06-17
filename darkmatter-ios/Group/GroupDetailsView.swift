@@ -63,7 +63,7 @@ struct GroupDetailsView: View {
         }
         .sheet(isPresented: $showAddMembers) {
             AddMembersSheet(
-                normalize: { try appState.marmot.normalizeMemberRef(memberRef: $0) },
+                normalize: { try await appState.currentMarmotClient().normalizeMemberRef(memberRef: $0) },
                 onSubmit: { refs in try await invite(refs: refs) }
             )
             .appAppearance()

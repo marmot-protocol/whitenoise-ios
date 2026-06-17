@@ -54,6 +54,18 @@ final class MarmotClient {
         }.value
     }
 
+    /// Normalizes a staged recipient reference off the main actor.
+    /// `Marmot.normalizeMemberRef` is a synchronous FFI call (bech32/TLV decode
+    /// plus possible relay-hint normalization), so running it inline on the
+    /// MainActor blocks the UI on every add / QR scan / submit. Offloading it
+    /// here lets the add-members / new-chat paths read as a plain `await` and
+    /// only hop back to the MainActor to stage the result (#260).
+    func normalizeMemberRef(memberRef: String) async throws -> MemberRefFfi {
+        try await Task.detached(priority: .userInitiated) { [marmot, memberRef] in
+            try marmot.normalizeMemberRef(memberRef: memberRef)
+        }.value
+    }
+
     /// Reads notification settings off the main actor before deciding which
     /// local accounts should refresh native push registration.
     func nativePushEnabledAccountRefs(accountRefs: [String]) async -> [String] {
