@@ -1911,13 +1911,29 @@ struct MessageMediaGallery: Identifiable {
 }
 
 enum MessageMediaFullscreenPresentation {
-    static func image(from data: Data?) -> UIImage? {
-        data.flatMap(UIImage.init(data:))
+    /// Pixel budget for a fullscreen decode derived from the longest native
+    /// screen edge. The fullscreen view only ever renders the image
+    /// `scaledToFit` within the screen, so a screen-sized decode is visually
+    /// lossless for presentation while capping the worst-case bitmap
+    /// allocation. Pure helper kept separate from `UIScreen` so it stays
+    /// testable and free of MainActor isolation.
+    static func fullscreenMaxPixelSize(forLongestScreenEdge longestEdge: CGFloat) -> Int {
+        guard longestEdge.isFinite, longestEdge >= 1 else { return 1 }
+        return max(1, Int(longestEdge.rounded(.up)))
     }
 
-    static func didFailInitialDecode(_ data: Data?) -> Bool {
-        guard let data else { return false }
-        return image(from: data) == nil
+    /// Decodes attacker-controlled image bytes off the MainActor, bounded to a
+    /// screen-sized pixel budget. Mirrors the thumbnail/grid hardening
+    /// (`MessageMediaThumbnailDecoder`) so the fullscreen path never performs a
+    /// full-resolution decode on the MainActor, and a crafted high-megapixel
+    /// image cannot allocate an unbounded bitmap on the UI actor.
+    static func decodedImage(from data: Data?, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
+        guard let data else { return nil }
+        return await MessageMediaThumbnailDecoder.image(
+            data: data,
+            maxPixelSize: maxPixelSize,
+            scale: scale
+        )
     }
 }
 
@@ -2046,10 +2062,19 @@ private struct MessageMediaFullscreenPage: View {
     ) {
         self.item = item
         self.onLoadMedia = onLoadMedia
-        let initialImage = MessageMediaFullscreenPresentation.image(from: initialImageData)
-        _imageData = State(initialValue: initialImage == nil ? nil : initialImageData)
-        _image = State(initialValue: initialImage)
-        _didFail = State(initialValue: MessageMediaFullscreenPresentation.didFailInitialDecode(initialImageData))
+        // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
+        // `loadImageIfNeeded`, which runs the decode off the MainActor and
+        // bounded to a screen-sized pixel budget. Stash the raw initial bytes
+        // (if any) so the first load can reuse them without re-fetching.
+        _imageData = State(initialValue: initialImageData)
+    }
+
+    private var fullscreenMaxPixelSize: Int {
+        let scale = UIScreen.main.scale
+        let bounds = UIScreen.main.bounds.size
+        let longestPoint = max(bounds.width, bounds.height)
+        let longestEdge = max(1, longestPoint * scale)
+        return MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: longestEdge)
     }
 
     var body: some View {
@@ -2089,20 +2114,47 @@ private struct MessageMediaFullscreenPage: View {
 
     private func loadImageIfNeeded(force: Bool = false) async {
         guard image == nil || force else { return }
+        let scale = UIScreen.main.scale
+        let maxPixelSize = fullscreenMaxPixelSize
+
+        // First, try decoding any bytes we already hold (initial data passed in
+        // from the gallery / a previous load) off the MainActor before paying
+        // for another fetch.
+        if !force, let existing = imageData {
+            if let decoded = await MessageMediaFullscreenPresentation.decodedImage(
+                from: existing,
+                maxPixelSize: maxPixelSize,
+                scale: scale
+            ) {
+                guard !Task.isCancelled else { return }
+                image = decoded
+                didFail = false
+                return
+            }
+        }
+
         isLoading = true
         didFail = false
         defer { isLoading = false }
         do {
             let data = try await onLoadMedia(item)
-            guard let decoded = MessageMediaFullscreenPresentation.image(from: data) else {
+            guard !Task.isCancelled else { return }
+            guard let decoded = await MessageMediaFullscreenPresentation.decodedImage(
+                from: data,
+                maxPixelSize: maxPixelSize,
+                scale: scale
+            ) else {
+                guard !Task.isCancelled else { return }
                 imageData = nil
                 image = nil
                 didFail = true
                 return
             }
+            guard !Task.isCancelled else { return }
             imageData = data
             image = decoded
         } catch {
+            guard !Task.isCancelled else { return }
             imageData = nil
             image = nil
             didFail = true

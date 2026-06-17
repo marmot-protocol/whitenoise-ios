@@ -6471,10 +6471,36 @@ struct MessageMediaGalleryTests {
         #expect(gallery.initialData(for: otherImage) == nil)
     }
 
-    @Test func fullscreenInitialDecodeFailureIsExplicit() {
-        #expect(MessageMediaFullscreenPresentation.didFailInitialDecode(Data([0x00])))
-        #expect(!MessageMediaFullscreenPresentation.didFailInitialDecode(nil))
-        #expect(MessageMediaFullscreenPresentation.image(from: imageData()) != nil)
+    @Test func fullscreenInitialDecodeFailureIsExplicit() async {
+        // Invalid bytes decode to nil off-main rather than crashing or
+        // returning a bogus image.
+        #expect(await MessageMediaFullscreenPresentation.decodedImage(
+            from: Data([0x00]),
+            maxPixelSize: 64,
+            scale: 1
+        ) == nil)
+        // Nil data short-circuits to nil without touching the decoder.
+        #expect(await MessageMediaFullscreenPresentation.decodedImage(
+            from: nil,
+            maxPixelSize: 64,
+            scale: 1
+        ) == nil)
+        // Valid bytes decode to a bounded, non-empty image.
+        let decoded = await MessageMediaFullscreenPresentation.decodedImage(
+            from: imageData(),
+            maxPixelSize: 64,
+            scale: 1
+        )
+        #expect(decoded != nil)
+        #expect((decoded?.size.width ?? 0) > 0)
+    }
+
+    @Test func fullscreenMaxPixelSizeIsScreenBoundedAndPositive() {
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 2532) == 2532)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 0) == 1)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: -10) == 1)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: .infinity) == 1)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 100.4) == 101)
     }
 
     @Test func thumbnailCacheRetainsSourceDataForFullscreenReuse() async throws {
