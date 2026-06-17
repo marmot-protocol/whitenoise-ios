@@ -1805,17 +1805,38 @@ enum MessageMediaThumbnailDecoder {
         cache.setObject(
             CachedThumbnail(image: image, sourceData: sourceData),
             forKey: cacheKey(for: itemID, maxPixelSize: maxPixelSize),
-            cost: sourceData.count
+            cost: thumbnailCacheCost(for: image, sourceData: sourceData)
         )
+    }
+
+    static func thumbnailCacheCost(for image: UIImage, sourceData: Data) -> Int {
+        let bitmapCost = decodedBitmapByteCost(for: image)
+        guard Int.max - bitmapCost >= sourceData.count else { return Int.max }
+        return max(1, bitmapCost + sourceData.count)
+    }
+
+    static func decodedBitmapByteCost(for image: UIImage) -> Int {
+        if let cgImage = image.cgImage {
+            let cost = cgImage.bytesPerRow.multipliedReportingOverflow(by: cgImage.height)
+            return cost.overflow ? Int.max : max(1, cost.partialValue)
+        }
+        let pixelWidth = max(1, Int(ceil(image.size.width * image.scale)))
+        let pixelHeight = max(1, Int(ceil(image.size.height * image.scale)))
+        let pixels = pixelWidth.multipliedReportingOverflow(by: pixelHeight)
+        guard !pixels.overflow else { return Int.max }
+        let bytes = pixels.partialValue.multipliedReportingOverflow(by: 4)
+        return bytes.overflow ? Int.max : max(1, bytes.partialValue)
     }
 
     static func image(data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
         let targetPixelSize = max(1, maxPixelSize)
         let imageScale = max(1, scale)
         let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
-            guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-                guard let image = UIImage(data: data) else { return nil }
-                return SendableImage(image: image)
+            let sourceOptions: [CFString: Any] = [
+                kCGImageSourceShouldCache: false,
+            ]
+            guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
+                return nil
             }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -1824,8 +1845,7 @@ enum MessageMediaThumbnailDecoder {
                 kCGImageSourceThumbnailMaxPixelSize: targetPixelSize,
             ]
             guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                guard let image = UIImage(data: data) else { return nil }
-                return SendableImage(image: image)
+                return nil
             }
             return SendableImage(image: UIImage(cgImage: cgImage, scale: imageScale, orientation: .up))
         }.value
