@@ -55,6 +55,13 @@ struct Bech32CharsetLookupTests {
         #expect(NostrProfileReference.memberRef(fromReference: "npub1" + String(repeating: "q", count: 58)) == nil)
     }
 
+    @Test func memberRefNormalizesUppercaseNpubToLowercase() {
+        // BIP-173 permits all-uppercase bech32 and bech32Decode accepts it, so
+        // an uppercase npub must normalize to the canonical lowercase form to
+        // match the hex/nprofile branches and de-dup correctly downstream (#232).
+        #expect(NostrProfileReference.memberRef(fromReference: npub.uppercased()) == npub)
+    }
+
     @Test func decodesKnownNprofileToPubkeyHex() {
         #expect(NostrProfileReference.memberRef(fromReference: nprofile) == nprofileHex)
     }

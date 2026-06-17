@@ -64,7 +64,12 @@ nonisolated enum NostrProfileReference {
         }
         if hasCaseInsensitivePrefix(trimmed, "npub1") {
             guard npubPubkeyBytes(trimmed) != nil else { return nil }
-            return trimmed
+            // Normalize to lowercase to match the hex and nprofile branches.
+            // bech32 is canonically lowercase (BIP-173) and the checksum is
+            // already validated above, so a scanned/pasted `NPUB1…` must not
+            // flow downstream un-normalized (would break ref-text dedup and
+            // may be mis-keyed/rejected by Marmot).
+            return trimmed.lowercased()
         }
         if Hex.is32Bytes(trimmed) {
             return trimmed.lowercased()
