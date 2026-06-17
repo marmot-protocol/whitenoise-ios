@@ -1599,8 +1599,13 @@ final class ConversationViewModel {
     private func reconcilePendingOutgoingMessage(with record: AppMessageRecordFfi, replyTargetId: String?) -> Bool {
         guard record.direction == "sent" else { return false }
         let projectedReplyTarget = replyTargetId ?? Self.replyTargetMessageId(in: record)
-        let matchingPendingMessages = transientTimelineItems.filter { _, item in
-            Self.pendingOutgoingMessage(item, matches: record, replyTargetId: projectedReplyTarget)
+        let matchingPendingMessages = transientTimelineItems.filter { key, item in
+            Self.pendingOutgoingMessage(
+                item,
+                matches: record,
+                replyTargetId: projectedReplyTarget,
+                pendingHasStagedMedia: pendingMediaByRowId[key]?.isEmpty == false
+            )
         }
         guard let match = matchingPendingMessages.min(by: { lhs, rhs in
             Self.pendingOutgoingMessage(lhs.value, isCloserTo: record, than: rhs.value)
@@ -1614,7 +1619,8 @@ final class ConversationViewModel {
     private static func pendingOutgoingMessage(
         _ item: TimelineItem,
         matches record: AppMessageRecordFfi,
-        replyTargetId: String?
+        replyTargetId: String?,
+        pendingHasStagedMedia: Bool
     ) -> Bool {
         guard case .message(let pending, let status) = item.kind,
               status == .sending || status == .sent,
@@ -1623,11 +1629,31 @@ final class ConversationViewModel {
             return false
         }
 
+        // A media optimistic record is built with `tags: []` and
+        // `plaintext: caption`, so it is otherwise indistinguishable from a
+        // plain text send carrying the same text. Without a media
+        // discriminator, the incoming confirmation for one can reconcile away
+        // the other's pending bubble (#262). Treat the pending row as media
+        // when it has staged local attachments or its own record already
+        // classifies as media, and require it to agree with the incoming
+        // record's media classification.
+        let pendingIsMedia = pendingHasStagedMedia || isMediaRecord(pending)
+        guard pendingIsMedia == isMediaRecord(record) else {
+            return false
+        }
+
         return pending.groupIdHex == record.groupIdHex
             && pending.sender == record.sender
             && pending.plaintext == record.plaintext
             && pending.kind == record.kind
             && replyTargetMessageId(in: pending) == replyTargetId
+    }
+
+    private static func isMediaRecord(_ record: AppMessageRecordFfi) -> Bool {
+        if case .media = MessageSemantics.classify(record) {
+            return true
+        }
+        return false
     }
 
     private static func pendingOutgoingMessage(
