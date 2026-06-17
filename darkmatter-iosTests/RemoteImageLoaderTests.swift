@@ -39,6 +39,18 @@ struct RemoteImageLoaderTests {
         #expect(!source.contains("UIImage(data: data)"))
     }
 
+    @Test func remoteImageFetchDataCapsResponseBytes() throws {
+        let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
+
+        // `data(for:)` (used by the DuckDuckGo image-search fetch) must stream
+        // with the same early-abort byte cap as `imageData(for:)`, not buffer
+        // an unbounded response via `session.data(for:)`.
+        #expect(source.contains("static let maximumResponseBytes ="))
+        #expect(source.contains("response.expectedContentLength > Int64(maximumResponseBytes)"))
+        #expect(source.contains("data.count < maximumResponseBytes"))
+        #expect(!source.contains("try await session.data(for: request)"))
+    }
+
     @Test func remoteImageFetchDoesNotAdvertiseSVGContent() throws {
         let request = RemoteImageFetch.request(
             for: try #require(URL(string: "https://example.com/avatar.png")),

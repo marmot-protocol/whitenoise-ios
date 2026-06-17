@@ -36,6 +36,12 @@ nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelega
 
 nonisolated enum RemoteImageFetch {
     static let maximumImageBytes = 2 * 1024 * 1024
+    /// Byte cap for non-image responses (e.g. the DuckDuckGo image-search
+    /// JSON/HTML fetched via `data(for:)`). Mirrors `maximumImageBytes` so a
+    /// hostile/oversized search response cannot be buffered unbounded into
+    /// memory. Larger than `maximumImageBytes` because a search payload can
+    /// legitimately exceed a single thumbnail's size.
+    static let maximumResponseBytes = 8 * 1024 * 1024
     static let remoteImageAcceptHeader = [
         "image/avif",
         "image/webp",
@@ -57,7 +63,23 @@ nonisolated enum RemoteImageFetch {
     )
 
     static func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        try await session.data(for: request)
+        let (bytes, response) = try await session.bytes(for: request)
+
+        if response.expectedContentLength > Int64(maximumResponseBytes) {
+            throw URLError(.dataLengthExceedsMaximum)
+        }
+
+        var data = Data()
+        if response.expectedContentLength > 0 {
+            data.reserveCapacity(Int(min(response.expectedContentLength, Int64(maximumResponseBytes))))
+        }
+        for try await byte in bytes {
+            guard data.count < maximumResponseBytes else {
+                throw URLError(.dataLengthExceedsMaximum)
+            }
+            data.append(byte)
+        }
+        return (data, response)
     }
 
     static func imageData(for url: URL) async throws -> Data {
