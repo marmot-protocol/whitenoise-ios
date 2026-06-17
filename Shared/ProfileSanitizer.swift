@@ -182,6 +182,21 @@ nonisolated enum ProfileSanitizer {
         if octets[0] == 192 && octets[1] == 168 {
             return true
         }
+        // RFC 6598 Carrier-Grade-NAT / shared address space: 100.64.0.0/10.
+        // The device gateway, captive portal, and internal services often live
+        // here on mobile-carrier and CG-NAT networks.
+        if octets[0] == 100 && (64...127).contains(Int(octets[1])) {
+            return true
+        }
+        // RFC 6890 IETF protocol assignments: 192.0.0.0/24.
+        if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
+            return true
+        }
+        // Multicast (224.0.0.0/4) and reserved/future-use (240.0.0.0/4) space,
+        // which also covers the 255.255.255.255 limited broadcast address.
+        if (224...255).contains(Int(octets[0])) {
+            return true
+        }
         return false
     }
 

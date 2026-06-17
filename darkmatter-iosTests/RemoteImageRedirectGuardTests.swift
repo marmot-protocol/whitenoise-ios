@@ -23,6 +23,12 @@ struct RemoteImageRedirectGuardTests {
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://10.1.2.3/x")))
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://192.168.1.10/x")))
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://169.254.169.254/latest/meta-data/")))
+        // RFC 6598 CG-NAT / shared address space (100.64.0.0/10) and other
+        // reserved IPv4 space reachable on-device/LAN (#244).
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://100.64.0.1/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://192.0.0.1/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://224.0.0.1/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://255.255.255.255/x")))
         // Legacy IPv4 literal and IPv4-mapped IPv6 spellings of loopback.
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://2130706433/x")))
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[::ffff:127.0.0.1]/x")))
