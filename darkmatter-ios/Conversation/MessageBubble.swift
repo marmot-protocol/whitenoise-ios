@@ -1904,12 +1904,21 @@ enum MessageMediaThumbnailDecoder {
         targetPixelSize: Int,
         imageScale: CGFloat,
         createSource: (Data, CFDictionary) -> CGImageSource?,
+        sourceType: (CGImageSource) -> CFString? = { CGImageSourceGetType($0) },
         createThumbnail: (CGImageSource, CFDictionary) -> CGImage?
     ) -> UIImage? {
         let sourceOptions: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
         ]
         guard let source = createSource(data, sourceOptions as CFDictionary) else {
+            return nil
+        }
+        // Peer-controlled MLS media attachments are admitted here purely on a
+        // `image/*` MIME prefix, which includes `image/svg+xml`. Gate the actual
+        // decoded container type through the shared remote-image allowlist so SVG
+        // (and any non-image container ImageIO would otherwise parse) is rejected
+        // before thumbnailing, mirroring the HTTP avatar/group-image path.
+        guard RemoteImageDecoder.isAllowedRemoteImageType(sourceType(source)) else {
             return nil
         }
         let options: [CFString: Any] = [
