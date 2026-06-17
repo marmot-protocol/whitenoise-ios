@@ -32,6 +32,22 @@ nonisolated enum NativePushRegistrationErrorDisposition {
     }
 }
 
+nonisolated enum NotificationPresentationRuntimeGate {
+    static func canPresent(
+        isTaskCancelled: Bool,
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        hasRuntimeClient: Bool
+    ) -> Bool {
+        !isTaskCancelled
+            && isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && hasRuntimeClient
+    }
+}
+
 /// Root observable state for the app.
 ///
 /// Holds the `Marmot` handle, the current set of `AccountSummaryFfi`, and
@@ -372,10 +388,13 @@ final class AppState {
             },
             present: { [weak self] update in
                 guard let self else { return }
+                guard await self.canPresentRuntimeNotificationUpdate() else { return }
                 let localNotificationsEnabled = await self.localNotificationsEnabledForPresentation(
                     accountRef: update.accountRef
                 )
+                guard await self.canPresentRuntimeNotificationUpdate() else { return }
                 let shouldPresent = await MainActor.run {
+                    guard self.canPresentRuntimeNotificationUpdate() else { return false }
                     self.noteNotificationSubscriptionDelivery()
                     return self.shouldPresentLocalNotification(
                         update,
@@ -383,6 +402,7 @@ final class AppState {
                     )
                 }
                 guard shouldPresent else { return }
+                guard await self.canPresentRuntimeNotificationUpdate() else { return }
                 await self.notifications.present(update: update)
             },
             reportError: { [weak self] error in
@@ -432,13 +452,25 @@ final class AppState {
     }
 
     @MainActor
+    private func canPresentRuntimeNotificationUpdate() -> Bool {
+        NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: Task.isCancelled,
+            isAppSceneActive: isAppSceneActive,
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: isRuntimeSuspending,
+            hasRuntimeClient: client != nil
+        )
+    }
+
+    @MainActor
     private func localNotificationsEnabledForPresentation(accountRef: String) async -> Bool {
-        do {
-            let client = try runtimeClient()
-            return await client.localNotificationsEnabledForPresentation(accountRef: accountRef)
-        } catch {
-            fatalError("Failed to rebuild Keychain-backed Marmot runtime (\(type(of: error)))")
-        }
+        guard !Task.isCancelled,
+              isAppSceneActive,
+              !runtimeSuspendedForBackground,
+              !isRuntimeSuspending,
+              let client
+        else { return true }
+        return await client.localNotificationsEnabledForPresentation(accountRef: accountRef)
     }
 
     // MARK: - Notifications
