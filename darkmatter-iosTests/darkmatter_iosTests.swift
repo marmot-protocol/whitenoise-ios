@@ -3686,7 +3686,7 @@ struct ConversationTimelineProjectionTests {
         #expect(ids == [approve.messageIdHex, response.messageIdHex])
     }
 
-    @Test func liveReplyResponseStaysBelowParentWhenSameTimestampWouldInsertAbove() throws {
+    @Test func windowReplyResponseStaysBelowParentWhenSameTimestampWouldInsertAbove() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),
             group: group(name: "")
@@ -3710,17 +3710,10 @@ struct ConversationTimelineProjectionTests {
             TimelinePageFfi(messages: [approve], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
         )
-        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
-            accountIdHex: hex("22"),
-            accountLabel: "account",
-            update: TimelineProjectionUpdateFfi(
-                groupIdHex: hex("aa"),
-                messages: [],
-                changes: [.upsert(trigger: .newMessage, message: response)],
-                chatListRow: nil,
-                chatListTrigger: .newLastMessage
-            )
-        )))
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [approve, response], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
 
         let ids = viewModel.timeline.compactMap { item -> String? in
             guard case .message(let record, _) = item.kind else { return nil }
@@ -3850,143 +3843,6 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.hasMoreAfter)
     }
 
-    @Test func projectionDeltaMergesTimelineAndForwardsChatListRow() throws {
-        var forwardedRows: [ChatListRowFfi] = []
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: ""),
-            onChatListRowUpdated: { forwardedRows.append($0) }
-        )
-        let existing = timelineRecord(messageIdHex: hex("a1"), plaintext: "existing", timelineAt: 10)
-        let projected = timelineRecord(messageIdHex: hex("b2"), plaintext: "projected", timelineAt: 20)
-        let row = chatListRow(
-            groupIdHex: existing.groupIdHex,
-            title: "Projected",
-            lastMessage: chatListPreview(messageIdHex: projected.messageIdHex, plaintext: projected.plaintext, timelineAt: projected.timelineAt),
-            unreadCount: 1,
-            firstUnreadMessageIdHex: projected.messageIdHex,
-            updatedAt: projected.timelineAt
-        )
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [existing], hasMoreBefore: true, hasMoreAfter: false),
-            placement: .window
-        )
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: hex("ff"),
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: existing.groupIdHex,
-                        messages: [projected],
-                        changes: [],
-                        chatListRow: row,
-                        chatListTrigger: .newLastMessage
-                    )
-                )
-            )
-        )
-
-        let messageIds = viewModel.timeline.compactMap { item -> String? in
-            guard case .message(let record, _) = item.kind else { return nil }
-            return record.messageIdHex
-        }
-        #expect(messageIds == [existing.messageIdHex, projected.messageIdHex])
-        #expect(viewModel.hasMoreBefore)
-        #expect(forwardedRows.map(\.groupIdHex) == [row.groupIdHex])
-        #expect(forwardedRows.first?.firstUnreadMessageIdHex == projected.messageIdHex)
-    }
-
-    @Test func projectionRemoveRetractsTimelineRecord() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "")
-        )
-        let existing = timelineRecord(messageIdHex: hex("a1"), plaintext: "existing", timelineAt: 10)
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [existing], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: hex("ff"),
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: existing.groupIdHex,
-                        messages: [],
-                        changes: [.remove(messageIdHex: existing.messageIdHex, reason: .invalidated)],
-                        chatListRow: nil,
-                        chatListTrigger: .snapshotRefresh
-                    )
-                )
-            )
-        )
-
-        #expect(viewModel.timeline.isEmpty)
-        #expect(viewModel.record(for: existing.messageIdHex) == nil)
-    }
-
-    @Test func multiChangeProjectionPublishesOneProjectionGeneration() throws {
-        let groupIdHex = hex("aa")
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "", id: groupIdHex)
-        )
-        let existing = timelineRecord(
-            messageIdHex: hex("a1"),
-            groupIdHex: groupIdHex,
-            plaintext: "existing",
-            timelineAt: 10
-        )
-        let first = timelineRecord(
-            messageIdHex: hex("b2"),
-            groupIdHex: groupIdHex,
-            plaintext: "first",
-            timelineAt: 20
-        )
-        let second = timelineRecord(
-            messageIdHex: hex("c3"),
-            groupIdHex: groupIdHex,
-            plaintext: "second",
-            timelineAt: 30
-        )
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [existing], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-        let generationAfterPage = viewModel.timelineProjectionGeneration
-
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: hex("ff"),
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: groupIdHex,
-                        messages: [],
-                        changes: [
-                            .upsert(trigger: .newMessage, message: first),
-                            .upsert(trigger: .newMessage, message: second),
-                        ],
-                        chatListRow: nil,
-                        chatListTrigger: .newLastMessage
-                    )
-                )
-            )
-        )
-
-        #expect(viewModel.timelineProjectionGeneration == generationAfterPage + 1)
-        #expect(messageIds(in: viewModel.timeline) == [
-            existing.messageIdHex,
-            first.messageIdHex,
-            second.messageIdHex,
-        ])
-    }
-
     @Test func projectedOutgoingMessageReplacesMatchingPendingBubble() throws {
         let sender = hex("11")
         let groupIdHex = hex("aa")
@@ -4015,20 +3871,9 @@ struct ConversationTimelineProjectionTests {
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: sender,
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: groupIdHex,
-                        messages: [projected],
-                        changes: [],
-                        chatListRow: nil,
-                        chatListTrigger: .newLastMessage
-                    )
-                )
-            )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
         )
 
         let messages = viewModel.timeline.compactMap { item -> (String, MessageStatus, UInt64)? in
@@ -4071,20 +3916,9 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
         viewModel.confirmSent(tempId: "pending-1", record: pending, messageId: nil)
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: sender,
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: groupIdHex,
-                        messages: [projected],
-                        changes: [],
-                        chatListRow: nil,
-                        chatListTrigger: .newLastMessage
-                    )
-                )
-            )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
         )
 
         let messages = viewModel.timeline.compactMap { item -> (String, MessageStatus, UInt64)? in
@@ -4142,20 +3976,9 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.older, record: olderPending)
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.newer, record: newerPending)
-        viewModel.applyTimelineSubscriptionUpdate(
-            .projection(
-                update: RuntimeProjectionUpdateFfi(
-                    accountIdHex: sender,
-                    accountLabel: "account-a",
-                    update: TimelineProjectionUpdateFfi(
-                        groupIdHex: groupIdHex,
-                        messages: [projectedOlder],
-                        changes: [],
-                        chatListRow: nil,
-                        chatListTrigger: .newLastMessage
-                    )
-                )
-            )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projectedOlder], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
         )
 
         let messages = viewModel.timeline.compactMap { item -> (id: String, status: MessageStatus, timestamp: UInt64)? in
@@ -4181,7 +4004,6 @@ struct ConversationTimelineProjectionTests {
         #expect(source.contains("@ObservationIgnored private var replyTargetByMessageId"))
         #expect(source.contains("@ObservationIgnored private var pendingMediaByRowId"))
         #expect(source.contains("private(set) var timelineProjectionGeneration"))
-        #expect(source.contains("let updateTimelineIncrementally = update.changes.count == 1"))
     }
 
     @Test func synchronousConversationMarmotReadsUseAsyncClientWrappers() throws {
@@ -4860,48 +4682,6 @@ struct AgentStreamTests {
     }
 
     @MainActor
-    @Test func fallbackChatUpdateDropsMatchingLivePreview() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "")
-        )
-        let streamId = hex("ab")
-        viewModel.applyStreamUpdate(
-            streamId: streamId,
-            sender: hex("11"),
-            update: .chunk(seq: 1, text: "partial")
-        )
-        let fallback = timelineRecord(
-            messageIdHex: hex("ef"),
-            sender: hex("11"),
-            plaintext: "fallback complete",
-            kind: MessageSemantics.kindChat,
-            tags: [],
-            timelineAt: 2
-        )
-
-        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
-            accountIdHex: hex("22"),
-            accountLabel: "account",
-            update: TimelineProjectionUpdateFfi(
-                groupIdHex: hex("aa"),
-                messages: [],
-                changes: [.upsert(trigger: .newMessage, message: fallback)],
-                chatListRow: nil,
-                chatListTrigger: .newLastMessage
-            )
-        )))
-
-        #expect(viewModel.timeline.count == 1)
-        #expect(viewModel.timeline.first?.id == "msg:\(hex("ef"))")
-        guard case .message(let record, let status) = viewModel.timeline.first?.kind else {
-            Issue.record("Expected the fallback chat message")
-            return
-        }
-        #expect(status == .received)
-        #expect(record.plaintext == "fallback complete")
-    }
-
     @MainActor
     @Test func streamChunksRenderIntoOnePreviewBubble() throws {
         let viewModel = ConversationViewModel(
@@ -5153,17 +4933,10 @@ struct AgentStreamTests {
             tags: [],
             timelineAt: 2
         )
-        viewModel.applyTimelineSubscriptionUpdate(.projection(update: RuntimeProjectionUpdateFfi(
-            accountIdHex: hex("22"),
-            accountLabel: "account",
-            update: TimelineProjectionUpdateFfi(
-                groupIdHex: hex("aa"),
-                messages: [],
-                changes: [.upsert(trigger: .newMessage, message: nextMessage)],
-                chatListRow: nil,
-                chatListTrigger: .newLastMessage
-            )
-        )))
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [nextMessage], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
 
         let ids = Set(viewModel.timeline.map(\.id))
         #expect(ids.contains("msg:stream:\(streamId)"))
