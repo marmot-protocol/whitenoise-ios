@@ -4121,6 +4121,10 @@ struct ConversationTimelineProjectionTests {
         #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
         #expect(source.contains("@ObservationIgnored private var timelineSubscription"))
         #expect(source.contains("SubscriptionDriver.timelineMessages(timelineSub)"))
+        #expect(source.contains("await client.timelineSubscriptionSnapshot(timelineSub)"))
+        #expect(source.contains("await client.groupStateSubscriptionSnapshot(groupSub)"))
+        #expect(!source.contains("timelineSub.snapshot()"))
+        #expect(!source.contains("groupSub.snapshot()"))
         #expect(source.contains("timelineSubscription.paginateBackwards"))
         #expect(source.contains("timelineSubscription.paginateForwards"))
         #expect(source.contains("private(set) var hasMoreAfter"))
@@ -4132,6 +4136,8 @@ struct ConversationTimelineProjectionTests {
         #expect(!source.contains("appState.marmot.listMedia("))
         #expect(clientSource.matches(#"func markTimelineMessagesRead[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?markTimelineMessageRead"#))
         #expect(clientSource.matches(#"func timelineMessages[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?timelineMessages"#))
+        #expect(clientSource.matches(#"func timelineSubscriptionSnapshot[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?subscription\.snapshot\(\)"#))
+        #expect(clientSource.matches(#"func groupStateSubscriptionSnapshot[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?subscription\.snapshot\(\)"#))
         #expect(clientSource.matches(#"func listMedia[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?listMedia"#))
     }
 

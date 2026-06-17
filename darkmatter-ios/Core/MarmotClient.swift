@@ -164,6 +164,28 @@ final class MarmotClient {
         }.value
     }
 
+    /// Materializes a live timeline subscription snapshot off the main actor.
+    /// `TimelineMessagesSubscription.snapshot()` is a synchronous UniFFI call,
+    /// so callers on MainActor must await this wrapper before applying the page.
+    func timelineSubscriptionSnapshot(
+        _ subscription: TimelineMessagesSubscription
+    ) async -> TimelinePageFfi? {
+        await Task.detached(priority: .utility) { [subscription] in
+            subscription.snapshot()
+        }.value
+    }
+
+    /// Materializes a live group-state subscription snapshot off the main actor.
+    /// `GroupStateSubscription.snapshot()` is synchronous and may touch Marmot
+    /// storage while building the current group record.
+    func groupStateSubscriptionSnapshot(
+        _ subscription: GroupStateSubscription
+    ) async -> AppGroupRecordFfi? {
+        await Task.detached(priority: .utility) { [subscription] in
+            subscription.snapshot()
+        }.value
+    }
+
     func exportConversationTranscript(
         accountRef: String,
         group: AppGroupRecordFfi
