@@ -290,13 +290,17 @@ struct AppStateBootstrapTests {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let presentationPattern =
             #"present:\s*\{ \[weak self\] update in[\s\S]*"#
+            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"let localNotificationsEnabled = await self\.localNotificationsEnabledForPresentation\([\s\S]*"#
             + #"accountRef: update\.accountRef[\s\S]*"#
+            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"let shouldPresent = await MainActor\.run \{[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return false \}[\s\S]*"#
             + #"self\.noteNotificationSubscriptionDelivery\(\)[\s\S]*"#
             + #"self\.shouldPresentLocalNotification\([\s\S]*"#
             + #"localNotificationsEnabled: localNotificationsEnabled[\s\S]*"#
             + #"guard shouldPresent else \{ return \}[\s\S]*"#
+            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"await self\.notifications\.present\(update: update\)"#
         let oldPresentationPattern =
             #"present:\s*\{ \[weak self\] update in\s*"#
@@ -307,13 +311,68 @@ struct AppStateBootstrapTests {
         #expect(!source.matches(oldPresentationPattern))
     }
 
+    @Test func notificationPresentationRuntimeGateRequiresForegroundRuntime() {
+        #expect(NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: true,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+    }
+
     @Test func notificationPresentationSettingsReadFailureFailsOpen() throws {
         let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
         let helperPattern =
             #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
-            + #"let client = try runtimeClient\(\)[\s\S]*"#
-            + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)"#
+            + #"guard !Task\.isCancelled,[\s\S]*"#
+            + #"isAppSceneActive,[\s\S]*"#
+            + #"!runtimeSuspendedForBackground,[\s\S]*"#
+            + #"!isRuntimeSuspending,[\s\S]*"#
+            + #"let client[\s\S]*"#
+            + #"else \{ return true \}[\s\S]*"#
+            + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)[\s\S]*"#
+            + #"// MARK: - Notifications"#
+        let unsafeRebuildPattern =
+            #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*?runtimeClient\(\)[\s\S]*?// MARK: - Notifications"#
+        let unsafeTrapPattern =
+            #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*?fatalError[\s\S]*?// MARK: - Notifications"#
         let clientHelperPattern =
             #"func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
             + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
@@ -324,6 +383,8 @@ struct AppStateBootstrapTests {
             + #"localNotificationsEnabled: localNotificationsEnabled"#
 
         #expect(appStateSource.matches(helperPattern))
+        #expect(!appStateSource.matches(unsafeRebuildPattern))
+        #expect(!appStateSource.matches(unsafeTrapPattern))
         #expect(marmotClientSource.matches(clientHelperPattern))
         #expect(appStateSource.matches(policyPattern))
         #expect(!appStateSource.contains("return try marmot.notificationSettings(accountRef: accountRef).localNotificationsEnabled"))
