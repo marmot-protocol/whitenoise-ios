@@ -104,18 +104,27 @@ struct AddMembersSheet: View {
             case .empty, .invalid:
                 return false
             case .duplicate:
-                pending = ""
+                clearPendingIfUnchanged(raw)
                 error = nil
                 Haptics.selection()
                 return true
             case .added(let updatedMembers, let addedMember):
                 members = updatedMembers
-                pending = ""
+                clearPendingIfUnchanged(raw)
                 error = nil
                 Haptics.success()
                 _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
                 return true
             }
+        }
+    }
+
+    /// Clear the pending field only if it still holds the value we normalized,
+    /// so an older add completing off-main can't erase text the user typed
+    /// while the FFI was in flight (#260/#274).
+    private func clearPendingIfUnchanged(_ raw: String) {
+        if pending == raw {
+            pending = ""
         }
     }
 
@@ -129,10 +138,20 @@ struct AddMembersSheet: View {
     }
 
     private func invite() async {
-        guard await addPending() else { return }
-        guard !members.isEmpty else { return }
+        // Take the in-flight guard synchronously before the first await so a
+        // fast double-tap can't start two concurrent invite tasks while the
+        // off-main recipient normalization is still in flight (#260/#274).
+        guard !isInviting else { return }
         isInviting = true
         error = nil
+        guard await addPending() else {
+            isInviting = false
+            return
+        }
+        guard !members.isEmpty else {
+            isInviting = false
+            return
+        }
         do {
             try await onSubmit(members.map(\.memberRef))
             isInviting = false

@@ -149,18 +149,27 @@ struct NewChatSheet: View {
             case .empty, .invalid:
                 return false
             case .duplicate:
-                pendingMember = ""
+                clearPendingIfUnchanged(raw)
                 error = nil
                 Haptics.selection()
                 return true
             case .added(let updatedMembers, let addedMember):
                 members = updatedMembers
-                pendingMember = ""
+                clearPendingIfUnchanged(raw)
                 error = nil
                 Haptics.success()
                 _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
                 return true
             }
+        }
+    }
+
+    /// Clear the pending field only if it still holds the value we normalized,
+    /// so an older add completing off-main can't erase text the user typed
+    /// while the FFI was in flight (#260/#274).
+    private func clearPendingIfUnchanged(_ raw: String) {
+        if pendingMember == raw {
+            pendingMember = ""
         }
     }
 
@@ -171,12 +180,18 @@ struct NewChatSheet: View {
 
     @MainActor
     private func create() async {
+        // Take the in-flight guard synchronously before the first await so a
+        // fast double-tap can't start two concurrent create tasks while the
+        // off-main recipient normalization is still in flight (#260/#274).
+        guard !isCreating else { return }
         guard let accountRef = appState.activeAccountRef else { return }
-        // Capture text still in the field before creating.
-        guard await addPending() else { return }
-
         isCreating = true
         error = nil
+        // Capture text still in the field before creating.
+        guard await addPending() else {
+            isCreating = false
+            return
+        }
         do {
             let groupIdHex = try await appState.marmot.createGroup(
                 accountRef: accountRef,
