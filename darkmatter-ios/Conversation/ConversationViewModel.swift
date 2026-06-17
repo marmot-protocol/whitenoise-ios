@@ -860,58 +860,6 @@ final class ConversationViewModel {
         isLoading = false
     }
 
-    func applyTimelineSubscriptionUpdate(_ update: TimelineSubscriptionUpdateFfi) {
-        switch update {
-        case .page(let page):
-            applyTimelinePage(page, placement: .window)
-        case .projection(let runtimeUpdate):
-            applyTimelineProjectionUpdate(runtimeUpdate.update)
-        }
-    }
-
-    private func applyTimelineProjectionUpdate(_ update: TimelineProjectionUpdateFfi) {
-        guard update.groupIdHex == group.groupIdHex else { return }
-        let rebuildTimelineAfterUpdate: Bool
-        var projectionChanged = false
-        if update.changes.isEmpty {
-            recordFinalizedStreams(in: update.messages)
-            for record in update.messages {
-                projectionChanged = applyTimelineRecord(
-                    record,
-                    updateTimeline: update.messages.count == 1
-                ) || projectionChanged
-            }
-            rebuildTimelineAfterUpdate = update.messages.count != 1
-        } else {
-            recordFinalizedStreams(in: update.changes.compactMap(Self.upsertedMessage))
-            let updateTimelineIncrementally = update.changes.count == 1
-            for change in update.changes {
-                projectionChanged = applyTimelineChange(
-                    change,
-                    updateTimeline: updateTimelineIncrementally
-                ) || projectionChanged
-            }
-            rebuildTimelineAfterUpdate = !updateTimelineIncrementally
-        }
-        if let row = update.chatListRow {
-            onChatListRowUpdated?(row)
-        }
-        rebuildProjectedState(
-            rebuildTimeline: rebuildTimelineAfterUpdate,
-            projectionChanged: projectionChanged
-        )
-    }
-
-    @discardableResult
-    private func applyTimelineChange(_ change: TimelineMessageChangeFfi, updateTimeline: Bool) -> Bool {
-        switch change {
-        case .upsert(let trigger, let message):
-            return applyTimelineRecord(message, updateTimeline: updateTimeline, trigger: trigger)
-        case .remove(let messageIdHex, _):
-            return removeTimelineRecord(messageIdHex: messageIdHex, updateTimeline: updateTimeline)
-        }
-    }
-
     /// Reloads the newest timeline page from Marmot. Group system rows (kind
     /// 1210) are synthesized locally when commits are processed, so a live
     /// subscription update can race with group-state refresh — especially after
@@ -2597,11 +2545,6 @@ final class ConversationViewModel {
                 finalizedStreamIds.insert(streamId)
             }
         }
-    }
-
-    private static func upsertedMessage(from change: TimelineMessageChangeFfi) -> TimelineMessageRecordFfi? {
-        if case .upsert(_, let message) = change { return message }
-        return nil
     }
 
     private static func finalizedStreamId(
