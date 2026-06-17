@@ -4325,25 +4325,27 @@ struct GroupManagementPresentationTests {
         )
     }
 
-    @Test func addMembersPendingRecipientRejectsInvalidInputWithoutChangingMembers() {
-        let existing = stagedMember(accountIdHex: hex("11"))
-        let result = AddMembersPresentation.pendingMemberAddResult(
+    @Test func addMembersPendingRecipientRejectsInvalidInputWithoutChangingMembers() async {
+        let result = await AddMembersPresentation.normalizedMember(
             "not a profile",
-            existingMembers: [existing],
             normalize: { stagedMember(accountIdHex: $0) }
         )
 
         #expect(result == .invalid)
     }
 
-    @Test func addMembersPendingRecipientAppendsValidInput() {
+    @Test func addMembersPendingRecipientAppendsValidInput() async {
         let existing = stagedMember(accountIdHex: hex("11"))
         let candidate = stagedMember(accountIdHex: hex("22"))
-        let result = AddMembersPresentation.pendingMemberAddResult(
+        let normalized = await AddMembersPresentation.normalizedMember(
             candidate.accountIdHex,
-            existingMembers: [existing],
             normalize: { stagedMember(accountIdHex: $0) }
         )
+        guard case .normalized(let member) = normalized else {
+            Issue.record("expected normalized member")
+            return
+        }
+        let result = AddMembersPresentation.stage(member, existingMembers: [existing])
 
         #expect(result == .added([existing, candidate], candidate))
     }

@@ -29,17 +29,20 @@ struct NewChatSheet: View {
     }
 
     typealias PendingMemberAddResult = AddMembersPresentation.PendingMemberAddResult
+    typealias NormalizedMemberResult = AddMembersPresentation.NormalizedMemberResult
 
-    static func pendingMemberAddResult(
+    static func normalizedMember(
         _ raw: String,
-        existingMembers: [MemberRefFfi],
-        normalize: (String) throws -> MemberRefFfi
+        normalize: (String) async throws -> MemberRefFfi
+    ) async -> NormalizedMemberResult {
+        await AddMembersPresentation.normalizedMember(raw, normalize: normalize)
+    }
+
+    static func stage(
+        _ normalized: MemberRefFfi,
+        existingMembers: [MemberRefFfi]
     ) -> PendingMemberAddResult {
-        AddMembersPresentation.pendingMemberAddResult(
-            raw,
-            existingMembers: existingMembers,
-            normalize: normalize
-        )
+        AddMembersPresentation.stage(normalized, existingMembers: existingMembers)
     }
 
     var body: some View {
@@ -64,7 +67,7 @@ struct NewChatSheet: View {
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
                         Button {
-                            addPending()
+                            Task { await addPending() }
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(.tint)
@@ -118,51 +121,59 @@ struct NewChatSheet: View {
     }
 
     @discardableResult
-    private func addPending() -> Bool {
-        add(
+    private func addPending() async -> Bool {
+        await add(
             pendingMember,
             invalidMessage: L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
         )
     }
 
     @discardableResult
-    private func add(_ raw: String, invalidMessage: String) -> Bool {
-        switch Self.pendingMemberAddResult(
+    private func add(_ raw: String, invalidMessage: String) async -> Bool {
+        // Normalize off the MainActor; only hop back to mutate members/error (#260).
+        let normalizedResult = await Self.normalizedMember(
             raw,
-            existingMembers: members,
-            normalize: { try appState.marmot.normalizeMemberRef(memberRef: $0) }
-        ) {
+            normalize: { try await appState.currentMarmotClient().normalizeMemberRef(memberRef: $0) }
+        )
+        switch normalizedResult {
         case .empty:
-            return true
-        case .duplicate:
-            pendingMember = ""
-            error = nil
-            Haptics.selection()
             return true
         case .invalid:
             Haptics.error()
             error = invalidMessage
             return false
-        case .added(let updatedMembers, let addedMember):
-            members = updatedMembers
-            pendingMember = ""
-            error = nil
-            Haptics.success()
-            _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
-            return true
+        case .normalized(let normalized):
+            // Stage against the live members list (post-await) so concurrent
+            // adds dedup correctly instead of racing on a stale snapshot.
+            switch Self.stage(normalized, existingMembers: members) {
+            case .empty, .invalid:
+                return false
+            case .duplicate:
+                pendingMember = ""
+                error = nil
+                Haptics.selection()
+                return true
+            case .added(let updatedMembers, let addedMember):
+                members = updatedMembers
+                pendingMember = ""
+                error = nil
+                Haptics.success()
+                _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
+                return true
+            }
         }
     }
 
     /// Add a recipient from a scanned profile QR code.
     private func handleScan(_ raw: String) {
-        add(raw, invalidMessage: L10n.string("That QR code isn't a Dark Matter profile."))
+        Task { await add(raw, invalidMessage: L10n.string("That QR code isn't a Dark Matter profile.")) }
     }
 
     @MainActor
     private func create() async {
         guard let accountRef = appState.activeAccountRef else { return }
         // Capture text still in the field before creating.
-        guard addPending() else { return }
+        guard await addPending() else { return }
 
         isCreating = true
         error = nil

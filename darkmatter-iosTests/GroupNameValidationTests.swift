@@ -42,52 +42,62 @@ struct GroupNameValidationTests {
         #expect(oversized?.count == ProfileSanitizer.maxGroupDescriptionLength)
     }
 
-    @Test func newChatPendingRecipientRejectsInvalidInputWithoutChangingMembers() {
-        let existing = stagedMember(accountIdHex: String(repeating: "a", count: 64))
-        let result = NewChatSheet.pendingMemberAddResult(
+    @Test func newChatPendingRecipientRejectsInvalidInputWithoutChangingMembers() async {
+        let result = await NewChatSheet.normalizedMember(
             "not a profile",
-            existingMembers: [existing],
             normalize: { stagedMember(accountIdHex: $0) }
         )
 
         #expect(result == .invalid)
     }
 
-    @Test func newChatPendingRecipientAppendsValidInput() {
+    @Test func newChatPendingRecipientAppendsValidInput() async {
         let existing = stagedMember(accountIdHex: String(repeating: "a", count: 64))
         let typed = String(repeating: "b", count: 64)
         let added = stagedMember(accountIdHex: typed)
-        let result = NewChatSheet.pendingMemberAddResult(
+        let normalized = await NewChatSheet.normalizedMember(
             "  \(typed)\n",
-            existingMembers: [existing],
             normalize: { stagedMember(accountIdHex: $0) }
         )
+        guard case .normalized(let member) = normalized else {
+            Issue.record("expected normalized member")
+            return
+        }
+        let result = NewChatSheet.stage(member, existingMembers: [existing])
 
         #expect(result == .added([existing, added], added))
     }
 
-    @Test func newChatPendingRecipientDeduplicatesNormalizedAccountId() {
+    @Test func newChatPendingRecipientDeduplicatesNormalizedAccountId() async {
         let existingAccount = String(repeating: "a", count: 64)
         let aliasRef = String(repeating: "b", count: 64)
         let existing = stagedMember(memberRef: "npub1existing", accountIdHex: existingAccount)
-        let result = NewChatSheet.pendingMemberAddResult(
+        let normalized = await NewChatSheet.normalizedMember(
             aliasRef,
-            existingMembers: [existing],
             normalize: { stagedMember(memberRef: $0, accountIdHex: existingAccount) }
         )
+        guard case .normalized(let member) = normalized else {
+            Issue.record("expected normalized member")
+            return
+        }
+        let result = NewChatSheet.stage(member, existingMembers: [existing])
 
         #expect(result == .duplicate)
     }
 
-    @Test func newChatPendingRecipientAcceptsScannedProfileLinks() {
+    @Test func newChatPendingRecipientAcceptsScannedProfileLinks() async {
         let npub = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
         let accountId = String(repeating: "c", count: 64)
         let added = stagedMember(memberRef: npub, accountIdHex: accountId)
-        let result = NewChatSheet.pendingMemberAddResult(
+        let normalized = await NewChatSheet.normalizedMember(
             "darkmatter://profile/\(npub)",
-            existingMembers: [],
             normalize: { stagedMember(memberRef: $0, accountIdHex: accountId) }
         )
+        guard case .normalized(let member) = normalized else {
+            Issue.record("expected normalized member")
+            return
+        }
+        let result = NewChatSheet.stage(member, existingMembers: [])
 
         #expect(result == .added([added], added))
     }

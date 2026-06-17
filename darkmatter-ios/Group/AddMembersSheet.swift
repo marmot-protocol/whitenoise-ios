@@ -4,7 +4,7 @@ import MarmotKit
 struct AddMembersSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    let normalize: (String) throws -> MemberRefFfi
+    let normalize: (String) async throws -> MemberRefFfi
     let onSubmit: ([String]) async throws -> Void
 
     @State private var members: [MemberRefFfi] = []
@@ -36,7 +36,7 @@ struct AddMembersSheet: View {
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
                         Button {
-                            addPending()
+                            Task { await addPending() }
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(.tint)
@@ -84,44 +84,52 @@ struct AddMembersSheet: View {
     }
 
     @discardableResult
-    private func add(_ raw: String) -> Bool {
-        switch AddMembersPresentation.pendingMemberAddResult(
+    private func add(_ raw: String) async -> Bool {
+        // Normalize off the MainActor; only hop back to mutate members/error (#260).
+        let normalizedResult = await AddMembersPresentation.normalizedMember(
             raw,
-            existingMembers: members,
             normalize: normalize
-        ) {
+        )
+        switch normalizedResult {
         case .empty:
             return true
         case .invalid:
             Haptics.error()
             self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
             return false
-        case .duplicate:
-            pending = ""
-            error = nil
-            Haptics.selection()
-            return true
-        case .added(let updatedMembers, let addedMember):
-            members = updatedMembers
-            pending = ""
-            error = nil
-            Haptics.success()
-            _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
-            return true
+        case .normalized(let normalized):
+            // Stage against the live members list (post-await) so concurrent
+            // adds dedup correctly instead of racing on a stale snapshot.
+            switch AddMembersPresentation.stage(normalized, existingMembers: members) {
+            case .empty, .invalid:
+                return false
+            case .duplicate:
+                pending = ""
+                error = nil
+                Haptics.selection()
+                return true
+            case .added(let updatedMembers, let addedMember):
+                members = updatedMembers
+                pending = ""
+                error = nil
+                Haptics.success()
+                _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
+                return true
+            }
         }
     }
 
     @discardableResult
-    private func addPending() -> Bool {
-        add(pending)
+    private func addPending() async -> Bool {
+        await add(pending)
     }
 
     private func addScanned(_ raw: String) {
-        add(raw)
+        Task { await add(raw) }
     }
 
     private func invite() async {
-        guard addPending() else { return }
+        guard await addPending() else { return }
         guard !members.isEmpty else { return }
         isInviting = true
         error = nil
@@ -174,6 +182,14 @@ enum AddMembersPresentation {
         case added([MemberRefFfi], MemberRefFfi)
     }
 
+    /// Outcome of normalizing a raw recipient reference off the main actor,
+    /// before it is staged against the live member list.
+    enum NormalizedMemberResult: Equatable {
+        case empty
+        case invalid
+        case normalized(MemberRefFfi)
+    }
+
     static func memberRef(fromScannedPayload raw: String) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -183,25 +199,38 @@ enum AddMembersPresentation {
         return NostrProfileReference.memberRef(fromReference: trimmed)
     }
 
-    static func pendingMemberAddResult(
+    /// Parses and normalizes a raw recipient reference. The `normalize` closure
+    /// is expected to run the synchronous MarmotKit FFI off the main actor
+    /// (#260), so callers can `await` this and only hop back to the MainActor
+    /// to stage the result.
+    static func normalizedMember(
         _ raw: String,
-        existingMembers: [MemberRefFfi],
-        normalize: (String) throws -> MemberRefFfi
-    ) -> PendingMemberAddResult {
+        normalize: (String) async throws -> MemberRefFfi
+    ) async -> NormalizedMemberResult {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .empty }
+        guard let memberRef = memberRef(fromScannedPayload: trimmed) else {
+            return .invalid
+        }
         do {
-            guard let memberRef = memberRef(fromScannedPayload: trimmed) else {
-                return .invalid
-            }
-            let normalized = try normalize(memberRef)
-            guard !existingMembers.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
-                return .duplicate
-            }
-            return .added(existingMembers + [normalized], normalized)
+            return .normalized(try await normalize(memberRef))
         } catch {
             return .invalid
         }
+    }
+
+    /// Stages a normalized member against the current member list. Pure and
+    /// MainActor-cheap: callers run this after awaiting `normalizedMember` so
+    /// the dedup check sees the live `members` value rather than a snapshot
+    /// captured before the off-main hop.
+    static func stage(
+        _ normalized: MemberRefFfi,
+        existingMembers: [MemberRefFfi]
+    ) -> PendingMemberAddResult {
+        guard !existingMembers.contains(where: { $0.accountIdHex == normalized.accountIdHex }) else {
+            return .duplicate
+        }
+        return .added(existingMembers + [normalized], normalized)
     }
 
     @MainActor
