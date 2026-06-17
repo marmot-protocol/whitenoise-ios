@@ -5248,6 +5248,33 @@ struct AgentStreamTests {
 
         #expect(viewModel.timeline.isEmpty)
     }
+
+    /// Regression for #230: when an agent-stream watch task exits naturally
+    /// (the broker returns nil from `next()` without any finished/failed/abort
+    /// update), it must clear its own `streamWatchTasks` entry so the admission
+    /// guard doesn't treat the stale dead key as "already watching" and lock
+    /// out re-subscription. The clear is generation-guarded: the owning task
+    /// (matching generation) clears; a stale task whose key was reused by a
+    /// later re-watch (mismatched generation) must not tear the re-watch down.
+    @Test func streamWatchClearsOwnEntryOnNaturalCompletion() {
+        let owning = UUID()
+        // Same generation still stored -> the completing task owns the key.
+        #expect(ConversationViewModel.shouldClearCompletedStreamWatch(
+            storedGeneration: owning,
+            taskGeneration: owning
+        ))
+        // Key was reused by a re-watch (new generation stored) -> the stale
+        // task must not clear the live re-watch.
+        #expect(!ConversationViewModel.shouldClearCompletedStreamWatch(
+            storedGeneration: UUID(),
+            taskGeneration: owning
+        ))
+        // Key already cleared (no stored generation) -> nothing to clear.
+        #expect(!ConversationViewModel.shouldClearCompletedStreamWatch(
+            storedGeneration: nil,
+            taskGeneration: owning
+        ))
+    }
 }
 
 @MainActor
