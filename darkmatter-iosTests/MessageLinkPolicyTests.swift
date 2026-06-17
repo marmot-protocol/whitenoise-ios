@@ -71,6 +71,21 @@ struct MessageLinkPolicyTests {
         }
     }
 
+    /// Regression for #254: a crafted `xn--` label can drive the punycode
+    /// decoder's `i` accumulator to exactly `Int.max`, which previously made
+    /// the unguarded `n += i / outputCount` add trap. The decoder must bail to
+    /// the raw host instead of crashing the link-confirmation text builder.
+    @Test func externalConfirmationSurvivesPunycodeOverflowLabel() {
+        withAppLanguage(.english) {
+            let url = URL(string: "https://xn--hz767205604493046e.example/path")!
+            let text = MessageExternalLinkConfirmation.displayText(for: url)
+
+            // No trap: the malformed label is shown raw, not decoded.
+            #expect(text.contains("xn--hz767205604493046e.example"))
+            #expect(text.contains("https://xn--hz767205604493046e.example/path"))
+        }
+    }
+
     @Test func externalConfirmationHandlesHostlessExternalURLs() {
         withAppLanguage(.english) {
             let url = URL(string: "mailto:a@b.com")!

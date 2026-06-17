@@ -578,7 +578,9 @@ nonisolated enum MessageExternalLinkConfirmation {
 
             let outputCount = output.count + 1
             bias = adaptPunycodeBias(delta: i - oldi, numPoints: outputCount, firstTime: oldi == 0)
-            n += i / outputCount
+            let (newN, overflowed) = n.addingReportingOverflow(i / outputCount)
+            guard !overflowed else { return nil }
+            n = newN
             let insertionIndex = i % outputCount
             guard let scalar = UnicodeScalar(n) else { return nil }
             output.insert(scalar.value, at: insertionIndex)
