@@ -4137,6 +4137,166 @@ struct ConversationTimelineProjectionTests {
         #expect(messages.last?.timestamp == newerPending.recordedAt)
     }
 
+    @MainActor
+    @Test func projectedTextSendDoesNotReconcileMediaPendingWithSameCaption() throws {
+        let sender = hex("11")
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: groupIdHex)
+        )
+        let caption = "hi"
+
+        // A media send: optimistic record carries `tags: []` and `plaintext`
+        // equal to the caption, with the local attachment staged under its row.
+        let mediaTempId = "pending-media"
+        let mediaRowId = "msg:\(mediaTempId)"
+        let mediaPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let attachment = MessageMediaAttachment(
+            id: "\(mediaRowId):0",
+            reference: nil,
+            fileName: "a.jpg",
+            mediaType: "image/jpeg",
+            dim: "640x480",
+            localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
+        )
+        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
+
+        // A plain text send with the same text, no staged media.
+        let textTempId = "pending-text"
+        let textPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 11,
+            receivedAt: 11
+        )
+        viewModel.applyPendingOutgoingMessage(tempId: textTempId, record: textPending)
+
+        // The incoming confirmation is the plain text send (no `imeta` tags).
+        // It must reconcile the text pending and leave the media bubble alone.
+        let projectedText = timelineRecord(
+            messageIdHex: hex("b2"),
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            timelineAt: 20
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projectedText], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        let messages = viewModel.timeline.compactMap { item -> (id: String, status: MessageStatus, rowId: String)? in
+            guard case .message(let record, let status) = item.kind else { return nil }
+            return (record.messageIdHex, status, item.id)
+        }
+
+        #expect(messages.count == 2)
+        // The confirmed text send replaced the text pending.
+        #expect(messages.contains { $0.id == projectedText.messageIdHex && $0.status == .sent })
+        // The media pending bubble survived, still pending under its temp row.
+        #expect(messages.contains { $0.rowId == mediaRowId && $0.status == .sending })
+        // Its staged attachment is still resolvable.
+        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == [attachment])
+    }
+
+    @MainActor
+    @Test func projectedMediaSendReconcilesMediaPendingNotTextWithSameCaption() throws {
+        let sender = hex("11")
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: groupIdHex)
+        )
+        let caption = "hi"
+
+        let mediaTempId = "pending-media"
+        let mediaRowId = "msg:\(mediaTempId)"
+        let mediaPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let attachment = MessageMediaAttachment(
+            id: "\(mediaRowId):0",
+            reference: nil,
+            fileName: "a.jpg",
+            mediaType: "image/jpeg",
+            dim: "640x480",
+            localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
+        )
+        viewModel.installPendingMediaForTesting(rowId: mediaRowId, items: [attachment])
+        viewModel.applyPendingOutgoingMessage(tempId: mediaTempId, record: mediaPending)
+
+        let textTempId = "pending-text"
+        let textRowId = "msg:\(textTempId)"
+        let textPending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 11,
+            receivedAt: 11
+        )
+        viewModel.applyPendingOutgoingMessage(tempId: textTempId, record: textPending)
+
+        // The incoming confirmation is the media send: kind-9 with an `imeta`
+        // tag. It must reconcile the media pending, not the text pending.
+        let reference = encryptedMediaReference(sourceEpoch: 0)
+        let projectedMedia = timelineRecord(
+            messageIdHex: hex("b3"),
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: caption,
+            tags: [MessageSemantics.imetaTag(for: reference)],
+            timelineAt: 20
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projectedMedia], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        let messages = viewModel.timeline.compactMap { item -> (id: String, status: MessageStatus, rowId: String)? in
+            guard case .message(let record, let status) = item.kind else { return nil }
+            return (record.messageIdHex, status, item.id)
+        }
+
+        #expect(messages.count == 2)
+        // The confirmed media send replaced the media pending.
+        #expect(messages.contains { $0.id == projectedMedia.messageIdHex && $0.status == .sent })
+        // The text pending bubble survived.
+        #expect(messages.contains { $0.rowId == textRowId && $0.status == .sending })
+        // The media pending row was removed (reconciled away).
+        #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == nil)
+    }
+
     @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
