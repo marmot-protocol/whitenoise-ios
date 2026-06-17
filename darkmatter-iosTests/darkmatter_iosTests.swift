@@ -4682,7 +4682,6 @@ struct AgentStreamTests {
     }
 
     @MainActor
-    @MainActor
     @Test func streamChunksRenderIntoOnePreviewBubble() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),
