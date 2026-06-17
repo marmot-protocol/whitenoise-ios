@@ -2064,6 +2064,12 @@ final class ConversationViewModel {
         // paste can't bypass the composer's cap (#54).
         let outgoing = Self.cappedOutgoingText(trimmed)
 
+        // Claim the send slot before the first suspension point. The off-MainActor
+        // markdown parse below introduces an `await`, so leaving the flag unset
+        // would let a second send task start during a long parse (#226 review).
+        sendInFlight = true
+        defer { sendInFlight = false }
+
         let replyTargetId = replyTargetMessageId()
         let tempId = UUID().uuidString
         let now = UInt64(Date().timeIntervalSince1970)
@@ -2075,13 +2081,17 @@ final class ConversationViewModel {
                 MessageTagFfi(values: [MessageSemantics.quoteRefTag, $0]),
             ]
         } ?? []
+        // Parse markdown off the MainActor: `parseMarkdown` is a synchronous
+        // rustCall whose cost scales with message length, so building the
+        // optimistic record inline would stall the composer at send time (#226).
+        let contentTokens = await appState.parseMarkdown(text: outgoing)
         let optimistic = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",
             groupIdHex: group.groupIdHex,
             sender: appState.activeAccount?.accountIdHex ?? "",
             plaintext: outgoing,
-            contentTokens: appState.marmot.parseMarkdown(text: outgoing),
+            contentTokens: contentTokens,
             kind: MessageSemantics.kindChat,
             tags: optimisticTags,
             recordedAt: now,
@@ -2090,8 +2100,6 @@ final class ConversationViewModel {
         applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        sendInFlight = true
-        defer { sendInFlight = false }
         do {
             let summary: SendSummaryFfi
             if let replyTargetId {
@@ -2131,9 +2139,16 @@ final class ConversationViewModel {
         let tempId = UUID().uuidString
         let tempRowId = "msg:\(tempId)"
         let now = UInt64(Date().timeIntervalSince1970)
+
+        // Claim the send slot before the first suspension point. The off-MainActor
+        // caption parse below introduces an `await`, so leaving the flag unset
+        // would let a second send task start during a long parse (#226 review).
+        sendInFlight = true
+        defer { sendInFlight = false }
+
         let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
             ? .emptyDocument
-            : appState.marmot.parseMarkdown(text: outgoingCaption)
+            : await appState.parseMarkdown(text: outgoingCaption)
         let optimistic = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",
@@ -2150,8 +2165,6 @@ final class ConversationViewModel {
         applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        sendInFlight = true
-        defer { sendInFlight = false }
         do {
             let result = try await appState.marmot.uploadMedia(
                 accountRef: accountRef,

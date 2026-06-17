@@ -699,6 +699,15 @@ final class AppState {
         try await runtimeClient().privacySecuritySettingsProjection()
     }
 
+    /// Parses markdown off the MainActor for the send path's optimistic record.
+    /// Falls back to an empty document if the runtime can't be resolved (e.g.
+    /// during a suspend/resume window); the timeline subscription will replace
+    /// the optimistic record with the confirmed, fully-parsed one (#226).
+    func parseMarkdown(text: String) async -> MarkdownDocumentFfi {
+        guard let client = try? runtimeClient() else { return .emptyDocument }
+        return await client.parseMarkdown(text: text)
+    }
+
     @MainActor
     @discardableResult
     func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
