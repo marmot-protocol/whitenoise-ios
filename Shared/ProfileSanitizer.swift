@@ -250,9 +250,16 @@ nonisolated enum ProfileSanitizer {
     }
 
     private static func isValidProfileAddressDomain(_ value: String) -> Bool {
-        guard !value.isEmpty, value.count <= 253, value.contains(".") else { return false }
+        guard !value.isEmpty,
+              value.count <= 253,
+              value.contains("."),
+              !isPrivateOrLoopbackHost(value)
+        else { return false }
         let labels = value.split(separator: ".", omittingEmptySubsequences: false)
-        guard labels.count >= 2 else { return false }
+        guard labels.count >= 2,
+              let topLevelLabel = labels.last,
+              topLevelLabel.unicodeScalars.contains(where: { (97...122).contains($0.value) })
+        else { return false }
         return labels.allSatisfy { label in
             guard !label.isEmpty,
                   label.count <= 63,
