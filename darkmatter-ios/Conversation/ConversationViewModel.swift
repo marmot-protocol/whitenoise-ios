@@ -155,6 +155,11 @@ final class ConversationViewModel {
     @ObservationIgnored private var optimisticReactionRemovals: Set<ReactionRemoval> = []
     /// Live agent-stream watch tasks, keyed by stream id.
     private var streamWatchTasks: [String: Task<Void, Never>] = [:]
+    /// Generation token per stream watch. A watch task only clears its own
+    /// `streamWatchTasks` entry on natural completion if the stored generation
+    /// still matches — mirroring the `NotificationDriver` completion guard so a
+    /// re-watch that reused the key isn't torn down by a stale task exit.
+    private var streamWatchGenerations: [String: UUID] = [:]
     /// Guards a concurrent "latest" (nil stream id) watch from racing past the
     /// post-await duplicate guard and opening an orphaned subscription (#48).
     private var latestStreamWatchInFlight = false
@@ -591,6 +596,7 @@ final class ConversationViewModel {
             task.cancel()
         }
         streamWatchTasks.removeAll()
+        streamWatchGenerations.removeAll()
     }
 
     private func resetOptimisticState() {
@@ -1677,6 +1683,29 @@ final class ConversationViewModel {
         return messageId
     }
 
+    /// Pure decision for whether a naturally-completing stream watch task may
+    /// clear its own dictionary entry. Only the task whose generation still
+    /// matches the stored generation owns the key; a stale task whose key was
+    /// reused by a later re-watch must not tear that re-watch down. Extracted
+    /// so the generation-guard is observable without a live broker subscription.
+    static func shouldClearCompletedStreamWatch(storedGeneration: UUID?, taskGeneration: UUID) -> Bool {
+        storedGeneration == taskGeneration
+    }
+
+    /// Clear a stream watch entry when its task exits naturally (the broker
+    /// closed the stream by returning nil from next()). Generation-guarded:
+    /// only clears if the stored generation still matches this task, so a
+    /// re-watch that reused the key isn't torn down by a stale task's exit.
+    /// Mirrors `NotificationDriver.clearCompletedTask`.
+    private func clearCompletedStreamWatch(streamId: String, generation: UUID) {
+        guard Self.shouldClearCompletedStreamWatch(
+            storedGeneration: streamWatchGenerations[streamId],
+            taskGeneration: generation
+        ) else { return }
+        streamWatchTasks[streamId] = nil
+        streamWatchGenerations[streamId] = nil
+    }
+
     /// Tear down a live preview that produced no usable transcript (the stream
     /// failed). agentnoise falls back to a plain chat reply in that case, which
     /// arrives as a normal message — so drop the preview and mark the stream
@@ -1685,6 +1714,7 @@ final class ConversationViewModel {
         finalizedStreamIds.insert(streamId)
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
+        streamWatchGenerations[streamId] = nil
         clearStreamPreviewText(streamId: streamId)
         streamsWithCheckpointPreview.remove(streamId)
         streamStartedAtById[streamId] = nil
@@ -1709,6 +1739,7 @@ final class ConversationViewModel {
         finalizedStreamIds.insert(streamId)
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
+        streamWatchGenerations[streamId] = nil
         streamsWithCheckpointPreview.remove(streamId)
         streamStartedAtById[streamId] = nil
         streamSenderById[streamId] = nil
@@ -1720,6 +1751,7 @@ final class ConversationViewModel {
         finalizedStreamIds.insert(streamId)
         streamWatchTasks[streamId]?.cancel()
         streamWatchTasks[streamId] = nil
+        streamWatchGenerations[streamId] = nil
         clearStreamPreviewText(streamId: streamId)
         streamsWithCheckpointPreview.remove(streamId)
         streamStartedAtById[streamId] = nil
@@ -2341,12 +2373,22 @@ final class ConversationViewModel {
             resetStreamPreviewText(streamId: streamId)
             streamSenderById[streamId] = sender
             Self.streamLog.info("watch opened: streamId=\(streamId, privacy: .public) developerMode=\(appState.developerMode, privacy: .public); waiting for text preview")
+            let generation = UUID()
             let task = Task { [weak self] in
                 while !Task.isCancelled, let update = await subscription.next() {
                     self?.applyStreamUpdate(streamId: streamId, sender: sender, update: update)
                 }
+                // The broker can close a stream silently by returning nil from
+                // next() without a .finished/.failed/abort update ever flowing
+                // through endStream/finalizeStreamBubble/resolveFinalizedStream.
+                // Clear our own entry on that natural exit so the admission
+                // guard doesn't treat the dead key as "already watching" and
+                // lock out re-subscription. Generation-guarded so a re-watch
+                // that reused the key isn't torn down by this stale exit.
+                self?.clearCompletedStreamWatch(streamId: streamId, generation: generation)
             }
             streamWatchTasks[streamId] = task
+            streamWatchGenerations[streamId] = generation
         } catch {
             // No resolvable start payload yet, or the broker is unreachable.
             Self.streamLog.error("watch failed to open: streamId=\(streamIdHex ?? "<latest>", privacy: .public): \(error.localizedDescription, privacy: .public)")
