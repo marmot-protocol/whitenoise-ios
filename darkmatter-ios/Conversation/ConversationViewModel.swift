@@ -2064,6 +2064,12 @@ final class ConversationViewModel {
         // paste can't bypass the composer's cap (#54).
         let outgoing = Self.cappedOutgoingText(trimmed)
 
+        // Claim the send slot before the first suspension point. The off-MainActor
+        // markdown parse below introduces an `await`, so leaving the flag unset
+        // would let a second send task start during a long parse (#226 review).
+        sendInFlight = true
+        defer { sendInFlight = false }
+
         let replyTargetId = replyTargetMessageId()
         let tempId = UUID().uuidString
         let now = UInt64(Date().timeIntervalSince1970)
@@ -2094,8 +2100,6 @@ final class ConversationViewModel {
         applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        sendInFlight = true
-        defer { sendInFlight = false }
         do {
             let summary: SendSummaryFfi
             if let replyTargetId {
@@ -2135,6 +2139,13 @@ final class ConversationViewModel {
         let tempId = UUID().uuidString
         let tempRowId = "msg:\(tempId)"
         let now = UInt64(Date().timeIntervalSince1970)
+
+        // Claim the send slot before the first suspension point. The off-MainActor
+        // caption parse below introduces an `await`, so leaving the flag unset
+        // would let a second send task start during a long parse (#226 review).
+        sendInFlight = true
+        defer { sendInFlight = false }
+
         let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
             ? .emptyDocument
             : await appState.parseMarkdown(text: outgoingCaption)
@@ -2154,8 +2165,6 @@ final class ConversationViewModel {
         applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        sendInFlight = true
-        defer { sendInFlight = false }
         do {
             let result = try await appState.marmot.uploadMedia(
                 accountRef: accountRef,
