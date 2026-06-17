@@ -67,7 +67,7 @@ struct AppStateBootstrapTests {
         _ = try await appState.createIdentity()
         #expect(appState.telemetryBuildConfig != fallback)
 
-        await appState.prepareForBackgroundSuspension()
+        await appState.startRuntimeSuspension().value
 
         #expect(appState.client == nil)
         #expect(appState.telemetryBuildConfig == fallback)
@@ -418,7 +418,7 @@ struct AppStateBootstrapTests {
     @Test func backgroundSuspensionWaitsUntilRuntimeIsReady() async throws {
         let appState = try testAppState()
 
-        await appState.prepareForBackgroundSuspension()
+        await appState.startRuntimeSuspension().value
 
         #expect(!appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
@@ -430,7 +430,7 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
 
         let generation = appState.runtimeGeneration
-        await appState.prepareForBackgroundSuspension()
+        await appState.startRuntimeSuspension().value
 
         #expect(!appState.isAppSceneActive)
         #expect(appState.runtimeSuspendedForBackground)
@@ -441,11 +441,64 @@ struct AppStateBootstrapTests {
         // touch `marmot` here: the accessor would rebuild it on demand.
         #expect(appState.client == nil)
 
-        await appState.resumeAfterForegroundActivation()
+        await appState.startForegroundActivation().value
 
         #expect(appState.isAppSceneActive)
         #expect(!appState.runtimeSuspendedForBackground)
         #expect(appState.runtimeGeneration == generation + 1)
+        #expect(appState.phase == .ready)
+        #expect(appState.client != nil)
+        #expect(!appState.marmot.isStopping())
+
+        await stopReadyRuntime(appState)
+    }
+
+    /// #222: a rapid `.background` → `.active` transition starts a runtime
+    /// suspension and a foreground activation that race. Previously the
+    /// suspension tore the runtime down even though the scene had returned to
+    /// active (the resume task it cancelled returned early), stranding the app
+    /// foregrounded with `client == nil` and nothing to re-trigger resume.
+    /// Driving both synchronous entry points back-to-back and draining the
+    /// lifecycle tasks must leave a running runtime.
+    @Test func backgroundThenForegroundRaceLeavesRuntimeRunning() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let generation = appState.runtimeGeneration
+
+        // Interleave the entry points the way SwiftUI delivers a fast
+        // background→foreground bounce: both run synchronously before either
+        // task body executes.
+        appState.startRuntimeSuspension()
+        appState.startForegroundActivation()
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        // Terminal state: foreground, runtime live, not suspended.
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.phase == .ready)
+        #expect(appState.client != nil)
+        #expect(!appState.marmot.isStopping())
+        // The runtime must be re-armed exactly once if it was suspended.
+        #expect(appState.runtimeGeneration <= generation + 1)
+
+        await stopReadyRuntime(appState)
+    }
+
+    /// #222 mirror: the foreground activation is delivered first and then a
+    /// suspension races in. The suspension must observe that the scene is still
+    /// active after cancelling foreground maintenance and decline to tear the
+    /// runtime down (rescheduling a resume), again leaving a live runtime.
+    @Test func foregroundThenBackgroundThenForegroundRaceLeavesRuntimeRunning() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+
+        appState.startForegroundActivation()
+        appState.startRuntimeSuspension()
+        appState.startForegroundActivation()
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
         #expect(appState.phase == .ready)
         #expect(appState.client != nil)
         #expect(!appState.marmot.isStopping())
@@ -458,7 +511,7 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         let generation = appState.runtimeGeneration
 
-        await appState.prepareForBackgroundSuspension()
+        await appState.startRuntimeSuspension().value
         appState.setAppSceneActive(true)
 
         #expect(appState.runtimeSuspendedForBackground)
@@ -678,7 +731,7 @@ struct AppStateBootstrapTests {
 
     private func stopReadyRuntime(_ appState: AppState) async {
         guard appState.phase == .ready || appState.notificationSubscriptionActive else { return }
-        await appState.prepareForBackgroundSuspension()
+        await appState.startRuntimeSuspension().value
         resetPersistedActiveAccountRef()
     }
 
