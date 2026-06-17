@@ -3241,6 +3241,27 @@ struct GroupImageSearchTests {
         #expect(results.first?.dimensionsLabel == "640x480")
     }
 
+    @Test func duckDuckGoResultDecoderCapsResultCount() throws {
+        let entryCount = DuckDuckGoImageSearchClient.maximumResultCount + 40
+        let entries = (0..<entryCount).map { index in
+            """
+            {
+              "title": "Result \(index)",
+              "image": "https://images.example.com/\(index).jpg",
+              "thumbnail": "https://images.example.com/thumb-\(index).jpg",
+              "url": "https://example.com/page/\(index)",
+              "width": 640,
+              "height": 480
+            }
+            """
+        }.joined(separator: ",\n")
+        let json = "{ \"results\": [\n\(entries)\n] }"
+
+        let results = try DuckDuckGoImageSearchClient.decodeResults(from: Data(json.utf8))
+
+        #expect(results.count == DuckDuckGoImageSearchClient.maximumResultCount)
+    }
+
     @Test func groupImageSheetUsesProfileImageURLPolicy() {
         #expect(GroupImageURLSheet.validatedImageURL("https://example.com/a.png")?.absoluteString == "https://example.com/a.png")
         #expect(GroupImageURLSheet.validatedImageURL("http://example.com/a.png") == nil)

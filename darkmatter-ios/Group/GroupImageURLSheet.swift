@@ -60,10 +60,17 @@ struct DuckDuckGoImageSearchClient {
         return nil
     }
 
+    /// Upper bound on the number of search results parsed and rendered. The
+    /// DuckDuckGo response is third-party and unbounded, so cap the raw entries
+    /// before dedup/sanitization to keep in-memory result count — and the
+    /// outbound thumbnail fetches the grid drives as the user scrolls — bounded
+    /// regardless of what the search backend returns.
+    static let maximumResultCount = 60
+
     static func decodeResults(from data: Data) throws -> [GroupImageSearchResult] {
         let response = try JSONDecoder().decode(DuckDuckGoImageResponse.self, from: data)
         var seen = Set<String>()
-        return response.results.compactMap { raw in
+        return response.results.prefix(maximumResultCount).compactMap { raw in
             guard let imageURL = sanitizedImageURL(raw.image) else { return nil }
             guard seen.insert(imageURL.absoluteString).inserted else { return nil }
             let thumbnailURL = sanitizedImageURL(raw.thumbnail)
