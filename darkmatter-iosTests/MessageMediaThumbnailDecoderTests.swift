@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Testing
 import UIKit
 
@@ -20,13 +21,46 @@ struct MessageMediaThumbnailDecoderTests {
         #expect(max(image.size.width * image.scale, image.size.height * image.scale) <= 24)
     }
 
-    @Test func decoderDoesNotUseUnboundedUIImageDataFallbacks() throws {
-        let source = try decoderSource()
+    @Test func decoderFailsClosedWhenImageIOSourceCreationFails() throws {
+        let data = try sampleImageData()
+        #expect(UIImage(data: data) != nil)
 
-        #expect(source.contains("CGImageSourceCreateThumbnailAtIndex"))
-        #expect(source.contains("kCGImageSourceThumbnailMaxPixelSize"))
-        #expect(source.contains("kCGImageSourceShouldCache: false"))
-        #expect(!source.contains("UIImage(data: data)"))
+        var createThumbnailCalled = false
+        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+            data: data,
+            targetPixelSize: 24,
+            imageScale: 1,
+            createSource: { _, _ in nil },
+            createThumbnail: { _, _ in
+                createThumbnailCalled = true
+                return nil
+            }
+        )
+
+        #expect(decoded == nil)
+        #expect(!createThumbnailCalled)
+    }
+
+    @Test func decoderFailsClosedWhenImageIOThumbnailCreationFails() throws {
+        let data = try sampleImageData()
+        #expect(UIImage(data: data) != nil)
+
+        var thumbnailMaxPixelSize: Int?
+        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+            data: data,
+            targetPixelSize: 24,
+            imageScale: 1,
+            createSource: { data, options in
+                CGImageSourceCreateWithData(data as CFData, options)
+            },
+            createThumbnail: { _, options in
+                thumbnailMaxPixelSize = (options as NSDictionary)[kCGImageSourceThumbnailMaxPixelSize] as? Int
+                return nil
+            }
+        )
+
+        #expect(decoded == nil)
+        #expect(thumbnailMaxPixelSize == 24)
     }
 
     @Test func thumbnailCacheCostIncludesDecodedBitmapAndSourceBytes() throws {
@@ -42,20 +76,12 @@ struct MessageMediaThumbnailDecoderTests {
         #expect(MessageMediaThumbnailDecoder.thumbnailCacheCost(for: image, sourceData: sourceData) == expectedCost)
     }
 
-    private func decoderSource() throws -> String {
-        let source = try messageBubbleSource()
-        let start = try #require(source.range(of: "enum MessageMediaThumbnailDecoder {"))
-        let end = try #require(source.range(of: "\nstruct MessageMediaGallery", range: start.upperBound..<source.endIndex))
-        return String(source[start.lowerBound..<end.lowerBound])
-    }
-
-    private func messageBubbleSource() throws -> String {
-        let repoRoot = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(
-            contentsOf: repoRoot.appendingPathComponent("darkmatter-ios/Conversation/MessageBubble.swift"),
-            encoding: .utf8
-        )
+    private func sampleImageData() throws -> Data {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 20))
+        let image = renderer.image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 32, height: 20))
+        }
+        return try #require(image.pngData())
     }
 }

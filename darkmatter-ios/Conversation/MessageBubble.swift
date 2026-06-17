@@ -1832,24 +1832,47 @@ enum MessageMediaThumbnailDecoder {
         let targetPixelSize = max(1, maxPixelSize)
         let imageScale = max(1, scale)
         let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
-            let sourceOptions: [CFString: Any] = [
-                kCGImageSourceShouldCache: false,
-            ]
-            guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
+            guard let image = decodeThumbnailImage(
+                data: data,
+                targetPixelSize: targetPixelSize,
+                imageScale: imageScale,
+                createSource: { data, options in
+                    CGImageSourceCreateWithData(data as CFData, options)
+                },
+                createThumbnail: { source, options in
+                    CGImageSourceCreateThumbnailAtIndex(source, 0, options)
+                }
+            ) else {
                 return nil
             }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: targetPixelSize,
-            ]
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                return nil
-            }
-            return SendableImage(image: UIImage(cgImage: cgImage, scale: imageScale, orientation: .up))
+            return SendableImage(image: image)
         }.value
         return decoded?.image
+    }
+
+    static func decodeThumbnailImage(
+        data: Data,
+        targetPixelSize: Int,
+        imageScale: CGFloat,
+        createSource: (Data, CFDictionary) -> CGImageSource?,
+        createThumbnail: (CGImageSource, CFDictionary) -> CGImage?
+    ) -> UIImage? {
+        let sourceOptions: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let source = createSource(data, sourceOptions as CFDictionary) else {
+            return nil
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: max(1, targetPixelSize),
+        ]
+        guard let cgImage = createThumbnail(source, options as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage, scale: max(1, imageScale), orientation: .up)
     }
 
     private static func cacheKey(for itemID: String, maxPixelSize: Int) -> NSString {
