@@ -446,12 +446,13 @@ private struct GroupImageRemoteThumbnail: View {
 
     let url: URL
 
+    @Environment(\.displayScale) private var displayScale
     @State private var phase = Phase.loading
 
     var body: some View {
         content
             .task(id: url) {
-                await loadImage()
+                await loadImage(scale: displayScale)
             }
     }
 
@@ -471,14 +472,14 @@ private struct GroupImageRemoteThumbnail: View {
         }
     }
 
-    private func loadImage() async {
+    private func loadImage(scale: CGFloat) async {
         phase = .loading
         do {
             let data = try await RemoteImageFetch.imageData(for: url)
             guard let image = await RemoteImageDecoder.downsampledImage(
                 from: data,
-                maxPixelSize: Self.thumbnailMaxPixelSize(scale: UIScreen.main.scale),
-                scale: UIScreen.main.scale
+                maxPixelSize: Self.thumbnailMaxPixelSize(scale: scale),
+                scale: scale
             ) else {
                 phase = .failure
                 return
