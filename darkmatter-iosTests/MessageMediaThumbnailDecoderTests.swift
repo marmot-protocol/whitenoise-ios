@@ -2,6 +2,7 @@ import Foundation
 import ImageIO
 import Testing
 import UIKit
+import UniformTypeIdentifiers
 
 @testable import darkmatter_ios
 
@@ -74,6 +75,73 @@ struct MessageMediaThumbnailDecoderTests {
         let expectedCost = cgImage.bytesPerRow * cgImage.height + sourceData.count
 
         #expect(MessageMediaThumbnailDecoder.thumbnailCacheCost(for: image, sourceData: sourceData) == expectedCost)
+    }
+
+    @Test func decoderRejectsDisallowedSourceTypeBeforeThumbnailing() throws {
+        let data = try sampleImageData()
+        #expect(UIImage(data: data) != nil)
+
+        var createThumbnailCalled = false
+        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+            data: data,
+            targetPixelSize: 24,
+            imageScale: 1,
+            createSource: { data, options in
+                CGImageSourceCreateWithData(data as CFData, options)
+            },
+            sourceType: { _ in UTType.svg.identifier as CFString },
+            createThumbnail: { _, _ in
+                createThumbnailCalled = true
+                return nil
+            }
+        )
+
+        #expect(decoded == nil)
+        #expect(!createThumbnailCalled)
+    }
+
+    @Test func decoderRejectsNilSourceTypeBeforeThumbnailing() throws {
+        let data = try sampleImageData()
+
+        var createThumbnailCalled = false
+        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+            data: data,
+            targetPixelSize: 24,
+            imageScale: 1,
+            createSource: { data, options in
+                CGImageSourceCreateWithData(data as CFData, options)
+            },
+            sourceType: { _ in nil },
+            createThumbnail: { _, _ in
+                createThumbnailCalled = true
+                return nil
+            }
+        )
+
+        #expect(decoded == nil)
+        #expect(!createThumbnailCalled)
+    }
+
+    @Test func decoderThumbnailsAllowedRasterSourceType() throws {
+        let data = try sampleImageData()
+
+        var createThumbnailCalled = false
+        let decoded = MessageMediaThumbnailDecoder.decodeThumbnailImage(
+            data: data,
+            targetPixelSize: 24,
+            imageScale: 1,
+            createSource: { data, options in
+                CGImageSourceCreateWithData(data as CFData, options)
+            },
+            sourceType: { _ in UTType.png.identifier as CFString },
+            createThumbnail: { source, options in
+                createThumbnailCalled = true
+                return CGImageSourceCreateThumbnailAtIndex(source, 0, options)
+            }
+        )
+
+        #expect(decoded != nil)
+        #expect(createThumbnailCalled)
     }
 
     private func sampleImageData() throws -> Data {

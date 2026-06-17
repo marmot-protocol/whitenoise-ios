@@ -5869,6 +5869,20 @@ struct MediaAttachmentPolicyTests {
         #expect(!MediaAttachmentPolicy.isSupported(mediaType: "application/x-msdownload"))
     }
 
+    @Test func rejectsSVGFromImageClassificationAndSupport() {
+        #expect(MediaAttachmentPolicy.isDecodableImageMediaType("image/png"))
+        #expect(MediaAttachmentPolicy.isDecodableImageMediaType("image/jpeg"))
+        #expect(!MediaAttachmentPolicy.isDecodableImageMediaType("image/svg+xml"))
+        #expect(!MediaAttachmentPolicy.isDecodableImageMediaType("image/svg+xml; charset=utf-8"))
+        #expect(!MediaAttachmentPolicy.isDecodableImageMediaType("IMAGE/SVG+XML"))
+
+        // SVG must not classify as an image (it would otherwise reach the
+        // ImageIO thumbnail decoder via the peer-controlled MLS media path).
+        #expect(MediaAttachmentKind.classify(mediaType: "image/png") == .image)
+        #expect(MediaAttachmentKind.classify(mediaType: "image/svg+xml") == .unsupported)
+        #expect(!MediaAttachmentPolicy.isSupported(mediaType: "image/svg+xml"))
+    }
+
     @Test func genericDraftPreservesNonImageBytesForUpload() throws {
         let data = Data("hello".utf8)
         let attachment = try MediaDraftProcessor.attachment(

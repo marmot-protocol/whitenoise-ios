@@ -13,7 +13,7 @@ nonisolated enum MediaAttachmentKind: String, Sendable {
 
     static func classify(mediaType: String, fileName: String? = nil) -> MediaAttachmentKind {
         let canonical = MediaAttachmentPolicy.canonicalMediaType(mediaType)
-        if canonical.hasPrefix("image/") { return .image }
+        if MediaAttachmentPolicy.isDecodableImageMediaType(canonical) { return .image }
         if canonical.hasPrefix("video/") { return .video }
         if canonical.hasPrefix("audio/") { return .audio }
         if MediaAttachmentPolicy.supportedDocumentMediaTypes.contains(canonical) {
@@ -103,9 +103,21 @@ nonisolated enum MediaAttachmentPolicy {
         return canonical == "image/jpg" ? "image/jpeg" : canonical
     }
 
+    /// MIME types that classify as a renderable raster image. `image/*` covers
+    /// the common cases, but `image/svg+xml` is deliberately excluded: SVG is an
+    /// XML/script container, not a raster bitmap, and routing it to the image
+    /// decode path expands the attack surface for peer-controlled bytes (see
+    /// darkmatter-ios#242 / #233). SVG is treated as unsupported so it never
+    /// reaches the ImageIO thumbnail decoder.
+    static func isDecodableImageMediaType(_ mediaType: String) -> Bool {
+        let canonical = canonicalMediaType(mediaType)
+        guard canonical.hasPrefix("image/") else { return false }
+        return canonical != "image/svg+xml"
+    }
+
     static func isSupported(mediaType: String, fileName: String? = nil) -> Bool {
         let canonical = canonicalMediaType(mediaType)
-        if canonical.hasPrefix("image/") { return true }
+        if isDecodableImageMediaType(canonical) { return true }
         if supportedVideoMediaTypes.contains(canonical) { return true }
         if supportedAudioMediaTypes.contains(canonical) { return true }
         if supportedDocumentMediaTypes.contains(canonical) { return true }
@@ -230,7 +242,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     }
 
     var isImage: Bool {
-        mediaType.lowercased().hasPrefix("image/")
+        MediaAttachmentPolicy.isDecodableImageMediaType(mediaType)
     }
 
     var isVideo: Bool {
