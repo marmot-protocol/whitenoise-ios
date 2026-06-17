@@ -2889,6 +2889,16 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.profileAddress("alice@" + String(repeating: "a", count: 250) + ".com") == nil)
     }
 
+    @Test func profileAddressRejectsIPLiteralAndNumericDomains() {
+        #expect(ProfileSanitizer.profileAddress("alice@127.0.0.1") == nil)
+        #expect(ProfileSanitizer.profileAddress("bob@10.0.0.1") == nil)
+        #expect(ProfileSanitizer.profileAddress("x@169.254.169.254") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@8.8.8.8") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@0x7f.0.0.1") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@123.456") == nil)
+        #expect(ProfileSanitizer.profileAddress("alice@example.123") == nil)
+    }
+
     // MARK: - Message bodies
 
     @Test func messageBodyStripsBidiButKeepsNewlines() {
