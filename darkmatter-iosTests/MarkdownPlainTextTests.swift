@@ -75,6 +75,20 @@ struct MarkdownPlainTextTests {
         #expect(flattened == nil)
     }
 
+    @Test func emptyListItemsConsumeNodeBudgetBeforeTrailingContent() {
+        // A list whose items carry no blocks must still charge one node per
+        // item, so a hostile message with a huge empty-item list exhausts the
+        // budget instead of looping unbounded on the MainActor (issue #228).
+        let emptyItem = MarkdownListItemFfi(blocks: [], checked: false)
+        let items = Array(repeating: emptyItem, count: 2500)
+        let flattened = MarkdownPlainText.flatten(doc([
+            .list(kind: .bullet(marker: "-"), tight: true, items: items),
+            .paragraph(inlines: [.text(content: "tail")]),
+        ]))
+
+        #expect(flattened == nil)
+    }
+
     @Test func nostrEntitiesTruncate() {
         let bech32 = "npub1" + String(repeating: "q", count: 58)
         let flattened = MarkdownPlainText.flatten(doc([
