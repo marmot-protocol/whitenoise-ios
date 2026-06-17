@@ -657,7 +657,8 @@ final class ConversationViewModel {
             while !Task.isCancelled {
                 do {
                     guard let appState else { return }
-                    let timelineSub = try await appState.marmot.subscribeTimelineMessages(
+                    let client = try appState.currentMarmotClient()
+                    let timelineSub = try await client.marmot.subscribeTimelineMessages(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex,
                         limit: Self.timelinePageLimit
@@ -666,7 +667,8 @@ final class ConversationViewModel {
                     self?.error = nil
                     self?.installTimelineSubscription(timelineSub)
                     defer { self?.clearTimelineSubscription(timelineSub) }
-                    if let snapshot = timelineSub.snapshot() {
+                    if let snapshot = await client.timelineSubscriptionSnapshot(timelineSub) {
+                        guard !Task.isCancelled else { return }
                         self?.applyTimelinePage(snapshot, placement: .window)
                     }
                     self?.isLoading = false
@@ -740,12 +742,14 @@ final class ConversationViewModel {
             while !Task.isCancelled {
                 do {
                     guard let appState else { return }
-                    let groupSub = try await appState.marmot.subscribeGroupState(
+                    let client = try appState.currentMarmotClient()
+                    let groupSub = try await client.marmot.subscribeGroupState(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex
                     )
                     guard !Task.isCancelled else { return }
-                    if let initial = groupSub.snapshot() {
+                    if let initial = await client.groupStateSubscriptionSnapshot(groupSub) {
+                        guard !Task.isCancelled else { return }
                         self?.applyGroupRecord(initial)
                     }
                     for await record in SubscriptionDriver.groupState(groupSub) {
