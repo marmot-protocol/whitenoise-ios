@@ -1371,6 +1371,7 @@ private struct MessageAudioAttachmentView: View {
     @State private var waveformSamples: [CGFloat]
     @State private var speedIndex = 0
     @State private var progressTask: Task<Void, Never>?
+    @State private var audioSessionLease: VoiceAudioSession.Lease?
 
     private let speeds: [Float] = [1, 1.5, 2]
     private var metadataCacheKey: String {
@@ -1561,7 +1562,8 @@ private struct MessageAudioAttachmentView: View {
     private func playLoadedAudio() {
         guard let player else { return }
         do {
-            try VoiceAudioSession.configureForPlayback()
+            releaseAudioSession()
+            audioSessionLease = try VoiceAudioSession.configureForPlayback()
         } catch {
             failPlaybackStart()
             return
@@ -1586,13 +1588,13 @@ private struct MessageAudioAttachmentView: View {
         progressTask = nil
         player?.pause()
         isPlaying = false
-        VoiceAudioSession.deactivate()
+        releaseAudioSession()
     }
 
     private func failPlaybackStart() {
         progressTask?.cancel()
         progressTask = nil
-        VoiceAudioSession.deactivate()
+        releaseAudioSession()
         didFail = true
         isPlaying = false
     }
@@ -1622,18 +1624,23 @@ private struct MessageAudioAttachmentView: View {
         progressTask?.cancel()
         progressTask = nil
         isPlaying = false
-        VoiceAudioSession.deactivate()
+        releaseAudioSession()
     }
 
     private func stopPlayback() {
         progressTask?.cancel()
         progressTask = nil
-        let shouldDeactivate = isPlaying || player?.isPlaying == true
+        let shouldDeactivate = isPlaying || player?.isPlaying == true || audioSessionLease != nil
         player?.stop()
         isPlaying = false
         if shouldDeactivate {
-            VoiceAudioSession.deactivate()
+            releaseAudioSession()
         }
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
     }
 
 }

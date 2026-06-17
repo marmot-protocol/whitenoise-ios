@@ -58,6 +58,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
     private var recorder: AVAudioRecorder?
     private var recordingURL: URL?
+    private var audioSessionLease: VoiceAudioSession.Lease?
     private var currentDragTranslation: CGSize = .zero
     private var holdTask: Task<Void, Never>?
     private var meterTask: Task<Void, Never>?
@@ -149,7 +150,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         }
 
         do {
-            try VoiceAudioSession.configureForRecording()
+            audioSessionLease = try VoiceAudioSession.configureForRecording()
         } catch {
             throw Failure.startFailed
         }
@@ -262,7 +263,12 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         if deleteFile, let url {
             try? FileManager.default.removeItem(at: url)
         }
-        VoiceAudioSession.deactivate()
+        releaseAudioSession()
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
     }
 }
 
