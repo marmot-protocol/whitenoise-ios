@@ -64,7 +64,7 @@ enum MarkdownPlainText {
                 appendBlocks(nested, to: &state, depth: depth + 1)
             case .list(_, _, let items):
                 for item in items {
-                    guard !state.exhausted else { return }
+                    guard state.consumeNode() else { return }
                     appendBlocks(item.blocks, to: &state, depth: depth + 1)
                 }
             case .table(_, let header, let rows):
