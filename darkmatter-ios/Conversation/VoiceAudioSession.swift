@@ -17,66 +17,107 @@ enum VoiceAudioSession {
         fileprivate let id = UUID()
         fileprivate weak var session: VoiceAudioSessionConfiguring?
         fileprivate let sessionIdentifier: ObjectIdentifier
+        fileprivate let configuration: Configuration
 
-        fileprivate init(session: VoiceAudioSessionConfiguring) {
+        fileprivate init(session: VoiceAudioSessionConfiguring, configuration: Configuration) {
             self.session = session
             self.sessionIdentifier = ObjectIdentifier(session)
+            self.configuration = configuration
         }
     }
 
+    fileprivate struct Configuration {
+        let category: AVAudioSession.Category
+        let mode: AVAudioSession.Mode
+        let options: AVAudioSession.CategoryOptions
+    }
+
+    private enum ReleaseAction {
+        case none
+        case deactivate
+        case restore(Configuration)
+    }
+
     private static let lock = NSLock()
-    private static var activeLeaseIDsBySession: [ObjectIdentifier: Set<UUID>] = [:]
+    private static var activeLeasesBySession: [ObjectIdentifier: [Lease]] = [:]
 
     @discardableResult
     static func configureForPlayback(
         _ session: VoiceAudioSessionConfiguring = AVAudioSession.sharedInstance()
     ) throws -> Lease {
-        try session.setCategory(.playback, mode: .spokenAudio, options: [])
+        let configuration = Configuration(category: .playback, mode: .spokenAudio, options: [])
+        try apply(configuration, to: session)
         try session.setActive(true, options: [])
-        return activate(session)
+        return activate(session, configuration: configuration)
     }
 
     @discardableResult
     static func configureForRecording(
         _ session: VoiceAudioSessionConfiguring = AVAudioSession.sharedInstance()
     ) throws -> Lease {
-        try session.setCategory(
-            .playAndRecord,
+        let configuration = Configuration(
+            category: .playAndRecord,
             mode: .spokenAudio,
             options: [.allowBluetoothHFP, .defaultToSpeaker]
         )
+        try apply(configuration, to: session)
         try session.setActive(true, options: [])
-        return activate(session)
+        return activate(session, configuration: configuration)
     }
 
     static func deactivate(_ lease: Lease?) {
         guard let lease else { return }
-        guard release(lease), let session = lease.session else { return }
-        try? session.setActive(false, options: [.notifyOthersOnDeactivation])
+        let session = lease.session
+        switch release(lease) {
+        case .none:
+            return
+        case .deactivate:
+            try? session?.setActive(false, options: [.notifyOthersOnDeactivation])
+        case .restore(let configuration):
+            guard let session else { return }
+            try? apply(configuration, to: session)
+        }
     }
 
-    private static func activate(_ session: VoiceAudioSessionConfiguring) -> Lease {
-        let lease = Lease(session: session)
+    private static func apply(
+        _ configuration: Configuration,
+        to session: VoiceAudioSessionConfiguring
+    ) throws {
+        try session.setCategory(
+            configuration.category,
+            mode: configuration.mode,
+            options: configuration.options
+        )
+    }
+
+    private static func activate(
+        _ session: VoiceAudioSessionConfiguring,
+        configuration: Configuration
+    ) -> Lease {
+        let lease = Lease(session: session, configuration: configuration)
         lock.lock()
-        activeLeaseIDsBySession[lease.sessionIdentifier, default: []].insert(lease.id)
+        activeLeasesBySession[lease.sessionIdentifier, default: []].append(lease)
         lock.unlock()
         return lease
     }
 
-    private static func release(_ lease: Lease) -> Bool {
+    private static func release(_ lease: Lease) -> ReleaseAction {
         lock.lock()
         defer { lock.unlock() }
 
-        guard var leaseIDs = activeLeaseIDsBySession[lease.sessionIdentifier],
-              leaseIDs.remove(lease.id) != nil
-        else { return false }
+        guard var leases = activeLeasesBySession[lease.sessionIdentifier],
+              let index = leases.firstIndex(where: { $0.id == lease.id })
+        else { return .none }
 
-        guard !leaseIDs.isEmpty else {
-            activeLeaseIDsBySession.removeValue(forKey: lease.sessionIdentifier)
-            return true
+        let removedLastLease = index == leases.count - 1
+        leases.remove(at: index)
+
+        guard !leases.isEmpty else {
+            activeLeasesBySession.removeValue(forKey: lease.sessionIdentifier)
+            return .deactivate
         }
 
-        activeLeaseIDsBySession[lease.sessionIdentifier] = leaseIDs
-        return false
+        activeLeasesBySession[lease.sessionIdentifier] = leases
+        return removedLastLease ? .restore(leases[leases.count - 1].configuration) : .none
     }
 }

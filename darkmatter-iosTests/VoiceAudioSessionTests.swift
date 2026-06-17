@@ -52,8 +52,27 @@ struct VoiceAudioSessionTests {
 
         VoiceAudioSession.deactivate(playbackLease)
         #expect(session.activeCalls.count == 2)
+        #expect(session.categoryCalls.count == 2)
 
         VoiceAudioSession.deactivate(recordingLease)
+        #expect(session.activeCalls.count == 3)
+        #expect(session.activeCalls.last?.active == false)
+        #expect(session.activeCalls.last?.options.contains(.notifyOthersOnDeactivation) == true)
+    }
+
+    @Test func deactivationRestoresPreviousCategoryWhenTopLeaseReleases() throws {
+        let session = AudioSessionSpy()
+        let playbackLease = try VoiceAudioSession.configureForPlayback(session)
+        let recordingLease = try VoiceAudioSession.configureForRecording(session)
+
+        VoiceAudioSession.deactivate(recordingLease)
+        #expect(session.activeCalls.count == 2)
+        #expect(session.categoryCalls.count == 3)
+        #expect(session.categoryCalls.last?.category == .playback)
+        #expect(session.categoryCalls.last?.mode == .spokenAudio)
+        #expect(session.categoryCalls.last?.options.isEmpty == true)
+
+        VoiceAudioSession.deactivate(playbackLease)
         #expect(session.activeCalls.count == 3)
         #expect(session.activeCalls.last?.active == false)
         #expect(session.activeCalls.last?.options.contains(.notifyOthersOnDeactivation) == true)
