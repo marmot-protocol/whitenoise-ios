@@ -58,6 +58,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
 
     private var recorder: AVAudioRecorder?
     private var recordingURL: URL?
+    private var audioSessionLease: VoiceAudioSession.Lease?
     private var currentDragTranslation: CGSize = .zero
     private var holdTask: Task<Void, Never>?
     private var meterTask: Task<Void, Never>?
@@ -148,10 +149,8 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
             throw Failure.permissionDenied
         }
 
-        let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
-            try session.setActive(true)
+            audioSessionLease = try VoiceAudioSession.configureForRecording()
         } catch {
             throw Failure.startFailed
         }
@@ -264,7 +263,12 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         if deleteFile, let url {
             try? FileManager.default.removeItem(at: url)
         }
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        releaseAudioSession()
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
     }
 }
 

@@ -1373,6 +1373,7 @@ private struct MessageAudioAttachmentView: View {
     @State private var waveformSamples: [CGFloat]
     @State private var speedIndex = 0
     @State private var progressTask: Task<Void, Never>?
+    @State private var audioSessionLease: VoiceAudioSession.Lease?
 
     private let speeds: [Float] = [1, 1.5, 2]
     private var metadataCacheKey: String {
@@ -1464,8 +1465,7 @@ private struct MessageAudioAttachmentView: View {
 
     private func togglePlayback() {
         if isPlaying {
-            player?.pause()
-            isPlaying = false
+            pausePlayback()
             return
         }
         if player == nil || didFail {
@@ -1563,15 +1563,42 @@ private struct MessageAudioAttachmentView: View {
 
     private func playLoadedAudio() {
         guard let player else { return }
+        do {
+            releaseAudioSession()
+            audioSessionLease = try VoiceAudioSession.configureForPlayback()
+        } catch {
+            failPlaybackStart()
+            return
+        }
         if player.currentTime >= player.duration {
             player.currentTime = 0
         }
         player.enableRate = true
         player.rate = speeds[speedIndex]
-        player.play()
+        guard player.play() else {
+            failPlaybackStart()
+            return
+        }
         player.rate = speeds[speedIndex]
+        didFail = false
         isPlaying = true
         startProgressLoop()
+    }
+
+    private func pausePlayback() {
+        progressTask?.cancel()
+        progressTask = nil
+        player?.pause()
+        isPlaying = false
+        releaseAudioSession()
+    }
+
+    private func failPlaybackStart() {
+        progressTask?.cancel()
+        progressTask = nil
+        releaseAudioSession()
+        didFail = true
+        isPlaying = false
     }
 
     private func startProgressLoop() {
@@ -1579,11 +1606,12 @@ private struct MessageAudioAttachmentView: View {
         progressTask = Task { @MainActor in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !Task.isCancelled else { return }
                 guard let player else { return }
                 let duration = max(0.01, player.duration)
                 progress = min(1, max(0, CGFloat(player.currentTime / duration)))
                 if !player.isPlaying {
-                    isPlaying = false
+                    finishPlayback()
                     if progress >= 0.995 {
                         progress = 0
                         player.currentTime = 0
@@ -1594,11 +1622,27 @@ private struct MessageAudioAttachmentView: View {
         }
     }
 
+    private func finishPlayback() {
+        progressTask?.cancel()
+        progressTask = nil
+        isPlaying = false
+        releaseAudioSession()
+    }
+
     private func stopPlayback() {
         progressTask?.cancel()
         progressTask = nil
+        let shouldDeactivate = isPlaying || player?.isPlaying == true || audioSessionLease != nil
         player?.stop()
         isPlaying = false
+        if shouldDeactivate {
+            releaseAudioSession()
+        }
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
     }
 
 }
