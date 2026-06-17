@@ -903,6 +903,7 @@ private struct MessageMediaTile: View {
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
 
+    @Environment(\.displayScale) private var displayScale
     @State private var imageData: Data?
     @State private var image: UIImage?
     @State private var loadedImageID: String?
@@ -942,17 +943,17 @@ private struct MessageMediaTile: View {
         .clipped()
         .contentShape(Rectangle())
         .task(id: item.id) {
-            _ = await loadImageIfNeeded()
+            _ = await loadImageIfNeeded(scale: displayScale)
         }
         .onTapGesture {
             guard item.isImage else { return }
             if didFail {
-                Task { await loadImageIfNeeded(force: true) }
+                Task { await loadImageIfNeeded(scale: displayScale, force: true) }
             } else if let imageData {
                 onOpenImage(item, imageData)
             } else {
                 Task {
-                    if let data = await loadImageIfNeeded(force: true) {
+                    if let data = await loadImageIfNeeded(scale: displayScale, force: true) {
                         onOpenImage(item, data)
                     }
                 }
@@ -998,9 +999,9 @@ private struct MessageMediaTile: View {
         .background(Color(.tertiarySystemFill))
     }
 
-    private func loadImageIfNeeded(force: Bool = false) async -> Data? {
+    private func loadImageIfNeeded(scale: CGFloat, force: Bool = false) async -> Data? {
         guard item.isImage else { return nil }
-        let maxPixelSize = max(1, Int(ceil(sideLength * UIScreen.main.scale)))
+        let maxPixelSize = max(1, Int(ceil(sideLength * scale)))
         if !force {
             if loadedImageID == item.id, let imageData { return imageData }
             if let cachedThumbnail = MessageMediaThumbnailDecoder.cachedThumbnail(for: item.id, maxPixelSize: maxPixelSize) {
@@ -1020,7 +1021,7 @@ private struct MessageMediaTile: View {
             guard let decoded = await MessageMediaThumbnailDecoder.image(
                 data: data,
                 maxPixelSize: maxPixelSize,
-                scale: UIScreen.main.scale
+                scale: scale
             ) else {
                 imageData = nil
                 image = nil
@@ -1064,12 +1065,14 @@ private struct MessageVideoAttachmentView: View {
     @State private var isLoadingFullscreen = false
     @State private var didFail = false
 
+    @Environment(\.displayScale) private var displayScale
+
     private var overlayDiameter: CGFloat {
         VideoPreviewOverlayPresentation.diameter(for: CGSize(width: width, height: height))
     }
 
-    private var maxThumbnailPixelSize: Int {
-        max(1, Int(ceil(max(width, height) * UIScreen.main.scale)))
+    private func maxThumbnailPixelSize(scale: CGFloat) -> Int {
+        max(1, Int(ceil(max(width, height) * scale)))
     }
 
     private var thumbnailCacheKey: String {
@@ -1081,7 +1084,7 @@ private struct MessageVideoAttachmentView: View {
             ?? previewThumbnail
             ?? MessageVideoThumbnailDecoder.cachedThumbnail(
                 for: thumbnailCacheKey,
-                maxPixelSize: maxThumbnailPixelSize
+                maxPixelSize: maxThumbnailPixelSize(scale: displayScale)
             )
     }
 
@@ -1122,7 +1125,7 @@ private struct MessageVideoAttachmentView: View {
                 HStack {
                     Spacer()
                     Button {
-                        Task { await openFullscreen() }
+                        Task { await openFullscreen(scale: displayScale) }
                     } label: {
                         Group {
                             if isLoadingFullscreen {
@@ -1155,10 +1158,10 @@ private struct MessageVideoAttachmentView: View {
         .frame(width: width, height: height)
         .contentShape(Rectangle())
         .onTapGesture {
-            Task { await loadAndPlay() }
+            Task { await loadAndPlay(scale: displayScale) }
         }
         .task(id: item.id) {
-            await loadPreviewThumbnailIfNeeded()
+            await loadPreviewThumbnailIfNeeded(scale: displayScale)
         }
         .onChange(of: item.id) { _, _ in
             player?.pause()
@@ -1191,13 +1194,13 @@ private struct MessageVideoAttachmentView: View {
         }
     }
 
-    private func loadPreviewThumbnailIfNeeded() async {
+    private func loadPreviewThumbnailIfNeeded(scale: CGFloat) async {
         guard item.thumbnail == nil,
               previewThumbnail == nil,
               !isLoadingPreview else { return }
         if let cached = MessageVideoThumbnailDecoder.cachedThumbnail(
             for: thumbnailCacheKey,
-            maxPixelSize: maxThumbnailPixelSize
+            maxPixelSize: maxThumbnailPixelSize(scale: scale)
         ) {
             previewThumbnail = cached
             return
@@ -1206,13 +1209,13 @@ private struct MessageVideoAttachmentView: View {
         defer { isLoadingPreview = false }
         do {
             let url = try await playbackFileURL()
-            await loadPreviewThumbnail(from: url)
+            await loadPreviewThumbnail(from: url, scale: scale)
         } catch {
             // Thumbnail fetch is opportunistic; tapping the video can still retry.
         }
     }
 
-    private func loadAndPlay() async {
+    private func loadAndPlay(scale: CGFloat) async {
         if let player {
             player.play()
             return
@@ -1222,7 +1225,7 @@ private struct MessageVideoAttachmentView: View {
         defer { isLoading = false }
         do {
             let url = try await playbackFileURL()
-            await loadPreviewThumbnail(from: url)
+            await loadPreviewThumbnail(from: url, scale: scale)
             let next = AVPlayer(url: url)
             player = next
             next.play()
@@ -1231,7 +1234,7 @@ private struct MessageVideoAttachmentView: View {
         }
     }
 
-    private func openFullscreen() async {
+    private func openFullscreen(scale: CGFloat) async {
         player?.pause()
         if let playbackURL {
             fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: playbackURL)
@@ -1243,7 +1246,7 @@ private struct MessageVideoAttachmentView: View {
         defer { isLoadingFullscreen = false }
         do {
             let url = try await playbackFileURL()
-            await loadPreviewThumbnail(from: url)
+            await loadPreviewThumbnail(from: url, scale: scale)
             fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: url)
         } catch {
             didFail = true
@@ -1262,19 +1265,19 @@ private struct MessageVideoAttachmentView: View {
         return url
     }
 
-    private func loadPreviewThumbnail(from url: URL) async {
+    private func loadPreviewThumbnail(from url: URL, scale: CGFloat) async {
         guard item.thumbnail == nil, previewThumbnail == nil else { return }
         if let cached = MessageVideoThumbnailDecoder.cachedThumbnail(
             for: thumbnailCacheKey,
-            maxPixelSize: maxThumbnailPixelSize
+            maxPixelSize: maxThumbnailPixelSize(scale: scale)
         ) {
             previewThumbnail = cached
             return
         }
         guard let thumbnail = await MessageVideoThumbnailDecoder.thumbnail(
             url: url,
-            maxPixelSize: maxThumbnailPixelSize,
-            scale: UIScreen.main.scale
+            maxPixelSize: maxThumbnailPixelSize(scale: scale),
+            scale: scale
         ) else {
             return
         }
@@ -1282,7 +1285,7 @@ private struct MessageVideoAttachmentView: View {
         MessageVideoThumbnailDecoder.store(
             thumbnail,
             for: thumbnailCacheKey,
-            maxPixelSize: maxThumbnailPixelSize
+            maxPixelSize: maxThumbnailPixelSize(scale: scale)
         )
     }
 }
@@ -2057,6 +2060,8 @@ private struct MessageMediaFullscreenPage: View {
     @State private var isLoading = false
     @State private var didFail = false
 
+    @Environment(\.displayScale) private var displayScale
+
     init(
         item: MessageMediaAttachment,
         initialImageData: Data?,
@@ -2071,53 +2076,52 @@ private struct MessageMediaFullscreenPage: View {
         _imageData = State(initialValue: initialImageData)
     }
 
-    private var fullscreenMaxPixelSize: Int {
-        let scale = UIScreen.main.scale
-        let bounds = UIScreen.main.bounds.size
-        let longestPoint = max(bounds.width, bounds.height)
+    private func fullscreenMaxPixelSize(viewSize: CGSize, scale: CGFloat) -> Int {
+        let longestPoint = max(viewSize.width, viewSize.height)
         let longestEdge = max(1, longestPoint * scale)
         return MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: longestEdge)
     }
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        GeometryReader { proxy in
+            ZStack {
+                Color.black.ignoresSafeArea()
 
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if isLoading {
-                ProgressView()
-                    .tint(.white)
-            } else if didFail {
-                Button {
-                    Task { await loadImageIfNeeded(force: true) }
-                } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else if didFail {
+                    Button {
+                        Task { await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale, force: true) }
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    ProgressView()
+                        .tint(.white)
                 }
-                .buttonStyle(.plain)
-            } else {
-                ProgressView()
-                    .tint(.white)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: item.id) {
-            await loadImageIfNeeded()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: item.id) {
+                await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale)
+            }
         }
     }
 
-    private func loadImageIfNeeded(force: Bool = false) async {
+    private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, force: Bool = false) async {
         guard image == nil || force else { return }
-        let scale = UIScreen.main.scale
-        let maxPixelSize = fullscreenMaxPixelSize
+        let maxPixelSize = fullscreenMaxPixelSize(viewSize: viewSize, scale: scale)
 
         // First, try decoding any bytes we already hold (initial data passed in
         // from the gallery / a previous load) off the MainActor before paying
