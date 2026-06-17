@@ -148,10 +148,8 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
             throw Failure.permissionDenied
         }
 
-        let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.allowBluetoothHFP, .defaultToSpeaker])
-            try session.setActive(true)
+            try VoiceAudioSession.configureForRecording()
         } catch {
             throw Failure.startFailed
         }
@@ -264,7 +262,7 @@ final class VoiceMessageRecorder: NSObject, ObservableObject {
         if deleteFile, let url {
             try? FileManager.default.removeItem(at: url)
         }
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        VoiceAudioSession.deactivate()
     }
 }
 
