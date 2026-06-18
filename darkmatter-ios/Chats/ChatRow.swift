@@ -61,14 +61,18 @@ struct ChatRow: View {
 
     /// Latest message preview. Sent messages are prefixed with "You:".
     private var subtitle: String {
+        Self.subtitleText(for: item, activeAccountIdHex: appState.activeAccount?.accountIdHex)
+    }
+
+    static func subtitleText(
+        for item: ChatsListViewModel.Item,
+        activeAccountIdHex: String?
+    ) -> String {
         guard let latest = item.lastMessage else {
             return L10n.string("No messages yet")
         }
-        let body = ProfileSanitizer.singleLine(
-            MessagePreview.body(latest, mentionDisplayName: { appState.mentionDisplayName(for: $0) }),
-            maxLength: 140
-        ) ?? ""
-        if latest.sender == appState.activeAccount?.accountIdHex {
+        let body = item.previewText ?? ""
+        if latest.sender == activeAccountIdHex {
             return body.isEmpty ? L10n.string("You sent a message") : L10n.formatted("You: %@", body)
         }
         return body.isEmpty ? L10n.string("New message") : body
