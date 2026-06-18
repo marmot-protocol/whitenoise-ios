@@ -153,6 +153,15 @@ final class ConversationViewModel {
     /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
     @ObservationIgnored private var reactionRecords: [String: AppMessageRecordFfi] = [:]
     @ObservationIgnored private var optimisticReactionRemovals: Set<ReactionRemoval> = []
+    /// Cached `@`-mention autocomplete candidates and the generation pair they
+    /// were built from. `mentionCandidates(for:)` runs on every composer
+    /// keystroke; rebuilding the candidate array (and re-deriving each
+    /// candidate's lowercased match fields) per keystroke is avoidable work on
+    /// the MainActor typing hot path (see issue #300). The cache is rebuilt only
+    /// when the group roster (`groupMlsRefreshGeneration`) or resolved profile
+    /// data (`AppState.profileRefreshGeneration`) actually changes.
+    @ObservationIgnored private var cachedMentionCandidates: [ComposerMentionCandidate]?
+    @ObservationIgnored private var cachedMentionCandidatesKey: MentionCandidateCacheKey?
     /// Live agent-stream watch tasks, keyed by stream id.
     private var streamWatchTasks: [String: Task<Void, Never>] = [:]
     /// Generation token per stream watch. A watch task only clears its own
@@ -235,6 +244,17 @@ final class ConversationViewModel {
     private struct GroupMemberAdminIdentity: Equatable {
         let memberIdHex: String
         let isAdmin: Bool
+    }
+
+    /// Identifies the inputs the cached `@`-mention candidate list was built
+    /// from. Both generations are monotonic: `rosterGeneration` bumps on group
+    /// membership/admin changes, `profileGeneration` bumps when resolved
+    /// display-name/avatar/npub data refreshes. A change in either invalidates
+    /// the cache so freshly resolved names still surface in autocomplete.
+    /// Non-private so the invalidation contract can be unit-tested (#300).
+    struct MentionCandidateCacheKey: Equatable {
+        let rosterGeneration: UInt64
+        let profileGeneration: Int
     }
 
     private var groupMlsRefreshIdentity: GroupMlsRefreshIdentity {
@@ -358,12 +378,24 @@ final class ConversationViewModel {
     }
 
     private func allMentionCandidates(appState: AppState) -> [ComposerMentionCandidate] {
+        let key = MentionCandidateCacheKey(
+            rosterGeneration: groupMlsRefreshGeneration,
+            profileGeneration: appState.profileRefreshGeneration
+        )
+        if let cachedMentionCandidates, cachedMentionCandidatesKey == key {
+            return cachedMentionCandidates
+        }
+        let candidates: [ComposerMentionCandidate]
         if !groupMemberDetails.isEmpty {
-            return groupMemberDetails
+            candidates = groupMemberDetails
                 .filter { !$0.isSelf }
                 .map { ComposerMentionCandidate(details: $0, appState: appState) }
+        } else {
+            candidates = members.compactMap { ComposerMentionCandidate(member: $0, appState: appState) }
         }
-        return members.compactMap { ComposerMentionCandidate(member: $0, appState: appState) }
+        cachedMentionCandidates = candidates
+        cachedMentionCandidatesKey = key
+        return candidates
     }
 
     func managementAction(for memberIdHex: String) -> GroupMemberActionStateFfi? {

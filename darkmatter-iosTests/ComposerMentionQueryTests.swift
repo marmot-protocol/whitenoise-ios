@@ -116,6 +116,32 @@ struct ComposerMentionQueryTests {
             GroupMemberDetailsPresentation.profileAccountIdHex(for: emptyAccount) == "mls-member-id"
         )
     }
+
+    @Test func mentionCandidateCacheKeyTreatsSameGenerationsAsEqual() {
+        // Regression for #300: ConversationViewModel caches the `@`-mention
+        // candidate list and reuses it across keystrokes, rebuilding only when
+        // the roster or profile generation changes. Equal generation pairs must
+        // compare equal so the cache is reused (no per-keystroke rebuild).
+        let a = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        let b = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        #expect(a == b)
+    }
+
+    @Test func mentionCandidateCacheKeyInvalidatesWhenEitherGenerationChanges() {
+        // A bump in either the roster generation (membership/admin change) or
+        // the profile generation (resolved display name/avatar/npub) must make
+        // the key compare unequal so a freshly resolved candidate list is built.
+        let base = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        let rosterBumped = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 8, profileGeneration: 3)
+        let profileBumped = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 4)
+        #expect(base != rosterBumped)
+        #expect(base != profileBumped)
+    }
 }
 
 private func mentionCandidate(name: String, npub: String, hex: String) -> ComposerMentionCandidate {
