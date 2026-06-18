@@ -18,6 +18,26 @@ struct NativePushDisableCoordinator {
     }
 }
 
+struct NativePushEnableCoordinator {
+    let setNativePushEnabled: (Bool) async throws -> NotificationSettingsFfi
+    let syncPushRegistration: () async throws -> Void
+
+    func enable() async throws -> NotificationSettingsFfi {
+        let enabledSettings = try await setNativePushEnabled(true)
+        do {
+            try await syncPushRegistration()
+            return enabledSettings
+        } catch NotificationSettingsActionError.missingApnsToken {
+            // APNS token delivery is asynchronous; the app delegate will retry
+            // registration as soon as iOS provides the token.
+            return enabledSettings
+        } catch {
+            _ = try? await setNativePushEnabled(false)
+            throw error
+        }
+    }
+}
+
 nonisolated enum NativePushRegistrationErrorDisposition {
     case stopSync
     case recordFailure
@@ -507,17 +527,22 @@ final class AppState {
             }
             let granted = try await notifications.requestAuthorizationAndRegister()
             guard granted else { throw NotificationSettingsActionError.permissionDenied }
-            let settings = try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)
-            do {
-                try await syncNativePushRegistration(accountRef: accountRef)
-            } catch NotificationSettingsActionError.missingApnsToken {
-                // APNS token delivery is asynchronous; the app delegate will
-                // retry registration as soon as iOS provides the token.
-            }
-            return settings
+            return try await enableNativePush(accountRef: accountRef)
         } else {
             return try await disableNativePush(accountRef: accountRef)
         }
+    }
+
+    private func enableNativePush(accountRef: String) async throws -> NotificationSettingsFfi {
+        let coordinator = NativePushEnableCoordinator(
+            setNativePushEnabled: { [marmot] enabled in
+                try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
+            },
+            syncPushRegistration: { [self] in
+                _ = try await syncNativePushRegistration(accountRef: accountRef)
+            }
+        )
+        return try await coordinator.enable()
     }
 
     private func disableNativePush(accountRef: String) async throws -> NotificationSettingsFfi {
@@ -541,14 +566,7 @@ final class AppState {
 
             guard NativePushServerConfig.current() != nil else { return }
             notifications.registerForRemoteNotifications()
-            _ = try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)
-
-            do {
-                _ = try await syncNativePushRegistration(accountRef: accountRef)
-            } catch NotificationSettingsActionError.missingApnsToken {
-                // APNS token delivery is asynchronous; the app delegate will
-                // retry registration as soon as iOS provides the token.
-            }
+            _ = try await enableNativePush(accountRef: accountRef)
         } catch {
             // Notification defaults are best-effort: account activation should
             // still succeed if iOS permission or push registration is blocked.
