@@ -273,6 +273,7 @@ enum MarkdownMessageBuilder {
         budget: inout Budget,
         mentionDisplayName: MarkdownMentionResolver?
     ) {
+        guard budget.consumeNode() else { return }
         if let headerLine = tableRowString(
             cells: header, bold: true, budget: &budget, mentionDisplayName: mentionDisplayName
         ) {
@@ -299,6 +300,7 @@ enum MarkdownMessageBuilder {
         context.bold = bold
         context.mentionDisplayName = mentionDisplayName
         for (index, cell) in cells.enumerated() {
+            guard budget.consumeNode() else { break }
             if index > 0, !line.characters.isEmpty {
                 line += AttributedString(String(budget.take("  ")))
             }
