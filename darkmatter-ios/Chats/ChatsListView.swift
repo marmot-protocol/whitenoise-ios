@@ -369,15 +369,9 @@ struct ChatsListView: View {
         case .unread:
             base = viewModel.items.filter(\.hasUnread)
         }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
         guard !query.isEmpty else { return base }
-        return base.filter { searchHaystack(for: $0).localizedCaseInsensitiveContains(query) }
-    }
-
-    private func searchHaystack(for item: ChatsListViewModel.Item) -> String {
-        let title = item.title
-        let preview = item.previewText ?? ""
-        return title + " " + preview
+        return base.filter { $0.searchHaystack.contains(query) }
     }
 
     private func navigate(to item: ChatsListViewModel.Item) {

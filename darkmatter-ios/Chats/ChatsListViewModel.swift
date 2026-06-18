@@ -12,22 +12,56 @@ final class ChatsListViewModel {
     struct Item: Identifiable {
         let row: ChatListRowFfi
         let avatarURL: URL?
-        var mentionDisplayName: MarkdownMentionResolver?
-        var id: String { row.groupIdHex }
-        var title: String { ProfileSanitizer.groupName(row.title) ?? IdentityFormatter.short(row.groupIdHex) }
-        @MainActor var previewText: String? {
-            row.lastMessage.flatMap { preview in
-                ProfileSanitizer.singleLine(
-                    MessagePreview.body(preview, mentionDisplayName: mentionDisplayName),
-                    maxLength: 140
-                )
-            }
+        let title: String
+        let previewText: String?
+        let searchHaystack: String
+
+        init(
+            row: ChatListRowFfi,
+            avatarURL: URL?,
+            mentionDisplayName: MarkdownMentionResolver? = nil
+        ) {
+            let title = Self.sanitizedTitle(for: row)
+            let previewText = Self.sanitizedPreview(
+                from: row.lastMessage,
+                mentionDisplayName: mentionDisplayName
+            )
+            self.row = row
+            self.avatarURL = avatarURL
+            self.title = title
+            self.previewText = previewText
+            self.searchHaystack = Self.makeSearchHaystack(
+                title: title,
+                previewText: previewText
+            )
         }
+
+        var id: String { row.groupIdHex }
         var unreadCount: UInt64 { row.unreadCount }
         var hasUnread: Bool { row.hasUnread }
         var isArchived: Bool { row.archived }
         var firstUnreadMessageIdHex: String? { row.firstUnreadMessageIdHex }
         var lastMessage: ChatListMessagePreviewFfi? { row.lastMessage }
+
+        private static func sanitizedTitle(for row: ChatListRowFfi) -> String {
+            ProfileSanitizer.groupName(row.title) ?? IdentityFormatter.short(row.groupIdHex)
+        }
+
+        private static func sanitizedPreview(
+            from preview: ChatListMessagePreviewFfi?,
+            mentionDisplayName: MarkdownMentionResolver?
+        ) -> String? {
+            preview.flatMap {
+                ProfileSanitizer.singleLine(
+                    MessagePreview.body($0, mentionDisplayName: mentionDisplayName),
+                    maxLength: 140
+                )
+            }
+        }
+
+        private static func makeSearchHaystack(title: String, previewText: String?) -> String {
+            (title + " " + (previewText ?? "")).localizedLowercase
+        }
     }
 
     private(set) var items: [Item] = []
