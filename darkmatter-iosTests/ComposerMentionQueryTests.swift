@@ -41,6 +41,26 @@ struct ComposerMentionQueryTests {
         #expect(ComposerMentionQuery.filter(candidates, matching: "").count == 2)
     }
 
+    @Test func filterMatchesMemberIdHexCaseInsensitively() {
+        // Regression for #300: filter matches against precomputed lowercased
+        // fields. Verify the memberIdHex match path and case-insensitivity
+        // survive the precompute (an uppercase query must still match the
+        // cached lowercased hex).
+        let candidates = [
+            mentionCandidate(name: "Jeff", npub: jeffNpub, hex: "deadbeef01"),
+            mentionCandidate(name: "Alice", npub: aliceNpub, hex: "cafef00d02"),
+        ]
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "DEADBEEF").map(\.displayName) == [
+                "Jeff"
+            ])
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "cafe").map(\.displayName) == [
+                "Alice"
+            ])
+        #expect(ComposerMentionQuery.filter(candidates, matching: "JE").map(\.displayName) == ["Jeff"])
+    }
+
     @Test func replacingInsertsFullNpubMention() throws {
         let draft = "ping @je"
         let session = try #require(ComposerMentionQuery.active(in: draft))
@@ -95,6 +115,32 @@ struct ComposerMentionQueryTests {
         #expect(
             GroupMemberDetailsPresentation.profileAccountIdHex(for: emptyAccount) == "mls-member-id"
         )
+    }
+
+    @Test func mentionCandidateCacheKeyTreatsSameGenerationsAsEqual() {
+        // Regression for #300: ConversationViewModel caches the `@`-mention
+        // candidate list and reuses it across keystrokes, rebuilding only when
+        // the roster or profile generation changes. Equal generation pairs must
+        // compare equal so the cache is reused (no per-keystroke rebuild).
+        let a = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        let b = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        #expect(a == b)
+    }
+
+    @Test func mentionCandidateCacheKeyInvalidatesWhenEitherGenerationChanges() {
+        // A bump in either the roster generation (membership/admin change) or
+        // the profile generation (resolved display name/avatar/npub) must make
+        // the key compare unequal so a freshly resolved candidate list is built.
+        let base = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 3)
+        let rosterBumped = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 8, profileGeneration: 3)
+        let profileBumped = ConversationViewModel.MentionCandidateCacheKey(
+            rosterGeneration: 7, profileGeneration: 4)
+        #expect(base != rosterBumped)
+        #expect(base != profileBumped)
     }
 }
 
