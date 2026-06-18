@@ -494,6 +494,18 @@ nonisolated enum MessageExternalLinkConfirmation {
         }
 
         let sanitizedHost = ProfileSanitizer.textRun(rawHost)
+
+        // Hosts wider than the display cap are peer-controlled (autolinks in
+        // received markdown) and are elided away anyway, so never feed an
+        // over-long string to the punycode decoder. `decodePunycodeLabel`
+        // grows its output with O(n) `Array.insert(_:at:)` calls, so decoding
+        // a multi-thousand-character `xn--` label is O(L²) work on the
+        // MainActor at tap time. Bounding the input before decode keeps that
+        // cost proportional to what we can actually show.
+        guard sanitizedHost.count <= maxDisplayedHostCharacters else {
+            return elided(sanitizedHost, maxCharacters: maxDisplayedHostCharacters)
+        }
+
         let decoded = decodedInternationalizedHost(sanitizedHost)
         let primary = elided(decoded.host, maxCharacters: maxDisplayedHostCharacters)
         guard decoded.isInternationalized else { return primary }
@@ -577,6 +589,12 @@ nonisolated enum MessageExternalLinkConfirmation {
             }
 
             let outputCount = output.count + 1
+            // Defense in depth against quadratic decode cost: each
+            // `output.insert(_:at:)` below shifts O(output.count) elements, so
+            // an over-long `xn--` label would be O(L²). Callers already cap the
+            // host length, but the decoder must not trust that, so bail to the
+            // raw label once the decoded output exceeds what we can display.
+            guard outputCount <= maxDisplayedHostCharacters else { return nil }
             bias = adaptPunycodeBias(delta: i - oldi, numPoints: outputCount, firstTime: oldi == 0)
             let (newN, overflowed) = n.addingReportingOverflow(i / outputCount)
             guard !overflowed else { return nil }

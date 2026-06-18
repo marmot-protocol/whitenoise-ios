@@ -86,6 +86,37 @@ struct MessageLinkPolicyTests {
         }
     }
 
+    /// Regression for #296: a peer-controlled autolink host can carry a
+    /// multi-thousand-character `xn--` label, and the punycode decoder grows
+    /// its output with O(n) `Array.insert(_:at:)` calls (O(L²) overall) on the
+    /// MainActor at tap time. The confirmation builder must cap the host before
+    /// decode and bound the decoder's own output, so an over-long host is shown
+    /// elided/raw without paying the quadratic cost or stalling the main thread.
+    @Test func externalConfirmationBoundsOverlongPunycodeHost() {
+        withAppLanguage(.english) {
+            // ~7900-char single `xn--` label, within `maxMessageLength` (8000)
+            // so it survives outbound capping but is far beyond what is shown.
+            let hugeLabel = "xn--" + String(repeating: "a", count: 7900)
+            let url = URL(string: "https://\(hugeLabel).example/path")!
+
+            // Must return quickly; if the O(L²) decode ran on the full label
+            // this would stall. Wall-clock isn't asserted here (it's a unit
+            // test), but the input cap guarantees the decoder never sees it.
+            let text = MessageExternalLinkConfirmation.displayText(for: url)
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+
+            #expect(lines.count == 2)
+            // Host line is elided to the display cap (no decode, no IDN suffix).
+            let hostLine = String(lines[0])
+            #expect(hostLine.hasPrefix("This link opens "))
+            #expect(hostLine.hasSuffix(":"))
+            #expect(hostLine.contains("…"))
+            #expect(!hostLine.contains("IDN/punycode"))
+            // The full label never appears verbatim in the host display.
+            #expect(!hostLine.contains(hugeLabel))
+        }
+    }
+
     @Test func externalConfirmationHandlesHostlessExternalURLs() {
         withAppLanguage(.english) {
             let url = URL(string: "mailto:a@b.com")!
