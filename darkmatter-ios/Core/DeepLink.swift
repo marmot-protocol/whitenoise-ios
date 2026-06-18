@@ -75,6 +75,8 @@ nonisolated enum DeepLink: Equatable {
     /// bare profile reference. Makes the scanner forgiving about QR payload
     /// formats.
     static func parse(string raw: String) -> DeepLink? {
+        guard NostrProfileReference.isWithinReferenceLimit(raw) else { return nil }
+
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let memberRef = NostrProfileReference.memberRef(from: trimmed) {
             return .profile(npub: memberRef)

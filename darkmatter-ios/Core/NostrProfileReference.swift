@@ -22,6 +22,8 @@ nonisolated enum NostrProfileReference {
     ]
 
     static func memberRef(from raw: String) -> String? {
+        guard isWithinReferenceLimit(raw) else { return nil }
+
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -132,7 +134,7 @@ nonisolated enum NostrProfileReference {
         raw.prefix(prefix.count).lowercased() == prefix
     }
 
-    private static func isWithinBech32ReferenceLimit(_ raw: String) -> Bool {
+    static func isWithinReferenceLimit(_ raw: String) -> Bool {
         raw.utf8.index(
             raw.utf8.startIndex,
             offsetBy: maxBech32ReferenceUTF8Bytes + 1,
@@ -141,7 +143,7 @@ nonisolated enum NostrProfileReference {
     }
 
     private static func bech32Decode(_ raw: String) -> (hrp: String, data: [UInt8])? {
-        guard isWithinBech32ReferenceLimit(raw) else { return nil }
+        guard isWithinReferenceLimit(raw) else { return nil }
         let lower = raw.lowercased()
         guard raw == lower || raw == raw.uppercased(),
               let separator = lower.lastIndex(of: "1")

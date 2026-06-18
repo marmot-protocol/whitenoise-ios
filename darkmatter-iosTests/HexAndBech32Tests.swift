@@ -82,4 +82,13 @@ struct Bech32CharsetLookupTests {
         #expect(DeepLink.parse(string: overlongNpub) == nil)
         #expect(DeepLink.parse(string: "darkmatter://profile/\(overlongNprofile)") == nil)
     }
+
+    @Test func rejectsOverlongRawInputsBeforeURLFallback() {
+        let overlongRaw = String(repeating: "x", count: 257)
+        let overlongURL = "darkmatter://profile/" + String(repeating: "q", count: 300)
+
+        #expect(NostrProfileReference.memberRef(from: overlongRaw) == nil)
+        #expect(NostrProfileReference.memberRef(from: overlongURL) == nil)
+        #expect(DeepLink.parse(string: overlongURL) == nil)
+    }
 }
