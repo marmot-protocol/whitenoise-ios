@@ -76,7 +76,18 @@ enum GroupRelaysPresentation {
         "\(relays.count)"
     }
 
+    /// Group relay URLs come from `AppGroupRecordFfi.relays`, which is group
+    /// metadata that propagates over MLS and is therefore peer/relay-influenced
+    /// (a group admin controls it). Render them through the shared display
+    /// boundary sanitizer so RTL-override / zero-width characters can't spoof
+    /// the displayed host (Trojan-Source-style, #298), matching the defense
+    /// `KeyPackagesView.sanitizedRelays` already applies to relay strings.
     static func rows(for relays: [String]) -> [String] {
-        relays.isEmpty ? [emptyMessage] : relays
+        guard !relays.isEmpty else { return [emptyMessage] }
+        let sanitized = relays.compactMap { ProfileSanitizer.singleLine($0, maxLength: 120) }
+        // A non-empty input that sanitizes entirely away (e.g. relays made only
+        // of control/bidi characters) must still render the empty state rather
+        // than a blank disclosure.
+        return sanitized.isEmpty ? [emptyMessage] : sanitized
     }
 }
