@@ -41,6 +41,26 @@ struct ComposerMentionQueryTests {
         #expect(ComposerMentionQuery.filter(candidates, matching: "").count == 2)
     }
 
+    @Test func filterMatchesMemberIdHexCaseInsensitively() {
+        // Regression for #300: filter matches against precomputed lowercased
+        // fields. Verify the memberIdHex match path and case-insensitivity
+        // survive the precompute (an uppercase query must still match the
+        // cached lowercased hex).
+        let candidates = [
+            mentionCandidate(name: "Jeff", npub: jeffNpub, hex: "deadbeef01"),
+            mentionCandidate(name: "Alice", npub: aliceNpub, hex: "cafef00d02"),
+        ]
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "DEADBEEF").map(\.displayName) == [
+                "Jeff"
+            ])
+        #expect(
+            ComposerMentionQuery.filter(candidates, matching: "cafe").map(\.displayName) == [
+                "Alice"
+            ])
+        #expect(ComposerMentionQuery.filter(candidates, matching: "JE").map(\.displayName) == ["Jeff"])
+    }
+
     @Test func replacingInsertsFullNpubMention() throws {
         let draft = "ping @je"
         let session = try #require(ComposerMentionQuery.active(in: draft))

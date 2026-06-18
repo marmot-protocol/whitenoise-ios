@@ -8,6 +8,14 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
     let npub: String
     let avatarPictureURL: URL?
 
+    // Lowercased forms of the stable match fields, precomputed once at
+    // construction. `filter` runs on every keystroke while composing a
+    // mention; caching these avoids re-lowercasing/re-allocating per
+    // candidate on the MainActor typing hot path (see issue #300).
+    let displayNameLowercased: String
+    let npubLowercased: String
+    let memberIdHexLowercased: String
+
     init(details: GroupMemberDetailsFfi, appState: AppState) {
         memberIdHex = details.memberIdHex
         npub = details.npub
@@ -18,6 +26,9 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
             ?? IdentityFormatter.short(accountIdHex)
         avatarPictureURL = appState.avatarURL(forAccountIdHex: accountIdHex)
         id = memberIdHex
+        displayNameLowercased = displayName.lowercased()
+        npubLowercased = npub.lowercased()
+        memberIdHexLowercased = memberIdHex.lowercased()
     }
 
     init?(member: AppGroupMemberRecordFfi, appState: AppState) {
@@ -31,6 +42,9 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
         displayName = appState.displayName(forAccountIdHex: accountHex)
         avatarPictureURL = appState.avatarURL(forAccountIdHex: accountHex)
         id = memberIdHex
+        displayNameLowercased = displayName.lowercased()
+        npubLowercased = self.npub.lowercased()
+        memberIdHexLowercased = memberIdHex.lowercased()
     }
 }
 
@@ -75,9 +89,9 @@ enum ComposerMentionQuery {
         } else {
             let needle = trimmed.lowercased()
             filtered = candidates.filter { candidate in
-                candidate.displayName.lowercased().contains(needle)
-                    || candidate.npub.lowercased().contains(needle)
-                    || candidate.memberIdHex.lowercased().contains(needle)
+                candidate.displayNameLowercased.contains(needle)
+                    || candidate.npubLowercased.contains(needle)
+                    || candidate.memberIdHexLowercased.contains(needle)
             }
         }
         return Array(filtered.prefix(maxVisibleCandidates))
