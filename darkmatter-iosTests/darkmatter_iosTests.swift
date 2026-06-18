@@ -845,6 +845,31 @@ struct NotificationSubscriptionRetryTests {
         #expect(snapshot.sleepDelays == [1, 1])
     }
 
+    @Test func idleSubscriptionResetsBackoffAfterFailures() async throws {
+        let probe = NotificationSubscriptionProbe(attempts: [
+            .failure,
+            .failure,
+            .updates([]),
+            .updates([notificationUpdate(notificationKey: "notif-idle-reset")])
+        ])
+        let runner = NotificationSubscriptionRunner(
+            initialRetryDelayNanoseconds: 1,
+            maximumRetryDelayNanoseconds: 8,
+            subscribe: { try await probe.subscribe() },
+            present: { await probe.present($0) },
+            reportError: { await probe.report(error: $0) },
+            sleep: { try await probe.sleep(nanoseconds: $0) }
+        )
+
+        await runner.run()
+
+        let snapshot = await probe.snapshot()
+        #expect(snapshot.subscribeAttempts == 4)
+        #expect(snapshot.presentedNotificationKeys == ["notif-idle-reset"])
+        #expect(snapshot.errorCount == 2)
+        #expect(snapshot.sleepDelays == [1, 2, 1, 1])
+    }
+
     @Test func backsOffConsecutiveFailuresAndResetsAfterNotification() async throws {
         let probe = NotificationSubscriptionProbe(attempts: [
             .failure,

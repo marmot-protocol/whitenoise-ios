@@ -33,10 +33,10 @@ nonisolated struct NotificationSubscriptionRunner {
 
             do {
                 let updates = try await subscribe()
+                retryDelay = initialRetryDelayNanoseconds
                 for await update in updates {
                     guard !Task.isCancelled else { return }
                     deliveredNotification = true
-                    retryDelay = initialRetryDelayNanoseconds
                     await present(update)
                 }
             } catch is CancellationError {
