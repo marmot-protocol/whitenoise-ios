@@ -4458,7 +4458,7 @@ struct ConversationTimelineProjectionTests {
         #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
         #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
         #expect(source.contains("@ObservationIgnored private var timelineSubscription"))
-        #expect(source.contains("SubscriptionDriver.timelineMessages(timelineSub)"))
+        #expect(source.contains("SubscriptionDriver.timelineMessageUpdates(timelineSub)"))
         #expect(source.contains("await client.timelineSubscriptionSnapshot(timelineSub)"))
         #expect(source.contains("await client.groupStateSubscriptionSnapshot(groupSub)"))
         #expect(!source.contains("timelineSub.snapshot()"))

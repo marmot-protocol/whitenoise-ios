@@ -704,10 +704,10 @@ final class ConversationViewModel {
                         self?.applyTimelinePage(snapshot, placement: .window)
                     }
                     self?.isLoading = false
-                    for await page in SubscriptionDriver.timelineMessages(timelineSub) {
+                    for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
                         guard !Task.isCancelled else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
-                        self?.applyTimelinePage(page, placement: .window)
+                        self?.applyTimelineSubscriptionUpdate(update)
                     }
                 } catch is CancellationError {
                     return
@@ -873,24 +873,64 @@ final class ConversationViewModel {
         }
     }
 
+    func applyTimelineSubscriptionUpdate(_ update: TimelineSubscriptionUpdateFfi) {
+        switch update {
+        case .page(let page):
+            applyTimelinePage(page, placement: .window)
+        case .projection(let runtimeUpdate):
+            applyTimelineProjectionUpdate(runtimeUpdate)
+        }
+    }
+
     private func applyTimelineWindowPage(_ page: TimelinePageFfi) {
-        let incomingMessageIds = Set(page.messages.map(\.messageIdHex).filter { !$0.isEmpty })
         var projectionChanged = false
-        for messageId in Array(messageById.keys) where !incomingMessageIds.contains(messageId) {
-            projectionChanged = removeTimelineRecord(
-                messageIdHex: messageId,
-                updateTimeline: false
-            ) || projectionChanged
+        let shouldEvictAbsentRecords = shouldEvictAbsentTimelineRecords(from: page)
+        if shouldEvictAbsentRecords {
+            let incomingMessageIds = Set(page.messages.map(\.messageIdHex).filter { !$0.isEmpty })
+            for messageId in Array(messageById.keys) where !incomingMessageIds.contains(messageId) {
+                projectionChanged = removeTimelineRecord(
+                    messageIdHex: messageId,
+                    updateTimeline: false
+                ) || projectionChanged
+            }
         }
         recordFinalizedStreams(in: page.messages)
-        pruneScannedFinalizedMessageIds(keeping: incomingMessageIds)
         for record in page.messages {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
+        }
+        if shouldEvictAbsentRecords {
+            pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         }
         hasMoreBefore = page.hasMoreBefore
         hasMoreAfter = page.hasMoreAfter
         rebuildProjectedState(projectionChanged: projectionChanged)
         isLoading = false
+    }
+
+    private func applyTimelineProjectionUpdate(_ runtimeUpdate: RuntimeProjectionUpdateFfi) {
+        let update = runtimeUpdate.update
+        guard update.groupIdHex == group.groupIdHex else { return }
+
+        var projectionChanged = false
+        // `changes` is authoritative for live deltas; the snapshot is still a bounded window.
+        for change in update.changes {
+            switch change {
+            case .upsert(let trigger, let record):
+                recordFinalizedStreams(in: [record])
+                projectionChanged = applyTimelineRecord(record, trigger: trigger) || projectionChanged
+            case .remove(let messageIdHex, _):
+                projectionChanged = removeTimelineRecord(
+                    messageIdHex: messageIdHex,
+                    updateTimeline: false
+                ) || projectionChanged
+            }
+        }
+        rebuildProjectedState(projectionChanged: projectionChanged)
+        isLoading = false
+    }
+
+    private func shouldEvictAbsentTimelineRecords(from page: TimelinePageFfi) -> Bool {
+        !hasMoreBefore && !hasMoreAfter && !page.hasMoreBefore && !page.hasMoreAfter
     }
 
     private func applyTimelineTailRefreshPage(_ page: TimelinePageFfi) {
@@ -1144,6 +1184,7 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
+        scannedFinalizedMessageIds.remove(messageIdHex)
         let timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
             : false
