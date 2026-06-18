@@ -16,7 +16,6 @@ struct ProfileEditView: View {
 
     @State private var isPublishing = false
     @State private var error: String?
-    @State private var success = false
 
     var body: some View {
         Form {
@@ -185,7 +184,6 @@ struct ProfileEditView: View {
 
         isPublishing = true
         error = nil
-        success = false
 
         do {
             let relays = appState.relayPublishRelays(for: accountRef)
@@ -197,7 +195,6 @@ struct ProfileEditView: View {
                 bootstrapRelays: bootstrapRelays
             )
             await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)
-            success = true
             Haptics.success()
             appState.present(.success(
                 L10n.string("Profile published"),
