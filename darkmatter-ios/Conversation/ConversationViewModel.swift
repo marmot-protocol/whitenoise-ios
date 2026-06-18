@@ -2611,6 +2611,7 @@ final class ConversationViewModel {
         let rowId = "msg:stream:\(streamId)"
         streamSenderById[streamId] = sender
         let timestamp = streamPreviewTimestamp(for: streamId)
+        let itemTimestamp = transientTimelineItems[rowId]?.timestamp ?? timestamp
         let record = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "received",
@@ -2622,27 +2623,14 @@ final class ConversationViewModel {
             recordedAt: timestamp,
             receivedAt: timestamp
         )
-        if let idx = timeline.firstIndex(where: { $0.id == rowId }) {
-            let timestamp = timeline[idx].timestamp
-            let item = TimelineItem(
-                id: rowId,
-                kind: .message(record: record, status: status),
-                timestamp: timestamp
-            )
-            transientTimelineItems[rowId] = item
-            if upsertTimelineItem(item) {
-                noteTimelineProjectionChanged()
-            }
-        } else {
-            let item = TimelineItem(
-                id: rowId,
-                kind: .message(record: record, status: status),
-                timestamp: timestamp
-            )
-            transientTimelineItems[rowId] = item
-            if upsertTimelineItem(item) {
-                noteTimelineProjectionChanged()
-            }
+        let item = TimelineItem(
+            id: rowId,
+            kind: .message(record: record, status: status),
+            timestamp: itemTimestamp
+        )
+        transientTimelineItems[rowId] = item
+        if upsertTimelineItem(item) {
+            noteTimelineProjectionChanged()
         }
     }
 

@@ -4927,6 +4927,17 @@ struct AgentStreamTests {
         #expect(!source.matches(#"private func appendStreamChunk[\s\S]*current\.count"#))
     }
 
+    @Test func streamBubbleUpsertPreservesTimestampWithoutTimelineScan() throws {
+        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let functionStart = try #require(source.range(of: "private func upsertStreamBubble"))
+        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    private func recordFinalizedStreams"))
+        let upsertSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
+
+        #expect(upsertSource.contains("let itemTimestamp = transientTimelineItems[rowId]?.timestamp ?? timestamp"))
+        #expect(upsertSource.contains("timestamp: itemTimestamp"))
+        #expect(!upsertSource.contains("timeline.firstIndex"))
+    }
+
     @MainActor
     @Test func historicalStreamStartsRenderNoBlankBubble() throws {
         let viewModel = ConversationViewModel(
