@@ -5957,6 +5957,170 @@ struct MessageSemanticsTests {
         #expect(source.contains("setAttributes(protectedAttributes, ofItemAtPath: url.path)"))
     }
 
+    @Test func mediaCacheEvictsExpiredPlaintext() throws {
+        let policy = DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60)
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MessageMediaCacheEvictionAgeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+        let oldReference = encryptedMediaReference(
+            plaintextByte: "10",
+            ciphertextByte: "11",
+            sourceEpoch: 0
+        )
+        let freshReference = encryptedMediaReference(
+            plaintextByte: "12",
+            ciphertextByte: "13",
+            sourceEpoch: 0
+        )
+        let oldURL = try #require(MessageMediaCache.cacheURL(for: oldReference, cachesDirectory: cachesDirectory))
+        let freshURL = try #require(MessageMediaCache.cacheURL(for: freshReference, cachesDirectory: cachesDirectory))
+
+        MessageMediaCache.store(
+            Data([0x01]),
+            for: oldReference,
+            cachesDirectory: cachesDirectory,
+            policy: policy,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+        MessageMediaCache.store(
+            Data([0x02]),
+            for: freshReference,
+            cachesDirectory: cachesDirectory,
+            policy: policy,
+            now: Date(timeIntervalSince1970: 1_061)
+        )
+
+        #expect(!FileManager.default.fileExists(atPath: oldURL.path))
+        #expect(FileManager.default.fileExists(atPath: freshURL.path))
+    }
+
+    @Test func mediaCacheEvictsLeastRecentlyUsedPlaintextBySize() throws {
+        let policy = DecryptedMediaCacheEvictionPolicy(maxBytes: 8, maxAge: 60 * 60)
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MessageMediaCacheEvictionSizeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+        let firstReference = encryptedMediaReference(
+            plaintextByte: "20",
+            ciphertextByte: "21",
+            sourceEpoch: 0
+        )
+        let secondReference = encryptedMediaReference(
+            plaintextByte: "22",
+            ciphertextByte: "23",
+            sourceEpoch: 0
+        )
+        let thirdReference = encryptedMediaReference(
+            plaintextByte: "24",
+            ciphertextByte: "25",
+            sourceEpoch: 0
+        )
+        let firstURL = try #require(MessageMediaCache.cacheURL(for: firstReference, cachesDirectory: cachesDirectory))
+        let secondURL = try #require(MessageMediaCache.cacheURL(for: secondReference, cachesDirectory: cachesDirectory))
+        let thirdURL = try #require(MessageMediaCache.cacheURL(for: thirdReference, cachesDirectory: cachesDirectory))
+
+        MessageMediaCache.store(
+            Data(repeating: 0x01, count: 4),
+            for: firstReference,
+            cachesDirectory: cachesDirectory,
+            policy: policy,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+        MessageMediaCache.store(
+            Data(repeating: 0x02, count: 4),
+            for: secondReference,
+            cachesDirectory: cachesDirectory,
+            policy: policy,
+            now: Date(timeIntervalSince1970: 1_001)
+        )
+        MessageMediaCache.store(
+            Data(repeating: 0x03, count: 4),
+            for: thirdReference,
+            cachesDirectory: cachesDirectory,
+            policy: policy,
+            now: Date(timeIntervalSince1970: 1_002)
+        )
+
+        #expect(!FileManager.default.fileExists(atPath: firstURL.path))
+        #expect(FileManager.default.fileExists(atPath: secondURL.path))
+        #expect(FileManager.default.fileExists(atPath: thirdURL.path))
+    }
+
+    @Test func playbackStoreReusesContentAddressedMediaCacheForReferencedItems() throws {
+        let reference = encryptedMediaReference(
+            fileName: "clip.mp4",
+            plaintextByte: "30",
+            ciphertextByte: "31",
+            mediaType: "video/mp4",
+            sourceEpoch: 0
+        )
+        let item = MessageMediaAttachment(
+            id: "message-a:\(reference.plaintextSha256):0:0",
+            reference: reference,
+            fileName: reference.fileName,
+            mediaType: reference.mediaType,
+            dim: nil,
+            localData: nil
+        )
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaPlaybackReuseTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+        let expectedURL = try #require(MessageMediaCache.cacheURL(for: reference, cachesDirectory: cachesDirectory))
+
+        let playbackURL = try #require(
+            MediaPlaybackFileStore.fileURL(
+                for: item,
+                data: Data([0x04, 0x05, 0x06]),
+                cachesDirectory: cachesDirectory,
+                mediaPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                playbackPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                now: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+
+        #expect(playbackURL == expectedURL)
+        #expect(try Data(contentsOf: expectedURL) == Data([0x04, 0x05, 0x06]))
+        #expect(!FileManager.default.fileExists(atPath: cachesDirectory.appendingPathComponent("EncryptedMediaPlayback").path))
+    }
+
+    @Test func playbackStoreUsesContentHashForUnreferencedItems() throws {
+        let item = MessageMediaAttachment(
+            id: "draft-reused-id",
+            reference: nil,
+            fileName: "clip.mp4",
+            mediaType: "video/mp4",
+            dim: nil,
+            localData: nil
+        )
+        let cachesDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MediaPlaybackContentHashTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cachesDirectory) }
+
+        let firstURL = try #require(
+            MediaPlaybackFileStore.fileURL(
+                for: item,
+                data: Data([0x01]),
+                cachesDirectory: cachesDirectory,
+                mediaPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                playbackPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                now: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+        let secondURL = try #require(
+            MediaPlaybackFileStore.fileURL(
+                for: item,
+                data: Data([0x02]),
+                cachesDirectory: cachesDirectory,
+                mediaPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                playbackPolicy: DecryptedMediaCacheEvictionPolicy(maxBytes: 1_024, maxAge: 60),
+                now: Date(timeIntervalSince1970: 1_001)
+            )
+        )
+
+        #expect(firstURL != secondURL)
+        #expect(try Data(contentsOf: firstURL) == Data([0x01]))
+        #expect(try Data(contentsOf: secondURL) == Data([0x02]))
+    }
+
     @MainActor
     @Test func conversationDisplayBodyUsesMediaFileNameFallback() throws {
         let nonce = String(repeating: "22", count: 12)
