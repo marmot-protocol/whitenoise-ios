@@ -53,6 +53,18 @@ enum SubscriptionDriver {
         }
     }
 
+    static func timelineMessageUpdates(_ sub: TimelineMessagesSubscription) -> AsyncStream<TimelineSubscriptionUpdateFfi> {
+        AsyncStream { continuation in
+            let task = Task {
+                while !Task.isCancelled, let next = await sub.nextUpdate() {
+                    continuation.yield(next)
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
     static func groupState(_ sub: GroupStateSubscription) -> AsyncStream<AppGroupRecordFfi> {
         AsyncStream { continuation in
             let task = Task {
