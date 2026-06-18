@@ -912,6 +912,7 @@ final class ConversationViewModel {
         guard update.groupIdHex == group.groupIdHex else { return }
 
         var projectionChanged = false
+        // `changes` is authoritative for live deltas; the snapshot is still a bounded window.
         for change in update.changes {
             switch change {
             case .upsert(let trigger, let record):

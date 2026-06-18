@@ -41,18 +41,6 @@ enum SubscriptionDriver {
         }
     }
 
-    static func timelineMessages(_ sub: TimelineMessagesSubscription) -> AsyncStream<TimelinePageFfi> {
-        AsyncStream { continuation in
-            let task = Task {
-                while !Task.isCancelled, let next = await sub.next() {
-                    continuation.yield(next)
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     static func timelineMessageUpdates(_ sub: TimelineMessagesSubscription) -> AsyncStream<TimelineSubscriptionUpdateFfi> {
         AsyncStream { continuation in
             let task = Task {
