@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CryptoKit
 import MarmotKit
 import UIKit
 import UniformTypeIdentifiers
@@ -1025,6 +1026,90 @@ nonisolated private enum TemporaryMediaFile {
     }
 }
 
+struct DecryptedMediaCacheEvictionPolicy: Equatable {
+    let maxBytes: Int64
+    let maxAge: TimeInterval
+
+    static let media = DecryptedMediaCacheEvictionPolicy(
+        maxBytes: 256 * 1024 * 1024,
+        maxAge: 30 * 24 * 60 * 60
+    )
+    static let playback = DecryptedMediaCacheEvictionPolicy(
+        maxBytes: 64 * 1024 * 1024,
+        maxAge: 7 * 24 * 60 * 60
+    )
+}
+
+private enum DecryptedMediaCacheEvictor {
+    private struct Entry {
+        let url: URL
+        let size: Int64
+        let modifiedAt: Date
+    }
+
+    static func touch(_ url: URL, at date: Date) {
+        try? FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+    }
+
+    static func trim(
+        directory: URL,
+        policy: DecryptedMediaCacheEvictionPolicy,
+        preserving preservedURL: URL? = nil,
+        now: Date = Date()
+    ) {
+        guard policy.maxBytes >= 0, policy.maxAge >= 0 else { return }
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return
+        }
+
+        var entries: [Entry] = []
+        entries.reserveCapacity(urls.count)
+        for url in urls {
+            guard let values = try? url.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .contentModificationDateKey,
+                .fileSizeKey,
+            ]), values.isRegularFile == true else {
+                continue
+            }
+            let size = Int64(max(0, values.fileSize ?? 0))
+            let modifiedAt = values.contentModificationDate ?? .distantPast
+            if preservedURL.map({ sameFile(url, $0) }) != true,
+               now.timeIntervalSince(modifiedAt) > policy.maxAge
+            {
+                try? FileManager.default.removeItem(at: url)
+                continue
+            }
+            entries.append(Entry(url: url, size: size, modifiedAt: modifiedAt))
+        }
+
+        var totalSize = entries.reduce(Int64(0)) { $0 + $1.size }
+        guard totalSize > policy.maxBytes else { return }
+        for entry in entries.sorted(by: { lhs, rhs in
+            if lhs.modifiedAt == rhs.modifiedAt {
+                return lhs.url.lastPathComponent < rhs.url.lastPathComponent
+            }
+            return lhs.modifiedAt < rhs.modifiedAt
+        }) where totalSize > policy.maxBytes {
+            if preservedURL.map({ sameFile(entry.url, $0) }) == true { continue }
+            do {
+                try FileManager.default.removeItem(at: entry.url)
+                totalSize -= entry.size
+            } catch {
+                continue
+            }
+        }
+    }
+
+    private static func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.standardizedFileURL.path == rhs.standardizedFileURL.path
+    }
+}
+
 enum MediaPlaybackFileStore {
     private static let protectedAttributes: [FileAttributeKey: Any] = [
         .protectionKey: FileProtectionType.complete
@@ -1034,13 +1119,39 @@ enum MediaPlaybackFileStore {
         guard let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             return nil
         }
+        return fileURL(
+            for: item,
+            data: data,
+            cachesDirectory: cachesDirectory,
+            mediaPolicy: .media,
+            playbackPolicy: .playback
+        )
+    }
+
+    static func fileURL(
+        for item: MessageMediaAttachment,
+        data: Data,
+        cachesDirectory: URL,
+        mediaPolicy: DecryptedMediaCacheEvictionPolicy,
+        playbackPolicy: DecryptedMediaCacheEvictionPolicy,
+        now: Date = Date()
+    ) -> URL? {
+        if let reference = item.reference,
+           let cachedURL = MessageMediaCache.cacheURL(for: reference, cachesDirectory: cachesDirectory)
+        {
+            MessageMediaCache.store(
+                data,
+                for: reference,
+                cachesDirectory: cachesDirectory,
+                policy: mediaPolicy,
+                now: now
+            )
+            return FileManager.default.fileExists(atPath: cachedURL.path) ? cachedURL : nil
+        }
+
         let fileExtension = MediaAttachmentPolicy.fileExtension(for: item.mediaType, fileName: item.fileName)
-        let rawName = item.reference?.plaintextSha256 ?? item.id
-        let safeName = rawName
-            .replacingOccurrences(of: #"[^A-Za-z0-9._-]+"#, with: "-", options: .regularExpression)
-            .trimmingCharacters(in: CharacterSet(charactersIn: ".-_"))
         let directory = cachesDirectory.appendingPathComponent("EncryptedMediaPlayback", isDirectory: true)
-        let url = directory.appendingPathComponent("\(safeName.isEmpty ? UUID().uuidString : safeName).\(fileExtension)")
+        let url = directory.appendingPathComponent("\(sha256Hex(of: data)).\(fileExtension)")
         do {
             try FileManager.default.createDirectory(
                 at: directory,
@@ -1052,10 +1163,23 @@ enum MediaPlaybackFileStore {
                 try data.write(to: url, options: [.atomic, .completeFileProtection])
                 try? FileManager.default.setAttributes(protectedAttributes, ofItemAtPath: url.path)
             }
+            DecryptedMediaCacheEvictor.touch(url, at: now)
+            DecryptedMediaCacheEvictor.trim(
+                directory: directory,
+                policy: playbackPolicy,
+                preserving: url,
+                now: now
+            )
             return url
         } catch {
             return nil
         }
+    }
+
+    private static func sha256Hex(of data: Data) -> String {
+        SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 }
 
@@ -1065,8 +1189,30 @@ enum MessageMediaCache {
     ]
 
     static func cachedData(for reference: MediaAttachmentReferenceFfi) -> Data? {
-        guard let url = cacheURL(for: reference) else { return nil }
-        return try? Data(contentsOf: url)
+        guard let cachesDirectory = defaultCachesDirectory else { return nil }
+        return cachedData(for: reference, cachesDirectory: cachesDirectory)
+    }
+
+    static func cachedData(
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date()
+    ) -> Data? {
+        guard let url = cacheURL(for: reference, cachesDirectory: cachesDirectory) else { return nil }
+        let directory = url.deletingLastPathComponent()
+        if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+           let modifiedAt = attributes[.modificationDate] as? Date,
+           now.timeIntervalSince(modifiedAt) > policy.maxAge
+        {
+            try? FileManager.default.removeItem(at: url)
+            DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, now: now)
+            return nil
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        DecryptedMediaCacheEvictor.touch(url, at: now)
+        DecryptedMediaCacheEvictor.trim(directory: directory, policy: policy, preserving: url, now: now)
+        return data
     }
 
     static func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) {
@@ -1074,7 +1220,13 @@ enum MessageMediaCache {
         store(data, for: reference, cachesDirectory: cachesDirectory)
     }
 
-    static func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, cachesDirectory: URL) {
+    static func store(
+        _ data: Data,
+        for reference: MediaAttachmentReferenceFfi,
+        cachesDirectory: URL,
+        policy: DecryptedMediaCacheEvictionPolicy = .media,
+        now: Date = Date()
+    ) {
         guard let url = cacheURL(for: reference, cachesDirectory: cachesDirectory) else { return }
         let directory = url.deletingLastPathComponent()
         do {
@@ -1086,6 +1238,13 @@ enum MessageMediaCache {
             try? FileManager.default.setAttributes(protectedAttributes, ofItemAtPath: directory.path)
             try data.write(to: url, options: [.atomic, .completeFileProtection])
             try? FileManager.default.setAttributes(protectedAttributes, ofItemAtPath: url.path)
+            DecryptedMediaCacheEvictor.touch(url, at: now)
+            DecryptedMediaCacheEvictor.trim(
+                directory: directory,
+                policy: policy,
+                preserving: url,
+                now: now
+            )
         } catch {
             return
         }
