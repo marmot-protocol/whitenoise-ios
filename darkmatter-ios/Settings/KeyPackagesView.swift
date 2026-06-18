@@ -20,6 +20,8 @@ struct KeyPackagesView: View {
 
     var body: some View {
         Form {
+            let packageSections = Self.packageSections(for: packages)
+
             if isLoading && packages.isEmpty {
                 Section {
                     HStack {
@@ -31,9 +33,9 @@ struct KeyPackagesView: View {
                     .listRowBackground(Color.clear)
                 }
             } else {
-                if !localPackages.isEmpty {
+                if !packageSections.local.isEmpty {
                     Section {
-                        ForEach(localPackages, id: \.eventIdHex) { pkg in
+                        ForEach(packageSections.local, id: \.eventIdHex) { pkg in
                             keyPackageRow(pkg)
                         }
                     } header: {
@@ -44,9 +46,9 @@ struct KeyPackagesView: View {
                     }
                 }
 
-                if !relayOnlyPackages.isEmpty {
+                if !packageSections.relayOnly.isEmpty {
                     Section {
-                        ForEach(relayOnlyPackages, id: \.eventIdHex) { pkg in
+                        ForEach(packageSections.relayOnly, id: \.eventIdHex) { pkg in
                             keyPackageRow(pkg)
                         }
                     } header: {
@@ -57,7 +59,20 @@ struct KeyPackagesView: View {
                     }
                 }
 
-                if packages.isEmpty {
+                if !packageSections.unclassified.isEmpty {
+                    Section {
+                        ForEach(packageSections.unclassified, id: \.eventIdHex) { pkg in
+                            keyPackageRow(pkg)
+                        }
+                    } header: {
+                        Text("Unclassified key packages")
+                    } footer: {
+                        Text("Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them.")
+                            .font(.footnote)
+                    }
+                }
+
+                if packageSections.isEmpty {
                     Section {
                         Text("No key packages found.")
                             .foregroundStyle(.secondary)
@@ -105,13 +120,27 @@ struct KeyPackagesView: View {
 
     // MARK: - Derived
 
-    private var localPackages: [AccountKeyPackageFfi] {
-        packages.filter(\.local).sorted { $0.publishedAt > $1.publishedAt }
+    struct PackageSections {
+        let local: [AccountKeyPackageFfi]
+        let relayOnly: [AccountKeyPackageFfi]
+        let unclassified: [AccountKeyPackageFfi]
+
+        var visiblePackageCount: Int {
+            local.count + relayOnly.count + unclassified.count
+        }
+
+        var isEmpty: Bool {
+            visiblePackageCount == 0
+        }
     }
 
-    private var relayOnlyPackages: [AccountKeyPackageFfi] {
-        packages.filter { !$0.local && $0.relay }
-                .sorted { $0.publishedAt > $1.publishedAt }
+    static func packageSections(for packages: [AccountKeyPackageFfi]) -> PackageSections {
+        let sorted = packages.sorted { $0.publishedAt > $1.publishedAt }
+        return PackageSections(
+            local: sorted.filter(\.local),
+            relayOnly: sorted.filter { !$0.local && $0.relay },
+            unclassified: sorted.filter { !$0.local && !$0.relay }
+        )
     }
 
     // MARK: - Row
@@ -164,12 +193,33 @@ struct KeyPackagesView: View {
 
     @ViewBuilder
     private func badge(for pkg: AccountKeyPackageFfi) -> some View {
+        badgeLabel(
+            L10n.string(Self.sourceBadgeTitle(for: pkg)),
+            tint: Self.sourceBadgeTint(for: pkg)
+        )
+    }
+
+    static func sourceBadgeTitle(for pkg: AccountKeyPackageFfi) -> String {
         if pkg.local && pkg.relay {
-            badgeLabel(L10n.string("Synced"), tint: .green)
+            return "Synced"
         } else if pkg.local {
-            badgeLabel(L10n.string("Local only"), tint: .orange)
+            return "Local only"
+        } else if pkg.relay {
+            return "Relay only"
         } else {
-            badgeLabel(L10n.string("Relay only"), tint: .blue)
+            return "Unclassified"
+        }
+    }
+
+    private static func sourceBadgeTint(for pkg: AccountKeyPackageFfi) -> Color {
+        if pkg.local && pkg.relay {
+            return .green
+        } else if pkg.local {
+            return .orange
+        } else if pkg.relay {
+            return .blue
+        } else {
+            return .gray
         }
     }
 

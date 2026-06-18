@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import MarmotKit
 @testable import darkmatter_ios
 
 /// #53 — the key-package relay preview must strip bidi / zero-width characters,
@@ -40,5 +41,53 @@ struct KeyPackageRelayPreviewTests {
         #expect(KeyPackagesView.publishedDescription(UInt64.max) != nil)
         // Zero/empty timestamps render nothing.
         #expect(KeyPackagesView.publishedDescription(0) == nil)
+    }
+
+    @Test func unclassifiedPackagesRemainVisibleAndManageable() {
+        let local = package(eventId: "local", publishedAt: 10, local: true, relay: false)
+        let relay = package(eventId: "relay", publishedAt: 20, local: false, relay: true)
+        let unclassified = package(eventId: "unclassified", publishedAt: 30, local: false, relay: false)
+
+        let sections = KeyPackagesView.packageSections(for: [local, relay, unclassified])
+
+        #expect(sections.local.map(\.eventIdHex) == ["local"])
+        #expect(sections.relayOnly.map(\.eventIdHex) == ["relay"])
+        #expect(sections.unclassified.map(\.eventIdHex) == ["unclassified"])
+        #expect(sections.visiblePackageCount == 3)
+        #expect(!sections.isEmpty)
+    }
+
+    @Test func emptyStateOnlyShowsWhenPartitionHasNoPackages() {
+        #expect(KeyPackagesView.packageSections(for: []).isEmpty)
+
+        let unclassified = package(eventId: "orphan", local: false, relay: false)
+        #expect(!KeyPackagesView.packageSections(for: [unclassified]).isEmpty)
+    }
+
+    @Test func badgeTitleMatchesEachFlagCombination() {
+        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: true, relay: true)) == "Synced")
+        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: true, relay: false)) == "Local only")
+        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: false, relay: true)) == "Relay only")
+        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: false, relay: false)) == "Unclassified")
+    }
+
+    private func package(
+        eventId: String = "event",
+        publishedAt: UInt64 = 1,
+        local: Bool,
+        relay: Bool
+    ) -> AccountKeyPackageFfi {
+        AccountKeyPackageFfi(
+            accountRef: nil,
+            accountIdHex: "account",
+            keyPackageId: "keyPackageId-\(eventId)",
+            keyPackageRefHex: "keyPackageRef-\(eventId)",
+            eventIdHex: eventId,
+            publishedAt: publishedAt,
+            keyPackageBytes: 32,
+            sourceRelays: relay ? ["wss://relay.example"] : [],
+            local: local,
+            relay: relay
+        )
     }
 }
