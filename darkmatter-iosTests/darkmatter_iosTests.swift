@@ -5623,6 +5623,16 @@ struct MessageSemanticsTests {
         #expect(MessageSemantics.classify(record) == .chat)
     }
 
+    @Test func mediaReferenceMediaTypeValidationPreservesAcceptedTokens() {
+        #expect(MessageSemantics.canonicalMediaType(" Image/JPG; charset=utf-8 ") == "image/jpeg")
+        #expect(MessageSemantics.canonicalMediaType("application/vnd.marmot+json") == "application/vnd.marmot+json")
+        #expect(MessageSemantics.canonicalMediaType("text/x.foo_bar-1") == "text/x.foo_bar-1")
+        #expect(MessageSemantics.canonicalMediaType("image/png/extra") == nil)
+        #expect(MessageSemantics.canonicalMediaType("image/") == nil)
+        #expect(MessageSemantics.canonicalMediaType("image/p ng") == nil)
+        #expect(MessageSemantics.canonicalMediaType("image/猫") == nil)
+    }
+
     @Test func mediaReferenceParsesEncryptedMediaV1ImetaFields() {
         let nonce = String(repeating: "22", count: 12)
         let record = AppMessageRecordFfi(
