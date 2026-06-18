@@ -7,6 +7,12 @@ import MarmotKit
 /// `content_tokens` and JSON in `plaintext`. Tags carry operation metadata.
 nonisolated enum AgentEventPresentation {
 
+    /// Length caps for peer-controlled text before display. The primary line is
+    /// a status/preview sentence (matches the chat-list preview bound of 140);
+    /// the secondary line is a short operation/event label.
+    static let maxPrimaryTextLength = 140
+    static let maxSecondaryTextLength = ProfileSanitizer.maxNameLength
+
     enum RowKind: Equatable {
         case activity
         case operation
@@ -91,15 +97,16 @@ nonisolated enum AgentEventPresentation {
         var name: String?
 
         var resolvedPrimaryText: String? {
-            if let text = trimmed(text) { return text }
-            if let preview = trimmed(preview) { return preview }
+            // Peer-controlled text (kind 1201/1202 JSON). Strip bidi/zero-width
+            // spoofing codepoints and cap length before display, mirroring the
+            // sibling GroupSystemEventPresentation sanitized fallback.
+            if let text = sanitized(text) { return text }
+            if let preview = sanitized(preview) { return preview }
             return nil
         }
 
-        private func trimmed(_ value: String?) -> String? {
-            guard let value else { return nil }
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
+        private func sanitized(_ value: String?) -> String? {
+            ProfileSanitizer.singleLine(value, maxLength: maxPrimaryTextLength)
         }
     }
 
@@ -126,7 +133,10 @@ nonisolated enum AgentEventPresentation {
         case "thinking":
             return L10n.string("Thinking")
         default:
-            return status.replacingOccurrences(of: "_", with: " ").capitalized
+            // `status` is peer-controlled (kind-1201 JSON / status tag) and is
+            // only lowercased upstream, so strip spoofing codepoints and cap
+            // length before display.
+            return sanitizedLabel(status.replacingOccurrences(of: "_", with: " ").capitalized)
         }
     }
 
@@ -148,10 +158,19 @@ nonisolated enum AgentEventPresentation {
     }
 
     private static func operationSecondaryText(name: String?, eventType: String?) -> String? {
+        // Both `name` and `eventType` are peer-controlled (kind-1202 JSON /
+        // operation-name / operation tags) and only lowercased upstream, so
+        // strip spoofing codepoints and cap length before display.
         if let name {
-            return name.replacingOccurrences(of: "_", with: " ")
+            return sanitizedLabel(name.replacingOccurrences(of: "_", with: " "))
         }
         guard let eventType else { return nil }
-        return eventType.replacingOccurrences(of: "_", with: " ").capitalized
+        return sanitizedLabel(eventType.replacingOccurrences(of: "_", with: " ").capitalized)
+    }
+
+    /// Sanitize a short peer-derived secondary label: strip bidi/zero-width
+    /// spoofing codepoints, collapse whitespace, and cap length.
+    private static func sanitizedLabel(_ raw: String?) -> String? {
+        ProfileSanitizer.singleLine(raw, maxLength: maxSecondaryTextLength)
     }
 }

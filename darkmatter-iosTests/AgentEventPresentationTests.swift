@@ -44,6 +44,67 @@ struct AgentEventPresentationTests {
         #expect(text == "Search for and summarize the latest b...")
     }
 
+    @Test func primaryTextStripsBidiAndZeroWidthSpoofingCodepoints() {
+        // RLO (U+202E) bidirectional override, LRM (U+200E), zero-width space
+        // (U+200B), and BOM/ZWNBSP (U+FEFF) embedded in peer JSON `text` must
+        // be stripped before display (Trojan-Source-style spoofing). JSON
+        // `\uXXXX` escapes decode to the real codepoints when parsed.
+        let record = agentRecord(
+            kind: MessageSemantics.kindAgentActivity,
+            plaintext: #"{"v":1,"status":"running","text":"safe\u202etxet desrever\u200b\u200e\ufeff"}"#,
+            tags: []
+        )
+
+        let display = AgentEventPresentation.display(for: record)
+
+        for scalar: Unicode.Scalar in ["\u{202E}", "\u{200B}", "\u{200E}", "\u{FEFF}"] {
+            #expect(display?.primaryText.unicodeScalars.contains(scalar) == false)
+        }
+        #expect(display?.primaryText.isEmpty == false)
+    }
+
+    @Test func primaryTextIsLengthBounded() {
+        // An unbounded peer `text` must be capped so a single row can't flood
+        // the timeline.
+        let long = String(repeating: "A", count: 5_000)
+        let record = agentRecord(
+            kind: MessageSemantics.kindAgentActivity,
+            plaintext: #"{"v":1,"status":"running","text":"\#(long)"}"#,
+            tags: []
+        )
+
+        let display = AgentEventPresentation.display(for: record)
+
+        #expect((display?.primaryText.count ?? .max) <= AgentEventPresentation.maxPrimaryTextLength)
+    }
+
+    @Test func secondaryOperationNameStripsBidiAndIsLengthBounded() {
+        // The operation-name secondary line is also peer-controlled and must be
+        // sanitized + bounded (a fix that only covers the primary line leaves
+        // this exposed).
+        let longName = String(repeating: "b", count: 5_000)
+        let record = agentRecord(
+            kind: MessageSemantics.kindAgentOperation,
+            plaintext: #"{"v":1,"event_type":"tool_call","text":"op","name":"do\u202e_\#(longName)"}"#,
+            tags: []
+        )
+
+        let display = AgentEventPresentation.display(for: record)
+
+        #expect(display?.secondaryText?.unicodeScalars.contains("\u{202E}") == false)
+        #expect((display?.secondaryText?.count ?? .max) <= AgentEventPresentation.maxSecondaryTextLength)
+    }
+
+    @Test func previewTextStripsBidiSpoofingCodepoints() {
+        // The chat-list preview path also routes through the same projection,
+        // so it inherits the sanitization.
+        let text = AgentEventPresentation.previewText(
+            from: #"{"v":1,"preview":"hi\u202eybab\u200b"}"#
+        )
+        #expect(text?.unicodeScalars.contains("\u{202E}") == false)
+        #expect(text?.unicodeScalars.contains("\u{200B}") == false)
+    }
+
     @MainActor
     @Test func agentOperationTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
