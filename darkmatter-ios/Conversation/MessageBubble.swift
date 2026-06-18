@@ -700,10 +700,16 @@ private struct MessageMediaTileCornerClip: ViewModifier {
     let corners: MessageMediaTileCornerRadii
     let radius: CGFloat
 
+    @Environment(\.layoutDirection) private var layoutDirection
+
     @ViewBuilder
     func body(content: Content) -> some View {
         if corners.hasRoundedCorners {
-            content.clipShape(MessageMediaRoundedTileShape(corners: corners, radius: radius))
+            content.clipShape(MessageMediaRoundedTileShape(
+                corners: corners,
+                radius: radius,
+                layoutDirection: layoutDirection
+            ))
         } else {
             content
         }
@@ -719,13 +725,10 @@ private extension View {
 private struct MessageMediaRoundedTileShape: Shape {
     let corners: MessageMediaTileCornerRadii
     let radius: CGFloat
+    let layoutDirection: LayoutDirection
 
     func path(in rect: CGRect) -> Path {
-        var roundedCorners: UIRectCorner = []
-        if corners.topLeading { roundedCorners.insert(.topLeft) }
-        if corners.topTrailing { roundedCorners.insert(.topRight) }
-        if corners.bottomLeading { roundedCorners.insert(.bottomLeft) }
-        if corners.bottomTrailing { roundedCorners.insert(.bottomRight) }
+        let roundedCorners = corners.uiRectCorners(layoutDirection: layoutDirection)
         guard !roundedCorners.isEmpty else { return Path(rect) }
 
         let boundedRadius = min(max(0, radius), rect.width / 2, rect.height / 2)
@@ -854,6 +857,18 @@ nonisolated struct MessageMediaTileCornerRadii: Equatable, Sendable {
 
     var hasRoundedCorners: Bool {
         topLeading || topTrailing || bottomLeading || bottomTrailing
+    }
+
+    func uiRectCorners(layoutDirection: LayoutDirection) -> UIRectCorner {
+        var roundedCorners: UIRectCorner = []
+        let isRightToLeft = layoutDirection == .rightToLeft
+
+        if topLeading { roundedCorners.insert(isRightToLeft ? .topRight : .topLeft) }
+        if topTrailing { roundedCorners.insert(isRightToLeft ? .topLeft : .topRight) }
+        if bottomLeading { roundedCorners.insert(isRightToLeft ? .bottomRight : .bottomLeft) }
+        if bottomTrailing { roundedCorners.insert(isRightToLeft ? .bottomLeft : .bottomRight) }
+
+        return roundedCorners
     }
 }
 

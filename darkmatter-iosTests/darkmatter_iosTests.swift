@@ -6483,6 +6483,45 @@ struct MessageMediaGridPresentationTests {
         let negativeIndex = MessageMediaGridPresentation.roundedCorners(totalCount: 3, tileIndex: -1)
         #expect(!negativeIndex.hasRoundedCorners)
     }
+
+    @Test func semanticGridCornersMirrorForRightToLeftLayout() {
+        let leadingCorners = MessageMediaTileCornerRadii(
+            topLeading: true,
+            topTrailing: false,
+            bottomLeading: true,
+            bottomTrailing: false
+        )
+        let trailingCorners = MessageMediaTileCornerRadii(
+            topLeading: false,
+            topTrailing: true,
+            bottomLeading: false,
+            bottomTrailing: true
+        )
+
+        let leadingLeftToRight = leadingCorners.uiRectCorners(layoutDirection: .leftToRight)
+        #expect(leadingLeftToRight.contains(.topLeft))
+        #expect(leadingLeftToRight.contains(.bottomLeft))
+        #expect(!leadingLeftToRight.contains(.topRight))
+        #expect(!leadingLeftToRight.contains(.bottomRight))
+
+        let leadingRightToLeft = leadingCorners.uiRectCorners(layoutDirection: .rightToLeft)
+        #expect(!leadingRightToLeft.contains(.topLeft))
+        #expect(!leadingRightToLeft.contains(.bottomLeft))
+        #expect(leadingRightToLeft.contains(.topRight))
+        #expect(leadingRightToLeft.contains(.bottomRight))
+
+        let trailingLeftToRight = trailingCorners.uiRectCorners(layoutDirection: .leftToRight)
+        #expect(!trailingLeftToRight.contains(.topLeft))
+        #expect(!trailingLeftToRight.contains(.bottomLeft))
+        #expect(trailingLeftToRight.contains(.topRight))
+        #expect(trailingLeftToRight.contains(.bottomRight))
+
+        let trailingRightToLeft = trailingCorners.uiRectCorners(layoutDirection: .rightToLeft)
+        #expect(trailingRightToLeft.contains(.topLeft))
+        #expect(trailingRightToLeft.contains(.bottomLeft))
+        #expect(!trailingRightToLeft.contains(.topRight))
+        #expect(!trailingRightToLeft.contains(.bottomRight))
+    }
 }
 
 struct MessageVideoBubblePresentationTests {
