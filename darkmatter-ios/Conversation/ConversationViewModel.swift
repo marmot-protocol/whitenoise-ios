@@ -132,6 +132,7 @@ final class ConversationViewModel {
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
     private static let readMarkCoalescingDelayNanoseconds: UInt64 = 100_000_000
+    private static let maxMarkedReadMessageIds = Int(timelinePageLimit) * 4
     nonisolated static let maxSystemTimelineItems = 64
 
     /// Renderable timeline messages we've loaded by id.
@@ -180,6 +181,12 @@ final class ConversationViewModel {
     var streamTextLengthEntryCountForTesting: Int { streamTextLengthById.count }
     var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
     var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
+    var markedReadMessageIdsForTesting: Set<String> { markedReadMessageIds }
+
+    func insertMarkedReadMessageIdsForTesting(_ messageIds: Set<String>) {
+        markedReadMessageIds.formUnion(messageIds)
+        pruneMarkedReadMessageIds(force: true)
+    }
 #endif
     /// Streams that received a checkpoint snapshot. Their QUIC `.finished`
     /// text is text-delta-only, so prefer the current preview at close.
@@ -202,6 +209,10 @@ final class ConversationViewModel {
     /// Start-record timestamps for live previews, keyed by stream id.
     private var streamStartedAtById: [String: UInt64] = [:]
     private var streamSenderById: [String: String] = [:]
+    /// Message ids recently marked read or awaiting a coalesced mark-read flush.
+    /// This is a local dedup cache only; Marmot read marking is idempotent, so it
+    /// is pruned to the loaded window and capped instead of retaining every id
+    /// seen by the view model.
     private var markedReadMessageIds: Set<String> = []
     private var pendingReadMessageIds: [String] = []
     private var pendingReadMessageIdSet: Set<String> = []
@@ -515,6 +526,7 @@ final class ConversationViewModel {
 
         markedReadMessageIds.insert(record.messageIdHex)
         enqueueReadMark(messageIdHex: record.messageIdHex, accountRef: accountRef)
+        pruneMarkedReadMessageIds()
     }
 
     static func shouldMarkRead(_ record: AppMessageRecordFfi, isDeleted: Bool, alreadyMarked: Bool) -> Bool {
@@ -522,6 +534,42 @@ final class ConversationViewModel {
             && !isDeleted
             && !record.messageIdHex.isEmpty
             && record.kind == MessageSemantics.kindChat
+    }
+
+    nonisolated static func retainedMarkedReadMessageIds(
+        _ current: Set<String>,
+        loadedMessageIds: Set<String>,
+        pendingMessageIds: Set<String>,
+        limit: Int
+    ) -> Set<String> {
+        let pending = current.intersection(pendingMessageIds)
+        let boundedLimit = max(0, limit)
+        guard boundedLimit > 0 else { return pending }
+
+        let loaded = current.intersection(loadedMessageIds)
+        let retainedCandidates = loaded.union(pending)
+        guard retainedCandidates.count > boundedLimit else {
+            return retainedCandidates
+        }
+
+        var retained = pending
+        let remainingCapacity = max(0, boundedLimit - retained.count)
+        if remainingCapacity > 0 {
+            for messageId in loaded.subtracting(retained).prefix(remainingCapacity) {
+                retained.insert(messageId)
+            }
+        }
+        return retained
+    }
+
+    private func pruneMarkedReadMessageIds(force: Bool = false) {
+        guard force || markedReadMessageIds.count > Self.maxMarkedReadMessageIds else { return }
+        markedReadMessageIds = Self.retainedMarkedReadMessageIds(
+            markedReadMessageIds,
+            loadedMessageIds: Set(messageById.keys),
+            pendingMessageIds: pendingReadMessageIdSet,
+            limit: Self.maxMarkedReadMessageIds
+        )
     }
 
     static func canDeleteMessage(
@@ -583,10 +631,12 @@ final class ConversationViewModel {
         guard !messageIds.isEmpty else { return }
         guard let appState else {
             markedReadMessageIds.subtract(messageIds)
+            pruneMarkedReadMessageIds(force: true)
             return
         }
         guard appState.activeAccountRef == accountRef else {
             markedReadMessageIds.subtract(messageIds)
+            pruneMarkedReadMessageIds(force: true)
             return
         }
 
@@ -607,6 +657,7 @@ final class ConversationViewModel {
             markedReadMessageIds.subtract(messageIds)
         }
 
+        pruneMarkedReadMessageIds(force: true)
         if !pendingReadMessageIds.isEmpty, appState.activeAccountRef == accountRef {
             scheduleReadMarkFlush(accountRef: accountRef)
         }
@@ -620,6 +671,7 @@ final class ConversationViewModel {
         }
         pendingReadMessageIds = []
         pendingReadMessageIdSet = []
+        pruneMarkedReadMessageIds(force: true)
     }
 
     private func stopLiveSubscriptions() {
@@ -635,6 +687,7 @@ final class ConversationViewModel {
         readStateTask?.cancel()
         readStateTask = nil
         cancelPendingReadMarks()
+        markedReadMessageIds.removeAll()
         mediaRefreshTask?.cancel()
         mediaRefreshTask = nil
         cancelTimelineTailRefresh()
@@ -901,6 +954,7 @@ final class ConversationViewModel {
         if shouldEvictAbsentRecords {
             pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         }
+        pruneMarkedReadMessageIds(force: true)
         hasMoreBefore = page.hasMoreBefore
         hasMoreAfter = page.hasMoreAfter
         rebuildProjectedState(projectionChanged: projectionChanged)
@@ -925,6 +979,7 @@ final class ConversationViewModel {
                 ) || projectionChanged
             }
         }
+        pruneMarkedReadMessageIds(force: true)
         rebuildProjectedState(projectionChanged: projectionChanged)
         isLoading = false
     }
@@ -944,6 +999,7 @@ final class ConversationViewModel {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
         }
         pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
+        pruneMarkedReadMessageIds(force: true)
         if !hasMoreAfter {
             hasMoreBefore = page.hasMoreBefore
             hasMoreAfter = page.hasMoreAfter
@@ -1184,6 +1240,7 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
+        markedReadMessageIds.remove(messageIdHex)
         scannedFinalizedMessageIds.remove(messageIdHex)
         let timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
