@@ -356,6 +356,45 @@ struct MarkdownMessageBuilderTests {
         #expect(String(last.characters) == "…")
     }
 
+    @Test func tableEmptyCellsConsumeNodeBudgetBeforeLateContent() throws {
+        let emptyCells = Array(
+            repeating: MarkdownTableCellFfi(inlines: []),
+            count: MarkdownMessageBuilder.maxNodes
+        )
+        let visibleLateCell = MarkdownTableCellFfi(inlines: [.text(content: "late")])
+
+        let headerBlocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([
+            para([.text(content: "intro")]),
+            .table(
+                alignments: Array(repeating: .none, count: emptyCells.count + 1),
+                header: emptyCells + [visibleLateCell],
+                rows: []
+            )
+        ])))
+        let headerParagraphs = headerBlocks.compactMap { block -> String? in
+            guard case .paragraph(let attributed) = block else { return nil }
+            return String(attributed.characters)
+        }
+        #expect(headerParagraphs.first == "intro")
+        #expect(!headerParagraphs.contains("late"))
+        #expect(headerParagraphs.last == "…")
+
+        let bodyBlocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([
+            .table(
+                alignments: Array(repeating: .none, count: emptyCells.count + 1),
+                header: [MarkdownTableCellFfi(inlines: [.text(content: "header")])],
+                rows: [emptyCells + [visibleLateCell]]
+            )
+        ])))
+        let bodyParagraphs = bodyBlocks.compactMap { block -> String? in
+            guard case .paragraph(let attributed) = block else { return nil }
+            return String(attributed.characters)
+        }
+        #expect(bodyParagraphs.first == "header")
+        #expect(!bodyParagraphs.contains("late"))
+        #expect(bodyParagraphs.last == "…")
+    }
+
     @Test func deepQuoteNestingStopsAtRenderDepthCap() throws {
         var block: MarkdownBlockFfi = para([.text(content: "core")])
         for _ in 0..<30 {
