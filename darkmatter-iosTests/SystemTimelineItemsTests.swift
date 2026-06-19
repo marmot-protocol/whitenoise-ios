@@ -66,15 +66,68 @@ struct SystemTimelineItemsTests {
             return false
         })
     }
+
+    @Test func groupSnapshotChangesRefreshDurableTimelineRows() {
+        let admins = Set(["admin-a"])
+        #expect(!ConversationViewModel.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: "Test Group",
+            previousArchived: false,
+            previousAdmins: admins,
+            next: testGroup(admins: ["admin-a"])
+        ))
+        #expect(ConversationViewModel.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: "Test Group",
+            previousArchived: false,
+            previousAdmins: admins,
+            next: testGroup(name: "Renamed", admins: ["admin-a"])
+        ))
+        #expect(!ConversationViewModel.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: "",
+            previousArchived: false,
+            previousAdmins: admins,
+            next: testGroup(name: "Initial snapshot", admins: ["admin-a"])
+        ))
+        #expect(ConversationViewModel.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: "Test Group",
+            previousArchived: false,
+            previousAdmins: admins,
+            next: testGroup(admins: ["admin-a"], archived: true)
+        ))
+        #expect(ConversationViewModel.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: "Test Group",
+            previousArchived: false,
+            previousAdmins: admins,
+            next: testGroup(admins: ["admin-a", "admin-b"])
+        ))
+    }
+
+    @Test func groupMembershipChangesRefreshDurableTimelineRows() {
+        #expect(!ConversationViewModel.groupMembersNeedTimelineTailRefresh(
+            previousMemberIds: ["alice", "bob"],
+            nextMemberIds: ["alice", "bob"]
+        ))
+        #expect(ConversationViewModel.groupMembersNeedTimelineTailRefresh(
+            previousMemberIds: ["alice"],
+            nextMemberIds: ["alice", "bob"]
+        ))
+        #expect(ConversationViewModel.groupMembersNeedTimelineTailRefresh(
+            previousMemberIds: ["alice", "bob"],
+            nextMemberIds: ["bob", "alice"]
+        ))
+    }
 }
 
-private func testGroup() -> AppGroupRecordFfi {
+private func testGroup(
+    name: String = "Test Group",
+    admins: [String] = [],
+    archived: Bool = false
+) -> AppGroupRecordFfi {
     AppGroupRecordFfi(
         groupIdHex: String(repeating: "bb", count: 32),
         endpoint: "",
-        name: "Test Group",
+        name: name,
         description: "",
-        admins: [],
+        admins: admins,
         relays: [],
         nostrGroupIdHex: "",
         avatarUrl: nil,
@@ -90,7 +143,7 @@ private func testGroup() -> AppGroupRecordFfi {
                 AppBlobEndpointFfi(locatorKind: "blossom-v1", baseUrl: "https://blossom.primal.net")
             ]
         ),
-        archived: false,
+        archived: archived,
         pendingConfirmation: false,
         welcomerAccountIdHex: nil,
         viaWelcomeMessageIdHex: nil

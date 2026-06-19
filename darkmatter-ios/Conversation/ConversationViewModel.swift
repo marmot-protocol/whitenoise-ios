@@ -1955,28 +1955,45 @@ final class ConversationViewModel {
         let previousName = group.name
         let wasArchived = group.archived
         let previousAdmins = Set(group.admins)
+        let needsTimelineRefresh = Self.groupSnapshotNeedsTimelineTailRefresh(
+            previousName: previousName,
+            previousArchived: wasArchived,
+            previousAdmins: previousAdmins,
+            next: record
+        )
         applyGroupMlsTrackedChanges {
             group = record
         }
 
-        if Set(record.admins) != previousAdmins {
-            await refreshTimelineTail()
+        if needsTimelineRefresh {
+            scheduleTimelineTailRefresh()
         }
 
         if !previousName.isEmpty && previousName != record.name {
-            if let name = ProfileSanitizer.groupName(record.name) {
-                appendSystemEvent(.groupRenamed(name))
-            }
             appState?.present(.success(L10n.string("Group renamed"), message: ProfileSanitizer.groupName(record.name)))
         }
         if record.archived && !wasArchived {
-            appendSystemEvent(.groupArchived)
             appState?.present(.warning(L10n.string("Group archived")))
         } else if !record.archived && wasArchived {
-            appendSystemEvent(.groupUnarchived)
             appState?.present(.success(L10n.string("Group unarchived")))
         }
         await refreshMembers()
+    }
+
+    /// Group-state subscriptions expose snapshots, not the source timeline
+    /// record that caused the snapshot to change. If a visible group-system
+    /// change arrives through this path, refresh Marmot's durable kind-1210
+    /// timeline rows instead of synthesizing a local wall-clock row.
+    nonisolated static func groupSnapshotNeedsTimelineTailRefresh(
+        previousName: String,
+        previousArchived: Bool,
+        previousAdmins: Set<String>,
+        next: AppGroupRecordFfi
+    ) -> Bool {
+        let nameChanged = !previousName.isEmpty && previousName != next.name
+        let archiveStateChanged = next.archived != previousArchived
+        let adminsChanged = Set(next.admins) != previousAdmins
+        return nameChanged || archiveStateChanged || adminsChanged
     }
 
     func applyGroupRecord(_ record: AppGroupRecordFfi) {
@@ -2068,8 +2085,12 @@ final class ConversationViewModel {
             )
         }
         let nextMemberIds = nextMembers.map(\.memberIdHex)
-        if announceRosterChanges && nextMemberIds != previousMemberIds {
-            appendSystemEvent(.rosterChanged)
+        let membersChanged = Self.groupMembersNeedTimelineTailRefresh(
+            previousMemberIds: previousMemberIds,
+            nextMemberIds: nextMemberIds
+        )
+        let adminsChanged = Set(details.group.admins) != previousAdmins
+        if announceRosterChanges && membersChanged {
             appState?.present(.success(L10n.string("Group membership updated")))
         }
         group = details.group
@@ -2077,15 +2098,14 @@ final class ConversationViewModel {
         managementState = state
         members = nextMembers
         bumpGroupMlsRefreshGenerationIfNeeded(previousIdentity: previousIdentity)
-        if Set(details.group.admins) != previousAdmins || nextMemberIds != previousMemberIds {
+        if adminsChanged || membersChanged {
             scheduleTimelineTailRefresh()
         }
     }
 
-    private func appendSystemEvent(_ event: SystemEvent) {
-        appendSystemEvent(event, timestamp: UInt64(Date().timeIntervalSince1970))
-    }
-
+    /// Appends a session-only system row. Callers must pass a source timestamp;
+    /// group-state snapshots without one should refresh Marmot's durable
+    /// kind-1210 timeline records instead of using the client wall clock.
     private func appendSystemEvent(_ event: SystemEvent, timestamp: UInt64) {
         let item = TimelineItem.systemEvent(id: UUID().uuidString, event: event, timestamp: timestamp)
         let previousItems = systemTimelineItems
@@ -2144,8 +2164,11 @@ final class ConversationViewModel {
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
-            if next.map(\.memberIdHex) != members.map(\.memberIdHex) {
-                appendSystemEvent(.rosterChanged)
+            if Self.groupMembersNeedTimelineTailRefresh(
+                previousMemberIds: members.map(\.memberIdHex),
+                nextMemberIds: next.map(\.memberIdHex)
+            ) {
+                scheduleTimelineTailRefresh()
             }
             applyGroupMlsTrackedChanges {
                 members = next
@@ -2153,6 +2176,16 @@ final class ConversationViewModel {
         } catch {
             // Silent; the next subscription tick will retry.
         }
+    }
+
+    /// Member-detail snapshots also lack the causative group-system record, so
+    /// membership diffs refresh the durable timeline instead of adding local
+    /// roster rows with receipt-time ordering.
+    nonisolated static func groupMembersNeedTimelineTailRefresh(
+        previousMemberIds: [String],
+        nextMemberIds: [String]
+    ) -> Bool {
+        nextMemberIds != previousMemberIds
     }
 
     // MARK: - Send
