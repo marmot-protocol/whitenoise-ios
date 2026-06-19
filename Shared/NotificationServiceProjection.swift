@@ -21,6 +21,15 @@ nonisolated enum NotificationServiceProjection {
     // the notification service extension.
     static let maxWakeWaitMs: UInt32 = 8_000
 
+    // Upper bound on the number of *additional* message presentations the NSE
+    // adds individually (the primary presentation woke the extension and is not
+    // counted here). A large offline backlog can make `collectNotificationsAfterWake`
+    // return dozens or hundreds of records; issuing one `UNUserNotificationCenter.add`
+    // per record inside the extension's tight time budget risks expiration and floods
+    // the user. Mirrors the bounding applied to other large/untrusted collections
+    // (e.g. `DuckDuckGoImageSearchClient.maximumResultCount`).
+    static let maxAdditionalPresentations = 8
+
     static func decision(
         for collection: BackgroundNotificationCollectionFfi,
         localNotificationsEnabled: (String) -> Bool = { _ in true }
@@ -39,12 +48,61 @@ nonisolated enum NotificationServiceProjection {
             }
             return .decorate(
                 presentation,
-                additionalPresentations: Array(presentations.dropFirst())
+                additionalPresentations: boundedAdditionalPresentations(
+                    after: presentation,
+                    from: Array(presentations.dropFirst())
+                )
             )
         case .noData:
             return .fallback
         case .failed:
             return .fallback
         }
+    }
+
+    // Caps how many additional records the NSE adds individually and folds any
+    // overflow into a single summary presentation. The overflow records have
+    // already been consumed from Marmot's background notification cursor, so they
+    // must stay represented rather than be silently abandoned; the summary keeps
+    // the consumed-cursor count visible without an unbounded `add` loop.
+    static func boundedAdditionalPresentations(
+        after primary: LocalNotificationPresentation,
+        from additional: [LocalNotificationPresentation]
+    ) -> [LocalNotificationPresentation] {
+        guard additional.count > maxAdditionalPresentations else {
+            return additional
+        }
+
+        let shown = Array(additional.prefix(maxAdditionalPresentations))
+        let overflowCount = additional.count - shown.count
+        guard overflowCount > 0 else { return shown }
+
+        return shown + [summaryPresentation(after: primary, overflowCount: overflowCount)]
+    }
+
+    static func summaryPresentation(
+        after primary: LocalNotificationPresentation,
+        overflowCount: Int
+    ) -> LocalNotificationPresentation {
+        // Route the summary to the newest conversation so a tap opens somewhere
+        // sane, but give it a distinct synthetic key so it never collides with or
+        // dedupes against a real message presentation. No message content is
+        // included; only a coalesced count, so nothing extra is leaked.
+        let route = LocalNotificationRoute(
+            accountRef: primary.route.accountRef,
+            groupIdHex: primary.route.groupIdHex,
+            notificationKey: "\(primary.route.notificationKey):+\(overflowCount)-more",
+            messageIdHex: nil
+        )
+
+        return LocalNotificationPresentation(
+            identifier: route.notificationKey,
+            threadIdentifier: primary.threadIdentifier,
+            title: L10n.string("Darkmatter"),
+            body: L10n.plural("%lld more messages", Int64(overflowCount)),
+            route: route,
+            timestamp: primary.timestamp,
+            userInfo: LocalNotificationProjection.userInfo(for: route)
+        )
     }
 }
