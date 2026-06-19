@@ -1,6 +1,15 @@
 import SwiftUI
 import MarmotKit
 
+nonisolated enum ProfileReferenceResolution {
+    static func referenceForResolution(_ raw: String) -> String? {
+        guard NostrProfileReference.isWithinReferenceLimit(raw) else { return nil }
+        let reference = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reference.isEmpty else { return nil }
+        return reference
+    }
+}
+
 /// Read-only profile shown when you scan someone's QR or open a profile deep
 /// link. Resolves the profile reference to an account id, enriches with
 /// cached/fetched kind:0 metadata, and offers a "Message" action that starts
@@ -105,7 +114,14 @@ struct ProfileView: View {
 
     @MainActor
     private func resolve() async {
-        hex = appState.marmot.accountIdHex(reference: npub)
+        guard let reference = ProfileReferenceResolution.referenceForResolution(npub) else {
+            hex = nil
+            return
+        }
+        guard let client = try? appState.currentMarmotClient() else { return }
+        let resolvedHex = await client.accountIdHex(reference: reference)
+        guard !Task.isCancelled else { return }
+        hex = resolvedHex
         if let hex {
             // Trigger enrichment (cached read + background relay fetch).
             _ = appState.profile(forAccountIdHex: hex)

@@ -92,3 +92,18 @@ struct Bech32CharsetLookupTests {
         #expect(DeepLink.parse(string: overlongURL) == nil)
     }
 }
+
+struct ProfileReferenceResolutionTests {
+
+    @Test func rejectsOverlongProfileReferenceBeforeResolution() {
+        let overlongReference = "npub1" + String(repeating: "q", count: 300)
+
+        #expect(ProfileReferenceResolution.referenceForResolution(overlongReference) == nil)
+    }
+
+    @Test func trimsProfileReferenceBeforeResolution() {
+        let npub = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+
+        #expect(ProfileReferenceResolution.referenceForResolution("  \(npub)\n") == npub)
+    }
+}
