@@ -35,6 +35,37 @@ nonisolated enum ProfileSanitizer {
         return String(collapsed.prefix(maxLength))
     }
 
+    /// Relay / URL-like single-line display: everything `singleLine` does, plus
+    /// removal of the remaining invisible Unicode *format* characters (general
+    /// category `Cf`) that `stripUnsafe` deliberately leaves in place for
+    /// general text — notably U+200C ZERO WIDTH NON-JOINER, U+200D ZERO WIDTH
+    /// JOINER, and U+2060 WORD JOINER (#306).
+    ///
+    /// A relay/host string can never legitimately contain a zero-width joiner
+    /// or word joiner inside a host label, so for this surface they are pure
+    /// host-spoofing vectors (Trojan-Source-adjacent, alongside #53 / #298).
+    /// This is intentionally stricter than `singleLine`: the shared sanitizer
+    /// must keep ZWJ/variation-selector sequences for `reactionEmoji` (#70), so
+    /// the stricter policy lives here rather than being folded into the shared
+    /// path. Returns nil when nothing renderable remains.
+    static func relayDisplayLine(_ raw: String?, maxLength: Int) -> String? {
+        guard let collapsed = singleLine(raw, maxLength: maxLength) else { return nil }
+        let stripped = String(String.UnicodeScalarView(
+            collapsed.unicodeScalars.filter { !isInvisibleFormat($0) }
+        ))
+        guard !stripped.isEmpty else { return nil }
+        return stripped
+    }
+
+    /// True for invisible Unicode format characters that have no place in a
+    /// relay/URL host string. Covers the general `Cf` (format) category, which
+    /// includes U+200C/U+200D (ZWNJ/ZWJ), U+2060 (WORD JOINER), U+FEFF (BOM),
+    /// the bidi isolates/overrides, and U+061C (Arabic letter mark). Whitespace
+    /// is already collapsed away by `singleLine` before this runs.
+    private static func isInvisibleFormat(_ scalar: UnicodeScalar) -> Bool {
+        scalar.properties.generalCategory == .format
+    }
+
     /// Person display name (single line, short cap).
     static func displayName(_ raw: String?) -> String? {
         singleLine(raw, maxLength: maxNameLength)

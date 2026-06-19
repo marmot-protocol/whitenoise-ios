@@ -34,6 +34,15 @@ struct GroupRelaysPresentationTests {
         #expect(rows == ["wss://x.example"])
     }
 
+    /// #306 — relay rows must also strip the invisible format characters the
+    /// shared sanitizer preserves for general text: ZWNJ, ZWJ, WORD JOINER.
+    @Test func stripsResidualInvisibleFormatCharacters() {
+        let spoofed = "wss://re\u{200C}lay\u{200D}evil\u{2060}.example"
+        let rows = GroupRelaysPresentation.rows(for: [spoofed])
+        #expect(rows == ["wss://relayevil.example"])
+        #expect(!rows.contains { $0.unicodeScalars.contains { [0x200C, 0x200D, 0x2060].contains($0.value) } })
+    }
+
     @Test func emptyRelaysRendersEmptyMessage() {
         #expect(GroupRelaysPresentation.rows(for: []) == [GroupRelaysPresentation.emptyMessage])
     }

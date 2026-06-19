@@ -262,11 +262,12 @@ struct KeyPackagesView: View {
     /// Anyone can publish anything to a relay — we only render a small preview
     /// here, never the raw payload. The previous ad-hoc filter only removed
     /// C0/DEL and let bidi / zero-width codepoints through, so relay URLs could
-    /// be visually spoofed (#53). Reuse ProfileSanitizer.singleLine, the shared
-    /// display-boundary sanitizer.
+    /// be visually spoofed (#53). Use ProfileSanitizer.relayDisplayLine, the
+    /// relay/URL display boundary that also removes the residual invisible
+    /// format characters (ZWNJ/ZWJ/WORD JOINER) a host label never needs (#306).
     static func sanitizedRelays(_ relays: [String]) -> String {
         relays.prefix(4)
-            .compactMap { ProfileSanitizer.singleLine($0, maxLength: 120) }
+            .compactMap { ProfileSanitizer.relayDisplayLine($0, maxLength: 120) }
             .joined(separator: ", ")
     }
 
