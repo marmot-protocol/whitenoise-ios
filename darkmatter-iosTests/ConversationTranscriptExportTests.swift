@@ -114,6 +114,34 @@ struct ConversationTranscriptExportTests {
         #expect(secondQuery.limit == ConversationTranscriptExport.pageLimit)
     }
 
+    @Test func fetchAllMessagesStopsBeforeAppendingRepeatedPageWhenCursorStalls() throws {
+        let newestId = String(repeating: "44", count: 32)
+        let oldestId = String(repeating: "22", count: 32)
+        let groupId = String(repeating: "aa", count: 32)
+        let page = TimelinePageFfi(
+            messages: [
+                timelineRecord(messageIdHex: newestId, timelineAt: 4),
+                timelineRecord(messageIdHex: oldestId, timelineAt: 2),
+            ],
+            hasMoreBefore: true,
+            hasMoreAfter: false
+        )
+        let reader = RepeatingTranscriptTimelineReader(page: page, maximumReads: 2)
+
+        let messages = try ConversationTranscriptExport.fetchAllMessages(
+            timelineReader: reader,
+            accountRef: "account-1",
+            groupIdHex: groupId
+        )
+
+        #expect(messages.map(\.messageIdHex) == [oldestId, newestId])
+        #expect(reader.queries.count == 2)
+        #expect(reader.queries[0].before == nil)
+        #expect(reader.queries[0].beforeMessageId == nil)
+        #expect(reader.queries[1].before == 2)
+        #expect(reader.queries[1].beforeMessageId == oldestId)
+    }
+
     @Test func exportActionUsesAsyncMarmotClientWrapper() throws {
         let rootURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -234,5 +262,28 @@ private final class FakeTranscriptTimelineReader: ConversationTranscriptTimeline
         accountRefs.append(accountRef)
         queries.append(query)
         return pages.removeFirst()
+    }
+}
+
+private enum RepeatingTranscriptTimelineReaderError: Error {
+    case exceededMaximumReads
+}
+
+private final class RepeatingTranscriptTimelineReader: ConversationTranscriptTimelineReading {
+    private let page: TimelinePageFfi
+    private let maximumReads: Int
+    private(set) var queries: [TimelineMessageQueryFfi] = []
+
+    init(page: TimelinePageFfi, maximumReads: Int) {
+        self.page = page
+        self.maximumReads = maximumReads
+    }
+
+    func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi) throws -> TimelinePageFfi {
+        queries.append(query)
+        if queries.count > maximumReads {
+            throw RepeatingTranscriptTimelineReaderError.exceededMaximumReads
+        }
+        return page
     }
 }
