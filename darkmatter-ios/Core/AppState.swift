@@ -68,6 +68,26 @@ nonisolated enum NotificationPresentationRuntimeGate {
     }
 }
 
+/// Decision point for whether `scheduleNativePushRegistrationIfEnabled()` may
+/// spawn a fresh registration sync. Pure so the guard — including the
+/// sign-out window (#320) — is observable in tests without reaching into
+/// MainActor-private state. A token-driven reschedule must be suppressed while
+/// the scene is inactive, the runtime is suspended/suspending, or a sign-out is
+/// tearing down the departing account.
+nonisolated enum NativePushRegistrationScheduleGate {
+    static func canSchedule(
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        isSigningOut: Bool
+    ) -> Bool {
+        isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && !isSigningOut
+    }
+}
+
 /// Root observable state for the app.
 ///
 /// Holds the `Marmot` handle, the current set of `AccountSummaryFfi`, and
@@ -181,6 +201,14 @@ final class AppState {
     private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
+    /// True only while `signOut()` is tearing down the departing account. Set
+    /// before any of sign-out's `await` suspension points and cleared once the
+    /// account is removed and `accounts` refreshed. `scheduleNativePushRegistrationIfEnabled()`
+    /// consults this so a system-driven APNS token arriving mid-sign-out cannot
+    /// spawn a fresh registration sync that re-`upsertPushRegistration`s the
+    /// account whose registration sign-out just cleared (#320, residual of
+    /// #7/#111). MainActor-owned; mutated only on the MainActor.
+    private var isSigningOut = false
     private var notificationSubscriptionFailureToastPresented = false
     private(set) var isAppSceneActive = true
     private(set) var runtimeSuspendedForBackground = false
@@ -584,6 +612,19 @@ final class AppState {
     @MainActor
     func signOut() async {
         guard let signingOut = activeAccountRef else { return }
+        // Block any APNS-token-driven reschedule for the duration of the
+        // teardown. `recordDeviceToken` (MainActor) can land on any of the
+        // `await` suspension points below and call
+        // `scheduleNativePushRegistrationIfEnabled()`; without this guard that
+        // fresh task would re-`upsertPushRegistration` the departing account
+        // (still on disk with native push enabled until `setNativePushEnabled`
+        // commits, and still in the in-memory `accounts` list until
+        // `refreshAccounts`), resurrecting a server-side registration for a
+        // signed-out account (#320, residual of #7/#111). The `defer` clears
+        // the flag on every exit path, including the early `removeAccount`
+        // failure return below.
+        isSigningOut = true
+        defer { isSigningOut = false }
         await cancelNativePushRegistrationTask()
         try? await marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
@@ -602,6 +643,12 @@ final class AppState {
             present(.error(L10n.string("Couldn't refresh accounts"), message: error.localizedDescription))
         }
 
+        // The departing account is now removed from disk and excluded from the
+        // in-memory `accounts` list, so it can no longer be re-registered. Clear
+        // the guard before routing so a legitimate reschedule for the *new*
+        // active account below is not suppressed (the trailing `defer` then
+        // becomes a no-op redo).
+        isSigningOut = false
         activeAccountRef = accounts.first?.label
         if activeAccountRef == nil {
             stopNotificationSubscription()
@@ -683,10 +730,12 @@ final class AppState {
     }
 
     func scheduleNativePushRegistrationIfEnabled() {
-        guard isAppSceneActive,
-              !runtimeSuspendedForBackground,
-              !isRuntimeSuspending
-        else { return }
+        guard NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: isAppSceneActive,
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: isRuntimeSuspending,
+            isSigningOut: isSigningOut
+        ) else { return }
         let previousTask = nativePushRegistrationTask
         previousTask?.cancel()
         nativePushRegistrationTask = Task { [weak self] in
@@ -1046,5 +1095,11 @@ final class AppState {
         await foregroundActivationTask?.value
         await nativePushRegistrationTask?.value
     }
+
+    /// Exposes the sign-out teardown guard (#320) so tests can assert it is
+    /// raised only during `signOut()` and cleared before the function returns
+    /// (so a legitimate post-sign-out reschedule is not suppressed).
+    @MainActor
+    var isSigningOutForTesting: Bool { isSigningOut }
     #endif
 }
