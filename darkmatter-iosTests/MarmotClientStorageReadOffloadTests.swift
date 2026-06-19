@@ -31,6 +31,58 @@ struct MarmotClientStorageReadOffloadTests {
         }
     }
 
+    /// #318 — `AppState.relayLists(for:)` and the `relayPublishRelays` /
+    /// `relayBootstrapRelays` accessors that funnel through it must be `async`
+    /// and read account relay lists through the `MarmotClient.accountRelayLists`
+    /// wrapper, so the generated synchronous FFI no longer runs on the MainActor
+    /// profile-publish / profile-refresh paths.
+    @Test func appStateRelayListAccessorsOffloadFfiAndAreAsync() throws {
+        let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
+
+        // The base accessor is async and reads through the MarmotClient wrapper,
+        // not the synchronous `marmot.accountRelayLists` FFI.
+        #expect(sourceContains(
+            #"func relayLists\(for accountRef: String\) async -> AccountRelayListsFfi\?[\s\S]*currentMarmotClient\(\)\.accountRelayLists\("#,
+            in: appStateSource
+        ))
+        #expect(
+            !appStateSource.contains("marmot.accountRelayLists("),
+            "AppState still calls the synchronous accountRelayLists FFI directly"
+        )
+
+        // The two callers that funnel through it are async too.
+        #expect(sourceContains(
+            #"func relayPublishRelays\(for accountRef: String\) async -> \[String\]"#,
+            in: appStateSource
+        ))
+        #expect(sourceContains(
+            #"func relayBootstrapRelays\(for accountRef: String\) async -> \[String\]"#,
+            in: appStateSource
+        ))
+
+        // MainActor-bound callers must await the accessors rather than computing
+        // from a synchronous read.
+        let profileEditSource = try sourceString("darkmatter-ios/Settings/ProfileEditView.swift")
+        #expect(
+            profileEditSource.contains("await appState.relayPublishRelays(for:"),
+            "ProfileEditView does not await relayPublishRelays"
+        )
+        #expect(
+            profileEditSource.contains("await appState.relayBootstrapRelays(for:"),
+            "ProfileEditView does not await relayBootstrapRelays"
+        )
+
+        let profilesSource = try sourceString("darkmatter-ios/Core/AppState+Profiles.swift")
+        #expect(
+            profilesSource.contains("await relayBootstrapRelays(for:"),
+            "refreshProfile does not await relayBootstrapRelays"
+        )
+        #expect(
+            !profilesSource.contains("map(relayBootstrapRelays(for:))"),
+            "refreshProfile still uses the synchronous point-free relayBootstrapRelays accessor"
+        )
+    }
+
     private func sourceString(_ relativePath: String) throws -> String {
         let url = URL(filePath: #filePath)
             .deletingLastPathComponent()

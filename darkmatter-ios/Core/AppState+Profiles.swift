@@ -365,7 +365,12 @@ extension AppState {
               canRefreshProfiles
         else { return }
 
-        let relays = activeAccountRef.map(relayBootstrapRelays(for:)) ?? MarmotClient.seedRelays
+        let relays: [String]
+        if let activeAccountRef {
+            relays = await relayBootstrapRelays(for: activeAccountRef)
+        } else {
+            relays = MarmotClient.seedRelays
+        }
         do {
             try await marmot.refreshProfile(accountIdHex: id, relays: relays)
         } catch {
