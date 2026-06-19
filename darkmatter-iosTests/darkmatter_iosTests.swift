@@ -3992,6 +3992,69 @@ struct ConversationTimelineProjectionTests {
         #expect(!ConversationViewModel.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
     }
 
+    @Test func markedReadDedupDropsMessagesOutsideCurrentTimelineWindow() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let kept = timelineRecord(messageIdHex: hex("11"), timelineAt: 1)
+        let evicted = timelineRecord(messageIdHex: hex("22"), timelineAt: 2)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept, evicted], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        viewModel.insertMarkedReadMessageIdsForTesting([kept.messageIdHex, evicted.messageIdHex])
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        #expect(viewModel.markedReadMessageIdsForTesting == Set([kept.messageIdHex]))
+    }
+
+    @Test func markedReadDedupKeepsEvictedPendingFlushIds() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let kept = timelineRecord(messageIdHex: hex("11"), timelineAt: 1)
+        let pending = timelineRecord(messageIdHex: hex("22"), timelineAt: 2)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept, pending], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        viewModel.insertPendingReadMessageIdsForTesting([pending.messageIdHex])
+        viewModel.insertMarkedReadMessageIdsForTesting([kept.messageIdHex, pending.messageIdHex])
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        #expect(viewModel.markedReadMessageIdsForTesting.contains(pending.messageIdHex))
+    }
+
+    @Test func markedReadDedupKeepsPendingFlushIdsWhenApplyingLimit() {
+        let loaded = Set([hex("11"), hex("22"), hex("33")])
+        let pending = Set([hex("aa")])
+        let stale = hex("ff")
+
+        let retained = ConversationViewModel.retainedMarkedReadMessageIds(
+            loaded.union(pending).union([stale]),
+            loadedMessageIds: loaded,
+            pendingMessageIds: pending,
+            limit: 2
+        )
+
+        #expect(retained.count == 2)
+        #expect(retained.isSubset(of: loaded.union(pending)))
+        #expect(retained.isSuperset(of: pending))
+        #expect(!retained.contains(stale))
+    }
+
     @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
