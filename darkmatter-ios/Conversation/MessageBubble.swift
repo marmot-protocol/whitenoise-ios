@@ -1474,6 +1474,28 @@ private struct MessageFullscreenVideoPlayerView: View {
     }
 }
 
+nonisolated enum MessageAudioPlayerPreparer {
+    private struct PreparedPlayer: @unchecked Sendable {
+        let player: AVAudioPlayer
+    }
+
+    static func preparedPlayer(from data: Data) async throws -> AVAudioPlayer {
+        let prepared = try await Task.detached(priority: .userInitiated) { () throws -> PreparedPlayer in
+            let next = try AVAudioPlayer(data: data)
+            next.enableRate = true
+            next.prepareToPlay()
+            return PreparedPlayer(player: next)
+        }.value
+        return prepared.player
+    }
+
+    static func duration(from data: Data) async -> Double? {
+        await Task.detached(priority: .utility) {
+            try? AVAudioPlayer(data: data).duration
+        }.value
+    }
+}
+
 private struct MessageAudioAttachmentView: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -1607,9 +1629,7 @@ private struct MessageAudioAttachmentView: View {
         do {
             let data = try await onLoadMedia(item)
             let metadata = await audioMetadata(from: data)
-            let next = try AVAudioPlayer(data: data)
-            next.enableRate = true
-            next.prepareToPlay()
+            let next = try await MessageAudioPlayerPreparer.preparedPlayer(from: data)
             player = next
             let playableMetadata = MessageAudioMetadata(
                 durationSeconds: metadata.durationSeconds ?? next.duration,
@@ -1663,7 +1683,7 @@ private struct MessageAudioAttachmentView: View {
         let analyzed = await Task.detached(priority: .utility) {
             MediaWaveformAnalyzer.metadata(from: data, mediaType: item.mediaType)
         }.value
-        let duration = analyzed.durationSeconds ?? (try? AVAudioPlayer(data: data).duration)
+        let duration = analyzed.durationSeconds ?? await MessageAudioPlayerPreparer.duration(from: data)
         let metadata = MessageAudioMetadata(
             durationSeconds: duration,
             samples: MediaWaveformAnalyzer.normalized(analyzed.samples)
