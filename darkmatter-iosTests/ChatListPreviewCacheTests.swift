@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import darkmatter_ios
 @testable import MarmotKit

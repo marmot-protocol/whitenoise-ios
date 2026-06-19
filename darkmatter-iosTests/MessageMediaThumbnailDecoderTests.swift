@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 @testable import darkmatter_ios
 
 @MainActor
-struct MessageMediaThumbnailDecoderTests {
+struct MessageMediaThumbnailDecoderCoreTests {
     @Test func decoderDownsamplesLargeImages() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 80))
         let sourceImage = renderer.image { context in

@@ -14531,6 +14531,65 @@
         }
       }
     },
+    "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        }
+      }
+    },
     "Media is not available in this group" : {
       "comment" : "Shown when trying to add media in a group where media is not available.",
       "extractionState" : "manual",
@@ -26796,6 +26855,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取消歸檔組"
+          }
+        }
+      }
+    },
+    "Unclassified key packages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Unclassified key packages"
           }
         }
       }

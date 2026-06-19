@@ -15,6 +15,7 @@ import Testing
 /// Both paths now funnel through
 /// `ConversationViewModel.normalizedTimeline(from:replyTargetId:)`
 /// (sort, then `normalizedReplyOrdering`), so they can never diverge.
+@MainActor
 struct TimelineIncrementalUpsertOrderingTests {
     private func hexId(_ n: Int) -> String {
         String(format: "%064x", n)
@@ -46,6 +47,14 @@ struct TimelineIncrementalUpsertOrderingTests {
         )
     }
 
+    private func messageId(in item: TimelineItem) -> String {
+        guard case .message(let record, _) = item.kind else {
+            Issue.record("Expected a message timeline item")
+            return ""
+        }
+        return record.messageIdHex
+    }
+
     /// A reply (t=10) whose parent (t=20) sorts *after* it is pulled down to sit
     /// directly under its parent, producing a deliberately non-monotonic order:
     /// `[20, 10, 30]`. This is the array shape that breaks a naive binary search.
@@ -53,7 +62,7 @@ struct TimelineIncrementalUpsertOrderingTests {
         let reply = TimelineItem.message(record(id: hexId(0x10), timestamp: 10))
         let parent = TimelineItem.message(record(id: hexId(0x20), timestamp: 20))
         let m30 = TimelineItem.message(record(id: hexId(0x30), timestamp: 30))
-        let replies = [reply.messageIdHex: parent.messageIdHex]
+        let replies = [messageId(in: reply): messageId(in: parent)]
 
         let ordered = rebuild([m30, reply, parent], replies: replies)
 
@@ -74,7 +83,7 @@ struct TimelineIncrementalUpsertOrderingTests {
         let parent = TimelineItem.message(record(id: hexId(0x20), timestamp: 20))
         let m25 = TimelineItem.message(record(id: hexId(0x25), timestamp: 25))
         let inserted = TimelineItem.message(record(id: hexId(0x11), timestamp: 11))
-        let replies = [reply.messageIdHex: parent.messageIdHex]
+        let replies = [messageId(in: reply): messageId(in: parent)]
 
         // Current displayed (reply-normalized, non-monotonic) timeline.
         let normalized = rebuild([reply, m15, parent, m25], replies: replies)
@@ -98,7 +107,7 @@ struct TimelineIncrementalUpsertOrderingTests {
         let reply = TimelineItem.message(record(id: hexId(0x10), timestamp: 10))
         let parent = TimelineItem.message(record(id: hexId(0x20), timestamp: 20))
         let m30 = TimelineItem.message(record(id: hexId(0x30), timestamp: 30))
-        let replies = [reply.messageIdHex: parent.messageIdHex]
+        let replies = [messageId(in: reply): messageId(in: parent)]
 
         // Timeline before the parent arrives: the reply has no parent in the set
         // yet, so it stays in timestamp order alongside a later message.

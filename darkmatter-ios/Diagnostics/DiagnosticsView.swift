@@ -101,8 +101,8 @@ struct DiagnosticsView: View {
             return "[\(received.accountLabel)] msg from \(IdentityFormatter.short(received.message.sender)): \(plaintextSummary(received.message.plaintext))"
         case .projectionUpdated(let update):
             return "[\(update.accountLabel)] projection \(IdentityFormatter.short(update.update.groupIdHex))"
-        case .groupEvent(_, let label):
-            return "[\(label)] group event"
+        case .groupEvent(_, let label, let groupIdHex, let event):
+            return "[\(label)] group event \(groupEventLabel(event)) \(IdentityFormatter.short(groupIdHex))"
         case .accountError(_, let label, let message):
             return "[\(label)] error: \(message)"
         case .agentStreamActivity(_, let label):
@@ -112,6 +112,35 @@ struct DiagnosticsView: View {
 
     private static func plaintextSummary(_ plaintext: String) -> String {
         plaintext.isEmpty ? "(empty)" : "(\(plaintext.count) chars)"
+    }
+
+    private static func groupEventLabel(_ event: GroupEventKindFfi) -> String {
+        switch event {
+        case .groupCreated:
+            return "created"
+        case .groupJoined:
+            return "joined"
+        case .messageReceived:
+            return "message"
+        case .appMessageInvalidated:
+            return "message invalidated"
+        case .groupStateChanged:
+            return "state changed"
+        case .groupHydrationQuarantined:
+            return "hydration quarantined"
+        case .epochChanged:
+            return "epoch changed"
+        case .forkRecovered:
+            return "fork recovered"
+        case .commitRolledBack:
+            return "commit rolled back"
+        case .groupUnrecoverable:
+            return "unrecoverable"
+        case .pendingCommitRecovered:
+            return "pending commit recovered"
+        case .groupHydrationRecovered:
+            return "hydration recovered"
+        }
     }
 
     @MainActor

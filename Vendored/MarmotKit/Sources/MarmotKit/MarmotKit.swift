@@ -1562,6 +1562,17 @@ public protocol MarmotProtocol : AnyObject {
     func pushRegistration(accountRef: String) throws  -> PushRegistrationFfi?
 
     /**
+     * Stored groups that failed session-open hydration and were skipped so the
+     * rest of the account could open (darkmatter#151 / #417). These groups are
+     * not in the live roster and otherwise vanish from the account with no
+     * explanation; surface them in a per-group recovery flow (darkmatter#426)
+     * distinct from healthy and archived groups, using `reason` to pick the
+     * per-reason guidance, and offer
+     * [`Self::retry_hydrate_quarantined_group`].
+     */
+    func quarantinedGroups(accountRef: String) async throws  -> [AppQuarantinedGroupFfi]
+
+    /**
      * React to `target_message_id` with `emoji` (an "add" reaction).
      */
     func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String) async throws  -> SendSummaryFfi
@@ -1614,6 +1625,18 @@ public protocol MarmotProtocol : AnyObject {
     func republishKeyPackage(accountRef: String) async throws  -> UInt64
 
     /**
+     * Re-attempt hydration of a single quarantined group (darkmatter#426).
+     *
+     * Non-destructive, user-initiated recovery for a transiently-bad group
+     * (e.g. a partial DB restore that has since completed). Returns `true` if
+     * the group recovered and is now a live chat (it leaves the quarantine
+     * list and reappears in the chat list), `false` if it is still unhealthy
+     * and stays quarantined. Errors with `UnknownGroup` if the id is not
+     * currently quarantined.
+     */
+    func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String) async throws  -> Bool
+
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
     func selfDemoteAdmin(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
@@ -1625,6 +1648,13 @@ public protocol MarmotProtocol : AnyObject {
      * carrying ordered NIP-92 `imeta` tags.
      */
     func sendMediaAttachments(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?) async throws  -> SendSummaryFfi
+
+    /**
+     * Backward-compatible single-attachment send helper. Prefer
+     * `send_media_attachments` for new callers so one chat can carry ordered
+     * mixed media attachments.
+     */
+    func sendMediaReference(accountRef: String, groupIdHex: String, reference: MediaAttachmentReferenceFfi, caption: String?) async throws  -> SendSummaryFfi
 
     /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
@@ -1730,10 +1760,11 @@ public protocol MarmotProtocol : AnyObject {
 
     /**
      * Messages for a specific group (when `group_id_hex` is `Some`) or
-     * every message across the account (when `None`). Async for the same
-     * tokio-runtime reason as [`Marmot::subscribe_chats`].
+     * every message across the account (when `None`). `limit` caps the initial
+     * snapshot to the latest N rows; live updates continue after the snapshot.
+     * Async for the same tokio-runtime reason as [`Marmot::subscribe_chats`].
      */
-    func subscribeMessages(accountRef: String, groupIdHex: String?) async throws  -> MessagesSubscription
+    func subscribeMessages(accountRef: String, groupIdHex: String?, limit: UInt32?) async throws  -> MessagesSubscription
 
     func subscribeNotifications() async throws  -> NotificationsSubscription
 
@@ -2726,6 +2757,32 @@ open func pushRegistration(accountRef: String)throws  -> PushRegistrationFfi? {
 }
 
     /**
+     * Stored groups that failed session-open hydration and were skipped so the
+     * rest of the account could open (darkmatter#151 / #417). These groups are
+     * not in the live roster and otherwise vanish from the account with no
+     * explanation; surface them in a per-group recovery flow (darkmatter#426)
+     * distinct from healthy and archived groups, using `reason` to pick the
+     * per-reason guidance, and offer
+     * [`Self::retry_hydrate_quarantined_group`].
+     */
+open func quarantinedGroups(accountRef: String)async throws  -> [AppQuarantinedGroupFfi] {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_quarantined_groups(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeAppQuarantinedGroupFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * React to `target_message_id` with `emoji` (an "add" reaction).
      */
 open func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String)async throws  -> SendSummaryFfi {
@@ -2919,6 +2976,33 @@ open func republishKeyPackage(accountRef: String)async throws  -> UInt64 {
 }
 
     /**
+     * Re-attempt hydration of a single quarantined group (darkmatter#426).
+     *
+     * Non-destructive, user-initiated recovery for a transiently-bad group
+     * (e.g. a partial DB restore that has since completed). Returns `true` if
+     * the group recovered and is now a live chat (it leaves the quarantine
+     * list and reappears in the chat list), `false` if it is still unhealthy
+     * and stays quarantined. Errors with `UnknownGroup` if the id is not
+     * currently quarantined.
+     */
+open func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String)async throws  -> Bool {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_retry_hydrate_quarantined_group(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
 open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -> SendSummaryFfi {
@@ -2966,6 +3050,28 @@ open func sendMediaAttachments(accountRef: String, groupIdHex: String, attachmen
                 uniffi_marmot_uniffi_fn_method_marmot_send_media_attachments(
                     self.uniffiClonePointer(),
                     FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments),FfiConverterOptionString.lower(caption)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
+     * Backward-compatible single-attachment send helper. Prefer
+     * `send_media_attachments` for new callers so one chat can carry ordered
+     * mixed media attachments.
+     */
+open func sendMediaReference(accountRef: String, groupIdHex: String, reference: MediaAttachmentReferenceFfi, caption: String?)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_media_reference(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeMediaAttachmentReferenceFfi.lower(reference),FfiConverterOptionString.lower(caption)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -3309,16 +3415,17 @@ open func subscribeGroupState(accountRef: String, groupIdHex: String)async throw
 
     /**
      * Messages for a specific group (when `group_id_hex` is `Some`) or
-     * every message across the account (when `None`). Async for the same
-     * tokio-runtime reason as [`Marmot::subscribe_chats`].
+     * every message across the account (when `None`). `limit` caps the initial
+     * snapshot to the latest N rows; live updates continue after the snapshot.
+     * Async for the same tokio-runtime reason as [`Marmot::subscribe_chats`].
      */
-open func subscribeMessages(accountRef: String, groupIdHex: String?)async throws  -> MessagesSubscription {
+open func subscribeMessages(accountRef: String, groupIdHex: String?, limit: UInt32?)async throws  -> MessagesSubscription {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_subscribe_messages(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterOptionString.lower(groupIdHex)
+                    FfiConverterString.lower(accountRef),FfiConverterOptionString.lower(groupIdHex),FfiConverterOptionUInt32.lower(limit)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
@@ -5161,6 +5268,78 @@ public func FfiConverterTypeAppMessageRecordFfi_lift(_ buf: RustBuffer) throws -
 #endif
 public func FfiConverterTypeAppMessageRecordFfi_lower(_ value: AppMessageRecordFfi) -> RustBuffer {
     return FfiConverterTypeAppMessageRecordFfi.lower(value)
+}
+
+
+/**
+ * A stored group that failed session-open hydration and was skipped so the
+ * rest of the account could open (darkmatter#151 / #417). Surfaced so the app
+ * can present a per-group recovery flow (darkmatter#426) distinct from healthy
+ * and archived groups, and offer a non-destructive re-hydration retry.
+ */
+public struct AppQuarantinedGroupFfi {
+    public var groupIdHex: String
+    public var reason: AppGroupHydrationQuarantineReasonFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String, reason: AppGroupHydrationQuarantineReasonFfi) {
+        self.groupIdHex = groupIdHex
+        self.reason = reason
+    }
+}
+
+
+
+extension AppQuarantinedGroupFfi: Equatable, Hashable {
+    public static func ==(lhs: AppQuarantinedGroupFfi, rhs: AppQuarantinedGroupFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(reason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAppQuarantinedGroupFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AppQuarantinedGroupFfi {
+        return
+            try AppQuarantinedGroupFfi(
+                groupIdHex: FfiConverterString.read(from: &buf),
+                reason: FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AppQuarantinedGroupFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppQuarantinedGroupFfi_lift(_ buf: RustBuffer) throws -> AppQuarantinedGroupFfi {
+    return try FfiConverterTypeAppQuarantinedGroupFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppQuarantinedGroupFfi_lower(_ value: AppQuarantinedGroupFfi) -> RustBuffer {
+    return FfiConverterTypeAppQuarantinedGroupFfi.lower(value)
 }
 
 
@@ -10388,6 +10567,113 @@ extension AgentStreamUpdateFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Coarse, privacy-safe reason a stored group failed session-open hydration and
+ * was quarantined (darkmatter#151 / #417). Carries no group/member ids,
+ * payloads, or key material — only a category the client can map to per-reason
+ * recovery guidance.
+ */
+
+public enum AppGroupHydrationQuarantineReasonFfi {
+
+    /**
+     * OpenMLS returned an error while loading the stored group state.
+     */
+    case openMlsLoadFailed
+    /**
+     * Marmot metadata referenced a group whose OpenMLS state was missing.
+     */
+    case openMlsGroupMissing
+    /**
+     * Member credentials, account-identity proofs, or ratchet-tree export
+     * validation failed for the loaded MLS group.
+     */
+    case memberValidationFailed
+    /**
+     * The Marmot group record could not be loaded or refreshed.
+     */
+    case groupRecordLoadFailed
+    /**
+     * Hydrate found a stranded pending commit, but recovery itself failed.
+     */
+    case pendingCommitRecoveryFailed
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAppGroupHydrationQuarantineReasonFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AppGroupHydrationQuarantineReasonFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AppGroupHydrationQuarantineReasonFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .openMlsLoadFailed
+
+        case 2: return .openMlsGroupMissing
+
+        case 3: return .memberValidationFailed
+
+        case 4: return .groupRecordLoadFailed
+
+        case 5: return .pendingCommitRecoveryFailed
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AppGroupHydrationQuarantineReasonFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .openMlsLoadFailed:
+            writeInt(&buf, Int32(1))
+
+
+        case .openMlsGroupMissing:
+            writeInt(&buf, Int32(2))
+
+
+        case .memberValidationFailed:
+            writeInt(&buf, Int32(3))
+
+
+        case .groupRecordLoadFailed:
+            writeInt(&buf, Int32(4))
+
+
+        case .pendingCommitRecoveryFailed:
+            writeInt(&buf, Int32(5))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppGroupHydrationQuarantineReasonFfi_lift(_ buf: RustBuffer) throws -> AppGroupHydrationQuarantineReasonFfi {
+    return try FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAppGroupHydrationQuarantineReasonFfi_lower(_ value: AppGroupHydrationQuarantineReasonFfi) -> RustBuffer {
+    return FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.lower(value)
+}
+
+
+
+extension AppGroupHydrationQuarantineReasonFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum ChatListSubscriptionUpdateFfi {
 
@@ -10568,6 +10854,194 @@ public func FfiConverterTypeChatListUpdateTriggerFfi_lower(_ value: ChatListUpda
 
 
 extension ChatListUpdateTriggerFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * FFI projection of [`cgka_traits::engine::GroupEvent`]. The previous FFI
+ * firehose collapsed every group event to bare `account_id_hex` /
+ * `account_label`, discarding the group id, event kind, and the typed
+ * recovery details (quarantine reason, recovered epoch) — so native clients
+ * could not react to the typed events the recovery feature surfaces
+ * (darkmatter#441 finding 1). This enum mirrors each `GroupEvent` variant and
+ * carries its privacy-safe scalar fields: ids are hex-encoded, epochs are
+ * `u64`, and the two deeply-nested inner enums (`GroupStateChange`,
+ * `AppMessageInvalidationReason`) are surfaced as stable low-cardinality tag
+ * strings rather than re-modeled in full. No payloads, ciphertext, plaintext,
+ * or key material cross the boundary.
+ */
+
+public enum GroupEventKindFfi {
+
+    case groupCreated
+    case groupJoined(viaWelcomeHex: String, welcomerIdHex: String?
+    )
+    case messageReceived(senderIdHex: String, epoch: UInt64
+    )
+    case appMessageInvalidated(messageIdHex: String, epoch: UInt64, reason: String, decryptedPayloadRef: String?
+    )
+    case groupStateChanged(epoch: UInt64, actorIdHex: String?, change: String, originCommitIdHex: String?
+    )
+    case groupHydrationQuarantined(reason: AppGroupHydrationQuarantineReasonFfi
+    )
+    case epochChanged(from: UInt64, to: UInt64
+    )
+    case forkRecovered(sourceEpoch: UInt64, recoveredEpoch: UInt64, invalidatedCommitIdHex: String
+    )
+    case commitRolledBack(invalidatedCommitIdHex: String
+    )
+    case groupUnrecoverable
+    case pendingCommitRecovered(recoveredEpoch: UInt64
+    )
+    case groupHydrationRecovered(recoveredEpoch: UInt64
+    )
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupEventKindFfi: FfiConverterRustBuffer {
+    typealias SwiftType = GroupEventKindFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupEventKindFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .groupCreated
+
+        case 2: return .groupJoined(viaWelcomeHex: try FfiConverterString.read(from: &buf), welcomerIdHex: try FfiConverterOptionString.read(from: &buf)
+        )
+
+        case 3: return .messageReceived(senderIdHex: try FfiConverterString.read(from: &buf), epoch: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        case 4: return .appMessageInvalidated(messageIdHex: try FfiConverterString.read(from: &buf), epoch: try FfiConverterUInt64.read(from: &buf), reason: try FfiConverterString.read(from: &buf), decryptedPayloadRef: try FfiConverterOptionString.read(from: &buf)
+        )
+
+        case 5: return .groupStateChanged(epoch: try FfiConverterUInt64.read(from: &buf), actorIdHex: try FfiConverterOptionString.read(from: &buf), change: try FfiConverterString.read(from: &buf), originCommitIdHex: try FfiConverterOptionString.read(from: &buf)
+        )
+
+        case 6: return .groupHydrationQuarantined(reason: try FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.read(from: &buf)
+        )
+
+        case 7: return .epochChanged(from: try FfiConverterUInt64.read(from: &buf), to: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        case 8: return .forkRecovered(sourceEpoch: try FfiConverterUInt64.read(from: &buf), recoveredEpoch: try FfiConverterUInt64.read(from: &buf), invalidatedCommitIdHex: try FfiConverterString.read(from: &buf)
+        )
+
+        case 9: return .commitRolledBack(invalidatedCommitIdHex: try FfiConverterString.read(from: &buf)
+        )
+
+        case 10: return .groupUnrecoverable
+
+        case 11: return .pendingCommitRecovered(recoveredEpoch: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        case 12: return .groupHydrationRecovered(recoveredEpoch: try FfiConverterUInt64.read(from: &buf)
+        )
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: GroupEventKindFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .groupCreated:
+            writeInt(&buf, Int32(1))
+
+
+        case let .groupJoined(viaWelcomeHex,welcomerIdHex):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(viaWelcomeHex, into: &buf)
+            FfiConverterOptionString.write(welcomerIdHex, into: &buf)
+
+
+        case let .messageReceived(senderIdHex,epoch):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(senderIdHex, into: &buf)
+            FfiConverterUInt64.write(epoch, into: &buf)
+
+
+        case let .appMessageInvalidated(messageIdHex,epoch,reason,decryptedPayloadRef):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(messageIdHex, into: &buf)
+            FfiConverterUInt64.write(epoch, into: &buf)
+            FfiConverterString.write(reason, into: &buf)
+            FfiConverterOptionString.write(decryptedPayloadRef, into: &buf)
+
+
+        case let .groupStateChanged(epoch,actorIdHex,change,originCommitIdHex):
+            writeInt(&buf, Int32(5))
+            FfiConverterUInt64.write(epoch, into: &buf)
+            FfiConverterOptionString.write(actorIdHex, into: &buf)
+            FfiConverterString.write(change, into: &buf)
+            FfiConverterOptionString.write(originCommitIdHex, into: &buf)
+
+
+        case let .groupHydrationQuarantined(reason):
+            writeInt(&buf, Int32(6))
+            FfiConverterTypeAppGroupHydrationQuarantineReasonFfi.write(reason, into: &buf)
+
+
+        case let .epochChanged(from,to):
+            writeInt(&buf, Int32(7))
+            FfiConverterUInt64.write(from, into: &buf)
+            FfiConverterUInt64.write(to, into: &buf)
+
+
+        case let .forkRecovered(sourceEpoch,recoveredEpoch,invalidatedCommitIdHex):
+            writeInt(&buf, Int32(8))
+            FfiConverterUInt64.write(sourceEpoch, into: &buf)
+            FfiConverterUInt64.write(recoveredEpoch, into: &buf)
+            FfiConverterString.write(invalidatedCommitIdHex, into: &buf)
+
+
+        case let .commitRolledBack(invalidatedCommitIdHex):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(invalidatedCommitIdHex, into: &buf)
+
+
+        case .groupUnrecoverable:
+            writeInt(&buf, Int32(10))
+
+
+        case let .pendingCommitRecovered(recoveredEpoch):
+            writeInt(&buf, Int32(11))
+            FfiConverterUInt64.write(recoveredEpoch, into: &buf)
+
+
+        case let .groupHydrationRecovered(recoveredEpoch):
+            writeInt(&buf, Int32(12))
+            FfiConverterUInt64.write(recoveredEpoch, into: &buf)
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupEventKindFfi_lift(_ buf: RustBuffer) throws -> GroupEventKindFfi {
+    return try FfiConverterTypeGroupEventKindFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupEventKindFfi_lower(_ value: GroupEventKindFfi) -> RustBuffer {
+    return FfiConverterTypeGroupEventKindFfi.lower(value)
+}
+
+
+
+extension GroupEventKindFfi: Equatable, Hashable {}
 
 
 
@@ -11277,7 +11751,7 @@ public enum MarmotEventFfi {
     )
     case projectionUpdated(update: RuntimeProjectionUpdateFfi
     )
-    case groupEvent(accountIdHex: String, accountLabel: String
+    case groupEvent(accountIdHex: String, accountLabel: String, groupIdHex: String, event: GroupEventKindFfi
     )
     case accountError(accountIdHex: String, accountLabel: String, message: String
     )
@@ -11308,7 +11782,7 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         case 4: return .projectionUpdated(update: try FfiConverterTypeRuntimeProjectionUpdateFfi.read(from: &buf)
         )
 
-        case 5: return .groupEvent(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf)
+        case 5: return .groupEvent(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), event: try FfiConverterTypeGroupEventKindFfi.read(from: &buf)
         )
 
         case 6: return .accountError(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
@@ -11349,10 +11823,12 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
             FfiConverterTypeRuntimeProjectionUpdateFfi.write(update, into: &buf)
 
 
-        case let .groupEvent(accountIdHex,accountLabel):
+        case let .groupEvent(accountIdHex,accountLabel,groupIdHex,event):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(accountIdHex, into: &buf)
             FfiConverterString.write(accountLabel, into: &buf)
+            FfiConverterString.write(groupIdHex, into: &buf)
+            FfiConverterTypeGroupEventKindFfi.write(event, into: &buf)
 
 
         case let .accountError(accountIdHex,accountLabel,message):
@@ -13056,6 +13532,31 @@ fileprivate struct FfiConverterSequenceTypeAppMessageRecordFfi: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeAppQuarantinedGroupFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AppQuarantinedGroupFfi]
+
+    public static func write(_ value: [AppQuarantinedGroupFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAppQuarantinedGroupFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AppQuarantinedGroupFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AppQuarantinedGroupFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAppQuarantinedGroupFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeAuditLogFileFfi: FfiConverterRustBuffer {
     typealias SwiftType = [AuditLogFileFfi]
 
@@ -13869,6 +14370,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_push_registration() != 38312) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_quarantined_groups() != 7043) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_react_to_message() != 39138) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13899,6 +14403,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_republish_key_package() != 44103) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_retry_hydrate_quarantined_group() != 51443) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13906,6 +14413,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_attachments() != 3385) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_media_reference() != 40798) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_text() != 60625) {
@@ -13959,7 +14469,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_group_state() != 22651) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages() != 58466) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_messages() != 27462) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_notifications() != 41715) {

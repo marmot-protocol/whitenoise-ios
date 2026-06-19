@@ -996,7 +996,9 @@ final class ConversationViewModel {
     }
 
     private func shouldEvictAbsentTimelineRecords(from page: TimelinePageFfi) -> Bool {
-        !hasMoreBefore && !hasMoreAfter && !page.hasMoreBefore && !page.hasMoreAfter
+        (!page.hasMoreBefore && !page.hasMoreAfter)
+            || hasMoreBefore != page.hasMoreBefore
+            || hasMoreAfter != page.hasMoreAfter
     }
 
     private func applyTimelineTailRefreshPage(_ page: TimelinePageFfi) {

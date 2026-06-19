@@ -194,7 +194,7 @@ struct KeyPackagesView: View {
     @ViewBuilder
     private func badge(for pkg: AccountKeyPackageFfi) -> some View {
         badgeLabel(
-            L10n.string(Self.sourceBadgeTitle(for: pkg)),
+            Self.sourceBadgeTitle(for: pkg),
             tint: Self.sourceBadgeTint(for: pkg)
         )
     }

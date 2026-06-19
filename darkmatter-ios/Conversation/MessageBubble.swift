@@ -1485,7 +1485,7 @@ nonisolated enum MessageAudioPlayerPreparer {
             next.enableRate = true
             next.prepareToPlay()
             return PreparedPlayer(player: next)
-        }.value
+        }
         return prepared.player
     }
 
@@ -1701,7 +1701,12 @@ private struct MessageAudioAttachmentView: View {
         let analyzed = await Task.detached(priority: .utility) {
             MediaWaveformAnalyzer.metadata(from: data, mediaType: item.mediaType)
         }.value
-        let duration = analyzed.durationSeconds ?? await MessageAudioPlayerPreparer.duration(from: data)
+        let duration: Double?
+        if let analyzedDuration = analyzed.durationSeconds {
+            duration = analyzedDuration
+        } else {
+            duration = await MessageAudioPlayerPreparer.duration(from: data)
+        }
         let metadata = MessageAudioMetadata(
             durationSeconds: duration,
             samples: MediaWaveformAnalyzer.normalized(analyzed.samples)
