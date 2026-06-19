@@ -3800,6 +3800,29 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.markedReadMessageIdsForTesting == Set([kept.messageIdHex]))
     }
 
+    @Test func markedReadDedupKeepsEvictedPendingFlushIds() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let kept = timelineRecord(messageIdHex: hex("11"), timelineAt: 1)
+        let pending = timelineRecord(messageIdHex: hex("22"), timelineAt: 2)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept, pending], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        viewModel.insertPendingReadMessageIdsForTesting([pending.messageIdHex])
+        viewModel.insertMarkedReadMessageIdsForTesting([kept.messageIdHex, pending.messageIdHex])
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [kept], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        #expect(viewModel.markedReadMessageIdsForTesting.contains(pending.messageIdHex))
+    }
+
     @Test func markedReadDedupKeepsPendingFlushIdsWhenApplyingLimit() {
         let loaded = Set([hex("11"), hex("22"), hex("33")])
         let pending = Set([hex("aa")])

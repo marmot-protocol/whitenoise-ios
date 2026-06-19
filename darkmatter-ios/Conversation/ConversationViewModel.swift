@@ -187,6 +187,13 @@ final class ConversationViewModel {
         markedReadMessageIds.formUnion(messageIds)
         pruneMarkedReadMessageIds(force: true)
     }
+
+    func insertPendingReadMessageIdsForTesting(_ messageIds: [String]) {
+        for messageId in messageIds {
+            guard pendingReadMessageIdSet.insert(messageId).inserted else { continue }
+            pendingReadMessageIds.append(messageId)
+        }
+    }
 #endif
     /// Streams that received a checkpoint snapshot. Their QUIC `.finished`
     /// text is text-delta-only, so prefer the current preview at close.
@@ -627,16 +634,21 @@ final class ConversationViewModel {
         readMarkTask = nil
         let messageIds = pendingReadMessageIds
         pendingReadMessageIds = []
-        pendingReadMessageIdSet = []
-        guard !messageIds.isEmpty else { return }
+        guard !messageIds.isEmpty else {
+            pendingReadMessageIdSet = []
+            pruneMarkedReadMessageIds(force: true)
+            return
+        }
+        defer {
+            pendingReadMessageIdSet.subtract(messageIds)
+            pruneMarkedReadMessageIds(force: true)
+        }
         guard let appState else {
             markedReadMessageIds.subtract(messageIds)
-            pruneMarkedReadMessageIds(force: true)
             return
         }
         guard appState.activeAccountRef == accountRef else {
             markedReadMessageIds.subtract(messageIds)
-            pruneMarkedReadMessageIds(force: true)
             return
         }
 
@@ -657,7 +669,6 @@ final class ConversationViewModel {
             markedReadMessageIds.subtract(messageIds)
         }
 
-        pruneMarkedReadMessageIds(force: true)
         if !pendingReadMessageIds.isEmpty, appState.activeAccountRef == accountRef {
             scheduleReadMarkFlush(accountRef: accountRef)
         }
@@ -1240,7 +1251,9 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
-        markedReadMessageIds.remove(messageIdHex)
+        if !pendingReadMessageIdSet.contains(messageIdHex) {
+            markedReadMessageIds.remove(messageIdHex)
+        }
         scannedFinalizedMessageIds.remove(messageIdHex)
         let timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
