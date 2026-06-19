@@ -1052,18 +1052,23 @@ final class AppState {
         return accounts.first { $0.label == ref }
     }
 
-    func relayLists(for accountRef: String) -> AccountRelayListsFfi? {
-        try? marmot.accountRelayLists(accountRef: accountRef)
+    /// Reads the published account relay-list projection off the MainActor.
+    /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
+    /// MainActor-bound callers (profile publish / profile refresh) must await the
+    /// `MarmotClient.accountRelayLists` wrapper rather than calling the generated
+    /// binding inline (#318). Mirrors the #247/#317 offload approach.
+    func relayLists(for accountRef: String) async -> AccountRelayListsFfi? {
+        try? await currentMarmotClient().accountRelayLists(accountRef: accountRef)
     }
 
-    func relayPublishRelays(for accountRef: String) -> [String] {
-        guard let lists = relayLists(for: accountRef) else { return MarmotClient.seedRelays }
+    func relayPublishRelays(for accountRef: String) async -> [String] {
+        guard let lists = await relayLists(for: accountRef) else { return MarmotClient.seedRelays }
         let relays = RelaySettings.editableRelays(from: lists)
         return relays.isEmpty ? MarmotClient.seedRelays : relays
     }
 
-    func relayBootstrapRelays(for accountRef: String) -> [String] {
-        guard let lists = relayLists(for: accountRef) else { return MarmotClient.seedRelays }
+    func relayBootstrapRelays(for accountRef: String) async -> [String] {
+        guard let lists = await relayLists(for: accountRef) else { return MarmotClient.seedRelays }
         return RelaySettings.bootstrapRelays(from: lists)
     }
 

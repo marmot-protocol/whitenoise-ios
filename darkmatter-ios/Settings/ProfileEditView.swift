@@ -186,8 +186,8 @@ struct ProfileEditView: View {
         error = nil
 
         do {
-            let relays = appState.relayPublishRelays(for: accountRef)
-            let bootstrapRelays = appState.relayBootstrapRelays(for: accountRef)
+            let relays = await appState.relayPublishRelays(for: accountRef)
+            let bootstrapRelays = await appState.relayBootstrapRelays(for: accountRef)
             _ = try await appState.marmot.publishUserProfile(
                 accountRef: accountRef,
                 profile: normalizedMetadata.ffi,
