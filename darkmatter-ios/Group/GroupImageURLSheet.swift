@@ -260,7 +260,7 @@ struct GroupImageURLSheet: View {
 
             if normalizedInitialURL != nil {
                 Button(role: .destructive) {
-                    Task { await save(nil) }
+                    Task { await removeImage() }
                 } label: {
                     Label("Remove image", systemImage: "trash")
                 }
@@ -391,11 +391,28 @@ struct GroupImageURLSheet: View {
     }
 
     private func saveDraft() async {
-        await save(normalizedDraftURL)
+        await save(normalizedDraftURL, isRemoval: false)
     }
 
-    private func save(_ urlString: String?) async {
-        if hasDraft && urlString == nil {
+    private func removeImage() async {
+        await save(nil, isRemoval: true)
+    }
+
+    /// Whether a save attempt should be rejected before reaching `onSave`.
+    ///
+    /// The draft-validation guard applies only to the *save the typed draft*
+    /// path: a non-empty draft that does not resolve to a valid HTTPS image
+    /// URL must not be saved. The destructive *remove* path explicitly passes
+    /// `nil` to clear the existing image and must bypass this guard entirely —
+    /// a stray/invalid draft left in the text field has nothing to do with
+    /// removing the current image.
+    static func shouldRejectSave(hasDraft: Bool, resolvedURL: String?, isRemoval: Bool) -> Bool {
+        if isRemoval { return false }
+        return hasDraft && resolvedURL == nil
+    }
+
+    private func save(_ urlString: String?, isRemoval: Bool) async {
+        if Self.shouldRejectSave(hasDraft: hasDraft, resolvedURL: urlString, isRemoval: isRemoval) {
             saveError = L10n.string("Use a public HTTPS image URL.")
             Haptics.error()
             return
