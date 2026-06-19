@@ -638,6 +638,76 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func nativePushRegistrationScheduleGateBlocksDuringSignOut() {
+        // Regression for issue #320: a system-driven APNS device-token callback
+        // (`recordDeviceToken`) can land on one of `signOut()`'s `await`
+        // suspension points and call `scheduleNativePushRegistrationIfEnabled()`.
+        // While the departing account is still on disk (push enabled) and still
+        // in the in-memory `accounts` list, that fresh sync would
+        // re-`upsertPushRegistration` it — resurrecting a server-side push
+        // registration for a signed-out account (residual of #7/#111). The
+        // sign-out guard must suppress scheduling, exactly like the existing
+        // scene-inactive / runtime-suspended guards.
+        #expect(NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: true
+        ))
+        // The pre-existing guards must keep blocking regardless of the new flag.
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            isSigningOut: false
+        ))
+    }
+
+    @Test func signOutClearsSigningOutGuardBeforeReturning() async throws {
+        // The sign-out guard (#320) must be raised only for the duration of the
+        // teardown and cleared before `signOut()` returns. Otherwise the
+        // legitimate post-sign-out reschedule for the surviving active account
+        // — and every later token-driven reschedule — would stay suppressed.
+        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
+        let appState = seeded.appState
+        let accountA = seeded.accounts[0]
+        let accountB = seeded.accounts[1]
+        appState.activeAccountRef = accountA.label
+
+        #expect(!appState.isSigningOutForTesting)
+
+        await appState.signOut()
+
+        // Guard down on return, surviving account active and intact.
+        #expect(!appState.isSigningOutForTesting)
+        #expect(appState.activeAccountRef == accountB.label)
+        // A reschedule for the surviving account is now permitted (the guard no
+        // longer suppresses it); calling it must not trap or re-raise the flag.
+        appState.scheduleNativePushRegistrationIfEnabled()
+        #expect(!appState.isSigningOutForTesting)
+
+        await appState.drainRuntimeLifecycleTasksForTesting()
+        await stopReadyRuntime(appState)
+    }
+
     @Test func signOutOfOnlyAccountClearsAccountStateAndReturnsToOnboarding() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
