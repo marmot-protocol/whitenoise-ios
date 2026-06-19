@@ -39,6 +39,36 @@ struct RemoteImageRedirectGuardTests {
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "http://example.com/a.png")))
     }
 
+    /// darkmatter-ios#322: the IPv6 allowlist must block multicast (`ff00::/8`)
+    /// and decode the embedded IPv4 of 6to4 (`2002::/16`) and Teredo
+    /// (`2001:0000::/32`) so an internal v4 can't ride in through those
+    /// transition prefixes — mirroring the IPv4-mapped/compatible decoding.
+    @Test func refusesRedirectToIPv6MulticastAndTransitionEmbeddings() {
+        // IPv6 multicast (all-nodes link-local, mDNS, site-local).
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[ff02::1]/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[ff02::fb]/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[ff05::1]/x")))
+        // 6to4 (2002::/16) embedding loopback / link-local-metadata IPv4.
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:7f00:1::]/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:a9fe:a9fe::]/x")))
+        // Teredo (2001:0000::/32) embedding loopback in the obfuscated client
+        // IPv4 (bytes[12..16] = ~127.0.0.1) and the metadata IP as the server.
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:0:0:0:0:80ff:fffe]/x")))
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:a9fe:a9fe::]/x")))
+    }
+
+    /// Public IPv6 transition addresses must stay allowed: 6to4 / Teredo
+    /// wrapping a public IPv4, and a global-unicast 2001 prefix that is not
+    /// Teredo, are legitimate public hosts and must not be over-blocked.
+    @Test func allowsRedirectToPublicIPv6TransitionAddresses() {
+        // 6to4 wrapping public 8.8.8.8.
+        #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:808:808::]/x")))
+        // Global-unicast 2001:db8::/32 documentation prefix is not Teredo.
+        #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:db8::1]/x")))
+        // Teredo with a public server and public client IPv4.
+        #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:808:808:0:0:f7f7:f7f7]/x")))
+    }
+
     @Test func refusesNilRedirectTarget() {
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: nil))
     }
