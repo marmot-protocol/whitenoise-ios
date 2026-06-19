@@ -3529,6 +3529,24 @@ struct GroupImageSearchTests {
         #expect(GroupImageURLSheet.validatedImageURL("https://localhost/a.png") == nil)
     }
 
+    @Test func groupImageSheetRemoveBypassesDraftValidationGuard() {
+        // Saving a typed draft that does not resolve to a valid HTTPS URL is
+        // rejected (the user intends to save an invalid URL).
+        #expect(GroupImageURLSheet.shouldRejectSave(hasDraft: true, resolvedURL: nil, isRemoval: false))
+
+        // Saving a draft that resolves to a valid URL is allowed.
+        #expect(!GroupImageURLSheet.shouldRejectSave(hasDraft: true, resolvedURL: "https://example.com/a.png", isRemoval: false))
+
+        // Saving with an empty field (no draft) is allowed.
+        #expect(!GroupImageURLSheet.shouldRejectSave(hasDraft: false, resolvedURL: nil, isRemoval: false))
+
+        // Removing the existing image must never be blocked by a stray/invalid
+        // draft left in the URL field (issue #324) — the remove intent passes
+        // nil to clear the image and is unrelated to the typed draft.
+        #expect(!GroupImageURLSheet.shouldRejectSave(hasDraft: true, resolvedURL: nil, isRemoval: true))
+        #expect(!GroupImageURLSheet.shouldRejectSave(hasDraft: false, resolvedURL: nil, isRemoval: true))
+    }
+
     @Test func groupImageWebSearchUsesEphemeralNetworking() throws {
         let source = try groupImageURLSheetSource()
 
