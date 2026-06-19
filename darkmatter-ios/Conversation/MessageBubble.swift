@@ -1480,7 +1480,7 @@ nonisolated enum MessageAudioPlayerPreparer {
     }
 
     static func preparedPlayer(from data: Data) async throws -> AVAudioPlayer {
-        let prepared = try await Task.detached(priority: .userInitiated) { () throws -> PreparedPlayer in
+        let prepared = try await detachedPreparedValue(priority: .userInitiated) { () throws -> PreparedPlayer in
             let next = try AVAudioPlayer(data: data)
             next.enableRate = true
             next.prepareToPlay()
@@ -1490,8 +1490,26 @@ nonisolated enum MessageAudioPlayerPreparer {
     }
 
     static func duration(from data: Data) async -> Double? {
-        await Task.detached(priority: .utility) {
+        await detachedValue(priority: .utility) {
             try? AVAudioPlayer(data: data).duration
+        }
+    }
+
+    static func detachedPreparedValue<Value: Sendable>(
+        priority: TaskPriority,
+        _ operation: @escaping @Sendable () throws -> Value
+    ) async throws -> Value {
+        try await Task.detached(priority: priority) {
+            try operation()
+        }.value
+    }
+
+    static func detachedValue<Value: Sendable>(
+        priority: TaskPriority,
+        _ operation: @escaping @Sendable () -> Value
+    ) async -> Value {
+        await Task.detached(priority: priority) {
+            operation()
         }.value
     }
 }
