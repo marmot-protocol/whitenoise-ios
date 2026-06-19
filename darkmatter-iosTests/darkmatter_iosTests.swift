@@ -1693,6 +1693,7 @@ struct LocalizationCatalogTests {
         let pluralKeys = [
             "%lld members",
             "%lld person group",
+            "%lld more messages",
             "%llu unread messages",
             "📎 %lld attachments",
             "Invited %lld members",

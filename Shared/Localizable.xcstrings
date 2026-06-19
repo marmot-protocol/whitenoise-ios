@@ -1715,6 +1715,18 @@
               "formatSpecifier" : "lld",
               "variations" : {
                 "plural" : {
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "ещё %lld сообщения"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "ещё %lld сообщений"
+                    }
+                  },
                   "one" : {
                     "stringUnit" : {
                       "state" : "translated",
