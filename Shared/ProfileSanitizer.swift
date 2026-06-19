@@ -316,6 +316,32 @@ nonisolated enum ProfileSanitizer {
             return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
         }
 
+        // Multicast (`ff00::/8`), mirroring the IPv4 multicast/reserved block.
+        // Not TCP-connectable, but kept symmetric with the IPv4 side so the
+        // allowlist never classifies a multicast group as a public host.
+        if bytes[0] == 0xff {
+            return true
+        }
+
+        // 6to4 (`2002::/16`, RFC 3056) carries the embedded IPv4 in bytes[2..6].
+        // `2002:7f00:1::` routes toward 127.0.0.1 on a host with a 6to4
+        // pseudo-interface, so re-check the embedded v4 against the private set.
+        if bytes[0] == 0x20 && bytes[1] == 0x02 {
+            return isPrivateOrLoopbackIPv4(Array(bytes[2..<6]))
+        }
+
+        // Teredo (`2001:0000::/32`, RFC 4380) embeds the Teredo server IPv4 in
+        // bytes[4..8] (plaintext) and the client IPv4 in bytes[12..16] obfuscated
+        // by a bitwise-NOT. Route both through the IPv4 check so a Teredo address
+        // pointing at an internal v4 is rejected like the other embeddings.
+        if bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x00 && bytes[3] == 0x00 {
+            if isPrivateOrLoopbackIPv4(Array(bytes[4..<8])) {
+                return true
+            }
+            let teredoClient = bytes[12..<16].map { $0 ^ 0xff }
+            return isPrivateOrLoopbackIPv4(teredoClient)
+        }
+
         return (bytes[0] & 0xfe) == 0xfc || (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80)
     }
 
