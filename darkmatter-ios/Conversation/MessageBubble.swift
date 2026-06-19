@@ -685,7 +685,6 @@ private struct MessageMediaGrid: View {
             }
         }
         .frame(width: maxWidth, height: gridHeight, alignment: .topLeading)
-        .clipShape(.rect(cornerRadius: cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(Color.primary.opacity(isFromMe ? 0.16 : 0.08), lineWidth: 1)
@@ -695,6 +694,10 @@ private struct MessageMediaGrid: View {
     @ViewBuilder
     private func tile(at index: Int) -> some View {
         if index < visibleItems.count {
+            let roundedCorners = MessageMediaGridPresentation.roundedCorners(
+                totalCount: items.count,
+                tileIndex: index
+            )
             MessageMediaTile(
                 item: visibleItems[index],
                 isFromMe: isFromMe,
@@ -703,10 +706,55 @@ private struct MessageMediaGrid: View {
                 onLoadMedia: onLoadMedia,
                 onOpenImage: onOpenImage
             )
+            .messageMediaTileCornerClip(roundedCorners, radius: cornerRadius)
         } else {
             Color.clear
                 .frame(width: tileSize, height: tileSize)
         }
+    }
+}
+
+private struct MessageMediaTileCornerClip: ViewModifier {
+    let corners: MessageMediaTileCornerRadii
+    let radius: CGFloat
+
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if corners.hasRoundedCorners {
+            content.clipShape(MessageMediaRoundedTileShape(
+                corners: corners,
+                radius: radius,
+                layoutDirection: layoutDirection
+            ))
+        } else {
+            content
+        }
+    }
+}
+
+private extension View {
+    func messageMediaTileCornerClip(_ corners: MessageMediaTileCornerRadii, radius: CGFloat) -> some View {
+        modifier(MessageMediaTileCornerClip(corners: corners, radius: radius))
+    }
+}
+
+private struct MessageMediaRoundedTileShape: Shape {
+    let corners: MessageMediaTileCornerRadii
+    let radius: CGFloat
+    let layoutDirection: LayoutDirection
+
+    func path(in rect: CGRect) -> Path {
+        let roundedCorners = corners.uiRectCorners(layoutDirection: layoutDirection)
+        guard !roundedCorners.isEmpty else { return Path(rect) }
+
+        let boundedRadius = min(max(0, radius), rect.width / 2, rect.height / 2)
+        return Path(UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: roundedCorners,
+            cornerRadii: CGSize(width: boundedRadius, height: boundedRadius)
+        ).cgPath)
     }
 }
 
@@ -812,6 +860,36 @@ private struct MessageSingleVideoBubble: View {
     }
 }
 
+nonisolated struct MessageMediaTileCornerRadii: Equatable, Sendable {
+    let topLeading: Bool
+    let topTrailing: Bool
+    let bottomLeading: Bool
+    let bottomTrailing: Bool
+
+    static let none = MessageMediaTileCornerRadii(
+        topLeading: false,
+        topTrailing: false,
+        bottomLeading: false,
+        bottomTrailing: false
+    )
+
+    var hasRoundedCorners: Bool {
+        topLeading || topTrailing || bottomLeading || bottomTrailing
+    }
+
+    func uiRectCorners(layoutDirection: LayoutDirection) -> UIRectCorner {
+        var roundedCorners: UIRectCorner = []
+        let isRightToLeft = layoutDirection == .rightToLeft
+
+        if topLeading { roundedCorners.insert(isRightToLeft ? .topRight : .topLeft) }
+        if topTrailing { roundedCorners.insert(isRightToLeft ? .topLeft : .topRight) }
+        if bottomLeading { roundedCorners.insert(isRightToLeft ? .bottomRight : .bottomLeft) }
+        if bottomTrailing { roundedCorners.insert(isRightToLeft ? .bottomLeft : .bottomRight) }
+
+        return roundedCorners
+    }
+}
+
 enum MessageMediaGridPresentation {
     static let maxVisibleItems = 4
 
@@ -830,6 +908,23 @@ enum MessageMediaGridPresentation {
     static func rowCount(totalCount: Int) -> Int {
         if totalCount <= 2 { return 1 }
         return 2
+    }
+
+    static func roundedCorners(totalCount: Int, tileIndex: Int) -> MessageMediaTileCornerRadii {
+        let visibleCount = visibleCount(totalCount: totalCount)
+        guard tileIndex >= 0, tileIndex < visibleCount else { return .none }
+
+        let columns = columnCount(totalCount: totalCount)
+        let rows = rowCount(totalCount: totalCount)
+        let row = tileIndex / columns
+        let column = tileIndex % columns
+
+        return MessageMediaTileCornerRadii(
+            topLeading: row == 0 && column == 0,
+            topTrailing: row == 0 && column == columns - 1,
+            bottomLeading: row == rows - 1 && column == 0,
+            bottomTrailing: row == rows - 1 && column == columns - 1
+        )
     }
 }
 

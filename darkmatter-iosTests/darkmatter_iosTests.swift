@@ -6755,6 +6755,83 @@ struct MessageMediaGridPresentationTests {
         #expect(MessageMediaGridPresentation.columnCount(totalCount: 10) == 2)
         #expect(MessageMediaGridPresentation.rowCount(totalCount: 10) == 2)
     }
+
+    @Test func gridRoundsOnlyOuterTileCorners() {
+        let single = MessageMediaGridPresentation.roundedCorners(totalCount: 1, tileIndex: 0)
+        #expect(single.topLeading)
+        #expect(single.topTrailing)
+        #expect(single.bottomLeading)
+        #expect(single.bottomTrailing)
+
+        let leadingTile = MessageMediaGridPresentation.roundedCorners(totalCount: 2, tileIndex: 0)
+        #expect(leadingTile.topLeading)
+        #expect(!leadingTile.topTrailing)
+        #expect(leadingTile.bottomLeading)
+        #expect(!leadingTile.bottomTrailing)
+
+        let trailingTile = MessageMediaGridPresentation.roundedCorners(totalCount: 2, tileIndex: 1)
+        #expect(!trailingTile.topLeading)
+        #expect(trailingTile.topTrailing)
+        #expect(!trailingTile.bottomLeading)
+        #expect(trailingTile.bottomTrailing)
+
+        let bottomRight = MessageMediaGridPresentation.roundedCorners(totalCount: 4, tileIndex: 3)
+        #expect(!bottomRight.topLeading)
+        #expect(!bottomRight.topTrailing)
+        #expect(!bottomRight.bottomLeading)
+        #expect(bottomRight.bottomTrailing)
+
+        let sparseBottomLeft = MessageMediaGridPresentation.roundedCorners(totalCount: 3, tileIndex: 2)
+        #expect(!sparseBottomLeft.topLeading)
+        #expect(!sparseBottomLeft.topTrailing)
+        #expect(sparseBottomLeft.bottomLeading)
+        #expect(!sparseBottomLeft.bottomTrailing)
+
+        let sparseEmptySlot = MessageMediaGridPresentation.roundedCorners(totalCount: 3, tileIndex: 3)
+        #expect(!sparseEmptySlot.hasRoundedCorners)
+
+        let negativeIndex = MessageMediaGridPresentation.roundedCorners(totalCount: 3, tileIndex: -1)
+        #expect(!negativeIndex.hasRoundedCorners)
+    }
+
+    @Test func semanticGridCornersMirrorForRightToLeftLayout() {
+        let leadingCorners = MessageMediaTileCornerRadii(
+            topLeading: true,
+            topTrailing: false,
+            bottomLeading: true,
+            bottomTrailing: false
+        )
+        let trailingCorners = MessageMediaTileCornerRadii(
+            topLeading: false,
+            topTrailing: true,
+            bottomLeading: false,
+            bottomTrailing: true
+        )
+
+        let leadingLeftToRight = leadingCorners.uiRectCorners(layoutDirection: .leftToRight)
+        #expect(leadingLeftToRight.contains(.topLeft))
+        #expect(leadingLeftToRight.contains(.bottomLeft))
+        #expect(!leadingLeftToRight.contains(.topRight))
+        #expect(!leadingLeftToRight.contains(.bottomRight))
+
+        let leadingRightToLeft = leadingCorners.uiRectCorners(layoutDirection: .rightToLeft)
+        #expect(!leadingRightToLeft.contains(.topLeft))
+        #expect(!leadingRightToLeft.contains(.bottomLeft))
+        #expect(leadingRightToLeft.contains(.topRight))
+        #expect(leadingRightToLeft.contains(.bottomRight))
+
+        let trailingLeftToRight = trailingCorners.uiRectCorners(layoutDirection: .leftToRight)
+        #expect(!trailingLeftToRight.contains(.topLeft))
+        #expect(!trailingLeftToRight.contains(.bottomLeft))
+        #expect(trailingLeftToRight.contains(.topRight))
+        #expect(trailingLeftToRight.contains(.bottomRight))
+
+        let trailingRightToLeft = trailingCorners.uiRectCorners(layoutDirection: .rightToLeft)
+        #expect(trailingRightToLeft.contains(.topLeft))
+        #expect(trailingRightToLeft.contains(.bottomLeft))
+        #expect(!trailingRightToLeft.contains(.topRight))
+        #expect(!trailingRightToLeft.contains(.bottomRight))
+    }
 }
 
 struct MessageVideoBubblePresentationTests {
