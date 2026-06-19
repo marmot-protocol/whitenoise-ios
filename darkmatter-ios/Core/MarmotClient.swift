@@ -175,6 +175,17 @@ final class MarmotClient {
         }.value
     }
 
+    /// Materializes a live chat-list subscription snapshot off the main actor.
+    /// `ChatListSubscription.snapshot()` is a synchronous UniFFI call that can
+    /// touch local Marmot storage while building the initial projected rows.
+    func chatListSubscriptionSnapshot(
+        _ subscription: ChatListSubscription
+    ) async -> [ChatListRowFfi] {
+        await Task.detached(priority: .utility) { [subscription] in
+            subscription.snapshot()
+        }.value
+    }
+
     /// Materializes a live timeline subscription snapshot off the main actor.
     /// `TimelineMessagesSubscription.snapshot()` is a synchronous UniFFI call,
     /// so callers on MainActor must await this wrapper before applying the page.

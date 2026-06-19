@@ -137,7 +137,9 @@ final class ChatsListViewModel {
                     includeArchived: true
                 )
                 guard !Task.isCancelled else { return }
-                self?.applyChatListSnapshot(chatListSub.snapshot())
+                let snapshot = await appState.marmot.chatListSubscriptionSnapshot(chatListSub)
+                guard !Task.isCancelled else { return }
+                self?.applyChatListSnapshot(snapshot)
 
                 for await update in SubscriptionDriver.chatListUpdates(chatListSub) {
                     self?.applyChatListUpdate(update)
