@@ -106,10 +106,20 @@ enum ConversationTranscriptExport {
                 )
             )
             try Task.checkCancellation()
+            guard page.hasMoreBefore, let oldest = page.messages.last else {
+                collected.append(contentsOf: page.messages)
+                break
+            }
+
+            let nextBefore = oldest.timelineAt
+            let nextBeforeMessageId = oldest.messageIdHex
+            if before == nextBefore, beforeMessageId == nextBeforeMessageId {
+                break
+            }
+
             collected.append(contentsOf: page.messages)
-            guard page.hasMoreBefore, let oldest = page.messages.last else { break }
-            before = oldest.timelineAt
-            beforeMessageId = oldest.messageIdHex
+            before = nextBefore
+            beforeMessageId = nextBeforeMessageId
         }
 
         return sortChronologically(collected)
