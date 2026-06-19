@@ -13,6 +13,7 @@ struct ProfileQRView: View {
     @State private var scanError: String?
     @State private var copied = false
     @State private var scanned: AppState.ProfileLink?
+    @State private var qrImage: UIImage?
 
     private var npub: String { appState.npub(forAccountIdHex: accountIdHex) }
     private var deepLink: String { DeepLink.profile(npub: npub).url.absoluteString }
@@ -102,12 +103,15 @@ struct ProfileQRView: View {
                 ProfileView(npub: link.npub)
                     .appAppearance()
             }
+            .task(id: deepLink) {
+                qrImage = QRCode.image(from: deepLink)
+            }
         }
     }
 
     private var qrCard: some View {
         Group {
-            if let image = QRCode.image(from: deepLink) {
+            if let image = qrImage {
                 Image(uiImage: image)
                     .interpolation(.none)
                     .resizable()
