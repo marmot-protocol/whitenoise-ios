@@ -1693,6 +1693,7 @@ struct LocalizationCatalogTests {
         let pluralKeys = [
             "%lld members",
             "%lld person group",
+            "%lld more messages",
             "%llu unread messages",
             "📎 %lld attachments",
             "Invited %lld members",
@@ -2740,6 +2741,131 @@ struct NotificationServiceProjectionTests {
                 LocalNotificationProjection.makePresentation(for: older)!
             ]
         ))
+    }
+
+    @Test func newDataCollectionShowsAllAdditionalPresentationsAtTheCap() {
+        // primary + exactly maxAdditionalPresentations additional => no overflow,
+        // every record shown individually, no summary appended.
+        let total = NotificationServiceProjection.maxAdditionalPresentations + 1
+        let updates = (0..<total).map { index in
+            notificationUpdate(
+                notificationKey: "notif-\(index)",
+                previewText: "message-\(index)",
+                // newest first after sort: higher timestamp == newer
+                timestampMs: Int64(10_000 - index)
+            )
+        }
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: updates.shuffled(),
+            error: nil
+        )
+
+        let decision = NotificationServiceProjection.decision(for: collection)
+
+        let expectedPresentations = updates.map {
+            LocalNotificationProjection.makePresentation(for: $0)!
+        }
+        #expect(decision == .decorate(
+            expectedPresentations.first!,
+            additionalPresentations: Array(expectedPresentations.dropFirst())
+        ))
+    }
+
+    @Test func newDataCollectionCapsAdditionalPresentationsAndCoalescesOverflow() {
+        let cap = NotificationServiceProjection.maxAdditionalPresentations
+        let overflow = 5
+        // primary + cap shown individually + overflow folded into one summary.
+        let total = 1 + cap + overflow
+        let updates = (0..<total).map { index in
+            notificationUpdate(
+                notificationKey: "notif-\(index)",
+                previewText: "message-\(index)",
+                timestampMs: Int64(100_000 - index)
+            )
+        }
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: updates.shuffled(),
+            error: nil
+        )
+
+        let decision = NotificationServiceProjection.decision(for: collection)
+
+        guard case let .decorate(primary, additional) = decision else {
+            Issue.record("expected decorate decision, got \(decision)")
+            return
+        }
+
+        // Exactly cap individually-shown additional presentations + 1 summary.
+        #expect(additional.count == cap + 1)
+
+        let presentations = updates.map {
+            LocalNotificationProjection.makePresentation(for: $0)!
+        }
+        #expect(primary == presentations.first!)
+        // The first `cap` additional presentations are the next-newest records,
+        // shown individually.
+        #expect(Array(additional.prefix(cap)) == Array(presentations.dropFirst().prefix(cap)))
+
+        // The trailing entry is a coalesced summary, not an abandoned record.
+        let summary = additional.last!
+        #expect(summary.body == L10n.plural("%lld more messages", Int64(overflow)))
+        // Summary carries no message content/preview from the overflow records.
+        for index in (1 + cap)..<total {
+            #expect(!summary.body.contains("message-\(index)"))
+        }
+        // Distinct identifier so the summary never dedupes against a real message.
+        #expect(summary.identifier != primary.identifier)
+        for shown in additional.dropLast() {
+            #expect(summary.identifier != shown.identifier)
+        }
+        // Routes to the newest conversation so a tap lands somewhere sane.
+        #expect(summary.threadIdentifier == primary.threadIdentifier)
+        #expect(summary.route.accountRef == primary.route.accountRef)
+        #expect(summary.route.groupIdHex == primary.route.groupIdHex)
+        #expect(summary.route.messageIdHex == nil)
+    }
+
+    @Test func boundedAdditionalPresentationsCoalescesOverflowWithoutDroppingRecords() {
+        // Unit-level coverage of the bounding helper independent of FFI plumbing.
+        let primary = LocalNotificationProjection.makePresentation(
+            for: notificationUpdate(notificationKey: "primary", timestampMs: 1_000)
+        )!
+        let cap = NotificationServiceProjection.maxAdditionalPresentations
+        let additional = (0..<(cap + 3)).map { index in
+            LocalNotificationProjection.makePresentation(
+                for: notificationUpdate(notificationKey: "add-\(index)", timestampMs: Int64(900 - index))
+            )!
+        }
+
+        let bounded = NotificationServiceProjection.boundedAdditionalPresentations(
+            after: primary,
+            from: additional
+        )
+
+        // cap shown + a single summary; the 3 overflow records are represented, not lost.
+        #expect(bounded.count == cap + 1)
+        #expect(Array(bounded.prefix(cap)) == Array(additional.prefix(cap)))
+        #expect(bounded.last!.body == L10n.plural("%lld more messages", Int64(3)))
+    }
+
+    @Test func boundedAdditionalPresentationsLeavesSmallListUntouched() {
+        let primary = LocalNotificationProjection.makePresentation(
+            for: notificationUpdate(notificationKey: "primary", timestampMs: 1_000)
+        )!
+        let additional = (0..<3).map { index in
+            LocalNotificationProjection.makePresentation(
+                for: notificationUpdate(notificationKey: "add-\(index)", timestampMs: Int64(900 - index))
+            )!
+        }
+
+        let bounded = NotificationServiceProjection.boundedAdditionalPresentations(
+            after: primary,
+            from: additional
+        )
+
+        #expect(bounded == additional)
     }
 
     @Test func disabledLocalNotificationsAreNotDecoratedByNSE() {
