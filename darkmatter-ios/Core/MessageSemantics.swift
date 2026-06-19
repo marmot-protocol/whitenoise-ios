@@ -285,20 +285,64 @@ nonisolated enum MessageSemantics {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         guard let type,
-              !type.isEmpty,
-              type.contains("/"),
-              type.range(of: #"^[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+$"#, options: .regularExpression) != nil
+              isValidMediaType(type)
         else { return nil }
         return type == "image/jpg" ? "image/jpeg" : type
     }
 
+    private static func isValidMediaType(_ raw: String) -> Bool {
+        let parts = raw.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              !parts[0].isEmpty,
+              !parts[1].isEmpty
+        else { return false }
+        return parts[0].utf8.allSatisfy(isMediaTypeTokenByte)
+            && parts[1].utf8.allSatisfy(isMediaTypeTokenByte)
+    }
+
+    private static func isMediaTypeTokenByte(_ byte: UInt8) -> Bool {
+        // 0-9, a-z, and the punctuation allowed by the previous regex.
+        switch byte {
+        case 0x30...0x39, 0x61...0x7A,
+             0x21, 0x23, 0x24, 0x26,
+             0x2B, 0x2D, 0x2E,
+             0x5E, 0x5F:
+            return true
+        default:
+            return false
+        }
+    }
+
     private static func isValidMediaDim(_ raw: String) -> Bool {
-        raw.range(of: #"^[1-9][0-9]{0,5}x[1-9][0-9]{0,5}$"#, options: .regularExpression) != nil
+        let parts = raw.split(separator: "x", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return false }
+        return isValidMediaDimComponent(parts[0]) && isValidMediaDimComponent(parts[1])
+    }
+
+    private static func isValidMediaDimComponent(_ component: Substring) -> Bool {
+        let bytes = component.utf8
+        guard (1...6).contains(bytes.count),
+              let first = bytes.first,
+              (0x31...0x39).contains(first)
+        else { return false }
+        return bytes.dropFirst().allSatisfy(isAsciiDigit)
     }
 
     private static func isValidMediaThumbhash(_ raw: String) -> Bool {
-        guard (1...128).contains(raw.count) else { return false }
-        return raw.range(of: #"^[A-Za-z0-9+/_=-]+$"#, options: .regularExpression) != nil
+        let bytes = raw.utf8
+        guard (1...128).contains(bytes.count) else { return false }
+        return bytes.allSatisfy(isMediaThumbhashByte)
+    }
+
+    private static func isMediaThumbhashByte(_ byte: UInt8) -> Bool {
+        // 0-9, A-Z, a-z, and + - / = _.
+        switch byte {
+        case 0x30...0x39, 0x41...0x5A, 0x61...0x7A,
+             0x2B, 0x2D, 0x2F, 0x3D, 0x5F:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func streamStart(from tags: [MessageTagFfi]) -> StreamStart? {
@@ -320,11 +364,16 @@ nonisolated enum MessageSemantics {
     }
 
     private static func validUnsignedDecimal(_ raw: String?) -> Bool {
-        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty,
-              value.range(of: #"^[0-9]+$"#, options: .regularExpression) != nil
+        guard let value = raw?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        let bytes = value.utf8
+        guard !bytes.isEmpty,
+              bytes.allSatisfy(isAsciiDigit)
         else { return false }
         return UInt64(value) != nil
+    }
+
+    private static func isAsciiDigit(_ byte: UInt8) -> Bool {
+        (0x30...0x39).contains(byte)
     }
 }
 
@@ -336,7 +385,7 @@ nonisolated private extension String {
     }
 
     func isHexByteString(byteCount: Int) -> Bool {
-        count == byteCount * 2
-            && range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil
+        let bytes = utf8
+        return bytes.count == byteCount * 2 && Hex.isHex(self)
     }
 }
