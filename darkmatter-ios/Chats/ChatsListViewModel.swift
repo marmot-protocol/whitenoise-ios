@@ -118,12 +118,25 @@ final class ChatsListViewModel {
 
         guard let accountRef, let appState else { return }
         isLoading = true
+        defer {
+            if currentAccount == accountRef {
+                isLoading = false
+            }
+        }
         do {
-            applyChatListSnapshot(try appState.marmot.chatList(accountRef: accountRef, includeArchived: true))
+            let snapshot = try await appState.currentMarmotClient().chatList(
+                accountRef: accountRef,
+                includeArchived: true
+            )
+            guard currentAccount == accountRef else { return }
+            applyChatListSnapshot(snapshot)
+        } catch is CancellationError {
+            return
         } catch {
+            guard currentAccount == accountRef else { return }
             loadError = error.localizedDescription
         }
-        isLoading = false
+        guard currentAccount == accountRef else { return }
         startLiveUpdates(accountRef: accountRef)
     }
 
@@ -132,12 +145,13 @@ final class ChatsListViewModel {
         chatListTask = Task { [weak self, weak appState] in
             do {
                 guard let appState else { return }
-                let chatListSub = try await appState.marmot.subscribeChatList(
+                let client = try appState.currentMarmotClient()
+                let chatListSub = try await client.marmot.subscribeChatList(
                     accountRef: accountRef,
                     includeArchived: true
                 )
                 guard !Task.isCancelled else { return }
-                let snapshot = await appState.marmot.chatListSubscriptionSnapshot(chatListSub)
+                let snapshot = await client.chatListSubscriptionSnapshot(chatListSub)
                 guard !Task.isCancelled else { return }
                 self?.applyChatListSnapshot(snapshot)
 
@@ -158,7 +172,14 @@ final class ChatsListViewModel {
     func refreshRows() async {
         guard let accountRef = currentAccount, let appState else { return }
         do {
-            applyChatListSnapshot(try appState.marmot.chatList(accountRef: accountRef, includeArchived: true))
+            let snapshot = try await appState.currentMarmotClient().chatList(
+                accountRef: accountRef,
+                includeArchived: true
+            )
+            guard currentAccount == accountRef else { return }
+            applyChatListSnapshot(snapshot)
+        } catch is CancellationError {
+            return
         } catch {
             // Non-fatal: subscription updates remain authoritative.
         }

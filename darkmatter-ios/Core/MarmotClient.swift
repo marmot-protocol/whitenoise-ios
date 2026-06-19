@@ -54,6 +54,27 @@ final class MarmotClient {
         }.value
     }
 
+    /// Reads the durable chat-list projection off the main actor. Chat-list
+    /// screens call this on account bind and pull-to-refresh, and the generated
+    /// `Marmot.chatList` binding is a synchronous storage read.
+    func chatList(
+        accountRef: String,
+        includeArchived: Bool
+    ) async throws -> [ChatListRowFfi] {
+        try await Task.detached(priority: .utility) { [marmot, accountRef, includeArchived] in
+            try marmot.chatList(accountRef: accountRef, includeArchived: includeArchived)
+        }.value
+    }
+
+    /// Reads published account relay-list projections off the main actor.
+    /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
+    /// MainActor-bound settings screens should await this wrapper.
+    func accountRelayLists(accountRef: String) async throws -> AccountRelayListsFfi {
+        try await Task.detached(priority: .utility) { [marmot, accountRef] in
+            try marmot.accountRelayLists(accountRef: accountRef)
+        }.value
+    }
+
     /// Normalizes a staged recipient reference off the main actor.
     /// `Marmot.normalizeMemberRef` is a synchronous FFI call (bech32/TLV decode
     /// plus possible relay-hint normalization), so running it inline on the

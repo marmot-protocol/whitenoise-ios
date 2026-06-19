@@ -182,7 +182,11 @@ struct RelaysView: View {
             lists = nil
             return
         }
-        lists = try? appState.marmot.accountRelayLists(accountRef: ref)
+        do {
+            lists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
+        } catch {
+            lists = nil
+        }
     }
 
     @MainActor

@@ -134,7 +134,10 @@ struct DiagnosticsView: View {
     }
 
     private func diagnosticGroupId(accountRef: String) async throws -> String {
-        let rows = try appState.marmot.chatList(accountRef: accountRef, includeArchived: true)
+        let rows = try await appState.currentMarmotClient().chatList(
+            accountRef: accountRef,
+            includeArchived: true
+        )
         if let row = DiagnosticSelfSend.reusableGroup(
             accountRef: accountRef,
             rows: rows
