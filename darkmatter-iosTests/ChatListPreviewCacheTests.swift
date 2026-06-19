@@ -63,7 +63,7 @@ struct ChatListPreviewCacheTests {
         let viewModelSource = try sourceString("darkmatter-ios/Chats/ChatsListViewModel.swift")
 
         #expect(clientSource.matches(#"func chatListSubscriptionSnapshot\(\s*_ subscription: ChatListSubscription\s*\) async -> \[ChatListRowFfi\] \{[\s\S]*Task\.detached\(priority: \.utility\) \{ \[subscription\] in[\s\S]*subscription\.snapshot\(\)"#))
-        #expect(viewModelSource.matches(#"let snapshot = await appState\.marmot\.chatListSubscriptionSnapshot\(chatListSub\)[\s\S]*guard !Task\.isCancelled else \{ return \}[\s\S]*self\?\.applyChatListSnapshot\(snapshot\)"#))
+        #expect(viewModelSource.matches(#"let snapshot = await client\.chatListSubscriptionSnapshot\(chatListSub\)[\s\S]*guard !Task\.isCancelled else \{ return \}[\s\S]*self\?\.applyChatListSnapshot\(snapshot\)"#))
         #expect(!viewModelSource.matches(#"applyChatListSnapshot\(chatListSub\.snapshot\(\)\)"#))
     }
 

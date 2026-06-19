@@ -289,10 +289,11 @@ struct KeyPackagesView: View {
         defer { isLoading = false }
 
         do {
-            lists = try appState.marmot.accountRelayLists(accountRef: ref)
+            let loadedLists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
+            lists = loadedLists
             packages = try await appState.marmot.accountKeyPackages(
                 accountRef: ref,
-                bootstrapRelays: bootstrapRelays
+                bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists)
             )
         } catch {
             loadError = error.localizedDescription
