@@ -310,6 +310,26 @@ nonisolated enum ProfileSanitizer {
             return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
         }
 
+        // SIIT / IPv4-translatable (`::ffff:0:a.b.c.d`, RFC 6052) embeds the
+        // IPv4 address in the low 32 bits behind the `::ffff:0:0/96` prefix.
+        let isIPv4Translatable = bytes[0..<8].allSatisfy { $0 == 0 } &&
+            bytes[8] == 0xff &&
+            bytes[9] == 0xff &&
+            bytes[10] == 0 &&
+            bytes[11] == 0
+        if isIPv4Translatable {
+            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+        }
+
+        // NAT64 well-known prefix (`64:ff9b::/96`, RFC 6052) also carries the
+        // translated IPv4 address in the low 32 bits.
+        let isNAT64WellKnown = bytes[0] == 0x00 && bytes[1] == 0x64 &&
+            bytes[2] == 0xff && bytes[3] == 0x9b &&
+            bytes[4..<12].allSatisfy { $0 == 0 }
+        if isNAT64WellKnown {
+            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+        }
+
         // Deprecated IPv4-compatible IPv6 (`::a.b.c.d`) embeds the IPv4
         // address in the low 32 bits without the `::ffff:` marker.
         if bytes[0..<12].allSatisfy({ $0 == 0 }) {
