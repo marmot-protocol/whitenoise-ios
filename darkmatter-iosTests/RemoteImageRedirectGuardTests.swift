@@ -51,10 +51,14 @@ struct RemoteImageRedirectGuardTests {
         // 6to4 (2002::/16) embedding loopback / link-local-metadata IPv4.
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:7f00:1::]/x")))
         #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:a9fe:a9fe::]/x")))
-        // Teredo (2001:0000::/32) embedding loopback in the obfuscated client
-        // IPv4 (bytes[12..16] = ~127.0.0.1) and the metadata IP as the server.
-        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:0:0:0:0:80ff:fffe]/x")))
-        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:a9fe:a9fe::]/x")))
+        // Teredo (2001:0000::/32) — branch-isolated rejection vectors so a
+        // regression in either embedded-IPv4 check fails on its own.
+        // Public server (8.8.8.8) + private client (~127.0.0.1): only the
+        // obfuscated-client decode (bytes[12..16] ^ 0xff) can reject this.
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:808:808:0:0:80ff:fffe]/x")))
+        // Private server (169.254.169.254) + public client (8.8.8.8): only the
+        // plaintext server decode (bytes[4..8]) can reject this.
+        #expect(!RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:a9fe:a9fe:0:0:f7f7:f7f7]/x")))
     }
 
     /// Public IPv6 transition addresses must stay allowed: 6to4 / Teredo
@@ -63,8 +67,9 @@ struct RemoteImageRedirectGuardTests {
     @Test func allowsRedirectToPublicIPv6TransitionAddresses() {
         // 6to4 wrapping public 8.8.8.8.
         #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2002:808:808::]/x")))
-        // Global-unicast 2001:db8::/32 documentation prefix is not Teredo.
-        #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:db8::1]/x")))
+        // Global-unicast 2001 prefix that is not Teredo (bytes[2..4] != 0000):
+        // a genuinely routable public host (Google public DNS) must stay allowed.
+        #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:4860:4860::8888]/x")))
         // Teredo with a public server and public client IPv4.
         #expect(RemoteImageRedirectGuard.isRedirectAllowed(to: URL(string: "https://[2001:0:808:808:0:0:f7f7:f7f7]/x")))
     }
