@@ -144,7 +144,7 @@ enum MarkdownMessageBuilder {
         var out = AttributedString()
         var context = InlineContext(baseFont: baseFont)
         context.mentionDisplayName = mentionDisplayName
-        walkInlines(inlines, into: &out, context: context, budget: &budget, depth: 0)
+        _ = walkInlines(inlines, into: &out, context: context, budget: &budget, depth: 0)
         return out
     }
 
@@ -304,7 +304,7 @@ enum MarkdownMessageBuilder {
             if index > 0, !line.characters.isEmpty {
                 line += AttributedString(String(budget.take("  ")))
             }
-            walkInlines(cell.inlines, into: &line, context: context, budget: &budget, depth: 0)
+            _ = walkInlines(cell.inlines, into: &line, context: context, budget: &budget, depth: 0)
         }
         return hasVisibleContent(line) ? line : nil
     }
@@ -384,79 +384,83 @@ enum MarkdownMessageBuilder {
         }
     }
 
+    @discardableResult
     private static func walkInlines(
         _ inlines: [MarkdownInlineFfi],
         into out: inout AttributedString,
         context: InlineContext,
         budget: inout Budget,
         depth: Int
-    ) {
+    ) -> Bool {
         guard depth < maxRenderDepth else {
             budget.truncated = true
-            return
+            return false
         }
+        var emitted = false
         for inline in inlines {
-            guard budget.consumeNode() else { return }
+            guard budget.consumeNode() else { return emitted }
             switch inline {
             case .text(let content):
-                append(content, to: &out, context: context, budget: &budget)
+                emitted = append(content, to: &out, context: context, budget: &budget) || emitted
 
             case .softBreak:
-                appendBreak(" ", to: &out, budget: &budget)
+                emitted = appendBreak(" ", to: &out, budget: &budget) || emitted
 
             case .hardBreak:
-                appendBreak("\n", to: &out, budget: &budget)
+                emitted = appendBreak("\n", to: &out, budget: &budget) || emitted
 
             case .code(let content):
                 var code = context
                 code.monospaced = true
-                append(content, to: &out, context: code, budget: &budget, codeBackground: true)
+                emitted = append(content, to: &out, context: code, budget: &budget, codeBackground: true) || emitted
 
             case .math(let content):
                 var math = context
                 math.monospaced = true
-                append(content, to: &out, context: math, budget: &budget, codeBackground: true)
+                emitted = append(content, to: &out, context: math, budget: &budget, codeBackground: true) || emitted
 
             case .emph(let children):
                 var nested = context
                 nested.italic = true
-                walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1)
+                emitted = walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1) || emitted
 
             case .strong(let children):
                 var nested = context
                 nested.bold = true
-                walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1)
+                emitted = walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1) || emitted
 
             case .strikethrough(let children):
                 var nested = context
                 nested.strikethrough = true
-                walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1)
+                emitted = walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1) || emitted
 
             case .link(let dest, _, let children):
                 var nested = context
                 if context.link == nil, let url = allowedLinkURL(dest) {
                     nested.link = url
                 }
-                walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1)
+                emitted = walkInlines(children, into: &out, context: nested, budget: &budget, depth: depth + 1) || emitted
 
             case .image(let dest, _, let alt):
-                appendImage(dest: dest, alt: alt, to: &out, context: context, budget: &budget, depth: depth)
+                emitted = appendImage(dest: dest, alt: alt, to: &out, context: context, budget: &budget, depth: depth) || emitted
 
             case .autolink(let url, let kind):
-                appendAutolink(url, kind: kind, to: &out, context: context, budget: &budget)
+                emitted = appendAutolink(url, kind: kind, to: &out, context: context, budget: &budget) || emitted
 
             case .nostrMention(let entity):
-                appendNostrEntity(entity, prefix: "@", to: &out, context: context, budget: &budget)
+                emitted = appendNostrEntity(entity, prefix: "@", to: &out, context: context, budget: &budget) || emitted
 
             case .nostrUri(let entity):
-                appendNostrEntity(entity, prefix: "", to: &out, context: context, budget: &budget)
+                emitted = appendNostrEntity(entity, prefix: "", to: &out, context: context, budget: &budget) || emitted
             }
         }
+        return emitted
     }
 
     /// Images are never fetched — arbitrary-host loads leak the reader's IP in
     /// an E2EE chat. The alt text renders as a link to the destination; inside
     /// an outer link the outer destination wins.
+    @discardableResult
     private static func appendImage(
         dest: String,
         alt: [MarkdownInlineFfi],
@@ -464,25 +468,26 @@ enum MarkdownMessageBuilder {
         context: InlineContext,
         budget: inout Budget,
         depth: Int
-    ) {
+    ) -> Bool {
         var nested = context
         if context.link == nil, let url = allowedLinkURL(dest) {
             nested.link = url
         }
-        let lengthBefore = out.characters.count
-        walkInlines(alt, into: &out, context: nested, budget: &budget, depth: depth + 1)
-        if out.characters.count == lengthBefore {
-            append(L10n.string("Image"), to: &out, context: nested, budget: &budget)
+        let emittedAlt = walkInlines(alt, into: &out, context: nested, budget: &budget, depth: depth + 1)
+        if emittedAlt {
+            return true
         }
+        return append(L10n.string("Image"), to: &out, context: nested, budget: &budget)
     }
 
+    @discardableResult
     private static func appendAutolink(
         _ url: String,
         kind: MarkdownAutolinkKindFfi,
         to out: inout AttributedString,
         context: InlineContext,
         budget: inout Budget
-    ) {
+    ) -> Bool {
         var nested = context
         if context.link == nil {
             let dest: String
@@ -494,20 +499,21 @@ enum MarkdownMessageBuilder {
             }
             nested.link = allowedLinkURL(dest)
         }
-        append(url, to: &out, context: nested, budget: &budget)
+        return append(url, to: &out, context: nested, budget: &budget)
     }
 
     /// npub/nprofile entities deep-link to the profile screen via a synthetic
     /// `nostr:` URL; other entity kinds render styled but inert. When the
     /// profile is known, the mention reads `@Display Name` (bold, body font)
     /// instead of the truncated bech32.
+    @discardableResult
     private static func appendNostrEntity(
         _ entity: MarkdownNostrEntityFfi,
         prefix: String,
         to out: inout AttributedString,
         context: InlineContext,
         budget: inout Budget
-    ) {
+    ) -> Bool {
         var nested = context
         if context.link == nil {
             switch entity.hrp {
@@ -519,22 +525,22 @@ enum MarkdownMessageBuilder {
         }
         if let name = context.mentionDisplayName?(entity) {
             nested.bold = true
-            append("@" + name, to: &out, context: nested, budget: &budget)
-            return
+            return append("@" + name, to: &out, context: nested, budget: &budget)
         }
         nested.monospaced = true
-        append(prefix + truncatedBech32(entity.bech32), to: &out, context: nested, budget: &budget)
+        return append(prefix + truncatedBech32(entity.bech32), to: &out, context: nested, budget: &budget)
     }
 
+    @discardableResult
     private static func append(
         _ raw: String,
         to out: inout AttributedString,
         context: InlineContext,
         budget: inout Budget,
         codeBackground: Bool = false
-    ) {
+    ) -> Bool {
         let piece = String(budget.take(ProfileSanitizer.textRun(raw)))
-        guard !piece.isEmpty else { return }
+        guard !piece.isEmpty else { return false }
         var attributes = AttributeContainer()
         attributes.font = context.font
         if context.strikethrough {
@@ -548,23 +554,26 @@ enum MarkdownMessageBuilder {
             attributes.backgroundColor = Color.primary.opacity(0.08)
         }
         out += AttributedString(piece, attributes: attributes)
+        return true
     }
 
     /// Breaks are structural, not attacker text: soft → space, hard → newline,
     /// and runs never exceed one blank line (mirrors `clampBlankLineRuns`).
+    @discardableResult
     private static func appendBreak(
         _ piece: String,
         to out: inout AttributedString,
         budget: inout Budget
-    ) {
-        guard !out.characters.isEmpty else { return }
+    ) -> Bool {
+        guard !out.characters.isEmpty else { return false }
         if piece == "\n" {
             let trailing = out.characters.suffix(2)
-            if trailing.count == 2, trailing.allSatisfy({ $0 == "\n" }) { return }
+            if trailing.count == 2, trailing.allSatisfy({ $0 == "\n" }) { return false }
         } else if out.characters.last == " " || out.characters.last == "\n" {
-            return
+            return false
         }
-        guard !budget.take(piece).isEmpty else { return }
+        guard !budget.take(piece).isEmpty else { return false }
         out += AttributedString(piece)
+        return true
     }
 }

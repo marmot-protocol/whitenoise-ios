@@ -272,6 +272,16 @@ struct MarkdownMessageBuilderTests {
         #expect(String(attributed.characters) == L10n.string("Image"))
     }
 
+    @Test func imageWithSanitizedEmptyAltUsesPlaceholderLabel() throws {
+        let attributed = try firstParagraph(doc([para([
+            .image(dest: "https://example.com/pic.png", title: nil, alt: [
+                .emph(children: [.text(content: "\u{202E}\u{200B}")])
+            ])
+        ])]))
+
+        #expect(String(attributed.characters) == L10n.string("Image"))
+    }
+
     @Test func imageWithBlockedSchemeRendersPlainAlt() throws {
         let attributed = try firstParagraph(doc([para([
             .image(dest: "file:///etc/passwd", title: nil, alt: [.text(content: "alt")])
