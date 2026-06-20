@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 extension View {
     /// Uses iOS 26 Liquid Glass when available, with a material fallback for
@@ -149,5 +150,74 @@ struct InputCirclePressButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 1.08 : 1.0)
             .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
+    }
+}
+
+struct FullScreenConfirmationDialog: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    let destructiveTitle: String
+    var cancelTitle: String = "Cancel"
+    var onConfirm: () -> Void
+    var onCancel: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 32)
+
+                VStack(spacing: 18) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 44, weight: .semibold))
+                        .foregroundStyle(.red)
+                        .frame(width: 76, height: 76)
+                        .background(Color.red.opacity(0.12), in: Circle())
+
+                    VStack(spacing: 10) {
+                        Text(title)
+                            .font(.title2.weight(.semibold))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.primary)
+
+                        Text(message)
+                            .font(.body)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.horizontal, 28)
+
+                Spacer(minLength: 32)
+
+                VStack(spacing: 12) {
+                    Button(role: .destructive, action: onConfirm) {
+                        Text(destructiveTitle)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(Color.red, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                    Button(role: .cancel, action: onCancel) {
+                        Text(cancelTitle)
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
     }
 }

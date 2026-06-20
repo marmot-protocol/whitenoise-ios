@@ -7579,12 +7579,13 @@ struct MessageMediaThumbnailDecoderTests {
             throw writer.error ?? VideoThumbnailFixtureError.writerFailed
         }
         input.markAsFinished()
+        let completionWriter = SendableVideoFixtureWriter(writer: writer)
         try await withCheckedThrowingContinuation { continuation in
             writer.finishWriting {
-                if writer.status == .completed {
+                if completionWriter.writer.status == AVAssetWriter.Status.completed {
                     continuation.resume()
                 } else {
-                    continuation.resume(throwing: writer.error ?? VideoThumbnailFixtureError.writerFailed)
+                    continuation.resume(throwing: completionWriter.writer.error ?? VideoThumbnailFixtureError.writerFailed)
                 }
             }
         }
@@ -7632,6 +7633,10 @@ struct MessageMediaThumbnailDecoderTests {
         case missingPixelBufferPool
         case writerFailed
     }
+}
+
+private struct SendableVideoFixtureWriter: @unchecked Sendable {
+    let writer: AVAssetWriter
 }
 
 @MainActor

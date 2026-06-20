@@ -6,7 +6,7 @@ import Testing
 struct VoiceMessageRecorderLifecycleTests {
     @Test func meteringTaskDoesNotRetainRecorderOwner() async {
         var recorder: VoiceMessageRecorder? = VoiceMessageRecorder()
-        weak var weakRecorder = recorder
+        weak let weakRecorder = recorder
 
         recorder?.startMeteringForTesting()
         recorder = nil
@@ -17,7 +17,7 @@ struct VoiceMessageRecorderLifecycleTests {
 
     @Test func pendingHoldTaskDoesNotRetainRecorderOwner() async {
         var recorder: VoiceMessageRecorder? = VoiceMessageRecorder()
-        weak var weakRecorder = recorder
+        weak let weakRecorder = recorder
 
         recorder?.beginPress { _ in }
         #expect(recorder?.isActive == true)

@@ -1,14 +1,14 @@
 import Foundation
 import MarmotKit
 
-protocol ConversationTranscriptTimelineReading {
+nonisolated protocol ConversationTranscriptTimelineReading {
     func timelineMessages(accountRef: String, query: TimelineMessageQueryFfi) throws -> TimelinePageFfi
 }
 
-extension Marmot: ConversationTranscriptTimelineReading {}
+nonisolated extension Marmot: ConversationTranscriptTimelineReading {}
 
 /// Builds a chronological JSON dump of inner Marmot/Nostr app events for debugging.
-enum ConversationTranscriptExport {
+nonisolated enum ConversationTranscriptExport {
     static let pageLimit: UInt32 = 200
     private static let protectedAttributes: [FileAttributeKey: Any] = [
         .protectionKey: FileProtectionType.complete

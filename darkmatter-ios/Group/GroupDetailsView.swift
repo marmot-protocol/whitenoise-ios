@@ -2,6 +2,23 @@ import SwiftUI
 import UIKit
 import MarmotKit
 
+private enum GroupDetailsConfirmation: Identifiable {
+    case leave
+    case remove(GroupMemberDetailsFfi)
+    case selfDemote
+
+    var id: String {
+        switch self {
+        case .leave:
+            return "leave"
+        case .remove(let member):
+            return "remove-\(member.memberIdHex)"
+        case .selfDemote:
+            return "self-demote"
+        }
+    }
+}
+
 /// Inspector for a single group. Name, members + admin management,
 /// invite/remove, archive, leave, and (in developer mode) MLS internals.
 struct GroupDetailsView: View {
@@ -11,7 +28,6 @@ struct GroupDetailsView: View {
     var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
 
     @State private var showAddMembers = false
-    @State private var showLeaveConfirm = false
     @State private var showRename = false
     @State private var showGroupImageEditor = false
     @State private var renameDraft = ""
@@ -19,8 +35,7 @@ struct GroupDetailsView: View {
     @State private var mlsState: AppGroupMlsStateFfi?
     @State private var pushDebugInfo: GroupPushDebugInfoFfi?
     @State private var pushDebugError: String?
-    @State private var pendingRemoval: GroupMemberDetailsFfi?
-    @State private var showSelfDemoteConfirm = false
+    @State private var pendingConfirmation: GroupDetailsConfirmation?
     @State private var membershipActionInFlight = false
     @State private var showRelays = false
     @State private var actionHelp: GroupActionHelp?
@@ -82,45 +97,9 @@ struct GroupDetailsView: View {
         } message: {
             Text("Everyone in the group will see the new name.")
         }
-        .confirmationDialog(
-            "Leave this group?",
-            isPresented: $showLeaveConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Leave", role: .destructive) {
-                Task { await leave() }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text(GroupManagementPresentation.leaveConfirmationMessage(state: viewModel.managementState))
-        }
-        .confirmationDialog(
-            "Remove this member?",
-            isPresented: Binding(
-                get: { pendingRemoval != nil },
-                set: { if !$0 { pendingRemoval = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Remove from Group", role: .destructive) {
-                guard let pendingRemoval else { return }
-                Task { await remove(member: pendingRemoval) }
-            }
-            Button("Cancel", role: .cancel) { pendingRemoval = nil }
-        } message: {
-            Text("They'll stop receiving new messages in this group.")
-        }
-        .confirmationDialog(
-            "Step down as admin?",
-            isPresented: $showSelfDemoteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Step Down", role: .destructive) {
-                Task { await selfDemote() }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("You'll stay in the group, but another admin will need to restore your admin status.")
+        .fullScreenCover(item: $pendingConfirmation) { confirmation in
+            fullScreenConfirmation(for: confirmation)
+                .appAppearance()
         }
         .alert(actionHelp?.title ?? "", isPresented: actionHelpBinding) {
             Button("OK", role: .cancel) { actionHelp = nil }
@@ -159,6 +138,48 @@ struct GroupDetailsView: View {
             get: { actionHelp != nil },
             set: { if !$0 { actionHelp = nil } }
         )
+    }
+
+    @ViewBuilder
+    private func fullScreenConfirmation(for confirmation: GroupDetailsConfirmation) -> some View {
+        switch confirmation {
+        case .leave:
+            FullScreenConfirmationDialog(
+                title: "Leave this group?",
+                message: GroupManagementPresentation.leaveConfirmationMessage(state: viewModel.managementState),
+                systemImage: "rectangle.portrait.and.arrow.right",
+                destructiveTitle: "Leave",
+                onConfirm: {
+                    pendingConfirmation = nil
+                    Task { await leave() }
+                },
+                onCancel: { pendingConfirmation = nil }
+            )
+        case .remove(let member):
+            FullScreenConfirmationDialog(
+                title: "Remove this member?",
+                message: "They'll stop receiving new messages in this group.",
+                systemImage: "person.crop.circle.badge.minus",
+                destructiveTitle: "Remove from Group",
+                onConfirm: {
+                    pendingConfirmation = nil
+                    Task { await remove(member: member) }
+                },
+                onCancel: { pendingConfirmation = nil }
+            )
+        case .selfDemote:
+            FullScreenConfirmationDialog(
+                title: "Step down as admin?",
+                message: "You'll stay in the group, but another admin will need to restore your admin status.",
+                systemImage: "star.slash",
+                destructiveTitle: "Step Down",
+                onConfirm: {
+                    pendingConfirmation = nil
+                    Task { await selfDemote() }
+                },
+                onCancel: { pendingConfirmation = nil }
+            )
+        }
     }
 
     private var headerSection: some View {
@@ -288,7 +309,7 @@ struct GroupDetailsView: View {
                     isDisabled: !canSelfDemoteAction || membershipActionInFlight,
                     help: .stepDown
                 ) {
-                    showSelfDemoteConfirm = true
+                    pendingConfirmation = .selfDemote
                 }
             }
 
@@ -306,7 +327,7 @@ struct GroupDetailsView: View {
                     fallbackIsLastAdmin: viewModel.isLastAdmin
                 ))
             ) {
-                showLeaveConfirm = true
+                pendingConfirmation = .leave
             }
         }
     }
@@ -538,14 +559,14 @@ struct GroupDetailsView: View {
         }
         if actions.contains(.selfDemote) {
             Button(role: .destructive) {
-                showSelfDemoteConfirm = true
+                pendingConfirmation = .selfDemote
             } label: {
                 Label("Step Down as Admin", systemImage: "star.slash")
             }
         }
         if actions.contains(.remove) {
             Button(role: .destructive) {
-                pendingRemoval = member
+                pendingConfirmation = .remove(member)
             } label: {
                 Label("Remove from Group", systemImage: "person.crop.circle.badge.minus")
             }
@@ -557,7 +578,7 @@ struct GroupDetailsView: View {
         let actions = memberActions(for: member)
         if actions.contains(.remove) {
             Button(role: .destructive) {
-                pendingRemoval = member
+                pendingConfirmation = .remove(member)
             } label: {
                 Label("Remove", systemImage: "person.crop.circle.badge.minus")
             }
@@ -611,7 +632,7 @@ struct GroupDetailsView: View {
     }
 
     private func remove(member: GroupMemberDetailsFfi) async {
-        pendingRemoval = nil
+        pendingConfirmation = nil
         guard let accountRef = appState.activeAccountRef else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }

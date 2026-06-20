@@ -61,15 +61,19 @@ struct IdentityView: View {
         }
         .navigationTitle("Identity")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(
-            "Sign out?",
-            isPresented: $showSignOutConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Sign out", role: .destructive) {
-                Task { await appState.signOut() }
-            }
-            Button("Cancel", role: .cancel) { }
+        .fullScreenCover(isPresented: $showSignOutConfirm) {
+            FullScreenConfirmationDialog(
+                title: "Sign out?",
+                message: "Signing out removes this account and its local key material from this device.",
+                systemImage: "rectangle.portrait.and.arrow.right",
+                destructiveTitle: "Sign out",
+                onConfirm: {
+                    showSignOutConfirm = false
+                    Task { await appState.signOut() }
+                },
+                onCancel: { showSignOutConfirm = false }
+            )
+            .appAppearance()
         }
     }
 }

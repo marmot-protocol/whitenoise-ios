@@ -1170,7 +1170,7 @@ private struct MessageMediaTile: View {
 /// moment playback pauses or finishes, mirroring how the audio attachment view
 /// releases its lease on pause / end-of-playback.
 @MainActor
-private final class ObservableVideoPlaybackAudioSession: ObservableObject {
+private final class ObservableVideoPlaybackAudioSession {
     private weak var player: AVPlayer?
     private var statusObservation: NSKeyValueObservation?
     private var lease: VoiceAudioSession.Lease?
@@ -1202,8 +1202,7 @@ private final class ObservableVideoPlaybackAudioSession: ObservableObject {
 
     /// Stops observing and releases the audio session lease. Called from the
     /// owning view's teardown points (`onDisappear`, item change, fullscreen
-    /// handoff); the `@StateObject` lifetime guarantees these fire before the
-    /// view — and this object — is destroyed.
+    /// handoff) before the view storage releases this object.
     func stop() {
         statusObservation?.invalidate()
         statusObservation = nil
@@ -1231,7 +1230,7 @@ private final class ObservableVideoPlaybackAudioSession: ObservableObject {
 /// Pure decision for how a video playback audio-session lease should respond to
 /// an `AVPlayer.timeControlStatus` change. Extracted so the release-on-pause /
 /// release-on-end behavior is unit-testable without a live `AVPlayer`.
-enum VideoPlaybackLeaseAction: Equatable {
+nonisolated enum VideoPlaybackLeaseAction: Equatable {
     case acquire
     case release
     case none
@@ -1265,7 +1264,7 @@ private struct MessageVideoAttachmentView: View {
 
     @State private var player: AVPlayer?
     @State private var playbackURL: URL?
-    @StateObject private var audioSession = ObservableVideoPlaybackAudioSession()
+    @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var previewThumbnail: UIImage?
     @State private var fullscreenVideo: MessageFullscreenVideo?
     @State private var isLoading = false
@@ -1512,7 +1511,7 @@ private struct MessageFullscreenVideoPlayerView: View {
     let onDismiss: () -> Void
 
     @State private var player: AVPlayer
-    @StateObject private var audioSession = ObservableVideoPlaybackAudioSession()
+    @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var dismissDragOffset: CGFloat = 0
 
     init(video: MessageFullscreenVideo, onDismiss: @escaping () -> Void) {
@@ -2158,7 +2157,7 @@ enum MessageMediaThumbnailDecoder {
         return decoded?.image
     }
 
-    static func decodeThumbnailImage(
+    nonisolated static func decodeThumbnailImage(
         data: Data,
         targetPixelSize: Int,
         imageScale: CGFloat,

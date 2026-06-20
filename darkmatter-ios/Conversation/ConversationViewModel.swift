@@ -287,7 +287,7 @@ final class ConversationViewModel {
     /// display-name/avatar/npub data refreshes. A change in either invalidates
     /// the cache so freshly resolved names still surface in autocomplete.
     /// Non-private so the invalidation contract can be unit-tested (#300).
-    struct MentionCandidateCacheKey: Equatable {
+    nonisolated struct MentionCandidateCacheKey: Equatable {
         let rosterGeneration: UInt64
         let profileGeneration: Int
     }

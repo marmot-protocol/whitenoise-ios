@@ -454,11 +454,11 @@ final class AppState {
             },
             present: { [weak self] update in
                 guard let self else { return }
-                guard await self.canPresentRuntimeNotificationUpdate() else { return }
+                guard self.canPresentRuntimeNotificationUpdate() else { return }
                 let localNotificationsEnabled = await self.localNotificationsEnabledForPresentation(
                     accountRef: update.accountRef
                 )
-                guard await self.canPresentRuntimeNotificationUpdate() else { return }
+                guard self.canPresentRuntimeNotificationUpdate() else { return }
                 let shouldPresent = await MainActor.run {
                     guard self.canPresentRuntimeNotificationUpdate() else { return false }
                     self.noteNotificationSubscriptionDelivery()
@@ -468,7 +468,7 @@ final class AppState {
                     )
                 }
                 guard shouldPresent else { return }
-                guard await self.canPresentRuntimeNotificationUpdate() else { return }
+                guard self.canPresentRuntimeNotificationUpdate() else { return }
                 await self.notifications.present(update: update)
             },
             reportError: { [weak self] error in
