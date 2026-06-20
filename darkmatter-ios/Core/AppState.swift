@@ -224,6 +224,12 @@ final class AppState {
     private var notificationSubscriptionFailureToastPresented = false
     private(set) var isAppSceneActive = true
     private(set) var runtimeSuspendedForBackground = false
+    /// True while the runtime is being (re)started after a background
+    /// suspension. During this window the account worker is still hydrating and
+    /// running its initial relay catch-up, so live reads (timeline tail, group
+    /// roster) are briefly blocked. Conversation chrome surfaces a "Connecting…"
+    /// status off this flag instead of appearing frozen. MainActor-owned.
+    private(set) var isRuntimeWarmingUp = false
     private(set) var runtimeGeneration = 0
     private(set) var profileRefreshGeneration = 0
     @ObservationIgnored private let suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig
@@ -929,6 +935,10 @@ final class AppState {
         guard phaseOwnsLiveRuntime, !Task.isCancelled else { return }
 
         if runtimeSuspendedForBackground {
+            isRuntimeWarmingUp = true
+            // Cleared on both the success and failure exits of the restart so a
+            // failed resume doesn't strand the "Connecting…" chrome on.
+            defer { isRuntimeWarmingUp = false }
             do {
                 let restored = try makeRuntime()
                 client = restored

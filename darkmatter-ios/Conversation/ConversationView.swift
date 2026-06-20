@@ -257,6 +257,36 @@ nonisolated struct ConversationChromePresentation: Equatable {
     }
 }
 
+/// What the conversation header's secondary line shows. While the runtime is
+/// (re)starting after a background suspension, live reads are briefly blocked,
+/// so the header surfaces a transient "Connecting…" status in place of the
+/// static member subtitle rather than letting the screen look frozen.
+enum ConversationHeaderSecondary: Equatable {
+    case connecting
+    case subtitle(String?)
+
+    static func resolve(isRuntimeWarmingUp: Bool, subtitle: String?) -> ConversationHeaderSecondary {
+        isRuntimeWarmingUp ? .connecting : .subtitle(subtitle)
+    }
+}
+
+/// What the timeline area shows while it holds no rows. The `connecting` state
+/// distinguishes a runtime warming up after a background resume (a network wait
+/// worth labelling) from a brief steady-state local read, so the content area
+/// reads as "catching up" rather than a contextless spinner.
+enum ConversationEmptyState: Equatable {
+    case error
+    case connecting
+    case loading
+    case empty
+
+    static func resolve(hasError: Bool, isLoading: Bool, isRuntimeWarmingUp: Bool) -> ConversationEmptyState {
+        if hasError { return .error }
+        if isLoading { return isRuntimeWarmingUp ? .connecting : .loading }
+        return .empty
+    }
+}
+
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
     let chat: AppGroupRecordFfi
@@ -570,11 +600,31 @@ struct ConversationView: View {
             Text(chrome.title)
                 .font(.headline)
                 .lineLimit(1)
-            Text(chrome.subtitle ?? " ")
+            conversationHeaderSecondary(subtitle: chrome.subtitle)
+        }
+    }
+
+    @ViewBuilder
+    private func conversationHeaderSecondary(subtitle: String?) -> some View {
+        switch ConversationHeaderSecondary.resolve(
+            isRuntimeWarmingUp: appState.isRuntimeWarmingUp,
+            subtitle: subtitle
+        ) {
+        case .connecting:
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text(L10n.string("Connecting…"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+        case .subtitle(let value):
+            Text(value ?? " ")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .opacity(chrome.subtitle == nil ? 0 : 1)
+                .opacity(value == nil ? 0 : 1)
         }
     }
 
@@ -598,21 +648,36 @@ struct ConversationView: View {
     private var timeline: some View {
         if let viewModel {
             if viewModel.timeline.isEmpty {
-                if let error = viewModel.error {
+                switch ConversationEmptyState.resolve(
+                    hasError: viewModel.error != nil,
+                    isLoading: viewModel.isLoading,
+                    isRuntimeWarmingUp: appState.isRuntimeWarmingUp
+                ) {
+                case .error:
                     ContentUnavailableView {
                         Label("Couldn't load conversation", systemImage: "exclamationmark.triangle")
                     } description: {
-                        Text(error)
+                        Text(viewModel.error ?? "")
                     } actions: {
                         Button("Retry") {
                             Task { await viewModel.start() }
                         }
                         .buttonStyle(.borderedProminent)
                     }
-                } else if viewModel.isLoading {
+                case .connecting:
+                    // The local snapshot hasn't landed yet because the runtime is
+                    // still warming up; label the wait instead of a bare spinner.
+                    ContentUnavailableView {
+                        Label {
+                            Text(L10n.string("Connecting…"))
+                        } icon: {
+                            ProgressView()
+                        }
+                    }
+                case .loading:
                     ProgressView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
+                case .empty:
                     ContentUnavailableView(
                         "No messages yet",
                         systemImage: "bubble.middle.bottom",

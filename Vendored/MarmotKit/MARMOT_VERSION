@@ -1,6 +1,6 @@
-darkmatter-sha: 97d4f39
-darkmatter-branch: HEAD
-built-at: 2026-06-19T13:35:46Z
+darkmatter-sha: cac2f98
+darkmatter-branch: master
+built-at: 2026-06-20T15:57:29Z
 uniffi-version: 0.28.3
 features: otlp-export
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim

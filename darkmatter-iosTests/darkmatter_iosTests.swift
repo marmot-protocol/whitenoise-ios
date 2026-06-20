@@ -3794,6 +3794,47 @@ struct ConversationChromeTests {
         #expect(viewModel.displayTitle == appState.shortNpub(forAccountIdHex: other))
         #expect(viewModel.displaySubtitle == "2 members")
     }
+
+    @Test func headerSecondaryShowsConnectingWhileRuntimeWarmsUp() {
+        #expect(
+            ConversationHeaderSecondary.resolve(isRuntimeWarmingUp: true, subtitle: "2 members")
+                == .connecting
+        )
+    }
+
+    @Test func headerSecondaryShowsSubtitleOnceWarmedUp() {
+        #expect(
+            ConversationHeaderSecondary.resolve(isRuntimeWarmingUp: false, subtitle: "2 members")
+                == .subtitle("2 members")
+        )
+        #expect(
+            ConversationHeaderSecondary.resolve(isRuntimeWarmingUp: false, subtitle: nil)
+                == .subtitle(nil)
+        )
+    }
+
+    @Test func emptyStateLabelsConnectingWhileWarmingUpInsteadOfBareSpinner() {
+        #expect(
+            ConversationEmptyState.resolve(hasError: false, isLoading: true, isRuntimeWarmingUp: true)
+                == .connecting
+        )
+        #expect(
+            ConversationEmptyState.resolve(hasError: false, isLoading: true, isRuntimeWarmingUp: false)
+                == .loading
+        )
+    }
+
+    @Test func emptyStatePrefersErrorThenFallsBackToEmpty() {
+        // Error wins even mid-warm-up so a failed load still surfaces Retry.
+        #expect(
+            ConversationEmptyState.resolve(hasError: true, isLoading: true, isRuntimeWarmingUp: true)
+                == .error
+        )
+        #expect(
+            ConversationEmptyState.resolve(hasError: false, isLoading: false, isRuntimeWarmingUp: false)
+                == .empty
+        )
+    }
 }
 
 @MainActor
