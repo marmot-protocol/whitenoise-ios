@@ -52,6 +52,16 @@ enum VoiceAudioSession {
     }
 
     @discardableResult
+    static func configureForVideoPlayback(
+        _ session: VoiceAudioSessionConfiguring = AVAudioSession.sharedInstance()
+    ) throws -> Lease {
+        let configuration = Configuration(category: .playback, mode: .moviePlayback, options: [])
+        try apply(configuration, to: session)
+        try session.setActive(true, options: [])
+        return activate(session, configuration: configuration)
+    }
+
+    @discardableResult
     static func configureForRecording(
         _ session: VoiceAudioSessionConfiguring = AVAudioSession.sharedInstance()
     ) throws -> Lease {

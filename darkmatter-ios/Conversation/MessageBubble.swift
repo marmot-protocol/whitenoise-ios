@@ -1162,6 +1162,100 @@ private struct MessageMediaTile: View {
     }
 }
 
+/// Drives an `AVAudioSession` `.playback` lease from an externally-controlled
+/// `AVPlayer`'s `timeControlStatus`. `VideoPlayer` exposes system transport
+/// controls, so the user can pause/resume (and the item can reach its end)
+/// without routing through our view code. Observing `timeControlStatus` keeps
+/// the lease held only while the player is actually playing and releases it the
+/// moment playback pauses or finishes, mirroring how the audio attachment view
+/// releases its lease on pause / end-of-playback.
+@MainActor
+private final class ObservableVideoPlaybackAudioSession: ObservableObject {
+    private weak var player: AVPlayer?
+    private var statusObservation: NSKeyValueObservation?
+    private var lease: VoiceAudioSession.Lease?
+
+    /// Begins observing `player`'s play/pause transitions and syncs the lease to
+    /// the current status immediately. Safe to call repeatedly; re-attaching to a
+    /// new player tears down any prior observation and releases the held lease.
+    func attach(to player: AVPlayer) {
+        guard self.player !== player else {
+            sync(to: player.timeControlStatus)
+            return
+        }
+        stop()
+        self.player = player
+        statusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] _, _ in
+            // Apple does not guarantee KVO callbacks arrive on the main thread,
+            // so hop to the MainActor explicitly rather than asserting isolation.
+            // Re-read the player's `timeControlStatus` inside the hop from the
+            // MainActor-isolated stored reference (avoids capturing the
+            // non-Sendable AVPlayer) so the lease converges toward the player's
+            // latest state even if hops coalesce or reorder.
+            guard let self else { return }
+            Task { @MainActor in
+                guard let player = self.player else { return }
+                self.sync(to: player.timeControlStatus)
+            }
+        }
+    }
+
+    /// Stops observing and releases the audio session lease. Called from the
+    /// owning view's teardown points (`onDisappear`, item change, fullscreen
+    /// handoff); the `@StateObject` lifetime guarantees these fire before the
+    /// view — and this object — is destroyed.
+    func stop() {
+        statusObservation?.invalidate()
+        statusObservation = nil
+        player = nil
+        release()
+    }
+
+    private func sync(to status: AVPlayer.TimeControlStatus) {
+        switch VideoPlaybackLeaseAction.resolve(status: status, hasLease: lease != nil) {
+        case .acquire:
+            lease = try? VoiceAudioSession.configureForVideoPlayback()
+        case .release:
+            release()
+        case .none:
+            break
+        }
+    }
+
+    private func release() {
+        VoiceAudioSession.deactivate(lease)
+        lease = nil
+    }
+}
+
+/// Pure decision for how a video playback audio-session lease should respond to
+/// an `AVPlayer.timeControlStatus` change. Extracted so the release-on-pause /
+/// release-on-end behavior is unit-testable without a live `AVPlayer`.
+enum VideoPlaybackLeaseAction: Equatable {
+    case acquire
+    case release
+    case none
+
+    static func resolve(status: AVPlayer.TimeControlStatus, hasLease: Bool) -> VideoPlaybackLeaseAction {
+        switch status {
+        case .playing:
+            // Only acquire when we don't already hold a lease, so repeated
+            // `.playing` notifications don't stack redundant leases.
+            return hasLease ? .none : .acquire
+        case .paused:
+            // Covers user pause via the system transport control and reaching
+            // end-of-item, both of which leave the player in `.paused`. Release
+            // only when a lease is actually held.
+            return hasLease ? .release : .none
+        case .waitingToPlayAtSpecifiedRate:
+            // Buffering/stalling while still intending to play; keep the lease.
+            return .none
+        @unknown default:
+            return .none
+        }
+    }
+}
+
 private struct MessageVideoAttachmentView: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -1171,6 +1265,7 @@ private struct MessageVideoAttachmentView: View {
 
     @State private var player: AVPlayer?
     @State private var playbackURL: URL?
+    @StateObject private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var previewThumbnail: UIImage?
     @State private var fullscreenVideo: MessageFullscreenVideo?
     @State private var isLoading = false
@@ -1278,6 +1373,7 @@ private struct MessageVideoAttachmentView: View {
         }
         .onChange(of: item.id) { _, _ in
             player?.pause()
+            audioSession.stop()
             player = nil
             playbackURL = nil
             previewThumbnail = nil
@@ -1289,6 +1385,7 @@ private struct MessageVideoAttachmentView: View {
         }
         .onDisappear {
             player?.pause()
+            audioSession.stop()
         }
         .fullScreenCover(item: $fullscreenVideo) { video in
             MessageFullscreenVideoPlayerView(video: video) {
@@ -1331,6 +1428,7 @@ private struct MessageVideoAttachmentView: View {
     private func loadAndPlay(scale: CGFloat) async {
         if let player {
             player.play()
+            audioSession.attach(to: player)
             return
         }
         isLoading = true
@@ -1342,6 +1440,7 @@ private struct MessageVideoAttachmentView: View {
             let next = AVPlayer(url: url)
             player = next
             next.play()
+            audioSession.attach(to: next)
         } catch {
             didFail = true
         }
@@ -1349,6 +1448,7 @@ private struct MessageVideoAttachmentView: View {
 
     private func openFullscreen(scale: CGFloat) async {
         player?.pause()
+        audioSession.stop()
         if let playbackURL {
             fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: playbackURL)
             return
@@ -1412,6 +1512,7 @@ private struct MessageFullscreenVideoPlayerView: View {
     let onDismiss: () -> Void
 
     @State private var player: AVPlayer
+    @StateObject private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var dismissDragOffset: CGFloat = 0
 
     init(video: MessageFullscreenVideo, onDismiss: @escaping () -> Void) {
@@ -1444,9 +1545,11 @@ private struct MessageFullscreenVideoPlayerView: View {
         .simultaneousGesture(swipeDownToDismissGesture)
         .onAppear {
             player.play()
+            audioSession.attach(to: player)
         }
         .onDisappear {
             player.pause()
+            audioSession.stop()
         }
     }
 
