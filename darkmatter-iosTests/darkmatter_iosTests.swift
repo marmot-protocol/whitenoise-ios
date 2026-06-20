@@ -3340,6 +3340,16 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("https://[::8.8.8.8]/avatar.png") != nil)
     }
 
+    @Test func imageURLRejectsSIITAndNAT64IPv4Embeddings() {
+        #expect(ProfileSanitizer.imageURL("https://[::ffff:0:127.0.0.1]/avatar.png") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[::ffff:0:169.254.169.254]/latest/meta-data/") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[64:ff9b::a9fe:a9fe]/latest/meta-data/") == nil)
+        #expect(ProfileSanitizer.imageURL("https://[64:ff9b::127.0.0.1]/avatar.png") == nil)
+
+        #expect(ProfileSanitizer.imageURL("https://[::ffff:0:8.8.8.8]/avatar.png") != nil)
+        #expect(ProfileSanitizer.imageURL("https://[64:ff9b::808:808]/avatar.png") != nil)
+    }
+
     @Test func profileAddressNormalizesSimpleAddressFields() {
         #expect(ProfileSanitizer.profileAddress(" Alice+Tips@Example.COM ") == "alice+tips@example.com")
         #expect(ProfileSanitizer.profileAddress("alice@example.com") == "alice@example.com")
