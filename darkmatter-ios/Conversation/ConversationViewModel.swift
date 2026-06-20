@@ -384,8 +384,22 @@ final class ConversationViewModel {
         return isSelfAdmin && group.admins.count <= 1
     }
 
+    var canSendMessages: Bool {
+        GroupManagementPresentation.isActiveMember(
+            state: managementState,
+            members: members,
+            groupMemberDetails: groupMemberDetails,
+            myAccountId: myAccountId
+        )
+    }
+
+    var inactiveGroupMessage: String? {
+        canSendMessages ? nil : GroupManagementPresentation.inactiveGroupComposerMessage
+    }
+
     var canSendMediaAttachments: Bool {
-        group.encryptedMedia.required
+        canSendMessages
+            && group.encryptedMedia.required
             && group.encryptedMedia.mediaFormat == MessageSemantics.encryptedMediaVersion
             && group.encryptedMedia.allowedLocatorKinds.contains("blossom-v1")
     }
@@ -2287,7 +2301,8 @@ final class ConversationViewModel {
 
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
+        guard canSendMessages,
+              !trimmed.isEmpty,
               let appState,
               let accountRef = appState.activeAccountRef else { return }
 

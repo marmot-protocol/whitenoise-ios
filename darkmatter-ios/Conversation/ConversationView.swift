@@ -474,6 +474,9 @@ struct ConversationView: View {
             .onChange(of: appState.profileRefreshGeneration) { _, _ in
                 viewModel?.refreshProfileDependentTimelineProjections()
             }
+            .onChange(of: viewModel?.canSendMessages ?? true) { _, canSendMessages in
+                handleComposerAvailabilityChange(canSendMessages: canSendMessages)
+            }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
             }
@@ -519,6 +522,7 @@ struct ConversationView: View {
                 hasAttachments: !mediaDrafts.isEmpty,
                 audioDraft: inlineAudioDraft,
                 mediaEnabled: viewModel?.canSendMediaAttachments ?? false,
+                disabledMessage: viewModel?.inactiveGroupMessage,
                 voiceRecordingActive: voiceRecorder.isActive,
                 focusRequest: composerFocusRequest,
                 mentionCandidates: mentionCandidates,
@@ -1181,6 +1185,7 @@ struct ConversationView: View {
     }
 
     private func send() {
+        guard viewModel?.canSendMessages == true else { return }
         guard let payload = ConversationSendPreparation.prepare(
             draft: &draft,
             mediaDrafts: &mediaDrafts,
@@ -1193,6 +1198,15 @@ struct ConversationView: View {
                 await payload.viewModel.sendMedia(payload.attachments, caption: payload.text)
             }
         }
+    }
+
+    private func handleComposerAvailabilityChange(canSendMessages: Bool) {
+        guard !canSendMessages else { return }
+        cancelVoiceRecording()
+        showCameraCapture = false
+        showPhotoLibraryPicker = false
+        showFileImporter = false
+        dismissKeyboard()
     }
 
     private func takePhoto() {

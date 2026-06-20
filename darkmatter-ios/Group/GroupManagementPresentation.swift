@@ -9,6 +9,8 @@ enum GroupMemberManagementAction: Equatable {
 }
 
 enum GroupManagementPresentation {
+    static let inactiveGroupComposerMessage = L10n.string("This group is inactive. You can't send new messages.")
+
     static func memberActions(
         for action: GroupMemberActionStateFfi,
         state: GroupManagementStateFfi?
@@ -23,6 +25,34 @@ enum GroupManagementPresentation {
 
     static func canInvite(state: GroupManagementStateFfi?, fallbackIsAdmin: Bool) -> Bool {
         state?.canInvite ?? fallbackIsAdmin
+    }
+
+    static func isActiveMember(
+        state: GroupManagementStateFfi?,
+        members: [AppGroupMemberRecordFfi],
+        groupMemberDetails: [GroupMemberDetailsFfi],
+        myAccountId: String?
+    ) -> Bool {
+        if let state {
+            return state.isSelfAdmin
+                || state.canLeave
+                || state.requiresSelfDemoteBeforeLeave
+                || state.memberActions.contains { $0.isSelf }
+        }
+
+        if !groupMemberDetails.isEmpty {
+            return groupMemberDetails.contains { member in
+                member.isSelf || member.memberIdHex == myAccountId
+            }
+        }
+
+        if !members.isEmpty {
+            return members.contains { member in
+                member.local || member.memberIdHex == myAccountId
+            }
+        }
+
+        return true
     }
 
     static func canLeave(state: GroupManagementStateFfi?, fallbackIsLastAdmin: Bool) -> Bool {

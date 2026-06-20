@@ -6698,6 +6698,48 @@ struct MediaComposerAvailabilityTests {
         #expect(!viewModel.canSendMediaAttachments)
     }
 
+    @Test func inactiveMembershipDisablesComposerAndAttachments() throws {
+        let me = hex("11")
+        let other = hex("22")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "removed")
+        )
+        viewModel.applyGroupMutation(
+            GroupMutationResultFfi(
+                summary: SendSummaryFfi(published: 0, messageIds: []),
+                details: GroupDetailsFfi(
+                    group: group(name: "removed", admins: [other]),
+                    members: [
+                        groupMember(memberIdHex: other, isAdmin: true, isSelf: false)
+                    ]
+                ),
+                managementState: GroupManagementStateFfi(
+                    myAccountIdHex: me,
+                    isSelfAdmin: false,
+                    isLastAdmin: false,
+                    canInvite: false,
+                    canLeave: false,
+                    requiresSelfDemoteBeforeLeave: false,
+                    memberActions: [
+                        GroupMemberActionStateFfi(
+                            memberIdHex: other,
+                            isSelf: false,
+                            isAdmin: true,
+                            canRemove: false,
+                            canPromote: false,
+                            canDemote: false
+                        )
+                    ]
+                )
+            )
+        )
+
+        #expect(!viewModel.canSendMessages)
+        #expect(viewModel.inactiveGroupMessage == GroupManagementPresentation.inactiveGroupComposerMessage)
+        #expect(!viewModel.canSendMediaAttachments)
+    }
+
     @Test func attachmentButtonUsesDisabledAppearanceWhenMediaIsUnavailable() {
         let enabled = ComposerAttachmentButtonAppearance.mediaAvailability(true)
         let disabled = ComposerAttachmentButtonAppearance.mediaAvailability(false)

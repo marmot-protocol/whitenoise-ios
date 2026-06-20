@@ -108,6 +108,7 @@ struct ComposerBar: View {
     let hasAttachments: Bool
     let audioDraft: MediaDraftAttachment?
     let mediaEnabled: Bool
+    let disabledMessage: String?
     let voiceRecordingActive: Bool
     let focusRequest: Int
     let mentionCandidates: [ComposerMentionCandidate]
@@ -127,11 +128,16 @@ struct ComposerBar: View {
 
     private var controlSize: CGFloat { BottomInputChromeLayout.controlSize }
     private var inlineSendSize: CGFloat { BottomInputChromeLayout.inlineSendSize }
+    private var inputEnabled: Bool { disabledMessage == nil }
 
     var body: some View {
         VStack(spacing: 6) {
             if !mentionCandidates.isEmpty {
                 ComposerMentionPicker(candidates: mentionCandidates, onSelect: onMentionSelect)
+            }
+
+            if let disabledMessage {
+                inactiveComposerMessage(disabledMessage)
             }
 
             HStack(alignment: .bottom, spacing: BottomInputChromeLayout.rowSpacing) {
@@ -147,6 +153,8 @@ struct ComposerBar: View {
             }
             .animation(.easeInOut(duration: 0.22), value: showsMic)
             .animation(.easeInOut(duration: 0.22), value: showsSend)
+            .disabled(!inputEnabled)
+            .opacity(inputEnabled ? 1 : 0.68)
         }
         .fixedSize(horizontal: false, vertical: true)
         .sheet(isPresented: $showEmojiPicker) {
@@ -159,10 +167,32 @@ struct ComposerBar: View {
         .keyboardAdaptiveHorizontalPadding(isKeyboardVisible: $isKeyboardVisible)
         .padding(.top, BottomInputChromeLayout.topInset)
         .padding(.bottom, BottomInputChromeLayout.bottomInset)
+        .onChange(of: inputEnabled) { _, enabled in
+            guard !enabled else { return }
+            focused = false
+            attachmentPopover = nil
+            showEmojiPicker = false
+        }
+    }
+
+    private func inactiveComposerMessage(_ message: String) -> some View {
+        Label {
+            Text(message)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: "exclamationmark.circle")
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 2)
     }
 
     private var attachmentButton: some View {
-        let appearance = ComposerAttachmentButtonAppearance.mediaAvailability(mediaEnabled)
+        let attachmentEnabled = inputEnabled && mediaEnabled
+        let appearance = ComposerAttachmentButtonAppearance.mediaAvailability(attachmentEnabled)
 
         return Button {
             handleAttachmentTap(appearance.tapBehavior)
@@ -179,7 +209,7 @@ struct ComposerBar: View {
         .contentShape(Circle())
         .opacity(appearance.controlOpacity)
         .accessibilityLabel("Add attachment")
-        .accessibilityHint(mediaEnabled ? "" : L10n.string("Media is not available in this group"))
+        .accessibilityHint(attachmentAccessibilityHint)
         .popover(
             item: $attachmentPopover,
             attachmentAnchor: .rect(.rect(CGRect(
@@ -298,7 +328,7 @@ struct ComposerBar: View {
                 "mic.fill",
                 weight: .semibold,
                 size: BottomInputChromeLayout.sideControlIconSize,
-                tone: voiceRecordingActive ? .primary : .primary
+                tone: inputEnabled ? .primary : .disabled
             )
             .scaleEffect(voiceRecordingActive ? 1.08 : 1)
             .contentShape(Circle())
@@ -330,7 +360,7 @@ struct ComposerBar: View {
     }
 
     private var canSend: Bool {
-        !isSending && hasSendableContent
+        inputEnabled && !isSending && hasSendableContent
     }
 
     private var showsSend: Bool {
@@ -344,12 +374,14 @@ struct ComposerBar: View {
     private var voiceGesture: some Gesture {
         DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
+                guard inputEnabled else { return }
                 if !voiceRecordingActive {
                     onVoicePressBegan()
                 }
                 onVoiceDragChanged(value.translation)
             }
             .onEnded { _ in
+                guard inputEnabled else { return }
                 onVoicePressEnded()
             }
     }
@@ -358,6 +390,11 @@ struct ComposerBar: View {
         guard canSend else { return }
         Haptics.tap()
         onSend()
+    }
+
+    private var attachmentAccessibilityHint: String {
+        if let disabledMessage { return disabledMessage }
+        return mediaEnabled ? "" : L10n.string("Media is not available in this group")
     }
 
     private func handleAttachmentTap(_ behavior: ComposerAttachmentButtonTapBehavior) {
@@ -370,6 +407,7 @@ struct ComposerBar: View {
     }
 
     private func focusComposer() {
+        guard inputEnabled else { return }
         guard audioDraft == nil else { return }
         Task { @MainActor in
             await Task.yield()
