@@ -18,6 +18,21 @@ struct VoiceAudioSessionTests {
         #expect(session.activeCalls.first?.options.isEmpty == true)
     }
 
+    @Test func videoPlaybackSessionUsesPlaybackCategoryWithMoviePlaybackMode() throws {
+        let session = AudioSessionSpy()
+
+        let lease = try VoiceAudioSession.configureForVideoPlayback(session)
+        defer { VoiceAudioSession.deactivate(lease) }
+
+        #expect(session.categoryCalls.count == 1)
+        #expect(session.categoryCalls.first?.category == .playback)
+        #expect(session.categoryCalls.first?.mode == .moviePlayback)
+        #expect(session.categoryCalls.first?.options.isEmpty == true)
+        #expect(session.activeCalls.count == 1)
+        #expect(session.activeCalls.first?.active == true)
+        #expect(session.activeCalls.first?.options.isEmpty == true)
+    }
+
     @Test func recordingSessionUsesPlayAndRecordCategoryAndActivates() throws {
         let session = AudioSessionSpy()
 

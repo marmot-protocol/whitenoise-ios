@@ -1171,6 +1171,7 @@ private struct MessageVideoAttachmentView: View {
 
     @State private var player: AVPlayer?
     @State private var playbackURL: URL?
+    @State private var audioSessionLease: VoiceAudioSession.Lease?
     @State private var previewThumbnail: UIImage?
     @State private var fullscreenVideo: MessageFullscreenVideo?
     @State private var isLoading = false
@@ -1278,6 +1279,7 @@ private struct MessageVideoAttachmentView: View {
         }
         .onChange(of: item.id) { _, _ in
             player?.pause()
+            releaseAudioSession()
             player = nil
             playbackURL = nil
             previewThumbnail = nil
@@ -1289,6 +1291,7 @@ private struct MessageVideoAttachmentView: View {
         }
         .onDisappear {
             player?.pause()
+            releaseAudioSession()
         }
         .fullScreenCover(item: $fullscreenVideo) { video in
             MessageFullscreenVideoPlayerView(video: video) {
@@ -1330,6 +1333,7 @@ private struct MessageVideoAttachmentView: View {
 
     private func loadAndPlay(scale: CGFloat) async {
         if let player {
+            configureAudioSessionForPlayback()
             player.play()
             return
         }
@@ -1341,14 +1345,26 @@ private struct MessageVideoAttachmentView: View {
             await loadPreviewThumbnail(from: url, scale: scale)
             let next = AVPlayer(url: url)
             player = next
+            configureAudioSessionForPlayback()
             next.play()
         } catch {
             didFail = true
         }
     }
 
+    private func configureAudioSessionForPlayback() {
+        releaseAudioSession()
+        audioSessionLease = try? VoiceAudioSession.configureForVideoPlayback()
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
+    }
+
     private func openFullscreen(scale: CGFloat) async {
         player?.pause()
+        releaseAudioSession()
         if let playbackURL {
             fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: playbackURL)
             return
@@ -1412,6 +1428,7 @@ private struct MessageFullscreenVideoPlayerView: View {
     let onDismiss: () -> Void
 
     @State private var player: AVPlayer
+    @State private var audioSessionLease: VoiceAudioSession.Lease?
     @State private var dismissDragOffset: CGFloat = 0
 
     init(video: MessageFullscreenVideo, onDismiss: @escaping () -> Void) {
@@ -1443,10 +1460,13 @@ private struct MessageFullscreenVideoPlayerView: View {
         .opacity(1 - min(dismissDragOffset / 420, 0.35))
         .simultaneousGesture(swipeDownToDismissGesture)
         .onAppear {
+            audioSessionLease = try? VoiceAudioSession.configureForVideoPlayback()
             player.play()
         }
         .onDisappear {
             player.pause()
+            VoiceAudioSession.deactivate(audioSessionLease)
+            audioSessionLease = nil
         }
     }
 
