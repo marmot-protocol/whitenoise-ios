@@ -87,6 +87,16 @@ final class MarmotClient {
         }.value
     }
 
+    /// Normalizes a scanned or deep-linked public-key reference off the main
+    /// actor. `Marmot.accountIdHex` is synchronous FFI, so profile presentation
+    /// must await this wrapper instead of decoding attacker-influenced input on
+    /// the MainActor (#297).
+    func accountIdHex(reference: String) async -> String? {
+        await Task.detached(priority: .userInitiated) { [marmot, reference] in
+            marmot.accountIdHex(reference: reference)
+        }.value
+    }
+
     /// Parses markdown off the main actor. `Marmot.parseMarkdown(text:)` is a
     /// synchronous `rustCall()` binding whose cost scales with message length,
     /// so running it inline on MainActor stalls the composer/send animation for
