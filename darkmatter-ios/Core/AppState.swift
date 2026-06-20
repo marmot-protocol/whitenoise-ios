@@ -109,6 +109,18 @@ final class AppState {
     /// Where the user is in the global flow. Drives the root router.
     private(set) var phase: Phase = .bootstrapping
 
+    /// Phases that own a live, started Marmot runtime (its SQLite store open in
+    /// the shared App Group container). Both must release that runtime on
+    /// background suspension and rebuild it on foreground resume, otherwise the
+    /// held file lock risks a `0xdead10cc` watchdog kill (#338). `performBootstrap`
+    /// starts the runtime *before* checking for accounts, so `.onboarding` carries
+    /// a live runtime exactly like `.ready` does — the suspend/resume machinery
+    /// must treat them the same. Maintenance that needs an active account
+    /// (notification subscription, push registration) stays gated on `.ready`.
+    private var phaseOwnsLiveRuntime: Bool {
+        phase == .ready || phase == .onboarding
+    }
+
     /// All accounts known to marmot-app, refreshed after every account-changing call.
     private(set) var accounts: [AccountSummaryFfi] = []
 
@@ -894,7 +906,7 @@ final class AppState {
             startForegroundActivation()
             return
         }
-        guard phase == .ready,
+        guard phaseOwnsLiveRuntime,
               !runtimeSuspendedForBackground,
               !isRuntimeSuspending
         else { return }
@@ -914,7 +926,7 @@ final class AppState {
 
     func resumeAfterForegroundActivation() async {
         await waitForRuntimeSuspensionToFinish()
-        guard phase == .ready, !Task.isCancelled else { return }
+        guard phaseOwnsLiveRuntime, !Task.isCancelled else { return }
 
         if runtimeSuspendedForBackground {
             do {
@@ -922,7 +934,15 @@ final class AppState {
                 client = restored
                 try await restored.startRuntime()
                 noteRuntimeForegroundReadyAfterSuspension()
-                startNotificationSubscription()
+                // The notification subscription needs an active account, so it
+                // only belongs to `.ready`. An `.onboarding` resume rebuilds the
+                // runtime (releasing the suspended App Group SQLite lock) but
+                // mirrors `performBootstrap`'s onboarding branch, which starts no
+                // subscription. The subscription begins when onboarding completes
+                // via `startReadyForegroundMaintenance()` (#338).
+                if phase == .ready {
+                    startNotificationSubscription()
+                }
             } catch {
                 // Release the partial runtime before showing the failure screen
                 // so Retry → bootstrap() → runtimeClient() rebuilds a fresh
@@ -934,6 +954,10 @@ final class AppState {
         }
 
         guard isAppSceneActive, !Task.isCancelled else { return }
+        // The remaining maintenance is account-scoped and no-ops safely in
+        // `.onboarding`: `catchUpAfterForegroundActivation` is `.ready`-gated by
+        // `ForegroundNotificationSyncPolicy`, and the push-registration / profile
+        // queue paths find no accounts to act on while onboarding.
         await catchUpAfterForegroundActivation()
         guard isAppSceneActive, !Task.isCancelled else { return }
         scheduleNativePushRegistrationIfEnabled()
