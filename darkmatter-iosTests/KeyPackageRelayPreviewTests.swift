@@ -19,6 +19,16 @@ struct KeyPackageRelayPreviewTests {
         #expect(preview.contains("wss://ab.example"))
     }
 
+    /// #306 — the preview must also strip the invisible format characters the
+    /// shared sanitizer preserves for general text: ZWNJ, ZWJ, WORD JOINER.
+    @Test func stripsResidualInvisibleFormatCharactersFromRelayPreview() {
+        let preview = KeyPackagesView.sanitizedRelays([
+            "wss://re\u{200C}lay\u{200D}evil\u{2060}.example"
+        ])
+        #expect(preview == "wss://relayevil.example")
+        #expect(!preview.unicodeScalars.contains { [0x200C, 0x200D, 0x2060].contains($0.value) })
+    }
+
     @Test func limitsToFourRelays() {
         let many = (0..<10).map { "wss://r\($0).example" }
         #expect(KeyPackagesView.sanitizedRelays(many).components(separatedBy: ", ").count == 4)
