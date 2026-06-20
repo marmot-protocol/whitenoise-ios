@@ -1185,11 +1185,17 @@ private final class ObservableVideoPlaybackAudioSession: ObservableObject {
         }
         stop()
         self.player = player
-        statusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-            // KVO callbacks for `AVPlayer.timeControlStatus` are delivered on the
-            // main thread; hop explicitly to satisfy the MainActor isolation.
-            MainActor.assumeIsolated {
-                self?.sync(to: player.timeControlStatus)
+        statusObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] _, _ in
+            // Apple does not guarantee KVO callbacks arrive on the main thread,
+            // so hop to the MainActor explicitly rather than asserting isolation.
+            // Re-read the player's `timeControlStatus` inside the hop from the
+            // MainActor-isolated stored reference (avoids capturing the
+            // non-Sendable AVPlayer) so the lease converges toward the player's
+            // latest state even if hops coalesce or reorder.
+            guard let self else { return }
+            Task { @MainActor in
+                guard let player = self.player else { return }
+                self.sync(to: player.timeControlStatus)
             }
         }
     }
