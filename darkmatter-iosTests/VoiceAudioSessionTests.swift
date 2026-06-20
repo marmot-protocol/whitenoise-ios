@@ -135,6 +135,21 @@ struct VideoPlaybackLeaseActionTests {
     }
 }
 
+struct AudioPlaybackLoadOutcomeTests {
+    @Test func liveLoadProceedsToPlayback() {
+        // A load that completes while the view is still on screen (task not
+        // cancelled) must start playback as usual.
+        #expect(AudioPlaybackLoadOutcome.resolve(isCancelled: false) == .proceed)
+    }
+
+    @Test func cancelledLoadAbortsBeforeStartingPlayback() {
+        // The view disappeared mid-load and `stopPlayback` cancelled the task.
+        // The load must abort rather than start invisible, uncontrollable
+        // playback and acquire the `.playback` audio-session lease on a gone view.
+        #expect(AudioPlaybackLoadOutcome.resolve(isCancelled: true) == .abort)
+    }
+}
+
 private final class AudioSessionSpy: VoiceAudioSessionConfiguring {
     private(set) var categoryCalls: [(category: AVAudioSession.Category, mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions)] = []
     private(set) var activeCalls: [(active: Bool, options: AVAudioSession.SetActiveOptions)] = []
