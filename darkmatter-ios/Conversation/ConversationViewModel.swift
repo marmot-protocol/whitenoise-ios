@@ -241,6 +241,23 @@ final class ConversationViewModel {
         category: "agent-stream"
     )
 
+    /// First-open load timings. Visible under category "conversation-load" in
+    /// Console.app. Measures how long each Marmot read on the open path takes so
+    /// we can tell whether the storage-backed timeline snapshot or the
+    /// worker-backed group details dominate first-open latency. Durations only —
+    /// no chat content.
+    private static let loadLog = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.darkmatter",
+        category: "conversation-load"
+    )
+
+    private func logLoadDuration(_ label: String, since start: ContinuousClock.Instant) {
+        let elapsed = start.duration(to: ContinuousClock.now).components
+        let elapsedMs = Double(elapsed.seconds) * 1000
+            + Double(elapsed.attoseconds) / 1_000_000_000_000_000
+        Self.loadLog.debug("\(label, privacy: .public): \(elapsedMs, format: .fixed(precision: 0), privacy: .public)ms")
+    }
+
     enum TimelinePagePlacement {
         case window
         case tailRefresh
@@ -754,16 +771,20 @@ final class ConversationViewModel {
                 do {
                     guard let appState else { return }
                     let client = try appState.currentMarmotClient()
+                    let subscribeStart = ContinuousClock.now
                     let timelineSub = try await client.marmot.subscribeTimelineMessages(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex,
                         limit: Self.timelinePageLimit
                     )
+                    self?.logLoadDuration("timeline.subscribe", since: subscribeStart)
                     guard !Task.isCancelled else { return }
                     self?.error = nil
                     self?.installTimelineSubscription(timelineSub)
                     defer { self?.clearTimelineSubscription(timelineSub) }
+                    let snapshotStart = ContinuousClock.now
                     if let snapshot = await client.timelineSubscriptionSnapshot(timelineSub) {
+                        self?.logLoadDuration("timeline.snapshot", since: snapshotStart)
                         guard !Task.isCancelled else { return }
                         self?.applyTimelinePage(snapshot, placement: .window)
                     }
@@ -2126,6 +2147,7 @@ final class ConversationViewModel {
     func refreshGroupManagement(announceRosterChanges: Bool = false) async -> Bool {
         guard let appState, let accountRef = appState.activeAccountRef else { return false }
         do {
+            let detailsStart = ContinuousClock.now
             let details = try await appState.marmot.groupDetails(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
@@ -2134,6 +2156,7 @@ final class ConversationViewModel {
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
+            logLoadDuration("group.details+management", since: detailsStart)
             applyGroupDetails(details, managementState: state, announceRosterChanges: announceRosterChanges)
             return true
         } catch {
