@@ -67,6 +67,10 @@ struct DuckDuckGoImageSearchClient {
     /// regardless of what the search backend returns.
     static let maximumResultCount = 60
 
+    /// Bound and sanitize untrusted result titles before they are rendered as a
+    /// fallback when DuckDuckGo's source URL cannot be displayed.
+    static let maximumResultTitleLength = 120
+
     static func decodeResults(from data: Data) throws -> [GroupImageSearchResult] {
         let response = try JSONDecoder().decode(DuckDuckGoImageResponse.self, from: data)
         var seen = Set<String>()
@@ -76,7 +80,7 @@ struct DuckDuckGoImageSearchClient {
             let thumbnailURL = sanitizedImageURL(raw.thumbnail)
             return GroupImageSearchResult(
                 id: imageURL.absoluteString,
-                title: raw.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+                title: ProfileSanitizer.singleLine(raw.title, maxLength: maximumResultTitleLength) ?? "",
                 imageURL: imageURL,
                 thumbnailURL: thumbnailURL,
                 sourceHost: sourceHost(for: raw.sourceURL ?? raw.image),

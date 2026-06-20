@@ -3649,6 +3649,32 @@ struct GroupImageSearchTests {
         #expect(results.count == DuckDuckGoImageSearchClient.maximumResultCount)
     }
 
+    @Test func duckDuckGoResultDecoderSanitizesAndBoundsFallbackTitle() throws {
+        let unsafeTitle = "  Mirror\nHost \u{202E}\u{200B}" + String(
+            repeating: "x",
+            count: DuckDuckGoImageSearchClient.maximumResultTitleLength + 20
+        )
+        let resultObject: [String: Any] = [
+            "title": unsafeTitle,
+            "image": "https://images.example.com/a.jpg",
+            "thumbnail": "https://images.example.com/thumb-a.jpg",
+            "url": "http://example.com/page",
+            "width": 640,
+            "height": 480
+        ]
+        let data = try JSONSerialization.data(withJSONObject: ["results": [resultObject]])
+
+        let results = try DuckDuckGoImageSearchClient.decodeResults(from: data)
+        let result = try #require(results.first)
+
+        #expect(result.sourceHost == nil)
+        #expect(result.title.count == DuckDuckGoImageSearchClient.maximumResultTitleLength)
+        #expect(result.title.hasPrefix("Mirror Host"))
+        #expect(!result.title.contains("\n"))
+        #expect(!result.title.contains("\u{202E}"))
+        #expect(!result.title.contains("\u{200B}"))
+    }
+
     @Test func groupImageSheetUsesProfileImageURLPolicy() {
         #expect(GroupImageURLSheet.validatedImageURL("https://example.com/a.png")?.absoluteString == "https://example.com/a.png")
         #expect(GroupImageURLSheet.validatedImageURL("http://example.com/a.png") == nil)
