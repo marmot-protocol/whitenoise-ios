@@ -1255,6 +1255,20 @@ nonisolated enum VideoPlaybackLeaseAction: Equatable {
     }
 }
 
+/// Pure decision for whether a received-audio bubble's in-flight load+play task
+/// should proceed to start playback after an `await`, or abort. Extracted so the
+/// "don't start playback (or acquire the audio-session lease) once the view has
+/// disappeared and the task was cancelled" behavior is unit-testable without a
+/// live SwiftUI view or `AVAudioPlayer`.
+enum AudioPlaybackLoadOutcome: Equatable {
+    case proceed
+    case abort
+
+    static func resolve(isCancelled: Bool) -> AudioPlaybackLoadOutcome {
+        isCancelled ? .abort : .proceed
+    }
+}
+
 private struct MessageVideoAttachmentView: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
@@ -1631,6 +1645,7 @@ private struct MessageAudioAttachmentView: View {
     @State private var waveformSamples: [CGFloat]
     @State private var speedIndex = 0
     @State private var progressTask: Task<Void, Never>?
+    @State private var playbackLoadTask: Task<Void, Never>?
     @State private var audioSessionLease: VoiceAudioSession.Lease?
 
     private let speeds: [Float] = [1, 1.5, 2]
@@ -1727,7 +1742,11 @@ private struct MessageAudioAttachmentView: View {
             return
         }
         if player == nil || didFail {
-            Task { await loadAndPlay() }
+            // Store the load+play task so it can be cancelled when the view
+            // disappears mid-load; cancel any prior in-flight load first so we
+            // never stack redundant loads. Mirrors the `progressTask` pattern.
+            playbackLoadTask?.cancel()
+            playbackLoadTask = Task { await loadAndPlay() }
         } else {
             playLoadedAudio()
         }
@@ -1748,8 +1767,14 @@ private struct MessageAudioAttachmentView: View {
         defer { isLoading = false }
         do {
             let data = try await onLoadMedia(item)
+            // The view may have disappeared (and `stopPlayback` cancelled this
+            // task) while the decrypt/download was in flight. Bail before
+            // touching player state or acquiring the audio-session lease so a
+            // gone view never starts invisible, uncontrollable playback.
+            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
             let metadata = await audioMetadata(from: data)
             let next = try await MessageAudioPlayerPreparer.preparedPlayer(from: data)
+            guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
             player = next
             let playableMetadata = MessageAudioMetadata(
                 durationSeconds: metadata.durationSeconds ?? next.duration,
@@ -1759,6 +1784,9 @@ private struct MessageAudioAttachmentView: View {
             applyMetadata(playableMetadata)
             playLoadedAudio()
         } catch {
+            // A cancelled load is an expected disappearance, not a failure;
+            // don't flip the bubble into the retry/failed state for it.
+            if Task.isCancelled { return }
             didFail = true
             isPlaying = false
         }
@@ -1893,6 +1921,11 @@ private struct MessageAudioAttachmentView: View {
     private func stopPlayback() {
         progressTask?.cancel()
         progressTask = nil
+        // Cancel any in-flight load+play task. Without this, a load resolving
+        // after the view disappeared would start playback (and acquire the
+        // `.playback` lease) on a view that is no longer on screen.
+        playbackLoadTask?.cancel()
+        playbackLoadTask = nil
         let shouldDeactivate = isPlaying || player?.isPlaying == true || audioSessionLease != nil
         player?.stop()
         isPlaying = false
