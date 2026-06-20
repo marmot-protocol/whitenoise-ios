@@ -453,6 +453,52 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    /// #338: `performBootstrap` starts the runtime (opening its SQLite store in
+    /// the shared App Group container) before checking for accounts, so the app
+    /// sits in `.onboarding` with a *live* runtime. The suspend/resume machinery
+    /// was gated on `phase == .ready`, so backgrounding during onboarding left
+    /// that runtime — and its App Group file lock — alive across suspension, the
+    /// exact `0xdead10cc` condition the machinery exists to prevent. Suspension
+    /// must now tear the onboarding runtime down (`client == nil`) and foreground
+    /// resume must rebuild it, all while staying in `.onboarding` and without
+    /// starting the account-scoped notification subscription.
+    @Test func onboardingRuntimeSuspendsForBackgroundAndResumesForForeground() async throws {
+        let appState = try testAppState()
+        await appState.bootstrap()
+
+        #expect(appState.phase == .onboarding)
+        #expect(appState.accounts.isEmpty)
+        #expect(appState.client != nil)
+        #expect(!appState.notificationSubscriptionActive)
+        let generation = appState.runtimeGeneration
+
+        await appState.startRuntimeSuspension().value
+
+        // The runtime handle is released even in onboarding so its SQLite
+        // storage in the shared App Group container is closed and its file lock
+        // freed. Don't touch `marmot` here: the accessor would rebuild on demand.
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeGeneration == generation)
+        #expect(appState.phase == .onboarding)
+
+        await appState.startForegroundActivation().value
+
+        // Foreground rebuilds the onboarding runtime but does not promote past
+        // onboarding or start the notification subscription (no active account).
+        #expect(appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == generation + 1)
+        #expect(appState.phase == .onboarding)
+        #expect(appState.client != nil)
+        #expect(!appState.marmot.isStopping())
+        #expect(!appState.notificationSubscriptionActive)
+
+        await appState.startRuntimeSuspension().value
+        resetPersistedActiveAccountRef()
+    }
+
     /// #222: a rapid `.background` → `.active` transition starts a runtime
     /// suspension and a foreground activation that race. Previously the
     /// suspension tore the runtime down even though the scene had returned to
