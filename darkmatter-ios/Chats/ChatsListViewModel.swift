@@ -283,6 +283,20 @@ final class ChatsListViewModel {
         let all = Array(itemByGroupId.values)
         items = all.filter { !$0.row.archived }.sorted(by: Self.sortRule)
         archivedItems = all.filter { $0.row.archived }.sorted(by: Self.sortRule)
+        updateActiveAccountUnreadSummary(rows: all.map(\.row))
+    }
+
+    private func updateActiveAccountUnreadSummary(rows: [ChatListRowFfi]) {
+        guard
+            let accountRef = currentAccount,
+            let appState,
+            let account = appState.accounts.first(where: { $0.label == accountRef })
+        else { return }
+
+        appState.updateAccountUnreadSummary(
+            accountIdHex: account.accountIdHex,
+            chatListRows: rows
+        )
     }
 
     private func scheduleAvatarURLRefresh(for rows: [ChatListRowFfi]) {

@@ -45,6 +45,22 @@ struct AccountSwitcherSheet: View {
 
                                     Spacer(minLength: 4)
 
+                                    if let summary = appState.accountUnreadSummary(
+                                        forAccountIdHex: account.accountIdHex
+                                    ), summary.hasUnread {
+                                        Text(unreadBadgeText(summary.unreadCount))
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .monospacedDigit()
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Capsule().fill(Color.accentColor))
+                                            .accessibilityLabel(L10n.plural(
+                                                "%llu unread messages",
+                                                summary.unreadCount
+                                            ))
+                                    }
+
                                     if account.label == appState.activeAccountRef {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
@@ -93,6 +109,9 @@ struct AccountSwitcherSheet: View {
                 ProfileQRView(accountIdHex: account.hex)
                     .appAppearance()
             }
+            .task {
+                await appState.refreshAccountUnreadSummaries()
+            }
         }
     }
 
@@ -101,5 +120,9 @@ struct AccountSwitcherSheet: View {
         let version = dict?["CFBundleShortVersionString"] as? String ?? "—"
         let build = dict?["CFBundleVersion"] as? String ?? "—"
         return L10n.formatted("Version %@ (%@)", version, build)
+    }
+
+    private func unreadBadgeText(_ count: UInt64) -> String {
+        count > 99 ? "99+" : "\(count)"
     }
 }

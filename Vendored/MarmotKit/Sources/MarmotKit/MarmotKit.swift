@@ -1329,6 +1329,16 @@ public protocol MarmotProtocol : AnyObject {
     func accountRelayLists(accountRef: String) throws  -> AccountRelayListsFfi
 
     /**
+     * Per-account unread aggregate for the account-switcher badge
+     * (darkmatter#461). Each entry's `unread_count` is read from that
+     * account's materialized chat-list projection, so this does not require
+     * switching into, or loading a full session/timeline for, any account —
+     * non-active (not-`running`) accounts are reported too. Only
+     * local-signing accounts are included, matching `list_accounts`.
+     */
+    func accountUnreadSummary() throws  -> [AccountUnreadFfi]
+
+    /**
      * Local JSONL audit logs available for explicit forensic upload.
      */
     func auditLogFiles() throws  -> [AuditLogFileFfi]
@@ -2017,6 +2027,21 @@ open func accountRelayLists(accountRef: String)throws  -> AccountRelayListsFfi {
     return try  FfiConverterTypeAccountRelayListsFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
     uniffi_marmot_uniffi_fn_method_marmot_account_relay_lists(self.uniffiClonePointer(),
         FfiConverterString.lower(accountRef),$0
+    )
+})
+}
+
+    /**
+     * Per-account unread aggregate for the account-switcher badge
+     * (darkmatter#461). Each entry's `unread_count` is read from that
+     * account's materialized chat-list projection, so this does not require
+     * switching into, or loading a full session/timeline for, any account —
+     * non-active (not-`running`) accounts are reported too. Only
+     * local-signing accounts are included, matching `list_accounts`.
+     */
+open func accountUnreadSummary()throws  -> [AccountUnreadFfi] {
+    return try  FfiConverterSequenceTypeAccountUnreadFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_account_unread_summary(self.uniffiClonePointer(),$0
     )
 })
 }
@@ -4637,6 +4662,112 @@ public func FfiConverterTypeAccountSummaryFfi_lower(_ value: AccountSummaryFfi) 
 }
 
 
+/**
+ * Per-account unread aggregate for the account-switcher badge
+ * (darkmatter#461). Computed from each account's materialized chat-list
+ * projection without loading a full session/timeline, so accounts that are
+ * not the active/running one are reported too.
+ */
+public struct AccountUnreadFfi {
+    public var accountIdHex: String
+    /**
+     * Total unread messages across all unarchived conversations.
+     */
+    public var unreadCount: UInt64
+    /**
+     * Number of unarchived conversations with at least one unread message.
+     */
+    public var unreadConversations: UInt64
+    /**
+     * Whether the account has any unread message at all.
+     */
+    public var hasUnread: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountIdHex: String,
+        /**
+         * Total unread messages across all unarchived conversations.
+         */unreadCount: UInt64,
+        /**
+         * Number of unarchived conversations with at least one unread message.
+         */unreadConversations: UInt64,
+        /**
+         * Whether the account has any unread message at all.
+         */hasUnread: Bool) {
+        self.accountIdHex = accountIdHex
+        self.unreadCount = unreadCount
+        self.unreadConversations = unreadConversations
+        self.hasUnread = hasUnread
+    }
+}
+
+
+
+extension AccountUnreadFfi: Equatable, Hashable {
+    public static func ==(lhs: AccountUnreadFfi, rhs: AccountUnreadFfi) -> Bool {
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.unreadCount != rhs.unreadCount {
+            return false
+        }
+        if lhs.unreadConversations != rhs.unreadConversations {
+            return false
+        }
+        if lhs.hasUnread != rhs.hasUnread {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountIdHex)
+        hasher.combine(unreadCount)
+        hasher.combine(unreadConversations)
+        hasher.combine(hasUnread)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAccountUnreadFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AccountUnreadFfi {
+        return
+            try AccountUnreadFfi(
+                accountIdHex: FfiConverterString.read(from: &buf),
+                unreadCount: FfiConverterUInt64.read(from: &buf),
+                unreadConversations: FfiConverterUInt64.read(from: &buf),
+                hasUnread: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AccountUnreadFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterUInt64.write(value.unreadCount, into: &buf)
+        FfiConverterUInt64.write(value.unreadConversations, into: &buf)
+        FfiConverterBool.write(value.hasUnread, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountUnreadFfi_lift(_ buf: RustBuffer) throws -> AccountUnreadFfi {
+    return try FfiConverterTypeAccountUnreadFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAccountUnreadFfi_lower(_ value: AccountUnreadFfi) -> RustBuffer {
+    return FfiConverterTypeAccountUnreadFfi.lower(value)
+}
+
+
 public struct AgentStreamStartFfi {
     public var streamIdHex: String
     public var published: UInt32
@@ -7202,6 +7333,106 @@ public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lift(_ buf: RustBuffer) 
 #endif
 public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lower(_ value: GroupPushTokenDebugEntryFfi) -> RustBuffer {
     return FfiConverterTypeGroupPushTokenDebugEntryFfi.lower(value)
+}
+
+
+public struct GroupSystemEventFfi {
+    public var systemType: String
+    /**
+     * Human-readable fallback from the row content. Prefer rendering from
+     * `system_type` plus the structured fields so clients can localize and
+     * render the local account as "you".
+     */
+    public var text: String
+    public var actorAccountIdHex: String?
+    public var subjectAccountIdHex: String?
+    public var name: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(systemType: String,
+        /**
+         * Human-readable fallback from the row content. Prefer rendering from
+         * `system_type` plus the structured fields so clients can localize and
+         * render the local account as "you".
+         */text: String, actorAccountIdHex: String?, subjectAccountIdHex: String?, name: String?) {
+        self.systemType = systemType
+        self.text = text
+        self.actorAccountIdHex = actorAccountIdHex
+        self.subjectAccountIdHex = subjectAccountIdHex
+        self.name = name
+    }
+}
+
+
+
+extension GroupSystemEventFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupSystemEventFfi, rhs: GroupSystemEventFfi) -> Bool {
+        if lhs.systemType != rhs.systemType {
+            return false
+        }
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.actorAccountIdHex != rhs.actorAccountIdHex {
+            return false
+        }
+        if lhs.subjectAccountIdHex != rhs.subjectAccountIdHex {
+            return false
+        }
+        if lhs.name != rhs.name {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(systemType)
+        hasher.combine(text)
+        hasher.combine(actorAccountIdHex)
+        hasher.combine(subjectAccountIdHex)
+        hasher.combine(name)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupSystemEventFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupSystemEventFfi {
+        return
+            try GroupSystemEventFfi(
+                systemType: FfiConverterString.read(from: &buf),
+                text: FfiConverterString.read(from: &buf),
+                actorAccountIdHex: FfiConverterOptionString.read(from: &buf),
+                subjectAccountIdHex: FfiConverterOptionString.read(from: &buf),
+                name: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupSystemEventFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.systemType, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterOptionString.write(value.actorAccountIdHex, into: &buf)
+        FfiConverterOptionString.write(value.subjectAccountIdHex, into: &buf)
+        FfiConverterOptionString.write(value.name, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupSystemEventFfi_lift(_ buf: RustBuffer) throws -> GroupSystemEventFfi {
+    return try FfiConverterTypeGroupSystemEventFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupSystemEventFfi_lower(_ value: GroupSystemEventFfi) -> RustBuffer {
+    return FfiConverterTypeGroupSystemEventFfi.lower(value)
 }
 
 
@@ -9943,6 +10174,11 @@ public struct TimelineMessageRecordFfi {
     public var replyPreview: TimelineReplyPreviewFfi?
     public var mediaJson: String?
     public var agentTextStreamJson: String?
+    /**
+     * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
+     * stream rows, and malformed/free-text kind-1210 assertions.
+     */
+    public var groupSystem: GroupSystemEventFfi?
     public var reactions: TimelineReactionSummaryFfi
     public var deleted: Bool
     public var deletedByMessageIdHex: String?
@@ -9968,7 +10204,11 @@ public struct TimelineMessageRecordFfi {
          * without minting a duplicate, call `retry_group_convergence` rather than
          * re-sending the text. For received messages this is the originating event
          * id and is always `Some(..)`.
-         */sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?,
+         */sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?,
+        /**
+         * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
+         * stream rows, and malformed/free-text kind-1210 assertions.
+         */groupSystem: GroupSystemEventFfi?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?,
         /**
          * Set when convergence invalidated this message (it landed on a losing
          * branch). The message is kept as a "did not reach the group" tombstone
@@ -9990,6 +10230,7 @@ public struct TimelineMessageRecordFfi {
         self.replyPreview = replyPreview
         self.mediaJson = mediaJson
         self.agentTextStreamJson = agentTextStreamJson
+        self.groupSystem = groupSystem
         self.reactions = reactions
         self.deleted = deleted
         self.deletedByMessageIdHex = deletedByMessageIdHex
@@ -10046,6 +10287,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.agentTextStreamJson != rhs.agentTextStreamJson {
             return false
         }
+        if lhs.groupSystem != rhs.groupSystem {
+            return false
+        }
         if lhs.reactions != rhs.reactions {
             return false
         }
@@ -10077,6 +10321,7 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(replyPreview)
         hasher.combine(mediaJson)
         hasher.combine(agentTextStreamJson)
+        hasher.combine(groupSystem)
         hasher.combine(reactions)
         hasher.combine(deleted)
         hasher.combine(deletedByMessageIdHex)
@@ -10107,6 +10352,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 replyPreview: FfiConverterOptionTypeTimelineReplyPreviewFfi.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
                 agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
+                groupSystem: FfiConverterOptionTypeGroupSystemEventFfi.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf),
                 deletedByMessageIdHex: FfiConverterOptionString.read(from: &buf),
@@ -10130,6 +10376,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterOptionTypeTimelineReplyPreviewFfi.write(value.replyPreview, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
         FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
+        FfiConverterOptionTypeGroupSystemEventFfi.write(value.groupSystem, into: &buf)
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
         FfiConverterOptionString.write(value.deletedByMessageIdHex, into: &buf)
@@ -13493,6 +13740,30 @@ fileprivate struct FfiConverterOptionTypeChatListRowFfi: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeGroupSystemEventFfi: FfiConverterRustBuffer {
+    typealias SwiftType = GroupSystemEventFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeGroupSystemEventFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeGroupSystemEventFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeNotificationUpdateFfi: FfiConverterRustBuffer {
     typealias SwiftType = NotificationUpdateFfi?
 
@@ -13873,6 +14144,31 @@ fileprivate struct FfiConverterSequenceTypeAccountSummaryFfi: FfiConverterRustBu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeAccountSummaryFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeAccountUnreadFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [AccountUnreadFfi]
+
+    public static func write(_ value: [AccountUnreadFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeAccountUnreadFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [AccountUnreadFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [AccountUnreadFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeAccountUnreadFfi.read(from: &buf))
         }
         return seq
     }
@@ -14735,6 +15031,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_account_relay_lists() != 47794) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_account_unread_summary() != 225) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_files() != 25846) {

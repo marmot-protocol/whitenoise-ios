@@ -66,6 +66,15 @@ final class MarmotClient {
         }.value
     }
 
+    /// Reads the per-account unread aggregate off the main actor. The generated
+    /// `Marmot.accountUnreadSummary` binding is a synchronous storage aggregate
+    /// over each account's materialized chat-list projection.
+    func accountUnreadSummary() async throws -> [AccountUnreadFfi] {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.accountUnreadSummary()
+        }.value
+    }
+
     /// Reads published account relay-list projections off the main actor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
     /// MainActor-bound settings screens should await this wrapper.

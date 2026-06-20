@@ -26375,6 +26375,65 @@
         }
       }
     },
+    "This group is inactive. You can't send new messages." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Gruppe ist inaktiv. Du kannst keine neuen Nachrichten senden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este grupo está inactivo. No puedes enviar mensajes nuevos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce groupe est inactif. Vous ne pouvez pas envoyer de nouveaux messages."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo gruppo è inattivo. Non puoi inviare nuovi messaggi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este grupo está inativo. Você não pode enviar novas mensagens."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эта группа неактивна. Вы не можете отправлять новые сообщения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu grup etkin değil. Yeni mesaj gönderemezsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此群组处于非活跃状态。你无法发送新消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此群組處於非活躍狀態。你無法傳送新訊息。"
+          }
+        }
+      }
+    },
     "This link opens %@:\n%@" : {
       "comment" : "External-link confirmation body. First placeholder is the display host, second placeholder is the bounded URL.",
       "extractionState" : "manual",

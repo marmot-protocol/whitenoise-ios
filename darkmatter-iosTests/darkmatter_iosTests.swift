@@ -290,17 +290,17 @@ struct AppStateBootstrapTests {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let presentationPattern =
             #"present:\s*\{ \[weak self\] update in[\s\S]*"#
-            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"let localNotificationsEnabled = await self\.localNotificationsEnabledForPresentation\([\s\S]*"#
             + #"accountRef: update\.accountRef[\s\S]*"#
-            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"let shouldPresent = await MainActor\.run \{[\s\S]*"#
             + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return false \}[\s\S]*"#
             + #"self\.noteNotificationSubscriptionDelivery\(\)[\s\S]*"#
             + #"self\.shouldPresentLocalNotification\([\s\S]*"#
             + #"localNotificationsEnabled: localNotificationsEnabled[\s\S]*"#
             + #"guard shouldPresent else \{ return \}[\s\S]*"#
-            + #"guard await self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
             + #"await self\.notifications\.present\(update: update\)"#
         let oldPresentationPattern =
             #"present:\s*\{ \[weak self\] update in\s*"#
@@ -4186,7 +4186,7 @@ struct ConversationTimelineProjectionTests {
     @Test func conversationErrorStateOffersRetryAction() throws {
         let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
 
-        #expect(source.matches(#"if let error = viewModel\.error[\s\S]*ContentUnavailableView[\s\S]*Couldn't load conversation[\s\S]*Button\(\"Retry\"\)[\s\S]*await viewModel\.start\(\)"#))
+        #expect(source.matches(#"case \.error:[\s\S]*ContentUnavailableView[\s\S]*Couldn't load conversation[\s\S]*Button\(\"Retry\"\)[\s\S]*await viewModel\.start\(\)"#))
     }
 
     @Test func startClearsOptimisticOverlaysBeforeRebindingSubscriptions() throws {

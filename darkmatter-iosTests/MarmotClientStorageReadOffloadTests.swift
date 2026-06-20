@@ -15,11 +15,17 @@ struct MarmotClientStorageReadOffloadTests {
             in: marmotClientSource
         ))
         #expect(sourceContains(
+            #"func accountUnreadSummary\(\) async throws -> \[AccountUnreadFfi\][\s\S]*Task\.detached\(priority: \.utility\)[\s\S]*marmot\.accountUnreadSummary\("#,
+            in: marmotClientSource
+        ))
+        #expect(sourceContains(
             #"func accountRelayLists\(accountRef: String\) async throws -> AccountRelayListsFfi[\s\S]*Task\.detached\(priority: \.utility\)[\s\S]*marmot\.accountRelayLists\("#,
             in: marmotClientSource
         ))
 
         for relativePath in [
+            "darkmatter-ios/Core/AppState.swift",
+            "darkmatter-ios/Chats/AccountSwitcherSheet.swift",
             "darkmatter-ios/Chats/ChatsListViewModel.swift",
             "darkmatter-ios/Diagnostics/DiagnosticsView.swift",
             "darkmatter-ios/Settings/KeyPackagesView.swift",
@@ -27,6 +33,7 @@ struct MarmotClientStorageReadOffloadTests {
         ] {
             let source = try sourceString(relativePath)
             #expect(!source.contains("appState.marmot.chatList("), "\(relativePath) still calls sync chatList FFI directly")
+            #expect(!source.contains("appState.marmot.accountUnreadSummary("), "\(relativePath) still calls sync accountUnreadSummary FFI directly")
             #expect(!source.contains("appState.marmot.accountRelayLists("), "\(relativePath) still calls sync accountRelayLists FFI directly")
         }
     }
