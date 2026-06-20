@@ -1625,6 +1625,22 @@ public protocol MarmotProtocol : AnyObject {
     func republishKeyPackage(accountRef: String) async throws  -> UInt64
 
     /**
+     * Re-attempt publishing a group's pending (committed-but-undelivered)
+     * commit(s) without minting a new event.
+     *
+     * An own send commits and projects locally *before* it publishes, so a
+     * message sent while offline (or when the relay was unreachable) lands in
+     * the timeline with `source_message_id_hex == null` — committed, not yet
+     * delivered. Re-sending the same text would mint a fresh commit and event
+     * id, duplicating the bubble. This drives the existing pending commit to
+     * the relays via convergence instead, so the original timeline row flips
+     * to delivered (`source_message_id_hex == Some(..)`) on success and no new
+     * event is created. Returns the delivery summary; `published == 0` means
+     * nothing was pending or publishing is still failing.
+     */
+    func retryGroupConvergence(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
+
+    /**
      * Re-attempt hydration of a single quarantined group (darkmatter#426).
      *
      * Non-destructive, user-initiated recovery for a transiently-bad group
@@ -1713,6 +1729,17 @@ public protocol MarmotProtocol : AnyObject {
      * host side will see their `next()` return `None` shortly after.
      */
     func shutdown() async
+
+    /**
+     * Destructive sign-out: leave every active MLS group (best-effort), delete
+     * the account's relay-published KeyPackages, then wipe all local state for
+     * this account (MLS state DB, cached media/secrets, SQL account row, and
+     * the secret-store nsec). After this returns the account ref is no longer
+     * valid for any further FFI call. The returned `WipeOutcomeFfi` reports
+     * each stage independently so the app can show progress and a
+     * partial-failure sheet (darkmatter#478).
+     */
+    func signOutAndWipe(accountRef: String) async throws  -> WipeOutcomeFfi
 
     /**
      * Bring the runtime online: reconcile known accounts, start workers,
@@ -2976,6 +3003,37 @@ open func republishKeyPackage(accountRef: String)async throws  -> UInt64 {
 }
 
     /**
+     * Re-attempt publishing a group's pending (committed-but-undelivered)
+     * commit(s) without minting a new event.
+     *
+     * An own send commits and projects locally *before* it publishes, so a
+     * message sent while offline (or when the relay was unreachable) lands in
+     * the timeline with `source_message_id_hex == null` — committed, not yet
+     * delivered. Re-sending the same text would mint a fresh commit and event
+     * id, duplicating the bubble. This drives the existing pending commit to
+     * the relays via convergence instead, so the original timeline row flips
+     * to delivered (`source_message_id_hex == Some(..)`) on success and no new
+     * event is created. Returns the delivery summary; `published == 0` means
+     * nothing was pending or publishing is still failing.
+     */
+open func retryGroupConvergence(accountRef: String, groupIdHex: String)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_retry_group_convergence(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * Re-attempt hydration of a single quarantined group (darkmatter#426).
      *
      * Non-destructive, user-initiated recovery for a transiently-bad group
@@ -3286,6 +3344,32 @@ open func shutdown()async  {
             liftFunc: { $0 },
             errorHandler: nil
 
+        )
+}
+
+    /**
+     * Destructive sign-out: leave every active MLS group (best-effort), delete
+     * the account's relay-published KeyPackages, then wipe all local state for
+     * this account (MLS state DB, cached media/secrets, SQL account row, and
+     * the secret-store nsec). After this returns the account ref is no longer
+     * valid for any further FFI call. The returned `WipeOutcomeFfi` reports
+     * each stage independently so the app can show progress and a
+     * partial-failure sheet (darkmatter#478).
+     */
+open func signOutAndWipe(accountRef: String)async throws  -> WipeOutcomeFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_sign_out_and_wipe(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeWipeOutcomeFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
 
@@ -6435,6 +6519,72 @@ public func FfiConverterTypeGroupInviteDeclineResultFfi_lower(_ value: GroupInvi
 }
 
 
+public struct GroupLeaveFailureFfi {
+    public var groupIdHex: String
+    public var reason: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(groupIdHex: String, reason: String) {
+        self.groupIdHex = groupIdHex
+        self.reason = reason
+    }
+}
+
+
+
+extension GroupLeaveFailureFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupLeaveFailureFfi, rhs: GroupLeaveFailureFfi) -> Bool {
+        if lhs.groupIdHex != rhs.groupIdHex {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupIdHex)
+        hasher.combine(reason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupLeaveFailureFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupLeaveFailureFfi {
+        return
+            try GroupLeaveFailureFfi(
+                groupIdHex: FfiConverterString.read(from: &buf),
+                reason: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupLeaveFailureFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.groupIdHex, into: &buf)
+        FfiConverterString.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupLeaveFailureFfi_lift(_ buf: RustBuffer) throws -> GroupLeaveFailureFfi {
+    return try FfiConverterTypeGroupLeaveFailureFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupLeaveFailureFfi_lower(_ value: GroupLeaveFailureFfi) -> RustBuffer {
+    return FfiConverterTypeGroupLeaveFailureFfi.lower(value)
+}
+
+
 public struct GroupManagementStateFfi {
     public var myAccountIdHex: String
     public var isSelfAdmin: Bool
@@ -7052,6 +7202,72 @@ public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lift(_ buf: RustBuffer) 
 #endif
 public func FfiConverterTypeGroupPushTokenDebugEntryFfi_lower(_ value: GroupPushTokenDebugEntryFfi) -> RustBuffer {
     return FfiConverterTypeGroupPushTokenDebugEntryFfi.lower(value)
+}
+
+
+public struct LocalCleanupReportFfi {
+    public var completed: Bool
+    public var reason: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(completed: Bool, reason: String?) {
+        self.completed = completed
+        self.reason = reason
+    }
+}
+
+
+
+extension LocalCleanupReportFfi: Equatable, Hashable {
+    public static func ==(lhs: LocalCleanupReportFfi, rhs: LocalCleanupReportFfi) -> Bool {
+        if lhs.completed != rhs.completed {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(completed)
+        hasher.combine(reason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalCleanupReportFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalCleanupReportFfi {
+        return
+            try LocalCleanupReportFfi(
+                completed: FfiConverterBool.read(from: &buf),
+                reason: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalCleanupReportFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.completed, into: &buf)
+        FfiConverterOptionString.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCleanupReportFfi_lift(_ buf: RustBuffer) throws -> LocalCleanupReportFfi {
+    return try FfiConverterTypeLocalCleanupReportFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCleanupReportFfi_lower(_ value: LocalCleanupReportFfi) -> RustBuffer {
+    return FfiConverterTypeLocalCleanupReportFfi.lower(value)
 }
 
 
@@ -8852,6 +9068,72 @@ public func FfiConverterTypeReceivedMessageFfi_lower(_ value: ReceivedMessageFfi
 }
 
 
+public struct RelayFailureFfi {
+    public var eventIdHex: String
+    public var reason: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(eventIdHex: String, reason: String) {
+        self.eventIdHex = eventIdHex
+        self.reason = reason
+    }
+}
+
+
+
+extension RelayFailureFfi: Equatable, Hashable {
+    public static func ==(lhs: RelayFailureFfi, rhs: RelayFailureFfi) -> Bool {
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.reason != rhs.reason {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(eventIdHex)
+        hasher.combine(reason)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayFailureFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayFailureFfi {
+        return
+            try RelayFailureFfi(
+                eventIdHex: FfiConverterString.read(from: &buf),
+                reason: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RelayFailureFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterString.write(value.reason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayFailureFfi_lift(_ buf: RustBuffer) throws -> RelayFailureFfi {
+    return try FfiConverterTypeRelayFailureFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayFailureFfi_lower(_ value: RelayFailureFfi) -> RustBuffer {
+    return FfiConverterTypeRelayFailureFfi.lower(value)
+}
+
+
 /**
  * Live relay-plane connection health for the diagnostics view.
  */
@@ -9635,6 +9917,18 @@ public func FfiConverterTypeTimelineMessageQueryFfi_lower(_ value: TimelineMessa
 
 public struct TimelineMessageRecordFfi {
     public var messageIdHex: String
+    /**
+     * Delivery marker for own (`direction == "sent"`) messages. An own send
+     * commits and projects locally *before* it publishes, so a message that
+     * was committed but not yet delivered (e.g. sent offline / relay
+     * unreachable) carries `None` here — render it as pending/failed. On
+     * delivery/convergence the same row is upserted with `Some(..)` (the
+     * published source event id), so flip the UI to delivered once this
+     * becomes non-null. To re-drive delivery of a stuck pending message
+     * without minting a duplicate, call `retry_group_convergence` rather than
+     * re-sending the text. For received messages this is the originating event
+     * id and is always `Some(..)`.
+     */
     public var sourceMessageIdHex: String?
     public var direction: String
     public var groupIdHex: String
@@ -9662,7 +9956,19 @@ public struct TimelineMessageRecordFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?,
+    public init(messageIdHex: String,
+        /**
+         * Delivery marker for own (`direction == "sent"`) messages. An own send
+         * commits and projects locally *before* it publishes, so a message that
+         * was committed but not yet delivered (e.g. sent offline / relay
+         * unreachable) carries `None` here — render it as pending/failed. On
+         * delivery/convergence the same row is upserted with `Some(..)` (the
+         * published source event id), so flip the UI to delivered once this
+         * becomes non-null. To re-drive delivery of a stuck pending message
+         * without minting a duplicate, call `retry_group_convergence` rather than
+         * re-sending the text. For received messages this is the originating event
+         * id and is always `Some(..)`.
+         */sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?, reactions: TimelineReactionSummaryFfi, deleted: Bool, deletedByMessageIdHex: String?,
         /**
          * Set when convergence invalidated this message (it landed on a losing
          * branch). The message is kept as a "did not reach the group" tombstone
@@ -10442,6 +10748,131 @@ public func FfiConverterTypeUserProfileMetadataFfi_lift(_ buf: RustBuffer) throw
 #endif
 public func FfiConverterTypeUserProfileMetadataFfi_lower(_ value: UserProfileMetadataFfi) -> RustBuffer {
     return FfiConverterTypeUserProfileMetadataFfi.lower(value)
+}
+
+
+/**
+ * Structured result of `signOutAndWipe`. Every stage of the destructive
+ * sign-out is reported independently so the app can render progress and a
+ * partial-failure sheet.
+ */
+public struct WipeOutcomeFfi {
+    /**
+     * Active MLS groups this account successfully left.
+     */
+    public var groupsLeft: UInt32
+    /**
+     * Per-group leave failures. Best-effort: the wipe does not abort on these.
+     */
+    public var groupLeaveFailures: [GroupLeaveFailureFfi]
+    /**
+     * Relay-published KeyPackage events successfully deleted.
+     */
+    public var keyPackagesDeleted: UInt32
+    /**
+     * Per-relay KeyPackage deletion (or discovery) failures.
+     */
+    public var keyPackageFailures: [RelayFailureFfi]
+    /**
+     * Local cleanup (MLS DB, media cache, SQL row, secret-store nsec) result.
+     */
+    public var localCleanup: LocalCleanupReportFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Active MLS groups this account successfully left.
+         */groupsLeft: UInt32,
+        /**
+         * Per-group leave failures. Best-effort: the wipe does not abort on these.
+         */groupLeaveFailures: [GroupLeaveFailureFfi],
+        /**
+         * Relay-published KeyPackage events successfully deleted.
+         */keyPackagesDeleted: UInt32,
+        /**
+         * Per-relay KeyPackage deletion (or discovery) failures.
+         */keyPackageFailures: [RelayFailureFfi],
+        /**
+         * Local cleanup (MLS DB, media cache, SQL row, secret-store nsec) result.
+         */localCleanup: LocalCleanupReportFfi) {
+        self.groupsLeft = groupsLeft
+        self.groupLeaveFailures = groupLeaveFailures
+        self.keyPackagesDeleted = keyPackagesDeleted
+        self.keyPackageFailures = keyPackageFailures
+        self.localCleanup = localCleanup
+    }
+}
+
+
+
+extension WipeOutcomeFfi: Equatable, Hashable {
+    public static func ==(lhs: WipeOutcomeFfi, rhs: WipeOutcomeFfi) -> Bool {
+        if lhs.groupsLeft != rhs.groupsLeft {
+            return false
+        }
+        if lhs.groupLeaveFailures != rhs.groupLeaveFailures {
+            return false
+        }
+        if lhs.keyPackagesDeleted != rhs.keyPackagesDeleted {
+            return false
+        }
+        if lhs.keyPackageFailures != rhs.keyPackageFailures {
+            return false
+        }
+        if lhs.localCleanup != rhs.localCleanup {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(groupsLeft)
+        hasher.combine(groupLeaveFailures)
+        hasher.combine(keyPackagesDeleted)
+        hasher.combine(keyPackageFailures)
+        hasher.combine(localCleanup)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWipeOutcomeFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WipeOutcomeFfi {
+        return
+            try WipeOutcomeFfi(
+                groupsLeft: FfiConverterUInt32.read(from: &buf),
+                groupLeaveFailures: FfiConverterSequenceTypeGroupLeaveFailureFfi.read(from: &buf),
+                keyPackagesDeleted: FfiConverterUInt32.read(from: &buf),
+                keyPackageFailures: FfiConverterSequenceTypeRelayFailureFfi.read(from: &buf),
+                localCleanup: FfiConverterTypeLocalCleanupReportFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WipeOutcomeFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.groupsLeft, into: &buf)
+        FfiConverterSequenceTypeGroupLeaveFailureFfi.write(value.groupLeaveFailures, into: &buf)
+        FfiConverterUInt32.write(value.keyPackagesDeleted, into: &buf)
+        FfiConverterSequenceTypeRelayFailureFfi.write(value.keyPackageFailures, into: &buf)
+        FfiConverterTypeLocalCleanupReportFfi.write(value.localCleanup, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWipeOutcomeFfi_lift(_ buf: RustBuffer) throws -> WipeOutcomeFfi {
+    return try FfiConverterTypeWipeOutcomeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWipeOutcomeFfi_lower(_ value: WipeOutcomeFfi) -> RustBuffer {
+    return FfiConverterTypeWipeOutcomeFfi.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
@@ -11901,6 +12332,16 @@ public enum MarmotKitError {
     )
     case NotAdmin(groupIdHex: String, memberIdHex: String
     )
+    /**
+     * Transient storage lock contention (`SQLITE_BUSY` / "database is locked")
+     * that survived the storage layer's internal retry-with-backoff. It is a
+     * distinct, typed variant — separate from [`MarmotKitError::Runtime`] — so
+     * the app (#484) can recognise a *transient* condition worth a user retry
+     * or auto-retry instead of string-parsing "database is locked" and
+     * surfacing it as a fatal "Send failed".
+     */
+    case StorageBusy(details: String
+    )
     case Runtime(details: String
     )
 }
@@ -11963,7 +12404,10 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 16: return .Runtime(
+        case 16: return .StorageBusy(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 17: return .Runtime(
             details: try FfiConverterString.read(from: &buf)
             )
 
@@ -12054,8 +12498,13 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
-        case let .Runtime(details):
+        case let .StorageBusy(details):
             writeInt(&buf, Int32(16))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Runtime(details):
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(details, into: &buf)
 
         }
@@ -13632,6 +14081,31 @@ fileprivate struct FfiConverterSequenceTypeChatListRowFfi: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeGroupLeaveFailureFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [GroupLeaveFailureFfi]
+
+    public static func write(_ value: [GroupLeaveFailureFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeGroupLeaveFailureFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [GroupLeaveFailureFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [GroupLeaveFailureFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeGroupLeaveFailureFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeGroupMemberActionStateFfi: FfiConverterRustBuffer {
     typealias SwiftType = [GroupMemberActionStateFfi]
 
@@ -13924,6 +14398,31 @@ fileprivate struct FfiConverterSequenceTypeNotificationUpdateFfi: FfiConverterRu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeNotificationUpdateFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeRelayFailureFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [RelayFailureFfi]
+
+    public static func write(_ value: [RelayFailureFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRelayFailureFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RelayFailureFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RelayFailureFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeRelayFailureFfi.read(from: &buf))
         }
         return seq
     }
@@ -14403,6 +14902,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_republish_key_package() != 44103) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_retry_group_convergence() != 64264) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_retry_hydrate_quarantined_group() != 51443) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14449,6 +14951,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 57342) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 64245) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_start() != 20136) {
