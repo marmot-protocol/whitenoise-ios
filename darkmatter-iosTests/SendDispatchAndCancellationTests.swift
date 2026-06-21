@@ -79,18 +79,12 @@ struct SendDispatchAndCancellationTests {
     /// #350 — native push registration reconciliation is best-effort and may
     /// run before the Keychain-backed runtime can be rebuilt. A transient
     /// runtime rebuild failure must skip this pass instead of trapping.
-    @Test func nativePushEnabledAccountRefsSkipsWhenRuntimeRebuildFails() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState.swift")
-        let nonFatalPattern =
-            #"private func nativePushEnabledAccountRefs\(\) async -> \[String\] \{[\s\S]*"# +
-            #"do \{[\s\S]*try runtimeClient\(\)[\s\S]*"# +
-            #"\} catch \{[\s\S]*return \[\][\s\S]*\n    \}"#
-        let trapPattern =
-            #"private func nativePushEnabledAccountRefs\(\) async -> \[String\] \{[\s\S]*"# +
-            #"fatalError\("#
+    @Test func nativePushEnabledAccountRefsSkipsWhenRuntimeRebuildFails() async {
+        let accountRefs = await AppState.nativePushEnabledAccountRefs(accountRefs: ["account-a"]) {
+            throw NativePushTestError.generic
+        }
 
-        #expect(sourceContains(nonFatalPattern, in: source))
-        #expect(!sourceContains(trapPattern, in: source))
+        #expect(accountRefs.isEmpty)
     }
 
     private func sourceString(_ relativePath: String) throws -> String {
