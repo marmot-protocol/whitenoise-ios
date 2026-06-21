@@ -1041,7 +1041,7 @@ final class AppState {
             let client = try runtimeClient()
             return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)
         } catch {
-            fatalError("Failed to rebuild Keychain-backed Marmot runtime (\(type(of: error)))")
+            return []
         }
     }
 
