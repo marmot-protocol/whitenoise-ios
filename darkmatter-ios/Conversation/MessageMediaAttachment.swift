@@ -1040,7 +1040,7 @@ struct DecryptedMediaCacheEvictionPolicy: Equatable {
     )
 }
 
-private enum DecryptedMediaCacheEvictor {
+nonisolated private enum DecryptedMediaCacheEvictor {
     private struct Entry {
         let url: URL
         let size: Int64
@@ -1110,22 +1110,41 @@ private enum DecryptedMediaCacheEvictor {
     }
 }
 
-enum MediaPlaybackFileStore {
+nonisolated enum MediaPlaybackFileStore {
     private static let protectedAttributes: [FileAttributeKey: Any] = [
         .protectionKey: FileProtectionType.complete
     ]
 
-    static func fileURL(for item: MessageMediaAttachment, data: Data) -> URL? {
+    /// Runs the synchronous content-addressed store/write/trim off the MainActor
+    /// so media open never blocks the UI thread (#351). `MessageMediaAttachment`
+    /// is not `Sendable`, so only its content-addressed inputs cross into the
+    /// detached task, which reconstructs a minimal item for the synchronous core.
+    static func fileURL(for item: MessageMediaAttachment, data: Data) async -> URL? {
         guard let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             return nil
         }
-        return fileURL(
-            for: item,
-            data: data,
-            cachesDirectory: cachesDirectory,
-            mediaPolicy: .media,
-            playbackPolicy: .playback
-        )
+        let reference = item.reference
+        let mediaType = item.mediaType
+        let fileName = item.fileName
+        let id = item.id
+        return await Task.detached(priority: .utility) {
+            let coreItem = MessageMediaAttachment(
+                id: id,
+                reference: reference,
+                fileName: fileName,
+                mediaType: mediaType,
+                dim: nil,
+                localData: nil
+            )
+            return fileURL(
+                for: coreItem,
+                data: data,
+                cachesDirectory: cachesDirectory,
+                mediaPolicy: .media,
+                playbackPolicy: .playback,
+                now: Date()
+            )
+        }.value
     }
 
     static func fileURL(
@@ -1183,14 +1202,18 @@ enum MediaPlaybackFileStore {
     }
 }
 
-enum MessageMediaCache {
+nonisolated enum MessageMediaCache {
     private static let protectedAttributes: [FileAttributeKey: Any] = [
         .protectionKey: FileProtectionType.complete
     ]
 
-    static func cachedData(for reference: MediaAttachmentReferenceFfi) -> Data? {
+    /// Reads the decrypted-media cache off the MainActor so cache hits never
+    /// block the UI thread on `Data(contentsOf:)` plus the eviction sweep (#351).
+    static func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
         guard let cachesDirectory = defaultCachesDirectory else { return nil }
-        return cachedData(for: reference, cachesDirectory: cachesDirectory)
+        return await Task.detached(priority: .utility) {
+            cachedData(for: reference, cachesDirectory: cachesDirectory)
+        }.value
     }
 
     static func cachedData(
@@ -1215,9 +1238,13 @@ enum MessageMediaCache {
         return data
     }
 
-    static func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) {
+    /// Writes the decrypted plaintext to the cache off the MainActor so the
+    /// `data.write(to:)` and eviction sweep never block the UI thread (#351).
+    static func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) async {
         guard let cachesDirectory = defaultCachesDirectory else { return }
-        store(data, for: reference, cachesDirectory: cachesDirectory)
+        await Task.detached(priority: .utility) {
+            store(data, for: reference, cachesDirectory: cachesDirectory)
+        }.value
     }
 
     static func store(

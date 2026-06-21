@@ -1484,7 +1484,7 @@ private struct MessageVideoAttachmentView: View {
             return playbackURL
         }
         let data = try await onLoadMedia(item)
-        guard let url = MediaPlaybackFileStore.fileURL(for: item, data: data) else {
+        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
         playbackURL = url
@@ -2044,7 +2044,7 @@ private struct MessageDocumentAttachmentView: View {
         defer { isLoading = false }
         do {
             let data = try await onLoadMedia(item)
-            guard let url = MediaPlaybackFileStore.fileURL(for: item, data: data) else {
+            guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data) else {
                 didFail = true
                 return
             }

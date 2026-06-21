@@ -1702,14 +1702,14 @@ final class ConversationViewModel {
         guard let reference = media.reference else {
             throw MediaDataError.missingReference
         }
-        if let cached = MessageMediaCache.cachedData(for: reference) {
+        if let cached = await MessageMediaCache.cachedData(for: reference) {
             return cached
         }
         guard let appState, let accountRef = appState.activeAccountRef else {
             throw MediaDataError.missingAccount
         }
         let downloadableReference = await downloadableMediaReference(for: reference)
-        if let cached = MessageMediaCache.cachedData(for: downloadableReference) {
+        if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
             return cached
         }
         let groupIdHex = group.groupIdHex
@@ -1722,7 +1722,7 @@ final class ConversationViewModel {
                 groupIdHex: groupIdHex,
                 reference: downloadableReference
             )
-            MessageMediaCache.store(result.plaintext, for: downloadableReference)
+            await MessageMediaCache.store(result.plaintext, for: downloadableReference)
             return result.plaintext
         }
     }
