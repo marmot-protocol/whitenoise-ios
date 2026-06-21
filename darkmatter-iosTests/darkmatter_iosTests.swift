@@ -654,6 +654,90 @@ struct AppStateBootstrapTests {
         #expect(task != nil)
     }
 
+    @Test func cancelProfileFetchQueuePreservesProfileProjectionLoadVersions() async throws {
+        // Regression for #353 (corrected per adversarial review of PR #357):
+        // `cancelProfileFetchQueue()` runs on every background suspension (via
+        // `cancelForegroundMaintenance`). A direct `reloadProfileProjection`
+        // caller can be suspended at its `await` holding an already-captured
+        // version token. If this method reset the whole version map, a later
+        // load for the same id would restart the per-id counter and re-issue a
+        // token that COLLIDES with the suspended caller's captured value (ABA),
+        // letting stale data pass the staleness guard. So it must clear the
+        // sibling queues (bounded to in-flight work) while PRESERVING the
+        // monotonic version map. Eviction happens instead via post-load pruning
+        // and full sign-out — covered by the tests below.
+        let appState = try testAppState()
+        appState.queuedProfileProjectionLoadIDs = [hex("44")]
+        appState.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
+        appState.profileProjectionRefreshAfterLoadIDs = [hex("55")]
+        appState.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
+
+        _ = appState.cancelProfileFetchQueue()
+
+        // Sibling queues are cleared...
+        #expect(appState.queuedProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.scheduledProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileProjectionRefreshAfterLoadIDs.isEmpty)
+        // ...but the monotonic version map survives, so a suspended direct
+        // reload's captured token cannot be reused by a re-bump after resume.
+        #expect(appState.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
+    }
+
+    @Test func settledProfileProjectionLoadPrunesItsVersionEntry() async throws {
+        // After a guarded load completes for an id with no pending
+        // queued/scheduled/refresh work, its version entry is evicted so the map
+        // stays bounded to in-flight work rather than growing per distinct id
+        // ever seen (#353).
+        let appState = try testAppState()
+        appState.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
+
+        // id 66 settled at its current token, nothing pending -> evicted.
+        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("66"), matching: 7)
+
+        #expect(appState.profileProjectionLoadVersions == [hex("77"): 2])
+    }
+
+    @Test func prunePreservesVersionEntryWhenTokenSupersededOrWorkPending() async throws {
+        // The prune must fail closed in exactly the cases that protect the
+        // staleness guard's monotonic invariant (#353):
+        //   (a) the stored token has been superseded by a newer load (the value
+        //       no longer matches the settled token) -> keep the live token, and
+        //   (b) queued/scheduled/refresh work still pending for the id -> keep
+        //       the token a pending load will read.
+        let appState = try testAppState()
+
+        // (a) superseded token: a newer load bumped 88 from 4 to 5; an older
+        // load settling with token 4 must NOT evict the live token 5.
+        appState.profileProjectionLoadVersions = [hex("88"): 5]
+        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("88"), matching: 4)
+        #expect(appState.profileProjectionLoadVersions == [hex("88"): 5])
+
+        // (b) work still pending: matching token but the id is still queued.
+        appState.profileProjectionLoadVersions = [hex("99"): 1]
+        appState.queuedProfileProjectionLoadIDs = [hex("99")]
+        appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("99"), matching: 1)
+        #expect(appState.profileProjectionLoadVersions == [hex("99"): 1])
+    }
+
+    @Test func fullSignOutClearsProfileProjectionLoadVersions() async throws {
+        // Full sign-out into onboarding is the one place a whole-map reset is
+        // safe: with no active account `canRefreshProfiles` is false, so no
+        // in-flight load can re-bump a token for the gone account ids and race
+        // the reset. Signing out the last account must reclaim the accumulated
+        // version entries (#353).
+        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 1)
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
+        appState.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
+
+        await appState.signOut()
+
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+        #expect(appState.profileProjectionLoadVersions.isEmpty)
+    }
+
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
         // account's push registration so the push server stops delivering

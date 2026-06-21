@@ -675,6 +675,18 @@ final class AppState {
         isSigningOut = false
         activeAccountRef = accounts.first?.label
         if activeAccountRef == nil {
+            // Last account signed out: tear the profile-projection load
+            // bookkeeping back down to empty so the per-account version map
+            // (#353) and its sibling queues do not survive a full sign-out into
+            // onboarding. `cancelProfileFetchQueue()` cancels in-flight work and
+            // clears the sibling queues but deliberately preserves the monotonic
+            // version map (see its comment). Clearing the whole map is only safe
+            // here, in full sign-out: with no active account `canRefreshProfiles`
+            // is false, so no in-flight load can re-bump a token for these gone
+            // account ids and race the reset (the ABA hazard that bars a reset in
+            // the suspend path). This reclaims the accumulated entries.
+            cancelProfileFetchQueue()
+            profileProjectionLoadVersions.removeAll()
             stopNotificationSubscription()
             phase = .onboarding
         } else {

@@ -178,6 +178,11 @@ extension AppState {
         if let projection {
             applyProfileProjection(projection, forAccountIdHex: id)
         }
+        // This guarded load is the current one for `id` (its token still
+        // matches). With it complete, prune the version entry if nothing else
+        // is pending for `id`, bounding the map without disturbing tokens held
+        // by any other in-flight load (#353).
+        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
         return projection
     }
 
@@ -241,6 +246,11 @@ extension AppState {
             if shouldRefresh, projection?.hasRemoteIdentity != true {
                 scheduleProfileRefresh(forAccountIdHex: id)
             }
+            // The queued load for `id` is the current one (token still matches)
+            // and is now applied. Prune its version entry when no further
+            // load/refresh work remains for `id` so the map stays bounded to
+            // in-flight work instead of growing per distinct id (#353).
+            pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
         }
     }
 
@@ -282,6 +292,40 @@ extension AppState {
         let version = (profileProjectionLoadVersions[id] ?? 0) + 1
         profileProjectionLoadVersions[id] = version
         return version
+    }
+
+    /// Evict an account id's monotonic load-version token once its current
+    /// guarded load has settled (#353).
+    ///
+    /// The version map is the staleness guard for `reloadProfileProjection` and
+    /// `runProfileProjectionLoadQueue`: each load captures the id's token and,
+    /// after its `await`, only applies its result if the stored token still
+    /// matches — so an older suspended load whose token was superseded fails the
+    /// guard and discards its stale projection. That guard's correctness relies
+    /// on the token being *monotonic* per id; a whole-map reset would restart
+    /// the counter and let a superseded suspended load's captured token collide
+    /// with a freshly re-issued one (ABA), applying stale data.
+    ///
+    /// We therefore prune one id at a time, and only when:
+    ///   - `matching` is still the stored token (this is the latest load for the
+    ///     id, so removing the entry cannot strip a token a newer load relies
+    ///     on), and
+    ///   - no queued/scheduled/refresh-after work remains for the id (nothing
+    ///     pending will read the token before the next `bump` re-establishes a
+    ///     fresh value).
+    /// Any other in-flight load for the id has a *different*, higher token; it
+    /// never matches `matching`, so its later guard check still fails closed
+    /// after the entry is gone (a missing entry reads as `nil`, never equal to a
+    /// positive captured token). This bounds the map to ids with pending work
+    /// while preserving the monotonic-staleness invariant the guard needs.
+    @MainActor
+    private func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
+        guard profileProjectionLoadVersions[id] == version,
+              !queuedProfileProjectionLoadIDs.contains(id),
+              !scheduledProfileProjectionLoadIDs.contains(id),
+              !profileProjectionRefreshAfterLoadIDs.contains(id)
+        else { return }
+        profileProjectionLoadVersions.removeValue(forKey: id)
     }
 
     @MainActor
@@ -341,6 +385,18 @@ extension AppState {
         queuedProfileProjectionLoadIDs.removeAll()
         scheduledProfileProjectionLoadIDs.removeAll()
         profileProjectionRefreshAfterLoadIDs.removeAll()
+        // Deliberately do NOT clear `profileProjectionLoadVersions` here. This
+        // method runs on every background suspension (via
+        // `cancelForegroundMaintenance`), and a direct `reloadProfileProjection`
+        // caller can be suspended at its `await` with an already-captured
+        // version token. Resetting the whole map would restart the per-id
+        // counter; a later load for the same id would re-issue a token that
+        // collides with the suspended caller's captured value (ABA), letting it
+        // pass the staleness guard and apply stale data. The map is instead kept
+        // monotonic and bounded by `pruneProfileProjectionLoadVersionIfSettled`,
+        // which evicts an id only after its current guarded load completes with
+        // no pending work (#353). Full sign-out, where no in-flight load can
+        // race a re-bump, clears the map separately in `signOut()`.
         let projectionTask = profileProjectionLoadTask
         profileProjectionLoadTask = nil
         projectionTask?.cancel()
@@ -385,6 +441,13 @@ extension AppState {
     @MainActor
     func runProfileFetchQueueForTesting() async {
         await runProfileFetchQueue()
+    }
+
+    /// Test hook for the post-load version-map eviction (#353). Mirrors the call
+    /// the guarded load sites make after applying a projection.
+    @MainActor
+    func pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex id: String, matching version: Int) {
+        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
     }
     #endif
 }
