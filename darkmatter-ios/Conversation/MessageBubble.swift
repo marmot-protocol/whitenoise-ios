@@ -2150,7 +2150,7 @@ enum MessageMediaThumbnailDecoder {
     }
 
     static func thumbnailCacheCost(for image: UIImage, sourceData: Data) -> Int {
-        let bitmapCost = DecodedImageCacheCost.decodedBitmapByteCost(for: image)
+        let bitmapCost = DecodedImageCost.decodedBitmapByteCost(for: image)
         guard Int.max - bitmapCost >= sourceData.count else { return Int.max }
         return max(1, bitmapCost + sourceData.count)
     }

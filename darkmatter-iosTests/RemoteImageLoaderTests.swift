@@ -77,22 +77,24 @@ struct RemoteImageLoaderTests {
         #expect(source.contains("NSCache<NSString, CachedImage>"))
         #expect(source.contains("cacheKey(for: url, maxPixelSize: targetPixelSize)"))
         #expect(source.contains(#""\(url.absoluteString):\(maxPixelSize)" as NSString"#))
-        #expect(source.contains("cost: DecodedImageCacheCost.decodedBitmapByteCost(for: image)"))
+        #expect(source.contains("cost: DecodedImageCost.decodedBitmapByteCost(for: image)"))
         #expect(!source.contains("cost: data.count"))
     }
 
     @Test func avatarLoaderCacheCostExceedsCompressedBytesForHighlyCompressibleImage() throws {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64))
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64), format: format)
         let image = renderer.image { context in
             UIColor.blue.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
         }
-        let cgImage = try #require(image.cgImage)
         let compressedData = try #require(image.pngData())
 
-        let cost = DecodedImageCacheCost.decodedBitmapByteCost(for: image)
+        let cost = DecodedImageCost.decodedBitmapByteCost(for: image)
 
-        #expect(cost == cgImage.bytesPerRow * cgImage.height)
+        #expect(cost == 64 * 64 * 4)
         #expect(cost > compressedData.count)
     }
 

@@ -168,7 +168,7 @@ nonisolated enum RemoteImageDecoder {
     }
 }
 
-nonisolated enum DecodedImageCacheCost {
+nonisolated enum DecodedImageCost {
     static func decodedBitmapByteCost(for image: UIImage) -> Int {
         if let cgImage = image.cgImage {
             let cost = cgImage.bytesPerRow.multipliedReportingOverflow(by: cgImage.height)
@@ -213,7 +213,7 @@ enum RemoteAvatarImageLoader {
             scale: scale
         ) else { throw URLError(.cannotDecodeContentData) }
 
-        cache.setObject(CachedImage(image: image), forKey: key, cost: DecodedImageCacheCost.decodedBitmapByteCost(for: image))
+        cache.setObject(CachedImage(image: image), forKey: key, cost: DecodedImageCost.decodedBitmapByteCost(for: image))
         return image
     }
 
