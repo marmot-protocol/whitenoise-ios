@@ -77,7 +77,21 @@ struct RemoteImageLoaderTests {
         #expect(source.contains("NSCache<NSString, CachedImage>"))
         #expect(source.contains("cacheKey(for: url, maxPixelSize: targetPixelSize)"))
         #expect(source.contains(#""\(url.absoluteString):\(maxPixelSize)" as NSString"#))
-        #expect(source.contains("cache.setObject(CachedImage(image: image), forKey: key, cost: data.count)"))
+        #expect(source.contains("cost: decodedImageCacheCost(for: image)"))
+        #expect(!source.contains("cost: data.count"))
+    }
+
+    @Test func avatarLoaderCacheCostUsesDecodedBitmapBytes() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 32, height: 24))
+        let image = renderer.image { context in
+            UIColor.blue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 32, height: 24))
+        }
+        let cgImage = try #require(image.cgImage)
+
+        let cost = RemoteAvatarImageLoader.decodedImageCacheCost(for: image)
+
+        #expect(cost == cgImage.bytesPerRow * cgImage.height)
     }
 
     @Test func decoderDownsamplesLargeImages() async throws {

@@ -198,8 +198,21 @@ enum RemoteAvatarImageLoader {
             scale: scale
         ) else { throw URLError(.cannotDecodeContentData) }
 
-        cache.setObject(CachedImage(image: image), forKey: key, cost: data.count)
+        cache.setObject(CachedImage(image: image), forKey: key, cost: decodedImageCacheCost(for: image))
         return image
+    }
+
+    static func decodedImageCacheCost(for image: UIImage) -> Int {
+        if let cgImage = image.cgImage {
+            let cost = cgImage.bytesPerRow.multipliedReportingOverflow(by: cgImage.height)
+            return cost.overflow ? Int.max : max(1, cost.partialValue)
+        }
+        let pixelWidth = max(1, Int(ceil(image.size.width * image.scale)))
+        let pixelHeight = max(1, Int(ceil(image.size.height * image.scale)))
+        let pixels = pixelWidth.multipliedReportingOverflow(by: pixelHeight)
+        guard !pixels.overflow else { return Int.max }
+        let bytes = pixels.partialValue.multipliedReportingOverflow(by: 4)
+        return bytes.overflow ? Int.max : max(1, bytes.partialValue)
     }
 
     private static func cacheKey(for url: URL, maxPixelSize: Int) -> NSString {
