@@ -64,6 +64,9 @@ nonisolated enum RemoteImageFetch {
 
     static func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode)
+        else { throw URLError(.badServerResponse) }
 
         if response.expectedContentLength > Int64(maximumResponseBytes) {
             throw URLError(.dataLengthExceedsMaximum)

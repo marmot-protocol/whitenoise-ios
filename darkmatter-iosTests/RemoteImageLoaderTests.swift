@@ -51,6 +51,36 @@ struct RemoteImageLoaderTests {
         #expect(!source.contains("try await session.data(for: request)"))
     }
 
+    @Test func remoteImageFetchDataRejectsNon2xxStatus() throws {
+        let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
+
+        // `data(for:)` must validate a 2xx HTTP status before buffering/returning
+        // the body, mirroring `imageData(for:)`. Without this, a 4xx/5xx error
+        // page (or a refused-redirect response) is handed to the DuckDuckGo
+        // image-search result parser as if it were a valid search payload.
+        // The guard must appear twice in this file: once in `data(for:)` and
+        // once in `imageData(for:)`.
+        let statusGuard = "(200..<300).contains(http.statusCode)"
+        let occurrences = source.components(separatedBy: statusGuard).count - 1
+        #expect(occurrences >= 2)
+
+        // The byte-cap check must come after the status guard so an error body
+        // is rejected before any bytes are streamed/buffered.
+        let dataFunc = "static func data(for request: URLRequest) async throws -> (Data, URLResponse) {"
+        if let bodyStart = source.range(of: dataFunc) {
+            let body = String(source[bodyStart.upperBound...])
+            let guardIndex = body.range(of: statusGuard)?.lowerBound
+            let capIndex = body.range(of: "response.expectedContentLength > Int64(maximumResponseBytes)")?.lowerBound
+            #expect(guardIndex != nil)
+            #expect(capIndex != nil)
+            if let guardIndex, let capIndex {
+                #expect(guardIndex < capIndex)
+            }
+        } else {
+            Issue.record("data(for:) signature not found")
+        }
+    }
+
     @Test func remoteImageFetchDoesNotAdvertiseSVGContent() throws {
         let request = RemoteImageFetch.request(
             for: try #require(URL(string: "https://example.com/avatar.png")),
