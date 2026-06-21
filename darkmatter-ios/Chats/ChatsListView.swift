@@ -104,6 +104,9 @@ struct ChatsListView: View {
                 // event) when returning to the list.
                 Task { await viewModel?.refreshRows() }
             }
+            .onChange(of: appState.profileRefreshGeneration) { _, _ in
+                viewModel?.refreshDisplayProjections()
+            }
             .onChange(of: path.count) { oldCount, count in
                 if count > 0 || (oldCount > 0 && count == 0) {
                     dismissSearchKeyboard()

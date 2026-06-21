@@ -1179,6 +1179,17 @@ final class AppState {
         return RelaySettings.bootstrapRelays(from: lists)
     }
 
+    func revealNsec(accountRef: String) async throws -> String {
+        try await currentMarmotClient().revealNsec(accountRef: accountRef)
+    }
+
+    func exportEncryptedSecretKey(accountRef: String, passphrase: String) async throws -> String {
+        try await currentMarmotClient().exportEncryptedSecretKey(
+            accountRef: accountRef,
+            passphrase: passphrase
+        )
+    }
+
     @discardableResult
     func startAgentTextStream(
         accountRef: String,

@@ -4010,7 +4010,7 @@ struct ChatsListProjectionTests {
             )
         )
 
-        let item = ChatsListViewModel.Item(row: unsafe, avatarURL: nil)
+        let item = ChatsListViewModel.Item(row: unsafe, avatarURL: nil, title: "Unsafe")
 
         #expect(item.previewText == "hello there")
     }
@@ -4018,16 +4018,46 @@ struct ChatsListProjectionTests {
     @Test func itemAvatarURLUsesProjectedGroupAvatarURL() throws {
         let item = ChatsListViewModel.Item(
             row: chatListRow(groupIdHex: hex("d4"), title: "Avatar"),
-            avatarURL: URL(string: "https://cdn.example.com/group.png")
+            avatarURL: URL(string: "https://cdn.example.com/group.png"),
+            title: "Avatar"
         )
 
         #expect(item.avatarURL?.absoluteString == "https://cdn.example.com/group.png")
     }
 
+    @MainActor
+    @Test func chatListDisplayTitleUsesGroupDisplayForUnnamedDirectMessage() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let me = hex("11")
+        let other = hex("22")
+        let groupId = hex("aa")
+        let row = chatListRow(
+            groupIdHex: groupId,
+            title: groupId,
+            groupName: ""
+        )
+        let details = GroupDetailsFfi(
+            group: group(name: "", id: groupId),
+            members: [
+                groupMember(memberIdHex: me, isAdmin: true, isSelf: true),
+                groupMember(memberIdHex: other, isAdmin: false, isSelf: false),
+            ]
+        )
+
+        let title = ChatsListViewModel.displayTitle(
+            for: row,
+            details: details,
+            appState: appState
+        )
+
+        #expect(title == appState.shortNpub(forAccountIdHex: other))
+    }
+
     @Test func itemAvatarURLRejectsUnsafeProjectedGroupAvatarURL() throws {
         let item = ChatsListViewModel.Item(
             row: chatListRow(groupIdHex: hex("d5"), title: "Unsafe Avatar"),
-            avatarURL: nil
+            avatarURL: nil,
+            title: "Unsafe Avatar"
         )
 
         #expect(item.avatarURL == nil)

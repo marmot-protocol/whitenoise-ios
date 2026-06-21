@@ -3,12 +3,16 @@ import MarmotKit
 
 /// Per-account identity inspector. Shows the projected display name, the
 /// public key (hex) and its npub (bech32) as tap-to-copy rows, plus signing
-/// + runtime status. Exporting the nsec is intentionally not surfaced —
-/// marmot-app's policy is "private key export disabled" and the iOS app
-/// honors the same posture.
+/// + runtime status. Local-signing accounts can export raw or encrypted nsec
+/// backups through Marmot's audited keystore APIs.
 struct IdentityView: View {
     @Environment(AppState.self) private var appState
     @State private var showSignOutConfirm = false
+    @State private var showRawExportConfirm = false
+    @State private var showEncryptedExportSheet = false
+    @State private var exportShareText: String?
+    @State private var exportInFlight = false
+    @State private var exportError: String?
 
     var body: some View {
         Form {
@@ -39,6 +43,41 @@ struct IdentityView: View {
                 } footer: {
                     Text("“Online” means this account's runtime worker is active in the app right now (subscribed to its relays). It doesn't reflect key access.")
                         .font(.footnote)
+                }
+
+                if active.localSigning {
+                    Section {
+                        Button {
+                            exportError = nil
+                            showRawExportConfirm = true
+                        } label: {
+                            Label("Export raw nsec", systemImage: "key.fill")
+                        }
+                        .disabled(exportInFlight)
+
+                        Button {
+                            exportError = nil
+                            showEncryptedExportSheet = true
+                        } label: {
+                            Label("Export encrypted nsec", systemImage: "lock.fill")
+                        }
+                        .disabled(exportInFlight)
+
+                        if exportInFlight {
+                            ProgressView("Preparing export")
+                        }
+
+                        if let exportError {
+                            Label(exportError, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.red)
+                                .font(.callout)
+                        }
+                    } header: {
+                        Text("Backup")
+                    } footer: {
+                        Text("Raw export reveals your private key in plaintext and permanently marks it as handled insecurely. Encrypted export creates an ncryptsec1 backup protected by your passphrase without revealing the raw key.")
+                            .font(.footnote)
+                    }
                 }
             } else {
                 Section {
@@ -75,6 +114,143 @@ struct IdentityView: View {
             )
             .appAppearance()
         }
+        .fullScreenCover(isPresented: $showRawExportConfirm) {
+            FullScreenConfirmationDialog(
+                title: "Export raw nsec?",
+                message: "This reveals your private key in plaintext. The export is logged, and this account's key will be permanently marked as handled insecurely.",
+                systemImage: "key.fill",
+                destructiveTitle: "Export raw nsec",
+                onConfirm: {
+                    showRawExportConfirm = false
+                    Task { await exportRawNsec() }
+                },
+                onCancel: { showRawExportConfirm = false }
+            )
+            .appAppearance()
+        }
+        .sheet(isPresented: $showEncryptedExportSheet) {
+            EncryptedNsecExportSheet(
+                isExporting: exportInFlight,
+                errorMessage: exportError,
+                onCancel: {
+                    showEncryptedExportSheet = false
+                    exportError = nil
+                },
+                onExport: { passphrase in
+                    Task { await exportEncryptedNsec(passphrase: passphrase) }
+                }
+            )
+            .appAppearance()
+        }
+        .sheet(isPresented: exportSharePresented) {
+            if let exportShareText {
+                ActivityShareSheet(items: [exportShareText]) {
+                    self.exportShareText = nil
+                }
+                .appAppearance()
+            }
+        }
+    }
+
+    private var exportSharePresented: Binding<Bool> {
+        Binding(
+            get: { exportShareText != nil },
+            set: { isPresented in
+                if !isPresented {
+                    exportShareText = nil
+                }
+            }
+        )
+    }
+
+    @MainActor
+    private func exportRawNsec() async {
+        guard let accountRef = appState.activeAccountRef else { return }
+        exportInFlight = true
+        exportError = nil
+        defer { exportInFlight = false }
+
+        do {
+            let nsec = try await appState.revealNsec(accountRef: accountRef)
+            exportShareText = nsec
+            Haptics.success()
+        } catch {
+            Haptics.error()
+            exportError = IdentityKeyExportPresentation.errorMessage(for: error)
+        }
+    }
+
+    @MainActor
+    private func exportEncryptedNsec(passphrase: String) async {
+        guard let accountRef = appState.activeAccountRef else { return }
+        exportInFlight = true
+        exportError = nil
+        defer { exportInFlight = false }
+
+        do {
+            let ncryptsec = try await appState.exportEncryptedSecretKey(
+                accountRef: accountRef,
+                passphrase: passphrase
+            )
+            showEncryptedExportSheet = false
+            exportShareText = ncryptsec
+            Haptics.success()
+        } catch {
+            Haptics.error()
+            exportError = IdentityKeyExportPresentation.errorMessage(for: error)
+        }
+    }
+}
+
+private struct EncryptedNsecExportSheet: View {
+    let isExporting: Bool
+    let errorMessage: String?
+    let onCancel: () -> Void
+    let onExport: (String) -> Void
+
+    @State private var passphrase = ""
+    @FocusState private var passphraseFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    SecureField("Passphrase", text: $passphrase)
+                        .textContentType(.password)
+                        .focused($passphraseFocused)
+                        .disabled(isExporting)
+                } footer: {
+                    Text("Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it.")
+                        .font(.footnote)
+                }
+
+                if let errorMessage {
+                    Section {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                            .font(.callout)
+                    }
+                }
+            }
+            .navigationTitle("Encrypted export")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                        .disabled(isExporting)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Export") {
+                        onExport(passphrase)
+                    }
+                    .disabled(isExporting || passphrase.isEmpty)
+                }
+            }
+            .onAppear {
+                passphraseFocused = true
+            }
+        }
+        .interactiveDismissDisabled(isExporting)
     }
 }
 

@@ -19,9 +19,9 @@ final class ChatsListViewModel {
         init(
             row: ChatListRowFfi,
             avatarURL: URL?,
+            title: String,
             mentionDisplayName: MarkdownMentionResolver? = nil
         ) {
-            let title = Self.sanitizedTitle(for: row)
             let previewText = Self.sanitizedPreview(
                 from: row.lastMessage,
                 mentionDisplayName: mentionDisplayName
@@ -43,8 +43,10 @@ final class ChatsListViewModel {
         var firstUnreadMessageIdHex: String? { row.firstUnreadMessageIdHex }
         var lastMessage: ChatListMessagePreviewFfi? { row.lastMessage }
 
-        private static func sanitizedTitle(for row: ChatListRowFfi) -> String {
-            ProfileSanitizer.groupName(row.title) ?? IdentityFormatter.short(row.groupIdHex)
+        static func sanitizedTitle(for row: ChatListRowFfi) -> String {
+            if let name = ProfileSanitizer.groupName(row.groupName) { return name }
+            if let name = ProfileSanitizer.groupName(row.title) { return name }
+            return IdentityFormatter.short(row.groupIdHex)
         }
 
         private static func sanitizedPreview(
@@ -80,6 +82,9 @@ final class ChatsListViewModel {
     private var avatarURLByGroupId: [String: String] = [:]
     private var avatarURLLoadedGroupIds: Set<String> = []
     private var pendingAvatarURLRefreshGroupIds: Set<String> = []
+    private var groupDetailsCache: [String: GroupDetailsFfi] = [:]
+    private var groupDetailsLoadedGroupIds: Set<String> = []
+    private var pendingGroupDetailsRefreshGroupIds: Set<String> = []
 
     private static let chatListUpdateCoalescingDelayNanoseconds: UInt64 = 16_000_000
 
@@ -112,6 +117,9 @@ final class ChatsListViewModel {
             avatarURLByGroupId = [:]
             avatarURLLoadedGroupIds = []
             pendingAvatarURLRefreshGroupIds = []
+            groupDetailsCache = [:]
+            groupDetailsLoadedGroupIds = []
+            pendingGroupDetailsRefreshGroupIds = []
         }
         loadError = nil
         currentAccount = accountRef
@@ -193,14 +201,14 @@ final class ChatsListViewModel {
             storeRow(row)
         }
         publishItems()
-        scheduleAvatarURLRefresh(for: snapshot)
+        scheduleRowEnrichment(for: snapshot)
     }
 
     func applyChatListRow(_ row: ChatListRowFfi) {
         pendingChatListRowsByGroupId[row.groupIdHex] = nil
         storeRow(row)
         publishItems()
-        scheduleAvatarURLRefresh(for: [row])
+        scheduleRowEnrichment(for: [row])
     }
 
     func applyChatListUpdate(_ update: ChatListSubscriptionUpdateFfi) {
@@ -219,6 +227,9 @@ final class ChatsListViewModel {
         avatarURLByGroupId[groupIdHex] = nil
         avatarURLLoadedGroupIds.remove(groupIdHex)
         pendingAvatarURLRefreshGroupIds.remove(groupIdHex)
+        groupDetailsCache[groupIdHex] = nil
+        groupDetailsLoadedGroupIds.remove(groupIdHex)
+        pendingGroupDetailsRefreshGroupIds.remove(groupIdHex)
         publishItems()
     }
 
@@ -261,7 +272,7 @@ final class ChatsListViewModel {
             storeRow(row)
         }
         publishItems()
-        scheduleAvatarURLRefresh(for: pendingRows)
+        scheduleRowEnrichment(for: pendingRows)
     }
 
     private func storeRow(_ row: ChatListRowFfi) {
@@ -269,14 +280,83 @@ final class ChatsListViewModel {
         itemByGroupId[row.groupIdHex] = makeItem(for: row)
     }
 
+    func refreshDisplayProjections() {
+        guard !groupDetailsCache.isEmpty else { return }
+        var changed = false
+        for groupId in groupDetailsCache.keys {
+            guard let row = rowByGroupId[groupId] else { continue }
+            itemByGroupId[groupId] = makeItem(for: row)
+            changed = true
+        }
+        if changed {
+            publishItems()
+        }
+    }
+
     private func makeItem(for row: ChatListRowFfi) -> Item {
-        Item(
+        let details = groupDetailsCache[row.groupIdHex]
+        return Item(
             row: row,
-            avatarURL: ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex]),
+            avatarURL: displayAvatarURL(for: row, details: details),
+            title: Self.displayTitle(for: row, details: details, appState: appState),
             mentionDisplayName: { [weak appState] entity in
                 appState?.mentionDisplayName(for: entity)
             }
         )
+    }
+
+    private func displayAvatarURL(for row: ChatListRowFfi, details: GroupDetailsFfi?) -> URL? {
+        if let details, let appState {
+            let members = Self.memberRecords(from: details)
+            let otherMember = GroupDisplay.otherMemberAccount(
+                in: members,
+                myAccountId: appState.activeAccount?.accountIdHex
+            )
+            if let url = GroupDisplay.avatarURL(
+                group: details.group,
+                otherMember: otherMember,
+                memberCount: members.count,
+                appState: appState
+            ) {
+                return url
+            }
+        }
+        return ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
+    }
+
+    static func displayTitle(
+        for row: ChatListRowFfi,
+        details: GroupDetailsFfi?,
+        appState: AppState?
+    ) -> String {
+        if let details, let appState {
+            let members = memberRecords(from: details)
+            let otherMember = GroupDisplay.otherMemberAccount(
+                in: members,
+                myAccountId: appState.activeAccount?.accountIdHex
+            )
+            return GroupDisplay.title(
+                group: details.group,
+                otherMember: otherMember,
+                memberCount: members.count,
+                appState: appState
+            )
+        }
+        return Item.sanitizedTitle(for: row)
+    }
+
+    static func memberRecords(from details: GroupDetailsFfi) -> [AppGroupMemberRecordFfi] {
+        details.members.map {
+            AppGroupMemberRecordFfi(
+                memberIdHex: $0.memberIdHex,
+                account: $0.account,
+                local: $0.local
+            )
+        }
+    }
+
+    private static func rowNeedsDisplayEnrichment(_ row: ChatListRowFfi) -> Bool {
+        ProfileSanitizer.groupName(row.groupName) == nil
     }
 
     private func publishItems() {
@@ -299,46 +379,77 @@ final class ChatsListViewModel {
         )
     }
 
-    private func scheduleAvatarURLRefresh(for rows: [ChatListRowFfi]) {
+    private func scheduleRowEnrichment(for rows: [ChatListRowFfi]) {
         guard let accountRef = currentAccount, let appState else { return }
-        let groupIds = rows
-            .filter { $0.avatarUrl == nil }
-            .map(\.groupIdHex)
-            .filter { !avatarURLLoadedGroupIds.contains($0) }
+        let groupIds = rows.compactMap { row -> String? in
+            let needsAvatar = row.avatarUrl == nil && !avatarURLLoadedGroupIds.contains(row.groupIdHex)
+            let needsDisplay = Self.rowNeedsDisplayEnrichment(row)
+                && !groupDetailsLoadedGroupIds.contains(row.groupIdHex)
+            guard needsAvatar || needsDisplay else { return nil }
+            return row.groupIdHex
+        }
         guard !groupIds.isEmpty else { return }
 
-        pendingAvatarURLRefreshGroupIds.formUnion(groupIds)
+        pendingAvatarURLRefreshGroupIds.formUnion(
+            groupIds.filter { groupId in
+                rowByGroupId[groupId]?.avatarUrl == nil
+                    && !avatarURLLoadedGroupIds.contains(groupId)
+            }
+        )
+        pendingGroupDetailsRefreshGroupIds.formUnion(
+            groupIds.filter { groupId in
+                guard let row = rowByGroupId[groupId] else { return false }
+                return Self.rowNeedsDisplayEnrichment(row)
+                    && !groupDetailsLoadedGroupIds.contains(groupId)
+            }
+        )
         guard avatarURLTask == nil else { return }
         avatarURLTask = Task { @MainActor [weak self, weak appState] in
             guard let self, let appState else { return }
             while !Task.isCancelled, self.currentAccount == accountRef {
-                let groupIds = Array(self.pendingAvatarURLRefreshGroupIds)
+                let avatarGroupIds = Array(self.pendingAvatarURLRefreshGroupIds)
+                let displayGroupIds = Array(self.pendingGroupDetailsRefreshGroupIds)
                 self.pendingAvatarURLRefreshGroupIds = []
+                self.pendingGroupDetailsRefreshGroupIds = []
+                let groupIds = Array(Set(avatarGroupIds + displayGroupIds))
                 guard !groupIds.isEmpty else { break }
 
-                var loaded = Set<String>()
-                var updates: [String: String] = [:]
+                var changed = false
                 for groupId in groupIds where !Task.isCancelled {
-                    if let details = try? await appState.marmot.groupDetails(
+                    guard let details = try? await appState.marmot.groupDetails(
                         accountRef: accountRef,
                         groupIdHex: groupId
-                    ) {
-                        loaded.insert(groupId)
-                        if let avatarUrl = details.group.avatarUrl {
-                            updates[groupId] = avatarUrl
+                    ) else { continue }
+
+                    self.groupDetailsCache[groupId] = details
+                    self.groupDetailsLoadedGroupIds.insert(groupId)
+                    if let row = self.rowByGroupId[groupId], Self.rowNeedsDisplayEnrichment(row) {
+                        let members = Self.memberRecords(from: details)
+                        if members.count == 2,
+                           let other = GroupDisplay.otherMemberAccount(
+                               in: members,
+                               myAccountId: appState.activeAccount?.accountIdHex
+                           ) {
+                            appState.warmProfileProjection(
+                                forAccountIdHex: other,
+                                refreshAfterLoad: true
+                            )
                         }
                     }
-                }
-                guard !Task.isCancelled, self.currentAccount == accountRef else { break }
-                self.avatarURLLoadedGroupIds.formUnion(loaded)
-                var changed = false
-                for (groupId, avatarURL) in updates {
-                    self.avatarURLByGroupId[groupId] = avatarURL
+
+                    if self.rowByGroupId[groupId]?.avatarUrl == nil {
+                        self.avatarURLLoadedGroupIds.insert(groupId)
+                        if let avatarUrl = details.group.avatarUrl {
+                            self.avatarURLByGroupId[groupId] = avatarUrl
+                        }
+                    }
+
                     if let row = self.rowByGroupId[groupId] {
                         self.itemByGroupId[groupId] = self.makeItem(for: row)
                         changed = true
                     }
                 }
+                guard !Task.isCancelled, self.currentAccount == accountRef else { break }
                 if changed {
                     self.publishItems()
                 }

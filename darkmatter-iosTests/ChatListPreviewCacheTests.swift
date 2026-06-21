@@ -22,6 +22,7 @@ struct ChatListPreviewCacheTests {
                 lastMessage: preview(plaintext: "fallback", contentTokens: tokens)
             ),
             avatarURL: nil,
+            title: "Team Room",
             mentionDisplayName: { entity in
                 resolverCalls += 1
                 return entity.bech32 == bech32 ? "ALICE" : nil
@@ -43,7 +44,8 @@ struct ChatListPreviewCacheTests {
             row: row(
                 lastMessage: preview(sender: "self", plaintext: " hello\nthere ")
             ),
-            avatarURL: nil
+            avatarURL: nil,
+            title: "Room"
         )
         #expect(ChatRow.subtitleText(for: sentItem, activeAccountIdHex: "self") == "You: hello there")
 
@@ -51,11 +53,12 @@ struct ChatListPreviewCacheTests {
             row: row(
                 lastMessage: preview(sender: "self", plaintext: "   ")
             ),
-            avatarURL: nil
+            avatarURL: nil,
+            title: "Room"
         )
         #expect(ChatRow.subtitleText(for: emptySentItem, activeAccountIdHex: "self") == "You sent a message")
 
-        let emptyItem = ChatsListViewModel.Item(row: row(lastMessage: nil), avatarURL: nil)
+        let emptyItem = ChatsListViewModel.Item(row: row(lastMessage: nil), avatarURL: nil, title: "Room")
         #expect(ChatRow.subtitleText(for: emptyItem, activeAccountIdHex: "self") == "No messages yet")
     }
 
