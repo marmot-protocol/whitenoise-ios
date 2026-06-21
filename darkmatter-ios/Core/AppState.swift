@@ -1035,14 +1035,25 @@ final class AppState {
         await profileTask?.value
     }
 
-    private func nativePushEnabledAccountRefs() async -> [String] {
-        let accountRefs = accounts.map(\.label)
+    static func nativePushEnabledAccountRefs(
+        accountRefs: [String],
+        runtimeClient: () throws -> MarmotClient
+    ) async -> [String] {
         do {
             let client = try runtimeClient()
             return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)
         } catch {
-            fatalError("Failed to rebuild Keychain-backed Marmot runtime (\(type(of: error)))")
+            // Native push sync is best-effort; skip this pass and retry on the
+            // next foreground/token event once runtime rebuild succeeds.
+            return []
         }
+    }
+
+    private func nativePushEnabledAccountRefs() async -> [String] {
+        await Self.nativePushEnabledAccountRefs(
+            accountRefs: accounts.map(\.label),
+            runtimeClient: { try self.runtimeClient() }
+        )
     }
 
     @MainActor
