@@ -1041,6 +1041,8 @@ final class AppState {
             let client = try runtimeClient()
             return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)
         } catch {
+            // Native push sync is best-effort; skip this pass and retry on the
+            // next foreground/token event once runtime rebuild succeeds.
             return []
         }
     }
