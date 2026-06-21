@@ -270,7 +270,7 @@ final class ConversationViewModel {
         case tailRefresh
     }
 
-    private struct ReactionRemoval: Hashable {
+    struct ReactionRemoval: Hashable {
         let targetMessageIdHex: String
         let emoji: String
         let sender: String
@@ -1258,6 +1258,12 @@ final class ConversationViewModel {
             summary: record.reactions,
             me: myAccountId ?? ""
         )
+        optimisticReactionRemovals = Self.prunedConfirmedOptimisticReactionRemovals(
+            optimisticReactionRemovals,
+            target: appRecord.messageIdHex,
+            summary: record.reactions,
+            me: myAccountId ?? ""
+        )
         if record.deleted {
             projectedDeletedMessageIds.insert(record.messageIdHex)
         } else {
@@ -2108,6 +2114,37 @@ final class ConversationViewModel {
                   recordTarget == target
             else { return true }
             return false
+        }
+    }
+
+    /// Drop optimistic un-react placeholders that the server projection has now
+    /// confirmed. A `ReactionRemoval` suppresses `me` from a target+emoji tally
+    /// until the un-react lands server-side; once the authoritative summary for
+    /// that target no longer lists `me` for the emoji, the removal is redundant
+    /// and must be dropped (#349). Without this, the removal is retained for the
+    /// conversation's lifetime — leaking on the MainActor rebuild hot path and,
+    /// worse, silently subtracting `me` from a later *genuine* re-reaction once
+    /// its own optimistic record is pruned. Mirrors
+    /// `prunedConfirmedOptimisticReactions` for the remove side.
+    nonisolated static func prunedConfirmedOptimisticReactionRemovals(
+        _ removals: Set<ReactionRemoval>,
+        target: String,
+        summary: TimelineReactionSummaryFfi,
+        me: String
+    ) -> Set<ReactionRemoval> {
+        guard !me.isEmpty else { return removals }
+        // Emoji on this target the server summary still attributes to `me`.
+        // A removal for one of these is NOT yet confirmed — keep suppressing.
+        let stillMineEmoji = Set(
+            summary.byEmoji
+                .filter { $0.senders.contains(me) }
+                .map(\.emoji)
+        )
+        return removals.filter { removal in
+            guard removal.targetMessageIdHex == target, removal.sender == me
+            else { return true }
+            // Confirmed when the summary no longer lists me for this emoji.
+            return stillMineEmoji.contains(removal.emoji)
         }
     }
 
@@ -2973,6 +3010,7 @@ final class ConversationViewModel {
         var addedKey: String?
         var removedRecords: [String: AppMessageRecordFfi] = [:]
         var removal: ReactionRemoval?
+        var clearedRemoval: ReactionRemoval?
 
         if alreadyMine {
             removal = ReactionRemoval(
@@ -2993,6 +3031,18 @@ final class ConversationViewModel {
             }
             for key in removedRecords.keys { reactionRecords.removeValue(forKey: key) }
         } else {
+            // Re-react: clear any pending optimistic un-react for this
+            // target+emoji so the new add isn't immediately subtracted by a
+            // stale removal in `recomputeReactions()` (#349). The removal is
+            // tracked so failure can re-insert it.
+            let pending = ReactionRemoval(
+                targetMessageIdHex: message.messageIdHex,
+                emoji: emoji,
+                sender: me
+            )
+            if optimisticReactionRemovals.remove(pending) != nil {
+                clearedRemoval = pending
+            }
             // Add: synthesize a kind-7 reaction (emoji in content, `e` tag target).
             let key = "optimistic-\(UUID().uuidString)"
             let synthetic = AppMessageRecordFfi(
@@ -3033,6 +3083,7 @@ final class ConversationViewModel {
             // Revert the optimistic change.
             if let addedKey { reactionRecords.removeValue(forKey: addedKey) }
             if let removal { optimisticReactionRemovals.remove(removal) }
+            if let clearedRemoval { optimisticReactionRemovals.insert(clearedRemoval) }
             for (key, record) in removedRecords { reactionRecords[key] = record }
             if recomputeReactions() {
                 noteTimelineProjectionChanged()

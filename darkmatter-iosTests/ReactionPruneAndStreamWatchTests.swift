@@ -63,6 +63,101 @@ struct OptimisticReactionPruneTests {
     }
 }
 
+/// #349 — the remove-side analog of #47. An optimistic `ReactionRemoval`
+/// suppresses `me` from a target+emoji tally until the un-react lands
+/// server-side. Once the authoritative summary for that target no longer
+/// lists `me` for the emoji the removal is confirmed and must be dropped,
+/// otherwise it leaks for the conversation's lifetime and can silently
+/// subtract a later genuine re-reaction.
+struct OptimisticReactionRemovalPruneTests {
+    private let me = String(repeating: "1", count: 64)
+    private let other = String(repeating: "2", count: 64)
+    private let target = String(repeating: "a", count: 64)
+
+    private func removal(emoji: String, sender: String, target: String) -> ConversationViewModel.ReactionRemoval {
+        ConversationViewModel.ReactionRemoval(
+            targetMessageIdHex: target,
+            emoji: emoji,
+            sender: sender
+        )
+    }
+
+    @Test func dropsRemovalWhenServerSummaryNoLongerListsMe() {
+        // Un-react confirmed: the summary for this target has no entry for me.
+        let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            [removal(emoji: "❤️", sender: me, target: target)],
+            target: target, summary: summary, me: me
+        )
+        #expect(pruned.isEmpty)
+    }
+
+    @Test func dropsRemovalWhenOtherSendersRemainButMeDoesNot() {
+        // Someone else still reacts ❤️ on this target, but me does not —
+        // my un-react is still confirmed, so the removal is dropped.
+        let summary = TimelineReactionSummaryFfi(
+            byEmoji: [TimelineReactionEmojiFfi(emoji: "❤️", senders: [other])],
+            userReactions: []
+        )
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            [removal(emoji: "❤️", sender: me, target: target)],
+            target: target, summary: summary, me: me
+        )
+        #expect(pruned.isEmpty)
+    }
+
+    @Test func keepsRemovalWhileServerSummaryStillListsMe() {
+        // Un-react not yet propagated — summary still attributes ❤️ to me, so
+        // keep suppressing it optimistically.
+        let summary = TimelineReactionSummaryFfi(
+            byEmoji: [TimelineReactionEmojiFfi(emoji: "❤️", senders: [me])],
+            userReactions: []
+        )
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            [removal(emoji: "❤️", sender: me, target: target)],
+            target: target, summary: summary, me: me
+        )
+        #expect(pruned.count == 1)
+    }
+
+    @Test func leavesRemovalsForADifferentTargetUntouched() {
+        // The reconciler runs per incoming-record target; a removal for another
+        // target must never be dropped by this target's summary.
+        let otherTarget = String(repeating: "b", count: 64)
+        let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            [removal(emoji: "❤️", sender: me, target: otherTarget)],
+            target: target, summary: summary, me: me
+        )
+        #expect(pruned.count == 1)
+    }
+
+    @Test func prunesOnlyConfirmedEmojiOnTheSameTarget() {
+        // ❤️ confirmed (no me in summary) → dropped; 👍 still mine → kept.
+        let summary = TimelineReactionSummaryFfi(
+            byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", senders: [me])],
+            userReactions: []
+        )
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            [
+                removal(emoji: "❤️", sender: me, target: target),
+                removal(emoji: "👍", sender: me, target: target),
+            ],
+            target: target, summary: summary, me: me
+        )
+        #expect(pruned == [removal(emoji: "👍", sender: me, target: target)])
+    }
+
+    @Test func returnsInputUnchangedWhenMeIsEmpty() {
+        let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
+        let input: Set<ConversationViewModel.ReactionRemoval> = [removal(emoji: "❤️", sender: me, target: target)]
+        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+            input, target: target, summary: summary, me: ""
+        )
+        #expect(pruned == input)
+    }
+}
+
 /// #48 — a concurrent "latest" (nil stream id) watch must be guarded so it can't
 /// race past the post-await duplicate check and open an orphaned subscription.
 struct StreamWatchRaceGuardTests {
