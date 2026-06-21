@@ -139,6 +139,23 @@ final class MarmotClient {
         }.value
     }
 
+    /// Reveals the account's raw `nsec1…` backup off the main actor. Logged to
+    /// the per-account audit log and marks the key as handled insecurely.
+    func revealNsec(accountRef: String) async throws -> String {
+        try await Task.detached(priority: .userInitiated) { [marmot, accountRef] in
+            try marmot.revealNsec(accountRef: accountRef)
+        }.value
+    }
+
+    /// Exports a NIP-49 `ncryptsec1…` backup off the main actor. The Rust
+    /// boundary zeroes the passphrase copy; the export is audit-logged without
+    /// downgrading key-security metadata.
+    func exportEncryptedSecretKey(accountRef: String, passphrase: String) async throws -> String {
+        try await Task.detached(priority: .userInitiated) { [marmot, accountRef, passphrase] in
+            try marmot.exportEncryptedSecretKey(accountRef: accountRef, passphrase: passphrase)
+        }.value
+    }
+
     func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.relayTelemetrySettings()

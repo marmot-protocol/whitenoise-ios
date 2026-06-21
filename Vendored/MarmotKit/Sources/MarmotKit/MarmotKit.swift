@@ -1435,6 +1435,18 @@ public protocol MarmotProtocol : AnyObject {
     func editMessage(accountRef: String, groupIdHex: String, targetMessageId: String, content: String) async throws  -> SendSummaryFfi
 
     /**
+     * Export the active account's private key as a password-encrypted NIP-49
+     * `ncryptsec1...` bech32 backup string (darkmatter#544).
+     *
+     * SENSITIVE: the passphrase is accepted as an owned FFI string and zeroed
+     * on return by the Rust boundary. The encrypted export is logged to the
+     * per-account audit log, but unlike `reveal_nsec` it does not downgrade the
+     * account's NIP-49 KEY_SECURITY_BYTE because raw plaintext key material is
+     * not returned to the host app.
+     */
+    func exportEncryptedSecretKey(accountRef: String, passphrase: String) throws  -> String
+
+    /**
      * Group plus enriched member rows for detail screens.
      */
     func groupDetails(accountRef: String, groupIdHex: String) async throws  -> GroupDetailsFfi
@@ -1663,6 +1675,19 @@ public protocol MarmotProtocol : AnyObject {
     func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String) async throws  -> Bool
 
     /**
+     * Export the active account's raw private key in canonical `nsec1...`
+     * bech32 form for an in-app key-backup display (darkmatter#543).
+     *
+     * SENSITIVE: revealing the raw key is logged to the per-account audit log
+     * and permanently marks the account's NIP-49 KEY_SECURITY_BYTE as 0x00
+     * ("handled insecurely"). The returned string is computed on demand and is
+     * never cached by the engine; the caller should display it transiently and
+     * drop it. Refuses unknown / public-only / cross-account refs via the
+     * existing keystore validation.
+     */
+    func revealNsec(accountRef: String) throws  -> String
+
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
     func selfDemoteAdmin(accountRef: String, groupIdHex: String) async throws  -> SendSummaryFfi
@@ -1739,6 +1764,33 @@ public protocol MarmotProtocol : AnyObject {
      * host side will see their `next()` return `None` shortly after.
      */
     func shutdown() async
+
+    /**
+     * Re-activate a non-destructively signed-out local account. This clears
+     * the durable signed-out marker and starts the account worker again; relay
+     * list/key-package repair can still be driven by the existing publish
+     * commands after sign-in.
+     */
+    func signInAccount(accountRef: String) async throws  -> AccountSummaryFfi
+
+    /**
+     * Non-destructive sign-out: deactivate the account on this device and,
+     * when `delete_key_packages` is `true` (the default behavior in the UI),
+     * publish kind:5 deletions for its relay-published KeyPackages so
+     * strangers cannot gift-wrap a Welcome into a new group while it is signed
+     * out.
+     *
+     * Unlike [`sign_out_and_wipe`](Self::sign_out_and_wipe) /
+     * [`remove_account`](Self::remove_account), this keeps ALL local state on
+     * device — the SQLCipher session database (MLS state + projections), cached
+     * media/secrets, the SQL account record, and the secret-store nsec — so the
+     * same identity can be signed back in from the account picker with its
+     * groups, message history, and drafts intact. The account ref stays valid
+     * after this returns. The returned `SignOutOutcomeFfi` surfaces per-relay
+     * KeyPackage cleanup failures so the app can show a "will retry on next
+     * sign-in" hint (darkmatter#477).
+     */
+    func signOut(accountRef: String, deleteKeyPackages: Bool) async throws  -> SignOutOutcomeFfi
 
     /**
      * Destructive sign-out: leave every active MLS group (best-effort), delete
@@ -2358,6 +2410,25 @@ open func editMessage(accountRef: String, groupIdHex: String, targetMessageId: S
             liftFunc: FfiConverterTypeSendSummaryFfi.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
+}
+
+    /**
+     * Export the active account's private key as a password-encrypted NIP-49
+     * `ncryptsec1...` bech32 backup string (darkmatter#544).
+     *
+     * SENSITIVE: the passphrase is accepted as an owned FFI string and zeroed
+     * on return by the Rust boundary. The encrypted export is logged to the
+     * per-account audit log, but unlike `reveal_nsec` it does not downgrade the
+     * account's NIP-49 KEY_SECURITY_BYTE because raw plaintext key material is
+     * not returned to the host app.
+     */
+open func exportEncryptedSecretKey(accountRef: String, passphrase: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_export_encrypted_secret_key(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterString.lower(passphrase),$0
+    )
+})
 }
 
     /**
@@ -3086,6 +3157,25 @@ open func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String)as
 }
 
     /**
+     * Export the active account's raw private key in canonical `nsec1...`
+     * bech32 form for an in-app key-backup display (darkmatter#543).
+     *
+     * SENSITIVE: revealing the raw key is logged to the per-account audit log
+     * and permanently marks the account's NIP-49 KEY_SECURITY_BYTE as 0x00
+     * ("handled insecurely"). The returned string is computed on demand and is
+     * never cached by the engine; the caller should display it transiently and
+     * drop it. Refuses unknown / public-only / cross-account refs via the
+     * existing keystore validation.
+     */
+open func revealNsec(accountRef: String)throws  -> String {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_reveal_nsec(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
+}
+
+    /**
      * Step down as an admin of `group_id_hex` (demote the active account).
      */
 open func selfDemoteAdmin(accountRef: String, groupIdHex: String)async throws  -> SendSummaryFfi {
@@ -3369,6 +3459,63 @@ open func shutdown()async  {
             liftFunc: { $0 },
             errorHandler: nil
 
+        )
+}
+
+    /**
+     * Re-activate a non-destructively signed-out local account. This clears
+     * the durable signed-out marker and starts the account worker again; relay
+     * list/key-package repair can still be driven by the existing publish
+     * commands after sign-in.
+     */
+open func signInAccount(accountRef: String)async throws  -> AccountSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_sign_in_account(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAccountSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
+     * Non-destructive sign-out: deactivate the account on this device and,
+     * when `delete_key_packages` is `true` (the default behavior in the UI),
+     * publish kind:5 deletions for its relay-published KeyPackages so
+     * strangers cannot gift-wrap a Welcome into a new group while it is signed
+     * out.
+     *
+     * Unlike [`sign_out_and_wipe`](Self::sign_out_and_wipe) /
+     * [`remove_account`](Self::remove_account), this keeps ALL local state on
+     * device — the SQLCipher session database (MLS state + projections), cached
+     * media/secrets, the SQL account record, and the secret-store nsec — so the
+     * same identity can be signed back in from the account picker with its
+     * groups, message history, and drafts intact. The account ref stays valid
+     * after this returns. The returned `SignOutOutcomeFfi` surfaces per-relay
+     * KeyPackage cleanup failures so the app can show a "will retry on next
+     * sign-in" hint (darkmatter#477).
+     */
+open func signOut(accountRef: String, deleteKeyPackages: Bool)async throws  -> SignOutOutcomeFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_sign_out(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterBool.lower(deleteKeyPackages)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSignOutOutcomeFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
 
@@ -4584,14 +4731,16 @@ public struct AccountSummaryFfi {
     public var label: String
     public var accountIdHex: String
     public var localSigning: Bool
+    public var signedOut: Bool
     public var running: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(label: String, accountIdHex: String, localSigning: Bool, running: Bool) {
+    public init(label: String, accountIdHex: String, localSigning: Bool, signedOut: Bool, running: Bool) {
         self.label = label
         self.accountIdHex = accountIdHex
         self.localSigning = localSigning
+        self.signedOut = signedOut
         self.running = running
     }
 }
@@ -4609,6 +4758,9 @@ extension AccountSummaryFfi: Equatable, Hashable {
         if lhs.localSigning != rhs.localSigning {
             return false
         }
+        if lhs.signedOut != rhs.signedOut {
+            return false
+        }
         if lhs.running != rhs.running {
             return false
         }
@@ -4619,6 +4771,7 @@ extension AccountSummaryFfi: Equatable, Hashable {
         hasher.combine(label)
         hasher.combine(accountIdHex)
         hasher.combine(localSigning)
+        hasher.combine(signedOut)
         hasher.combine(running)
     }
 }
@@ -4634,6 +4787,7 @@ public struct FfiConverterTypeAccountSummaryFfi: FfiConverterRustBuffer {
                 label: FfiConverterString.read(from: &buf),
                 accountIdHex: FfiConverterString.read(from: &buf),
                 localSigning: FfiConverterBool.read(from: &buf),
+                signedOut: FfiConverterBool.read(from: &buf),
                 running: FfiConverterBool.read(from: &buf)
         )
     }
@@ -4642,6 +4796,7 @@ public struct FfiConverterTypeAccountSummaryFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.label, into: &buf)
         FfiConverterString.write(value.accountIdHex, into: &buf)
         FfiConverterBool.write(value.localSigning, into: &buf)
+        FfiConverterBool.write(value.signedOut, into: &buf)
         FfiConverterBool.write(value.running, into: &buf)
     }
 }
@@ -10040,6 +10195,108 @@ public func FfiConverterTypeSendSummaryFfi_lower(_ value: SendSummaryFfi) -> Rus
 }
 
 
+/**
+ * Structured result of the non-destructive `signOut`. The account's local
+ * state is kept on device; only the relay-published KeyPackages are cleaned
+ * up (when requested), so the app can render the same per-relay
+ * partial-failure sheet as a wipe and show a "will retry on next sign-in" hint.
+ */
+public struct SignOutOutcomeFfi {
+    /**
+     * Relay-published KeyPackage events successfully deleted. `0` when
+     * `deleteKeyPackages` was `false`.
+     */
+    public var keyPackagesDeleted: UInt32
+    /**
+     * Per-relay KeyPackage deletion (or discovery) failures. Best-effort.
+     */
+    public var keyPackageFailures: [RelayFailureFfi]
+    /**
+     * Local teardown (worker shutdown, subscription deactivation, in-memory
+     * cache eviction) result. Never removes on-disk state.
+     */
+    public var localCleanup: LocalCleanupReportFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Relay-published KeyPackage events successfully deleted. `0` when
+         * `deleteKeyPackages` was `false`.
+         */keyPackagesDeleted: UInt32,
+        /**
+         * Per-relay KeyPackage deletion (or discovery) failures. Best-effort.
+         */keyPackageFailures: [RelayFailureFfi],
+        /**
+         * Local teardown (worker shutdown, subscription deactivation, in-memory
+         * cache eviction) result. Never removes on-disk state.
+         */localCleanup: LocalCleanupReportFfi) {
+        self.keyPackagesDeleted = keyPackagesDeleted
+        self.keyPackageFailures = keyPackageFailures
+        self.localCleanup = localCleanup
+    }
+}
+
+
+
+extension SignOutOutcomeFfi: Equatable, Hashable {
+    public static func ==(lhs: SignOutOutcomeFfi, rhs: SignOutOutcomeFfi) -> Bool {
+        if lhs.keyPackagesDeleted != rhs.keyPackagesDeleted {
+            return false
+        }
+        if lhs.keyPackageFailures != rhs.keyPackageFailures {
+            return false
+        }
+        if lhs.localCleanup != rhs.localCleanup {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(keyPackagesDeleted)
+        hasher.combine(keyPackageFailures)
+        hasher.combine(localCleanup)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSignOutOutcomeFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SignOutOutcomeFfi {
+        return
+            try SignOutOutcomeFfi(
+                keyPackagesDeleted: FfiConverterUInt32.read(from: &buf),
+                keyPackageFailures: FfiConverterSequenceTypeRelayFailureFfi.read(from: &buf),
+                localCleanup: FfiConverterTypeLocalCleanupReportFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SignOutOutcomeFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.keyPackagesDeleted, into: &buf)
+        FfiConverterSequenceTypeRelayFailureFfi.write(value.keyPackageFailures, into: &buf)
+        FfiConverterTypeLocalCleanupReportFfi.write(value.localCleanup, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignOutOutcomeFfi_lift(_ buf: RustBuffer) throws -> SignOutOutcomeFfi {
+    return try FfiConverterTypeSignOutOutcomeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSignOutOutcomeFfi_lower(_ value: SignOutOutcomeFfi) -> RustBuffer {
+    return FfiConverterTypeSignOutOutcomeFfi.lower(value)
+}
+
+
 public struct TimelineMessageQueryFfi {
     public var groupIdHex: String?
     public var search: String?
@@ -12589,6 +12846,43 @@ public enum MarmotKitError {
      */
     case StorageBusy(details: String
     )
+    /**
+     * The account exists but its raw private key could not be located in the
+     * keystore — e.g. a public-only / watch-only account, or a secret that was
+     * never loaded. Distinct, typed variant (#543) so a key-backup surface can
+     * tell "this account has no exportable key" apart from a generic runtime
+     * failure without string-parsing.
+     */
+    case SecretNotFound(details: String
+    )
+    /**
+     * The platform secret store / keychain is locked, uninitialized, or
+     * otherwise unavailable, so the raw private key could not be read. Typed
+     * variant (#543) so a key-backup surface can prompt the user to unlock the
+     * keystore rather than reporting an opaque runtime error.
+     */
+    case KeystoreUnavailable(details: String
+    )
+    /**
+     * The user supplied an empty passphrase for NIP-49 encrypted key export.
+     * Distinct typed variant (#544) so backup UI can keep the user in the
+     * passphrase sheet instead of showing a generic runtime failure.
+     */
+    case EmptyPassphrase
+    /**
+     * NIP-49 encryption failed after keystore access succeeded. Carries only
+     * library/error classification text, never passphrase or key material.
+     */
+    case EncryptionFailed(details: String
+    )
+    /**
+     * A filesystem IO error while reading the key, appending the reveal audit
+     * entry, or persisting the NIP-49 key-security byte. Typed variant (#543)
+     * so a key-backup surface can distinguish disk failures from arbitrary
+     * runtime faults.
+     */
+    case Io(details: String
+    )
     case Runtime(details: String
     )
 }
@@ -12654,7 +12948,20 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
         case 16: return .StorageBusy(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 17: return .Runtime(
+        case 17: return .SecretNotFound(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 18: return .KeystoreUnavailable(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 19: return .EmptyPassphrase
+        case 20: return .EncryptionFailed(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 21: return .Io(
+            details: try FfiConverterString.read(from: &buf)
+            )
+        case 22: return .Runtime(
             details: try FfiConverterString.read(from: &buf)
             )
 
@@ -12750,8 +13057,32 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .Runtime(details):
+        case let .SecretNotFound(details):
             writeInt(&buf, Int32(17))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .KeystoreUnavailable(details):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case .EmptyPassphrase:
+            writeInt(&buf, Int32(19))
+
+
+        case let .EncryptionFailed(details):
+            writeInt(&buf, Int32(20))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Io(details):
+            writeInt(&buf, Int32(21))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Runtime(details):
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(details, into: &buf)
 
         }
@@ -15087,6 +15418,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_edit_message() != 43927) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_export_encrypted_secret_key() != 9505) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_details() != 55062) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15207,6 +15541,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_retry_hydrate_quarantined_group() != 51443) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 4639) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15250,6 +15587,12 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 57342) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_in_account() != 63258) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out() != 40136) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_sign_out_and_wipe() != 64245) {
