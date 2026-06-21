@@ -675,6 +675,12 @@ final class AppState {
         isSigningOut = false
         activeAccountRef = accounts.first?.label
         if activeAccountRef == nil {
+            // Last account signed out: tear the profile-projection load
+            // bookkeeping back down to empty so the per-account version map
+            // (#353) and its sibling queues do not survive a full sign-out into
+            // onboarding. With no active account `canRefreshProfiles` already
+            // gates new loads, so this only reclaims the accumulated entries.
+            cancelProfileFetchQueue()
             stopNotificationSubscription()
             phase = .onboarding
         } else {

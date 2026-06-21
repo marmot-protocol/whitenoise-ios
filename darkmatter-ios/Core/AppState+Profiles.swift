@@ -341,6 +341,15 @@ extension AppState {
         queuedProfileProjectionLoadIDs.removeAll()
         scheduledProfileProjectionLoadIDs.removeAll()
         profileProjectionRefreshAfterLoadIDs.removeAll()
+        // Clear the per-account load-version map alongside the sibling
+        // bookkeeping it guards. The map is only meaningful while a load is
+        // queued/scheduled (its sole purpose is detecting stale loads in
+        // `reloadProfileProjection` and `runProfileProjectionLoadQueue`); once
+        // the queue is cancelled no version comparison can fire, so retaining
+        // entries only leaks one [String: Int] per distinct account id ever
+        // seen, never evicted across cancel/sign-out/suspend (#353). Resetting
+        // here bounds it to in-flight work and matches the sibling sets.
+        profileProjectionLoadVersions.removeAll()
         let projectionTask = profileProjectionLoadTask
         profileProjectionLoadTask = nil
         projectionTask?.cancel()

@@ -654,6 +654,27 @@ struct AppStateBootstrapTests {
         #expect(task != nil)
     }
 
+    @Test func cancelProfileFetchQueueClearsProfileProjectionLoadVersions() async throws {
+        // Regression for #353: `profileProjectionLoadVersions` accumulated one
+        // [String: Int] entry per distinct account id ever loaded and was never
+        // evicted, unlike its sibling bookkeeping. `cancelProfileFetchQueue()`
+        // (the canonical reset, also reached on suspend/resume and last-account
+        // sign-out) must clear it alongside the sibling queues so the map is
+        // bounded to in-flight work rather than growing monotonically.
+        let appState = try testAppState()
+        appState.queuedProfileProjectionLoadIDs = [hex("44")]
+        appState.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
+        appState.profileProjectionRefreshAfterLoadIDs = [hex("55")]
+        appState.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
+
+        _ = appState.cancelProfileFetchQueue()
+
+        #expect(appState.profileProjectionLoadVersions.isEmpty)
+        #expect(appState.queuedProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.scheduledProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileProjectionRefreshAfterLoadIDs.isEmpty)
+    }
+
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
         // account's push registration so the push server stops delivering
