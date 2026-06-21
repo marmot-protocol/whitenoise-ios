@@ -6513,6 +6513,135 @@ struct MessageSemanticsTests {
         #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
     }
 
+    @MainActor
+    @Test func mediaRecordUpdateRefreshesOnlyChangedTimelineProjection() throws {
+        let messageId = hex("dd")
+        let otherMessageId = hex("ee")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: hex("aa"))
+        )
+        let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
+        let otherRecord = timelineRecord(messageIdHex: otherMessageId, timelineAt: 2)
+        let firstReference = encryptedMediaReference(
+            fileName: "first.jpg",
+            plaintextByte: "31",
+            ciphertextByte: "41",
+            sourceEpoch: 42
+        )
+        let replacementReference = encryptedMediaReference(
+            fileName: "replacement.jpg",
+            plaintextByte: "32",
+            ciphertextByte: "42",
+            sourceEpoch: 42
+        )
+        let otherReference = encryptedMediaReference(
+            fileName: "other.jpg",
+            plaintextByte: "33",
+            ciphertextByte: "43",
+            sourceEpoch: 42
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record, otherRecord], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        let item = try #require(viewModel.timeline.first { $0.id == "msg:\(messageId)" })
+        let otherItem = try #require(viewModel.timeline.first { $0.id == "msg:\(otherMessageId)" })
+        viewModel.replaceMediaRecordsForTesting([
+            messageId: [
+                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: firstReference)
+            ],
+            otherMessageId: [
+                mediaRecord(messageIdHex: otherMessageId, attachmentIndex: 0, reference: otherReference)
+            ],
+        ])
+        let buildCountAfterInitialProjection = viewModel.mediaItemProjectionBuildCountForTesting
+
+        #expect(viewModel.replaceMediaRecordsForTesting([
+            mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: replacementReference)
+        ], forMessageId: messageId))
+        let updated = viewModel.mediaItems(for: item)
+        let unchanged = viewModel.mediaItems(for: otherItem)
+
+        #expect(updated.map(\.fileName) == ["replacement.jpg"])
+        #expect(unchanged.map(\.fileName) == ["other.jpg"])
+        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterInitialProjection + 1)
+    }
+
+    @MainActor
+    @Test func timelineMediaItemsUseCachedClassifiedMediaProjection() throws {
+        let messageId = hex("dd")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: hex("aa"))
+        )
+        let record = timelineRecord(
+            messageIdHex: messageId,
+            plaintext: "caption",
+            tags: [encryptedMediaTag(fileName: "classified.jpg", plaintextByte: "31", ciphertextByte: "41")],
+            timelineAt: 1
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        let item = try #require(viewModel.timeline.first)
+        let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
+
+        let firstRead = viewModel.mediaItems(for: item)
+        let secondRead = viewModel.mediaItems(for: item)
+
+        #expect(firstRead.map(\.fileName) == ["classified.jpg"])
+        #expect(secondRead == firstRead)
+        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
+    }
+
+    @MainActor
+    @Test func pendingMediaOverridesCachedTimelineProjection() throws {
+        let messageId = hex("dd")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: hex("aa"))
+        )
+        let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
+        let listedReference = encryptedMediaReference(
+            fileName: "listed.jpg",
+            plaintextByte: "31",
+            ciphertextByte: "41",
+            sourceEpoch: 42
+        )
+        let pending = MessageMediaAttachment(
+            id: "pending-local",
+            reference: nil,
+            fileName: "pending.jpg",
+            mediaType: "image/jpeg",
+            dim: "640x480",
+            localData: Data([0xDE, 0xAD, 0xBE, 0xEF])
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        let item = try #require(viewModel.timeline.first)
+        viewModel.replaceMediaRecordsForTesting([
+            messageId: [
+                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: listedReference)
+            ]
+        ])
+        #expect(viewModel.mediaItems(for: item).map(\.fileName) == ["listed.jpg"])
+
+        viewModel.installPendingMediaForTesting(rowId: item.id, items: [pending])
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        #expect(viewModel.mediaItems(for: item) == [pending])
+    }
+
     @Test func mediaDownloadInFlightKeyNormalizesCryptoIdentity() {
         var uppercase = encryptedMediaReference(sourceEpoch: 0)
         let lowercase = uppercase
@@ -8406,6 +8535,26 @@ private func encryptedMediaReference(
         sourceEpoch: sourceEpoch,
         dim: dim,
         thumbhash: nil
+    )
+}
+
+private func mediaRecord(
+    messageIdHex: String,
+    attachmentIndex: UInt32,
+    reference: MediaAttachmentReferenceFfi,
+    direction: String = "received",
+    recordedAt: UInt64 = 1
+) -> MediaRecordFfi {
+    MediaRecordFfi(
+        messageIdHex: messageIdHex,
+        attachmentIndex: attachmentIndex,
+        direction: direction,
+        groupIdHex: hex("aa"),
+        sender: hex("11"),
+        reference: reference,
+        caption: nil,
+        recordedAt: recordedAt,
+        receivedAt: recordedAt
     )
 }
 

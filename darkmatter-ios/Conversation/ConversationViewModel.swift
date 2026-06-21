@@ -153,6 +153,8 @@ final class ConversationViewModel {
     @ObservationIgnored private var mediaRecordReferencesByKey: [MediaDownloadInFlightKey: MediaAttachmentReferenceFfi] = [:]
     @ObservationIgnored private let mediaDownloadInFlight = MediaDownloadInFlightStore()
 #if DEBUG
+    // Counts buildMediaItemProjection invocations across both record-backed and
+    // classify-backed media paths so tests can catch accidental body-time rebuilds.
     @ObservationIgnored private var mediaItemProjectionBuildCountForTestingStorage = 0
 #endif
     /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
@@ -1518,6 +1520,17 @@ final class ConversationViewModel {
         return changed
     }
 
+    @discardableResult
+    private func updateMediaItemProjection(forMessageId messageIdHex: String) -> Bool {
+        let rowId = "msg:\(messageIdHex)"
+        guard let record = messageById[messageIdHex],
+              let item = visibleTimelineItem(for: record, status: messageStatusById[messageIdHex])
+        else {
+            return removeMediaItemProjection(rowId: rowId)
+        }
+        return updateMediaItemProjection(for: item)
+    }
+
     private func usesMessageBubbleMarkdownProjection(for record: AppMessageRecordFfi) -> Bool {
         if GroupSystemEventPresentation.isDisplayable(record) {
             return false
@@ -1757,7 +1770,7 @@ final class ConversationViewModel {
         guard mediaRecordsByMessageId[messageIdHex] != records else { return false }
         mediaRecordsByMessageId[messageIdHex] = records
         rebuildMediaRecordReferenceIndex()
-        return rebuildMediaItemProjections(for: timeline)
+        return updateMediaItemProjection(forMessageId: messageIdHex)
     }
 
     private func rebuildMediaRecordReferenceIndex() {
@@ -1806,6 +1819,11 @@ final class ConversationViewModel {
 #if DEBUG
     func replaceMediaRecordsForTesting(_ recordsByMessageId: [String: [MediaRecordFfi]]) {
         replaceMediaRecordsByMessageId(recordsByMessageId)
+    }
+
+    @discardableResult
+    func replaceMediaRecordsForTesting(_ records: [MediaRecordFfi], forMessageId messageIdHex: String) -> Bool {
+        replaceMediaRecords(records, forMessageId: messageIdHex)
     }
 
     func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
