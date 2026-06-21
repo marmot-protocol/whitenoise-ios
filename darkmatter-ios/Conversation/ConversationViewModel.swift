@@ -148,9 +148,13 @@ final class ConversationViewModel {
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var pendingMediaByRowId: [String: [MessageMediaAttachment]] = [:]
+    @ObservationIgnored private var mediaItemProjectionsByRowId: [String: [MessageMediaAttachment]] = [:]
     @ObservationIgnored private var mediaRecordsByMessageId: [String: [MediaRecordFfi]] = [:]
     @ObservationIgnored private var mediaRecordReferencesByKey: [MediaDownloadInFlightKey: MediaAttachmentReferenceFfi] = [:]
     @ObservationIgnored private let mediaDownloadInFlight = MediaDownloadInFlightStore()
+#if DEBUG
+    @ObservationIgnored private var mediaItemProjectionBuildCountForTestingStorage = 0
+#endif
     /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
     @ObservationIgnored private var reactionRecords: [String: AppMessageRecordFfi] = [:]
     @ObservationIgnored private var optimisticReactionRemovals: Set<ReactionRemoval> = []
@@ -182,6 +186,7 @@ final class ConversationViewModel {
     var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
     var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
     var markedReadMessageIdsForTesting: Set<String> { markedReadMessageIds }
+    var mediaItemProjectionBuildCountForTesting: Int { mediaItemProjectionBuildCountForTestingStorage }
 
     func insertMarkedReadMessageIdsForTesting(_ messageIds: Set<String>) {
         markedReadMessageIds.formUnion(messageIds)
@@ -1352,7 +1357,8 @@ final class ConversationViewModel {
             for: next,
             onlyRowsWithMentions: false
         )
-        return assignTimeline(next) || markdownChanged
+        let mediaChanged = rebuildMediaItemProjections(for: next)
+        return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
     func refreshStreamingDebugPresentation() {
@@ -1402,14 +1408,16 @@ final class ConversationViewModel {
             replyTargetId: { replyTargetId(for: $0) }
         )
         let markdownChanged = updateMarkdownDisplayProjection(for: item)
-        return assignTimeline(next) || markdownChanged
+        let mediaChanged = updateMediaItemProjection(for: item)
+        return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
     @discardableResult
     private func removeTimelineItem(id: String) -> Bool {
         let next = timeline.filter { $0.id != id }
         let markdownChanged = removeMarkdownDisplayProjection(rowId: id)
-        return assignTimeline(next) || markdownChanged
+        let mediaChanged = removeMediaItemProjection(rowId: id)
+        return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
     private func assignTimeline(_ next: [TimelineItem]) -> Bool {
@@ -1468,6 +1476,44 @@ final class ConversationViewModel {
                 markdownDisplayProjectionsByRowId[rowId] = nil
                 changed = true
             }
+        }
+        return changed
+    }
+
+    @discardableResult
+    private func updateMediaItemProjection(for item: TimelineItem) -> Bool {
+        if pendingMediaByRowId[item.id] != nil {
+            return removeMediaItemProjection(rowId: item.id)
+        }
+        guard case .message(let record, _) = item.kind else {
+            return removeMediaItemProjection(rowId: item.id)
+        }
+        let next = buildMediaItemProjection(for: record, ownerId: item.id)
+        guard !next.isEmpty else {
+            return removeMediaItemProjection(rowId: item.id)
+        }
+        guard mediaItemProjectionsByRowId[item.id] != next else { return false }
+        mediaItemProjectionsByRowId[item.id] = next
+        return true
+    }
+
+    @discardableResult
+    private func removeMediaItemProjection(rowId: String) -> Bool {
+        mediaItemProjectionsByRowId.removeValue(forKey: rowId) != nil
+    }
+
+    @discardableResult
+    private func rebuildMediaItemProjections(for items: [TimelineItem]) -> Bool {
+        var changed = false
+        var activeRowIds = Set<String>()
+        for item in items {
+            guard case .message = item.kind else { continue }
+            activeRowIds.insert(item.id)
+            changed = updateMediaItemProjection(for: item) || changed
+        }
+        for rowId in Array(mediaItemProjectionsByRowId.keys) where !activeRowIds.contains(rowId) {
+            mediaItemProjectionsByRowId[rowId] = nil
+            changed = true
         }
         return changed
     }
@@ -1603,19 +1649,19 @@ final class ConversationViewModel {
         if let pending = pendingMediaByRowId[item.id] {
             return pending
         }
-        guard case .message(let record, _) = item.kind else {
-            return []
-        }
-        return mediaItems(for: record, ownerId: item.id)
+        return mediaItemProjectionsByRowId[item.id] ?? []
     }
 
     func mediaItems(for record: AppMessageRecordFfi) -> [MessageMediaAttachment] {
         _ = timelineProjectionGeneration
-        return mediaItems(for: record, ownerId: record.messageIdHex)
+        return buildMediaItemProjection(for: record, ownerId: record.messageIdHex)
     }
 
-    private func mediaItems(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
+    private func buildMediaItemProjection(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
         if let records = mediaRecordsByMessageId[record.messageIdHex], !records.isEmpty {
+#if DEBUG
+            mediaItemProjectionBuildCountForTestingStorage += 1
+#endif
             let references = records
                 .sorted { $0.attachmentIndex < $1.attachmentIndex }
                 .map(\.reference)
@@ -1624,6 +1670,9 @@ final class ConversationViewModel {
         guard case .media(let references) = MessageSemantics.classify(record) else {
             return []
         }
+#if DEBUG
+        mediaItemProjectionBuildCountForTestingStorage += 1
+#endif
         return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
     }
 
@@ -1696,9 +1745,11 @@ final class ConversationViewModel {
         }
     }
 
-    private func replaceMediaRecordsByMessageId(_ recordsByMessageId: [String: [MediaRecordFfi]]) {
+    @discardableResult
+    private func replaceMediaRecordsByMessageId(_ recordsByMessageId: [String: [MediaRecordFfi]]) -> Bool {
         mediaRecordsByMessageId = recordsByMessageId
         rebuildMediaRecordReferenceIndex()
+        return rebuildMediaItemProjections(for: timeline)
     }
 
     @discardableResult
@@ -1706,7 +1757,7 @@ final class ConversationViewModel {
         guard mediaRecordsByMessageId[messageIdHex] != records else { return false }
         mediaRecordsByMessageId[messageIdHex] = records
         rebuildMediaRecordReferenceIndex()
-        return true
+        return rebuildMediaItemProjections(for: timeline)
     }
 
     private func rebuildMediaRecordReferenceIndex() {
@@ -1743,8 +1794,9 @@ final class ConversationViewModel {
             guard !Task.isCancelled else { return }
             let next = Dictionary(grouping: records, by: \.messageIdHex)
             guard mediaRecordsByMessageId != next else { return }
-            replaceMediaRecordsByMessageId(next)
-            noteTimelineProjectionChanged()
+            if replaceMediaRecordsByMessageId(next) {
+                noteTimelineProjectionChanged()
+            }
         } catch {
             // Media rows are a display accelerator for decrypt/download. The
             // timeline remains usable and future updates retry the refresh.

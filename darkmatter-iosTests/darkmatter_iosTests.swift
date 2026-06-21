@@ -6451,6 +6451,68 @@ struct MessageSemanticsTests {
         #expect(viewModel.mediaRecordReferenceForTesting(matching: timelineReference) == listedReference)
     }
 
+    @MainActor
+    @Test func timelineMediaItemsUseCachedSortedRecordProjection() throws {
+        let messageId = hex("dd")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: hex("aa"))
+        )
+        let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
+        let firstReference = encryptedMediaReference(
+            fileName: "first.jpg",
+            plaintextByte: "31",
+            ciphertextByte: "41",
+            sourceEpoch: 42
+        )
+        let secondReference = encryptedMediaReference(
+            fileName: "second.jpg",
+            plaintextByte: "32",
+            ciphertextByte: "42",
+            sourceEpoch: 42
+        )
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [record], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        let item = try #require(viewModel.timeline.first)
+        viewModel.replaceMediaRecordsForTesting([
+            messageId: [
+                MediaRecordFfi(
+                    messageIdHex: messageId,
+                    attachmentIndex: 1,
+                    direction: "received",
+                    groupIdHex: hex("aa"),
+                    sender: hex("11"),
+                    reference: secondReference,
+                    caption: nil,
+                    recordedAt: 1,
+                    receivedAt: 1
+                ),
+                MediaRecordFfi(
+                    messageIdHex: messageId,
+                    attachmentIndex: 0,
+                    direction: "received",
+                    groupIdHex: hex("aa"),
+                    sender: hex("11"),
+                    reference: firstReference,
+                    caption: nil,
+                    recordedAt: 1,
+                    receivedAt: 1
+                ),
+            ]
+        ])
+
+        let firstRead = viewModel.mediaItems(for: item)
+        let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
+        let secondRead = viewModel.mediaItems(for: item)
+
+        #expect(firstRead.map(\.fileName) == ["first.jpg", "second.jpg"])
+        #expect(secondRead == firstRead)
+        #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
+    }
+
     @Test func mediaDownloadInFlightKeyNormalizesCryptoIdentity() {
         var uppercase = encryptedMediaReference(sourceEpoch: 0)
         let lowercase = uppercase
