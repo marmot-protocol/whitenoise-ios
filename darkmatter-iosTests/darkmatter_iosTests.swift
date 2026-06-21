@@ -4518,6 +4518,59 @@ struct ConversationTimelineProjectionTests {
         #expect(messages.first?.2 == projected.timelineAt)
     }
 
+    @Test func projectedOutgoingMessageReplacesMatchingFailedPendingBubble() throws {
+        let sender = hex("11")
+        let groupIdHex = hex("aa")
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "", id: groupIdHex)
+        )
+        let tempId = "pending-1"
+        let pending = AppMessageRecordFfi(
+            messageIdHex: "",
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: "hello from me",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 10,
+            receivedAt: 10
+        )
+        let projected = timelineRecord(
+            messageIdHex: hex("b2"),
+            direction: "sent",
+            groupIdHex: groupIdHex,
+            sender: sender,
+            plaintext: pending.plaintext,
+            timelineAt: 20
+        )
+
+        viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
+        viewModel.markFailedForTesting(tempId: tempId)
+
+        let failedMessages = viewModel.timeline.compactMap { item -> (String, MessageStatus)? in
+            guard case .message(let record, let status) = item.kind else { return nil }
+            return (record.messageIdHex, status)
+        }
+        #expect(failedMessages == [("", .failed)])
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        let messages = viewModel.timeline.compactMap { item -> (String, MessageStatus, UInt64)? in
+            guard case .message(let record, let status) = item.kind else { return nil }
+            return (record.messageIdHex, status, item.timestamp)
+        }
+
+        #expect(messages.count == 1)
+        #expect(messages.first?.0 == projected.messageIdHex)
+        #expect(messages.first?.1 == .sent)
+        #expect(messages.first?.2 == projected.timelineAt)
+    }
+
     @Test func projectedOutgoingMessageReplacesConfirmedTransientWithoutServerId() throws {
         let sender = hex("11")
         let groupIdHex = hex("aa")

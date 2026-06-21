@@ -1803,7 +1803,7 @@ final class ConversationViewModel {
         pendingHasStagedMedia: Bool
     ) -> Bool {
         guard case .message(let pending, let status) = item.kind,
-              status == .sending || status == .sent,
+              status == .sending || status == .sent || status == .failed,
               pending.messageIdHex.isEmpty,
               pending.direction == "sent" else {
             return false
@@ -2539,6 +2539,12 @@ final class ConversationViewModel {
             noteTimelineProjectionChanged()
         }
     }
+
+#if DEBUG
+    func markFailedForTesting(tempId: String) {
+        markFailed(tempId: tempId)
+    }
+#endif
 
     // MARK: - Reactions
 
