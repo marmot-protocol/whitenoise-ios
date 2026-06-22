@@ -261,6 +261,12 @@ struct MessageBubble: View {
                         initialItem: item,
                         initialImageData: data
                     )
+                },
+                onOpenVideo: { item in
+                    mediaGallery = MessageMediaGallery(
+                        items: mediaItems,
+                        initialItem: item
+                    )
                 }
             )
 
@@ -640,6 +646,7 @@ private struct MessageMediaGrid: View {
     let maxWidth: CGFloat
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
+    let onOpenVideo: (MessageMediaAttachment) -> Void
 
     private let spacing: CGFloat = 3
     private let cornerRadius: CGFloat = 14
@@ -704,7 +711,8 @@ private struct MessageMediaGrid: View {
                 sideLength: tileSize,
                 hiddenCount: index == MessageMediaGridPresentation.maxVisibleItems - 1 ? hiddenCount : 0,
                 onLoadMedia: onLoadMedia,
-                onOpenImage: onOpenImage
+                onOpenImage: onOpenImage,
+                onOpenVideo: onOpenVideo
             )
             .messageMediaTileCornerClip(roundedCorners, radius: cornerRadius)
         } else {
@@ -764,6 +772,7 @@ private struct MessageMediaAttachmentContent: View {
     let maxWidth: CGFloat
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
+    let onOpenVideo: (MessageMediaAttachment) -> Void
 
     private var usesVisualGrid: Bool {
         !items.isEmpty && items.allSatisfy { $0.isImage || $0.isVideo }
@@ -787,7 +796,8 @@ private struct MessageMediaAttachmentContent: View {
                 isFromMe: isFromMe,
                 maxWidth: maxWidth,
                 onLoadMedia: onLoadMedia,
-                onOpenImage: onOpenImage
+                onOpenImage: onOpenImage,
+                onOpenVideo: onOpenVideo
             )
         } else {
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
@@ -850,7 +860,8 @@ private struct MessageSingleVideoBubble: View {
             isFromMe: isFromMe,
             width: size.width,
             height: size.height,
-            onLoadMedia: onLoadMedia
+            onLoadMedia: onLoadMedia,
+            onOpenFullscreen: nil
         )
         .clipShape(.rect(cornerRadius: cornerRadius))
         .overlay {
@@ -1015,6 +1026,7 @@ private struct MessageMediaTile: View {
     let hiddenCount: Int
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
+    let onOpenVideo: (MessageMediaAttachment) -> Void
 
     @Environment(\.displayScale) private var displayScale
     @State private var imageData: Data?
@@ -1039,7 +1051,10 @@ private struct MessageMediaTile: View {
                     isFromMe: isFromMe,
                     width: sideLength,
                     height: sideLength,
-                    onLoadMedia: onLoadMedia
+                    onLoadMedia: onLoadMedia,
+                    onOpenFullscreen: {
+                        onOpenVideo(item)
+                    }
                 )
             } else {
                 filePlaceholder
@@ -1275,6 +1290,7 @@ private struct MessageVideoAttachmentView: View {
     let width: CGFloat
     let height: CGFloat
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+    let onOpenFullscreen: (() -> Void)?
 
     @State private var player: AVPlayer?
     @State private var playbackURL: URL?
@@ -1346,10 +1362,16 @@ private struct MessageVideoAttachmentView: View {
                 HStack {
                     Spacer()
                     Button {
-                        Task { await openFullscreen(scale: displayScale) }
+                        if let onOpenFullscreen {
+                            player?.pause()
+                            audioSession.stop()
+                            onOpenFullscreen()
+                        } else {
+                            Task { await openFullscreen(scale: displayScale) }
+                        }
                     } label: {
                         Group {
-                            if isLoadingFullscreen {
+                            if isLoadingFullscreen && onOpenFullscreen == nil {
                                 ProgressView()
                                     .controlSize(.small)
                                     .tint(.white)
@@ -1369,8 +1391,12 @@ private struct MessageVideoAttachmentView: View {
                         .background(Color.black.opacity(0.48), in: Circle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(isLoadingFullscreen)
-                    .accessibilityLabel("Open video fullscreen")
+                    .disabled(onOpenFullscreen == nil && isLoadingFullscreen)
+                    .accessibilityLabel(
+                        onOpenFullscreen == nil
+                            ? L10n.string("Open video fullscreen")
+                            : L10n.string("Open media gallery")
+                    )
                 }
                 Spacer()
             }
@@ -2443,7 +2469,7 @@ private struct MessageMediaFullscreenVideoPage: View {
                 Button {
                     Task { await loadAndPlay(force: true) }
                 } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
+                    Label(L10n.string("Retry"), systemImage: "arrow.clockwise")
                         .font(.headline)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
@@ -2460,35 +2486,38 @@ private struct MessageMediaFullscreenVideoPage: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Play video")
+                .accessibilityLabel(L10n.string("Play video"))
             }
         }
         .contentShape(Rectangle())
-        .task(id: item.id) {
-            if isSelected {
-                await loadAndPlay()
-            }
+        .onAppear {
+            startPlaybackIfSelected()
         }
         .onChange(of: isSelected) { _, selected in
             if selected {
-                Task { await loadAndPlay() }
+                startPlaybackIfSelected()
             } else {
-                pausePlayback()
+                releasePlayback()
             }
         }
         .onDisappear {
-            pausePlayback()
+            releasePlayback()
         }
-        .accessibilityLabel("Video attachment")
+        .accessibilityLabel(L10n.string("Video attachment"))
+    }
+
+    private func startPlaybackIfSelected() {
+        guard isSelected else { return }
+        Task { await loadAndPlay() }
     }
 
     private func loadAndPlay(force: Bool = false) async {
         guard isSelected else { return }
         guard force || !isLoading else { return }
         if force {
-            player?.pause()
-            audioSession.stop()
-            player = nil
+            // Retry should refetch the decrypted playback file, while ordinary
+            // re-selection reuses the memoized URL after releasing the player.
+            releasePlayback()
             playbackURL = nil
         } else if let player {
             player.play()
@@ -2507,7 +2536,7 @@ private struct MessageMediaFullscreenVideoPage: View {
             next.play()
             audioSession.attach(to: next)
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, isSelected else { return }
             didFail = true
         }
     }
@@ -2524,9 +2553,11 @@ private struct MessageMediaFullscreenVideoPage: View {
         return url
     }
 
-    private func pausePlayback() {
+    private func releasePlayback() {
         player?.pause()
+        player?.replaceCurrentItem(with: nil)
         audioSession.stop()
+        player = nil
     }
 }
 
