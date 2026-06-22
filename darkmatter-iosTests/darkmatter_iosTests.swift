@@ -48,7 +48,9 @@ struct AppStateBootstrapTests {
         let saved = try await appState.setRelayTelemetryExportEnabled(false)
 
         #expect(!saved.exportEnabled)
-        #expect(try appState.relayTelemetrySettings().exportEnabled == false)
+        let maybeReloaded = try await appState.relayTelemetrySettings()
+        let reloaded = try #require(maybeReloaded)
+        #expect(!reloaded.exportEnabled)
     }
 
     @Test func suspendedRuntimeTelemetryBuildConfigUsesCachedFallback() async throws {
@@ -105,7 +107,8 @@ struct AppStateBootstrapTests {
 
         let account = try await appState.createIdentity()
 
-        let settings = try #require(appState.notificationSettings(for: account.label))
+        let maybeSettings = await appState.notificationSettings(for: account.label)
+        let settings = try #require(maybeSettings)
         #expect(settings.localNotificationsEnabled)
         #expect(settings.nativePushEnabled)
         #expect(authorizationRequestCount == 1)
@@ -124,7 +127,8 @@ struct AppStateBootstrapTests {
 
         let account = try await appState.createIdentity()
 
-        let settings = try #require(appState.notificationSettings(for: account.label))
+        let maybeSettings = await appState.notificationSettings(for: account.label)
+        let settings = try #require(maybeSettings)
         #expect(!settings.localNotificationsEnabled)
         #expect(!settings.nativePushEnabled)
         #expect(remoteRegistrationRequestCount == 0)
@@ -391,6 +395,47 @@ struct AppStateBootstrapTests {
         #expect(!appStateSource.matches(#"localNotificationsEnabled:\s*\(try\? marmot\.notificationSettings"#))
     }
 
+    @Test func settingsReadAccessorsGateSuspensionAndUseClientWrappers() throws {
+        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
+
+        #expect(appStateSource.matches(
+            #"private func foregroundSettingsReadClient\(\) -> MarmotClient\? \{[\s\S]*"#
+                + #"guard !Task\.isCancelled,[\s\S]*"#
+                + #"isAppSceneActive,[\s\S]*"#
+                + #"!runtimeSuspendedForBackground,[\s\S]*"#
+                + #"!isRuntimeSuspending,[\s\S]*"#
+                + #"let client[\s\S]*"#
+                + #"else \{ return nil \}[\s\S]*"#
+                + #"return client"#
+        ))
+        #expect(appStateSource.matches(
+            #"func notificationSettings\(for accountRef: String\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
+                + #"guard let client = foregroundSettingsReadClient\(\) else \{ return nil \}[\s\S]*"#
+                + #"return try\? await client\.notificationSettings\(accountRef: accountRef\)"#
+        ))
+        #expect(appStateSource.matches(
+            #"func pushRegistration\(for accountRef: String\) async -> PushRegistrationFfi\? \{[\s\S]*"#
+                + #"guard let client = foregroundSettingsReadClient\(\) else \{ return nil \}[\s\S]*"#
+                + #"return try\? await client\.pushRegistration\(accountRef: accountRef\)"#
+        ))
+        #expect(marmotClientSource.matches(
+            #"func notificationSettings\(accountRef: String\) async throws -> NotificationSettingsFfi \{[\s\S]*"#
+                + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
+                + #"try marmot\.notificationSettings\(accountRef: accountRef\)"#
+        ))
+        #expect(marmotClientSource.matches(
+            #"func pushRegistration\(accountRef: String\) async throws -> PushRegistrationFfi\? \{[\s\S]*"#
+                + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
+                + #"try marmot\.pushRegistration\(accountRef: accountRef\)"#
+        ))
+        #expect(!appStateSource.contains("try? marmot.notificationSettings(accountRef: accountRef)"))
+        #expect(!appStateSource.contains("try? marmot.pushRegistration(accountRef: accountRef)"))
+        #expect(!appStateSource.contains("try marmot.relayTelemetrySettings()"))
+        #expect(!appStateSource.contains("try marmot.auditLogSettings()"))
+        #expect(!appStateSource.contains("try marmot.auditLogFiles()"))
+    }
+
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
         let appState = try testAppState()
         appState.activeAccountRef = "account-a"
@@ -450,6 +495,40 @@ struct AppStateBootstrapTests {
         #expect(appState.client != nil)
         #expect(!appState.marmot.isStopping())
 
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func suspendedRuntimeSettingsReadsDoNotRebuildRuntime() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        let generation = appState.runtimeGeneration
+
+        await appState.startRuntimeSuspension().value
+
+        let notificationSettings = await appState.notificationSettings(for: account.label)
+        let pushRegistration = await appState.pushRegistration(for: account.label)
+        let telemetrySettings = try await appState.relayTelemetrySettings()
+        let auditSettings = try await appState.auditLogSettings()
+        let auditFiles = try await appState.auditLogFiles()
+        let auditRows = try await appState.auditLogFileRows()
+        let privacyProjection = try await appState.privacySecuritySettingsProjection()
+
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+        #expect(notificationSettings == nil)
+        #expect(pushRegistration == nil)
+        #expect(telemetrySettings == nil)
+        #expect(auditSettings == nil)
+        #expect(auditFiles == nil)
+        #expect(auditRows == nil)
+        #expect(privacyProjection == nil)
+        #expect(appState.client == nil)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration == generation)
+
+        await appState.startForegroundActivation().value
         await stopReadyRuntime(appState)
     }
 
@@ -582,7 +661,9 @@ struct AppStateBootstrapTests {
         let settings = try await appState.setAuditLogEnabled(true)
 
         #expect(settings.enabled)
-        #expect(try appState.auditLogSettings().enabled)
+        let maybeReloadedSettings = try await appState.auditLogSettings()
+        let reloadedSettings = try #require(maybeReloadedSettings)
+        #expect(reloadedSettings.enabled)
         #expect(appState.runtimeGeneration == generation)
         #expect(appState.phase == .ready)
         #expect(appState.client != nil)
@@ -755,13 +836,15 @@ struct AppStateBootstrapTests {
         // APNS token unavailable in unit tests; calling marmot directly
         // flips the same local preference.
         _ = try await appState.marmot.setNativePushEnabled(accountRef: accountA.label, enabled: true)
-        #expect(appState.notificationSettings(for: accountA.label)?.nativePushEnabled == true)
+        let enabledSettings = await appState.notificationSettings(for: accountA.label)
+        #expect(enabledSettings?.nativePushEnabled == true)
 
         await appState.signOut()
 
+        let removedSettings = await appState.notificationSettings(for: accountA.label)
         #expect(appState.activeAccountRef == accountB.label)
         #expect(appState.accounts.map(\.label) == [accountB.label])
-        #expect(appState.notificationSettings(for: accountA.label) == nil)
+        #expect(removedSettings == nil)
         // A remaining account means we stay in the main interface.
         #expect(appState.phase == .ready)
 
@@ -846,9 +929,10 @@ struct AppStateBootstrapTests {
 
         await appState.signOut()
 
+        let removedSettings = await appState.notificationSettings(for: only.label)
         #expect(appState.accounts.isEmpty)
         #expect(appState.activeAccountRef == nil)
-        #expect(appState.notificationSettings(for: only.label) == nil)
+        #expect(removedSettings == nil)
         // Signing out of the last account must route back to onboarding
         // rather than leaving the main UI up with no active account.
         #expect(appState.phase == .onboarding)

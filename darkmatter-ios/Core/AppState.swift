@@ -544,14 +544,31 @@ final class AppState {
         return await client.localNotificationsEnabledForPresentation(accountRef: accountRef)
     }
 
-    // MARK: - Notifications
-
-    func notificationSettings(for accountRef: String) -> NotificationSettingsFfi? {
-        try? marmot.notificationSettings(accountRef: accountRef)
+    /// Returns the already-live foreground runtime for settings reads, or nil
+    /// while the app is inactive/suspending/suspended. Settings reload tasks can
+    /// resume during the background transition; using this helper avoids the
+    /// rebuilding `marmot` / `runtimeClient()` accessors so they cannot re-open
+    /// the App Group SQLite store after suspension deliberately released it.
+    private func foregroundSettingsReadClient() -> MarmotClient? {
+        guard !Task.isCancelled,
+              isAppSceneActive,
+              !runtimeSuspendedForBackground,
+              !isRuntimeSuspending,
+              let client
+        else { return nil }
+        return client
     }
 
-    func pushRegistration(for accountRef: String) -> PushRegistrationFfi? {
-        try? marmot.pushRegistration(accountRef: accountRef)
+    // MARK: - Notifications
+
+    func notificationSettings(for accountRef: String) async -> NotificationSettingsFfi? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try? await client.notificationSettings(accountRef: accountRef)
+    }
+
+    func pushRegistration(for accountRef: String) async -> PushRegistrationFfi? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try? await client.pushRegistration(accountRef: accountRef)
     }
 
     @discardableResult
@@ -821,12 +838,14 @@ final class AppState {
         await task?.value
     }
 
-    func relayTelemetrySettings() throws -> RelayTelemetrySettingsFfi {
-        try marmot.relayTelemetrySettings()
+    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try await client.relayTelemetrySettings()
     }
 
-    func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
-        try await runtimeClient().privacySecuritySettingsProjection()
+    func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try await client.privacySecuritySettingsProjection()
     }
 
     /// Parses markdown off the MainActor for the send path's optimistic record.
@@ -857,8 +876,9 @@ final class AppState {
         )
     }
 
-    func auditLogSettings() throws -> AuditLogSettingsFfi {
-        try marmot.auditLogSettings()
+    func auditLogSettings() async throws -> AuditLogSettingsFfi? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try await client.auditLogSettings()
     }
 
     @MainActor
@@ -867,12 +887,14 @@ final class AppState {
         try await marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: enabled))
     }
 
-    func auditLogFiles() throws -> [AuditLogFileFfi] {
-        try marmot.auditLogFiles()
+    func auditLogFiles() async throws -> [AuditLogFileFfi]? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try await client.auditLogFiles()
     }
 
-    func auditLogFileRows() async throws -> [AuditFileRow] {
-        try await runtimeClient().auditFileRows()
+    func auditLogFileRows() async throws -> [AuditFileRow]? {
+        guard let client = foregroundSettingsReadClient() else { return nil }
+        return try await client.auditFileRows()
     }
 
     @MainActor
