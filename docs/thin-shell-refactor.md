@@ -470,10 +470,9 @@ polling over re-running.
       - [x] `AccountUnreadStore` (commit `0eb5bba`): unread badge index → pure
             `@Observable` store (index methods take `accounts` as a param, no
             back-ref); AppState keeps the Marmot fetch + read forwarder
-      - [ ] `AccountStore` (accounts list + active ref): the larger, more
-            entangled piece — 3 observable props, `activeAccountRef` UserDefaults
-            `didSet`, circular `refreshAccounts`↔profile coupling. Identity ops
-            (create/import/signOut) STAY in AppState (lifecycle orchestration).
+      - [x] `AccountStore` (commit `fdc88a0`): account list + `activeAccountRef`
+            (+ its UserDefaults `didSet`/key) + `activeAccount` → pure `@Observable`
+            store; AppState forwarders + still drives refresh/identity lifecycle
       - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
             most entangled; verify suspend/resume by running the app, not just tests
       - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up)
