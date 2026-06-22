@@ -463,8 +463,13 @@ polling over re-running.
       mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`
       timeline path + index maps + sourceEpoch recovery. Drop-bad now via the Rust
       row; Swift parser retained as the local/optimistic fallback (oracle unchanged)
-- [ ] Phase 2 — extract RuntimeLifecycle, AccountStore, NotificationCoordinator,
-      ProfileStore; AppState → composition root
+- [ ] Phase 2 — extract services from AppState; AppState → composition root
+      - [x] `ProfileStore` (commit `8e7f089`): profile cache + load/refresh queues
+            → `@MainActor ProfileStore`; `profileRefreshGeneration` stays on AppState
+            for observation; AppState+Profiles.swift now thin forwarders
+      - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks)
+      - [ ] `AccountStore` (accounts, active ref, unread index, identity ops)
+      - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up)
 - [ ] Phase 4 — screen-store template; convert 19 view-embedded screens
 - [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
       MediaController / ComposerModel / StreamWatcher
