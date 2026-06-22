@@ -525,20 +525,29 @@ struct GroupDetailsView: View {
 
     @ViewBuilder
     private func memberActionsMenu(for member: GroupMemberDetailsFfi) -> some View {
-        let actions = memberActions(for: member)
-        if !actions.isEmpty {
-            Menu {
-                memberActionButtons(for: member, actions: actions)
+        // Copy npub is available to every member, so the menu always renders.
+        // Membership-management actions (admin/remove) stay gated on the
+        // caller's permissions and only appear when applicable.
+        Menu {
+            Button {
+                copyNpub(for: member)
             } label: {
-                Image(systemName: "ellipsis.circle")
-                    .imageScale(.large)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
+                Label("Copy npub", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.plain)
-            .disabled(membershipActionInFlight)
-            .accessibilityLabel("Member actions")
+
+            let actions = memberActions(for: member)
+            if !actions.isEmpty {
+                Divider()
+                memberActionButtons(for: member, actions: actions)
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .imageScale(.large)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Member actions")
     }
 
     @ViewBuilder
@@ -552,6 +561,7 @@ struct GroupDetailsView: View {
             } label: {
                 Label("Make Admin", systemImage: "star")
             }
+            .disabled(membershipActionInFlight)
         }
         if actions.contains(.demote) {
             Button {
@@ -559,6 +569,7 @@ struct GroupDetailsView: View {
             } label: {
                 Label("Remove Admin", systemImage: "star.slash")
             }
+            .disabled(membershipActionInFlight)
         }
         if actions.contains(.selfDemote) {
             Button(role: .destructive) {
@@ -566,6 +577,7 @@ struct GroupDetailsView: View {
             } label: {
                 Label("Step Down as Admin", systemImage: "star.slash")
             }
+            .disabled(membershipActionInFlight)
         }
         if actions.contains(.remove) {
             Button(role: .destructive) {
@@ -573,7 +585,14 @@ struct GroupDetailsView: View {
             } label: {
                 Label("Remove from Group", systemImage: "person.crop.circle.badge.minus")
             }
+            .disabled(membershipActionInFlight)
         }
+    }
+
+    private func copyNpub(for member: GroupMemberDetailsFfi) {
+        UIPasteboard.general.string = member.npub
+        Haptics.selection()
+        appState.present(.success(L10n.string("Copied to clipboard"), message: L10n.string("npub")))
     }
 
     @ViewBuilder
