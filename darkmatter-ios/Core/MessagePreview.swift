@@ -39,13 +39,20 @@ enum MessagePreview {
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
         case .groupSystem:
             return GroupSystemEventPresentation.displayText(from: record.plaintext) ?? ""
-        case .chat, .reply, .streamFinal, .reaction, .delete, .agentStreamStart, .unknown:
+        case .chat, .reply, .streamFinal:
             // Reply text, stream transcript, and plain chat all live in plaintext.
             return flattenedBody(
                 plaintext: record.plaintext,
                 tokens: record.contentTokens,
                 mentionDisplayName: mentionDisplayName
             )
+        case .reaction, .delete, .agentStreamStart, .unknown:
+            // Not previewable/displayable text: a reaction's emoji, a delete
+            // tombstone, or a kind-1200 stream-start signal must never surface
+            // as message body. Mirrors `isPreviewable(_:)` so the
+            // previewable/displayable classification has a single source of
+            // truth and never renders a bare reaction/stream-start as a preview.
+            return ""
         }
     }
 
