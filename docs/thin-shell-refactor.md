@@ -467,8 +467,15 @@ polling over re-running.
       - [x] `ProfileStore` (commit `8e7f089`): profile cache + load/refresh queues
             → `@MainActor ProfileStore`; `profileRefreshGeneration` stays on AppState
             for observation; AppState+Profiles.swift now thin forwarders
-      - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks)
-      - [ ] `AccountStore` (accounts, active ref, unread index, identity ops)
+      - [x] `AccountUnreadStore` (commit `0eb5bba`): unread badge index → pure
+            `@Observable` store (index methods take `accounts` as a param, no
+            back-ref); AppState keeps the Marmot fetch + read forwarder
+      - [ ] `AccountStore` (accounts list + active ref): the larger, more
+            entangled piece — 3 observable props, `activeAccountRef` UserDefaults
+            `didSet`, circular `refreshAccounts`↔profile coupling. Identity ops
+            (create/import/signOut) STAY in AppState (lifecycle orchestration).
+      - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
+            most entangled; verify suspend/resume by running the app, not just tests
       - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up)
 - [ ] Phase 4 — screen-store template; convert 19 view-embedded screens
 - [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
