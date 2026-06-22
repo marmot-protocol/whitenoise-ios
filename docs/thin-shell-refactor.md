@@ -103,8 +103,24 @@ and (later) the Rust output.
 
 ## Phase 1 — One seam (unify the Marmot access path)
 
-**Goal:** eliminate MainActor-blocking FFI and make `MarmotClient` the only way
-to reach Marmot. This unlocks every later phase.
+> **Reconciled against the code (2026-06-22).** The "39 MainActor-blocking
+> sites" premise was wrong. Classifying the 27 directly-called methods against
+> the generated bindings: **26 are already `async`** (they suspend, not block),
+> and the one remaining sync call, `npub`, is a trivial bech32 encode
+> (microseconds, no I/O) — blocking on it is harmless, and making it `async`
+> would push async churn into 4 view sites for zero benefit. The heavy sync
+> reads that genuinely blocked (chatList, timelineMessages, accountUnreadSummary,
+> notificationSettings, parseMarkdown, normalizeMemberRef, accountIdHex, …) were
+> **already wrapped** in `MarmotClient`. So Phase 1's correctness work is
+> effectively **done**. The remaining value is pure seam *discipline* (route the
+> async calls through `MarmotClient`, then make the raw handle inaccessible) —
+> and since the handle can't be locked down until the Phase 4/5 screens/VM stop
+> using it, that routing is best **folded into the Phase 4/5 rewrites** rather
+> than churning the same files twice. Net: no standalone Phase 1; lock the handle
+> down as the final step after 4/5.
+
+**Original goal:** eliminate MainActor-blocking FFI and make `MarmotClient` the
+only way to reach Marmot.
 
 **Scope (measured):** 39 direct `appState.marmot.` sites in:
 GroupDetailsView (12), ConversationViewModel (11), DiagnosticsView (5),
@@ -299,12 +315,39 @@ every screen with backend interaction has a store following the template.
 store template.
 
 **Approach**
-- After Phase 3: delete the media buckets that moved to the row
-  (`mediaRecordsByMessageId`, `mediaRecordReferencesByKey`, per-rebuild `imeta`
-  classification, timeline `listMedia`). Reaction aggregation, reply ordering,
-  and markdown display-block building stay (they were reclassified as UI state),
-  but should be cleaned up here: consume row `content_tokens` instead of
-  re-parsing, and keep the reaction path to a thin optimistic overlay.
+- **Media slice (ready-to-execute design, scoped 2026-06-22).** The row's new
+  `media: [MediaAttachmentReferenceFfi]` lives on `TimelineMessageRecordFfi`, but
+  the VM stores `AppMessageRecordFfi` in `messageById` (no `media` field). So
+  capture it at ingest exactly like the existing reaction/reply-preview pattern:
+  - `applyTimelineRecord` (~L1315) already does
+    `replyPreviewsByMessageId[id] = record.replyPreview` and
+    `projectedReactionSummaries[id] = record.reactions`. Add
+    `mediaReferencesByMessageId[id] = record.media` alongside it (and capture in
+    `applyTimelinePage`'s record loop).
+  - Rewrite `buildMediaItemProjection` (~L1758) to read
+    `mediaReferencesByMessageId[record.messageIdHex]` instead of
+    `mediaRecordsByMessageId` (listMedia) and the `MessageSemantics.classify`
+    tag-classification fallback.
+  - `downloadableMediaReference` (~L1809) can drop the `sourceEpoch == 0`
+    fallback — row references already carry the real epoch; delete
+    `mediaRecordReference(matching:)` + the index.
+  - **Delete**: `mediaRecordsByMessageId`, `mediaRecordReferencesByKey`,
+    `refreshMediaRecords`, `scheduleMediaRecordsRefresh`,
+    `rebuildMediaRecordReferenceIndex`, `replaceMediaRecordsByMessageId`,
+    `replaceMediaRecords`, and the `client.listMedia` call for the timeline.
+    (`listMedia` may stay in `MarmotClient` for a future media-gallery surface.)
+  - **Test fallout**: rewrite the ~4 tests built on `replaceMediaRecordsForTesting`
+    / `mediaRecordsByMessageId` (e.g. `timelineMediaItemsUseCachedSortedRecordProjection`,
+    `mediaRecordUpdateRefreshesOnlyChangedTimelineProjection`,
+    `mediaRecordReferenceLookupUsesIndexedNormalizedIdentity`) to drive
+    `mediaReferencesByMessageId` via a timeline record carrying `media`.
+  - **Behavior change lands here**: drop-bad (the row drops a malformed `imeta`
+    and keeps valid ones). Flip the `MediaImetaProjectionParityTests` corpus's
+    malformed-multi case from `nil` to `[valid]` and enable the consumption check.
+- After the media slice: reaction aggregation, reply ordering, and markdown
+  display-block building stay (reclassified as UI state), but clean up: consume
+  row `content_tokens` instead of re-parsing, keep the reaction path to a thin
+  optimistic overlay.
 - Split the remainder by concern into focused stores:
   - `TimelineStore` — subscription + `messageById` dumb mirror + optimistic
     overlay (pending/failed sends), pagination cursors, coalesced read-marking.
@@ -362,14 +405,17 @@ polling over re-running.
 
 ## Attack checklist
 
-- [ ] Phase 0 — golden tests for reply-order, reaction aggregation, media
-      classification (parity oracle)
-- [ ] Phase 1 — convert 39 sync-FFI sites to `MarmotClient`; lock down raw
-      handle
+- [x] Phase 0 — media parity oracle (`MediaImetaProjectionParityTests`); reply-order
+      & reaction aggregation already covered by existing tests
+- [x] Phase 1 — reconciled: the genuine blocking reads were already wrapped in
+      `MarmotClient`; the rest is non-blocking/trivial. Seam routing + handle
+      lockdown fold into Phase 4/5 (no standalone phase)
+- [x] Phase 3 — merged (darkmatter#570) + bindings synced (127fe17) + fixtures migrated
+- [ ] **Phase 5a (media slice)** — capture `record.media` at ingest, delete the
+      `listMedia` timeline path + index maps, flip the oracle's drop-bad case
+      *(ready-to-execute design in Phase 5 above; next concrete unit)*
 - [ ] Phase 2 — extract RuntimeLifecycle, AccountStore, NotificationCoordinator,
       ProfileStore; AppState → composition root
-- [ ] Phase 3 — push `sourceEpoch`, reaction tally, reply order, media
-      projection into Rust; delete iOS re-derivation
 - [ ] Phase 4 — screen-store template; convert 19 view-embedded screens
-- [ ] Phase 5 — decompose ConversationViewModel into TimelineStore /
+- [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
       MediaController / ComposerModel / StreamWatcher
