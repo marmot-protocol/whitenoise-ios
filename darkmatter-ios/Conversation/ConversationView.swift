@@ -143,6 +143,11 @@ enum TimelinePaginationTrigger {
     }
 }
 
+private struct ConversationRuntimeStartToken: Equatable {
+    let runtimeGeneration: Int
+    let isRuntimeWarmingUp: Bool
+}
+
 struct ConversationSendPayload {
     let viewModel: ConversationViewModel
     let text: String
@@ -455,7 +460,10 @@ struct ConversationView: View {
                 allowsMultipleSelection: true,
                 onCompletion: addFileImporterResult
             )
-            .task(id: appState.runtimeGeneration) {
+            .task(id: ConversationRuntimeStartToken(
+                runtimeGeneration: appState.runtimeGeneration,
+                isRuntimeWarmingUp: appState.isRuntimeWarmingUp
+            )) {
                 if viewModel == nil {
                     viewModel = ConversationViewModel(
                         appState: appState,

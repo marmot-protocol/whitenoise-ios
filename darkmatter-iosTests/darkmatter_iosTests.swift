@@ -140,8 +140,8 @@ struct AppStateBootstrapTests {
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
 
-        #expect(source.matches(#"func createIdentity\(\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(\)[\s\S]*?return summary"#))
-        #expect(source.matches(#"func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(\)[\s\S]*?return summary"#))
+        #expect(source.matches(#"func createIdentity\(\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(scheduleNativePushRegistration: false\)[\s\S]*?return summary"#))
+        #expect(source.matches(#"func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(scheduleNativePushRegistration: false\)[\s\S]*?return summary"#))
     }
 
     @Test func lifecycleEntrypointsDeclareMainActorIsolation() throws {
@@ -363,20 +363,21 @@ struct AppStateBootstrapTests {
     @Test func notificationPresentationSettingsReadFailureFailsOpen() throws {
         let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
+        let helperStart = try #require(appStateSource.range(of: "private func localNotificationsEnabledForPresentation(accountRef: String) async -> Bool"))
+        let helperEnd = try #require(appStateSource.range(
+            of: "\n    }\n\n",
+            range: helperStart.upperBound..<appStateSource.endIndex
+        ))
+        let localNotificationHelperSource = String(appStateSource[helperStart.lowerBound..<helperEnd.upperBound])
         let helperPattern =
-            #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
+            #"private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
             + #"guard !Task\.isCancelled,[\s\S]*"#
             + #"isAppSceneActive,[\s\S]*"#
             + #"!runtimeSuspendedForBackground,[\s\S]*"#
             + #"!isRuntimeSuspending,[\s\S]*"#
             + #"let client[\s\S]*"#
             + #"else \{ return true \}[\s\S]*"#
-            + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)[\s\S]*"#
-            + #"// MARK: - Notifications"#
-        let unsafeRebuildPattern =
-            #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*?runtimeClient\(\)[\s\S]*?// MARK: - Notifications"#
-        let unsafeTrapPattern =
-            #"@MainActor\s+private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*?fatalError[\s\S]*?// MARK: - Notifications"#
+            + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)"#
         let clientHelperPattern =
             #"func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
             + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
@@ -386,9 +387,9 @@ struct AppStateBootstrapTests {
             #"LocalNotificationSuppressionPolicy\.shouldPresent\([\s\S]*"#
             + #"localNotificationsEnabled: localNotificationsEnabled"#
 
-        #expect(appStateSource.matches(helperPattern))
-        #expect(!appStateSource.matches(unsafeRebuildPattern))
-        #expect(!appStateSource.matches(unsafeTrapPattern))
+        #expect(localNotificationHelperSource.matches(helperPattern))
+        #expect(!localNotificationHelperSource.contains("runtimeClient()"))
+        #expect(!localNotificationHelperSource.contains("fatalError"))
         #expect(marmotClientSource.matches(clientHelperPattern))
         #expect(appStateSource.matches(policyPattern))
         #expect(!appStateSource.contains("return try marmot.notificationSettings(accountRef: accountRef).localNotificationsEnabled"))
@@ -444,18 +445,18 @@ struct AppStateBootstrapTests {
         let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
 
-        #expect(appStateSource.matches(
+        let foregroundSettingsReadClientPattern =
             #"private func foregroundSettingsReadClient\(\) -> MarmotClient\? \{[\s\S]*"#
-                + #"SettingsReadRuntimeGate\.canRead\([\s\S]*"#
-                + #"isTaskCancelled: Task\.isCancelled,[\s\S]*"#
-                + #"isAppSceneActive: isAppSceneActive,[\s\S]*"#
-                + #"runtimeSuspendedForBackground: runtimeSuspendedForBackground,[\s\S]*"#
-                + #"isRuntimeSuspending: isRuntimeSuspending,[\s\S]*"#
-                + #"hasRuntimeClient: liveClient != nil[\s\S]*"#
-                + #"let liveClient[\s\S]*"#
-                + #"else \{ return nil \}[\s\S]*"#
-                + #"return liveClient"#
-        ))
+            + #"SettingsReadRuntimeGate\.canRead\([\s\S]*"#
+            + #"isTaskCancelled: Task\.isCancelled,[\s\S]*"#
+            + #"isAppSceneActive: isAppSceneActive,[\s\S]*"#
+            + #"runtimeSuspendedForBackground: runtimeSuspendedForBackground,[\s\S]*"#
+            + #"isRuntimeSuspending: isRuntimeSuspending,[\s\S]*"#
+            + #"hasRuntimeClient: liveClient != nil[\s\S]*"#
+            + #"let liveClient[\s\S]*"#
+            + #"else \{ return nil \}[\s\S]*"#
+            + #"return liveClient"#
+        #expect(appStateSource.matches(foregroundSettingsReadClientPattern))
         #expect(appStateSource.matches(
             #"func notificationSettings\(for accountRef: String\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
                 + #"guard let client = foregroundSettingsReadClient\(\) else \{ return nil \}[\s\S]*"#
@@ -732,6 +733,60 @@ struct AppStateBootstrapTests {
 
         #expect(!source.matches(#"(?s)func resumeAfterForegroundActivation\(\) async \{.*Task\.sleep"#))
         #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
+    }
+
+    @Test func foregroundRuntimeWorkIsGatedDuringBackgroundSuspension() {
+        #expect(ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+
+        #expect(ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true
+        ))
     }
 
     @Test func foregroundResumeSchedulesNativePushAfterBestEffortCatchUp() throws {
@@ -4467,10 +4522,47 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func startClearsOptimisticOverlaysBeforeRebindingSubscriptions() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        #expect(ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: false,
+            canStartLiveWork: true
+        ) == .loadLocalSnapshot(startLiveWork: true))
+        #expect(ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: false,
+            canStartLiveWork: false
+        ) == .skipForegroundWork)
+        #expect(ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: true,
+            canStartLiveWork: false
+        ) == .loadLocalSnapshot(startLiveWork: false))
+        #expect(ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: true,
+            canStartLiveWork: true
+        ) == .loadLocalSnapshot(startLiveWork: true))
 
-        #expect(source.matches(#"func start\(\) async \{[\s\S]*stopLiveSubscriptions\(\)\s*resetOptimisticState\(\)[\s\S]*startLiveTimeline"#))
-        #expect(source.matches(#"private func resetOptimisticState\(\) \{[\s\S]*optimisticDeletedMessageIds\.removeAll\(\)[\s\S]*optimisticReactionRemovals\.removeAll\(\)[\s\S]*reactionRecords\.removeAll\(\)[\s\S]*rebuildDeletedMessageIds\(\)[\s\S]*recomputeReactions\(\)"#))
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: group(name: "")
+        )
+        let message = timelineRecord(messageIdHex: hex("44"), timelineAt: 1)
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [message], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        viewModel.seedOptimisticStateForTesting(
+            deletedMessageIdHex: message.messageIdHex,
+            reactionTargetMessageIdHex: message.messageIdHex,
+            emoji: "🔥",
+            sender: hex("22")
+        )
+        #expect(viewModel.isDeleted(message.messageIdHex))
+        #expect(viewModel.reactions(for: message.messageIdHex) == [
+            ConversationViewModel.ReactionTally(emoji: "🔥", count: 1, mine: false)
+        ])
+
+        viewModel.resetOptimisticStateForTesting()
+        #expect(!viewModel.isDeleted(message.messageIdHex))
+        #expect(viewModel.reactions(for: message.messageIdHex).isEmpty)
     }
 
     @Test func timelinePageHydratesReplyPreviewReactionsAndDeletedState() throws {

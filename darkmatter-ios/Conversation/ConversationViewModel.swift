@@ -26,6 +26,18 @@ enum TimelineTailRefreshTaskLifetime {
     }
 }
 
+enum ConversationRuntimeStartDecision: Equatable {
+    case skipForegroundWork
+    case loadLocalSnapshot(startLiveWork: Bool)
+
+    static func evaluate(canLoadLocalSnapshot: Bool, canStartLiveWork: Bool) -> Self {
+        guard canLoadLocalSnapshot || canStartLiveWork else {
+            return .skipForegroundWork
+        }
+        return .loadLocalSnapshot(startLiveWork: canStartLiveWork)
+    }
+}
+
 private struct TimelineTailRefreshRequest {
     let client: MarmotClient
     let accountRef: String
@@ -545,14 +557,27 @@ final class ConversationViewModel {
     }
 
     func start() async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let appState,
+              let accountRef = appState.activeAccountRef
+        else { return }
+        let canLoadLocalSnapshot = appState.canUseRuntimeForLocalForegroundWork
+        let canStartLiveWork = appState.canUseRuntimeForForegroundWork
+        let startDecision = ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: canLoadLocalSnapshot,
+            canStartLiveWork: canStartLiveWork
+        )
         stopLiveSubscriptions()
+        guard startDecision != .skipForegroundWork else {
+            initialTimelineSnapshotTask?.cancel()
+            return
+        }
         resetOptimisticState()
         error = nil
-        if timeline.isEmpty {
+        if canLoadLocalSnapshot, timeline.isEmpty {
             isLoading = true
             startInitialTimelineSnapshot(accountRef: accountRef)
         }
+        guard case .loadLocalSnapshot(startLiveWork: true) = startDecision else { return }
         startLiveTimeline(accountRef: accountRef)
         startLiveGroupState(accountRef: accountRef)
         startDeferredGroupDetails(accountRef: accountRef)
@@ -638,7 +663,10 @@ final class ConversationViewModel {
     }
 
     private func initializeReadState() async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let appState,
+              appState.canUseRuntimeForForegroundWork,
+              let accountRef = appState.activeAccountRef
+        else { return }
         do {
             let client = try appState.currentMarmotClient()
             if let row = try await client.initializeChatReadState(
@@ -681,7 +709,7 @@ final class ConversationViewModel {
             pendingReadMessageIdSet.subtract(messageIds)
             pruneMarkedReadMessageIds(force: true)
         }
-        guard let appState else {
+        guard let appState, appState.canUseRuntimeForForegroundWork else {
             markedReadMessageIds.subtract(messageIds)
             return
         }
@@ -781,16 +809,39 @@ final class ConversationViewModel {
     func resetOptimisticStateForTesting() {
         resetOptimisticState()
     }
+
+    func seedOptimisticStateForTesting(
+        deletedMessageIdHex: String,
+        reactionTargetMessageIdHex: String,
+        emoji: String,
+        sender: String
+    ) {
+        optimisticDeletedMessageIds.insert(deletedMessageIdHex)
+        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
+        reactionRecords[reactionId] = AppMessageRecordFfi(
+            messageIdHex: reactionId,
+            direction: "sent",
+            groupIdHex: group.groupIdHex,
+            sender: sender,
+            plaintext: emoji,
+            kind: MessageSemantics.kindReaction,
+            tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
+            recordedAt: 1,
+            receivedAt: 1
+        )
+        _ = rebuildDeletedMessageIds()
+        _ = recomputeReactions()
+    }
 #endif
 
     private func startLiveTimeline(accountRef: String) {
-        guard let appState else { return }
+        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
         let groupIdHex = group.groupIdHex
         timelineTask = Task { [weak self, weak appState] in
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
-                    guard let appState else { return }
+                    guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
                     let subscribeStart = ContinuousClock.now
                     let timelineSub = try await client.marmot.subscribeTimelineMessages(
@@ -806,23 +857,31 @@ final class ConversationViewModel {
                     let snapshotStart = ContinuousClock.now
                     if let snapshot = await client.timelineSubscriptionSnapshot(timelineSub) {
                         self?.logLoadDuration("timeline.snapshot", since: snapshotStart)
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled,
+                              appState.canUseRuntimeForForegroundWork
+                        else { return }
                         self?.applyTimelinePage(snapshot, placement: .window)
                     }
                     self?.isLoading = false
                     for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled,
+                              appState.canUseRuntimeForForegroundWork
+                        else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         self?.applyTimelineSubscriptionUpdate(update)
                     }
                 } catch is CancellationError {
                     return
                 } catch {
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled,
+                          appState?.canUseRuntimeForForegroundWork == true
+                    else { return }
                     self?.isLoading = false
                     self?.error = error.localizedDescription
                 }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled,
+                      appState?.canUseRuntimeForForegroundWork == true
+                else { return }
                 do {
                     try await Task.sleep(nanoseconds: retryDelay)
                 } catch {
@@ -835,11 +894,14 @@ final class ConversationViewModel {
 
     private func startInitialTimelineSnapshot(accountRef: String) {
         initialTimelineSnapshotTask?.cancel()
-        guard let appState else { return }
+        guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
         let groupIdHex = group.groupIdHex
         initialTimelineSnapshotTask = Task { [weak self, weak appState] in
             do {
-                guard let self, let appState else { return }
+                guard let self,
+                      let appState,
+                      appState.canUseRuntimeForLocalForegroundWork
+                else { return }
                 let client = try appState.currentMarmotClient()
                 let page = try await client.timelineMessages(
                     accountRef: accountRef,
@@ -873,25 +935,31 @@ final class ConversationViewModel {
     }
 
     private func startLiveGroupState(accountRef: String) {
-        guard let appState else { return }
+        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
         let groupIdHex = group.groupIdHex
         groupStateTask = Task { [weak self, weak appState] in
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
-                    guard let appState else { return }
+                    guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
                     let groupSub = try await client.marmot.subscribeGroupState(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex
                     )
-                    guard !Task.isCancelled else { return }
+                    guard !Task.isCancelled,
+                          appState.canUseRuntimeForForegroundWork
+                    else { return }
                     if let initial = await client.groupStateSubscriptionSnapshot(groupSub) {
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled,
+                              appState.canUseRuntimeForForegroundWork
+                        else { return }
                         self?.applyGroupRecord(initial)
                     }
                     for await record in SubscriptionDriver.groupState(groupSub) {
-                        guard !Task.isCancelled else { return }
+                        guard !Task.isCancelled,
+                              appState.canUseRuntimeForForegroundWork
+                        else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         await self?.applyGroupUpdate(record)
                     }
@@ -901,7 +969,9 @@ final class ConversationViewModel {
                     guard !Task.isCancelled else { return }
                     self?.error = error.localizedDescription
                 }
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled,
+                      appState?.canUseRuntimeForForegroundWork == true
+                else { return }
                 do {
                     try await Task.sleep(nanoseconds: retryDelay)
                 } catch {
@@ -913,14 +983,19 @@ final class ConversationViewModel {
     }
 
     private func startDeferredGroupDetails(accountRef: String) {
-        guard let appState else { return }
+        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
         let groupIdHex = group.groupIdHex
         groupDetailsTask = Task { [weak self, weak appState] in
-            guard let self, let appState else { return }
+            guard let self,
+                  let appState,
+                  appState.canUseRuntimeForForegroundWork
+            else { return }
             if await self.refreshGroupManagement() {
                 return
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  appState.canUseRuntimeForForegroundWork
+            else { return }
             do {
                 let next = try await appState.marmot.groupMembers(
                     accountRef: accountRef,
@@ -1802,7 +1877,10 @@ final class ConversationViewModel {
     }
 
     func refreshMediaRecords(limit: UInt32 = 500) async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let appState,
+              appState.canUseRuntimeForLocalForegroundWork,
+              let accountRef = appState.activeAccountRef
+        else { return }
         do {
             let client = try appState.currentMarmotClient()
             let records = try await client.listMedia(
@@ -2371,7 +2449,10 @@ final class ConversationViewModel {
     }
 
     private func refreshMembers() async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let appState,
+              appState.canUseRuntimeForForegroundWork,
+              let accountRef = appState.activeAccountRef
+        else { return }
         if await refreshGroupManagement(announceRosterChanges: true) {
             return
         }
@@ -2695,7 +2776,10 @@ final class ConversationViewModel {
     /// Watch a concrete live agent stream when the start payload names one;
     /// otherwise fall back to the latest live stream in this group.
     private func startWatching(sender: String, streamIdHex: String?, startedAt: UInt64? = nil) async {
-        guard let appState, let accountRef = appState.activeAccountRef else { return }
+        guard let appState,
+              appState.canUseRuntimeForForegroundWork,
+              let accountRef = appState.activeAccountRef
+        else { return }
         guard AgentStreamWatchAdmission.canStart(
             streamIdHex: streamIdHex,
             activeStreamIds: Set(streamWatchTasks.keys),

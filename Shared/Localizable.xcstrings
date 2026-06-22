@@ -4685,7 +4685,17 @@
       }
     },
     "Backup" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sicherung" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Copia de seguridad" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sauvegarde" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backup" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Backup" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Резервная копия" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yedekleme" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "备份" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "備份" } }
+      }
     },
     "Built on" : {
       "extractionState" : "manual",
@@ -9011,10 +9021,30 @@
       }
     },
     "Encrypted export" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsselter Export" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportación cifrada" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Export chiffré" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esportazione crittografata" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportação criptografada" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Зашифрованный экспорт" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli dışa aktarma" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加密导出" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加密匯出" } }
+      }
     },
     "Encrypted export failed: %@" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsselter Export fehlgeschlagen: %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Error al exportar cifrado: %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Échec de l'export chiffré : %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esportazione crittografata non riuscita: %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Falha na exportação criptografada: %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось экспортировать зашифрованные данные: %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli dışa aktarma başarısız oldu: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加密导出失败：%@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加密匯出失敗：%@" } }
+      }
     },
     "End-to-end encrypted group messaging." : {
       "extractionState" : "manual",
@@ -9076,7 +9106,17 @@
       }
     },
     "Enter a passphrase." : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gib eine Passphrase ein." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Introduce una frase de contraseña." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Saisissez une phrase secrète." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Inserisci una passphrase." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Insira uma frase secreta." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите парольную фразу." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Bir parola girin." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入密码短语。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "輸入密碼短語。" } }
+      }
     },
     "Enter a search term." : {
       "comment" : "Error message when the user has not entered a search term.",
@@ -9553,7 +9593,17 @@
       }
     },
     "Export" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Exportieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exporter" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esporta" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportar" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспортировать" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Dışa aktar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "导出" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "匯出" } }
+      }
     },
     "Export Conversation Transcript" : {
       "localizations" : {
@@ -9614,7 +9664,17 @@
       }
     },
     "Export encrypted nsec" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsseltes nsec exportieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportar nsec cifrado" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exporter le nsec chiffré" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esporta nsec crittografato" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportar nsec criptografado" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспортировать зашифрованный nsec" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli nsec'i dışa aktar" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "导出加密 nsec" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "匯出加密 nsec" } }
+      }
     },
     "Export failed" : {
       "comment" : "A title for an alert that indicates a failed export.",
@@ -9677,7 +9737,62 @@
       }
     },
     "Export raw nsec" : {
-
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rohes nsec exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar nsec sin procesar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le nsec brut"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta nsec grezzo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar nsec bruto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать необработанный nsec"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ham nsec'i dışa aktar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出原始 nsec"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出原始 nsec"
+          }
+        }
+      }
     },
     "Exports the raw inner Nostr event history for this group as JSON (kinds 9, 1200–1210, and related metadata), ordered by time. Use Share to copy or save the file." : {
       "comment" : "A footer for the transcript export section.",
@@ -19000,7 +19115,17 @@
       }
     },
     "Passphrase" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Passphrase" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Frase de contraseña" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Phrase secrète" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Passphrase" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Frase secreta" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Парольная фраза" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Parola" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "密码短语" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "密碼短語" } }
+      }
     },
     "Paste your nsec (bech32 secret key). Public npub values are for sharing and cannot sign in." : {
       "extractionState" : "manual",
@@ -19554,7 +19679,17 @@
       }
     },
     "Preparing export" : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Export wird vorbereitet" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Preparando exportación" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Préparation de l'export" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Preparazione dell'esportazione" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Preparando exportação" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подготовка экспорта" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Dışa aktarma hazırlanıyor" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在准备导出" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在準備匯出" } }
+      }
     },
     "Privacy & Security" : {
       "comment" : "A heading for the privacy and security settings screen.",
@@ -21023,7 +21158,17 @@
       }
     },
     "Raw export reveals your private key in plaintext and permanently marks it as handled insecurely. Encrypted export creates an ncryptsec1 backup protected by your passphrase without revealing the raw key." : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Roh-Export zeigt deinen privaten Schlüssel im Klartext und markiert ihn dauerhaft als unsicher behandelt. Der verschlüsselte Export erstellt eine durch deine Passphrase geschützte ncryptsec1-Sicherung, ohne den Rohschlüssel offenzulegen." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La exportación sin procesar revela tu clave privada en texto claro y la marca permanentemente como tratada de forma insegura. La exportación cifrada crea una copia ncryptsec1 protegida por tu frase de contraseña sin revelar la clave sin procesar." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "L'export brut révèle votre clé privée en clair et la marque définitivement comme manipulée de façon non sécurisée. L'export chiffré crée une sauvegarde ncryptsec1 protégée par votre phrase secrète sans révéler la clé brute." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "L'esportazione grezza mostra la tua chiave privata in chiaro e la contrassegna in modo permanente come gestita in modo non sicuro. L'esportazione crittografata crea un backup ncryptsec1 protetto dalla tua passphrase senza rivelare la chiave grezza." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "A exportação bruta revela sua chave privada em texto puro e a marca permanentemente como manipulada de forma insegura. A exportação criptografada cria um backup ncryptsec1 protegido pela sua frase secreta sem revelar a chave bruta." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспорт в сыром виде раскрывает ваш приватный ключ открытым текстом и навсегда помечает его как обработанный небезопасно. Зашифрованный экспорт создает резервную копию ncryptsec1, защищенную парольной фразой, не раскрывая исходный ключ." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Ham dışa aktarma özel anahtarınızı düz metin olarak gösterir ve kalıcı olarak güvensiz şekilde işlendi diye işaretler. Şifreli dışa aktarma, ham anahtarı göstermeden parolanızla korunan bir ncryptsec1 yedeği oluşturur." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "原始导出会以明文显示你的私钥，并永久标记为已不安全处理。加密导出会创建受密码短语保护的 ncryptsec1 备份，而不会暴露原始密钥。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "原始匯出會以明文顯示你的私鑰，並永久標記為已不安全處理。加密匯出會建立受密碼短語保護的 ncryptsec1 備份，而不會暴露原始金鑰。" } }
+      }
     },
     "React" : {
       "extractionState" : "manual",
@@ -26580,7 +26725,17 @@
       }
     },
     "The account keystore is unavailable right now." : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Kontoschlüsselspeicher ist derzeit nicht verfügbar." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El almacén de claves de la cuenta no está disponible ahora." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le magasin de clés du compte est indisponible pour le moment." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "L'archivio chiavi dell'account non è disponibile al momento." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "O armazenamento de chaves da conta não está disponível agora." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Хранилище ключей аккаунта сейчас недоступно." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Hesap anahtar deposu şu anda kullanılamıyor." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "帐户密钥库当前不可用。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "帳戶金鑰庫目前無法使用。" } }
+      }
     },
     "Theme" : {
       "extractionState" : "manual",
@@ -26761,7 +26916,17 @@
       }
     },
     "This account cannot export a private key." : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Konto kann keinen privaten Schlüssel exportieren." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta cuenta no puede exportar una clave privada." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ce compte ne peut pas exporter de clé privée." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Questo account non può esportare una chiave privata." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Esta conta não pode exportar uma chave privada." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот аккаунт не может экспортировать приватный ключ." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Bu hesap özel anahtar dışa aktaramaz." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "此帐户无法导出私钥。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "此帳戶無法匯出私鑰。" } }
+      }
     },
     "This attachment is not ready yet." : {
       "comment" : "Error message when trying to access media data without a reference.",
@@ -29749,7 +29914,17 @@
       }
     },
     "Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it." : {
-
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Deine Passphrase verschlüsselt die exportierte ncryptsec1-Sicherung. Marmot speichert sie nie." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tu frase de contraseña cifra la copia ncryptsec1 exportada. Marmot nunca la almacena." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Votre phrase secrète chiffre la sauvegarde ncryptsec1 exportée. Marmot ne la stocke jamais." } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "La tua passphrase crittografa il backup ncryptsec1 esportato. Marmot non la memorizza mai." } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Sua frase secreta criptografa o backup ncryptsec1 exportado. O Marmot nunca a armazena." } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ваша парольная фраза шифрует экспортированную резервную копию ncryptsec1. Marmot никогда ее не сохраняет." } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Parolanız dışa aktarılan ncryptsec1 yedeğini şifreler. Marmot bunu asla saklamaz." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "你的密码短语会加密导出的 ncryptsec1 备份。Marmot 永远不会存储它。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "你的密碼短語會加密匯出的 ncryptsec1 備份。Marmot 永遠不會儲存它。" } }
+      }
     }
   },
   "version" : "1.1"
