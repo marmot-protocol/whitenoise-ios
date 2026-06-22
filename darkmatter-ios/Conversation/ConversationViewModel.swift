@@ -137,8 +137,6 @@ final class ConversationViewModel {
     private var groupDetailsTask: Task<Void, Never>?
     private var readStateTask: Task<Void, Never>?
     private var readMarkTask: Task<Void, Never>?
-    private var mediaRefreshTask: Task<Void, Never>?
-    private var mediaRefreshGeneration: UInt64 = 0
     private var tailRefreshTask: Task<Void, Never>?
     private var tailRefreshGeneration: UInt64 = 0
 
@@ -163,8 +161,11 @@ final class ConversationViewModel {
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var pendingMediaByRowId: [String: [MessageMediaAttachment]] = [:]
     @ObservationIgnored private var mediaItemProjectionsByRowId: [String: [MessageMediaAttachment]] = [:]
-    @ObservationIgnored private var mediaRecordsByMessageId: [String: [MediaRecordFfi]] = [:]
-    @ObservationIgnored private var mediaRecordReferencesByKey: [MediaDownloadInFlightKey: MediaAttachmentReferenceFfi] = [:]
+    /// Resolved, downloadable media references per message, mirrored from each
+    /// timeline row's `media` projection at ingest (Marmot resolves the imeta
+    /// tags + source_epoch). A dumb mirror of the row — no iOS-side derivation,
+    /// and no separate `listMedia` round-trip to recover `sourceEpoch`.
+    @ObservationIgnored private var mediaReferencesByMessageId: [String: [MediaAttachmentReferenceFfi]] = [:]
     @ObservationIgnored private let mediaDownloadInFlight = MediaDownloadInFlightStore()
 #if DEBUG
     // Counts buildMediaItemProjection invocations across both record-backed and
@@ -553,7 +554,6 @@ final class ConversationViewModel {
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
         readMarkTask?.cancel()
-        mediaRefreshTask?.cancel()
         tailRefreshTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
@@ -767,10 +767,6 @@ final class ConversationViewModel {
         readStateTask = nil
         cancelPendingReadMarks()
         markedReadMessageIds.removeAll()
-        mediaRefreshTask?.cancel()
-        mediaRefreshTask = nil
-        mediaRefreshGeneration &+= 1
-        isMediaRecordsRefreshPending = false
         cancelTimelineTailRefresh()
         for task in streamWatchTasks.values {
             task.cancel()
@@ -1321,15 +1317,15 @@ final class ConversationViewModel {
         let appRecord = Self.appMessageRecord(from: record)
         guard !appRecord.messageIdHex.isEmpty else { return false }
         let semantics = MessageSemantics.classify(appRecord)
-        if case .media = semantics {
-            scheduleMediaRecordsRefresh()
-        }
 
         projectionChanged = true
         messageById[appRecord.messageIdHex] = appRecord
         messageStatusById[appRecord.messageIdHex] = appRecord.direction == "sent" ? .sent : .received
         replyTargetByMessageId[appRecord.messageIdHex] = record.replyToMessageIdHex
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
+        // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
+        // mirror it instead of re-classifying tags or a separate listMedia pass.
+        mediaReferencesByMessageId[appRecord.messageIdHex] = record.media
         projectedReactionSummaries[appRecord.messageIdHex] = record.reactions
         reactionRecords = Self.prunedConfirmedOptimisticReactions(
             reactionRecords,
@@ -1378,6 +1374,7 @@ final class ConversationViewModel {
         messageStatusById[messageIdHex] = nil
         replyTargetByMessageId[messageIdHex] = nil
         replyPreviewsByMessageId[messageIdHex] = nil
+        mediaReferencesByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
         if !pendingReadMessageIdSet.contains(messageIdHex) {
@@ -1756,16 +1753,15 @@ final class ConversationViewModel {
     }
 
     private func buildMediaItemProjection(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
-        if let records = mediaRecordsByMessageId[record.messageIdHex], !records.isEmpty {
-#if DEBUG
-            mediaItemProjectionBuildCountForTestingStorage += 1
-#endif
-            let references = records
-                .sorted { $0.attachmentIndex < $1.attachmentIndex }
-                .map(\.reference)
-            return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
-        }
-        guard case .media(let references) = MessageSemantics.classify(record) else {
+        // Prefer the row-resolved references (correct source_epoch, drop-bad).
+        // Fall back to tag classification only for records with no captured row
+        // projection (e.g. local/optimistic sends before the confirmed row).
+        let references: [MediaAttachmentReferenceFfi]
+        if let rowReferences = mediaReferencesByMessageId[record.messageIdHex], !rowReferences.isEmpty {
+            references = rowReferences
+        } else if case .media(let classified) = MessageSemantics.classify(record) {
+            references = classified
+        } else {
             return []
         }
 #if DEBUG
@@ -1787,7 +1783,9 @@ final class ConversationViewModel {
         guard let appState, let accountRef = appState.activeAccountRef else {
             throw MediaDataError.missingAccount
         }
-        let downloadableReference = await downloadableMediaReference(for: reference)
+        // Row references already carry the real source_epoch, so the reference
+        // is directly downloadable — no listMedia round-trip to recover it.
+        let downloadableReference = reference
         if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
             return cached
         }
@@ -1804,19 +1802,6 @@ final class ConversationViewModel {
             await MessageMediaCache.store(result.plaintext, for: downloadableReference)
             return result.plaintext
         }
-    }
-
-    private func downloadableMediaReference(for reference: MediaAttachmentReferenceFfi) async -> MediaAttachmentReferenceFfi {
-        guard reference.sourceEpoch == 0 else { return reference }
-        if let mediaRecordReference = mediaRecordReference(matching: reference) {
-            return mediaRecordReference
-        }
-        await refreshMediaRecords()
-        return mediaRecordReference(matching: reference) ?? reference
-    }
-
-    private func mediaRecordReference(matching reference: MediaAttachmentReferenceFfi) -> MediaAttachmentReferenceFfi? {
-        mediaRecordReferencesByKey[MediaDownloadInFlightKey(reference: reference)]
     }
 
     static func sameMediaAttachment(
@@ -1843,91 +1828,20 @@ final class ConversationViewModel {
         }
     }
 
+    /// Mirrors the resolved references for one message (from the timeline row,
+    /// or from an upload result so a just-sent bubble renders before its row
+    /// arrives) and refreshes that message's projection.
     @discardableResult
-    private func replaceMediaRecordsByMessageId(_ recordsByMessageId: [String: [MediaRecordFfi]]) -> Bool {
-        mediaRecordsByMessageId = recordsByMessageId
-        rebuildMediaRecordReferenceIndex()
-        return rebuildMediaItemProjections(for: timeline)
-    }
-
-    @discardableResult
-    private func replaceMediaRecords(_ records: [MediaRecordFfi], forMessageId messageIdHex: String) -> Bool {
-        guard mediaRecordsByMessageId[messageIdHex] != records else { return false }
-        mediaRecordsByMessageId[messageIdHex] = records
-        rebuildMediaRecordReferenceIndex()
+    private func replaceMediaReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
+        guard mediaReferencesByMessageId[messageIdHex] != references else { return false }
+        mediaReferencesByMessageId[messageIdHex] = references
         return updateMediaItemProjection(forMessageId: messageIdHex)
     }
 
-    private func rebuildMediaRecordReferenceIndex() {
-        var next: [MediaDownloadInFlightKey: MediaAttachmentReferenceFfi] = [:]
-        for records in mediaRecordsByMessageId.values {
-            for record in records {
-                next[MediaDownloadInFlightKey(reference: record.reference)] = record.reference
-            }
-        }
-        mediaRecordReferencesByKey = next
-    }
-
-    private func scheduleMediaRecordsRefresh() {
-        mediaRefreshTask?.cancel()
-        mediaRefreshGeneration &+= 1
-        let generation = mediaRefreshGeneration
-        isMediaRecordsRefreshPending = true
-        mediaRefreshTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 150_000_000)
-            } catch {
-                return
-            }
-            await self?.refreshMediaRecords(pendingGeneration: generation)
-        }
-    }
-
-    func refreshMediaRecords(limit: UInt32 = 500) async {
-        await refreshMediaRecords(limit: limit, pendingGeneration: nil)
-    }
-
-    private func refreshMediaRecords(limit: UInt32 = 500, pendingGeneration: UInt64?) async {
-        defer {
-            clearPendingMediaRecordsRefresh(generation: pendingGeneration)
-        }
-        guard let appState,
-              appState.canUseRuntimeForLocalForegroundWork,
-              let accountRef = appState.activeAccountRef
-        else { return }
-        do {
-            let client = try appState.currentMarmotClient()
-            let records = try await client.listMedia(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                limit: limit
-            )
-            guard !Task.isCancelled else { return }
-            let next = Dictionary(grouping: records, by: \.messageIdHex)
-            guard mediaRecordsByMessageId != next else { return }
-            if replaceMediaRecordsByMessageId(next) {
-                noteTimelineProjectionChanged()
-            }
-        } catch {
-            // Media rows are a display accelerator for decrypt/download. The
-            // timeline remains usable and future updates retry the refresh.
-        }
-    }
-
-    private func clearPendingMediaRecordsRefresh(generation: UInt64?) {
-        guard let generation, mediaRefreshGeneration == generation else { return }
-        mediaRefreshTask = nil
-        isMediaRecordsRefreshPending = false
-    }
-
 #if DEBUG
-    func replaceMediaRecordsForTesting(_ recordsByMessageId: [String: [MediaRecordFfi]]) {
-        replaceMediaRecordsByMessageId(recordsByMessageId)
-    }
-
     @discardableResult
-    func replaceMediaRecordsForTesting(_ records: [MediaRecordFfi], forMessageId messageIdHex: String) -> Bool {
-        replaceMediaRecords(records, forMessageId: messageIdHex)
+    func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
+        replaceMediaReferences(references, forMessageId: messageIdHex)
     }
 
     func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
@@ -1938,14 +1852,8 @@ final class ConversationViewModel {
         pendingMediaByRowId[rowId]
     }
 
-    func mediaRecordReferenceForTesting(
-        matching reference: MediaAttachmentReferenceFfi
-    ) -> MediaAttachmentReferenceFfi? {
-        mediaRecordReference(matching: reference)
-    }
-
-    var mediaRecordReferenceIndexCountForTesting: Int {
-        mediaRecordReferencesByKey.count
+    var mediaReferenceCountForTesting: Int {
+        mediaReferencesByMessageId.values.reduce(0) { $0 + $1.count }
     }
 #endif
 
@@ -2646,20 +2554,9 @@ final class ConversationViewModel {
             let messageId = result.sent?.messageIds.first
             confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
             if let messageId, !messageId.isEmpty {
-                let nextRecords = references.enumerated().map { index, reference in
-                    MediaRecordFfi(
-                        messageIdHex: messageId,
-                        attachmentIndex: UInt32(index),
-                        direction: "sent",
-                        groupIdHex: group.groupIdHex,
-                        sender: optimistic.sender,
-                        reference: reference,
-                        caption: captionForRust,
-                        recordedAt: now,
-                        receivedAt: now
-                    )
-                }
-                if replaceMediaRecords(nextRecords, forMessageId: messageId) {
+                // Render the just-sent attachments immediately from the upload's
+                // resolved references; the subscription row will mirror the same.
+                if replaceMediaReferences(references, forMessageId: messageId) {
                     noteTimelineProjectionChanged()
                 }
             }
@@ -2712,7 +2609,7 @@ final class ConversationViewModel {
             // No server message id: the row stays transient under "msg:\(tempId)".
             // Restore the pending media we just removed so the just-sent
             // attachments keep rendering — without a real message id there is no
-            // mediaRecordsByMessageId entry to fall back on, so dropping this
+            // mediaReferencesByMessageId entry to fall back on, so dropping this
             // would silently blank the bubble's images.
             if let removedPendingMedia {
                 pendingMediaByRowId[rowId] = removedPendingMedia

@@ -5257,7 +5257,8 @@ struct ConversationTimelineProjectionTests {
         #expect(source.contains("await client.markTimelineMessagesRead("))
         #expect(source.contains("try await client.initializeChatReadState("))
         #expect(source.contains("try await client.timelineMessages("))
-        #expect(source.contains("try await client.listMedia("))
+        // Timeline media now arrives resolved on the row (mediaReferencesByMessageId);
+        // the VM no longer calls client.listMedia (the wrapper stays for other surfaces).
         #expect(source.contains("initialTimelineSnapshotTask"))
         #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
         #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
@@ -6772,39 +6773,7 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func mediaRecordReferenceLookupUsesIndexedNormalizedIdentity() throws {
-        var timelineReference = encryptedMediaReference(sourceEpoch: 0)
-        timelineReference.plaintextSha256 = timelineReference.plaintextSha256.uppercased()
-        timelineReference.ciphertextSha256 = timelineReference.ciphertextSha256.uppercased()
-        timelineReference.nonceHex = timelineReference.nonceHex.uppercased()
-        let listedReference = encryptedMediaReference(sourceEpoch: 42)
-        let messageId = hex("dd")
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "", id: hex("aa"))
-        )
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 0,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: listedReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                )
-            ]
-        ])
-
-        #expect(viewModel.mediaRecordReferenceIndexCountForTesting == 1)
-        #expect(viewModel.mediaRecordReferenceForTesting(matching: timelineReference) == listedReference)
-    }
-
-    @MainActor
-    @Test func timelineMediaItemsUseCachedSortedRecordProjection() throws {
+    @Test func timelineMediaItemsUseCachedReferenceProjection() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),
@@ -6829,32 +6798,8 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 1,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: secondReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                ),
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 0,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: firstReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                ),
-            ]
-        ])
+        // Row-resolved references arrive already ordered (Marmot preserves imeta order).
+        viewModel.replaceMediaReferencesForTesting([firstReference, secondReference], forMessageId: messageId)
 
         let firstRead = viewModel.mediaItems(for: item)
         let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
@@ -6866,7 +6811,7 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func mediaRecordUpdateRefreshesOnlyChangedTimelineProjection() throws {
+    @Test func mediaReferenceUpdateRefreshesOnlyChangedTimelineProjection() throws {
         let messageId = hex("dd")
         let otherMessageId = hex("ee")
         let viewModel = ConversationViewModel(
@@ -6875,24 +6820,9 @@ struct MessageSemanticsTests {
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
         let otherRecord = timelineRecord(messageIdHex: otherMessageId, timelineAt: 2)
-        let firstReference = encryptedMediaReference(
-            fileName: "first.jpg",
-            plaintextByte: "31",
-            ciphertextByte: "41",
-            sourceEpoch: 42
-        )
-        let replacementReference = encryptedMediaReference(
-            fileName: "replacement.jpg",
-            plaintextByte: "32",
-            ciphertextByte: "42",
-            sourceEpoch: 42
-        )
-        let otherReference = encryptedMediaReference(
-            fileName: "other.jpg",
-            plaintextByte: "33",
-            ciphertextByte: "43",
-            sourceEpoch: 42
-        )
+        let firstReference = encryptedMediaReference(fileName: "first.jpg", plaintextByte: "31", ciphertextByte: "41", sourceEpoch: 42)
+        let replacementReference = encryptedMediaReference(fileName: "replacement.jpg", plaintextByte: "32", ciphertextByte: "42", sourceEpoch: 42)
+        let otherReference = encryptedMediaReference(fileName: "other.jpg", plaintextByte: "33", ciphertextByte: "43", sourceEpoch: 42)
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [record, otherRecord], hasMoreBefore: false, hasMoreAfter: false),
@@ -6900,19 +6830,11 @@ struct MessageSemanticsTests {
         )
         let item = try #require(viewModel.timeline.first { $0.id == "msg:\(messageId)" })
         let otherItem = try #require(viewModel.timeline.first { $0.id == "msg:\(otherMessageId)" })
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: firstReference)
-            ],
-            otherMessageId: [
-                mediaRecord(messageIdHex: otherMessageId, attachmentIndex: 0, reference: otherReference)
-            ],
-        ])
+        viewModel.replaceMediaReferencesForTesting([firstReference], forMessageId: messageId)
+        viewModel.replaceMediaReferencesForTesting([otherReference], forMessageId: otherMessageId)
         let buildCountAfterInitialProjection = viewModel.mediaItemProjectionBuildCountForTesting
 
-        #expect(viewModel.replaceMediaRecordsForTesting([
-            mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: replacementReference)
-        ], forMessageId: messageId))
+        #expect(viewModel.replaceMediaReferencesForTesting([replacementReference], forMessageId: messageId))
         let updated = viewModel.mediaItems(for: item)
         let unchanged = viewModel.mediaItems(for: otherItem)
 
@@ -6978,11 +6900,7 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: listedReference)
-            ]
-        ])
+        viewModel.replaceMediaReferencesForTesting([listedReference], forMessageId: messageId)
         #expect(viewModel.mediaItems(for: item).map(\.fileName) == ["listed.jpg"])
 
         viewModel.installPendingMediaForTesting(rowId: item.id, items: [pending])

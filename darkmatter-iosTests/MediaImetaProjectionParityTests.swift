@@ -209,15 +209,14 @@ struct MediaImetaProjectionParityTests {
     //      a given `imeta` + epoch, doubling as a hand-checkable golden set
     //      against the Rust conversion tests in `conversions/media.rs`.
     //
-    // When iOS adopts `record.media` (Phase 5 — delete `MessageSemantics`
-    // `mediaAttachments`, `mediaRecordsByMessageId`, `mediaRecordReferencesByKey`,
-    // and the timeline `listMedia` path), validate consumption with an
-    // integration test over a real runtime timeline (real rows carry resolved
-    // `media`), not a hand-built fixture. That swap is also where the DECIDED
-    // drop-bad behavior takes effect: a message with one valid + one malformed
-    // `imeta` will then surface the valid attachment, where today's Swift parser
-    // surfaces none — flip the corpus "drop-bad" case from `nil` to `[valid]`
-    // at that point.
+    // STATUS: the media slice has landed. `ConversationViewModel` now mirrors
+    // `record.media` into `mediaReferencesByMessageId` at ingest and the
+    // `listMedia` timeline path + its index maps are deleted. `MessageSemantics`
+    // `mediaAttachments` is RETAINED as the fallback for local/optimistic records
+    // that have no row projection yet, so this corpus still pins its (unchanged,
+    // all-or-nothing) behavior. The DECIDED drop-bad behavior now lives in the
+    // Rust row path (`record.media`), which a pure-Swift fixture can't exercise —
+    // verify it via the Rust conversion tests + a real-runtime integration check.
 }
 
 // MARK: - Fixtures (file-private; mirror encryptedMediaTag in darkmatter_iosTests)
