@@ -83,6 +83,38 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Clears the cached APNS token and asks iOS for a fresh one. Waits until
+    /// the app delegate receives a token, registration fails, or the timeout
+    /// elapses. A successful refresh schedules native push re-registration.
+    func refreshApnsToken(
+        timeoutNanoseconds: UInt64 = 10_000_000_000,
+        pollIntervalNanoseconds: UInt64 = 100_000_000
+    ) async throws -> String {
+        guard await registerForRemoteNotificationsIfAuthorized() else {
+            throw NotificationSettingsActionError.permissionDenied
+        }
+
+        apnsTokenHex = nil
+        lastRegistrationError = nil
+        registerForRemoteNotifications()
+
+        let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+        while DispatchTime.now().uptimeNanoseconds < deadline {
+            if let errorMessage = lastRegistrationError {
+                throw NotificationSettingsActionError.apnsRegistrationFailed(errorMessage)
+            }
+            if let token = apnsTokenHex, !token.isEmpty {
+                return token
+            }
+            try await Task.sleep(nanoseconds: pollIntervalNanoseconds)
+        }
+
+        if let errorMessage = lastRegistrationError {
+            throw NotificationSettingsActionError.apnsRegistrationFailed(errorMessage)
+        }
+        throw NotificationSettingsActionError.apnsTokenRefreshTimedOut
+    }
+
     func recordDeviceToken(_ deviceToken: Data) {
         apnsTokenHex = deviceToken.map { String(format: "%02x", $0) }.joined()
         lastRegistrationError = nil
@@ -179,6 +211,8 @@ enum NotificationSettingsActionError: LocalizedError {
     case permissionDenied
     case nativePushNotConfigured
     case missingApnsToken
+    case apnsTokenRefreshTimedOut
+    case apnsRegistrationFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -190,6 +224,10 @@ enum NotificationSettingsActionError: LocalizedError {
             return L10n.string("Native push server configuration is missing.")
         case .missingApnsToken:
             return L10n.string("APNS has not returned a device token yet.")
+        case .apnsTokenRefreshTimedOut:
+            return L10n.string("APNS did not return a new device token in time. Try again, or check notification permission in Settings.")
+        case let .apnsRegistrationFailed(message):
+            return L10n.formatted("APNS registration failed: %@", message)
         }
     }
 }

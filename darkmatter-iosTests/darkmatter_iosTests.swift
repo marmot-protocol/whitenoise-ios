@@ -2536,9 +2536,9 @@ struct NativePushRegistrationPolicyTests {
 
     @Test func enabledAccountsAreSyncedAcrossAllLocalAccounts() {
         let accounts = [
-            AccountSummaryFfi(label: "account-a", accountIdHex: hex("11"), localSigning: true, running: true),
-            AccountSummaryFfi(label: "account-b", accountIdHex: hex("22"), localSigning: true, running: true),
-            AccountSummaryFfi(label: "account-c", accountIdHex: hex("33"), localSigning: true, running: true)
+            AccountSummaryFfi(label: "account-a", accountIdHex: hex("11"), localSigning: true, signedOut: false, running: true),
+            AccountSummaryFfi(label: "account-b", accountIdHex: hex("22"), localSigning: true, signedOut: false, running: true),
+            AccountSummaryFfi(label: "account-c", accountIdHex: hex("33"), localSigning: true, signedOut: false, running: true)
         ]
         let settings = [
             "account-a": NotificationSettingsFfi(
@@ -4667,7 +4667,9 @@ struct ConversationTimelineProjectionTests {
             guard case .message(let record, let status) = item.kind else { return nil }
             return (record.messageIdHex, status)
         }
-        #expect(failedMessages == [("", .failed)])
+        #expect(failedMessages.count == 1)
+        #expect(failedMessages[0].0 == "")
+        #expect(failedMessages[0].1 == .failed)
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),

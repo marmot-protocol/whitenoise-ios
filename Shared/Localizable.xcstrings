@@ -3848,6 +3848,65 @@
         }
       }
     },
+    "APNS did not return a new device token in time. Try again, or check notification permission in Settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS hat nicht rechtzeitig ein neues Geräte-Token zurückgegeben. Versuche es erneut oder prüfe die Benachrichtigungsberechtigung in den Einstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS no devolvió un token de dispositivo nuevo a tiempo. Inténtalo de nuevo o revisa el permiso de notificaciones en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS n’a pas renvoyé un nouveau jeton d’appareil à temps. Réessayez ou vérifiez l’autorisation de notifications dans Réglages."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS non ha restituito un nuovo token del dispositivo in tempo. Riprova o controlla l’autorizzazione alle notifiche in Impostazioni."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS não devolveu um token de dispositivo novo a tempo. Tente novamente ou verifique a permissão de notificações em Ajustes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS не вернул новый токен устройства вовремя. Повторите попытку или проверьте разрешение на уведомления в Настройках."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS zamanında yeni bir cihaz belirteci döndürmedi. Tekrar deneyin veya Ayarlar’daki bildirim iznini kontrol edin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS 未及时返回新的设备令牌。请重试，或在设置中检查通知权限。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS 未及時返回新的裝置令牌。請再試一次，或在設定中檢查通知權限。"
+          }
+        }
+      }
+    },
     "APNS has not returned a device token yet." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3903,6 +3962,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "APNS 尚未返回設備令牌。"
+          }
+        }
+      }
+    },
+    "APNS registration failed: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS-Registrierung fehlgeschlagen: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error en el registro de APNS: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de l’enregistrement APNS : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrazione APNS non riuscita: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha no registo APNS: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ошибка регистрации APNS: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS kaydı başarısız: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS 注册失败：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS 註冊失敗：%@"
           }
         }
       }
@@ -4565,6 +4683,9 @@
           }
         }
       }
+    },
+    "Backup" : {
+
     },
     "Built on" : {
       "extractionState" : "manual",
@@ -6895,6 +7016,65 @@
         }
       }
     },
+    "Couldn't sign in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung fehlgeschlagen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo iniciar sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de se connecter"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile accedere"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível iniciar sessão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось войти"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oturum açılamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法登录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法登入"
+          }
+        }
+      }
+    },
     "Couldn't sign out" : {
       "comment" : "Error message when signing out an account fails.",
       "isCommentAutoGenerated" : true,
@@ -8771,6 +8951,12 @@
         }
       }
     },
+    "Encrypted export" : {
+
+    },
+    "Encrypted export failed: %@" : {
+
+    },
     "End-to-end encrypted group messaging." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8829,6 +9015,9 @@
           }
         }
       }
+    },
+    "Enter a passphrase." : {
+
     },
     "Enter a search term." : {
       "comment" : "Error message when the user has not entered a search term.",
@@ -9304,6 +9493,9 @@
         }
       }
     },
+    "Export" : {
+
+    },
     "Export Conversation Transcript" : {
       "localizations" : {
         "de" : {
@@ -9361,6 +9553,9 @@
           }
         }
       }
+    },
+    "Export encrypted nsec" : {
+
     },
     "Export failed" : {
       "comment" : "A title for an alert that indicates a failed export.",
@@ -9421,6 +9616,9 @@
           }
         }
       }
+    },
+    "Export raw nsec" : {
+
     },
     "Exports the raw inner Nostr event history for this group as JSON (kinds 9, 1200–1210, and related metadata), ordered by time. Use Share to copy or save the file." : {
       "comment" : "A footer for the transcript export section.",
@@ -13997,6 +14195,65 @@
         }
       }
     },
+    "Local account cleanup did not finish." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die lokale Kontobereinigung wurde nicht abgeschlossen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se completó la limpieza local de la cuenta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le nettoyage local du compte ne s’est pas terminé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La pulizia locale dell’account non è stata completata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A limpeza local da conta não terminou."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Локальная очистка аккаунта не завершилась."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yerel hesap temizliği tamamlanmadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地账户清理未完成。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本機帳戶清理未完成。"
+          }
+        }
+      }
+    },
     "Local leaf" : {
       "comment" : "A label for the local leaf index.",
       "isCommentAutoGenerated" : true,
@@ -14530,6 +14787,65 @@
         }
       }
     },
+    "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
+          }
+        }
+      }
+    },
     "MarmotKit %@" : {
       "comment" : "A label displaying the version of the MarmotKit library. The argument is the version of the MarmotKit library.",
       "isCommentAutoGenerated" : true,
@@ -14586,65 +14902,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "MarmotKit %@"
-          }
-        }
-      }
-    },
-    "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them."
           }
         }
       }
@@ -18683,6 +18940,9 @@
         }
       }
     },
+    "Passphrase" : {
+
+    },
     "Paste your nsec (bech32 secret key). Public npub values are for sharing and cannot sign in." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19233,6 +19493,9 @@
           }
         }
       }
+    },
+    "Preparing export" : {
+
     },
     "Privacy & Security" : {
       "comment" : "A heading for the privacy and security settings screen.",
@@ -20700,6 +20963,9 @@
         }
       }
     },
+    "Raw export reveals your private key in plaintext and permanently marks it as handled insecurely. Encrypted export creates an ncryptsec1 backup protected by your passphrase without revealing the raw key." : {
+
+    },
     "React" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21171,6 +21437,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Refresh"
+          }
+        }
+      }
+    },
+    "Refresh APNS Token" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS-Token aktualisieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizar token APNS"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualiser le jeton APNS"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiorna token APNS"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atualizar token APNS"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновить токен APNS"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APNS Token Yenile"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刷新 APNS 令牌"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新整理 APNS 令牌"
           }
         }
       }
@@ -24031,6 +24356,65 @@
         }
       }
     },
+    "Signed out" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgemeldet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sesión cerrada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déconnecté"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnesso"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessão terminada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вышли"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oturum kapalı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已退出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已登出"
+          }
+        }
+      }
+    },
     "Signing out only forgets which account is active. Identities and their key material stay in the device keychain so you can sign back in." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26136,6 +26520,9 @@
         }
       }
     },
+    "The account keystore is unavailable right now." : {
+
+    },
     "Theme" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26313,6 +26700,9 @@
           }
         }
       }
+    },
+    "This account cannot export a private key." : {
+
     },
     "This attachment is not ready yet." : {
       "comment" : "Error message when trying to access media data without a reference.",
@@ -29298,6 +29688,9 @@
           }
         }
       }
+    },
+    "Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it." : {
+
     }
   },
   "version" : "1.1"

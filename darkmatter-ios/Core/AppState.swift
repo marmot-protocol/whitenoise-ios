@@ -624,6 +624,27 @@ final class AppState {
         }
     }
 
+    /// Switches the active account, signing it back in first when it was
+    /// locally signed out without wiping.
+    @MainActor
+    func activateAccount(_ accountRef: String) async {
+        guard accountRef != activeAccountRef else { return }
+        guard let account = accounts.first(where: { $0.label == accountRef }) else { return }
+
+        if account.signedOut {
+            do {
+                _ = try await marmot.signInAccount(accountRef: accountRef)
+                try await refreshAccounts()
+            } catch {
+                present(.error(L10n.string("Couldn't sign in"), message: error.localizedDescription))
+                return
+            }
+        }
+
+        activeAccountRef = accountRef
+        scheduleNativePushRegistrationIfEnabled()
+    }
+
     /// Signs out of the active account: clears its native push registration
     /// (so the push server stops delivering its notifications to this device)
     /// and disables its `nativePushEnabled` preference, removes the local
@@ -644,8 +665,8 @@ final class AppState {
         // commits, and still in the in-memory `accounts` list until
         // `refreshAccounts`), resurrecting a server-side registration for a
         // signed-out account (#320, residual of #7/#111). The `defer` clears
-        // the flag on every exit path, including the early `removeAccount`
-        // failure return below.
+        // the flag on every exit path, including the early wipe failure return
+        // below.
         isSigningOut = true
         defer { isSigningOut = false }
         await cancelNativePushRegistrationTask()
@@ -653,7 +674,13 @@ final class AppState {
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
 
         do {
-            try await marmot.removeAccount(accountRef: signingOut)
+            let outcome = try await marmot.signOutAndWipe(accountRef: signingOut)
+            guard outcome.localCleanup.completed else {
+                let message = outcome.localCleanup.reason
+                    ?? L10n.string("Local account cleanup did not finish.")
+                present(.error(L10n.string("Couldn't sign out"), message: message))
+                return
+            }
         } catch {
             present(.error(L10n.string("Couldn't sign out"), message: error.localizedDescription))
             return

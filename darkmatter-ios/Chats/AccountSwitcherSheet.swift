@@ -22,9 +22,11 @@ struct AccountSwitcherSheet: View {
                     ForEach(appState.accounts, id: \.label) { account in
                         HStack(spacing: 12) {
                             Button {
-                                appState.activeAccountRef = account.label
-                                Haptics.selection()
-                                dismiss()
+                                Task {
+                                    await appState.activateAccount(account.label)
+                                    Haptics.selection()
+                                    dismiss()
+                                }
                             } label: {
                                 HStack(spacing: 12) {
                                     AvatarBubble(
@@ -64,6 +66,13 @@ struct AccountSwitcherSheet: View {
                                     if account.label == appState.activeAccountRef {
                                         Image(systemName: "checkmark.circle.fill")
                                             .foregroundStyle(.green)
+                                    } else if account.signedOut {
+                                        Text(L10n.string("Signed out"))
+                                            .font(.caption2.weight(.semibold))
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 2)
+                                            .background(Color.orange.opacity(0.18), in: Capsule())
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                                 .contentShape(.rect)

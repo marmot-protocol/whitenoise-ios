@@ -75,6 +75,12 @@ struct NotificationSettingsView: View {
                     }
                 }
 
+                if let lastRegistrationError = appState.notifications.lastRegistrationError {
+                    Label(lastRegistrationError, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+
                 if appState.notifications.apnsTokenHex == nil {
                     Button {
                         Task { await requestApnsToken() }
@@ -83,6 +89,13 @@ struct NotificationSettingsView: View {
                     }
                     .disabled(isSaving)
                 } else {
+                    Button {
+                        Task { await refreshApnsToken() }
+                    } label: {
+                        Label("Refresh APNS Token", systemImage: "arrow.clockwise.circle")
+                    }
+                    .disabled(!canRefreshApnsToken)
+
                     Button {
                         Task { await syncNativeRegistration() }
                     } label: {
@@ -104,6 +117,18 @@ struct NotificationSettingsView: View {
             return false
         }
         return NativePushServerConfig.current() == nil
+    }
+
+    private var canRefreshApnsToken: Bool {
+        guard !isSaving else { return false }
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .denied, .notDetermined:
+            return false
+        @unknown default:
+            return false
+        }
     }
 
     private var canSyncNativeRegistration: Bool {
@@ -183,6 +208,24 @@ struct NotificationSettingsView: View {
         } catch {
             Haptics.error()
             errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func refreshApnsToken() async {
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            _ = try await appState.notifications.refreshApnsToken()
+            savedAt = Date()
+            Haptics.success()
+            await reload()
+        } catch {
+            Haptics.error()
+            errorMessage = error.localizedDescription
+            await reload()
         }
     }
 

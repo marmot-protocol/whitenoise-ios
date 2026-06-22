@@ -156,6 +156,17 @@ final class MarmotClient {
         }.value
     }
 
+    /// Destructive sign-out: leave MLS groups, delete relay KeyPackages, and
+    /// wipe all local account state. Returns per-stage outcomes for UI.
+    func signOutAndWipe(accountRef: String) async throws -> WipeOutcomeFfi {
+        try await marmot.signOutAndWipe(accountRef: accountRef)
+    }
+
+    /// Reactivates a locally signed-out account without re-importing keys.
+    func signInAccount(accountRef: String) async throws -> AccountSummaryFfi {
+        try await marmot.signInAccount(accountRef: accountRef)
+    }
+
     func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.relayTelemetrySettings()

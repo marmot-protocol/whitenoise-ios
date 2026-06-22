@@ -10,7 +10,7 @@ struct AccountsView: View {
             Section("Identities") {
                 ForEach(appState.accounts, id: \.label) { account in
                     Button {
-                        appState.activeAccountRef = account.label
+                        Task { await appState.activateAccount(account.label) }
                     } label: {
                         accountRow(account)
                     }
@@ -63,8 +63,14 @@ struct AccountsView: View {
                 if account.label == appState.activeAccountRef {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                }
-                if !account.localSigning {
+                    } else if account.signedOut {
+                        Text(L10n.string("Signed out"))
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.orange.opacity(0.18), in: Capsule())
+                        .foregroundStyle(.secondary)
+                } else if !account.localSigning {
                     Text("Read-only")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6)

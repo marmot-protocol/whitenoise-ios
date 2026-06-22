@@ -26,6 +26,7 @@ struct AccountUnreadSummaryProjectionTests {
             label: "account-a",
             accountIdHex: "account-a-id",
             localSigning: true,
+            signedOut: false,
             running: true
         )
 
