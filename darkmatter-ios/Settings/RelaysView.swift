@@ -105,7 +105,7 @@ struct RelaysView: View {
                     Text(
                         L10n.formatted(
                             "Missing: %@. Add a relay to publish them.",
-                            lists.missing.joined(separator: ", ")
+                            RelaySettings.missingRelayLabels(lists.missing).joined(separator: ", ")
                         )
                     )
                         .font(.footnote)
@@ -117,16 +117,10 @@ struct RelaysView: View {
 
     private func relayListRow(_ title: LocalizedStringKey, systemImage: String, list: RelayListFfi) -> some View {
         DisclosureGroup {
-            if list.relays.isEmpty {
-                Text("Not published")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(list.relays, id: \.self) { relay in
-                    Text(relay)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
+            ForEach(RelaySettings.publishedRelayRows(list.relays), id: \.self) { relay in
+                Text(relay)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(relay == RelaySettings.notPublishedMessage ? .secondary : .primary)
             }
         } label: {
             HStack(spacing: 8) {

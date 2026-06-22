@@ -379,8 +379,36 @@ struct RelaySettingsSaveFailure: LocalizedError {
 }
 
 enum RelaySettings {
+    /// Shown for a published list whose relays are empty, or whose every entry
+    /// sanitized entirely away (e.g. relays made only of control/bidi
+    /// characters) — never a blank disclosure row.
+    static let notPublishedMessage = L10n.string("Not published")
+
     static func editableRelays(from lists: AccountRelayListsFfi) -> [String] {
         normalizedRelayURLs(lists.defaultRelays.isEmpty ? lists.nip65.relays : lists.defaultRelays)
+    }
+
+    /// Published-list relay URLs (NIP-65 / kind:10050 inbox) come from
+    /// `AccountRelayListsFfi`, parsed from relay-hosted events, and are
+    /// therefore relay-influenced display strings. Render them through the
+    /// relay/URL display boundary sanitizer so RTL-override / zero-width /
+    /// invisible-format characters can't spoof the displayed host
+    /// (Trojan-Source-style, #298 / #306 / #365), matching the defense
+    /// `KeyPackagesView.sanitizedRelays` and `GroupRelaysPresentation.rows`
+    /// already apply. Returns `[notPublishedMessage]` for the empty / fully
+    /// sanitized-away case.
+    static func publishedRelayRows(_ relays: [String]) -> [String] {
+        guard !relays.isEmpty else { return [notPublishedMessage] }
+        let sanitized = relays.compactMap { ProfileSanitizer.relayDisplayLine($0, maxLength: 120) }
+        return sanitized.isEmpty ? [notPublishedMessage] : sanitized
+    }
+
+    /// Sanitized form of `AccountRelayListsFfi.missing`, the relay-influenced
+    /// list of relay kinds/URLs not yet published, before it is joined into the
+    /// "Missing: …" footer. Same display-boundary hardening as
+    /// `publishedRelayRows`; entries that sanitize away are dropped.
+    static func missingRelayLabels(_ missing: [String]) -> [String] {
+        missing.compactMap { ProfileSanitizer.relayDisplayLine($0, maxLength: 120) }
     }
 
     static func bootstrapRelays(from lists: AccountRelayListsFfi) -> [String] {
