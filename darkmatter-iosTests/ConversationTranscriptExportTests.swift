@@ -241,6 +241,7 @@ private func timelineRecord(
         replyToMessageIdHex: nil,
         replyPreview: nil,
         mediaJson: nil,
+        media: [],
         agentTextStreamJson: agentTextStreamJson,
         groupSystem: nil,
         reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),

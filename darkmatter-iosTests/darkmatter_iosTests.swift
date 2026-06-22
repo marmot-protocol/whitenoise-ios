@@ -4591,11 +4591,12 @@ struct ConversationTimelineProjectionTests {
                 plaintext: parent.plaintext,
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
+                media: [],
                 agentTextStreamJson: nil,
                 deleted: false
             ),
             reactions: TimelineReactionSummaryFfi(
-                byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", senders: [hex("33"), hex("44")])],
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", count: 2, senders: [hex("33"), hex("44")])],
                 userReactions: []
             )
         )
@@ -4647,6 +4648,7 @@ struct ConversationTimelineProjectionTests {
                 plaintext: approve.plaintext,
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
+                media: [],
                 agentTextStreamJson: nil,
                 deleted: false
             )
@@ -4798,7 +4800,7 @@ struct ConversationTimelineProjectionTests {
             plaintext: loaded.plaintext,
             timelineAt: loaded.timelineAt,
             reactions: TimelineReactionSummaryFfi(
-                byEmoji: [TimelineReactionEmojiFfi(emoji: "🔥", senders: [hex("33")])],
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "🔥", count: 1, senders: [hex("33")])],
                 userReactions: []
             )
         )
@@ -6532,6 +6534,7 @@ struct MessageSemanticsTests {
             plaintext: #"{"v":1,"event_type":"tool_call","status":"started","text":"Searching"}"#,
             kind: MessageSemantics.kindAgentOperation,
             mediaJson: nil,
+            media: [],
             agentTextStreamJson: nil,
             deleted: false
         )
@@ -8836,6 +8839,7 @@ private func timelineRecord(
         replyToMessageIdHex: replyToMessageIdHex,
         replyPreview: replyPreview,
         mediaJson: mediaJson,
+        media: [],
         agentTextStreamJson: agentTextStreamJson,
         reactions: reactions,
         deleted: deleted,

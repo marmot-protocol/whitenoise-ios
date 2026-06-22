@@ -215,6 +215,7 @@ struct MarkdownPlainTextTests {
             ]),
             kind: MessageSemantics.kindChat,
             mediaJson: nil,
+            media: [],
             agentTextStreamJson: nil,
             deleted: false
         )

@@ -10430,6 +10430,15 @@ public struct TimelineMessageRecordFfi {
     public var replyToMessageIdHex: String?
     public var replyPreview: TimelineReplyPreviewFfi?
     public var mediaJson: String?
+    /**
+     * Fully-resolved, downloadable media references for this message, built
+     * from its `imeta` tags + its own `source_epoch` using the same resolution
+     * and validation as `list_media` (a `list_media` record and this row's
+     * `media` resolve identically for the same message). Empty when the message
+     * has no media; a malformed `imeta` attachment is dropped while the message
+     * still appears as text.
+     */
+    public var media: [MediaAttachmentReferenceFfi]
     public var agentTextStreamJson: String?
     /**
      * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
@@ -10461,7 +10470,15 @@ public struct TimelineMessageRecordFfi {
          * without minting a duplicate, call `retry_group_convergence` rather than
          * re-sending the text. For received messages this is the originating event
          * id and is always `Some(..)`.
-         */sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?, agentTextStreamJson: String?,
+         */sourceMessageIdHex: String?, direction: String, groupIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, tags: [MessageTagFfi], timelineAt: UInt64, receivedAt: UInt64, replyToMessageIdHex: String?, replyPreview: TimelineReplyPreviewFfi?, mediaJson: String?,
+        /**
+         * Fully-resolved, downloadable media references for this message, built
+         * from its `imeta` tags + its own `source_epoch` using the same resolution
+         * and validation as `list_media` (a `list_media` record and this row's
+         * `media` resolve identically for the same message). Empty when the message
+         * has no media; a malformed `imeta` attachment is dropped while the message
+         * still appears as text.
+         */media: [MediaAttachmentReferenceFfi], agentTextStreamJson: String?,
         /**
          * Parsed view of kind-1210 group system rows. `None` for chat, reactions,
          * stream rows, and malformed/free-text kind-1210 assertions.
@@ -10486,6 +10503,7 @@ public struct TimelineMessageRecordFfi {
         self.replyToMessageIdHex = replyToMessageIdHex
         self.replyPreview = replyPreview
         self.mediaJson = mediaJson
+        self.media = media
         self.agentTextStreamJson = agentTextStreamJson
         self.groupSystem = groupSystem
         self.reactions = reactions
@@ -10541,6 +10559,9 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         if lhs.mediaJson != rhs.mediaJson {
             return false
         }
+        if lhs.media != rhs.media {
+            return false
+        }
         if lhs.agentTextStreamJson != rhs.agentTextStreamJson {
             return false
         }
@@ -10577,6 +10598,7 @@ extension TimelineMessageRecordFfi: Equatable, Hashable {
         hasher.combine(replyToMessageIdHex)
         hasher.combine(replyPreview)
         hasher.combine(mediaJson)
+        hasher.combine(media)
         hasher.combine(agentTextStreamJson)
         hasher.combine(groupSystem)
         hasher.combine(reactions)
@@ -10608,6 +10630,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
                 replyToMessageIdHex: FfiConverterOptionString.read(from: &buf),
                 replyPreview: FfiConverterOptionTypeTimelineReplyPreviewFfi.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
+                media: FfiConverterSequenceTypeMediaAttachmentReferenceFfi.read(from: &buf),
                 agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
                 groupSystem: FfiConverterOptionTypeGroupSystemEventFfi.read(from: &buf),
                 reactions: FfiConverterTypeTimelineReactionSummaryFfi.read(from: &buf),
@@ -10632,6 +10655,7 @@ public struct FfiConverterTypeTimelineMessageRecordFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.replyToMessageIdHex, into: &buf)
         FfiConverterOptionTypeTimelineReplyPreviewFfi.write(value.replyPreview, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
+        FfiConverterSequenceTypeMediaAttachmentReferenceFfi.write(value.media, into: &buf)
         FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
         FfiConverterOptionTypeGroupSystemEventFfi.write(value.groupSystem, into: &buf)
         FfiConverterTypeTimelineReactionSummaryFfi.write(value.reactions, into: &buf)
@@ -10823,12 +10847,26 @@ public func FfiConverterTypeTimelineProjectionUpdateFfi_lower(_ value: TimelineP
 
 public struct TimelineReactionEmojiFfi {
     public var emoji: String
+    /**
+     * Number of distinct senders that reacted with this emoji
+     * (`== senders.len()`), surfaced so clients render the tally without
+     * counting. This is the authenticated reaction count only; clients overlay
+     * their own optimistic react/unreact and "did I react" state on top.
+     */
+    public var count: UInt32
     public var senders: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(emoji: String, senders: [String]) {
+    public init(emoji: String,
+        /**
+         * Number of distinct senders that reacted with this emoji
+         * (`== senders.len()`), surfaced so clients render the tally without
+         * counting. This is the authenticated reaction count only; clients overlay
+         * their own optimistic react/unreact and "did I react" state on top.
+         */count: UInt32, senders: [String]) {
         self.emoji = emoji
+        self.count = count
         self.senders = senders
     }
 }
@@ -10840,6 +10878,9 @@ extension TimelineReactionEmojiFfi: Equatable, Hashable {
         if lhs.emoji != rhs.emoji {
             return false
         }
+        if lhs.count != rhs.count {
+            return false
+        }
         if lhs.senders != rhs.senders {
             return false
         }
@@ -10848,6 +10889,7 @@ extension TimelineReactionEmojiFfi: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(emoji)
+        hasher.combine(count)
         hasher.combine(senders)
     }
 }
@@ -10861,12 +10903,14 @@ public struct FfiConverterTypeTimelineReactionEmojiFfi: FfiConverterRustBuffer {
         return
             try TimelineReactionEmojiFfi(
                 emoji: FfiConverterString.read(from: &buf),
+                count: FfiConverterUInt32.read(from: &buf),
                 senders: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
     public static func write(_ value: TimelineReactionEmojiFfi, into buf: inout [UInt8]) {
         FfiConverterString.write(value.emoji, into: &buf)
+        FfiConverterUInt32.write(value.count, into: &buf)
         FfiConverterSequenceString.write(value.senders, into: &buf)
     }
 }
@@ -10888,12 +10932,20 @@ public func FfiConverterTypeTimelineReactionEmojiFfi_lower(_ value: TimelineReac
 
 
 public struct TimelineReactionSummaryFfi {
+    /**
+     * Reaction tallies pre-sorted by `count` descending, ties broken by `emoji`
+     * ascending, so clients render a stable tally without re-sorting.
+     */
     public var byEmoji: [TimelineReactionEmojiFfi]
     public var userReactions: [TimelineUserReactionFfi]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(byEmoji: [TimelineReactionEmojiFfi], userReactions: [TimelineUserReactionFfi]) {
+    public init(
+        /**
+         * Reaction tallies pre-sorted by `count` descending, ties broken by `emoji`
+         * ascending, so clients render a stable tally without re-sorting.
+         */byEmoji: [TimelineReactionEmojiFfi], userReactions: [TimelineUserReactionFfi]) {
         self.byEmoji = byEmoji
         self.userReactions = userReactions
     }
@@ -10960,18 +11012,32 @@ public struct TimelineReplyPreviewFfi {
     public var contentTokens: MarkdownDocumentFfi
     public var kind: UInt64
     public var mediaJson: String?
+    /**
+     * Fully-resolved, downloadable media references for the previewed message,
+     * built from its `imeta` tags + its own `source_epoch` using the same
+     * resolution and validation as `list_media`. Empty when the previewed
+     * message has no media or its `imeta` is malformed.
+     */
+    public var media: [MediaAttachmentReferenceFfi]
     public var agentTextStreamJson: String?
     public var deleted: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, mediaJson: String?, agentTextStreamJson: String?, deleted: Bool) {
+    public init(messageIdHex: String, sender: String, plaintext: String, contentTokens: MarkdownDocumentFfi, kind: UInt64, mediaJson: String?,
+        /**
+         * Fully-resolved, downloadable media references for the previewed message,
+         * built from its `imeta` tags + its own `source_epoch` using the same
+         * resolution and validation as `list_media`. Empty when the previewed
+         * message has no media or its `imeta` is malformed.
+         */media: [MediaAttachmentReferenceFfi], agentTextStreamJson: String?, deleted: Bool) {
         self.messageIdHex = messageIdHex
         self.sender = sender
         self.plaintext = plaintext
         self.contentTokens = contentTokens
         self.kind = kind
         self.mediaJson = mediaJson
+        self.media = media
         self.agentTextStreamJson = agentTextStreamJson
         self.deleted = deleted
     }
@@ -10999,6 +11065,9 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         if lhs.mediaJson != rhs.mediaJson {
             return false
         }
+        if lhs.media != rhs.media {
+            return false
+        }
         if lhs.agentTextStreamJson != rhs.agentTextStreamJson {
             return false
         }
@@ -11015,6 +11084,7 @@ extension TimelineReplyPreviewFfi: Equatable, Hashable {
         hasher.combine(contentTokens)
         hasher.combine(kind)
         hasher.combine(mediaJson)
+        hasher.combine(media)
         hasher.combine(agentTextStreamJson)
         hasher.combine(deleted)
     }
@@ -11034,6 +11104,7 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
                 contentTokens: FfiConverterTypeMarkdownDocumentFfi.read(from: &buf),
                 kind: FfiConverterUInt64.read(from: &buf),
                 mediaJson: FfiConverterOptionString.read(from: &buf),
+                media: FfiConverterSequenceTypeMediaAttachmentReferenceFfi.read(from: &buf),
                 agentTextStreamJson: FfiConverterOptionString.read(from: &buf),
                 deleted: FfiConverterBool.read(from: &buf)
         )
@@ -11046,6 +11117,7 @@ public struct FfiConverterTypeTimelineReplyPreviewFfi: FfiConverterRustBuffer {
         FfiConverterTypeMarkdownDocumentFfi.write(value.contentTokens, into: &buf)
         FfiConverterUInt64.write(value.kind, into: &buf)
         FfiConverterOptionString.write(value.mediaJson, into: &buf)
+        FfiConverterSequenceTypeMediaAttachmentReferenceFfi.write(value.media, into: &buf)
         FfiConverterOptionString.write(value.agentTextStreamJson, into: &buf)
         FfiConverterBool.write(value.deleted, into: &buf)
     }
