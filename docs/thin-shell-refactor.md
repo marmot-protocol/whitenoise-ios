@@ -411,9 +411,10 @@ polling over re-running.
       `MarmotClient`; the rest is non-blocking/trivial. Seam routing + handle
       lockdown fold into Phase 4/5 (no standalone phase)
 - [x] Phase 3 — merged (darkmatter#570) + bindings synced (127fe17) + fixtures migrated
-- [ ] **Phase 5a (media slice)** — capture `record.media` at ingest, delete the
-      `listMedia` timeline path + index maps, flip the oracle's drop-bad case
-      *(ready-to-execute design in Phase 5 above; next concrete unit)*
+- [x] **Phase 5a (media slice)** — done (commit `4d46058`, +56/−242): `record.media`
+      mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`
+      timeline path + index maps + sourceEpoch recovery. Drop-bad now via the Rust
+      row; Swift parser retained as the local/optimistic fallback (oracle unchanged)
 - [ ] Phase 2 — extract RuntimeLifecycle, AccountStore, NotificationCoordinator,
       ProfileStore; AppState → composition root
 - [ ] Phase 4 — screen-store template; convert 19 view-embedded screens
