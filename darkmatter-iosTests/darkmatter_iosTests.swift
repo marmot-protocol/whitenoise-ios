@@ -719,22 +719,28 @@ struct AppStateBootstrapTests {
         #expect(appState.profileProjectionLoadVersions == [hex("99"): 1])
     }
 
-    @Test func fullSignOutClearsProfileProjectionLoadVersions() async throws {
+    @Test func fullSignOutClearsProfileProjectionState() async throws {
         // Full sign-out into onboarding is the one place a whole-map reset is
         // safe: with no active account `canRefreshProfiles` is false, so no
-        // in-flight load can re-bump a token for the gone account ids and race
-        // the reset. Signing out the last account must reclaim the accumulated
-        // version entries (#353).
+        // in-flight load can re-bump a token for the gone account ids or
+        // repopulate the cache and race the reset. Signing out the last account
+        // must reclaim accumulated cached projections (#366) and version entries
+        // (#353).
         let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 1)
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
+        appState.profileProjectionCache = [
+            hex("aa"): ProfileDisplayProjection(profile: nil, projectedName: "Previous peer", localAccountLabel: nil),
+            account.accountIdHex: ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: account.label),
+        ]
         appState.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
 
         await appState.signOut()
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.phase == .onboarding)
+        #expect(appState.profileProjectionCache.isEmpty)
         #expect(appState.profileProjectionLoadVersions.isEmpty)
     }
 
