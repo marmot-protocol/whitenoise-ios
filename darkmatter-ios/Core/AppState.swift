@@ -277,6 +277,12 @@ final class AppState {
     var canRefreshProfiles: Bool {
         isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
     }
+    var canUseRuntimeForLocalForegroundWork: Bool {
+        isAppSceneActive && !isRuntimeSuspending && client != nil
+    }
+    var canUseRuntimeForForegroundWork: Bool {
+        isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
+    }
 
     private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"

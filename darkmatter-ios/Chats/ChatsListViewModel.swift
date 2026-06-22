@@ -124,7 +124,7 @@ final class ChatsListViewModel {
         loadError = nil
         currentAccount = accountRef
 
-        guard let accountRef, let appState else { return }
+        guard let accountRef, let appState, appState.canUseRuntimeForForegroundWork else { return }
         isLoading = true
         defer {
             if currentAccount == accountRef {
@@ -152,7 +152,7 @@ final class ChatsListViewModel {
         guard let appState else { return }
         chatListTask = Task { [weak self, weak appState] in
             do {
-                guard let appState else { return }
+                guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                 let client = try appState.currentMarmotClient()
                 let chatListSub = try await client.marmot.subscribeChatList(
                     accountRef: accountRef,
@@ -178,7 +178,10 @@ final class ChatsListViewModel {
     /// Re-pull the durable rows from local storage. This keeps pull-to-refresh
     /// and list reappearance useful without doing an account-wide message scan.
     func refreshRows() async {
-        guard let accountRef = currentAccount, let appState else { return }
+        guard let accountRef = currentAccount,
+              let appState,
+              appState.canUseRuntimeForForegroundWork
+        else { return }
         do {
             let snapshot = try await appState.currentMarmotClient().chatList(
                 accountRef: accountRef,

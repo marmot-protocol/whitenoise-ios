@@ -734,6 +734,58 @@ struct AppStateBootstrapTests {
         #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
     }
 
+    @Test func foregroundRuntimeWorkIsGatedDuringBackgroundSuspension() throws {
+        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        #expect(appStateSource.matches(#"var canUseRuntimeForLocalForegroundWork: Bool \{[\s\S]*isAppSceneActive && !isRuntimeSuspending && client != nil[\s\S]*\}"#))
+        #expect(appStateSource.matches(#"var canUseRuntimeForForegroundWork: Bool \{[\s\S]*isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending[\s\S]*\}"#))
+
+        let conversationSource = try String(
+            contentsOf: appStateSourceURL
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Conversation/ConversationViewModel.swift"),
+            encoding: .utf8
+        )
+        for functionName in [
+            "start() async",
+            "initializeReadState() async",
+            "flushPendingReadMarks(accountRef: String) async",
+            "startLiveTimeline(accountRef: String)",
+            "startLiveGroupState(accountRef: String)",
+            "startDeferredGroupDetails(accountRef: String)",
+            "startWatching(sender: String, streamIdHex: String?, startedAt: UInt64? = nil) async"
+        ] {
+            let functionStart = try #require(conversationSource.range(of: "func \(functionName)"))
+            let remainder = conversationSource[functionStart.lowerBound...]
+            let bodyPrefix = String(remainder.prefix(1400))
+            #expect(bodyPrefix.contains("canUseRuntimeForForegroundWork"), "\(functionName) can still access Marmot while backgrounded")
+        }
+        let initialSnapshotStart = try #require(conversationSource.range(of: "func startInitialTimelineSnapshot(accountRef: String)"))
+        let initialSnapshotPrefix = String(conversationSource[initialSnapshotStart.lowerBound...].prefix(1400))
+        #expect(initialSnapshotPrefix.contains("canUseRuntimeForLocalForegroundWork"))
+        let mediaRefreshStart = try #require(conversationSource.range(of: "func refreshMediaRecords(limit: UInt32 = 500) async"))
+        let mediaRefreshPrefix = String(conversationSource[mediaRefreshStart.lowerBound...].prefix(1000))
+        #expect(mediaRefreshPrefix.contains("canUseRuntimeForLocalForegroundWork"))
+
+        let chatsSource = try String(
+            contentsOf: appStateSourceURL
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Chats/ChatsListViewModel.swift"),
+            encoding: .utf8
+        )
+        for functionName in [
+            "bind(accountRef: String?, force: Bool = false) async",
+            "startLiveUpdates(accountRef: String)",
+            "refreshRows() async"
+        ] {
+            let functionStart = try #require(chatsSource.range(of: "func \(functionName)"))
+            let remainder = chatsSource[functionStart.lowerBound...]
+            let bodyPrefix = String(remainder.prefix(1000))
+            #expect(bodyPrefix.contains("canUseRuntimeForForegroundWork"), "\(functionName) can still access Marmot while backgrounded")
+        }
+    }
+
     @Test func foregroundResumeSchedulesNativePushAfterBestEffortCatchUp() throws {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let catchUpStart = try #require(source.range(of: "func catchUpAfterForegroundActivation() async {"))
@@ -4469,7 +4521,7 @@ struct ConversationTimelineProjectionTests {
     @Test func startClearsOptimisticOverlaysBeforeRebindingSubscriptions() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
-        #expect(source.matches(#"func start\(\) async \{[\s\S]*stopLiveSubscriptions\(\)\s*resetOptimisticState\(\)[\s\S]*startLiveTimeline"#))
+        #expect(source.matches(#"func start\(\) async \{[\s\S]*if canStartLiveWork \{[\s\S]*stopLiveSubscriptions\(\)[\s\S]*resetOptimisticState\(\)[\s\S]*guard canStartLiveWork else \{ return \}[\s\S]*startLiveTimeline"#))
         #expect(source.matches(#"private func resetOptimisticState\(\) \{[\s\S]*optimisticDeletedMessageIds\.removeAll\(\)[\s\S]*optimisticReactionRemovals\.removeAll\(\)[\s\S]*reactionRecords\.removeAll\(\)[\s\S]*rebuildDeletedMessageIds\(\)[\s\S]*recomputeReactions\(\)"#))
     }
 
