@@ -161,8 +161,12 @@ final class AppState {
         phase == .ready || phase == .onboarding
     }
 
-    /// All accounts known to marmot-app, refreshed after every account-changing call.
-    private(set) var accounts: [AccountSummaryFfi] = []
+    /// Account list + active selection. Owned by `AccountStore`; these forwarders
+    /// keep the `appState.accounts` / `activeAccountRef` / `activeAccount` call
+    /// sites and SwiftUI observation unchanged. AppState still drives the Marmot
+    /// account refresh and the identity lifecycle (create / import / sign-out).
+    @ObservationIgnored let accountStore = AccountStore()
+    var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
     /// Per-account unread totals (account-switcher badges). Owned by
     /// `AccountUnreadStore`; this read-only forwarder keeps the
@@ -174,18 +178,11 @@ final class AppState {
     }
 
     /// The account whose chats / messages are currently displayed.
-    /// `nil` only between bootstrap and onboarding completion.
+    /// `nil` only between bootstrap and onboarding completion. Backed by
+    /// `AccountStore` (which persists it to UserDefaults).
     var activeAccountRef: String? {
-        didSet {
-            if let ref = activeAccountRef {
-                UserDefaults.standard.set(ref, forKey: Self.activeAccountKey)
-            } else {
-                // Clearing the ref (e.g. signing out of the only account)
-                // must remove the persisted value, otherwise the next launch
-                // resurrects the signed-out account from UserDefaults.
-                UserDefaults.standard.removeObject(forKey: Self.activeAccountKey)
-            }
-        }
+        get { accountStore.activeAccountRef }
+        set { accountStore.activeAccountRef = newValue }
     }
 
     /// Developer mode: surfaces extra debugging UI (e.g. MLS group internals
@@ -315,7 +312,6 @@ final class AppState {
         )
     }
 
-    private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
     private static let recentReactionsKey = "marmot.recentReactions"
@@ -335,7 +331,6 @@ final class AppState {
         self.runtimeRelayUrls = client.relayUrls
         self.notifications = notifications
         self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
-        self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
@@ -767,7 +762,7 @@ final class AppState {
         do {
             try await refreshAccounts()
         } catch {
-            accounts.removeAll { $0.label == signingOut }
+            accountStore.accounts.removeAll { $0.label == signingOut }
             accountUnreadStore.pruneToCurrentAccounts(accounts)
             present(.error(L10n.string("Couldn't refresh accounts"), message: error.localizedDescription))
         }
@@ -1180,7 +1175,7 @@ final class AppState {
 
     @MainActor
     private func refreshAccounts() async throws {
-        accounts = try await runtimeClient().listAccounts()
+        accountStore.accounts = try await runtimeClient().listAccounts()
         await refreshAccountUnreadSummaries()
         updateProfileProjectionLocalAccountLabels()
         warmLocalAccountProfileProjections()
@@ -1252,10 +1247,7 @@ final class AppState {
         return summary
     }
 
-    var activeAccount: AccountSummaryFfi? {
-        guard let ref = activeAccountRef else { return nil }
-        return accounts.first { $0.label == ref }
-    }
+    var activeAccount: AccountSummaryFfi? { accountStore.activeAccount }
 
     /// Reads the published account relay-list projection off the MainActor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
