@@ -164,10 +164,14 @@ final class AppState {
     /// All accounts known to marmot-app, refreshed after every account-changing call.
     private(set) var accounts: [AccountSummaryFfi] = []
 
-    /// Cached per-account unread totals keyed by account id hex. Backed by
-    /// Marmot's materialized chat-list aggregate and patched from active-list
-    /// updates while the chats screen is live.
-    private(set) var accountUnreadSummariesByAccountId: [String: AccountUnreadFfi] = [:]
+    /// Per-account unread totals (account-switcher badges). Owned by
+    /// `AccountUnreadStore`; this read-only forwarder keeps the
+    /// `appState.accountUnreadSummariesByAccountId` call sites and SwiftUI
+    /// observation of the badges unchanged.
+    @ObservationIgnored let accountUnreadStore = AccountUnreadStore()
+    var accountUnreadSummariesByAccountId: [String: AccountUnreadFfi] {
+        accountUnreadStore.byAccountId
+    }
 
     /// The account whose chats / messages are currently displayed.
     /// `nil` only between bootstrap and onboarding completion.
@@ -764,7 +768,7 @@ final class AppState {
             try await refreshAccounts()
         } catch {
             accounts.removeAll { $0.label == signingOut }
-            pruneAccountUnreadSummariesToCurrentAccounts()
+            accountUnreadStore.pruneToCurrentAccounts(accounts)
             present(.error(L10n.string("Couldn't refresh accounts"), message: error.localizedDescription))
         }
 
@@ -1182,27 +1186,25 @@ final class AppState {
         warmLocalAccountProfileProjections()
     }
 
+    /// Fetches the durable unread aggregate (client access is AppState's domain)
+    /// and feeds it to the store; on failure prunes stale entries.
     @MainActor
     func refreshAccountUnreadSummaries() async {
         guard !accounts.isEmpty else {
-            accountUnreadSummariesByAccountId = [:]
+            accountUnreadStore.refreshed(from: [], accounts: [])
             return
         }
-
         do {
             let summaries = try await runtimeClient().accountUnreadSummary()
-            accountUnreadSummariesByAccountId = AccountUnreadSummaryProjection.byAccountId(
-                summaries,
-                accounts: accounts
-            )
+            accountUnreadStore.refreshed(from: summaries, accounts: accounts)
         } catch {
-            pruneAccountUnreadSummariesToCurrentAccounts()
+            accountUnreadStore.pruneToCurrentAccounts(accounts)
         }
     }
 
     @MainActor
     func accountUnreadSummary(forAccountIdHex accountIdHex: String) -> AccountUnreadFfi? {
-        accountUnreadSummariesByAccountId[accountIdHex]
+        accountUnreadStore.summary(forAccountIdHex: accountIdHex)
     }
 
     @MainActor
@@ -1210,19 +1212,7 @@ final class AppState {
         accountIdHex: String,
         chatListRows: [ChatListRowFfi]
     ) {
-        guard accounts.contains(where: { $0.accountIdHex == accountIdHex }) else { return }
-        accountUnreadSummariesByAccountId[accountIdHex] = AccountUnreadSummaryProjection.summary(
-            accountIdHex: accountIdHex,
-            rows: chatListRows
-        )
-    }
-
-    @MainActor
-    private func pruneAccountUnreadSummariesToCurrentAccounts() {
-        let knownAccountIds = Set(accounts.map(\.accountIdHex))
-        accountUnreadSummariesByAccountId = accountUnreadSummariesByAccountId.filter {
-            knownAccountIds.contains($0.key)
-        }
+        accountUnreadStore.update(accountIdHex: accountIdHex, chatListRows: chatListRows, accounts: accounts)
     }
 
     // MARK: - Identity management
