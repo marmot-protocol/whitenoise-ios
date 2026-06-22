@@ -79,13 +79,15 @@ struct MarmotClientStorageReadOffloadTests {
             "ProfileEditView does not await relayBootstrapRelays"
         )
 
-        let profilesSource = try sourceString("darkmatter-ios/Core/AppState+Profiles.swift")
+        // refreshProfile moved to ProfileStore (Phase 2); it reaches the async
+        // accessor through its AppState back-reference.
+        let profileStoreSource = try sourceString("darkmatter-ios/Core/ProfileStore.swift")
         #expect(
-            profilesSource.contains("await relayBootstrapRelays(for:"),
+            profileStoreSource.contains("await appState.relayBootstrapRelays(for:"),
             "refreshProfile does not await relayBootstrapRelays"
         )
         #expect(
-            !profilesSource.contains("map(relayBootstrapRelays(for:))"),
+            !profileStoreSource.contains("map(appState.relayBootstrapRelays(for:))"),
             "refreshProfile still uses the synchronous point-free relayBootstrapRelays accessor"
         )
     }

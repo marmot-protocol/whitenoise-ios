@@ -164,6 +164,54 @@ focused, individually testable services.
 `+Routing.swift`, `+Toasts.swift`). Existing MARK regions: Bootstrap,
 Notifications, Identity management.
 
+> **First slice scoped (2026-06-22): `ProfileStore` — ready to execute.**
+> `toastState`/`navigation` are already extracted (the app entry injects them
+> separately), so `ProfileStore` is the cleanest remaining seam: it already lives
+> in its own `AppState+Profiles.swift` and is a dumb-mirror cache + two queues.
+>
+> *Mechanics:*
+> - New `darkmatter-ios/Core/ProfileStore.swift`: a `@MainActor` class (NOT
+>   `@Observable` — see observation note) with `weak var appState: AppState?`.
+>   Move both structs (`ProfileProjectionRequest`, `ProfileDisplayProjection`)
+>   and all the machinery from `AppState+Profiles.swift` into it.
+> - Move these 11 stored props off `AppState` (currently L248–257) into
+>   `ProfileStore`: `profileFetchQueueTask`, `queuedProfileFetchIDs`,
+>   `scheduledProfileFetchIDs`, `activeProfileFetchID`, `profileProjectionCache`,
+>   `profileProjectionLoadTask`, `queuedProfileProjectionLoadIDs`,
+>   `scheduledProfileProjectionLoadIDs`, `profileProjectionRefreshAfterLoadIDs`,
+>   `profileProjectionLoadVersions`. **Keep `profileRefreshGeneration` (L279) on
+>   `AppState`** so SwiftUI observation is unchanged; `ProfileStore` reads it via
+>   `appState?.profileRefreshGeneration` and bumps via
+>   `appState?.noteProfileRefreshCompleted()`.
+> - Rewire the 7 deps through `appState?.`: `marmot`, `canRefreshProfiles`,
+>   `accounts`, `activeAccountRef`, `relayBootstrapRelays(for:)`,
+>   `noteProfileRefreshCompleted()`, `profileRefreshGeneration`.
+> - `AppState+Profiles.swift` becomes thin forwarders (`appState.profile(...)`
+>   etc. → `profileStore.…`) so external call sites are untouched. `npub` /
+>   `shortNpub` stay on `AppState` (they use `marmot`, not the cache).
+> - `AppState` gets `let profileStore = ProfileStore()` wired in init
+>   (`profileStore.appState = self`); update internal refs at L356–361 (cancel +
+>   bump), L788–797 (sign-out clears cache + versions), L1105
+>   (`resumeProfileFetchQueueIfNeeded`), L1156 (`cancelProfileFetchQueue`),
+>   L1188–1189 (`updateProfileProjectionLocalAccountLabels` +
+>   `warmLocalAccountProfileProjections`).
+> - Tests: `darkmatter_iosTests.swift` L927/L937 access
+>   `appState.profileProjectionCache` directly → repoint to
+>   `appState.profileStore.profileProjectionCache`; DEBUG hooks
+>   (`runProfileFetchQueueForTesting`, `pruneProfileProjectionLoadVersionIfSettledForTesting`)
+>   forward to `profileStore`; check the source-scrape at L820
+>   (`resumeProfileFetchQueueIfNeeded\(\)`) still matches.
+>
+> *Observation note:* keep `profileRefreshGeneration` on `AppState`. With
+> `@Observable`, a view calling `appState.displayName(id)` that reads
+> `appState.profileRefreshGeneration` still tracks that access, so live
+> profile-name updates survive the move — but this is a SwiftUI runtime behavior
+> unit tests won't catch, so **verify by running the app** (open a chat, confirm
+> peer names/avatars resolve and update live) before considering it done.
+>
+> *Preserve the ABA invariant* in `pruneProfileProjectionLoadVersionIfSettled` /
+> `cancelProfileFetchQueue` verbatim — do not reset the version map wholesale.
+
 **Target services** (each `@MainActor @Observable`, owned by `AppState`):
 - `RuntimeLifecycle` — bootstrap, suspend/resume, runtime generation, the
   foreground/suspension gates, background-task ownership. (Already the most

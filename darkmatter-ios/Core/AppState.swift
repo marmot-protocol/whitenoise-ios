@@ -245,16 +245,10 @@ final class AppState {
     private var foregroundActivationTask: Task<Void, Never>?
     private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
-    @ObservationIgnored var profileFetchQueueTask: Task<Void, Never>?
-    @ObservationIgnored var queuedProfileFetchIDs: [String] = []
-    @ObservationIgnored var scheduledProfileFetchIDs: Set<String> = []
-    @ObservationIgnored var activeProfileFetchID: String?
-    @ObservationIgnored var profileProjectionCache: [String: ProfileDisplayProjection] = [:]
-    @ObservationIgnored var profileProjectionLoadTask: Task<Void, Never>?
-    @ObservationIgnored var queuedProfileProjectionLoadIDs: [String] = []
-    @ObservationIgnored var scheduledProfileProjectionLoadIDs: Set<String> = []
-    @ObservationIgnored var profileProjectionRefreshAfterLoadIDs: Set<String> = []
-    @ObservationIgnored var profileProjectionLoadVersions: [String: Int] = [:]
+    /// Profile projection cache + hydration/refresh queues. `profileRefreshGeneration`
+    /// stays on AppState (below) as the observed token; the store reads/bumps it
+    /// through its back-reference so SwiftUI observation is unchanged.
+    @ObservationIgnored let profileStore = ProfileStore()
     private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
@@ -342,6 +336,7 @@ final class AppState {
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
+        self.profileStore.appState = self
     }
 
     convenience init(client: MarmotClient) {
@@ -353,8 +348,7 @@ final class AppState {
         foregroundActivationTask?.cancel()
         nativePushRegistrationTask?.cancel()
         runtimeSuspensionTask?.cancel()
-        profileFetchQueueTask?.cancel()
-        profileProjectionLoadTask?.cancel()
+        // ProfileStore cancels its own tasks in its deinit.
     }
 
     func noteProfileRefreshCompleted() {
@@ -793,8 +787,7 @@ final class AppState {
             // apply a projection back into the cache. This reclaims the accumulated
             // entries.
             cancelProfileFetchQueue()
-            profileProjectionCache.removeAll()
-            profileProjectionLoadVersions.removeAll()
+            profileStore.clearForSignOut()
             stopNotificationSubscription()
             phase = .onboarding
         } else {

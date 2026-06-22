@@ -824,23 +824,23 @@ struct AppStateBootstrapTests {
     @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
         let appState = try testAppState()
         let queued = [hex("11"), hex("22")]
-        appState.queuedProfileFetchIDs = queued
-        appState.scheduledProfileFetchIDs = Set(queued)
+        appState.profileStore.queuedProfileFetchIDs = queued
+        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
         appState.setAppSceneActive(false)
 
         await appState.runProfileFetchQueueForTesting()
 
-        #expect(appState.queuedProfileFetchIDs == queued)
-        #expect(appState.scheduledProfileFetchIDs == Set(queued))
-        #expect(appState.activeProfileFetchID == nil)
-        #expect(appState.profileFetchQueueTask == nil)
+        #expect(appState.profileStore.queuedProfileFetchIDs == queued)
+        #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
+        #expect(appState.profileStore.activeProfileFetchID == nil)
+        #expect(appState.profileStore.profileFetchQueueTask == nil)
     }
 
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
         let appState = try testAppState()
         let queued = [hex("33")]
-        appState.queuedProfileFetchIDs = queued
-        appState.scheduledProfileFetchIDs = Set(queued)
+        appState.profileStore.queuedProfileFetchIDs = queued
+        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
 
         appState.resumeProfileFetchQueueIfNeeded()
         let task = appState.cancelProfileFetchQueue()
@@ -861,20 +861,20 @@ struct AppStateBootstrapTests {
         // monotonic version map. Eviction happens instead via post-load pruning
         // and full sign-out — covered by the tests below.
         let appState = try testAppState()
-        appState.queuedProfileProjectionLoadIDs = [hex("44")]
-        appState.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
-        appState.profileProjectionRefreshAfterLoadIDs = [hex("55")]
-        appState.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
+        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("44")]
+        appState.profileStore.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
+        appState.profileStore.profileProjectionRefreshAfterLoadIDs = [hex("55")]
+        appState.profileStore.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
 
         _ = appState.cancelProfileFetchQueue()
 
         // Sibling queues are cleared...
-        #expect(appState.queuedProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.scheduledProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.profileProjectionRefreshAfterLoadIDs.isEmpty)
+        #expect(appState.profileStore.queuedProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileStore.scheduledProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileStore.profileProjectionRefreshAfterLoadIDs.isEmpty)
         // ...but the monotonic version map survives, so a suspended direct
         // reload's captured token cannot be reused by a re-bump after resume.
-        #expect(appState.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
     }
 
     @Test func settledProfileProjectionLoadPrunesItsVersionEntry() async throws {
@@ -883,12 +883,12 @@ struct AppStateBootstrapTests {
         // stays bounded to in-flight work rather than growing per distinct id
         // ever seen (#353).
         let appState = try testAppState()
-        appState.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
+        appState.profileStore.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
 
         // id 66 settled at its current token, nothing pending -> evicted.
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("66"), matching: 7)
 
-        #expect(appState.profileProjectionLoadVersions == [hex("77"): 2])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("77"): 2])
     }
 
     @Test func prunePreservesVersionEntryWhenTokenSupersededOrWorkPending() async throws {
@@ -902,15 +902,15 @@ struct AppStateBootstrapTests {
 
         // (a) superseded token: a newer load bumped 88 from 4 to 5; an older
         // load settling with token 4 must NOT evict the live token 5.
-        appState.profileProjectionLoadVersions = [hex("88"): 5]
+        appState.profileStore.profileProjectionLoadVersions = [hex("88"): 5]
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("88"), matching: 4)
-        #expect(appState.profileProjectionLoadVersions == [hex("88"): 5])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("88"): 5])
 
         // (b) work still pending: matching token but the id is still queued.
-        appState.profileProjectionLoadVersions = [hex("99"): 1]
-        appState.queuedProfileProjectionLoadIDs = [hex("99")]
+        appState.profileStore.profileProjectionLoadVersions = [hex("99"): 1]
+        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("99")]
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("99"), matching: 1)
-        #expect(appState.profileProjectionLoadVersions == [hex("99"): 1])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("99"): 1])
     }
 
     @Test func fullSignOutClearsProfileProjectionState() async throws {
@@ -924,18 +924,18 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
-        appState.profileProjectionCache = [
+        appState.profileStore.profileProjectionCache = [
             hex("aa"): ProfileDisplayProjection(profile: nil, projectedName: "Previous peer", localAccountLabel: nil),
             account.accountIdHex: ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: account.label),
         ]
-        appState.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
+        appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
 
         await appState.signOut()
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.phase == .onboarding)
-        #expect(appState.profileProjectionCache.isEmpty)
-        #expect(appState.profileProjectionLoadVersions.isEmpty)
+        #expect(appState.profileStore.profileProjectionCache.isEmpty)
+        #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
     }
 
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
