@@ -688,7 +688,10 @@ final class AppState {
     private func enableNotificationsByDefault(for accountRef: String) async {
         do {
             let granted = try await notifications.requestAuthorization()
-            guard granted else { return }
+            guard granted else {
+                _ = try? marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: false)
+                return
+            }
 
             _ = try marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: true)
 

@@ -6,6 +6,8 @@ import AVFoundation
 @testable import darkmatter_ios
 @testable import MarmotKit
 
+private let notificationDefaultsTestGate = AsyncTestGate()
+
 /// Smoke coverage for the iOS-side glue layer.
 ///
 /// Full functional tests require running against a Nostr relay (handled by
@@ -92,49 +94,58 @@ struct AppStateBootstrapTests {
     }
 
     @Test func createIdentityDefaultsNotificationsOnWhenPermissionIsGranted() async throws {
-        var authorizationRequestCount = 0
-        var remoteRegistrationRequestCount = 0
-        let notifications = grantedNotifications(
-            onAuthorizationRequest: {
-                authorizationRequestCount += 1
-            },
-            remoteNotificationRegistrar: {
-                remoteRegistrationRequestCount += 1
-            }
-        )
-        let appState = try testAppState(notifications: notifications)
-        await appState.bootstrap()
+        try await notificationDefaultsTestGate.withLock {
+            var authorizationRequestCount = 0
+            var remoteRegistrationRequestCount = 0
+            let notifications = grantedNotifications(
+                onAuthorizationRequest: {
+                    authorizationRequestCount += 1
+                },
+                remoteNotificationRegistrar: {
+                    remoteRegistrationRequestCount += 1
+                }
+            )
+            let appState = try testAppState(notifications: notifications)
+            await appState.bootstrap()
 
-        let account = try await appState.createIdentity()
+            let account = try await appState.createIdentity()
 
-        let maybeSettings = await appState.notificationSettings(for: account.label)
-        let settings = try #require(maybeSettings)
-        #expect(settings.localNotificationsEnabled)
-        #expect(settings.nativePushEnabled)
-        #expect(authorizationRequestCount == 1)
-        #expect(remoteRegistrationRequestCount == 1)
+            let maybeSettings = await appState.notificationSettings(for: account.label)
+            let settings = try #require(maybeSettings)
+            #expect(settings.localNotificationsEnabled)
+            #expect(settings.nativePushEnabled)
+            #expect(authorizationRequestCount == 1)
+            #expect(remoteRegistrationRequestCount == 1)
 
-        await stopReadyRuntime(appState)
+            _ = try? appState.marmot.setLocalNotificationsEnabled(accountRef: account.label, enabled: false)
+            _ = try? await appState.marmot.setNativePushEnabled(accountRef: account.label, enabled: false)
+            try? await appState.marmot.clearPushRegistration(accountRef: account.label)
+            await appState.signOut()
+            await stopReadyRuntime(appState)
+        }
     }
 
     @Test func createIdentityKeepsNotificationDefaultsOffWhenPermissionIsDenied() async throws {
-        var remoteRegistrationRequestCount = 0
-        let notifications = deniedNotifications {
-            remoteRegistrationRequestCount += 1
+        try await notificationDefaultsTestGate.withLock {
+            var remoteRegistrationRequestCount = 0
+            let notifications = deniedNotifications {
+                remoteRegistrationRequestCount += 1
+            }
+            let appState = try testAppState(notifications: notifications)
+            await appState.bootstrap()
+
+            let account = try await appState.createIdentity()
+
+            let maybeSettings = await appState.notificationSettings(for: account.label)
+            let settings = try #require(maybeSettings)
+            #expect(!settings.localNotificationsEnabled)
+            #expect(!settings.nativePushEnabled)
+            #expect(remoteRegistrationRequestCount == 0)
+            #expect(appState.phase == .ready)
+
+            await appState.signOut()
+            await stopReadyRuntime(appState)
         }
-        let appState = try testAppState(notifications: notifications)
-        await appState.bootstrap()
-
-        let account = try await appState.createIdentity()
-
-        let maybeSettings = await appState.notificationSettings(for: account.label)
-        let settings = try #require(maybeSettings)
-        #expect(!settings.localNotificationsEnabled)
-        #expect(!settings.nativePushEnabled)
-        #expect(remoteRegistrationRequestCount == 0)
-        #expect(appState.phase == .ready)
-
-        await stopReadyRuntime(appState)
     }
 
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
@@ -4327,20 +4338,13 @@ struct ChatsListProjectionTests {
         #expect(!source.matches(#"private func scheduleAvatarURLRefresh[\s\S]*?avatarURLTask\?\.cancel\(\)"#))
     }
 
-    @Test func chatListItemsDoNotExposeSyntheticGroupRecords() throws {
-        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
-
-        #expect(!source.contains("var group: AppGroupRecordFfi"))
-        #expect(!source.contains("endpoint: \"\""))
-        #expect(!source.contains("admins: []"))
-    }
-
-    @Test func chatDestinationResolvesFullGroupBeforeOpeningConversation() throws {
+    @Test func chatDestinationOpensFromProjectedRowBeforeGroupDetails() throws {
         let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
 
-        #expect(source.contains("@State private var resolvedGroup"))
-        #expect(source.contains("groupDetails(accountRef: accountRef, groupIdHex: item.id)"))
-        #expect(source.matches(#"ConversationView\(\s*chat: resolvedGroup"#))
+        #expect(source.matches(#"ConversationView\(\s*chat: item\.projectedGroup"#))
+        #expect(!source.contains("@State private var resolvedGroup"))
+        #expect(!source.contains("private func resolveGroup"))
+        #expect(!source.contains("groupDetails(accountRef: accountRef, groupIdHex: item.id)"))
     }
 
     @Test func chatDestinationForwardsConversationGroupChangesToChatList() throws {
@@ -8395,6 +8399,11 @@ struct TimelineBottomTests {
         ))
     }
 
+    @Test func initialBottomSettleWaitsForPendingMediaRefresh() {
+        #expect(!TimelineInitialScroll.shouldSettleBottom(isMediaRecordsRefreshPending: true))
+        #expect(TimelineInitialScroll.shouldSettleBottom(isMediaRecordsRefreshPending: false))
+    }
+
     @Test func bottomStateAllowsSmallLayoutDrift() {
         #expect(TimelineBottom.isPinned(bottomY: 1030, viewportBottomY: 1000))
     }
@@ -8582,14 +8591,34 @@ struct TimelineBottomTests {
         ))
     }
 
+    @Test func bottomClampComputesLegalScrollViewOffset() {
+        #expect(ScrollViewBottomClamp.legalBottomOffsetY(
+            contentHeight: 2_000,
+            boundsHeight: 700,
+            adjustedTopInset: 10,
+            adjustedBottomInset: 40
+        ) == 1_340)
+        #expect(ScrollViewBottomClamp.legalBottomOffsetY(
+            contentHeight: 200,
+            boundsHeight: 700,
+            adjustedTopInset: 10,
+            adjustedBottomInset: 40
+        ) == -10)
+    }
+
     @Test func conversationViewCoalescesAutomaticScrollAndKeyboardFollowUps() throws {
         let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
 
         #expect(source.contains("@State private var pendingBottomScrollRequest"))
         #expect(source.contains("private func scheduleScrollToBottom"))
         #expect(source.contains("TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll"))
+        #expect(source.contains("InitialBottomScrollClamp"))
+        #expect(source.contains("ScrollViewBottomClamp.legalBottomOffsetY"))
+        #expect(source.contains("proxy.scrollTo(Self.timelineBottomID, anchor: .bottom)"))
         #expect(source.contains(".onChange(of: viewModel.timelineProjectionGeneration)"))
         #expect(source.contains("private func handleTimelineProjectionChange"))
+        #expect(source.contains("viewModel.isMediaRecordsRefreshPending"))
+        #expect(source.contains("isInitialBottomStabilizationScheduled"))
         #expect(source.contains("private func scheduleKeyboardDismiss"))
         #expect(source.contains("reason: .buttonTap"))
         #expect(source.contains("cancelPendingTimelineFollowUpWork()"))
@@ -9197,6 +9226,35 @@ private func waitForExpectation(
         try await Task.sleep(nanoseconds: pollingIntervalNanoseconds)
     }
     #expect(predicate())
+}
+
+private actor AsyncTestGate {
+    private var isLocked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func withLock<T>(_ operation: () async throws -> T) async throws -> T {
+        await acquire()
+        defer { release() }
+        return try await operation()
+    }
+
+    private func acquire() async {
+        if !isLocked {
+            isLocked = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        guard !waiters.isEmpty else {
+            isLocked = false
+            return
+        }
+        waiters.removeFirst().resume()
+    }
 }
 
 extension MarmotClient {

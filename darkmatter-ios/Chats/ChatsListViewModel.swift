@@ -42,6 +42,32 @@ final class ChatsListViewModel {
         var isArchived: Bool { row.archived }
         var firstUnreadMessageIdHex: String? { row.firstUnreadMessageIdHex }
         var lastMessage: ChatListMessagePreviewFfi? { row.lastMessage }
+        var projectedGroup: AppGroupRecordFfi {
+            AppGroupRecordFfi(
+                groupIdHex: row.groupIdHex,
+                endpoint: "",
+                name: ProfileSanitizer.groupName(row.groupName) ?? title,
+                description: "",
+                admins: [],
+                relays: [],
+                nostrGroupIdHex: "",
+                avatarUrl: row.avatarUrl,
+                avatarDim: nil,
+                avatarThumbhash: nil,
+                encryptedMedia: AppGroupEncryptedMediaComponentFfi(
+                    componentId: 0,
+                    component: "",
+                    required: false,
+                    mediaFormat: "",
+                    allowedLocatorKinds: [],
+                    defaultBlobEndpoints: []
+                ),
+                archived: row.archived,
+                pendingConfirmation: row.pendingConfirmation,
+                welcomerAccountIdHex: nil,
+                viaWelcomeMessageIdHex: nil
+            )
+        }
 
         static func sanitizedTitle(for row: ChatListRowFfi) -> String {
             if let name = ProfileSanitizer.groupName(row.groupName) { return name }

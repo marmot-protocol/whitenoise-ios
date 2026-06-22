@@ -121,6 +121,7 @@ final class ConversationViewModel {
     private(set) var isLoading = false
     private(set) var sendInFlight = false
     private(set) var error: String?
+    private(set) var isMediaRecordsRefreshPending = false
 
     /// The message the composer is currently replying to (set by swipe / menu).
     var replyingTo: AppMessageRecordFfi?
@@ -137,6 +138,7 @@ final class ConversationViewModel {
     private var readStateTask: Task<Void, Never>?
     private var readMarkTask: Task<Void, Never>?
     private var mediaRefreshTask: Task<Void, Never>?
+    private var mediaRefreshGeneration: UInt64 = 0
     private var tailRefreshTask: Task<Void, Never>?
     private var tailRefreshGeneration: UInt64 = 0
 
@@ -282,7 +284,7 @@ final class ConversationViewModel {
         case tailRefresh
     }
 
-    struct ReactionRemoval: Hashable {
+    nonisolated struct ReactionRemoval: Hashable {
         let targetMessageIdHex: String
         let emoji: String
         let sender: String
@@ -767,6 +769,8 @@ final class ConversationViewModel {
         markedReadMessageIds.removeAll()
         mediaRefreshTask?.cancel()
         mediaRefreshTask = nil
+        mediaRefreshGeneration &+= 1
+        isMediaRecordsRefreshPending = false
         cancelTimelineTailRefresh()
         for task in streamWatchTasks.values {
             task.cancel()
@@ -1866,17 +1870,27 @@ final class ConversationViewModel {
 
     private func scheduleMediaRecordsRefresh() {
         mediaRefreshTask?.cancel()
+        mediaRefreshGeneration &+= 1
+        let generation = mediaRefreshGeneration
+        isMediaRecordsRefreshPending = true
         mediaRefreshTask = Task { [weak self] in
             do {
                 try await Task.sleep(nanoseconds: 150_000_000)
             } catch {
                 return
             }
-            await self?.refreshMediaRecords()
+            await self?.refreshMediaRecords(pendingGeneration: generation)
         }
     }
 
     func refreshMediaRecords(limit: UInt32 = 500) async {
+        await refreshMediaRecords(limit: limit, pendingGeneration: nil)
+    }
+
+    private func refreshMediaRecords(limit: UInt32 = 500, pendingGeneration: UInt64?) async {
+        defer {
+            clearPendingMediaRecordsRefresh(generation: pendingGeneration)
+        }
         guard let appState,
               appState.canUseRuntimeForLocalForegroundWork,
               let accountRef = appState.activeAccountRef
@@ -1898,6 +1912,12 @@ final class ConversationViewModel {
             // Media rows are a display accelerator for decrypt/download. The
             // timeline remains usable and future updates retry the refresh.
         }
+    }
+
+    private func clearPendingMediaRecordsRefresh(generation: UInt64?) {
+        guard let generation, mediaRefreshGeneration == generation else { return }
+        mediaRefreshTask = nil
+        isMediaRecordsRefreshPending = false
     }
 
 #if DEBUG

@@ -1260,7 +1260,7 @@ nonisolated enum VideoPlaybackLeaseAction: Equatable {
 /// "don't start playback (or acquire the audio-session lease) once the view has
 /// disappeared and the task was cancelled" behavior is unit-testable without a
 /// live SwiftUI view or `AVAudioPlayer`.
-enum AudioPlaybackLoadOutcome: Equatable {
+nonisolated enum AudioPlaybackLoadOutcome: Equatable {
     case proceed
     case abort
 

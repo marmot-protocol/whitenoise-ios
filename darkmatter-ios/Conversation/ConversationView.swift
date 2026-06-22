@@ -137,6 +137,19 @@ enum TimelineBottomScrollCoordinator {
     }
 }
 
+enum ScrollViewBottomClamp {
+    static let tolerance: CGFloat = 0.5
+
+    static func legalBottomOffsetY(
+        contentHeight: CGFloat,
+        boundsHeight: CGFloat,
+        adjustedTopInset: CGFloat,
+        adjustedBottomInset: CGFloat
+    ) -> CGFloat {
+        max(-adjustedTopInset, contentHeight - boundsHeight + adjustedBottomInset)
+    }
+}
+
 enum TimelinePaginationTrigger {
     static func shouldRequestPage(hasMore: Bool, isTriggerAlreadyVisible: Bool) -> Bool {
         hasMore && !isTriggerAlreadyVisible
@@ -173,6 +186,8 @@ enum ConversationSendPreparation {
 }
 
 enum TimelineInitialScroll {
+    static let bottomStabilizationDelayNanoseconds: UInt64 = 120_000_000
+
     static func shouldStartAtBottom(hasItems: Bool, didPerformInitialScroll: Bool) -> Bool {
         destination(
             hasItems: hasItems,
@@ -207,6 +222,10 @@ enum TimelineInitialScroll {
             return targetItemId?.isEmpty == false
         }
         return true
+    }
+
+    static func shouldSettleBottom(isMediaRecordsRefreshPending: Bool) -> Bool {
+        !isMediaRecordsRefreshPending
     }
 }
 
@@ -292,6 +311,75 @@ enum ConversationEmptyState: Equatable {
     }
 }
 
+private struct InitialBottomScrollClamp: UIViewRepresentable {
+    let isEnabled: Bool
+
+    func makeUIView(context: Context) -> InitialBottomScrollClampView {
+        let view = InitialBottomScrollClampView()
+        view.isClampEnabled = isEnabled
+        return view
+    }
+
+    func updateUIView(_ uiView: InitialBottomScrollClampView, context: Context) {
+        uiView.isClampEnabled = isEnabled
+        uiView.clampToBottomIfNeeded()
+    }
+}
+
+private final class InitialBottomScrollClampView: UIView {
+    var isClampEnabled = false {
+        didSet {
+            guard isClampEnabled else { return }
+            clampToBottomIfNeeded()
+        }
+    }
+
+    private weak var resolvedScrollView: UIScrollView?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        resolvedScrollView = enclosingScrollView()
+        clampToBottomIfNeeded()
+    }
+
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        resolvedScrollView = enclosingScrollView()
+        clampToBottomIfNeeded()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        clampToBottomIfNeeded()
+    }
+
+    func clampToBottomIfNeeded() {
+        guard isClampEnabled else { return }
+        guard let scrollView = resolvedScrollView ?? enclosingScrollView() else { return }
+        resolvedScrollView = scrollView
+        scrollView.layoutIfNeeded()
+        let targetY = ScrollViewBottomClamp.legalBottomOffsetY(
+            contentHeight: scrollView.contentSize.height,
+            boundsHeight: scrollView.bounds.height,
+            adjustedTopInset: scrollView.adjustedContentInset.top,
+            adjustedBottomInset: scrollView.adjustedContentInset.bottom
+        )
+        guard abs(scrollView.contentOffset.y - targetY) > ScrollViewBottomClamp.tolerance else { return }
+        scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: targetY), animated: false)
+    }
+
+    private func enclosingScrollView() -> UIScrollView? {
+        var candidate = superview
+        while let view = candidate {
+            if let scrollView = view as? UIScrollView {
+                return scrollView
+            }
+            candidate = view.superview
+        }
+        return nil
+    }
+}
+
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
     let chat: AppGroupRecordFfi
@@ -329,6 +417,7 @@ struct ConversationView: View {
     @State private var isOlderTimelineTriggerVisible = false
     @State private var isNewerTimelineTriggerVisible = false
     @State private var lastAutomaticBottomScrollTargetID: String?
+    @State private var isInitialBottomStabilizationScheduled = false
     @State private var pendingKeyboardDismissTask: Task<Void, Never>?
     @State private var visibleChatRoute: VisibleChatRoute?
     /// Global Y bounds of the visible timeline (between nav bar and composer).
@@ -714,6 +803,12 @@ struct ConversationView: View {
                             }
                             .padding(.top, 8)
                             .padding(.bottom, 2)
+                            .background {
+                                InitialBottomScrollClamp(
+                                    isEnabled: isInitialBottomPositioning(viewModel: viewModel)
+                                )
+                                .frame(width: 0, height: 0)
+                            }
                         }
                         .overlay(alignment: .bottomTrailing) {
                             scrollToBottomButton(proxy: proxy, viewModel: viewModel)
@@ -733,7 +828,10 @@ struct ConversationView: View {
                                 bottomContentInset: geometry.contentInsets.bottom
                             )
                         } action: { previous, current in
-                            if TimelineBottom.shouldRepairBottomOverscroll(current) {
+                            if isInitialBottomPositioning(viewModel: viewModel) {
+                                isAtTimelineBottom = true
+                                scheduleInitialBottomStabilization(proxy: proxy, viewModel: viewModel)
+                            } else if TimelineBottom.shouldRepairBottomOverscroll(current) {
                                 isAtTimelineBottom = true
                                 scheduleScrollToBottom(
                                     proxy: proxy,
@@ -797,6 +895,7 @@ struct ConversationView: View {
                         .onDisappear {
                             initialScrollFollowUpTask?.cancel()
                             initialScrollFollowUpTask = nil
+                            isInitialBottomStabilizationScheduled = false
                             cancelPendingBottomScroll()
                         }
                     }
@@ -1011,7 +1110,7 @@ struct ConversationView: View {
         }
     }
 
-    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {
+    private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool, targetID: String?) {
         if animated {
             withAnimation(.smooth(duration: 0.2)) {
                 proxy.scrollTo(Self.timelineBottomID, anchor: .bottom)
@@ -1054,7 +1153,7 @@ struct ConversationView: View {
             guard !Task.isCancelled, let request = pendingBottomScrollRequest else { return }
             pendingBottomScrollRequest = nil
             pendingBottomScrollTask = nil
-            scrollToBottom(proxy: proxy, animated: request.animated)
+            scrollToBottom(proxy: proxy, animated: request.animated, targetID: request.targetID)
             lastAutomaticBottomScrollTargetID = request.targetID
         }
     }
@@ -1082,20 +1181,20 @@ struct ConversationView: View {
         let targetItemId = initialTargetMessageIdHex.flatMap {
             timelineItemId(forMessageIdHex: $0, viewModel: viewModel)
         }
-        switch TimelineInitialScroll.destination(
+        let destination = TimelineInitialScroll.destination(
             hasItems: !viewModel.timeline.isEmpty,
             didPerformInitialScroll: didPerformInitialBottomScroll,
             targetMessageIdHex: initialTargetMessageIdHex,
             targetItemId: targetItemId
-        ) {
+        )
+        switch destination {
         case .none:
             return false
         case .bottom:
             didPerformInitialBottomScroll = true
             isInitialTimelinePositionSettled = false
             isAtTimelineBottom = true
-            scrollToBottom(proxy: proxy, animated: false)
-            scheduleInitialScrollFollowUp(.bottom, proxy: proxy)
+            scheduleInitialBottomStabilization(proxy: proxy, viewModel: viewModel)
         case .item(let itemId):
             didPerformInitialBottomScroll = true
             isInitialTimelinePositionSettled = false
@@ -1136,7 +1235,7 @@ struct ConversationView: View {
             case .none:
                 break
             case .bottom:
-                scrollToBottom(proxy: proxy, animated: false)
+                scrollToBottom(proxy: proxy, animated: false, targetID: nil)
             case .item(let itemId):
                 scrollTo(itemId, proxy: proxy, anchor: .center)
             }
@@ -1144,6 +1243,40 @@ struct ConversationView: View {
             await Task.yield()
             guard !Task.isCancelled else { return }
             isInitialTimelinePositionSettled = true
+        }
+    }
+
+    private func isInitialBottomPositioning(viewModel: ConversationViewModel) -> Bool {
+        didPerformInitialBottomScroll
+            && !isInitialTimelinePositionSettled
+            && initialTargetMessageIdHex == nil
+            && !viewModel.timeline.isEmpty
+    }
+
+    private func scheduleInitialBottomStabilization(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
+        guard !isInitialBottomStabilizationScheduled else { return }
+        isInitialBottomStabilizationScheduled = true
+        initialScrollFollowUpTask?.cancel()
+        initialScrollFollowUpTask = Task { @MainActor in
+            defer { isInitialBottomStabilizationScheduled = false }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: TimelineInitialScroll.bottomStabilizationDelayNanoseconds)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                scrollToBottom(proxy: proxy, animated: false, targetID: nil)
+                isAtTimelineBottom = true
+                guard TimelineInitialScroll.shouldSettleBottom(
+                    isMediaRecordsRefreshPending: viewModel.isMediaRecordsRefreshPending
+                ) else {
+                    continue
+                }
+                isInitialTimelinePositionSettled = true
+                lastAutomaticBottomScrollTargetID = viewModel.timeline.last?.id
+                return
+            }
         }
     }
 

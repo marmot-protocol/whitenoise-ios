@@ -1026,7 +1026,7 @@ nonisolated private enum TemporaryMediaFile {
     }
 }
 
-struct DecryptedMediaCacheEvictionPolicy: Equatable {
+nonisolated struct DecryptedMediaCacheEvictionPolicy: Equatable {
     let maxBytes: Int64
     let maxAge: TimeInterval
 

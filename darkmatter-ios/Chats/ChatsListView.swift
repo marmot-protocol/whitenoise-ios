@@ -476,18 +476,14 @@ struct ChatsListView: View {
 
 /// Resolves a group id to its conversation. A just-created or deep-linked
 /// chat may not be in the list yet, so show a spinner until the chats
-/// subscription delivers it. Once the row exists, load the authoritative group
-/// record before opening the conversation so membership/admin metadata is not
-/// inferred from the chat-list projection. Fall back to an unavailable state if it
-/// never arrives (e.g. a link to a chat this account isn't a member of).
+/// subscription delivers it. Once the row exists, open from the projected row
+/// immediately; `ConversationViewModel` refreshes authoritative group details
+/// after the local timeline snapshot can render.
 private struct ChatDestination: View {
     let target: ChatsListView.ChatNavigationTarget
     let viewModel: ChatsListViewModel
     let appState: AppState
     @State private var timedOut = false
-    @State private var resolvedGroup: AppGroupRecordFfi?
-    @State private var loadingGroupId: String?
-    @State private var loadError: String?
 
     private var item: ChatsListViewModel.Item? {
         (viewModel.items + viewModel.archivedItems)
@@ -496,34 +492,14 @@ private struct ChatDestination: View {
 
     var body: some View {
         if let item {
-            Group {
-                if let resolvedGroup, resolvedGroup.groupIdHex == item.id {
-                    ConversationView(
-                        chat: resolvedGroup,
-                        initialTitle: item.title,
-                        initialTargetMessageIdHex: target.messageIdHex,
-                        initialAppState: appState,
-                        onChatListRowUpdated: { viewModel.applyChatListRow($0) },
-                        onGroupChanged: { viewModel.applyLocalGroupChange($0) }
-                    )
-                } else if let loadError, loadingGroupId == item.id {
-                    ContentUnavailableView {
-                        Label("Couldn't load conversation", systemImage: "exclamationmark.triangle")
-                    } description: {
-                        Text(loadError)
-                    } actions: {
-                        Button("Retry") {
-                            Task { await resolveGroup(for: item, force: true) }
-                        }
-                    }
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            }
-            .task(id: item.id) {
-                await resolveGroup(for: item)
-            }
+            ConversationView(
+                chat: item.projectedGroup,
+                initialTitle: item.title,
+                initialTargetMessageIdHex: target.messageIdHex,
+                initialAppState: appState,
+                onChatListRowUpdated: { viewModel.applyChatListRow($0) },
+                onGroupChanged: { viewModel.applyLocalGroupChange($0) }
+            )
         } else if timedOut {
             // A slow network can take longer than the spin-wait to deliver the
             // chat-list row. Offer Retry instead of a dead end so the user can
@@ -542,27 +518,6 @@ private struct ChatDestination: View {
                     try? await Task.sleep(nanoseconds: 5_000_000_000)
                     timedOut = true
                 }
-        }
-    }
-
-    @MainActor
-    private func resolveGroup(for item: ChatsListViewModel.Item, force: Bool = false) async {
-        guard force || resolvedGroup?.groupIdHex != item.id || loadError != nil else { return }
-        guard let accountRef = appState.activeAccountRef else {
-            loadingGroupId = item.id
-            loadError = L10n.string("No active account.")
-            return
-        }
-
-        loadingGroupId = item.id
-        loadError = nil
-        do {
-            let details = try await appState.marmot.groupDetails(accountRef: accountRef, groupIdHex: item.id)
-            guard !Task.isCancelled else { return }
-            resolvedGroup = details.group
-        } catch {
-            guard !Task.isCancelled else { return }
-            loadError = error.localizedDescription
         }
     }
 }
