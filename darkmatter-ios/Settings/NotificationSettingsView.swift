@@ -156,8 +156,12 @@ struct NotificationSettingsView: View {
             registration = nil
             return
         }
-        settings = await appState.notificationSettings(for: accountRef)
-        registration = await appState.pushRegistration(for: accountRef)
+        if let reloadedSettings = await appState.notificationSettings(for: accountRef) {
+            settings = reloadedSettings
+        }
+        if let reloadedRegistration = await appState.pushRegistration(for: accountRef) {
+            registration = reloadedRegistration
+        }
     }
 
     @MainActor

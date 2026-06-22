@@ -68,6 +68,22 @@ nonisolated enum NotificationPresentationRuntimeGate {
     }
 }
 
+nonisolated enum SettingsReadRuntimeGate {
+    static func canRead(
+        isTaskCancelled: Bool,
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        hasRuntimeClient: Bool
+    ) -> Bool {
+        !isTaskCancelled
+            && isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && hasRuntimeClient
+    }
+}
+
 /// Decision point for whether `scheduleNativePushRegistrationIfEnabled()` may
 /// spawn a fresh registration sync. Pure so the guard — including the
 /// sign-out window (#320) — is observable in tests without reaching into
@@ -550,13 +566,16 @@ final class AppState {
     /// rebuilding `marmot` / `runtimeClient()` accessors so they cannot re-open
     /// the App Group SQLite store after suspension deliberately released it.
     private func foregroundSettingsReadClient() -> MarmotClient? {
-        guard !Task.isCancelled,
-              isAppSceneActive,
-              !runtimeSuspendedForBackground,
-              !isRuntimeSuspending,
-              let client
+        let liveClient = client
+        guard SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: Task.isCancelled,
+            isAppSceneActive: isAppSceneActive,
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: isRuntimeSuspending,
+            hasRuntimeClient: liveClient != nil
+        ), let liveClient
         else { return nil }
-        return client
+        return liveClient
     }
 
     // MARK: - Notifications

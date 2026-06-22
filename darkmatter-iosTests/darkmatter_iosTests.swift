@@ -395,19 +395,66 @@ struct AppStateBootstrapTests {
         #expect(!appStateSource.matches(#"localNotificationsEnabled:\s*\(try\? marmot\.notificationSettings"#))
     }
 
+    @Test func settingsReadRuntimeGateRejectsSuspensionWindows() {
+        #expect(SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: true,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+    }
+
     @Test func settingsReadAccessorsGateSuspensionAndUseClientWrappers() throws {
         let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
 
         #expect(appStateSource.matches(
             #"private func foregroundSettingsReadClient\(\) -> MarmotClient\? \{[\s\S]*"#
-                + #"guard !Task\.isCancelled,[\s\S]*"#
-                + #"isAppSceneActive,[\s\S]*"#
-                + #"!runtimeSuspendedForBackground,[\s\S]*"#
-                + #"!isRuntimeSuspending,[\s\S]*"#
-                + #"let client[\s\S]*"#
+                + #"SettingsReadRuntimeGate\.canRead\([\s\S]*"#
+                + #"isTaskCancelled: Task\.isCancelled,[\s\S]*"#
+                + #"isAppSceneActive: isAppSceneActive,[\s\S]*"#
+                + #"runtimeSuspendedForBackground: runtimeSuspendedForBackground,[\s\S]*"#
+                + #"isRuntimeSuspending: isRuntimeSuspending,[\s\S]*"#
+                + #"hasRuntimeClient: liveClient != nil[\s\S]*"#
+                + #"let liveClient[\s\S]*"#
                 + #"else \{ return nil \}[\s\S]*"#
-                + #"return client"#
+                + #"return liveClient"#
         ))
         #expect(appStateSource.matches(
             #"func notificationSettings\(for accountRef: String\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
