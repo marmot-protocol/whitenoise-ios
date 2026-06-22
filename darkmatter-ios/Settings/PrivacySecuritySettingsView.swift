@@ -185,7 +185,7 @@ struct PrivacySecuritySettingsView: View {
         defer { filesLoading = false }
 
         do {
-            let projection = try await appState.privacySecuritySettingsProjection()
+            guard let projection = try await appState.privacySecuritySettingsProjection() else { return }
             telemetrySettings = projection.telemetrySettings
             auditSettings = projection.auditSettings
             auditFileRows = projection.auditFileRows
@@ -201,7 +201,8 @@ struct PrivacySecuritySettingsView: View {
         defer { filesLoading = false }
 
         do {
-            auditFileRows = try await appState.auditLogFileRows()
+            guard let rows = try await appState.auditLogFileRows() else { return }
+            auditFileRows = rows
         } catch {
             errorMessage = error.localizedDescription
         }
