@@ -26,6 +26,18 @@ enum TimelineTailRefreshTaskLifetime {
     }
 }
 
+enum ConversationRuntimeStartDecision: Equatable {
+    case skipForegroundWork
+    case loadLocalSnapshot(startLiveWork: Bool)
+
+    static func evaluate(canLoadLocalSnapshot: Bool, canStartLiveWork: Bool) -> Self {
+        guard canLoadLocalSnapshot || canStartLiveWork else {
+            return .skipForegroundWork
+        }
+        return .loadLocalSnapshot(startLiveWork: canStartLiveWork)
+    }
+}
+
 private struct TimelineTailRefreshRequest {
     let client: MarmotClient
     let accountRef: String
@@ -550,11 +562,14 @@ final class ConversationViewModel {
         else { return }
         let canLoadLocalSnapshot = appState.canUseRuntimeForLocalForegroundWork
         let canStartLiveWork = appState.canUseRuntimeForForegroundWork
-        guard canLoadLocalSnapshot || canStartLiveWork else { return }
-        if canStartLiveWork {
-            stopLiveSubscriptions()
-        } else {
+        let startDecision = ConversationRuntimeStartDecision.evaluate(
+            canLoadLocalSnapshot: canLoadLocalSnapshot,
+            canStartLiveWork: canStartLiveWork
+        )
+        stopLiveSubscriptions()
+        guard startDecision != .skipForegroundWork else {
             initialTimelineSnapshotTask?.cancel()
+            return
         }
         resetOptimisticState()
         error = nil
@@ -562,7 +577,7 @@ final class ConversationViewModel {
             isLoading = true
             startInitialTimelineSnapshot(accountRef: accountRef)
         }
-        guard canStartLiveWork else { return }
+        guard case .loadLocalSnapshot(startLiveWork: true) = startDecision else { return }
         startLiveTimeline(accountRef: accountRef)
         startLiveGroupState(accountRef: accountRef)
         startDeferredGroupDetails(accountRef: accountRef)
@@ -793,6 +808,29 @@ final class ConversationViewModel {
 #if DEBUG
     func resetOptimisticStateForTesting() {
         resetOptimisticState()
+    }
+
+    func seedOptimisticStateForTesting(
+        deletedMessageIdHex: String,
+        reactionTargetMessageIdHex: String,
+        emoji: String,
+        sender: String
+    ) {
+        optimisticDeletedMessageIds.insert(deletedMessageIdHex)
+        let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
+        reactionRecords[reactionId] = AppMessageRecordFfi(
+            messageIdHex: reactionId,
+            direction: "sent",
+            groupIdHex: group.groupIdHex,
+            sender: sender,
+            plaintext: emoji,
+            kind: MessageSemantics.kindReaction,
+            tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
+            recordedAt: 1,
+            receivedAt: 1
+        )
+        _ = rebuildDeletedMessageIds()
+        _ = recomputeReactions()
     }
 #endif
 

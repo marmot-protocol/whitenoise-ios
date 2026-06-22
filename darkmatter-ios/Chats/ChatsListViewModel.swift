@@ -122,9 +122,13 @@ final class ChatsListViewModel {
             pendingGroupDetailsRefreshGroupIds = []
         }
         loadError = nil
-        currentAccount = accountRef
 
-        guard let accountRef, let appState, appState.canUseRuntimeForForegroundWork else { return }
+        guard let accountRef else {
+            currentAccount = nil
+            return
+        }
+        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+        currentAccount = accountRef
         isLoading = true
         defer {
             if currentAccount == accountRef {

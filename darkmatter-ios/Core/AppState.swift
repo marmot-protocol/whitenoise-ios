@@ -84,6 +84,30 @@ nonisolated enum SettingsReadRuntimeGate {
     }
 }
 
+nonisolated enum ForegroundRuntimeWorkGate {
+    static func canUseLocalForegroundWork(
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        hasRuntimeClient: Bool
+    ) -> Bool {
+        isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && hasRuntimeClient
+    }
+
+    static func canUseForegroundWork(
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool
+    ) -> Bool {
+        isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+    }
+}
+
 /// Decision point for whether `scheduleNativePushRegistrationIfEnabled()` may
 /// spawn a fresh registration sync. Pure so the guard — including the
 /// sign-out window (#320) — is observable in tests without reaching into
@@ -278,10 +302,19 @@ final class AppState {
         isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
     }
     var canUseRuntimeForLocalForegroundWork: Bool {
-        isAppSceneActive && !isRuntimeSuspending && client != nil
+        ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: isAppSceneActive,
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: isRuntimeSuspending,
+            hasRuntimeClient: client != nil
+        )
     }
     var canUseRuntimeForForegroundWork: Bool {
-        isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
+        ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: isAppSceneActive,
+            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
+            isRuntimeSuspending: isRuntimeSuspending
+        )
     }
 
     private static let activeAccountKey = "marmot.activeAccountRef"
@@ -455,17 +488,19 @@ final class AppState {
     }
 
     @MainActor
-    private func completeOnboardingAfterIdentityActivation() {
+    private func completeOnboardingAfterIdentityActivation(scheduleNativePushRegistration: Bool = true) {
         guard phase == .onboarding else { return }
         phase = .ready
-        startReadyForegroundMaintenance()
+        startReadyForegroundMaintenance(scheduleNativePushRegistration: scheduleNativePushRegistration)
     }
 
     @MainActor
-    private func startReadyForegroundMaintenance() {
+    private func startReadyForegroundMaintenance(scheduleNativePushRegistration: Bool = true) {
         notifications.configure(appState: self)
         startNotificationSubscription()
-        scheduleNativePushRegistrationIfEnabled()
+        if scheduleNativePushRegistration {
+            scheduleNativePushRegistrationIfEnabled()
+        }
     }
 
     @MainActor
@@ -1207,8 +1242,9 @@ final class AppState {
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
-        completeOnboardingAfterIdentityActivation()
+        completeOnboardingAfterIdentityActivation(scheduleNativePushRegistration: false)
         await enableNotificationsByDefault(for: summary.label)
+        scheduleNativePushRegistrationIfEnabled()
         return summary
     }
 
@@ -1224,8 +1260,9 @@ final class AppState {
         )
         try await refreshAccounts()
         activeAccountRef = summary.label
-        completeOnboardingAfterIdentityActivation()
+        completeOnboardingAfterIdentityActivation(scheduleNativePushRegistration: false)
         await enableNotificationsByDefault(for: summary.label)
+        scheduleNativePushRegistrationIfEnabled()
         return summary
     }
 
