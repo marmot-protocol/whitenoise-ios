@@ -117,7 +117,10 @@ struct RelaysView: View {
 
     private func relayListRow(_ title: LocalizedStringKey, systemImage: String, list: RelayListFfi) -> some View {
         DisclosureGroup {
-            ForEach(RelaySettings.publishedRelayRows(list.relays), id: \.self) { relay in
+            // Stable per-row identity by position. Sanitized display strings can
+            // collide (distinct raw relays sanitize to the same line), so id: \.self
+            // would produce duplicate SwiftUI identities on hostile relay input.
+            ForEach(Array(RelaySettings.publishedRelayRows(list.relays).enumerated()), id: \.offset) { _, relay in
                 Text(relay)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(relay == RelaySettings.notPublishedMessage ? .secondary : .primary)
