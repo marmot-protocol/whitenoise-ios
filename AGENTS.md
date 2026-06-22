@@ -140,7 +140,7 @@ Do not add a second storage path for data Marmot already owns.
 - Media attachment display IDs must include the owning message or timeline-row identity; do not key SwiftUI media views solely by the encrypted media reference.
 - Timeline row geometry preferences must be keyed by `TimelineItem.rowFrameKey`/row identity, not `messageIdHex`, because pending, failed, and live stream rows can have empty message IDs.
 - Malformed or unsupported media `imeta` fields must not hide kind-9 messages; degrade to chat text unless a valid encrypted-media reference is available, and keep optional fields such as `thumbhash` bounded and validated.
-- Fullscreen media galleries are image-only. Reject non-image initial items before presentation and surface undecodable image bytes as an explicit failure state rather than an idle spinner.
+- Fullscreen media galleries include image and video visual attachments. Reject non-visual initial items before presentation and surface undecodable image bytes as an explicit failure state rather than an idle spinner.
 - Media downloads should pass through the conversation view model's in-flight store so duplicate thumbnail/gallery requests share one decrypt/download task.
 - Conversation media record refreshes must keep the message-id map and normalized attachment lookup index in sync; download paths should not scan every media record to recover `sourceEpoch`.
 - Draft photo attachment decoding, downsampling, JPEG encoding, and thumbnail generation should run off the MainActor; hop back to the UI actor only to append prepared drafts or surface errors.

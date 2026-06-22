@@ -2220,27 +2220,31 @@ struct MessageMediaGallery: Identifiable {
     let id = UUID()
     let items: [MessageMediaAttachment]
     let initialItemID: String
-    let initialImageData: Data
+    let initialMediaData: Data?
 
     init?(item: MessageMediaAttachment, imageData: Data) {
-        self.init(items: [item], initialItem: item, initialImageData: imageData)
+        self.init(items: [item], initialItem: item, initialMediaData: imageData)
     }
 
     init?(items: [MessageMediaAttachment], initialItem: MessageMediaAttachment, initialImageData: Data) {
-        guard initialItem.isImage else { return nil }
-        let imageItems = items.filter(\.isImage)
-        if imageItems.contains(where: { $0.id == initialItem.id }) {
-            self.items = imageItems
+        self.init(items: items, initialItem: initialItem, initialMediaData: initialImageData)
+    }
+
+    init?(items: [MessageMediaAttachment], initialItem: MessageMediaAttachment, initialMediaData: Data? = nil) {
+        guard initialItem.isImage || initialItem.isVideo else { return nil }
+        let visualItems = items.filter { $0.isImage || $0.isVideo }
+        if visualItems.contains(where: { $0.id == initialItem.id }) {
+            self.items = visualItems
         } else {
-            self.items = [initialItem] + imageItems
+            self.items = [initialItem] + visualItems
         }
         self.initialItemID = initialItem.id
-        self.initialImageData = initialImageData
+        self.initialMediaData = initialMediaData
     }
 
     func initialData(for item: MessageMediaAttachment) -> Data? {
         if item.id == initialItemID {
-            return initialImageData
+            return initialMediaData
         }
         return item.localData
     }
@@ -2312,6 +2316,7 @@ private struct MessageMediaFullscreenGalleryView: View {
                 ForEach(gallery.items) { item in
                     MessageMediaFullscreenPage(
                         item: item,
+                        isSelected: item.id == selectedItemID,
                         initialImageData: gallery.initialData(for: item),
                         onLoadMedia: onLoadMedia
                     )
@@ -2383,6 +2388,149 @@ private struct MessageMediaFullscreenGalleryView: View {
 }
 
 private struct MessageMediaFullscreenPage: View {
+    let item: MessageMediaAttachment
+    let isSelected: Bool
+    let initialImageData: Data?
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+
+    var body: some View {
+        if item.isVideo {
+            MessageMediaFullscreenVideoPage(
+                item: item,
+                isSelected: isSelected,
+                onLoadMedia: onLoadMedia
+            )
+        } else {
+            MessageMediaFullscreenImagePage(
+                item: item,
+                initialImageData: initialImageData,
+                onLoadMedia: onLoadMedia
+            )
+        }
+    }
+}
+
+private struct MessageMediaFullscreenVideoPage: View {
+    let item: MessageMediaAttachment
+    let isSelected: Bool
+    let onLoadMedia: (MessageMediaAttachment) async throws -> Data
+
+    @State private var player: AVPlayer?
+    @State private var playbackURL: URL?
+    @State private var audioSession = ObservableVideoPlaybackAudioSession()
+    @State private var isLoading = false
+    @State private var didFail = false
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+            } else if let thumbnail = item.thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .controlSize(.regular)
+            } else if didFail {
+                Button {
+                    Task { await loadAndPlay(force: true) }
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else if player == nil {
+                Button {
+                    Task { await loadAndPlay() }
+                } label: {
+                    VideoPreviewPlayOverlay(
+                        diameter: VideoPreviewOverlayPresentation.maximumDiameter
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Play video")
+            }
+        }
+        .contentShape(Rectangle())
+        .task(id: item.id) {
+            if isSelected {
+                await loadAndPlay()
+            }
+        }
+        .onChange(of: isSelected) { _, selected in
+            if selected {
+                Task { await loadAndPlay() }
+            } else {
+                pausePlayback()
+            }
+        }
+        .onDisappear {
+            pausePlayback()
+        }
+        .accessibilityLabel("Video attachment")
+    }
+
+    private func loadAndPlay(force: Bool = false) async {
+        guard isSelected else { return }
+        guard force || !isLoading else { return }
+        if force {
+            player?.pause()
+            audioSession.stop()
+            player = nil
+            playbackURL = nil
+        } else if let player {
+            player.play()
+            audioSession.attach(to: player)
+            return
+        }
+
+        isLoading = true
+        didFail = false
+        defer { isLoading = false }
+        do {
+            let url = try await playbackFileURL()
+            guard !Task.isCancelled, isSelected else { return }
+            let next = AVPlayer(url: url)
+            player = next
+            next.play()
+            audioSession.attach(to: next)
+        } catch {
+            guard !Task.isCancelled else { return }
+            didFail = true
+        }
+    }
+
+    private func playbackFileURL() async throws -> URL {
+        if let playbackURL {
+            return playbackURL
+        }
+        let data = try await onLoadMedia(item)
+        guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data) else {
+            throw MessageVideoAttachmentError.playbackFileUnavailable
+        }
+        playbackURL = url
+        return url
+    }
+
+    private func pausePlayback() {
+        player?.pause()
+        audioSession.stop()
+    }
+}
+
+private struct MessageMediaFullscreenImagePage: View {
     let item: MessageMediaAttachment
     let onLoadMedia: (MessageMediaAttachment) async throws -> Data
 
