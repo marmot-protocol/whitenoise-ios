@@ -1,7 +1,7 @@
 # Darkmatter (Marmot) binding work — iOS thin-shell refactor
 
 Copy this whole file as the task prompt in a `darkmatter` repo session
-(`/Users/jeff/code/darkmatter`). It is self-contained.
+(your local checkout root, e.g. `$DARKMATTER_DIR`). It is self-contained.
 
 ---
 
@@ -130,7 +130,7 @@ viewer/UI state and belongs in iOS.
   follow-up PR removes `media_json` and the iOS `list_media`-for-timeline path.
 - Workspace version is `0.2.0` (`Cargo.toml`); there is no ABI pin between the
   repos. After merge, iOS picks the change up with:
-  `DARKMATTER_DIR=/Users/jeff/code/darkmatter ./scripts/sync-bindings.sh`.
+  `DARKMATTER_DIR=<your darkmatter checkout> ./scripts/sync-bindings.sh`.
 
 ## Build / test / regenerate
 

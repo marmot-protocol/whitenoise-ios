@@ -136,10 +136,13 @@ ComposerMentionSupport (1), NewChatSheet (1), ChatsListViewModel (1).
    route it through a single `MarmotClient` method so the raw handle never
    escapes to the view layer.
 3. Convert all 39 sites; for subscriptions, expose a `MarmotClient` factory.
-4. **Enforce:** make the raw `Marmot` handle inaccessible from views/stores —
+4. **Enforce (final step, only after the Phase 4/5 rewrites stop using the raw
+   handle):** make the raw `Marmot` handle inaccessible from views/stores —
    `private`/`internal` to `MarmotClient`, or mark `appState.marmot` deprecated
    so new sync-on-main calls fail review. Add a lightweight test/lint that the
-   view layer references only `MarmotClient`.
+   view layer references only `MarmotClient`. (Per the reconciliation note above,
+   this is deliberately deferred to the end so the same files aren't churned
+   twice.)
 
 **Risks:** a couple of these calls are hot (mention rendering, markdown) — make
 sure async conversion doesn't introduce visible flicker; cache the result in
