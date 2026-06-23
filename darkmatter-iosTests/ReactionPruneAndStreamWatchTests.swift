@@ -29,7 +29,7 @@ struct OptimisticReactionPruneTests {
             byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", count: 1, senders: [me])],
             userReactions: []
         )
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactions(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             [record.messageIdHex: record], target: target, summary: summary, me: me
         )
         #expect(pruned.isEmpty)
@@ -38,7 +38,7 @@ struct OptimisticReactionPruneTests {
     @Test func keepsOptimisticReactionNotYetInSummary() {
         let record = optimisticReaction(emoji: "👍", sender: me, target: target)
         let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactions(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             [record.messageIdHex: record], target: target, summary: summary, me: me
         )
         #expect(pruned.count == 1)
@@ -52,12 +52,12 @@ struct OptimisticReactionPruneTests {
         )
         // Summary belongs to a different target — record must be kept.
         let otherTarget = String(repeating: "b", count: 64)
-        #expect(ConversationViewModel.prunedConfirmedOptimisticReactions(
+        #expect(ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             [record.messageIdHex: record], target: otherTarget, summary: summary, me: me
         ).count == 1)
         // Summary confirms a different emoji — record must be kept.
         let heart = optimisticReaction(emoji: "❤️", sender: me, target: target)
-        #expect(ConversationViewModel.prunedConfirmedOptimisticReactions(
+        #expect(ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             [heart.messageIdHex: heart], target: target, summary: summary, me: me
         ).count == 1)
     }
@@ -74,8 +74,8 @@ struct OptimisticReactionRemovalPruneTests {
     private let other = String(repeating: "2", count: 64)
     private let target = String(repeating: "a", count: 64)
 
-    private func removal(emoji: String, sender: String, target: String) -> ConversationViewModel.ReactionRemoval {
-        ConversationViewModel.ReactionRemoval(
+    private func removal(emoji: String, sender: String, target: String) -> ReactionRemoval {
+        ReactionRemoval(
             targetMessageIdHex: target,
             emoji: emoji,
             sender: sender
@@ -85,7 +85,7 @@ struct OptimisticReactionRemovalPruneTests {
     @Test func dropsRemovalWhenServerSummaryNoLongerListsMe() {
         // Un-react confirmed: the summary for this target has no entry for me.
         let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             [removal(emoji: "❤️", sender: me, target: target)],
             target: target, summary: summary, me: me
         )
@@ -99,7 +99,7 @@ struct OptimisticReactionRemovalPruneTests {
             byEmoji: [TimelineReactionEmojiFfi(emoji: "❤️", count: 1, senders: [other])],
             userReactions: []
         )
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             [removal(emoji: "❤️", sender: me, target: target)],
             target: target, summary: summary, me: me
         )
@@ -113,7 +113,7 @@ struct OptimisticReactionRemovalPruneTests {
             byEmoji: [TimelineReactionEmojiFfi(emoji: "❤️", count: 1, senders: [me])],
             userReactions: []
         )
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             [removal(emoji: "❤️", sender: me, target: target)],
             target: target, summary: summary, me: me
         )
@@ -125,7 +125,7 @@ struct OptimisticReactionRemovalPruneTests {
         // target must never be dropped by this target's summary.
         let otherTarget = String(repeating: "b", count: 64)
         let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             [removal(emoji: "❤️", sender: me, target: otherTarget)],
             target: target, summary: summary, me: me
         )
@@ -138,7 +138,7 @@ struct OptimisticReactionRemovalPruneTests {
             byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", count: 1, senders: [me])],
             userReactions: []
         )
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             [
                 removal(emoji: "❤️", sender: me, target: target),
                 removal(emoji: "👍", sender: me, target: target),
@@ -150,8 +150,8 @@ struct OptimisticReactionRemovalPruneTests {
 
     @Test func returnsInputUnchangedWhenMeIsEmpty() {
         let summary = TimelineReactionSummaryFfi(byEmoji: [], userReactions: [])
-        let input: Set<ConversationViewModel.ReactionRemoval> = [removal(emoji: "❤️", sender: me, target: target)]
-        let pruned = ConversationViewModel.prunedConfirmedOptimisticReactionRemovals(
+        let input: Set<ReactionRemoval> = [removal(emoji: "❤️", sender: me, target: target)]
+        let pruned = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             input, target: target, summary: summary, me: ""
         )
         #expect(pruned == input)

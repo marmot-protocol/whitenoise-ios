@@ -242,12 +242,6 @@ final class ConversationViewModel {
         case tailRefresh
     }
 
-    nonisolated struct ReactionRemoval: Hashable {
-        let targetMessageIdHex: String
-        let emoji: String
-        let sender: String
-    }
-
     private struct GroupMlsRefreshIdentity: Equatable {
         let groupIdHex: String
         let admins: [String]
@@ -1114,13 +1108,13 @@ final class ConversationViewModel {
         // mirror it instead of re-classifying tags or a separate listMedia pass.
         mediaReferencesByMessageId[appRecord.messageIdHex] = record.media
         projectedReactionSummaries[appRecord.messageIdHex] = record.reactions
-        reactionRecords = Self.prunedConfirmedOptimisticReactions(
+        reactionRecords = ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             reactionRecords,
             target: appRecord.messageIdHex,
             summary: record.reactions,
             me: myAccountId ?? ""
         )
-        optimisticReactionRemovals = Self.prunedConfirmedOptimisticReactionRemovals(
+        optimisticReactionRemovals = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
             optimisticReactionRemovals,
             target: appRecord.messageIdHex,
             summary: record.reactions,
@@ -1841,60 +1835,6 @@ final class ConversationViewModel {
     /// keeps every optimistic entry for the life of the conversation even after
     /// the authoritative projection arrives (#47). The displayed tally is
     /// unaffected because the confirmed reaction still comes from the summary.
-    nonisolated static func prunedConfirmedOptimisticReactions(
-        _ records: [String: AppMessageRecordFfi],
-        target: String,
-        summary: TimelineReactionSummaryFfi,
-        me: String
-    ) -> [String: AppMessageRecordFfi] {
-        guard !me.isEmpty else { return records }
-        let confirmedEmoji = Set(
-            summary.byEmoji
-                .filter { $0.senders.contains(me) }
-                .map(\.emoji)
-        )
-        guard !confirmedEmoji.isEmpty else { return records }
-        return records.filter { _, record in
-            guard record.sender == me,
-                  confirmedEmoji.contains(record.plaintext),
-                  case .reaction(let recordTarget) = MessageSemantics.classify(record),
-                  recordTarget == target
-            else { return true }
-            return false
-        }
-    }
-
-    /// Drop optimistic un-react placeholders that the server projection has now
-    /// confirmed. A `ReactionRemoval` suppresses `me` from a target+emoji tally
-    /// until the un-react lands server-side; once the authoritative summary for
-    /// that target no longer lists `me` for the emoji, the removal is redundant
-    /// and must be dropped (#349). Without this, the removal is retained for the
-    /// conversation's lifetime — leaking on the MainActor rebuild hot path and,
-    /// worse, silently subtracting `me` from a later *genuine* re-reaction once
-    /// its own optimistic record is pruned. Mirrors
-    /// `prunedConfirmedOptimisticReactions` for the remove side.
-    nonisolated static func prunedConfirmedOptimisticReactionRemovals(
-        _ removals: Set<ReactionRemoval>,
-        target: String,
-        summary: TimelineReactionSummaryFfi,
-        me: String
-    ) -> Set<ReactionRemoval> {
-        guard !me.isEmpty else { return removals }
-        // Emoji on this target the server summary still attributes to `me`.
-        // A removal for one of these is NOT yet confirmed — keep suppressing.
-        let stillMineEmoji = Set(
-            summary.byEmoji
-                .filter { $0.senders.contains(me) }
-                .map(\.emoji)
-        )
-        return removals.filter { removal in
-            guard removal.targetMessageIdHex == target, removal.sender == me
-            else { return true }
-            // Confirmed when the summary no longer lists me for this emoji.
-            return stillMineEmoji.contains(removal.emoji)
-        }
-    }
-
     /// Prefer the event's own `recordedAt` so the timeline sorts by send time;
     /// fall back to `now` only when the FFI omitted it (zero sentinel).
     static func receivedToRecord(_ r: RuntimeMessageReceivedFfi, now: UInt64) -> AppMessageRecordFfi {
