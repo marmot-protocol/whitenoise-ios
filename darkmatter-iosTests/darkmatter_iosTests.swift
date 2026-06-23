@@ -8658,7 +8658,7 @@ struct SensitiveClipboardTests {
     }
 
     @Test func importIdentityClearsPastedSecretOnEveryOutcome() throws {
-        let source = try String(contentsOf: importIdentityViewSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: importIdentityViewModelSourceURL, encoding: .utf8)
 
         #expect(source.matches(#"defer\s*\{[\s\S]{0,120}SensitiveClipboard\.clear\(trimmed\)"#))
         #expect(!source.matches(#"try await appState\.importIdentity\(trimmed\)[\s\S]{0,200}SensitiveClipboard\.clear\(trimmed\)"#))
@@ -8683,11 +8683,11 @@ struct SensitiveClipboardTests {
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
     }
 
-    private var importIdentityViewSourceURL: URL {
+    private var importIdentityViewModelSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityView.swift")
+            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityViewModel.swift")
     }
 }
 
