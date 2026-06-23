@@ -11,7 +11,7 @@ struct NewChatSheet: View {
     @State private var model = NewChatSheetViewModel()
 
     private var canSubmit: Bool {
-        !model.members.isEmpty && !model.isCreating && appState.activeAccountRef != nil
+        !model.recipients.members.isEmpty && !model.isCreating && appState.activeAccountRef != nil
     }
 
     static func normalizedGroupName(_ raw: String) -> String {
@@ -22,33 +22,17 @@ struct NewChatSheet: View {
         ProfileSanitizer.multilineText(raw, maxLength: ProfileSanitizer.maxGroupDescriptionLength)
     }
 
-    typealias PendingMemberAddResult = AddMembersPresentation.PendingMemberAddResult
-    typealias NormalizedMemberResult = AddMembersPresentation.NormalizedMemberResult
-
-    static func normalizedMember(
-        _ raw: String,
-        normalize: (String) async throws -> MemberRefFfi
-    ) async -> NormalizedMemberResult {
-        await AddMembersPresentation.normalizedMember(raw, normalize: normalize)
-    }
-
-    static func stage(
-        _ normalized: MemberRefFfi,
-        existingMembers: [MemberRefFfi]
-    ) -> PendingMemberAddResult {
-        AddMembersPresentation.stage(normalized, existingMembers: existingMembers)
-    }
-
     var body: some View {
         @Bindable var model = model
+        @Bindable var recipients = model.recipients
         return NavigationStack {
             Form {
                 Section("Recipients") {
-                    ForEach(model.members, id: \.accountIdHex) { member in
+                    ForEach(recipients.members, id: \.accountIdHex) { member in
                         HStack {
                             StagedGroupMemberRow(member: member)
                             Button(role: .destructive) {
-                                model.members.removeAll { $0.accountIdHex == member.accountIdHex }
+                                recipients.members.removeAll { $0.accountIdHex == member.accountIdHex }
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.red)
@@ -57,7 +41,7 @@ struct NewChatSheet: View {
                         }
                     }
                     HStack {
-                        TextField("npub1…, nprofile1…, or hex public key", text: $model.pendingMember)
+                        TextField("npub1…, nprofile1…, or hex public key", text: $recipients.pending)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
@@ -67,12 +51,12 @@ struct NewChatSheet: View {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(.tint)
                         }
-                        .disabled(model.pendingMember.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(recipients.pending.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
 
                     Button {
-                        model.error = nil
-                        model.showScanner = true
+                        recipients.error = nil
+                        recipients.showScanner = true
                     } label: {
                         Label("Scan QR code", systemImage: "qrcode.viewfinder")
                     }
@@ -84,7 +68,7 @@ struct NewChatSheet: View {
                         .lineLimit(2...4)
                 }
 
-                if let error = model.error {
+                if let error = recipients.error {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -105,9 +89,9 @@ struct NewChatSheet: View {
                 }
             }
             .interactiveDismissDisabled(model.isCreating)
-            .fullScreenCover(isPresented: $model.showScanner) {
+            .fullScreenCover(isPresented: $recipients.showScanner) {
                 ScannerSheet { result in
-                    model.showScanner = false
+                    recipients.showScanner = false
                     model.handleScan(result, using: appState)
                 }
                 .appAppearance()

@@ -11,15 +11,16 @@ struct AddMembersSheet: View {
 
     var body: some View {
         @Bindable var model = model
+        @Bindable var recipients = model.recipients
         return NavigationStack {
             Form {
                 Section("Invite") {
-                    ForEach(model.members, id: \.accountIdHex) { member in
+                    ForEach(recipients.members, id: \.accountIdHex) { member in
                         HStack(spacing: 8) {
                             StagedGroupMemberRow(member: member)
 
                             Button(role: .destructive) {
-                                model.members.removeAll { $0.accountIdHex == member.accountIdHex }
+                                recipients.members.removeAll { $0.accountIdHex == member.accountIdHex }
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.red)
@@ -28,7 +29,7 @@ struct AddMembersSheet: View {
                         }
                     }
                     HStack {
-                        TextField("npub1…, nprofile1…, or hex public key", text: $model.pending)
+                        TextField("npub1…, nprofile1…, or hex public key", text: $recipients.pending)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
@@ -38,18 +39,18 @@ struct AddMembersSheet: View {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(.tint)
                         }
-                        .disabled(model.pending.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(recipients.pending.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
 
                     Button {
-                        model.error = nil
-                        model.showScanner = true
+                        recipients.error = nil
+                        recipients.showScanner = true
                     } label: {
                         Label("Scan QR code", systemImage: "qrcode.viewfinder")
                     }
                 }
 
-                if let error = model.error {
+                if let error = recipients.error {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -68,14 +69,14 @@ struct AddMembersSheet: View {
                     }
                     .disabled(
                         model.isInviting ||
-                        (model.members.isEmpty && model.pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        (recipients.members.isEmpty && recipients.pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     )
                 }
             }
             .interactiveDismissDisabled(model.isInviting)
-            .fullScreenCover(isPresented: $model.showScanner) {
+            .fullScreenCover(isPresented: $recipients.showScanner) {
                 ScannerSheet { result in
-                    model.showScanner = false
+                    recipients.showScanner = false
                     model.addScanned(result, normalize: normalize, using: appState)
                 }
                 .appAppearance()
