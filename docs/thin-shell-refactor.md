@@ -470,7 +470,10 @@ polling over re-running.
       mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`
       timeline path + index maps + sourceEpoch recovery. Drop-bad now via the Rust
       row; Swift parser retained as the local/optimistic fallback (oracle unchanged)
-- [ ] Phase 2 — extract services from AppState; AppState → composition root
+- [~] Phase 2 — extract services from AppState; AppState → composition root.
+      3/5 done (`ProfileStore`, `AccountUnreadStore`, `AccountStore`). The two
+      remaining services are **deferred to issues #389/#390** — organizational, lower
+      leverage, high (device) verification cost; see the leverage note below.
       - [x] `ProfileStore` (commit `8e7f089`): profile cache + load/refresh queues
             → `@MainActor ProfileStore`; `profileRefreshGeneration` stays on AppState
             for observation; AppState+Profiles.swift now thin forwarders
@@ -481,8 +484,20 @@ polling over re-running.
             (+ its UserDefaults `didSet`/key) + `activeAccount` → pure `@Observable`
             store; AppState forwarders + still drives refresh/identity lifecycle
       - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
-            most entangled; verify suspend/resume by running the app, not just tests
-      - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up)
+            most entangled; verify suspend/resume by running the app, not just tests.
+            **Tracked: marmot-protocol/darkmatter-ios#389** (deferred — see leverage note below).
+      - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up).
+            **Tracked: marmot-protocol/darkmatter-ios#390** (deferred — see leverage note below).
+
+      > **Leverage note (2026-06-23):** the two remaining Phase 2 services are
+      > *organizational* — they relocate orchestration out of `AppState` but do not
+      > delete re-derivation or push logic into Rust (the thin-shell thesis, already
+      > realized by Phase 3 + the projection caches + the Phase 5b VM decomposition).
+      > `AppState`'s lifecycle/notification code is also already partly factored
+      > (`NotificationDriver`, the policy types). Their value is *defensive* (isolate +
+      > test-pin a fragile, invariant-dense area) and their verification cost is high
+      > (suspend/resume + background push need device/manual testing). Deprioritized to
+      > issues #389/#390; not blocking the refactor's core goal.
 - [ ] Phase 4 — screen-store template; convert view-embedded screens
       - [x] template established + `RelaysView` → `RelaysViewModel` (commit `1356c5e`):
             `@Observable` store owns load/save/validation + UI state; view is pure
@@ -541,8 +556,11 @@ polling over re-running.
 > confirming the profile/account observation forwarding. No crash after the
 > store extractions. Deep live-update checks (account-switch badges) need a
 > populated account.
-- [~] Phase 5b — decompose ConversationViewModel into TimelineStore /
-      MediaController / ComposerModel / StreamWatcher.
+- [x] **Phase 5b — COMPLETE.** ConversationViewModel decomposed into TimelineStore /
+      ConversationMediaDownloader / ComposerModel / StreamWatcher + the four projection
+      caches. VM 3,179 → 1,528 lines over the session; the timeline path now holds only
+      UI/optimistic state over binding projections. Full `xcodebuild test` target green;
+      app boots healthy to Chats.
       - [x] MediaController download path → `ConversationMediaDownloader` (commit
             `d98c3e2`). VM 3096 → 3012 lines.
       - [x] Composer mention concern → `ComposerMentionController` (commit `b48470b`,
@@ -632,21 +650,6 @@ polling over re-running.
               `onError` closure that sets the view model's observable `error`. VM forwards
               `sendInFlight` (get) + `replyingTo` (get/set) + `send`/`sendMedia`. Full test
               target green.
-        - [ ] (superseded) the core: `messageById` mirror + optimistic send overlay
-              (`transientTimelineItems`/`applyPendingOutgoingMessage`/`confirmSent`/
-              `reconcilePendingOutgoingMessage`) + pagination + the rebuild engine
-              (`rebuildTimeline`/`upsert`/`remove`/`assignTimeline`/`visibleTimelineItem`)
-              + the apply* ingest. This is the irreducible part: it has back-edges into
-              the stream watcher (`watchAgentStreamStartIfNeeded`,
-              `dropMatchingStreamPreviewIfNeeded`, `resolveFinalizedStream`,
-              `streamDebugTimelineItems`) and reads `streamingDebugEnabled`/`myAccountId`,
-              so a clean class lift needs a delegate for those hooks (or the StreamWatcher
-              carved first). The view observes `timeline`/`timelineProjectionGeneration`/
-              pagination flags, so a TimelineStore must re-forward them as `@Observable`
-              computed props. Needs app-run verification (the timeline is the app's most-
-              used surface), not just tests. NOT a pure projection peel like the four above.
-              pagination state + the rebuild engine + accessors. The big atomic move that
-              the send pipeline / stream watcher then delegate into.
       - [x] `StreamWatcher` (VM 2572 → 2170, −402; new 513-line file): the agent-text
             (QUIC) watch subsystem — watch tasks, preview-text accumulation, finalized-
             stream cursor, synthetic stream + debug rows. Carved out *ahead* of the
@@ -660,17 +663,6 @@ polling over re-running.
             hooks) so no test call sites churn; three source-scrapes repointed to
             `StreamWatcher.swift`. `shouldClearCompletedStreamWatch`/`appMessageRecord`
             stay on the VM (the watcher calls them as statics).
-      - [ ] After the core lands, the now-unblocked carves:
-        - ComposerModel send pipeline (`send`/`sendMedia`/`sendInFlight`) writes
-          optimistic pending rows into the timeline + reconciles them — that overlay
-          belongs to TimelineStore, so the composer can't cleanly leave before it.
-          (Confirmed 2026-06-23: `confirmSent`/`applyPendingOutgoingMessage`/`markFailed`
-          mutate `messageById`/`transientTimelineItems`/`mediaProjections` directly —
-          they are timeline-mirror ops, not composer logic. Only the thin FFI
-          orchestration in `send`/`sendMedia` is composer-owned; it hands off to the
-          mirror's reconcile. So ComposerModel is a small carve once the core exists.)
-      - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
-            overlay + pagination + the rebuild engine that drives the now-extracted
-            markdown/media/reaction projection caches). The big one; unlocks the rest.
-            ~900 lines of the VM. Best as a focused dedicated effort — high risk of
-            breaking the conversation if rushed.
+      - [x] TimelineStore core + ComposerModel landed after StreamWatcher (see the two
+            entries above). Phase 5b is complete: ConversationViewModel is decomposed and
+            the timeline path holds only UI/optimistic state over binding projections.
