@@ -371,6 +371,12 @@ final class AppState {
 
     /// Convenience accessor for the underlying FFI handle.
     ///
+    /// AppState-internal seam only: lifecycle/bootstrap, runtime suspend/resume,
+    /// and the notification subscription legitimately need the raw handle. Feature
+    /// code (views / view-models / stores) must NOT use this — it goes through
+    /// `currentMarmotClient()` and the `MarmotClient` wrappers (the one seam),
+    /// enforced by `MarmotHandleLockdownTests` (#395).
+    ///
     /// Non-optional for call-site ergonomics: the runtime is only released
     /// while the app is suspended, when no UI or view-model code runs. If
     /// something does touch it during the foreground transition (before

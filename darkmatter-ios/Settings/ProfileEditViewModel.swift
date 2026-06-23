@@ -80,9 +80,10 @@ final class ProfileEditViewModel {
         error = nil
 
         do {
+            let client = try appState.currentMarmotClient()
             let relays = await appState.relayPublishRelays(for: accountRef)
             let bootstrapRelays = await appState.relayBootstrapRelays(for: accountRef)
-            _ = try await appState.marmot.publishUserProfile(
+            _ = try await client.publishUserProfile(
                 accountRef: accountRef,
                 profile: normalizedMetadata.ffi,
                 defaultRelays: relays,

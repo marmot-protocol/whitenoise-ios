@@ -232,9 +232,9 @@ final class ProfileStore {
     }
 
     private func loadProfileProjection(forAccountIdHex id: String) async -> ProfileDisplayProjection? {
-        guard let appState else { return nil }
+        guard let appState, let client = try? appState.currentMarmotClient() else { return nil }
         let request = profileProjectionRequest(forAccountIdHex: id)
-        let projections = await MarmotClient.profileProjections(for: [request], marmot: appState.marmot)
+        let projections = await client.profileProjections(for: [request])
         guard var projection = projections[id] else { return nil }
         projection.localAccountLabel = localAccountLabel(forAccountIdHex: id)
         return projection
@@ -402,7 +402,8 @@ final class ProfileStore {
             relays = MarmotClient.seedRelays
         }
         do {
-            try await appState.marmot.refreshProfile(accountIdHex: id, relays: relays)
+            let client = try appState.currentMarmotClient()
+            try await client.refreshProfile(accountIdHex: id, relays: relays)
         } catch {
             return
         }

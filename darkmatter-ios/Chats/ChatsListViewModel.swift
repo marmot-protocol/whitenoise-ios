@@ -184,7 +184,7 @@ final class ChatsListViewModel {
             do {
                 guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                 let client = try appState.currentMarmotClient()
-                let chatListSub = try await client.marmot.subscribeChatList(
+                let chatListSub = try await client.subscribeChatList(
                     accountRef: accountRef,
                     includeArchived: true
                 )
@@ -489,10 +489,11 @@ final class ChatsListViewModel {
 
                 var changed = false
                 for groupId in groupIds where !Task.isCancelled {
-                    guard let details = try? await appState.marmot.groupDetails(
-                        accountRef: accountRef,
-                        groupIdHex: groupId
-                    ) else { continue }
+                    guard let client = try? appState.currentMarmotClient(),
+                          let details = try? await client.groupDetails(
+                              accountRef: accountRef,
+                              groupIdHex: groupId
+                          ) else { continue }
 
                     // `groupDetails` is a suspension point: a full-snapshot
                     // replace (`applyChatListSnapshot`) can run during the await

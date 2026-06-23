@@ -77,16 +77,17 @@ final class ComposerModel {
         replyingTo = nil
 
         do {
+            let client = try appState.currentMarmotClient()
             let summary: SendSummaryFfi
             if let replyTargetId {
-                summary = try await appState.marmot.replyToMessage(
+                summary = try await client.replyToMessage(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex,
                     targetMessageId: replyTargetId,
                     text: outgoing
                 )
             } else {
-                summary = try await appState.marmot.sendText(
+                summary = try await client.sendText(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex,
                     text: outgoing
@@ -143,7 +144,8 @@ final class ComposerModel {
         replyingTo = nil
 
         do {
-            let result = try await appState.marmot.uploadMedia(
+            let client = try appState.currentMarmotClient()
+            let result = try await client.uploadMedia(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
                 request: MediaUploadRequestFfi(

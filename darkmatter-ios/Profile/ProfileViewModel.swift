@@ -34,7 +34,8 @@ final class ProfileViewModel {
         creating = true
         error = nil
         do {
-            let groupIdHex = try await appState.marmot.createGroup(
+            let client = try appState.currentMarmotClient()
+            let groupIdHex = try await client.createGroup(
                 accountRef: accountRef,
                 name: "",
                 memberRefs: [hex ?? npub],

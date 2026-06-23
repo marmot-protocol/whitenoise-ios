@@ -31,9 +31,10 @@ final class KeyPackagesViewModel {
         defer { isLoading = false }
 
         do {
-            let loadedLists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
+            let client = try appState.currentMarmotClient()
+            let loadedLists = try await client.accountRelayLists(accountRef: ref)
             lists = loadedLists
-            packages = try await appState.marmot.accountKeyPackages(
+            packages = try await client.accountKeyPackages(
                 accountRef: ref,
                 bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists)
             )
@@ -48,7 +49,8 @@ final class KeyPackagesViewModel {
         defer { isPublishing = false }
 
         do {
-            _ = try await appState.marmot.publishNewKeyPackage(accountRef: ref)
+            let client = try appState.currentMarmotClient()
+            _ = try await client.publishNewKeyPackage(accountRef: ref)
             Haptics.success()
             appState.present(.success(L10n.string("New key package published")))
             await reload(using: appState)
@@ -66,7 +68,8 @@ final class KeyPackagesViewModel {
         defer { deletingEventIds.remove(eventId) }
 
         do {
-            _ = try await appState.marmot.deleteAccountKeyPackage(
+            let client = try appState.currentMarmotClient()
+            _ = try await client.deleteAccountKeyPackage(
                 accountRef: ref,
                 eventIdHex: eventId,
                 relays: bootstrapRelays

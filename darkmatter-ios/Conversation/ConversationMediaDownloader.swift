@@ -72,11 +72,11 @@ final class ConversationMediaDownloader {
         if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
             return cached
         }
-        let marmot = appState.marmot
+        let client = try appState.currentMarmotClient()
         return try await inFlight.data(
             for: MediaDownloadInFlightKey(reference: downloadableReference)
         ) {
-            let result = try await marmot.downloadMedia(
+            let result = try await client.downloadMedia(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
                 reference: downloadableReference

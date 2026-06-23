@@ -443,7 +443,8 @@ struct ChatsListView: View {
     private func leave(groupIdHex: String) async {
         guard let ref = appState.activeAccountRef else { return }
         do {
-            _ = try await appState.marmot.leaveGroup(
+            let client = try appState.currentMarmotClient()
+            _ = try await client.leaveGroup(
                 accountRef: ref,
                 groupIdHex: groupIdHex
             )
@@ -458,7 +459,8 @@ struct ChatsListView: View {
     private func setArchived(groupIdHex: String, archived: Bool) async {
         guard let ref = appState.activeAccountRef else { return }
         do {
-            let updated = try await appState.marmot.setGroupArchived(
+            let client = try appState.currentMarmotClient()
+            let updated = try await client.setGroupArchived(
                 accountRef: ref,
                 groupIdHex: groupIdHex,
                 archived: archived

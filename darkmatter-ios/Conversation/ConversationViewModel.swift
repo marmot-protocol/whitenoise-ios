@@ -584,7 +584,7 @@ final class ConversationViewModel {
                     guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
                     let subscribeStart = ContinuousClock.now
-                    let timelineSub = try await client.marmot.subscribeTimelineMessages(
+                    let timelineSub = try await client.subscribeTimelineMessages(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex,
                         limit: Self.timelinePageLimit
@@ -683,7 +683,7 @@ final class ConversationViewModel {
                 do {
                     guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
-                    let groupSub = try await client.marmot.subscribeGroupState(
+                    let groupSub = try await client.subscribeGroupState(
                         accountRef: accountRef,
                         groupIdHex: groupIdHex
                     )
@@ -737,7 +737,8 @@ final class ConversationViewModel {
                   appState.canUseRuntimeForForegroundWork
             else { return }
             do {
-                let next = try await appState.marmot.groupMembers(
+                let client = try appState.currentMarmotClient()
+                let next = try await client.groupMembers(
                     accountRef: accountRef,
                     groupIdHex: groupIdHex
                 )
@@ -1325,12 +1326,13 @@ final class ConversationViewModel {
     func refreshGroupManagement(announceRosterChanges: Bool = false) async -> Bool {
         guard let appState, let accountRef = appState.activeAccountRef else { return false }
         do {
+            let client = try appState.currentMarmotClient()
             let detailsStart = ContinuousClock.now
-            let details = try await appState.marmot.groupDetails(
+            let details = try await client.groupDetails(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
-            let state = try await appState.marmot.groupManagementState(
+            let state = try await client.groupManagementState(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
@@ -1411,7 +1413,8 @@ final class ConversationViewModel {
             return
         }
         do {
-            let next = try await appState.marmot.groupMembers(
+            let client = try appState.currentMarmotClient()
+            let next = try await client.groupMembers(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex
             )
@@ -1469,7 +1472,8 @@ final class ConversationViewModel {
             timelineStore.noteProjectionChanged()
         }
         do {
-            _ = try await appState.marmot.deleteMessage(
+            let client = try appState.currentMarmotClient()
+            _ = try await client.deleteMessage(
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex,
                 targetMessageId: message.messageIdHex
@@ -1562,14 +1566,15 @@ final class ConversationViewModel {
         Haptics.tap()
 
         do {
+            let client = try appState.currentMarmotClient()
             if alreadyMine {
-                _ = try await appState.marmot.unreactFromMessage(
+                _ = try await client.unreactFromMessage(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     targetMessageId: message.messageIdHex
                 )
             } else {
-                _ = try await appState.marmot.reactToMessage(
+                _ = try await client.reactToMessage(
                     accountRef: accountRef,
                     groupIdHex: group.groupIdHex,
                     targetMessageId: message.messageIdHex,
