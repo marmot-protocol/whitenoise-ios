@@ -28,6 +28,7 @@ struct MarmotClientStorageReadOffloadTests {
             "darkmatter-ios/Chats/AccountSwitcherSheet.swift",
             "darkmatter-ios/Chats/ChatsListViewModel.swift",
             "darkmatter-ios/Diagnostics/DiagnosticsView.swift",
+            "darkmatter-ios/Diagnostics/DiagnosticsViewModel.swift",
             "darkmatter-ios/Settings/KeyPackagesView.swift",
             "darkmatter-ios/Settings/KeyPackagesViewModel.swift",
             "darkmatter-ios/Settings/RelaysView.swift",
