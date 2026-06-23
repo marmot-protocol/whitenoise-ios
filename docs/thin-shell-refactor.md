@@ -557,6 +557,11 @@ polling over re-running.
             forwarder so the many apply-path call sites don't churn; inject live
             context (weak appState + `[weak self]` loaded-window closure, lazy var so
             it captures a ready self) so the async flush sees current state.
+      - [x] Pure decision-point prep (extract pure logic before the stateful split):
+            `ConversationPaginationPolicy` (pagination-edge movement, commit `b20741a`)
+            + `ConversationReactionPolicy` (optimistic react/un-react reconciliation
+            #47/#349, with `ReactionRemoval` moved top-level, commit `5da61f7`).
+            VM 2855 → 2777.
       - [ ] **Remaining carves all need TimelineStore FIRST (verified by reading):**
         - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
           optimistic pending rows into the timeline + reconciles them — that overlay
