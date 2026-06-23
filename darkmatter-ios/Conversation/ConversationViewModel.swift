@@ -46,46 +46,6 @@ private struct TimelineTailRefreshRequest {
 
 typealias TimelineTailRefreshOperation = @MainActor () async -> Void
 
-struct MediaDownloadInFlightKey: Hashable {
-    let version: String
-    let plaintextSha256: String
-    let ciphertextSha256: String
-    let nonceHex: String
-
-    init(reference: MediaAttachmentReferenceFfi) {
-        self.version = reference.version
-        self.plaintextSha256 = reference.plaintextSha256.lowercased()
-        self.ciphertextSha256 = reference.ciphertextSha256.lowercased()
-        self.nonceHex = reference.nonceHex.lowercased()
-    }
-}
-
-@MainActor
-final class MediaDownloadInFlightStore {
-    private var tasks: [MediaDownloadInFlightKey: Task<Data, Error>] = [:]
-
-    func data(
-        for key: MediaDownloadInFlightKey,
-        operation: @escaping @MainActor () async throws -> Data
-    ) async throws -> Data {
-        if let task = tasks[key] {
-            return try await task.value
-        }
-        let task = Task { @MainActor in
-            try await operation()
-        }
-        tasks[key] = task
-        do {
-            let data = try await task.value
-            tasks[key] = nil
-            return data
-        } catch {
-            tasks[key] = nil
-            throw error
-        }
-    }
-}
-
 /// Owns the live state of a single conversation: the merged timeline of
 /// message bubbles + system events, aggregated reactions, the group roster,
 /// the in-progress reply, and the send pipeline.
@@ -166,7 +126,7 @@ final class ConversationViewModel {
     /// tags + source_epoch). A dumb mirror of the row — no iOS-side derivation,
     /// and no separate `listMedia` round-trip to recover `sourceEpoch`.
     @ObservationIgnored private var mediaReferencesByMessageId: [String: [MediaAttachmentReferenceFfi]] = [:]
-    @ObservationIgnored private let mediaDownloadInFlight = MediaDownloadInFlightStore()
+    @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
 #if DEBUG
     // Counts buildMediaItemProjection invocations across both record-backed and
     // classify-backed media paths so tests can catch accidental body-time rebuilds.
@@ -1771,37 +1731,7 @@ final class ConversationViewModel {
     }
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
-        if let localData = media.localData {
-            return localData
-        }
-        guard let reference = media.reference else {
-            throw MediaDataError.missingReference
-        }
-        if let cached = await MessageMediaCache.cachedData(for: reference) {
-            return cached
-        }
-        guard let appState, let accountRef = appState.activeAccountRef else {
-            throw MediaDataError.missingAccount
-        }
-        // Row references already carry the real source_epoch, so the reference
-        // is directly downloadable — no listMedia round-trip to recover it.
-        let downloadableReference = reference
-        if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
-            return cached
-        }
-        let groupIdHex = group.groupIdHex
-        let marmot = appState.marmot
-        return try await mediaDownloadInFlight.data(
-            for: MediaDownloadInFlightKey(reference: downloadableReference)
-        ) {
-            let result = try await marmot.downloadMedia(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                reference: downloadableReference
-            )
-            await MessageMediaCache.store(result.plaintext, for: downloadableReference)
-            return result.plaintext
-        }
+        try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
     static func sameMediaAttachment(
@@ -1812,20 +1742,6 @@ final class ConversationViewModel {
             && lhs.plaintextSha256.lowercased() == rhs.plaintextSha256.lowercased()
             && lhs.ciphertextSha256.lowercased() == rhs.ciphertextSha256.lowercased()
             && lhs.nonceHex.lowercased() == rhs.nonceHex.lowercased()
-    }
-
-    private enum MediaDataError: LocalizedError {
-        case missingReference
-        case missingAccount
-
-        var errorDescription: String? {
-            switch self {
-            case .missingReference:
-                return L10n.string("This attachment is not ready yet.")
-            case .missingAccount:
-                return L10n.string("No active account.")
-            }
-        }
     }
 
     /// Mirrors the resolved references for one message (from the timeline row,
