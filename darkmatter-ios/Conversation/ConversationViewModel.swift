@@ -1059,7 +1059,7 @@ final class ConversationViewModel {
         do {
             let page = try await timelineSubscription.paginateBackwards(count: Self.timelinePageLimit)
             guard !Task.isCancelled else { return }
-            let movedOlder = Self.paginationMovedOlder(
+            let movedOlder = ConversationPaginationPolicy.movedOlder(
                 previousOldestMessageId: previousOldestMessageId,
                 nextMessageIds: page.messages.map(\.messageIdHex)
             )
@@ -1081,7 +1081,7 @@ final class ConversationViewModel {
         do {
             let page = try await timelineSubscription.paginateForwards(count: Self.timelinePageLimit)
             guard !Task.isCancelled else { return }
-            let movedNewer = Self.paginationMovedNewer(
+            let movedNewer = ConversationPaginationPolicy.movedNewer(
                 previousNewestMessageId: previousNewestMessageId,
                 nextMessageIds: page.messages.map(\.messageIdHex)
             )
@@ -1092,24 +1092,6 @@ final class ConversationViewModel {
         } catch {
             self.error = error.localizedDescription
         }
-    }
-
-    nonisolated static func paginationMovedOlder(
-        previousOldestMessageId: String?,
-        nextMessageIds: [String]
-    ) -> Bool {
-        guard let previousOldestMessageId else { return !nextMessageIds.isEmpty }
-        guard let nextOldestMessageId = nextMessageIds.first else { return false }
-        return nextOldestMessageId != previousOldestMessageId
-    }
-
-    nonisolated static func paginationMovedNewer(
-        previousNewestMessageId: String?,
-        nextMessageIds: [String]
-    ) -> Bool {
-        guard let previousNewestMessageId else { return !nextMessageIds.isEmpty }
-        guard let nextNewestMessageId = nextMessageIds.last else { return false }
-        return nextNewestMessageId != previousNewestMessageId
     }
 
     @discardableResult

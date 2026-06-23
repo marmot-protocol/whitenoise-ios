@@ -5310,27 +5310,27 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func paginationProgressRequiresWindowEdgeMovement() {
-        #expect(ConversationViewModel.paginationMovedOlder(
+        #expect(ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: ["message-a", "message-b"]
         ))
-        #expect(!ConversationViewModel.paginationMovedOlder(
+        #expect(!ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: ["message-b", "message-c"]
         ))
-        #expect(!ConversationViewModel.paginationMovedOlder(
+        #expect(!ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: []
         ))
-        #expect(ConversationViewModel.paginationMovedNewer(
+        #expect(ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: ["message-b", "message-c"]
         ))
-        #expect(!ConversationViewModel.paginationMovedNewer(
+        #expect(!ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: ["message-a", "message-b"]
         ))
-        #expect(!ConversationViewModel.paginationMovedNewer(
+        #expect(!ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: []
         ))
