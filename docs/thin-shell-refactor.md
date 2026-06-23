@@ -467,7 +467,15 @@ polling over re-running.
       & reaction aggregation already covered by existing tests
 - [x] Phase 1 — reconciled: the genuine blocking reads were already wrapped in
       `MarmotClient`; the rest is non-blocking/trivial. Seam routing + handle
-      lockdown fold into Phase 4/5 (no standalone phase)
+      lockdown folded into Phase 4/5 (no standalone phase).
+      - [x] **Handle lockdown (final step, #395):** the remaining raw-handle
+            calls in feature code (group/message mutations + reads, profile /
+            key-package publish, `npub`, and the `subscribe*` / `watchAgentTextStream`
+            subscription factories) now route through thin `MarmotClient` wrappers;
+            `MarmotClient` conforms to `AccountRelayListManaging` so the relay-save
+            path takes `manager: client`. The raw `Marmot` handle is now reachable
+            only from `AppState` (lifecycle/bootstrap/notifications seam) and
+            `MarmotClient` itself, enforced by `MarmotHandleLockdownTests`.
 - [x] Phase 3 — merged (darkmatter#570) + bindings synced (127fe17) + fixtures migrated
 - [x] **Phase 5a (media slice)** — done (commit `4d46058`, +56/−242): `record.media`
       mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`

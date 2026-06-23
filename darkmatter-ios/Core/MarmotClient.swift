@@ -351,6 +351,158 @@ final class MarmotClient {
         }.value
     }
 
+    // MARK: - Group mutations & reads
+
+    /// Group/message mutation and read wrappers. The generated `Marmot`
+    /// bindings are already `async throws` (they suspend, not block), so these
+    /// forward directly — no `Task.detached` — exactly like `signOutAndWipe`.
+    /// Routing them here keeps the raw handle out of feature code (the one
+    /// seam).
+    func createGroup(accountRef: String, name: String, memberRefs: [String], description: String?) async throws -> String {
+        try await marmot.createGroup(accountRef: accountRef, name: name, memberRefs: memberRefs, description: description)
+    }
+
+    func setGroupArchived(accountRef: String, groupIdHex: String, archived: Bool) async throws -> AppGroupRecordFfi {
+        try await marmot.setGroupArchived(accountRef: accountRef, groupIdHex: groupIdHex, archived: archived)
+    }
+
+    func sendText(accountRef: String, groupIdHex: String, text: String) async throws -> SendSummaryFfi {
+        try await marmot.sendText(accountRef: accountRef, groupIdHex: groupIdHex, text: text)
+    }
+
+    func replyToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, text: String) async throws -> SendSummaryFfi {
+        try await marmot.replyToMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId, text: text)
+    }
+
+    func uploadMedia(accountRef: String, groupIdHex: String, request: MediaUploadRequestFfi) async throws -> MediaUploadResultFfi {
+        try await marmot.uploadMedia(accountRef: accountRef, groupIdHex: groupIdHex, request: request)
+    }
+
+    func downloadMedia(accountRef: String, groupIdHex: String, reference: MediaAttachmentReferenceFfi) async throws -> MediaDownloadResultFfi {
+        try await marmot.downloadMedia(accountRef: accountRef, groupIdHex: groupIdHex, reference: reference)
+    }
+
+    func inviteMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws -> GroupMutationResultFfi {
+        try await marmot.inviteMembersDetailed(accountRef: accountRef, groupIdHex: groupIdHex, memberRefs: memberRefs)
+    }
+
+    func removeMembersDetailed(accountRef: String, groupIdHex: String, memberRefs: [String]) async throws -> GroupMutationResultFfi {
+        try await marmot.removeMembersDetailed(accountRef: accountRef, groupIdHex: groupIdHex, memberRefs: memberRefs)
+    }
+
+    func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef: String) async throws -> GroupMutationResultFfi {
+        try await marmot.promoteAdminDetailed(accountRef: accountRef, groupIdHex: groupIdHex, memberRef: memberRef)
+    }
+
+    func demoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef: String) async throws -> GroupMutationResultFfi {
+        try await marmot.demoteAdminDetailed(accountRef: accountRef, groupIdHex: groupIdHex, memberRef: memberRef)
+    }
+
+    func selfDemoteAdminDetailed(accountRef: String, groupIdHex: String) async throws -> GroupMutationResultFfi {
+        try await marmot.selfDemoteAdminDetailed(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws -> SendSummaryFfi {
+        try await marmot.updateGroupProfile(accountRef: accountRef, groupIdHex: groupIdHex, name: name, description: description)
+    }
+
+    func updateGroupAvatarUrl(accountRef: String, groupIdHex: String, url: String?, dim: String?, thumbhash: String?) async throws -> SendSummaryFfi {
+        try await marmot.updateGroupAvatarUrl(accountRef: accountRef, groupIdHex: groupIdHex, url: url, dim: dim, thumbhash: thumbhash)
+    }
+
+    func leaveGroup(accountRef: String, groupIdHex: String) async throws -> SendSummaryFfi {
+        try await marmot.leaveGroup(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func groupMembers(accountRef: String, groupIdHex: String) async throws -> [AppGroupMemberRecordFfi] {
+        try await marmot.groupMembers(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func groupDetails(accountRef: String, groupIdHex: String) async throws -> GroupDetailsFfi {
+        try await marmot.groupDetails(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func groupManagementState(accountRef: String, groupIdHex: String) async throws -> GroupManagementStateFfi {
+        try await marmot.groupManagementState(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func groupMlsState(accountRef: String, groupIdHex: String) async throws -> AppGroupMlsStateFfi {
+        try await marmot.groupMlsState(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func groupPushDebugInfo(accountRef: String, groupIdHex: String) async throws -> GroupPushDebugInfoFfi {
+        try await marmot.groupPushDebugInfo(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func deleteMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {
+        try await marmot.deleteMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId)
+    }
+
+    func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String) async throws -> SendSummaryFfi {
+        try await marmot.reactToMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId, emoji: emoji)
+    }
+
+    func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {
+        try await marmot.unreactFromMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId)
+    }
+
+    // MARK: - Profile & key packages
+
+    /// Profile and key-package wrappers. The generated bindings are already
+    /// `async throws`, so these forward directly without `Task.detached`.
+    func publishUserProfile(accountRef: String, profile: UserProfileMetadataFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws -> UserProfileMetadataFfi {
+        try await marmot.publishUserProfile(accountRef: accountRef, profile: profile, defaultRelays: defaultRelays, bootstrapRelays: bootstrapRelays)
+    }
+
+    func refreshProfile(accountIdHex: String, relays: [String]) async throws {
+        try await marmot.refreshProfile(accountIdHex: accountIdHex, relays: relays)
+    }
+
+    func accountKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws -> [AccountKeyPackageFfi] {
+        try await marmot.accountKeyPackages(accountRef: accountRef, bootstrapRelays: bootstrapRelays)
+    }
+
+    func publishNewKeyPackage(accountRef: String) async throws -> UInt64 {
+        try await marmot.publishNewKeyPackage(accountRef: accountRef)
+    }
+
+    func deleteAccountKeyPackage(accountRef: String, eventIdHex: String, relays: [String]) async throws -> UInt64 {
+        try await marmot.deleteAccountKeyPackage(accountRef: accountRef, eventIdHex: eventIdHex, relays: relays)
+    }
+
+    /// Bech32-encodes an account id. `Marmot.npub` is a trivial synchronous
+    /// encode (microseconds, no I/O), so this stays a plain forwarder per the
+    /// thin-shell plan — making it `async` would push churn into sync call
+    /// sites for no benefit.
+    func npub(accountIdHex: String) -> String? {
+        marmot.npub(accountIdHex: accountIdHex)
+    }
+
+    // MARK: - Subscriptions
+
+    /// Subscription factories. Routing them through `MarmotClient` keeps the raw
+    /// `Marmot` handle from escaping to feature code; the returned subscription
+    /// handles are the live channel.
+    func subscribeEvents() -> EventsSubscription {
+        marmot.subscribeEvents()
+    }
+
+    func subscribeChatList(accountRef: String, includeArchived: Bool) async throws -> ChatListSubscription {
+        try await marmot.subscribeChatList(accountRef: accountRef, includeArchived: includeArchived)
+    }
+
+    func subscribeTimelineMessages(accountRef: String, groupIdHex: String?, limit: UInt32?) async throws -> TimelineMessagesSubscription {
+        try await marmot.subscribeTimelineMessages(accountRef: accountRef, groupIdHex: groupIdHex, limit: limit)
+    }
+
+    func subscribeGroupState(accountRef: String, groupIdHex: String) async throws -> GroupStateSubscription {
+        try await marmot.subscribeGroupState(accountRef: accountRef, groupIdHex: groupIdHex)
+    }
+
+    func watchAgentTextStream(accountRef: String, groupIdHex: String, streamIdHex: String?, serverCertDer: Data?, insecureLocal: Bool) async throws -> AgentStreamSubscription {
+        try await marmot.watchAgentTextStream(accountRef: accountRef, groupIdHex: groupIdHex, streamIdHex: streamIdHex, serverCertDer: serverCertDer, insecureLocal: insecureLocal)
+    }
+
     func startRuntime() async throws {
         try await configureTelemetryRuntime()
         try await marmot.start()
@@ -385,6 +537,33 @@ protocol AccountRelayListManaging {
 }
 
 extension Marmot: AccountRelayListManaging {}
+
+/// Lets `RelaysViewModel` pass `manager: client` so the relay-save path never
+/// touches the raw `Marmot` handle. The protocol's `accountRelayLists` is the
+/// synchronous `throws` variant used inside `RelaySettings.saveAccountRelays`'
+/// error-recovery reload; it is distinct from `MarmotClient`'s `async throws`
+/// read wrapper. The two setters forward directly (already `async throws`).
+extension MarmotClient: AccountRelayListManaging {
+    func accountRelayLists(accountRef: String) throws -> AccountRelayListsFfi {
+        try marmot.accountRelayLists(accountRef: accountRef)
+    }
+
+    func setAccountInboxRelays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi {
+        try await marmot.setAccountInboxRelays(accountRef: accountRef, relays: relays, bootstrapRelays: bootstrapRelays)
+    }
+
+    func setAccountNip65Relays(
+        accountRef: String,
+        relays: [String],
+        bootstrapRelays: [String]
+    ) async throws -> AccountRelayListsFfi {
+        try await marmot.setAccountNip65Relays(accountRef: accountRef, relays: relays, bootstrapRelays: bootstrapRelays)
+    }
+}
 
 struct RelaySettingsSaveFailure: LocalizedError {
     let underlyingError: Error

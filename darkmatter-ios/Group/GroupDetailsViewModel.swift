@@ -40,8 +40,9 @@ final class GroupDetailsViewModel {
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
+            let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Inviting members…"), message: L10n.string("Publishing group update.")))
-            let result = try await appState.marmot.inviteMembersDetailed(
+            let result = try await client.inviteMembersDetailed(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 memberRefs: refs
@@ -67,8 +68,9 @@ final class GroupDetailsViewModel {
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
+            let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Removing member…"), message: L10n.string("Publishing group update.")))
-            let result = try await appState.marmot.removeMembersDetailed(
+            let result = try await client.removeMembersDetailed(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 memberRefs: [member.memberIdHex]
@@ -94,15 +96,16 @@ final class GroupDetailsViewModel {
             message: L10n.string("Publishing group update.")
         ))
         do {
+            let client = try appState.currentMarmotClient()
             let result: GroupMutationResultFfi
             if admin {
-                result = try await appState.marmot.promoteAdminDetailed(
+                result = try await client.promoteAdminDetailed(
                     accountRef: accountRef,
                     groupIdHex: conversation.group.groupIdHex,
                     memberRef: member.memberIdHex
                 )
             } else {
-                result = try await appState.marmot.demoteAdminDetailed(
+                result = try await client.demoteAdminDetailed(
                     accountRef: accountRef,
                     groupIdHex: conversation.group.groupIdHex,
                     memberRef: member.memberIdHex
@@ -132,7 +135,8 @@ final class GroupDetailsViewModel {
         }
         appState.present(.warning(L10n.string("Stepping down…"), message: L10n.string("Publishing group update.")))
         do {
-            let result = try await appState.marmot.selfDemoteAdminDetailed(
+            let client = try appState.currentMarmotClient()
+            let result = try await client.selfDemoteAdminDetailed(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex
             )
@@ -150,8 +154,9 @@ final class GroupDetailsViewModel {
         guard let conversation, let accountRef = appState.activeAccountRef,
               let name = GroupDetailsView.validatedGroupName(renameDraft) else { return }
         do {
+            let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Updating group name…"), message: L10n.string("Publishing group update.")))
-            let summary = try await appState.marmot.updateGroupProfile(
+            let summary = try await client.updateGroupProfile(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 name: name,
@@ -182,8 +187,9 @@ final class GroupDetailsViewModel {
         }
 
         do {
+            let client = try appState.currentMarmotClient()
             appState.present(.warning(L10n.string("Updating group image…"), message: L10n.string("Publishing group update.")))
-            let summary = try await appState.marmot.updateGroupAvatarUrl(
+            let summary = try await client.updateGroupAvatarUrl(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 url: normalizedURL,
@@ -209,7 +215,8 @@ final class GroupDetailsViewModel {
     func setArchived(_ archived: Bool, using appState: AppState) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
         do {
-            let record = try await appState.marmot.setGroupArchived(
+            let client = try appState.currentMarmotClient()
+            let record = try await client.setGroupArchived(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 archived: archived
@@ -242,12 +249,13 @@ final class GroupDetailsViewModel {
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
+            let client = try appState.currentMarmotClient()
             if GroupManagementPresentation.shouldSelfDemoteBeforeLeave(state: conversation.managementState) {
                 if let myAccountId = conversation.managementState?.myAccountIdHex {
                     conversation.applyOptimisticAdminStatus(memberIdHex: myAccountId, isAdmin: false)
                 }
                 appState.present(.warning(L10n.string("Stepping down before leaving…"), message: L10n.string("Publishing group update.")))
-                let result = try await appState.marmot.selfDemoteAdminDetailed(
+                let result = try await client.selfDemoteAdminDetailed(
                     accountRef: accountRef,
                     groupIdHex: conversation.group.groupIdHex
                 )
@@ -255,7 +263,7 @@ final class GroupDetailsViewModel {
                 await refreshVisibleDebugState(using: appState)
             }
             appState.present(.warning(L10n.string("Leaving group…"), message: L10n.string("Publishing group update.")))
-            _ = try await appState.marmot.leaveGroup(
+            _ = try await client.leaveGroup(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex
             )
@@ -360,12 +368,13 @@ final class GroupDetailsViewModel {
             pushDebugError = nil
             return
         }
-        guard let conversation, let accountRef = appState.activeAccountRef else { return }
-        async let mlsResult = appState.marmot.groupMlsState(
+        guard let conversation, let accountRef = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return }
+        async let mlsResult = client.groupMlsState(
             accountRef: accountRef,
             groupIdHex: conversation.group.groupIdHex
         )
-        async let pushResult = appState.marmot.groupPushDebugInfo(
+        async let pushResult = client.groupPushDebugInfo(
             accountRef: accountRef,
             groupIdHex: conversation.group.groupIdHex
         )

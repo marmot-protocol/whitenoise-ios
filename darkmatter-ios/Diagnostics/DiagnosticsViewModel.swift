@@ -26,7 +26,8 @@ final class DiagnosticsViewModel {
     func runEventStream(using appState: AppState) async {
         streaming = true
         defer { streaming = false }
-        let sub = appState.marmot.subscribeEvents()
+        guard let client = try? appState.currentMarmotClient() else { return }
+        let sub = client.subscribeEvents()
         for await event in SubscriptionDriver.events(sub) {
             append(DiagnosticsView.diagnosticText(for: event))
         }
@@ -47,8 +48,9 @@ final class DiagnosticsViewModel {
         defer { sendingToSelf = false }
 
         do {
+            let client = try appState.currentMarmotClient()
             let groupId = try await diagnosticGroupId(accountRef: accountRef, using: appState)
-            _ = try await appState.marmot.sendText(
+            _ = try await client.sendText(
                 accountRef: accountRef,
                 groupIdHex: groupId,
                 text: DiagnosticSelfSend.pingText(now: Date())
@@ -60,7 +62,8 @@ final class DiagnosticsViewModel {
     }
 
     private func diagnosticGroupId(accountRef: String, using appState: AppState) async throws -> String {
-        let rows = try await appState.currentMarmotClient().chatList(
+        let client = try appState.currentMarmotClient()
+        let rows = try await client.chatList(
             accountRef: accountRef,
             includeArchived: true
         )
@@ -72,14 +75,14 @@ final class DiagnosticsViewModel {
             return row.groupIdHex
         }
 
-        let groupId = try await appState.marmot.createGroup(
+        let groupId = try await client.createGroup(
             accountRef: accountRef,
             name: DiagnosticSelfSend.groupName,
             memberRefs: [],
             description: nil
         )
         DiagnosticSelfSend.remember(groupIdHex: groupId, accountRef: accountRef)
-        _ = try await appState.marmot.setGroupArchived(
+        _ = try await client.setGroupArchived(
             accountRef: accountRef,
             groupIdHex: groupId,
             archived: true
@@ -89,7 +92,8 @@ final class DiagnosticsViewModel {
 
     private func archiveDiagnosticGroupIfNeeded(_ row: ChatListRowFfi, accountRef: String, using appState: AppState) async throws {
         guard !row.archived else { return }
-        _ = try await appState.marmot.setGroupArchived(
+        let client = try appState.currentMarmotClient()
+        _ = try await client.setGroupArchived(
             accountRef: accountRef,
             groupIdHex: row.groupIdHex,
             archived: true

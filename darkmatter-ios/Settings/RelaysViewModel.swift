@@ -77,11 +77,12 @@ final class RelaysViewModel {
         defer { isSaving = false }
 
         do {
+            let client = try appState.currentMarmotClient()
             lists = try await RelaySettings.saveAccountRelays(
                 accountRef: accountRef,
                 relays: normalized,
                 currentLists: lists,
-                manager: appState.marmot
+                manager: client
             )
             savedAt = Date()
             Haptics.success()

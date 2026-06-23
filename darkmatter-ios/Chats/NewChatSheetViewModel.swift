@@ -53,7 +53,8 @@ final class NewChatSheetViewModel {
         }
         recipients.error = nil
         do {
-            let groupIdHex = try await appState.marmot.createGroup(
+            let client = try appState.currentMarmotClient()
+            let groupIdHex = try await client.createGroup(
                 accountRef: accountRef,
                 name: NewChatSheet.normalizedGroupName(groupName),
                 memberRefs: recipients.members.map(\.memberRef),

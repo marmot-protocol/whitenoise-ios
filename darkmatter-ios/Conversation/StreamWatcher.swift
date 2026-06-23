@@ -217,10 +217,11 @@ final class StreamWatcher {
         if streamIdHex == nil { latestStreamWatchInFlight = true }
         defer { if streamIdHex == nil { latestStreamWatchInFlight = false } }
         do {
+            let client = try appState.currentMarmotClient()
             let insecureLocal = AgentStreamSecurity.insecureLocalEnabled(
                 developerMode: appState.developerMode
             )
-            let subscription = try await appState.marmot.watchAgentTextStream(
+            let subscription = try await client.watchAgentTextStream(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
                 streamIdHex: streamIdHex,
