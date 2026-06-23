@@ -29,6 +29,7 @@ struct MarmotClientStorageReadOffloadTests {
             "darkmatter-ios/Chats/ChatsListViewModel.swift",
             "darkmatter-ios/Diagnostics/DiagnosticsView.swift",
             "darkmatter-ios/Settings/KeyPackagesView.swift",
+            "darkmatter-ios/Settings/KeyPackagesViewModel.swift",
             "darkmatter-ios/Settings/RelaysView.swift",
             "darkmatter-ios/Settings/RelaysViewModel.swift",
         ] {
