@@ -624,8 +624,14 @@ polling over re-running.
               stayed on `ConversationViewModel` (6 widened `private`→`internal`); zero
               static churn. Full test target green; 3 source-scrapes repointed to
               `TimelineStore.swift`.
-        - [ ] NEXT: ComposerModel — the FFI send orchestration (`send`/`sendMedia`/
-              `sendInFlight`) now hands optimistic rows to `timelineStore`; a small carve.
+        - [x] **ComposerModel (VM 1668 → 1528, new 190-line file).** The send pipeline —
+              `sendInFlight`, `replyingTo`, `send`/`sendMedia`, `replyTargetMessageId` —
+              hands optimistic rows to `timelineStore` (the overlay is mirror state) and
+              does the text/media send FFI. Group-derived send gates injected as closures
+              (`canSendMessages`/`canSendMediaAttachments`); failures surface via an
+              `onError` closure that sets the view model's observable `error`. VM forwards
+              `sendInFlight` (get) + `replyingTo` (get/set) + `send`/`sendMedia`. Full test
+              target green.
         - [ ] (superseded) the core: `messageById` mirror + optimistic send overlay
               (`transientTimelineItems`/`applyPendingOutgoingMessage`/`confirmSent`/
               `reconcilePendingOutgoingMessage`) + pagination + the rebuild engine

@@ -66,6 +66,10 @@ final class ConversationViewModel {
     /// and reads projections back out. See `TimelineStore`.
     @ObservationIgnored let timelineStore: TimelineStore
 
+    /// The send pipeline: in-flight guard, reply target, text/media send FFI.
+    /// Hands optimistic rows to `timelineStore`. See `ComposerModel`.
+    @ObservationIgnored let composer: ComposerModel
+
     // Timeline surface forwarded from `timelineStore` (observation propagates
     // through these computed reads because `timelineStore` is `@Observable`).
     var timeline: [TimelineItem] { timelineStore.timeline }
@@ -81,12 +85,16 @@ final class ConversationViewModel {
     private(set) var managementState: GroupManagementStateFfi?
     private(set) var isLoadingOlder = false
     private(set) var isLoadingNewer = false
-    private(set) var sendInFlight = false
     private(set) var error: String?
     private(set) var isMediaRecordsRefreshPending = false
 
+    // Composer surface forwarded from `composer`.
+    var sendInFlight: Bool { composer.sendInFlight }
     /// The message the composer is currently replying to (set by swipe / menu).
-    var replyingTo: AppMessageRecordFfi?
+    var replyingTo: AppMessageRecordFfi? {
+        get { composer.replyingTo }
+        set { composer.replyingTo = newValue }
+    }
 
     private weak var appState: AppState?
     private let initialTitle: String?
@@ -399,12 +407,16 @@ final class ConversationViewModel {
         self.onChatListRowUpdated = onChatListRowUpdated
         self.timelineStore = TimelineStore(appState: appState, groupIdHex: group.groupIdHex)
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
+        self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore)
         streamWatcher.sink = timelineStore
         timelineStore.streamWatcher = streamWatcher
         timelineStore.mentionResolver = { [weak appState] entity in
             appState?.mentionDisplayName(for: entity)
         }
         timelineStore.readMarker = readMarker
+        composer.canSendMessages = { [weak self] in self?.canSendMessages ?? false }
+        composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
+        composer.onError = { [weak self] message in self?.error = message }
     }
 
     isolated deinit {
@@ -1366,163 +1378,11 @@ final class ConversationViewModel {
     // MARK: - Send
 
     func send(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSendMessages,
-              !trimmed.isEmpty,
-              let appState,
-              let accountRef = appState.activeAccountRef else { return }
-
-        // Defense-in-depth: clamp to the protocol's max length so an oversized
-        // paste can't bypass the composer's cap (#54).
-        let outgoing = Self.cappedOutgoingText(trimmed)
-
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // markdown parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
-        defer { sendInFlight = false }
-
-        let replyTargetId = replyTargetMessageId()
-        let tempId = UUID().uuidString
-        let now = UInt64(Date().timeIntervalSince1970)
-        // A reply is a kind-9 with `e` + `q` tags pointing at the parent; a plain
-        // message is a bare kind-9.
-        let optimisticTags: [MessageTagFfi] = replyTargetId.map {
-            [
-                MessageTagFfi(values: [MessageSemantics.eventRefTag, $0]),
-                MessageTagFfi(values: [MessageSemantics.quoteRefTag, $0]),
-            ]
-        } ?? []
-        // Parse markdown off the MainActor: `parseMarkdown` is a synchronous
-        // rustCall whose cost scales with message length, so building the
-        // optimistic record inline would stall the composer at send time (#226).
-        let contentTokens = await appState.parseMarkdown(text: outgoing)
-        let optimistic = AppMessageRecordFfi(
-            messageIdHex: "",
-            direction: "sent",
-            groupIdHex: group.groupIdHex,
-            sender: appState.activeAccount?.accountIdHex ?? "",
-            plaintext: outgoing,
-            contentTokens: contentTokens,
-            kind: MessageSemantics.kindChat,
-            tags: optimisticTags,
-            recordedAt: now,
-            receivedAt: now
-        )
-        applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
-
-        do {
-            let summary: SendSummaryFfi
-            if let replyTargetId {
-                summary = try await appState.marmot.replyToMessage(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex,
-                    targetMessageId: replyTargetId,
-                    text: outgoing
-                )
-            } else {
-                summary = try await appState.marmot.sendText(
-                    accountRef: accountRef,
-                    groupIdHex: group.groupIdHex,
-                    text: outgoing
-                )
-            }
-            confirmSent(tempId: tempId, record: optimistic, messageId: summary.messageIds.first)
-        } catch {
-            markFailed(tempId: tempId)
-            self.error = error.localizedDescription
-            await MainActor.run {
-                Haptics.error()
-                appState.present(.error(L10n.string("Send failed"), message: error.localizedDescription))
-            }
-        }
+        await composer.send(text)
     }
 
     func sendMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
-        guard !attachments.isEmpty,
-              canSendMediaAttachments,
-              let appState,
-              let accountRef = appState.activeAccountRef else { return }
-
-        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-        let outgoingCaption = trimmedCaption.isEmpty ? "" : Self.cappedOutgoingText(trimmedCaption)
-        let captionForRust = outgoingCaption.isEmpty ? nil : outgoingCaption
-        let tempId = UUID().uuidString
-        let tempRowId = "msg:\(tempId)"
-        let now = UInt64(Date().timeIntervalSince1970)
-
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // caption parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
-        defer { sendInFlight = false }
-
-        let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
-            ? .emptyDocument
-            : await appState.parseMarkdown(text: outgoingCaption)
-        let optimistic = AppMessageRecordFfi(
-            messageIdHex: "",
-            direction: "sent",
-            groupIdHex: group.groupIdHex,
-            sender: appState.activeAccount?.accountIdHex ?? "",
-            plaintext: outgoingCaption,
-            contentTokens: captionTokens,
-            kind: MessageSemantics.kindChat,
-            tags: [],
-            recordedAt: now,
-            receivedAt: now
-        )
-        timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
-        applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
-
-        do {
-            let result = try await appState.marmot.uploadMedia(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                request: MediaUploadRequestFfi(
-                    attachments: attachments.map(\.uploadRequest),
-                    caption: captionForRust,
-                    send: true,
-                    blossomServer: nil
-                )
-            )
-            let references = result.attachments.map(\.reference)
-            let confirmed = AppMessageRecordFfi(
-                messageIdHex: "",
-                direction: "sent",
-                groupIdHex: group.groupIdHex,
-                sender: optimistic.sender,
-                plaintext: outgoingCaption,
-                contentTokens: captionTokens,
-                kind: MessageSemantics.kindChat,
-                tags: references.map(MessageSemantics.imetaTag(for:)),
-                recordedAt: now,
-                receivedAt: now
-            )
-            let messageId = result.sent?.messageIds.first
-            confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
-            if let messageId, !messageId.isEmpty {
-                // Render the just-sent attachments immediately from the upload's
-                // resolved references; the subscription row will mirror the same.
-                if replaceMediaReferences(references, forMessageId: messageId) {
-                    timelineStore.noteProjectionChanged()
-                }
-            }
-        } catch {
-            markFailed(tempId: tempId)
-            self.error = error.localizedDescription
-            await MainActor.run {
-                Haptics.error()
-                appState.present(.error(L10n.string("Send failed"), message: error.localizedDescription))
-            }
-        }
-    }
-
-    private func replyTargetMessageId() -> String? {
-        guard let replyingTo, !replyingTo.messageIdHex.isEmpty else { return nil }
-        return replyingTo.messageIdHex
+        await composer.sendMedia(attachments, caption: caption)
     }
 
 #if DEBUG
