@@ -505,9 +505,12 @@ polling over re-running.
       - [x] `ImportIdentityView` → `ImportIdentityViewModel` (commit `ace5a37`): nsec
             import; secret consume/clear order preserved verbatim; clears-secret
             source-scrape repointed to the VM
-      - [ ] Remaining: AddMembersSheet (callback-based), CreateIdentityView (70 lines
-            — small), DiagnosticsView (dev tool — low value, subscription),
-            GroupDetailsView (1016 lines — large), ProfileEditView (deferred — coupling)
+      - [x] `CreateIdentityView` → `CreateIdentityViewModel` (commit `a80f1ca`)
+      - [ ] Remaining: AddMembersSheet (callback-based, different shape),
+            DiagnosticsView (dev tool — low value, subscription), GroupDetailsView
+            (1016 lines — large), ProfileEditView (deferred — heavy coupling).
+            Pure-UI/navigation screens (WelcomeView, AppearanceSettingsView,
+            AccountsView, AccountSwitcherSheet) have little/no logic to extract.
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
