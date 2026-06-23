@@ -2001,11 +2001,11 @@ struct LocalizationCatalogTests {
                 #"L10n.string("\(memberCount) members")"#
             ),
             (
-                "darkmatter-ios/Group/GroupDetailsView.swift",
+                "darkmatter-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Invited \(refs.count) members")"#
             ),
             (
-                "darkmatter-ios/Group/GroupDetailsView.swift",
+                "darkmatter-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Published \(summary.published) updates.")"#
             ),
             (
@@ -4026,12 +4026,15 @@ struct GroupImageSearchTests {
 
     @Test func groupDetailsSourceWiresAvatarMutationAndEditor() throws {
         let source = try String(contentsOf: groupDetailsSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: groupDetailsViewModelSourceURL, encoding: .utf8)
 
+        // View renders the editor + wires the callbacks; the avatar mutation runs
+        // in the view model.
         #expect(source.contains("onGroupChanged"))
         #expect(source.contains("refreshGroupManagementAndNotify"))
         #expect(source.contains("showGroupImageEditor"))
         #expect(source.contains("GroupImageURLSheet(initialURL: viewModel.group.avatarUrl)"))
-        #expect(source.contains("updateGroupAvatarUrl"))
+        #expect(modelSource.contains("updateGroupAvatarUrl"))
         #expect(source.contains(#"Label(viewModel.group.avatarUrl == nil ? "Set group image" : "Edit group image""#))
     }
 
@@ -4040,6 +4043,13 @@ struct GroupImageSearchTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Group/GroupDetailsView.swift")
+    }
+
+    private var groupDetailsViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Group/GroupDetailsViewModel.swift")
     }
 
     private var groupImageURLSheetSourceURL: URL {

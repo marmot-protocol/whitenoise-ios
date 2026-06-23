@@ -147,12 +147,12 @@ struct ConversationTranscriptExportTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
 
-        let groupDetailsSource = try String(
-            contentsOf: rootURL.appendingPathComponent("darkmatter-ios/Group/GroupDetailsView.swift"),
+        let groupDetailsModelSource = try String(
+            contentsOf: rootURL.appendingPathComponent("darkmatter-ios/Group/GroupDetailsViewModel.swift"),
             encoding: .utf8
         )
-        #expect(groupDetailsSource.contains("try await client.exportConversationTranscript("))
-        #expect(!groupDetailsSource.contains("ConversationTranscriptExport.fetchAllMessages(\n                marmot: appState.marmot"))
+        #expect(groupDetailsModelSource.contains("try await client.exportConversationTranscript("))
+        #expect(!groupDetailsModelSource.contains("ConversationTranscriptExport.fetchAllMessages(\n                marmot: appState.marmot"))
 
         let marmotClientSource = try String(
             contentsOf: rootURL.appendingPathComponent("darkmatter-ios/Core/MarmotClient.swift"),
