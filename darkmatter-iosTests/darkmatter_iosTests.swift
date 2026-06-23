@@ -4202,6 +4202,23 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.firstUnreadMessageIdHex == hex("c2"))
     }
 
+    @Test func itemByGroupIdAccessorResolvesActiveAndArchivedRowsAndMissesUnknownId() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let active = chatListRow(groupIdHex: hex("a1"), title: "Active", updatedAt: 10)
+        let archived = chatListRow(groupIdHex: hex("a2"), archived: true, title: "Archived", updatedAt: 20)
+
+        viewModel.applyChatListSnapshot([active, archived])
+
+        // The accessor resolves a row by id regardless of which published
+        // array it lands in, and returns nil for an unknown id — matching the
+        // old `(items + archivedItems).first(where:)` scan it replaces.
+        #expect(viewModel.item(groupIdHex: active.groupIdHex)?.id == active.groupIdHex)
+        #expect(viewModel.item(groupIdHex: active.groupIdHex)?.isArchived == false)
+        #expect(viewModel.item(groupIdHex: archived.groupIdHex)?.id == archived.groupIdHex)
+        #expect(viewModel.item(groupIdHex: archived.groupIdHex)?.isArchived == true)
+        #expect(viewModel.item(groupIdHex: hex("ff")) == nil)
+    }
+
     @Test func previewTextSanitizesProjectedLastMessage() throws {
         let unsafe = chatListRow(
             groupIdHex: hex("d0"),

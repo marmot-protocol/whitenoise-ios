@@ -226,6 +226,14 @@ final class ChatsListViewModel {
         }
     }
 
+    /// O(1) lookup for a chat-list item by its group id, backed by the
+    /// id-keyed `itemByGroupId` map. Views that resolve a single row by id
+    /// (e.g. deep-link destinations) should use this instead of scanning the
+    /// published `items`/`archivedItems` arrays in `body`.
+    func item(groupIdHex: String) -> Item? {
+        itemByGroupId[groupIdHex]
+    }
+
     func applyChatListSnapshot(_ snapshot: [ChatListRowFfi]) {
         pendingChatListRowsByGroupId = [:]
         rowByGroupId = [:]
