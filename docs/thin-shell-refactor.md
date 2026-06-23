@@ -632,9 +632,14 @@ polling over re-running.
             `StreamWatcher.swift`. `shouldClearCompletedStreamWatch`/`appMessageRecord`
             stay on the VM (the watcher calls them as statics).
       - [ ] After the core lands, the now-unblocked carves:
-        - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
+        - ComposerModel send pipeline (`send`/`sendMedia`/`sendInFlight`) writes
           optimistic pending rows into the timeline + reconciles them — that overlay
           belongs to TimelineStore, so the composer can't cleanly leave before it.
+          (Confirmed 2026-06-23: `confirmSent`/`applyPendingOutgoingMessage`/`markFailed`
+          mutate `messageById`/`transientTimelineItems`/`mediaProjections` directly —
+          they are timeline-mirror ops, not composer logic. Only the thin FFI
+          orchestration in `send`/`sendMedia` is composer-owned; it hands off to the
+          mirror's reconcile. So ComposerModel is a small carve once the core exists.)
       - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
             overlay + pagination + the rebuild engine that drives the now-extracted
             markdown/media/reaction projection caches). The big one; unlocks the rest.
