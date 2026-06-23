@@ -8123,7 +8123,7 @@ struct MessageAudioBubblePresentationTests {
 @MainActor
 struct MessageMediaGalleryTests {
 
-    @Test func galleryRejectsNonImageInitialItem() {
+    @Test func galleryRejectsNonVisualInitialItem() {
         let image = attachment(id: "image", mediaType: "image/png")
         let document = attachment(id: "document", mediaType: "application/pdf")
 
@@ -8136,33 +8136,51 @@ struct MessageMediaGalleryTests {
         #expect(gallery == nil)
     }
 
-    @Test func galleryKeepsOnlyImagePagesWhenInitialImageIsInList() throws {
+    @Test func galleryKeepsImageAndVideoPagesWhenInitialImageIsInList() throws {
         let image = attachment(id: "image", mediaType: "image/png")
+        let video = attachment(id: "video", mediaType: "video/mp4")
         let document = attachment(id: "document", mediaType: "application/pdf")
 
         let gallery = try #require(MessageMediaGallery(
-            items: [image, document],
+            items: [image, video, document],
             initialItem: image,
             initialImageData: imageData()
         ))
 
-        #expect(gallery.items.map(\.id) == ["image"])
+        #expect(gallery.items.map(\.id) == ["image", "video"])
         #expect(gallery.initialItemID == "image")
     }
 
-    @Test func galleryPrependsMissingImageInitialItem() throws {
+    @Test func galleryAcceptsVideoInitialItem() throws {
+        let image = attachment(id: "image", mediaType: "image/png")
+        let video = attachment(id: "video", mediaType: "video/mp4")
+        let document = attachment(id: "document", mediaType: "application/pdf")
+
+        let gallery = try #require(MessageMediaGallery(
+            items: [image, video, document],
+            initialItem: video,
+            initialMediaData: nil
+        ))
+
+        #expect(gallery.items.map(\.id) == ["image", "video"])
+        #expect(gallery.initialItemID == "video")
+        #expect(gallery.initialData(for: video) == nil)
+    }
+
+    @Test func galleryPrependsMissingVisualInitialItem() throws {
         let initial = attachment(id: "initial", mediaType: "image/png")
         let otherImage = attachment(id: "other", mediaType: "image/jpeg")
+        let video = attachment(id: "video", mediaType: "video/quicktime")
         let document = attachment(id: "document", mediaType: "application/pdf")
         let data = imageData()
 
         let gallery = try #require(MessageMediaGallery(
-            items: [document, otherImage],
+            items: [document, otherImage, video],
             initialItem: initial,
             initialImageData: data
         ))
 
-        #expect(gallery.items.map(\.id) == ["initial", "other"])
+        #expect(gallery.items.map(\.id) == ["initial", "other", "video"])
         #expect(gallery.initialData(for: initial) == data)
         #expect(gallery.initialData(for: otherImage) == nil)
     }
