@@ -2,30 +2,21 @@ import SwiftUI
 
 struct PrivacySecuritySettingsView: View {
     @Environment(AppState.self) private var appState
-
-    @State private var telemetrySettings: PrivacyTelemetrySettingsProjection?
-    @State private var auditSettings: PrivacyAuditSettingsProjection?
-    @State private var auditFileRows: [AuditFileRow] = []
-    @State private var telemetrySaving = false
-    @State private var auditSaving = false
-    @State private var auditDeleting = false
-    @State private var showDeleteAuditLogsConfirmation = false
-    @State private var filesLoading = false
-    @State private var errorMessage: String?
-    @State private var savedAt: Date?
+    @State private var model = PrivacySecuritySettingsViewModel()
 
     var body: some View {
-        Form {
+        @Bindable var model = model
+        return Form {
             Section {
                 Toggle(isOn: Binding(
-                    get: { telemetrySettings?.exportEnabled ?? false },
-                    set: { enabled in Task { await setTelemetryEnabled(enabled) } }
+                    get: { model.telemetrySettings?.exportEnabled ?? false },
+                    set: { enabled in Task { await model.setTelemetryEnabled(enabled, using: appState) } }
                 )) {
                     Label("Anonymous Telemetry", systemImage: "chart.line.uptrend.xyaxis")
                 }
-                .disabled(telemetryToggleDisabled)
+                .disabled(model.telemetryToggleDisabled)
 
-                if telemetrySaving {
+                if model.telemetrySaving {
                     ProgressView("Saving")
                 }
             } header: {
@@ -64,14 +55,14 @@ struct PrivacySecuritySettingsView: View {
 
             Section {
                 Toggle(isOn: Binding(
-                    get: { auditSettings?.enabled ?? false },
-                    set: { enabled in Task { await setAuditEnabled(enabled) } }
+                    get: { model.auditSettings?.enabled ?? false },
+                    set: { enabled in Task { await model.setAuditEnabled(enabled, using: appState) } }
                 )) {
                     Label("Audit Logging", systemImage: "doc.text.magnifyingglass")
                 }
-                .disabled(auditSaving || auditSettings == nil)
+                .disabled(model.auditSaving || model.auditSettings == nil)
 
-                if auditSaving {
+                if model.auditSaving {
                     ProgressView("Saving")
                 }
             } header: {
@@ -81,41 +72,41 @@ struct PrivacySecuritySettingsView: View {
             }
 
             Section {
-                if filesLoading && auditFileRows.isEmpty {
+                if model.filesLoading && model.auditFileRows.isEmpty {
                     HStack {
                         Spacer()
                         ProgressView("Loading audit logs")
                         Spacer()
                     }
                     .padding(.vertical, 16)
-                } else if auditFileRows.isEmpty {
+                } else if model.auditFileRows.isEmpty {
                     Text("No audit logs on this device.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(auditFileRows) { row in
+                    ForEach(model.auditFileRows) { row in
                         auditFileRow(row)
                     }
 
                     Button(role: .destructive) {
-                        showDeleteAuditLogsConfirmation = true
+                        model.showDeleteAuditLogsConfirmation = true
                     } label: {
                         Label("Delete All Audit Logs", systemImage: "trash")
                     }
-                    .disabled(auditDeleting || auditSaving)
+                    .disabled(model.auditDeleting || model.auditSaving)
                 }
 
-                if auditDeleting {
+                if model.auditDeleting {
                     ProgressView("Deleting audit logs")
                 }
             } header: {
                 Text("Audit Log Files")
             } footer: {
-                if !auditFileRows.isEmpty {
+                if !model.auditFileRows.isEmpty {
                     Text("Deletes every local audit JSONL file on this device. Live recorders rotate to fresh files when audit logging is still on.")
                 }
             }
 
-            if let errorMessage {
+            if let errorMessage = model.errorMessage {
                 Section {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -123,7 +114,7 @@ struct PrivacySecuritySettingsView: View {
                 }
             }
 
-            if let savedAt {
+            if let savedAt = model.savedAt {
                 Section {
                     Label(
                         L10n.formatted("Saved %@", savedAt.formatted(.relative(presentation: .named))),
@@ -136,23 +127,19 @@ struct PrivacySecuritySettingsView: View {
         }
         .navigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await reload() }
-        .refreshable { await reload() }
+        .task { await model.reload(using: appState) }
+        .refreshable { await model.reload(using: appState) }
         .alert(
             "Delete all audit logs?",
-            isPresented: $showDeleteAuditLogsConfirmation
+            isPresented: $model.showDeleteAuditLogsConfirmation
         ) {
             Button("Delete All Audit Logs", role: .destructive) {
-                Task { await deleteAllAuditLogs() }
+                Task { await model.deleteAllAuditLogs(using: appState) }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This permanently removes every local audit JSONL file on this device.")
         }
-    }
-
-    private var telemetryToggleDisabled: Bool {
-        telemetrySaving || telemetrySettings == nil
     }
 
     private var telemetryFooter: String {
@@ -176,95 +163,5 @@ struct PrivacySecuritySettingsView: View {
                 .truncationMode(.middle)
         }
         .padding(.vertical, 2)
-    }
-
-    @MainActor
-    private func reload() async {
-        filesLoading = true
-        errorMessage = nil
-        defer { filesLoading = false }
-
-        do {
-            guard let projection = try await appState.privacySecuritySettingsProjection() else { return }
-            telemetrySettings = projection.telemetrySettings
-            auditSettings = projection.auditSettings
-            auditFileRows = projection.auditFileRows
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func reloadAuditFiles() async {
-        filesLoading = true
-        errorMessage = nil
-        defer { filesLoading = false }
-
-        do {
-            guard let rows = try await appState.auditLogFileRows() else { return }
-            auditFileRows = rows
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func setTelemetryEnabled(_ enabled: Bool) async {
-        guard let current = telemetrySettings else { return }
-        telemetrySaving = true
-        errorMessage = nil
-        telemetrySettings = current.updatingExportEnabled(enabled)
-        defer { telemetrySaving = false }
-
-        do {
-            telemetrySettings = PrivacyTelemetrySettingsProjection(
-                settings: try await appState.setRelayTelemetryExportEnabled(enabled)
-            )
-            savedAt = Date()
-            Haptics.success()
-        } catch {
-            telemetrySettings = current
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func deleteAllAuditLogs() async {
-        auditDeleting = true
-        errorMessage = nil
-        defer { auditDeleting = false }
-
-        do {
-            try await appState.deleteAllAuditLogFiles()
-            savedAt = Date()
-            Haptics.success()
-            await reloadAuditFiles()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func setAuditEnabled(_ enabled: Bool) async {
-        guard let current = auditSettings else { return }
-        auditSaving = true
-        errorMessage = nil
-        auditSettings = PrivacyAuditSettingsProjection(enabled: enabled)
-        defer { auditSaving = false }
-
-        do {
-            auditSettings = PrivacyAuditSettingsProjection(
-                settings: try await appState.setAuditLogEnabled(enabled)
-            )
-            savedAt = Date()
-            Haptics.success()
-            await reloadAuditFiles()
-        } catch {
-            auditSettings = current
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
     }
 }

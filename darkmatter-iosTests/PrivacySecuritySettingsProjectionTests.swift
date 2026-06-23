@@ -24,9 +24,12 @@ struct PrivacySecuritySettingsProjectionTests {
     }
 
     @Test func privacySecurityViewRendersPrecomputedRows() throws {
-        let source = try sourceString("darkmatter-ios/Settings/PrivacySecuritySettingsView.swift")
+        // Data + loading moved to the view model (Phase 4); the view renders
+        // `ForEach(model.auditFileRows)`. Scrape the model for the precomputed-row
+        // type + projection loading (not raw FFI).
+        let source = try sourceString("darkmatter-ios/Settings/PrivacySecuritySettingsViewModel.swift")
 
-        #expect(source.contains("@State private var auditFileRows: [AuditFileRow] = []"))
+        #expect(source.contains("var auditFileRows: [AuditFileRow] = []"))
         #expect(source.contains("try await appState.privacySecuritySettingsProjection()"))
         #expect(source.contains("try await appState.auditLogFileRows()"))
         #expect(!source.contains("@State private var auditFiles: [AuditLogFileFfi]"))
