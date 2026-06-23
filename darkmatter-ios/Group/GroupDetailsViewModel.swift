@@ -36,6 +36,7 @@ final class GroupDetailsViewModel {
 
     func invite(refs: [String], using appState: AppState) async throws {
         guard let conversation, let accountRef = appState.activeAccountRef else { throw GroupDetailsActionError.noActiveAccount }
+        guard !membershipActionInFlight else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
@@ -62,6 +63,7 @@ final class GroupDetailsViewModel {
     func remove(member: GroupMemberDetailsFfi, using appState: AppState) async {
         pendingConfirmation = nil
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
+        guard !membershipActionInFlight else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {
@@ -83,6 +85,7 @@ final class GroupDetailsViewModel {
 
     func setAdmin(member: GroupMemberDetailsFfi, admin: Bool, using appState: AppState) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
+        guard !membershipActionInFlight else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         conversation.applyOptimisticAdminStatus(memberIdHex: member.memberIdHex, isAdmin: admin)
@@ -121,6 +124,7 @@ final class GroupDetailsViewModel {
 
     func selfDemote(using appState: AppState) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
+        guard !membershipActionInFlight else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         if let myAccountId = conversation.managementState?.myAccountIdHex {
@@ -234,6 +238,7 @@ final class GroupDetailsViewModel {
             )
             return
         }
+        guard !membershipActionInFlight else { return }
         membershipActionInFlight = true
         defer { membershipActionInFlight = false }
         do {

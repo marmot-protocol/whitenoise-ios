@@ -30,7 +30,8 @@ final class ComposerModel {
 
     func send(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard canSendMessages(),
+        guard !sendInFlight,
+              canSendMessages(),
               !trimmed.isEmpty,
               let appState,
               let accountRef = appState.activeAccountRef else { return }
@@ -103,7 +104,8 @@ final class ComposerModel {
     }
 
     func sendMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
-        guard !attachments.isEmpty,
+        guard !sendInFlight,
+              !attachments.isEmpty,
               canSendMediaAttachments(),
               let appState,
               let accountRef = appState.activeAccountRef else { return }

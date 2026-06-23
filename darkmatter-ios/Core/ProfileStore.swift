@@ -197,7 +197,16 @@ final class ProfileStore {
         while !Task.isCancelled, canRefreshProfiles, let id = nextQueuedProfileProjectionLoadID() {
             let version = profileProjectionLoadVersions[id] ?? 0
             let projection = await loadProfileProjection(forAccountIdHex: id)
-            guard !Task.isCancelled, canRefreshProfiles else { break }
+            guard !Task.isCancelled else { break }
+            guard canRefreshProfiles else {
+                // Gate closed mid-load: `id` was dequeued but is still marked
+                // scheduled. Re-arm it (front of the queue) so it isn't orphaned —
+                // `resumeProfileFetchQueueIfNeeded()` re-drains it when the gate
+                // reopens, instead of a later cache miss being suppressed by the
+                // stale scheduled marker.
+                queuedProfileProjectionLoadIDs.insert(id, at: 0)
+                break
+            }
             guard profileProjectionLoadVersions[id] == version else { continue }
 
             scheduledProfileProjectionLoadIDs.remove(id)

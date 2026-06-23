@@ -82,7 +82,9 @@ final class AddMembersSheetViewModel {
         // off-main recipient normalization is still in flight (#260/#274).
         guard !isInviting else { return }
         isInviting = true
-        error = nil
+        // Validate the still-in-field text before clearing any prior validation
+        // error (`addPending` sets its own error on invalid input). The in-flight
+        // guard stays ahead of the await so a double-tap can't start two invites.
         guard await addPending(normalize: normalize, using: appState) else {
             isInviting = false
             return
@@ -91,6 +93,7 @@ final class AddMembersSheetViewModel {
             isInviting = false
             return
         }
+        error = nil
         do {
             try await onSubmit(members.map(\.memberRef))
             isInviting = false

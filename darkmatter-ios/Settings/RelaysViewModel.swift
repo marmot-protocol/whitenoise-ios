@@ -38,7 +38,8 @@ final class RelaysViewModel {
         do {
             lists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
         } catch {
-            lists = nil
+            // Keep the last-known list on a transient reload failure rather than
+            // blanking an already-loaded screen back to the loading state.
         }
     }
 
@@ -59,6 +60,10 @@ final class RelaysViewModel {
 
     @discardableResult
     func save(_ relays: [String], using appState: AppState) async -> Bool {
+        // Serialize saves: a second save started while one is in flight would
+        // compute its next list from a stale `lists`/`currentRelays` and clobber
+        // the in-flight write. Reject the overlap (the caller keeps its input).
+        guard !isSaving else { return false }
         guard let accountRef = appState.activeAccountRef else { return false }
         let normalized = RelaySettings.normalizedRelayURLs(relays)
         guard !normalized.isEmpty else {

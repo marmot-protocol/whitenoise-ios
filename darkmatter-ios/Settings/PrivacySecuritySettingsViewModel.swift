@@ -78,6 +78,9 @@ final class PrivacySecuritySettingsViewModel {
 
         do {
             try await appState.deleteAllAuditLogFiles()
+            // Clear the deleted rows immediately so they don't linger during the
+            // follow-up reload.
+            auditFileRows = []
             savedAt = Date()
             Haptics.success()
             await reloadAuditFiles(using: appState)

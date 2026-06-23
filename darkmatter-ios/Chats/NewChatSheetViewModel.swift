@@ -83,12 +83,14 @@ final class NewChatSheetViewModel {
         guard !isCreating else { return }
         guard let accountRef = appState.activeAccountRef else { return }
         isCreating = true
-        error = nil
-        // Capture text still in the field before creating.
+        // Validate the still-in-field text before clearing any prior validation
+        // error (`addPending` sets its own error on invalid input). The in-flight
+        // guard stays ahead of the await so a double-tap can't start two creates.
         guard await addPending(using: appState) else {
             isCreating = false
             return
         }
+        error = nil
         do {
             let groupIdHex = try await appState.marmot.createGroup(
                 accountRef: accountRef,

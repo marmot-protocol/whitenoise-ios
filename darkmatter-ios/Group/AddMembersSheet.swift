@@ -66,7 +66,10 @@ struct AddMembersSheet: View {
                     Button(model.isInviting ? L10n.string("Inviting…") : L10n.string("Invite")) {
                         Task { await model.invite(normalize: normalize, onSubmit: onSubmit, using: appState, dismiss: { dismiss() }) }
                     }
-                    .disabled(model.members.isEmpty || model.isInviting)
+                    .disabled(
+                        model.isInviting ||
+                        (model.members.isEmpty && model.pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    )
                 }
             }
             .interactiveDismissDisabled(model.isInviting)

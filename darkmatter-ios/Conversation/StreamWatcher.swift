@@ -309,7 +309,7 @@ final class StreamWatcher {
         case .failed(let message):
             appendStreamDebugEvent(streamId: streamId, eventKind: "failed", detail: message)
             let previewLength = streamTextLengthById[streamId] ?? streamText[streamId]?.count ?? 0
-            Self.streamLog.error("failed: streamId=\(streamId, privacy: .public) gotText=\(previewLength)B reason=\(message, privacy: .public) — dropping live preview")
+            Self.streamLog.error("failed: streamId=\(streamId, privacy: .public) gotText=\(previewLength)B reasonLen=\(message.count, privacy: .public)B — dropping live preview")
             endStream(streamId: streamId)
         }
     }

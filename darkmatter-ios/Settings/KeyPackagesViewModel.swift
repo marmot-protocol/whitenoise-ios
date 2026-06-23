@@ -43,7 +43,7 @@ final class KeyPackagesViewModel {
     }
 
     func publishNew(using appState: AppState) async {
-        guard let ref = appState.activeAccountRef else { return }
+        guard !isPublishing, let ref = appState.activeAccountRef else { return }
         isPublishing = true
         defer { isPublishing = false }
 
@@ -61,6 +61,7 @@ final class KeyPackagesViewModel {
     func delete(_ pkg: AccountKeyPackageFfi, using appState: AppState) async {
         guard let ref = appState.activeAccountRef else { return }
         let eventId = pkg.eventIdHex
+        guard !deletingEventIds.contains(eventId) else { return }
         deletingEventIds.insert(eventId)
         defer { deletingEventIds.remove(eventId) }
 
