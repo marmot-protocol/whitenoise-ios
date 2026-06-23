@@ -502,8 +502,11 @@ polling over re-running.
       - [x] `NewChatSheet` → `NewChatSheetViewModel` (commit `daee487`): recipient
             staging + create; #260/#274 concurrency moved verbatim; tested
             normalization statics stay on the view
-      - [ ] Remaining: AddMembersSheet (callback-based), Onboarding (ImportIdentityView
-            /CreateIdentityView), DiagnosticsView (dev tool — low value, subscription),
+      - [x] `ImportIdentityView` → `ImportIdentityViewModel` (commit `ace5a37`): nsec
+            import; secret consume/clear order preserved verbatim; clears-secret
+            source-scrape repointed to the VM
+      - [ ] Remaining: AddMembersSheet (callback-based), CreateIdentityView (70 lines
+            — small), DiagnosticsView (dev tool — low value, subscription),
             GroupDetailsView (1016 lines — large), ProfileEditView (deferred — coupling)
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
