@@ -509,11 +509,15 @@ polling over re-running.
       - [x] `AddMembersSheet` → `AddMembersSheetViewModel` (commit `ffc44a1`):
             callback-based; parent's `normalize`/`onSubmit` passed as method params;
             #260/#274 concurrency verbatim; AddMembersPresentation helpers stay
-      - [ ] Remaining: DiagnosticsView (dev tool — subscription + many tested
-            statics), GroupDetailsView (1016 lines — large), ProfileEditView
-            (deferred — heavy coupling). Pure-UI/navigation screens (WelcomeView,
-            AppearanceSettingsView, AccountsView, AccountSwitcherSheet) have
-            little/no logic to extract.
+      - [x] `DiagnosticsView` → `DiagnosticsViewModel` (commit `8e5affa`): event-stream
+            log + send-to-self; view keeps `.task(id: runtimeGeneration)` owning the
+            stream lifecycle (calls `runEventStream`); tested `diagnosticText` static +
+            `DiagnosticSelfSend` stay; VM added to FFI-guard list
+      - [ ] Remaining (large/fiddly only): GroupDetailsView (1016 lines — large),
+            ProfileEditView (deferred — heavy coupling, ~6 split source-scrapes).
+            Pure-UI/navigation screens (WelcomeView, AppearanceSettingsView,
+            AccountsView, AccountSwitcherSheet) have little/no logic to extract.
+            **All bounded, clean screens are now converted (11 screens).**
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
