@@ -548,14 +548,22 @@ polling over re-running.
       - [x] Composer mention concern → `ComposerMentionController` (commit `b48470b`,
             in ComposerMentionSupport.swift). VM 3012 → 2980. `MentionCandidateCacheKey`
             moved top-level. The mention *send* pipeline did NOT move — see below.
-      - [ ] **The two clean "leaf" carves (download, mentions) are DONE. Everything
-            left is timeline-coupled and needs TimelineStore FIRST:**
+      - [x] Read-marking pipeline → `ConversationReadMarker` (commit `fe6e259`).
+            VM 2980 → 2855. The marked/pending sets + coalesced debounced flush +
+            bound-window pruning + the shouldMarkRead/retained policy statics moved;
+            the VM keeps markReadIfVisible/pruneMarkedReadMessageIds forwarders (the 5
+            timeline-apply prune sites unchanged) and wires the ingest-forget +
+            stop/cancel paths. Pattern for timeline-driven carves: keep a thin VM
+            forwarder so the many apply-path call sites don't churn; inject live
+            context (weak appState + `[weak self]` loaded-window closure, lazy var so
+            it captures a ready self) so the async flush sees current state.
+      - [ ] **Remaining carves all need TimelineStore FIRST (verified by reading):**
         - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
           optimistic pending rows into the timeline + reconciles them — that overlay
           belongs to TimelineStore, so the composer can't cleanly leave before it.
         - StreamWatcher is invoked from the timeline ingest (`applyTimelineRecord`).
         - Reactions / markdown projections are derived from timeline rows.
       - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
-            overlay + pagination + read-marking + media/markdown/reaction projections).
-            The big one; unlocks the rest. ~1000+ lines of the VM. Best as a focused
-            dedicated effort — high risk of breaking the conversation if rushed.
+            overlay + pagination + media/markdown/reaction projections). The big one;
+            unlocks the rest. ~1000 lines of the VM. Best as a focused dedicated
+            effort — high risk of breaking the conversation if rushed.
