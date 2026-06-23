@@ -67,9 +67,6 @@ final class ConversationViewModel {
     private(set) var groupMemberDetails: [GroupMemberDetailsFfi] = []
     private(set) var groupMlsRefreshGeneration: UInt64 = 0
     private(set) var managementState: GroupManagementStateFfi?
-    /// targetMessageId -> emoji tallies, derived from materialized timeline rows
-    /// plus local optimistic reaction edits.
-    private(set) var reactions: [String: [ReactionTally]] = [:]
     /// Message ids tombstoned by the timeline projection or local optimistic deletes.
     private(set) var deletedMessageIds: Set<String> = []
     /// Coarse invalidation token for projection data read through methods.
@@ -109,7 +106,11 @@ final class ConversationViewModel {
     @ObservationIgnored private var messageStatusById: [String: MessageStatus] = [:]
     @ObservationIgnored private var replyTargetByMessageId: [String: String] = [:]
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
-    @ObservationIgnored private var projectedReactionSummaries: [String: TimelineReactionSummaryFfi] = [:]
+    /// Per-target reaction tally cache: the authoritative server summary
+    /// (mirrored at ingest), the optimistic react/un-react overlay, and the
+    /// aggregated tallies. The optimistic toggle orchestration stays here; the
+    /// state + aggregation live in the cache.
+    @ObservationIgnored private let reactionProjections = ConversationReactionProjectionCache()
     @ObservationIgnored private let markdownProjections = ConversationMarkdownProjectionCache()
     @ObservationIgnored private var projectedDeletedMessageIds: Set<String> = []
     @ObservationIgnored private var optimisticDeletedMessageIds: Set<String> = []
@@ -134,9 +135,6 @@ final class ConversationViewModel {
         },
         onChatListRowUpdated: onChatListRowUpdated
     )
-    /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
-    @ObservationIgnored private var reactionRecords: [String: AppMessageRecordFfi] = [:]
-    @ObservationIgnored private var optimisticReactionRemovals: Set<ReactionRemoval> = []
     /// Cached `@`-mention autocomplete candidates and the generation pair they
     /// were built from. `mentionCandidates(for:)` runs on every composer
     /// keystroke; rebuilding the candidate array (and re-deriving each
@@ -389,7 +387,7 @@ final class ConversationViewModel {
     /// Reaction tallies for a target message (empty when none).
     func reactions(for messageIdHex: String) -> [ReactionTally] {
         _ = timelineProjectionGeneration
-        return reactions[messageIdHex] ?? []
+        return reactionProjections.tallies(forMessageId: messageIdHex)
     }
 
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
@@ -569,13 +567,11 @@ final class ConversationViewModel {
 
     private func resetOptimisticState() {
         let backingChanged = !optimisticDeletedMessageIds.isEmpty ||
-            !optimisticReactionRemovals.isEmpty ||
-            !reactionRecords.isEmpty ||
+            reactionProjections.hasOptimistic ||
             !systemTimelineItems.isEmpty ||
             mediaProjections.hasPending
         optimisticDeletedMessageIds.removeAll()
-        optimisticReactionRemovals.removeAll()
-        reactionRecords.removeAll()
+        reactionProjections.removeAllOptimistic()
         systemTimelineItems.removeAll()
         mediaProjections.removeAllPending()
         let deletedChanged = rebuildDeletedMessageIds()
@@ -610,16 +606,19 @@ final class ConversationViewModel {
     ) {
         optimisticDeletedMessageIds.insert(deletedMessageIdHex)
         let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
-        reactionRecords[reactionId] = AppMessageRecordFfi(
-            messageIdHex: reactionId,
-            direction: "sent",
-            groupIdHex: group.groupIdHex,
-            sender: sender,
-            plaintext: emoji,
-            kind: MessageSemantics.kindReaction,
-            tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
-            recordedAt: 1,
-            receivedAt: 1
+        reactionProjections.setRecord(
+            AppMessageRecordFfi(
+                messageIdHex: reactionId,
+                direction: "sent",
+                groupIdHex: group.groupIdHex,
+                sender: sender,
+                plaintext: emoji,
+                kind: MessageSemantics.kindReaction,
+                tags: [MessageTagFfi(values: [MessageSemantics.eventRefTag, reactionTargetMessageIdHex])],
+                recordedAt: 1,
+                receivedAt: 1
+            ),
+            forKey: reactionId
         )
         _ = rebuildDeletedMessageIds()
         _ = recomputeReactions()
@@ -1100,15 +1099,8 @@ final class ConversationViewModel {
         // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
         // mirror it instead of re-classifying tags or a separate listMedia pass.
         mediaProjections.setReferences(record.media, forMessageId: appRecord.messageIdHex)
-        projectedReactionSummaries[appRecord.messageIdHex] = record.reactions
-        reactionRecords = ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
-            reactionRecords,
-            target: appRecord.messageIdHex,
-            summary: record.reactions,
-            me: myAccountId ?? ""
-        )
-        optimisticReactionRemovals = ConversationReactionPolicy.prunedConfirmedOptimisticReactionRemovals(
-            optimisticReactionRemovals,
+        reactionProjections.setSummary(record.reactions, forMessageId: appRecord.messageIdHex)
+        reactionProjections.pruneConfirmedOptimistic(
             target: appRecord.messageIdHex,
             summary: record.reactions,
             me: myAccountId ?? ""
@@ -1149,7 +1141,7 @@ final class ConversationViewModel {
         replyTargetByMessageId[messageIdHex] = nil
         replyPreviewsByMessageId[messageIdHex] = nil
         mediaProjections.removeReferences(forMessageId: messageIdHex)
-        projectedReactionSummaries[messageIdHex] = nil
+        reactionProjections.removeSummary(forMessageId: messageIdHex)
         projectedDeletedMessageIds.remove(messageIdHex)
         readMarker.forgetMarkIfNotPending(messageIdHex)
         scannedFinalizedMessageIds.remove(messageIdHex)
@@ -1644,71 +1636,15 @@ final class ConversationViewModel {
         return deletedMessageIds.contains(messageIdHex)
     }
 
-    /// Rebuild the per-target reaction tallies from all reaction messages
-    /// (kind-7, emoji in content, target in the `e` tag). A reaction is dropped
-    /// when its own event id has been tombstoned by a delete (the un-react path).
+    /// Rebuild the per-target reaction tallies, folding the local optimistic
+    /// overlay and tombstoned un-reacts into the server summary. The aggregation
+    /// lives in `reactionProjections`; this passes the current timeline deletes
+    /// and local account id.
     @discardableResult
     private func recomputeReactions() -> Bool {
-        let me = myAccountId ?? ""
-        var byTarget: [String: [String: Set<String>]] = [:]
-
-        for (target, summary) in projectedReactionSummaries {
-            for reaction in summary.byEmoji where !reaction.emoji.isEmpty {
-                var emojis = byTarget[target] ?? [:]
-                emojis[reaction.emoji] = Set(reaction.senders)
-                byTarget[target] = emojis
-            }
-        }
-
-        for removal in optimisticReactionRemovals {
-            guard var emojis = byTarget[removal.targetMessageIdHex],
-                  var senders = emojis[removal.emoji]
-            else { continue }
-            senders.remove(removal.sender)
-            emojis[removal.emoji] = senders
-            byTarget[removal.targetMessageIdHex] = emojis
-        }
-
-        let ordered: [AppMessageRecordFfi] = reactionRecords.values
-            .sorted { $0.recordedAt < $1.recordedAt }
-        for record in ordered {
-            guard case .reaction(let target) = MessageSemantics.classify(record) else { continue }
-            // Un-react: the reaction event was deleted (kind-5 on its id).
-            if !record.messageIdHex.isEmpty, deletedMessageIds.contains(record.messageIdHex) {
-                continue
-            }
-            let emoji = record.plaintext
-            var emojis: [String: Set<String>] = byTarget[target] ?? [:]
-            if !emoji.isEmpty {
-                var senders: Set<String> = emojis[emoji] ?? []
-                senders.insert(record.sender)
-                emojis[emoji] = senders
-            }
-            byTarget[target] = emojis
-        }
-
-        var result: [String: [ReactionTally]] = [:]
-        for (target, emojis) in byTarget {
-            var tallies: [ReactionTally] = []
-            for (emoji, senders) in emojis where !senders.isEmpty {
-                tallies.append(ReactionTally(emoji: emoji, count: senders.count, mine: senders.contains(me)))
-            }
-            guard !tallies.isEmpty else { continue }
-            tallies.sort { lhs, rhs in
-                lhs.count == rhs.count ? lhs.emoji < rhs.emoji : lhs.count > rhs.count
-            }
-            result[target] = tallies
-        }
-        guard reactions != result else { return false }
-        reactions = result
-        return true
+        reactionProjections.recompute(deletedMessageIds: deletedMessageIds, me: myAccountId ?? "")
     }
 
-    /// Drop optimistic reaction placeholders that the server projection has now
-    /// confirmed (same target + emoji + sender). Without this, `reactionRecords`
-    /// keeps every optimistic entry for the life of the conversation even after
-    /// the authoritative projection arrives (#47). The displayed tally is
-    /// unaffected because the confirmed reaction still comes from the summary.
     /// Prefer the event's own `recordedAt` so the timeline sorts by send time;
     /// fall back to `now` only when the FFI omitted it (zero sentinel).
     static func receivedToRecord(_ r: RuntimeMessageReceivedFfi, now: UInt64) -> AppMessageRecordFfi {
@@ -2575,17 +2511,15 @@ final class ConversationViewModel {
                 sender: me
             )
             if let removal {
-                optimisticReactionRemovals.insert(removal)
+                reactionProjections.insertRemoval(removal)
             }
             // Un-react: drop my matching reaction record(s) for this target+emoji.
             // The real un-react publishes a kind-5 delete of the reaction event id.
-            for (key, record) in reactionRecords {
-                guard record.sender == me, record.plaintext == emoji,
-                      case .reaction(let target) = MessageSemantics.classify(record),
-                      target == message.messageIdHex else { continue }
-                removedRecords[key] = record
-            }
-            for key in removedRecords.keys { reactionRecords.removeValue(forKey: key) }
+            removedRecords = reactionProjections.removeMatchingRecords(
+                target: message.messageIdHex,
+                emoji: emoji,
+                sender: me
+            )
         } else {
             // Re-react: clear any pending optimistic un-react for this
             // target+emoji so the new add isn't immediately subtracted by a
@@ -2596,7 +2530,7 @@ final class ConversationViewModel {
                 emoji: emoji,
                 sender: me
             )
-            if optimisticReactionRemovals.remove(pending) != nil {
+            if reactionProjections.removeRemoval(pending) {
                 clearedRemoval = pending
             }
             // Add: synthesize a kind-7 reaction (emoji in content, `e` tag target).
@@ -2612,7 +2546,7 @@ final class ConversationViewModel {
                 recordedAt: UInt64(Date().timeIntervalSince1970),
                 receivedAt: UInt64(Date().timeIntervalSince1970)
             )
-            reactionRecords[key] = synthetic
+            reactionProjections.setRecord(synthetic, forKey: key)
             addedKey = key
         }
         if recomputeReactions() {
@@ -2637,10 +2571,10 @@ final class ConversationViewModel {
             }
         } catch {
             // Revert the optimistic change.
-            if let addedKey { reactionRecords.removeValue(forKey: addedKey) }
-            if let removal { optimisticReactionRemovals.remove(removal) }
-            if let clearedRemoval { optimisticReactionRemovals.insert(clearedRemoval) }
-            for (key, record) in removedRecords { reactionRecords[key] = record }
+            if let addedKey { reactionProjections.removeRecord(forKey: addedKey) }
+            if let removal { reactionProjections.removeRemoval(removal) }
+            if let clearedRemoval { reactionProjections.insertRemoval(clearedRemoval) }
+            reactionProjections.restoreRecords(removedRecords)
             if recomputeReactions() {
                 noteTimelineProjectionChanged()
             }

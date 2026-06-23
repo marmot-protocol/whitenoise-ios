@@ -580,6 +580,21 @@ polling over re-running.
               per call (`visibleTimelineItem(forMessageId:)`) so the cache holds no
               conversation state. DEBUG build-count + testing hooks forward to the cache;
               the `pendingMediaByRowId` source-scrape repointed to the cache instance.
+        - [x] `ConversationReactionProjectionCache` (VM 2651 → 2590): the third outer
+              projection peeled out ahead of the core, same shape as markdown/media.
+              Owns the server summary (mirrored at ingest), the optimistic react/un-react
+              overlay (`optimisticRecords` + `optimisticRemovals`), and the aggregated
+              `talliesByTarget`; `recompute(deletedMessageIds:me:)` folds them (the pure
+              #47/#349 reconciliation stays in `ConversationReactionPolicy`). The VM keeps
+              `reactions(for:)`/`recomputeReactions()` forwarders; the `toggleReaction`
+              FFI + rollback orchestration stays in the VM but reads/writes through cache
+              primitives (`insertRemoval`/`removeRemoval`/`setRecord`/`removeRecord`/
+              `removeMatchingRecords`/`restoreRecords`). `reactions(for:)` already gated
+              on `timelineProjectionGeneration`, so observation is unchanged.
+              *Sequencing note:* the plan originally deferred reactions to after the core,
+              but the recompute only depends on `deletedMessageIds` (already its own
+              projection, passed as a param) — not on `messageById`/timeline rows — so it
+              peels cleanly now, shrinking what the core must carry.
         - [ ] THEN the core: `messageById` mirror + optimistic overlay (pending sends) +
               pagination state + the rebuild engine + accessors. The big atomic move that
               the send pipeline / stream watcher then delegate into.
@@ -588,8 +603,8 @@ polling over re-running.
           optimistic pending rows into the timeline + reconciles them — that overlay
           belongs to TimelineStore, so the composer can't cleanly leave before it.
         - StreamWatcher is invoked from the timeline ingest (`applyTimelineRecord`).
-        - Reactions recompute is derived from timeline rows.
       - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
-            overlay + pagination + media/markdown/reaction projections). The big one;
-            unlocks the rest. ~1000 lines of the VM. Best as a focused dedicated
-            effort — high risk of breaking the conversation if rushed.
+            overlay + pagination + the rebuild engine that drives the now-extracted
+            markdown/media/reaction projection caches). The big one; unlocks the rest.
+            ~900 lines of the VM. Best as a focused dedicated effort — high risk of
+            breaking the conversation if rushed.
