@@ -513,11 +513,15 @@ polling over re-running.
             log + send-to-self; view keeps `.task(id: runtimeGeneration)` owning the
             stream lifecycle (calls `runEventStream`); tested `diagnosticText` static +
             `DiagnosticSelfSend` stay; VM added to FFI-guard list
-      - [ ] Remaining (large/fiddly only): GroupDetailsView (1016 lines — large),
-            ProfileEditView (deferred — heavy coupling, ~6 split source-scrapes).
+      - [x] `ProfileEditView` → `ProfileEditViewModel` (commit `abe6861`): editable
+            kind:0 fields + load/publish + per-field validation messages; pure
+            draft/metadata types stay in the view file; `saveDisabled` stays in the
+            view (reads `appState.activeAccountRef`). Five source-scrapes across 3 test
+            files repointed to follow the moved publish/validation code.
+      - [ ] Remaining (large/structural only): GroupDetailsView (1016 lines — large).
             Pure-UI/navigation screens (WelcomeView, AppearanceSettingsView,
             AccountsView, AccountSwitcherSheet) have little/no logic to extract.
-            **All bounded, clean screens are now converted (11 screens).**
+            **All bounded screens are now converted (12 screens).**
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
