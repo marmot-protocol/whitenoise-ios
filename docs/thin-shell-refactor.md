@@ -485,8 +485,9 @@ polling over re-running.
       - [x] `PrivacySecuritySettingsView` → `PrivacySecuritySettingsViewModel`
             (commit `9400762`): telemetry/audit settings + actions; dev-mode
             toggles stay bound to AppState
-      - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView,
-            IdentityView
+      - [x] `IdentityView` → `IdentityViewModel` (commit `77bdb55`): nsec export
+            flow + sheet/confirm flags; identity reads stay on AppState forwarders
+      - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView
       - [ ] Group / Profile / Onboarding / Diagnostics screens
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
