@@ -4,40 +4,34 @@ import MarmotKit
 
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
-
-    @State private var settings: NotificationSettingsFfi?
-    @State private var registration: PushRegistrationFfi?
-    @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var isSaving = false
-    @State private var errorMessage: String?
-    @State private var savedAt: Date?
+    @State private var model = NotificationSettingsViewModel()
 
     var body: some View {
         Form {
             Section {
                 Toggle("Local notifications", isOn: Binding(
-                    get: { settings?.localNotificationsEnabled ?? false },
-                    set: { enabled in Task { await setLocalNotifications(enabled) } }
+                    get: { model.settings?.localNotificationsEnabled ?? false },
+                    set: { enabled in Task { await model.setLocalNotifications(enabled, using: appState) } }
                 ))
-                .disabled(isSaving || settings == nil)
+                .disabled(model.isSaving || model.settings == nil)
 
                 Toggle("Native push", isOn: Binding(
-                    get: { settings?.nativePushEnabled ?? false },
-                    set: { enabled in Task { await setNativePush(enabled) } }
+                    get: { model.settings?.nativePushEnabled ?? false },
+                    set: { enabled in Task { await model.setNativePush(enabled, using: appState) } }
                 ))
-                .disabled(nativePushToggleDisabled)
+                .disabled(model.nativePushToggleDisabled)
 
-                if isSaving {
+                if model.isSaving {
                     ProgressView("Saving")
                 }
 
-                if let errorMessage {
+                if let errorMessage = model.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
                         .font(.callout)
                 }
 
-                if let savedAt {
+                if let savedAt = model.savedAt {
                     Label(
                         L10n.formatted("Saved %@", savedAt.formatted(.relative(presentation: .named))),
                         systemImage: "checkmark.seal.fill"
@@ -53,7 +47,7 @@ struct NotificationSettingsView: View {
 
             Section("Status") {
                 LabeledContent("Permission") {
-                    Text(authorizationStatus.displayName)
+                    Text(model.authorizationStatus.displayName)
                         .foregroundStyle(.secondary)
                 }
 
@@ -67,7 +61,7 @@ struct NotificationSettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if let registration {
+                if let registration = model.registration {
                     LabeledContent("Token fingerprint") {
                         Text(registration.tokenFingerprint)
                             .font(.caption.monospaced())
@@ -83,21 +77,21 @@ struct NotificationSettingsView: View {
 
                 if appState.notifications.apnsTokenHex == nil {
                     Button {
-                        Task { await requestApnsToken() }
+                        Task { await model.requestApnsToken(using: appState) }
                     } label: {
                         Label("Request APNS Token", systemImage: "antenna.radiowaves.left.and.right")
                     }
-                    .disabled(isSaving)
+                    .disabled(model.isSaving)
                 } else {
                     Button {
-                        Task { await refreshApnsToken() }
+                        Task { await model.refreshApnsToken(using: appState) }
                     } label: {
                         Label("Refresh APNS Token", systemImage: "arrow.clockwise.circle")
                     }
-                    .disabled(!canRefreshApnsToken)
+                    .disabled(!model.canRefreshApnsToken)
 
                     Button {
-                        Task { await syncNativeRegistration() }
+                        Task { await model.syncNativeRegistration(using: appState) }
                     } label: {
                         Label("Sync Native Registration", systemImage: "arrow.triangle.2.circlepath")
                     }
@@ -107,33 +101,15 @@ struct NotificationSettingsView: View {
         }
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: appState.activeAccountRef) { await reload() }
-        .refreshable { await reload() }
+        .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
+        .refreshable { await model.reload(using: appState) }
     }
 
-    private var nativePushToggleDisabled: Bool {
-        guard !isSaving, let settings else { return true }
-        if settings.nativePushEnabled {
-            return false
-        }
-        return NativePushServerConfig.current() == nil
-    }
-
-    private var canRefreshApnsToken: Bool {
-        guard !isSaving else { return false }
-        switch authorizationStatus {
-        case .authorized, .provisional, .ephemeral:
-            return true
-        case .denied, .notDetermined:
-            return false
-        @unknown default:
-            return false
-        }
-    }
-
+    // Reads `appState.notifications`, so stays on the view (the toggle/refresh
+    // gates that don't touch appState live on the model).
     private var canSyncNativeRegistration: Bool {
-        guard !isSaving,
-              let settings,
+        guard !model.isSaving,
+              let settings = model.settings,
               settings.nativePushEnabled,
               appState.notifications.apnsTokenHex != nil,
               NativePushServerConfig.current() != nil
@@ -146,109 +122,6 @@ struct NotificationSettingsView: View {
             return L10n.string("Native push is unavailable in this build until a Darkmatter push server public key is configured.")
         }
         return L10n.string("Native push registers only an encrypted APNS token with Darkmatter. Apple receives generic notification wakes.")
-    }
-
-    @MainActor
-    private func reload() async {
-        authorizationStatus = await appState.notifications.authorizationStatus()
-        guard let accountRef = appState.activeAccountRef else {
-            settings = nil
-            registration = nil
-            return
-        }
-        if let reloadedSettings = await appState.notificationSettings(for: accountRef) {
-            settings = reloadedSettings
-        }
-        if let reloadedRegistration = await appState.pushRegistration(for: accountRef) {
-            registration = reloadedRegistration
-        }
-    }
-
-    @MainActor
-    private func setLocalNotifications(_ enabled: Bool) async {
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-
-        do {
-            settings = try await appState.setLocalNotificationsEnabled(enabled)
-            savedAt = Date()
-            Haptics.success()
-            await reload()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func setNativePush(_ enabled: Bool) async {
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-
-        do {
-            settings = try await appState.setNativePushEnabled(enabled)
-            savedAt = Date()
-            Haptics.success()
-            await reload()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func requestApnsToken() async {
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-
-        do {
-            let granted = try await appState.notifications.requestAuthorizationAndRegister()
-            guard granted else { throw NotificationSettingsActionError.permissionDenied }
-            savedAt = Date()
-            await reload()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func refreshApnsToken() async {
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-
-        do {
-            _ = try await appState.notifications.refreshApnsToken()
-            savedAt = Date()
-            Haptics.success()
-            await reload()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-            await reload()
-        }
-    }
-
-    @MainActor
-    private func syncNativeRegistration() async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        isSaving = true
-        errorMessage = nil
-        defer { isSaving = false }
-
-        do {
-            registration = try await appState.syncNativePushRegistration(accountRef: accountRef)
-            savedAt = Date()
-            Haptics.success()
-            await reload()
-        } catch {
-            Haptics.error()
-            errorMessage = error.localizedDescription
-        }
     }
 }
 
