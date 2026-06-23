@@ -486,8 +486,7 @@ private struct ChatDestination: View {
     @State private var timedOut = false
 
     private var item: ChatsListViewModel.Item? {
-        (viewModel.items + viewModel.archivedItems)
-            .first(where: { $0.id == target.groupIdHex })
+        viewModel.item(groupIdHex: target.groupIdHex)
     }
 
     var body: some View {
