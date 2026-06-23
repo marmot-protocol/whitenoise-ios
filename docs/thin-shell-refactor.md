@@ -562,12 +562,26 @@ polling over re-running.
             + `ConversationReactionPolicy` (optimistic react/un-react reconciliation
             #47/#349, with `ReactionRemoval` moved top-level, commit `5da61f7`).
             VM 2855 → 2777.
-      - [ ] **Remaining carves all need TimelineStore FIRST (verified by reading):**
+      - [~] TimelineStore — STARTED, peeling the outer (row-display) projection layers
+            before the core mirror:
+        - [x] `ConversationMarkdownProjectionCache` (commit `839d06e`, VM 2777 → 2718):
+              per-row markdown display-block cache + incremental maintenance; build stays
+              in `MessageMarkdownDisplayProjection.build`, mention resolver passed
+              `@escaping` per call; VM keeps a `markdownDisplayBlocks(for:)` forwarder.
+              Pattern: a projection cache the rebuild/upsert/remove call sites delegate to.
+        - [ ] NEXT — media projection cache (parallel to markdown: `mediaItemProjections-
+              ByRowId` + build/update/remove/rebuild + `mediaItems(for:)`). Bigger: also
+              owns `mediaReferencesByMessageId` (written at ingest) + `pendingMediaByRowId`
+              (written by the send pipeline), so 2 extra write-paths to wire.
+        - [ ] THEN the core: `messageById` mirror + optimistic overlay (pending sends) +
+              pagination state + the rebuild engine + accessors. The big atomic move that
+              the send pipeline / stream watcher then delegate into.
+      - [ ] After the core lands, the now-unblocked carves:
         - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
           optimistic pending rows into the timeline + reconciles them — that overlay
           belongs to TimelineStore, so the composer can't cleanly leave before it.
         - StreamWatcher is invoked from the timeline ingest (`applyTimelineRecord`).
-        - Reactions / markdown projections are derived from timeline rows.
+        - Reactions recompute is derived from timeline rows.
       - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
             overlay + pagination + media/markdown/reaction projections). The big one;
             unlocks the rest. ~1000 lines of the VM. Best as a focused dedicated
