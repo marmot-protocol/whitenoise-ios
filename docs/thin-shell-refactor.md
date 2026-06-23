@@ -482,8 +482,18 @@ polling over re-running.
             rendering; store takes `AppState` as a method param (no retain)
       - [x] `KeyPackagesView` → `KeyPackagesViewModel` (commit `42104fb`): CRUD
             shape (list/publish/delete); pure presentation statics stay on the view
+      - [x] `PrivacySecuritySettingsView` → `PrivacySecuritySettingsViewModel`
+            (commit `9400762`): telemetry/audit settings + actions; dev-mode
+            toggles stay bound to AppState
       - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView,
-            PrivacySecuritySettingsView, IdentityView
+            IdentityView
       - [ ] Group / Profile / Onboarding / Diagnostics screens
+
+> **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
+> sim. App boots healthy to Chats (not onboarding) → persisted account loads,
+> confirming `AccountStore`'s relaunch persistence; avatar + chrome render,
+> confirming the profile/account observation forwarding. No crash after the
+> store extractions. Deep live-update checks (account-switch badges) need a
+> populated account.
 - [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
       MediaController / ComposerModel / StreamWatcher
