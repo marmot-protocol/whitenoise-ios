@@ -545,10 +545,17 @@ polling over re-running.
       MediaController / ComposerModel / StreamWatcher.
       - [x] MediaController download path → `ConversationMediaDownloader` (commit
             `d98c3e2`). VM 3096 → 3012 lines.
-      - [ ] ComposerModel (send pipeline: `sendInFlight`, `sendText`, `sendMedia`,
-            draft/reply state) — substantial but more self-contained than the rest.
-      - [ ] StreamWatcher — coupled to timeline ingest; carve after TimelineStore.
-      - [ ] TimelineStore — the core (subscription mirror + optimistic overlay +
-            pagination + read-marking + the media *projection* methods). Hardest;
-            do last. Media projections (`mediaItemProjectionsByRowId`, etc.) move
-            here, not into MediaController.
+      - [x] Composer mention concern → `ComposerMentionController` (commit `b48470b`,
+            in ComposerMentionSupport.swift). VM 3012 → 2980. `MentionCandidateCacheKey`
+            moved top-level. The mention *send* pipeline did NOT move — see below.
+      - [ ] **The two clean "leaf" carves (download, mentions) are DONE. Everything
+            left is timeline-coupled and needs TimelineStore FIRST:**
+        - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
+          optimistic pending rows into the timeline + reconciles them — that overlay
+          belongs to TimelineStore, so the composer can't cleanly leave before it.
+        - StreamWatcher is invoked from the timeline ingest (`applyTimelineRecord`).
+        - Reactions / markdown projections are derived from timeline rows.
+      - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
+            overlay + pagination + read-marking + media/markdown/reaction projections).
+            The big one; unlocks the rest. ~1000+ lines of the VM. Best as a focused
+            dedicated effort — high risk of breaking the conversation if rushed.
