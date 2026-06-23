@@ -241,8 +241,40 @@ final class ChatsListViewModel {
         for row in snapshot {
             storeRow(row)
         }
+        pruneEnrichmentCaches(toSurviving: Set(rowByGroupId.keys))
         publishItems()
         scheduleRowEnrichment(for: snapshot)
+    }
+
+    /// Intersect the parallel enrichment caches/sets down to the surviving
+    /// group-id key set after a full snapshot rebuild. A snapshot never calls
+    /// `removeChatListRow`, so groups that drop out of the list between
+    /// snapshots would otherwise strand entries in these collections for the
+    /// lifetime of the account binding. Mirrors `removeChatListRow`'s per-group
+    /// cleanup for every group absent from the snapshot.
+    private func pruneEnrichmentCaches(toSurviving surviving: Set<String>) {
+        groupDetailsCache = Self.intersecting(groupDetailsCache, with: surviving)
+        avatarURLByGroupId = Self.intersecting(avatarURLByGroupId, with: surviving)
+        groupDetailsLoadedGroupIds = Self.intersecting(groupDetailsLoadedGroupIds, with: surviving)
+        avatarURLLoadedGroupIds = Self.intersecting(avatarURLLoadedGroupIds, with: surviving)
+        pendingAvatarURLRefreshGroupIds = Self.intersecting(pendingAvatarURLRefreshGroupIds, with: surviving)
+        pendingGroupDetailsRefreshGroupIds = Self.intersecting(pendingGroupDetailsRefreshGroupIds, with: surviving)
+    }
+
+    /// Pure helper: keep only the dictionary entries whose key survives.
+    static func intersecting<Value>(
+        _ cache: [String: Value],
+        with surviving: Set<String>
+    ) -> [String: Value] {
+        cache.filter { surviving.contains($0.key) }
+    }
+
+    /// Pure helper: keep only the set members that survive.
+    static func intersecting(
+        _ ids: Set<String>,
+        with surviving: Set<String>
+    ) -> Set<String> {
+        ids.intersection(surviving)
     }
 
     func applyChatListRow(_ row: ChatListRowFfi) {
@@ -462,9 +494,17 @@ final class ChatsListViewModel {
                         groupIdHex: groupId
                     ) else { continue }
 
+                    // `groupDetails` is a suspension point: a full-snapshot
+                    // replace (`applyChatListSnapshot`) can run during the await
+                    // and prune this group out of `rowByGroupId` and the
+                    // enrichment caches. Skip writing any cache/loaded-set state
+                    // for a group that no longer survives so in-flight
+                    // enrichment cannot strand entries for a removed row.
+                    guard let row = self.rowByGroupId[groupId] else { continue }
+
                     self.groupDetailsCache[groupId] = details
                     self.groupDetailsLoadedGroupIds.insert(groupId)
-                    if let row = self.rowByGroupId[groupId], Self.rowNeedsDisplayEnrichment(row) {
+                    if Self.rowNeedsDisplayEnrichment(row) {
                         let members = Self.memberRecords(from: details)
                         if members.count == 2,
                            let other = GroupDisplay.otherMemberAccount(
@@ -478,17 +518,15 @@ final class ChatsListViewModel {
                         }
                     }
 
-                    if self.rowByGroupId[groupId]?.avatarUrl == nil {
+                    if row.avatarUrl == nil {
                         self.avatarURLLoadedGroupIds.insert(groupId)
                         if let avatarUrl = details.group.avatarUrl {
                             self.avatarURLByGroupId[groupId] = avatarUrl
                         }
                     }
 
-                    if let row = self.rowByGroupId[groupId] {
-                        self.itemByGroupId[groupId] = self.makeItem(for: row)
-                        changed = true
-                    }
+                    self.itemByGroupId[groupId] = self.makeItem(for: row)
+                    changed = true
                 }
                 guard !Task.isCancelled, self.currentAccount == accountRef else { break }
                 if changed {
