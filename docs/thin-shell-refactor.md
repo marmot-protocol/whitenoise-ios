@@ -487,8 +487,12 @@ polling over re-running.
             toggles stay bound to AppState
       - [x] `IdentityView` → `IdentityViewModel` (commit `77bdb55`): nsec export
             flow + sheet/confirm flags; identity reads stay on AppState forwarders
-      - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView
-      - [ ] Group / Profile / Onboarding / Diagnostics screens
+      - [ ] remaining settings cluster: ProfileEditView (heavy source-scrape
+            coupling — 4 sites), NotificationSettingsView (notification-lifecycle
+            entangled — do with care)
+      - [x] `ProfileView` → `ProfileViewModel` (commit `bae9530`): reference
+            resolution + Message action; `npub`/`dismiss` passed as method params
+      - [ ] Group / Onboarding / Diagnostics screens
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
