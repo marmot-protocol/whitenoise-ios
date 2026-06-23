@@ -810,7 +810,8 @@ private struct MessageMediaAttachmentContent: View {
                             sideLength: maxWidth,
                             hiddenCount: 0,
                             onLoadMedia: onLoadMedia,
-                            onOpenImage: onOpenImage
+                            onOpenImage: onOpenImage,
+                            onOpenVideo: onOpenVideo
                         )
                         .clipShape(.rect(cornerRadius: 14))
                     case .video:
