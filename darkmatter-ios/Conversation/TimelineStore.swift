@@ -199,13 +199,29 @@ final class TimelineStore {
         guard update.groupIdHex == groupIdHex else { return }
 
         var projectionChanged = false
+        var changedReactionTargets: Set<String> = []
         // `changes` is authoritative for live deltas; the snapshot is still a bounded window.
         for change in update.changes {
             switch change {
             case .upsert(let trigger, let record):
+                let appRecord = ConversationViewModel.appMessageRecord(from: record)
+                if !appRecord.messageIdHex.isEmpty {
+                    changedReactionTargets.insert(appRecord.messageIdHex)
+                }
+                if case .reaction(let target) = MessageSemantics.classify(appRecord), !target.isEmpty {
+                    changedReactionTargets.insert(target)
+                }
                 streamWatcher?.recordFinalizedStreams(in: [record])
                 projectionChanged = applyTimelineRecord(record, trigger: trigger) || projectionChanged
             case .remove(let messageIdHex, _):
+                if !messageIdHex.isEmpty {
+                    changedReactionTargets.insert(messageIdHex)
+                }
+                if let existing = messageById[messageIdHex],
+                   case .reaction(let target) = MessageSemantics.classify(existing),
+                   !target.isEmpty {
+                    changedReactionTargets.insert(target)
+                }
                 projectionChanged = removeTimelineRecord(
                     messageIdHex: messageIdHex,
                     updateTimeline: false
@@ -213,7 +229,7 @@ final class TimelineStore {
             }
         }
         readMarker?.pruneMarkedReadMessageIds(force: true)
-        rebuildProjectedState(projectionChanged: projectionChanged)
+        rebuildProjectedState(projectionChanged: projectionChanged, changedReactionTargets: changedReactionTargets)
         isLoading = false
     }
 
@@ -315,11 +331,19 @@ final class TimelineStore {
 
     func rebuildProjectedState(
         rebuildTimeline shouldRebuildTimeline: Bool = true,
-        projectionChanged: Bool = false
+        projectionChanged: Bool = false,
+        changedReactionTargets: Set<String>? = nil
     ) {
         var changed = projectionChanged
-        changed = deletedProjections.rebuild() || changed
-        changed = recomputeReactions() || changed
+        let deletedChanged = deletedProjections.rebuild()
+        changed = deletedChanged || changed
+        // A delete-state change can flip tombstoned un-reacts on any target, so it
+        // forces a full recompute; otherwise a live delta touches only its targets.
+        if let changedReactionTargets, !deletedChanged {
+            changed = recomputeReactions(for: changedReactionTargets) || changed
+        } else {
+            changed = recomputeReactions() || changed
+        }
         if shouldRebuildTimeline {
             changed = rebuildTimeline() || changed
         }
@@ -432,10 +456,26 @@ final class TimelineStore {
 
     // MARK: - Reactions
 
+    /// All aggregated reaction tallies (full dict) — for test hooks.
+    var reactions: [String: [ConversationViewModel.ReactionTally]] { reactionProjections.allTallies }
+
     @discardableResult
     func recomputeReactions() -> Bool {
         reactionProjections.recompute(deletedMessageIds: deletedProjections.deletedMessageIds, me: myAccountId ?? "")
     }
+
+    @discardableResult
+    func recomputeReactions(for targets: Set<String>) -> Bool {
+        reactionProjections.recompute(targets: targets, deletedMessageIds: deletedProjections.deletedMessageIds, me: myAccountId ?? "")
+    }
+
+#if DEBUG
+    @discardableResult
+    func forceFullReactionRecomputeForTesting() -> [String: [ConversationViewModel.ReactionTally]] {
+        _ = recomputeReactions()
+        return reactions
+    }
+#endif
 
     // MARK: - Optimistic send overlay
 

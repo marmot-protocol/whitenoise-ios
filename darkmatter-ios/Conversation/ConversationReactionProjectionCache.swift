@@ -110,59 +110,63 @@ final class ConversationReactionProjectionCache {
 
     // MARK: Aggregation
 
+    /// All aggregated tallies (for full-recompute test hooks).
+    var allTallies: [String: [ConversationViewModel.ReactionTally]] { talliesByTarget }
+
+    /// Rebuild every per-target tally. Reserved for full projection refreshes or
+    /// delete-state changes; live deltas should prefer `recompute(targets:…)` so
+    /// they don't rescan unrelated targets (#380).
     @discardableResult
     func recompute(deletedMessageIds: Set<String>, me: String) -> Bool {
-        var byTarget: [String: [String: Set<String>]] = [:]
-
-        for (target, summary) in summariesByTarget {
-            for reaction in summary.byEmoji where !reaction.emoji.isEmpty {
-                var emojis = byTarget[target] ?? [:]
-                emojis[reaction.emoji] = Set(reaction.senders)
-                byTarget[target] = emojis
-            }
-        }
-
-        for removal in optimisticRemovals {
-            guard var emojis = byTarget[removal.targetMessageIdHex],
-                  var senders = emojis[removal.emoji]
-            else { continue }
-            senders.remove(removal.sender)
-            emojis[removal.emoji] = senders
-            byTarget[removal.targetMessageIdHex] = emojis
-        }
-
-        let ordered: [AppMessageRecordFfi] = optimisticRecords.values
-            .sorted { $0.recordedAt < $1.recordedAt }
-        for record in ordered {
+        var targets = Set(summariesByTarget.keys)
+        targets.formUnion(optimisticRemovals.map(\.targetMessageIdHex))
+        for record in optimisticRecords.values {
             guard case .reaction(let target) = MessageSemantics.classify(record) else { continue }
-            // Un-react: the reaction event was deleted (kind-5 on its id).
-            if !record.messageIdHex.isEmpty, deletedMessageIds.contains(record.messageIdHex) {
-                continue
-            }
-            let emoji = record.plaintext
-            var emojis: [String: Set<String>] = byTarget[target] ?? [:]
-            if !emoji.isEmpty {
-                var senders: Set<String> = emojis[emoji] ?? []
-                senders.insert(record.sender)
-                emojis[emoji] = senders
-            }
-            byTarget[target] = emojis
+            targets.insert(target)
         }
 
         var result: [String: [ConversationViewModel.ReactionTally]] = [:]
-        for (target, emojis) in byTarget {
-            var tallies: [ConversationViewModel.ReactionTally] = []
-            for (emoji, senders) in emojis where !senders.isEmpty {
-                tallies.append(ConversationViewModel.ReactionTally(emoji: emoji, count: senders.count, mine: senders.contains(me)))
+        for target in targets where !target.isEmpty {
+            let tallies = ConversationViewModel.reactionTallies(
+                for: target,
+                summary: summariesByTarget[target],
+                optimisticRemovals: optimisticRemovals,
+                optimisticRecords: optimisticRecords,
+                deletedMessageIds: deletedMessageIds,
+                me: me
+            )
+            if !tallies.isEmpty {
+                result[target] = tallies
             }
-            guard !tallies.isEmpty else { continue }
-            tallies.sort { lhs, rhs in
-                lhs.count == rhs.count ? lhs.emoji < rhs.emoji : lhs.count > rhs.count
-            }
-            result[target] = tallies
         }
         guard talliesByTarget != result else { return false }
         talliesByTarget = result
+        return true
+    }
+
+    /// Recompute only the supplied targets — used for live single-row projection
+    /// updates and local optimistic toggles (#380).
+    @discardableResult
+    func recompute(targets: Set<String>, deletedMessageIds: Set<String>, me: String) -> Bool {
+        guard !targets.isEmpty else { return false }
+        var next = talliesByTarget
+        for target in targets where !target.isEmpty {
+            let tallies = ConversationViewModel.reactionTallies(
+                for: target,
+                summary: summariesByTarget[target],
+                optimisticRemovals: optimisticRemovals,
+                optimisticRecords: optimisticRecords,
+                deletedMessageIds: deletedMessageIds,
+                me: me
+            )
+            if tallies.isEmpty {
+                next[target] = nil
+            } else {
+                next[target] = tallies
+            }
+        }
+        guard talliesByTarget != next else { return false }
+        talliesByTarget = next
         return true
     }
 }

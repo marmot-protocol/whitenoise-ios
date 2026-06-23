@@ -73,6 +73,33 @@ struct ConversationTranscriptExportTests {
         ])
     }
 
+    @Test func documentSanitizesGroupNameBeforeExporting() throws {
+        let groupId = String(repeating: "ab", count: 32)
+        let document = ConversationTranscriptExport.makeDocument(
+            group: testExportGroup(
+                name: "\u{202E}  Secret\n\tRoom \u{200B}",
+                groupIdHex: groupId
+            ),
+            messages: []
+        )
+
+        #expect(document.groupName == "Secret Room")
+
+        let data = try ConversationTranscriptExport.encodeJSON(document)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["group_name"] as? String == "Secret Room")
+    }
+
+    @Test func documentFallsBackToShortGroupIdWhenGroupNameSanitizesEmpty() {
+        let groupId = String(repeating: "ab", count: 32)
+        let document = ConversationTranscriptExport.makeDocument(
+            group: testExportGroup(name: "\u{202E}\u{200B}\n\t", groupIdHex: groupId),
+            messages: []
+        )
+
+        #expect(document.groupName == IdentityFormatter.short(groupId))
+    }
+
     @Test func fetchAllMessagesPaginatesByOldestMessageAndSortsChronologically() throws {
         let newestId = String(repeating: "33", count: 32)
         let middleId = String(repeating: "22", count: 32)

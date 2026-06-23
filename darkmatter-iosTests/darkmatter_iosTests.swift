@@ -4225,6 +4225,23 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.firstUnreadMessageIdHex == hex("c2"))
     }
 
+    @Test func itemByGroupIdAccessorResolvesActiveAndArchivedRowsAndMissesUnknownId() throws {
+        let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let active = chatListRow(groupIdHex: hex("a1"), title: "Active", updatedAt: 10)
+        let archived = chatListRow(groupIdHex: hex("a2"), archived: true, title: "Archived", updatedAt: 20)
+
+        viewModel.applyChatListSnapshot([active, archived])
+
+        // The accessor resolves a row by id regardless of which published
+        // array it lands in, and returns nil for an unknown id — matching the
+        // old `(items + archivedItems).first(where:)` scan it replaces.
+        #expect(viewModel.item(groupIdHex: active.groupIdHex)?.id == active.groupIdHex)
+        #expect(viewModel.item(groupIdHex: active.groupIdHex)?.isArchived == false)
+        #expect(viewModel.item(groupIdHex: archived.groupIdHex)?.id == archived.groupIdHex)
+        #expect(viewModel.item(groupIdHex: archived.groupIdHex)?.isArchived == true)
+        #expect(viewModel.item(groupIdHex: hex("ff")) == nil)
+    }
+
     @Test func previewTextSanitizesProjectedLastMessage() throws {
         let unsafe = chatListRow(
             groupIdHex: hex("d0"),
@@ -4325,6 +4342,81 @@ struct ChatsListProjectionTests {
 
         #expect(viewModel.items.map(\.id) == [kept.groupIdHex])
         #expect(viewModel.archivedItems.isEmpty)
+    }
+
+    @Test func intersectingDictionaryKeepsOnlySurvivingKeys() throws {
+        let cache = ["a": 1, "b": 2, "c": 3]
+        let pruned = ChatsListViewModel.intersecting(cache, with: ["a", "c", "z"])
+
+        #expect(pruned == ["a": 1, "c": 3])
+    }
+
+    @Test func intersectingSetKeepsOnlySurvivingMembers() throws {
+        let ids: Set<String> = ["a", "b", "c"]
+        let pruned = ChatsListViewModel.intersecting(ids, with: ["b", "z"])
+
+        #expect(pruned == ["b"])
+    }
+
+    @Test func intersectingDropsEverythingWhenNothingSurvives() throws {
+        #expect(ChatsListViewModel.intersecting(["a": 1, "b": 2], with: []).isEmpty)
+        #expect(ChatsListViewModel.intersecting(Set(["a", "b"]), with: []).isEmpty)
+    }
+
+    @Test func intersectingKeepsEverythingWhenAllSurvive() throws {
+        let cache = ["a": 1, "b": 2]
+        #expect(ChatsListViewModel.intersecting(cache, with: ["a", "b"]) == cache)
+    }
+
+    @Test func snapshotReplacePrunesEnrichmentCachesToSurvivingRows() throws {
+        // Regression for the leak where `applyChatListSnapshot` rebuilt the row
+        // maps but left the parallel enrichment caches untouched, stranding
+        // entries for groups absent from the new snapshot. The pruning step is
+        // private instance state with no public read path, so assert the
+        // snapshot path drives the dedicated pruning helper against the freshly
+        // rebuilt row key set.
+        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
+
+        #expect(source.matches(
+            #"func applyChatListSnapshot[\s\S]*?pruneEnrichmentCaches\(toSurviving: Set\(rowByGroupId\.keys\)\)[\s\S]*?scheduleRowEnrichment"#
+        ))
+        // The pruning helper must intersect every one of the six enrichment
+        // collections that `removeChatListRow` cleans per group.
+        for collection in [
+            "groupDetailsCache",
+            "avatarURLByGroupId",
+            "groupDetailsLoadedGroupIds",
+            "avatarURLLoadedGroupIds",
+            "pendingAvatarURLRefreshGroupIds",
+            "pendingGroupDetailsRefreshGroupIds",
+        ] {
+            #expect(source.matches(
+                #"private func pruneEnrichmentCaches\(toSurviving[\s\S]*?\#(collection) = Self\.intersecting\(\#(collection),"#
+            ))
+        }
+    }
+
+    @Test func inFlightEnrichmentGuardsAgainstRowRemovedDuringAwait() throws {
+        // Regression for the leak where in-flight `scheduleRowEnrichment` work
+        // could resume after a full-snapshot replace pruned its group and
+        // unconditionally reinsert `groupDetailsCache` / `groupDetailsLoadedGroupIds`
+        // (and, via `rowByGroupId[groupId]?.avatarUrl == nil` being true for an
+        // absent row, the avatar caches too). The enrichment task reads/writes
+        // private instance state inside a detached `Task` with no public seam,
+        // so assert that the post-`groupDetails`-await survivor guard appears
+        // before any enrichment cache/loaded-set write.
+        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
+
+        // The survivor guard must sit between the `groupDetails` await and the
+        // first cache write so a group pruned during the await cannot strand
+        // entries. `[\s\S]` matches across newlines.
+        #expect(source.matches(
+            #"try\? await appState\.marmot\.groupDetails\([\s\S]*?guard let row = self\.rowByGroupId\[groupId\] else \{ continue \}[\s\S]*?self\.groupDetailsCache\[groupId\] ="#
+        ))
+        // The avatar reinsertion must key off the guarded `row`, not a fresh
+        // optional lookup that reads as nil for an absent group.
+        #expect(source.contains("if row.avatarUrl == nil {"))
+        #expect(!source.contains("if self.rowByGroupId[groupId]?.avatarUrl == nil {"))
     }
 
     @Test func chatListRowUpdatesAreCoalescedBeforePublishing() async throws {

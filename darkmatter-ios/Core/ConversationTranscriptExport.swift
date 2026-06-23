@@ -151,10 +151,12 @@ nonisolated enum ConversationTranscriptExport {
                 invalidationStatus: record.invalidationStatus
             )
         }
+        let groupName = ProfileSanitizer.groupName(group.name)
+            ?? IdentityFormatter.short(group.groupIdHex)
         return Document(
             exportedAt: iso8601Timestamp(exportedAt),
             groupIdHex: group.groupIdHex,
-            groupName: group.name,
+            groupName: groupName,
             eventCount: events.count,
             events: events
         )

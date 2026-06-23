@@ -321,6 +321,16 @@ final class ConversationViewModel {
         timelineStore.reactions(for: messageIdHex)
     }
 
+    /// All aggregated reaction tallies (full dict). Used by reaction tests.
+    var reactions: [String: [ReactionTally]] { timelineStore.reactions }
+
+#if DEBUG
+    @discardableResult
+    func forceFullReactionRecomputeForTesting() -> [String: [ReactionTally]] {
+        timelineStore.forceFullReactionRecomputeForTesting()
+    }
+#endif
+
     func markdownDisplayBlocks(for item: TimelineItem) -> [MarkdownDisplayBlock]? {
         timelineStore.markdownDisplayBlocks(for: item)
     }
@@ -1156,6 +1166,60 @@ final class ConversationViewModel {
             recordedAt: r.message.recordedAt > 0 ? r.message.recordedAt : now,
             receivedAt: now
         )
+    }
+
+    /// Pure per-target reaction tally: folds the server summary, optimistic
+    /// un-react removals, and local optimistic reaction records (dropping
+    /// tombstoned un-reacts) into the sorted tally for one message (#380). Lives
+    /// here so `ConversationReactionProjectionCache` (full + incremental) and the
+    /// tests share one implementation.
+    nonisolated static func reactionTallies(
+        for target: String,
+        summary: TimelineReactionSummaryFfi?,
+        optimisticRemovals: Set<ReactionRemoval>,
+        optimisticRecords: [String: AppMessageRecordFfi],
+        deletedMessageIds: Set<String>,
+        me: String
+    ) -> [ReactionTally] {
+        var emojis: [String: Set<String>] = [:]
+
+        if let summary {
+            for reaction in summary.byEmoji where !reaction.emoji.isEmpty {
+                emojis[reaction.emoji] = Set(reaction.senders)
+            }
+        }
+
+        for removal in optimisticRemovals where removal.targetMessageIdHex == target {
+            guard var senders = emojis[removal.emoji] else { continue }
+            senders.remove(removal.sender)
+            emojis[removal.emoji] = senders
+        }
+
+        // Local optimistic reaction records are kind-7 messages: emoji content,
+        // target in the `e` tag. A reaction is dropped when its own event id has
+        // been tombstoned by a delete (the un-react path).
+        for record in optimisticRecords.values {
+            guard case .reaction(let recordTarget) = MessageSemantics.classify(record),
+                  recordTarget == target
+            else { continue }
+            if !record.messageIdHex.isEmpty, deletedMessageIds.contains(record.messageIdHex) {
+                continue
+            }
+            let emoji = record.plaintext
+            guard !emoji.isEmpty else { continue }
+            var senders: Set<String> = emojis[emoji] ?? []
+            senders.insert(record.sender)
+            emojis[emoji] = senders
+        }
+
+        var tallies: [ReactionTally] = []
+        for (emoji, senders) in emojis where !senders.isEmpty {
+            tallies.append(ReactionTally(emoji: emoji, count: senders.count, mine: senders.contains(me)))
+        }
+        tallies.sort { lhs, rhs in
+            lhs.count == rhs.count ? lhs.emoji < rhs.emoji : lhs.count > rhs.count
+        }
+        return tallies
     }
 
     private func applyGroupUpdate(_ record: AppGroupRecordFfi) async {
