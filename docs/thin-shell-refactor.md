@@ -476,6 +476,12 @@ polling over re-running.
       - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
             most entangled; verify suspend/resume by running the app, not just tests
       - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up)
-- [ ] Phase 4 — screen-store template; convert 19 view-embedded screens
+- [ ] Phase 4 — screen-store template; convert view-embedded screens
+      - [x] template established + `RelaysView` → `RelaysViewModel` (commit `1356c5e`):
+            `@Observable` store owns load/save/validation + UI state; view is pure
+            rendering; store takes `AppState` as a method param (no retain)
+      - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView,
+            KeyPackagesView, PrivacySecuritySettingsView, IdentityView
+      - [ ] Group / Profile / Onboarding / Diagnostics screens
 - [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
       MediaController / ComposerModel / StreamWatcher
