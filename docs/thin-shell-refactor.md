@@ -569,10 +569,17 @@ polling over re-running.
               in `MessageMarkdownDisplayProjection.build`, mention resolver passed
               `@escaping` per call; VM keeps a `markdownDisplayBlocks(for:)` forwarder.
               Pattern: a projection cache the rebuild/upsert/remove call sites delegate to.
-        - [ ] NEXT — media projection cache (parallel to markdown: `mediaItemProjections-
-              ByRowId` + build/update/remove/rebuild + `mediaItems(for:)`). Bigger: also
-              owns `mediaReferencesByMessageId` (written at ingest) + `pendingMediaByRowId`
-              (written by the send pipeline), so 2 extra write-paths to wire.
+        - [x] `ConversationMediaProjectionCache` (VM 2718 → 2651): owns all three
+              media mirrors — `referencesByMessageId` (mirrored at ingest),
+              `pendingByRowId` (send-pipeline optimistic), `projectionsByRowId` (built
+              display items) — plus build/update/remove/rebuild + `items(for:)` and the
+              by-message-id refresh. The two extra write-paths wired as cache methods
+              (`setReferences`/`removeReferences` at ingest; `setPending`/`removePending`/
+              `removeAllPending` from send/reconcile/reset). VM keeps thin
+              `mediaItems(for:)` forwarders; the message-id → row resolution is passed in
+              per call (`visibleTimelineItem(forMessageId:)`) so the cache holds no
+              conversation state. DEBUG build-count + testing hooks forward to the cache;
+              the `pendingMediaByRowId` source-scrape repointed to the cache instance.
         - [ ] THEN the core: `messageById` mirror + optimistic overlay (pending sends) +
               pagination state + the rebuild engine + accessors. The big atomic move that
               the send pipeline / stream watcher then delegate into.

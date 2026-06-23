@@ -116,13 +116,11 @@ final class ConversationViewModel {
     @ObservationIgnored private var timelineSubscription: TimelineMessagesSubscription?
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
-    @ObservationIgnored private var pendingMediaByRowId: [String: [MessageMediaAttachment]] = [:]
-    @ObservationIgnored private var mediaItemProjectionsByRowId: [String: [MessageMediaAttachment]] = [:]
-    /// Resolved, downloadable media references per message, mirrored from each
-    /// timeline row's `media` projection at ingest (Marmot resolves the imeta
-    /// tags + source_epoch). A dumb mirror of the row — no iOS-side derivation,
-    /// and no separate `listMedia` round-trip to recover `sourceEpoch`.
-    @ObservationIgnored private var mediaReferencesByMessageId: [String: [MediaAttachmentReferenceFfi]] = [:]
+    /// Per-row media display cache: resolved references (mirrored at ingest),
+    /// optimistic pending media (from the send pipeline), and the built display
+    /// projection. A dumb mirror of the row — no iOS-side derivation, and no
+    /// separate `listMedia` round-trip to recover `sourceEpoch`.
+    @ObservationIgnored private let mediaProjections = ConversationMediaProjectionCache()
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
     // Lazy so its `[weak self]` loaded-window closure can capture a fully
     // initialized self; first touched on the post-start apply/mark paths.
@@ -136,11 +134,6 @@ final class ConversationViewModel {
         },
         onChatListRowUpdated: onChatListRowUpdated
     )
-#if DEBUG
-    // Counts buildMediaItemProjection invocations across both record-backed and
-    // classify-backed media paths so tests can catch accidental body-time rebuilds.
-    @ObservationIgnored private var mediaItemProjectionBuildCountForTestingStorage = 0
-#endif
     /// Optimistic reaction messages by their own temporary id, re-aggregated on change.
     @ObservationIgnored private var reactionRecords: [String: AppMessageRecordFfi] = [:]
     @ObservationIgnored private var optimisticReactionRemovals: Set<ReactionRemoval> = []
@@ -171,7 +164,7 @@ final class ConversationViewModel {
     var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
     var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
     var markedReadMessageIdsForTesting: Set<String> { readMarker.markedReadMessageIdsForTesting }
-    var mediaItemProjectionBuildCountForTesting: Int { mediaItemProjectionBuildCountForTestingStorage }
+    var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
 
     func insertMarkedReadMessageIdsForTesting(_ messageIds: Set<String>) {
         readMarker.insertMarkedReadMessageIdsForTesting(messageIds)
@@ -579,12 +572,12 @@ final class ConversationViewModel {
             !optimisticReactionRemovals.isEmpty ||
             !reactionRecords.isEmpty ||
             !systemTimelineItems.isEmpty ||
-            !pendingMediaByRowId.isEmpty
+            mediaProjections.hasPending
         optimisticDeletedMessageIds.removeAll()
         optimisticReactionRemovals.removeAll()
         reactionRecords.removeAll()
         systemTimelineItems.removeAll()
-        pendingMediaByRowId.removeAll()
+        mediaProjections.removeAllPending()
         let deletedChanged = rebuildDeletedMessageIds()
         let reactionsChanged = recomputeReactions()
         let timelineChanged = backingChanged ? rebuildTimeline() : false
@@ -1106,7 +1099,7 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
         // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
         // mirror it instead of re-classifying tags or a separate listMedia pass.
-        mediaReferencesByMessageId[appRecord.messageIdHex] = record.media
+        mediaProjections.setReferences(record.media, forMessageId: appRecord.messageIdHex)
         projectedReactionSummaries[appRecord.messageIdHex] = record.reactions
         reactionRecords = ConversationReactionPolicy.prunedConfirmedOptimisticReactions(
             reactionRecords,
@@ -1155,7 +1148,7 @@ final class ConversationViewModel {
         messageStatusById[messageIdHex] = nil
         replyTargetByMessageId[messageIdHex] = nil
         replyPreviewsByMessageId[messageIdHex] = nil
-        mediaReferencesByMessageId[messageIdHex] = nil
+        mediaProjections.removeReferences(forMessageId: messageIdHex)
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
         readMarker.forgetMarkIfNotPending(messageIdHex)
@@ -1221,7 +1214,7 @@ final class ConversationViewModel {
             onlyRowsWithMentions: false,
             resolver: mentionDisplayNameResolver
         )
-        let mediaChanged = rebuildMediaItemProjections(for: next)
+        let mediaChanged = mediaProjections.rebuild(for: next)
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
@@ -1272,7 +1265,7 @@ final class ConversationViewModel {
             replyTargetId: { replyTargetId(for: $0) }
         )
         let markdownChanged = markdownProjections.update(for: item, resolver: mentionDisplayNameResolver)
-        let mediaChanged = updateMediaItemProjection(for: item)
+        let mediaChanged = mediaProjections.update(for: item)
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
@@ -1280,7 +1273,7 @@ final class ConversationViewModel {
     private func removeTimelineItem(id: String) -> Bool {
         let next = timeline.filter { $0.id != id }
         let markdownChanged = markdownProjections.remove(rowId: id)
-        let mediaChanged = removeMediaItemProjection(rowId: id)
+        let mediaChanged = mediaProjections.remove(rowId: id)
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
 
@@ -1294,53 +1287,12 @@ final class ConversationViewModel {
         timelineProjectionGeneration += 1
     }
 
-    @discardableResult
-    private func updateMediaItemProjection(for item: TimelineItem) -> Bool {
-        if pendingMediaByRowId[item.id] != nil {
-            return removeMediaItemProjection(rowId: item.id)
-        }
-        guard case .message(let record, _) = item.kind else {
-            return removeMediaItemProjection(rowId: item.id)
-        }
-        let next = buildMediaItemProjection(for: record, ownerId: item.id)
-        guard !next.isEmpty else {
-            return removeMediaItemProjection(rowId: item.id)
-        }
-        guard mediaItemProjectionsByRowId[item.id] != next else { return false }
-        mediaItemProjectionsByRowId[item.id] = next
-        return true
-    }
-
-    @discardableResult
-    private func removeMediaItemProjection(rowId: String) -> Bool {
-        mediaItemProjectionsByRowId.removeValue(forKey: rowId) != nil
-    }
-
-    @discardableResult
-    private func rebuildMediaItemProjections(for items: [TimelineItem]) -> Bool {
-        var changed = false
-        var activeRowIds = Set<String>()
-        for item in items {
-            guard case .message = item.kind else { continue }
-            activeRowIds.insert(item.id)
-            changed = updateMediaItemProjection(for: item) || changed
-        }
-        for rowId in Array(mediaItemProjectionsByRowId.keys) where !activeRowIds.contains(rowId) {
-            mediaItemProjectionsByRowId[rowId] = nil
-            changed = true
-        }
-        return changed
-    }
-
-    @discardableResult
-    private func updateMediaItemProjection(forMessageId messageIdHex: String) -> Bool {
-        let rowId = "msg:\(messageIdHex)"
-        guard let record = messageById[messageIdHex],
-              let item = visibleTimelineItem(for: record, status: messageStatusById[messageIdHex])
-        else {
-            return removeMediaItemProjection(rowId: rowId)
-        }
-        return updateMediaItemProjection(for: item)
+    /// Resolves a loaded message id to its current visible timeline row, for the
+    /// media cache's by-message-id projection refresh. Returns nil when the
+    /// message is unloaded or not currently visible.
+    private func visibleTimelineItem(forMessageId messageIdHex: String) -> TimelineItem? {
+        guard let record = messageById[messageIdHex] else { return nil }
+        return visibleTimelineItem(for: record, status: messageStatusById[messageIdHex])
     }
 
     /// Builds the canonical timeline ordering from an arbitrary set of rows:
@@ -1461,33 +1413,12 @@ final class ConversationViewModel {
 
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         _ = timelineProjectionGeneration
-        if let pending = pendingMediaByRowId[item.id] {
-            return pending
-        }
-        return mediaItemProjectionsByRowId[item.id] ?? []
+        return mediaProjections.items(for: item)
     }
 
     func mediaItems(for record: AppMessageRecordFfi) -> [MessageMediaAttachment] {
         _ = timelineProjectionGeneration
-        return buildMediaItemProjection(for: record, ownerId: record.messageIdHex)
-    }
-
-    private func buildMediaItemProjection(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
-        // Prefer the row-resolved references (correct source_epoch, drop-bad).
-        // Fall back to tag classification only for records with no captured row
-        // projection (e.g. local/optimistic sends before the confirmed row).
-        let references: [MediaAttachmentReferenceFfi]
-        if let rowReferences = mediaReferencesByMessageId[record.messageIdHex], !rowReferences.isEmpty {
-            references = rowReferences
-        } else if case .media(let classified) = MessageSemantics.classify(record) {
-            references = classified
-        } else {
-            return []
-        }
-#if DEBUG
-        mediaItemProjectionBuildCountForTestingStorage += 1
-#endif
-        return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
+        return mediaProjections.build(for: record, ownerId: record.messageIdHex)
     }
 
     func data(for media: MessageMediaAttachment) async throws -> Data {
@@ -1509,9 +1440,11 @@ final class ConversationViewModel {
     /// arrives) and refreshes that message's projection.
     @discardableResult
     private func replaceMediaReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
-        guard mediaReferencesByMessageId[messageIdHex] != references else { return false }
-        mediaReferencesByMessageId[messageIdHex] = references
-        return updateMediaItemProjection(forMessageId: messageIdHex)
+        mediaProjections.replaceReferences(
+            references,
+            forMessageId: messageIdHex,
+            itemResolver: { [unowned self] in visibleTimelineItem(forMessageId: $0) }
+        )
     }
 
 #if DEBUG
@@ -1521,15 +1454,15 @@ final class ConversationViewModel {
     }
 
     func installPendingMediaForTesting(rowId: String, items: [MessageMediaAttachment]) {
-        pendingMediaByRowId[rowId] = items
+        mediaProjections.setPending(items, forRowId: rowId)
     }
 
     func pendingMediaForTesting(rowId: String) -> [MessageMediaAttachment]? {
-        pendingMediaByRowId[rowId]
+        mediaProjections.pending(forRowId: rowId)
     }
 
     var mediaReferenceCountForTesting: Int {
-        mediaReferencesByMessageId.values.reduce(0) { $0 + $1.count }
+        mediaProjections.referenceCountForTesting
     }
 #endif
 
@@ -1542,14 +1475,14 @@ final class ConversationViewModel {
                 item,
                 matches: record,
                 replyTargetId: projectedReplyTarget,
-                pendingHasStagedMedia: pendingMediaByRowId[key]?.isEmpty == false
+                pendingHasStagedMedia: mediaProjections.pending(forRowId: key)?.isEmpty == false
             )
         }
         guard let match = matchingPendingMessages.min(by: { lhs, rhs in
             Self.pendingOutgoingMessage(lhs.value, isCloserTo: record, than: rhs.value)
         }) else { return false }
         transientTimelineItems[match.key] = nil
-        pendingMediaByRowId[match.key] = nil
+        mediaProjections.removePending(forRowId: match.key)
         _ = removeTimelineItem(id: match.value.id)
         return true
     }
@@ -2145,7 +2078,7 @@ final class ConversationViewModel {
             recordedAt: now,
             receivedAt: now
         )
-        pendingMediaByRowId[tempRowId] = attachments.map(\.displayItem)
+        mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
         applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
@@ -2224,17 +2157,17 @@ final class ConversationViewModel {
         }
         let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
         projectionChanged = (transientTimelineItems.removeValue(forKey: "msg:\(tempId)") != nil) || projectionChanged
-        let removedPendingMedia = pendingMediaByRowId.removeValue(forKey: "msg:\(tempId)")
+        let removedPendingMedia = mediaProjections.removePending(forRowId: "msg:\(tempId)")
         projectionChanged = (removedPendingMedia != nil) || projectionChanged
         projectionChanged = removeTimelineItem(id: "msg:\(tempId)") || projectionChanged
         if realId.isEmpty {
             // No server message id: the row stays transient under "msg:\(tempId)".
             // Restore the pending media we just removed so the just-sent
             // attachments keep rendering — without a real message id there is no
-            // mediaReferencesByMessageId entry to fall back on, so dropping this
-            // would silently blank the bubble's images.
+            // resolved-references entry to fall back on, so dropping this would
+            // silently blank the bubble's images.
             if let removedPendingMedia {
-                pendingMediaByRowId[rowId] = removedPendingMedia
+                mediaProjections.setPending(removedPendingMedia, forRowId: rowId)
             }
             let item = TimelineItem(
                 id: rowId,

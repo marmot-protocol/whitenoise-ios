@@ -5266,7 +5266,9 @@ struct ConversationTimelineProjectionTests {
         #expect(!source.matches(#"func applyPendingOutgoingMessage[\s\S]*?rebuildTimeline\("#))
         #expect(!source.matches(#"private func upsertStreamBubble[\s\S]*?rebuildTimeline\("#))
         #expect(source.contains("@ObservationIgnored private var replyTargetByMessageId"))
-        #expect(source.contains("@ObservationIgnored private var pendingMediaByRowId"))
+        // Pending optimistic media now lives in the media projection cache; its
+        // presence still proves the incremental (non-rebuild) mutation path.
+        #expect(source.contains("private let mediaProjections = ConversationMediaProjectionCache()"))
         #expect(source.contains("private(set) var timelineProjectionGeneration"))
     }
 
@@ -5282,8 +5284,9 @@ struct ConversationTimelineProjectionTests {
         #expect(readMarkerSource.contains("await client.markTimelineMessagesRead("))
         #expect(source.contains("try await client.initializeChatReadState("))
         #expect(source.contains("try await client.timelineMessages("))
-        // Timeline media now arrives resolved on the row (mediaReferencesByMessageId);
-        // the VM no longer calls client.listMedia (the wrapper stays for other surfaces).
+        // Timeline media now arrives resolved on the row (mirrored into the media
+        // projection cache); the VM no longer calls client.listMedia (the wrapper
+        // stays for other surfaces).
         #expect(source.contains("initialTimelineSnapshotTask"))
         #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
         #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))

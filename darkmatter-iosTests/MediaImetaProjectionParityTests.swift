@@ -209,8 +209,8 @@ struct MediaImetaProjectionParityTests {
     //      a given `imeta` + epoch, doubling as a hand-checkable golden set
     //      against the Rust conversion tests in `conversions/media.rs`.
     //
-    // STATUS: the media slice has landed. `ConversationViewModel` now mirrors
-    // `record.media` into `mediaReferencesByMessageId` at ingest and the
+    // STATUS: the media slice has landed. The conversation now mirrors
+    // `record.media` into the media projection cache at ingest and the
     // `listMedia` timeline path + its index maps are deleted. `MessageSemantics`
     // `mediaAttachments` is RETAINED as the fallback for local/optimistic records
     // that have no row projection yet, so this corpus still pins its (unchanged,
