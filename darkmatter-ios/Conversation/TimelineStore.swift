@@ -290,6 +290,8 @@ final class TimelineStore {
         if let projectedReplyTarget = record.replyToMessageIdHex, !projectedReplyTarget.isEmpty {
             replyTargetByMessageId[appRecord.messageIdHex] = projectedReplyTarget
         } else {
+            // Keep the "known nil" mirror explicit by clearing any previous target
+            // for this row; guarded readers then suppress legacy tag fallback.
             replyTargetByMessageId[appRecord.messageIdHex] = nil
         }
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
@@ -525,6 +527,10 @@ final class TimelineStore {
             receivedAt: record.receivedAt
         )
         if !realId.isEmpty {
+            // A confirmed real-id row is still an optimistic local echo until
+            // Marmot mirrors the authoritative timeline row, so leave it out of
+            // replyProjectionKnownMessageIds. Reply fallbacks stay local-only in
+            // that window.
             if messageById[realId] == nil {
                 messageById[realId] = confirmed
                 projectionChanged = true

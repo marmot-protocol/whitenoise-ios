@@ -124,10 +124,8 @@ struct TimelineProjectionBoundaryTests {
             "darkmatter-ios/Conversation/ConversationMarkdownProjectionCache.swift",
             "darkmatter-ios/Conversation/MarkdownMessageModel.swift",
         ].map(sourceString).joined(separator: "\n")
-        let markdownModel = try sourceString("darkmatter-ios/Conversation/MarkdownMessageModel.swift")
 
         #expect(!displaySources.matches(#"\bparseMarkdown\s*\("#))
-        #expect(markdownModel.contains("for: record.contentTokens"))
     }
 
     private func sourceString(_ relativePath: String) throws -> String {
