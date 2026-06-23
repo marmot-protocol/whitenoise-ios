@@ -603,7 +603,30 @@ polling over re-running.
               path already bumps the generation, so observation is unchanged. One
               source-scrape (`deleteMessageChecksPermissionBeforeOptimisticTombstone`)
               repointed to `deletedProjections.insertOptimistic`.
-        - [ ] THEN the core: `messageById` mirror + optimistic send overlay
+        - [x] **TimelineStore core (commit pending): VM 2170 → 1668, new 634-line
+              `TimelineStore`.** Moved the timeline mirror (`messageById` + sibling maps),
+              the optimistic overlays (`transientTimelineItems`/`systemTimelineItems`/
+              `streamDebugTimelineItems`), the four projection caches, pagination edges +
+              `isLoading`, the apply ingest (`applyTimelineRecord`/`applyTimelinePage`
+              family/`applyTimelineSubscriptionUpdate`), the rebuild engine
+              (`rebuildTimeline`/`upsert`/`remove`/`assignTimeline`/`visibleTimelineItem`),
+              the send-overlay reconcile (`applyPendingOutgoingMessage`/`confirmSent`/
+              `markFailed`/`reconcile`/`replaceMediaReferences`), `appendSystemEvent`,
+              `recomputeReactions`, `resetOptimisticState`, and the projection accessors.
+              `TimelineStore` is `@Observable`; the VM forwards `timeline`/
+              `timelineProjectionGeneration`/`hasMoreBefore`/`hasMoreAfter`/`isLoading` as
+              computed reads (observation propagates) plus thin method forwarders so no
+              view/test call sites churn. Injected deps: `appState`/`groupIdHex`/
+              `streamWatcher`/`readMarker`/`mentionResolver`. `TimelineStore` now
+              implements `StreamWatcherTimelineSink` (the watcher writes its rows into the
+              store); both refs wired eagerly in `init` (the lazy wiring was a bug — the
+              store's `streamWatcher` stayed nil until first touch). Pure timeline statics
+              stayed on `ConversationViewModel` (6 widened `private`→`internal`); zero
+              static churn. Full test target green; 3 source-scrapes repointed to
+              `TimelineStore.swift`.
+        - [ ] NEXT: ComposerModel — the FFI send orchestration (`send`/`sendMedia`/
+              `sendInFlight`) now hands optimistic rows to `timelineStore`; a small carve.
+        - [ ] (superseded) the core: `messageById` mirror + optimistic send overlay
               (`transientTimelineItems`/`applyPendingOutgoingMessage`/`confirmSent`/
               `reconcilePendingOutgoingMessage`) + pagination + the rebuild engine
               (`rebuildTimeline`/`upsert`/`remove`/`assignTimeline`/`visibleTimelineItem`)

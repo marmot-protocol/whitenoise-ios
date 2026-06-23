@@ -5260,15 +5260,22 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        // The timeline mirror + rebuild engine moved to TimelineStore (Phase 5b).
+        let source = try String(contentsOf: timelineStoreSourceURL, encoding: .utf8)
 
         #expect(source.matches(#"private func upsertTimelineItem\("#))
-        #expect(!source.matches(#"func applyPendingOutgoingMessage[\s\S]*?rebuildTimeline\("#))
-        #expect(!source.matches(#"private func upsertStreamBubble[\s\S]*?rebuildTimeline\("#))
+        // applyPendingOutgoingMessage uses the incremental upsert path, not a full
+        // rebuild. Scope the check to the function body (other methods legitimately
+        // call rebuildTimeline).
+        let pendingStart = try #require(source.range(of: "func applyPendingOutgoingMessage("))
+        let pendingEnd = try #require(source[pendingStart.upperBound...].range(of: "\n\n"))
+        let pendingSource = String(source[pendingStart.lowerBound..<pendingEnd.lowerBound])
+        #expect(pendingSource.contains("upsertTimelineItem(item)"))
+        #expect(!pendingSource.contains("rebuildTimeline"))
         #expect(source.contains("@ObservationIgnored private var replyTargetByMessageId"))
         // Pending optimistic media now lives in the media projection cache; its
         // presence still proves the incremental (non-rebuild) mutation path.
-        #expect(source.contains("private let mediaProjections = ConversationMediaProjectionCache()"))
+        #expect(source.contains("let mediaProjections = ConversationMediaProjectionCache()"))
         #expect(source.contains("private(set) var timelineProjectionGeneration"))
     }
 
@@ -5298,7 +5305,7 @@ struct ConversationTimelineProjectionTests {
         #expect(!source.contains("groupSub.snapshot()"))
         #expect(source.contains("timelineSubscription.paginateBackwards"))
         #expect(source.contains("timelineSubscription.paginateForwards"))
-        #expect(source.contains("private(set) var hasMoreAfter"))
+        #expect(source.contains("var hasMoreAfter: Bool { timelineStore.hasMoreAfter }"))
         #expect(viewSource.contains("newerTimelineTrigger(viewModel: viewModel)"))
         #expect(viewSource.contains("viewModel.loadNewerTimelinePage()"))
         #expect(!source.contains("appState.marmot.markTimelineMessageRead("))
@@ -5357,6 +5364,13 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationReadMarker.swift")
+    }
+
+    private var timelineStoreSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/TimelineStore.swift")
     }
 
     private var conversationViewSourceURL: URL {
