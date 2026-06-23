@@ -399,10 +399,17 @@ store template.
 - Split the remainder by concern into focused stores:
   - `TimelineStore` — subscription + `messageById` dumb mirror + optimistic
     overlay (pending/failed sends), pagination cursors, coalesced read-marking.
-  - `MediaController` — downloads, in-flight dedup, decrypted-media cache
-    (already partly isolated as `MediaDownloadInFlightStore`).
+  - `MediaController` — downloads, in-flight dedup, decrypted-media cache.
+    **[x] DONE (commit `d98c3e2`)** — the download path is now
+    `ConversationMediaDownloader` (holds `MediaDownloadInFlightKey`/`Store` +
+    `MediaDataError`); the VM keeps a thin `data(for:)` forwarder passing the
+    group id + AppState per call. The media *projection* methods stay in the VM
+    (woven into timeline rebuilds — not separable without TimelineStore first).
   - `ComposerModel` — draft text/media, reply target, mention candidates.
-  - `StreamWatcher` — agent text streams (QUIC), debug rows.
+  - `StreamWatcher` — agent text streams (QUIC), debug rows. NOTE: woven through
+    the timeline ingest (`watchAgentStreamStartIfNeeded` from `applyTimelineRecord`,
+    `streamWatchTasks` management, completion clearing) — a coupled carve, not a
+    clean lift like the downloader.
 - Keep optimistic overlays as the only "merge" logic, and keep it minimal: the
   binding projection is truth, the overlay is a thin diff applied on top.
 
@@ -534,5 +541,14 @@ polling over re-running.
 > confirming the profile/account observation forwarding. No crash after the
 > store extractions. Deep live-update checks (account-switch badges) need a
 > populated account.
-- [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
-      MediaController / ComposerModel / StreamWatcher
+- [~] Phase 5b — decompose ConversationViewModel into TimelineStore /
+      MediaController / ComposerModel / StreamWatcher.
+      - [x] MediaController download path → `ConversationMediaDownloader` (commit
+            `d98c3e2`). VM 3096 → 3012 lines.
+      - [ ] ComposerModel (send pipeline: `sendInFlight`, `sendText`, `sendMedia`,
+            draft/reply state) — substantial but more self-contained than the rest.
+      - [ ] StreamWatcher — coupled to timeline ingest; carve after TimelineStore.
+      - [ ] TimelineStore — the core (subscription mirror + optimistic overlay +
+            pagination + read-marking + the media *projection* methods). Hardest;
+            do last. Media projections (`mediaItemProjectionsByRowId`, etc.) move
+            here, not into MediaController.
