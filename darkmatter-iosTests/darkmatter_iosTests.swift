@@ -3607,6 +3607,28 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.imageURL("http://example.com/a.png") == nil)
     }
 
+    @Test func imageURLRejectsOverLengthStrings() {
+        // Peer-controlled fields (kind:0 `picture`, group `avatarUrl`, DuckDuckGo
+        // results) are unbounded; reject before parsing past the length cap (#381).
+        let cap = ProfileSanitizer.maxImageURLLength
+        let prefix = "https://example.com/"
+        // A well-formed HTTPS URL at exactly the cap is still accepted.
+        let atCap = prefix + String(repeating: "a", count: cap - prefix.count)
+        #expect(atCap.count == cap)
+        #expect(ProfileSanitizer.imageURL(atCap) != nil)
+        // One character over the cap is rejected outright, even though the URL
+        // is otherwise valid (HTTPS, public host).
+        let overCap = atCap + "a"
+        #expect(overCap.count == cap + 1)
+        #expect(ProfileSanitizer.imageURL(overCap) == nil)
+        // A multi-megabyte hostile value is rejected without parsing it.
+        let huge = prefix + String(repeating: "a", count: 4_000_000)
+        #expect(ProfileSanitizer.imageURL(huge) == nil)
+        // Leading/trailing whitespace is trimmed before the length check, so a
+        // valid URL padded with whitespace still passes.
+        #expect(ProfileSanitizer.imageURL("  https://example.com/a.png  ") != nil)
+    }
+
     @Test func imageURLRejectsDangerousSchemes() {
         #expect(ProfileSanitizer.imageURL("data:image/png;base64,AAAA") == nil)
         #expect(ProfileSanitizer.imageURL("file:///etc/passwd") == nil)
