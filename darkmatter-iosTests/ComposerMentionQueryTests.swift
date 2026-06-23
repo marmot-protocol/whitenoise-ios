@@ -122,9 +122,9 @@ struct ComposerMentionQueryTests {
         // candidate list and reuses it across keystrokes, rebuilding only when
         // the roster or profile generation changes. Equal generation pairs must
         // compare equal so the cache is reused (no per-keystroke rebuild).
-        let a = ConversationViewModel.MentionCandidateCacheKey(
+        let a = MentionCandidateCacheKey(
             rosterGeneration: 7, profileGeneration: 3)
-        let b = ConversationViewModel.MentionCandidateCacheKey(
+        let b = MentionCandidateCacheKey(
             rosterGeneration: 7, profileGeneration: 3)
         #expect(a == b)
     }
@@ -133,11 +133,11 @@ struct ComposerMentionQueryTests {
         // A bump in either the roster generation (membership/admin change) or
         // the profile generation (resolved display name/avatar/npub) must make
         // the key compare unequal so a freshly resolved candidate list is built.
-        let base = ConversationViewModel.MentionCandidateCacheKey(
+        let base = MentionCandidateCacheKey(
             rosterGeneration: 7, profileGeneration: 3)
-        let rosterBumped = ConversationViewModel.MentionCandidateCacheKey(
+        let rosterBumped = MentionCandidateCacheKey(
             rosterGeneration: 8, profileGeneration: 3)
-        let profileBumped = ConversationViewModel.MentionCandidateCacheKey(
+        let profileBumped = MentionCandidateCacheKey(
             rosterGeneration: 7, profileGeneration: 4)
         #expect(base != rosterBumped)
         #expect(base != profileBumped)
