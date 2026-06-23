@@ -499,7 +499,12 @@ polling over re-running.
             it deliberately, not rushed.
       - [x] `ProfileView` → `ProfileViewModel` (commit `bae9530`): reference
             resolution + Message action; `npub`/`dismiss` passed as method params
-      - [ ] Group / Onboarding / Diagnostics screens
+      - [x] `NewChatSheet` → `NewChatSheetViewModel` (commit `daee487`): recipient
+            staging + create; #260/#274 concurrency moved verbatim; tested
+            normalization statics stay on the view
+      - [ ] Remaining: AddMembersSheet (callback-based), Onboarding (ImportIdentityView
+            /CreateIdentityView), DiagnosticsView (dev tool — low value, subscription),
+            GroupDetailsView (1016 lines — large), ProfileEditView (deferred — coupling)
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
