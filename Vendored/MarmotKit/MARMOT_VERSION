@@ -1,6 +1,6 @@
 darkmatter-sha: 127fe17
 darkmatter-branch: master
-darkmatter-tag: 
+darkmatter-tag:
 built-at: 2026-06-22T21:09:19Z
 uniffi-version: 0.28.3
 features: otlp-export

@@ -54,6 +54,7 @@ final class NotificationSettingsViewModel {
     }
 
     func setLocalNotifications(_ enabled: Bool, using appState: AppState) async {
+        guard !isSaving else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -70,6 +71,7 @@ final class NotificationSettingsViewModel {
     }
 
     func setNativePush(_ enabled: Bool, using appState: AppState) async {
+        guard !isSaving else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -86,6 +88,7 @@ final class NotificationSettingsViewModel {
     }
 
     func requestApnsToken(using appState: AppState) async {
+        guard !isSaving else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -102,6 +105,7 @@ final class NotificationSettingsViewModel {
     }
 
     func refreshApnsToken(using appState: AppState) async {
+        guard !isSaving else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }
@@ -120,6 +124,7 @@ final class NotificationSettingsViewModel {
 
     func syncNativeRegistration(using appState: AppState) async {
         guard let accountRef = appState.activeAccountRef else { return }
+        guard !isSaving else { return }
         isSaving = true
         errorMessage = nil
         defer { isSaving = false }

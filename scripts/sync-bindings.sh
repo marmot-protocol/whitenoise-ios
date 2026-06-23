@@ -71,6 +71,10 @@ Notes:
   changes when this bundle was built.
 EOF
 
+# Strip trailing whitespace (an empty `darkmatter-tag:` value would otherwise
+# leave a trailing space that fails the repo's `git diff --check` gate).
+sed -i '' -e 's/[[:space:]]*$//' "$VENDOR_DIR/MARMOT_VERSION"
+
 # Compile-time version constant the app reads (Bundle.main can't see the
 # MARMOT_VERSION text file, so we surface the SHA via Swift instead).
 cat > "$VENDOR_DIR/Sources/MarmotKit/MarmotKitVersion.swift" <<EOF
