@@ -30,6 +30,7 @@ struct MarmotClientStorageReadOffloadTests {
             "darkmatter-ios/Diagnostics/DiagnosticsView.swift",
             "darkmatter-ios/Settings/KeyPackagesView.swift",
             "darkmatter-ios/Settings/RelaysView.swift",
+            "darkmatter-ios/Settings/RelaysViewModel.swift",
         ] {
             let source = try sourceString(relativePath)
             #expect(!source.contains("appState.marmot.chatList("), "\(relativePath) still calls sync chatList FFI directly")
