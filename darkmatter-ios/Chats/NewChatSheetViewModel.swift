@@ -1,79 +1,40 @@
 import Foundation
 import MarmotKit
 
-/// Screen store for `NewChatSheet`: owns the staged recipients + group fields
-/// and the add/normalize/create flow (preserving the off-main normalization and
-/// #260/#274 concurrency guards verbatim), so the view is pure rendering. The
-/// tested normalization statics stay on `NewChatSheet`; this calls them. `AppState`
-/// and the view's `dismiss` are passed in rather than retained.
+/// Screen store for `NewChatSheet`: owns group fields and delegates recipient
+/// staging to the shared model used by add-members.
 @MainActor
 @Observable
 final class NewChatSheetViewModel {
-    var members: [MemberRefFfi] = []
-    var pendingMember = ""
+    let recipients = RecipientStagingModel()
     var groupName = ""
     var groupDescription = ""
     var isCreating = false
-    var error: String?
-    var showScanner = false
 
     @discardableResult
     func addPending(using appState: AppState) async -> Bool {
-        await add(
-            pendingMember,
-            invalidMessage: L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key."),
-            using: appState
-        )
+        await recipients.addPending(normalize: normalize(using: appState), warmProfile: warmProfile(using: appState))
     }
 
     @discardableResult
     func add(_ raw: String, invalidMessage: String, using appState: AppState) async -> Bool {
-        // Normalize off the MainActor; only hop back to mutate members/error (#260).
-        let normalizedResult = await NewChatSheet.normalizedMember(
+        await recipients.add(
             raw,
-            normalize: { try await appState.currentMarmotClient().normalizeMemberRef(memberRef: $0) }
+            invalidMessage: invalidMessage,
+            normalize: normalize(using: appState),
+            warmProfile: warmProfile(using: appState)
         )
-        switch normalizedResult {
-        case .empty:
-            return true
-        case .invalid:
-            Haptics.error()
-            error = invalidMessage
-            return false
-        case .normalized(let normalized):
-            // Stage against the live members list (post-await) so concurrent
-            // adds dedup correctly instead of racing on a stale snapshot.
-            switch NewChatSheet.stage(normalized, existingMembers: members) {
-            case .empty, .invalid:
-                return false
-            case .duplicate:
-                clearPendingIfUnchanged(raw)
-                error = nil
-                Haptics.selection()
-                return true
-            case .added(let updatedMembers, let addedMember):
-                members = updatedMembers
-                clearPendingIfUnchanged(raw)
-                error = nil
-                Haptics.success()
-                _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
-                return true
-            }
-        }
-    }
-
-    /// Clear the pending field only if it still holds the value we normalized,
-    /// so an older add completing off-main can't erase text the user typed
-    /// while the FFI was in flight (#260/#274).
-    func clearPendingIfUnchanged(_ raw: String) {
-        if pendingMember == raw {
-            pendingMember = ""
-        }
     }
 
     /// Add a recipient from a scanned profile QR code.
     func handleScan(_ raw: String, using appState: AppState) {
-        Task { await add(raw, invalidMessage: L10n.string("That QR code isn't a Dark Matter profile."), using: appState) }
+        Task {
+            await add(
+                raw,
+                invalidMessage: L10n.string("That QR code isn't a Dark Matter profile."),
+                using: appState
+            )
+        }
     }
 
     func create(using appState: AppState, dismiss: () -> Void) async {
@@ -90,12 +51,12 @@ final class NewChatSheetViewModel {
             isCreating = false
             return
         }
-        error = nil
+        recipients.error = nil
         do {
             let groupIdHex = try await appState.marmot.createGroup(
                 accountRef: accountRef,
                 name: NewChatSheet.normalizedGroupName(groupName),
-                memberRefs: members.map(\.memberRef),
+                memberRefs: recipients.members.map(\.memberRef),
                 description: NewChatSheet.normalizedGroupDescription(groupDescription)
             )
             Haptics.success()
@@ -105,19 +66,27 @@ final class NewChatSheetViewModel {
             Haptics.error()
             if case .MissingKeyPackage(let account) = marmotError {
                 // Soft validation — keep the sheet open and name who can't be added.
-                error = L10n.formatted(
+                recipients.error = L10n.formatted(
                     "%@ hasn't published a compatible key package, so they can't be added yet.",
                     IdentityFormatter.short(account)
                 )
             } else {
-                error = marmotError.localizedDescription
+                recipients.error = marmotError.localizedDescription
                 appState.present(.error(L10n.string("Couldn't create chat"), message: marmotError.localizedDescription))
             }
         } catch {
             Haptics.error()
-            self.error = error.localizedDescription
+            recipients.error = error.localizedDescription
             appState.present(.error(L10n.string("Couldn't create chat"), message: error.localizedDescription))
         }
         isCreating = false
+    }
+
+    private func normalize(using appState: AppState) -> RecipientStagingModel.Normalize {
+        { try await appState.currentMarmotClient().normalizeMemberRef(memberRef: $0) }
+    }
+
+    private func warmProfile(using appState: AppState) -> RecipientStagingModel.ProfileWarmup {
+        { _ = appState.profile(forAccountIdHex: $0) }
     }
 }

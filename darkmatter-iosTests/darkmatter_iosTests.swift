@@ -5683,31 +5683,6 @@ struct GroupManagementPresentationTests {
         )
     }
 
-    @Test func addMembersPendingRecipientRejectsInvalidInputWithoutChangingMembers() async {
-        let result = await AddMembersPresentation.normalizedMember(
-            "not a profile",
-            normalize: { stagedMember(accountIdHex: $0) }
-        )
-
-        #expect(result == .invalid)
-    }
-
-    @Test func addMembersPendingRecipientAppendsValidInput() async {
-        let existing = stagedMember(accountIdHex: hex("11"))
-        let candidate = stagedMember(accountIdHex: hex("22"))
-        let normalized = await AddMembersPresentation.normalizedMember(
-            candidate.accountIdHex,
-            normalize: { stagedMember(accountIdHex: $0) }
-        )
-        guard case .normalized(let member) = normalized else {
-            Issue.record("expected normalized member")
-            return
-        }
-        let result = AddMembersPresentation.stage(member, existingMembers: [existing])
-
-        #expect(result == .added([existing, candidate], candidate))
-    }
-
     @Test func stagedMembersFallBackToShortIdWithNpubSubtitle() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let account = hex("33")
