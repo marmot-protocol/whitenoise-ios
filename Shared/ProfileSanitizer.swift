@@ -19,6 +19,7 @@ nonisolated enum ProfileSanitizer {
     static let maxProfileAddressLength = 254
     static let maxMessageLength = 8000
     static let maxReactionLength = 8
+    static let maxImageURLLength = 2048
 
     private static let blankLineRunRegex = try! NSRegularExpression(pattern: "\n{3,}")
 
@@ -139,7 +140,14 @@ nonisolated enum ProfileSanitizer {
     static func imageURL(_ raw: String?) -> URL? {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Bound the peer-controlled string before any parsing. A hostile relay
+        // can publish a multi-megabyte `picture`/`avatarUrl`; cap it first so we
+        // reject early instead of percent-decoding and host-parsing arbitrary
+        // input (potentially re-parsed per render), matching the length bounds
+        // the sibling sanitizers (`singleLine`, `profileAddress`, `reactionEmoji`)
+        // apply to the surfaces they guard.
         guard !trimmed.isEmpty,
+              trimmed.count <= maxImageURLLength,
               let comps = URLComponents(string: trimmed),
               let scheme = comps.scheme?.lowercased(),
               scheme == "https",
