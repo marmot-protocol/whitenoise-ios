@@ -11,8 +11,7 @@ struct CreateIdentityView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isCreating = false
-    @State private var error: String?
+    @State private var model = CreateIdentityViewModel()
 
     var body: some View {
         Form {
@@ -22,23 +21,23 @@ struct CreateIdentityView: View {
                     .foregroundStyle(.secondary)
 
                 Button {
-                    Task { await runCreate() }
+                    Task { await model.runCreate(using: appState, dismiss: { dismiss() }) }
                 } label: {
                     HStack {
-                        if isCreating {
+                        if model.isCreating {
                             ProgressView().controlSize(.small)
                         }
-                        Text(isCreating ? L10n.string("Creating…") : L10n.string("Generate Identity"))
+                        Text(model.isCreating ? L10n.string("Creating…") : L10n.string("Generate Identity"))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 2)
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(isCreating)
+                .disabled(model.isCreating)
             }
 
-            if let error {
+            if let error = model.error {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -48,23 +47,6 @@ struct CreateIdentityView: View {
         }
         .navigationTitle("New Identity")
         .navigationBarTitleDisplayMode(.inline)
-        .interactiveDismissDisabled(isCreating)
-    }
-
-    @MainActor
-    private func runCreate() async {
-        isCreating = true
-        error = nil
-        do {
-            try await appState.createIdentity()
-            Haptics.success()
-            // Parent handles navigation (sheet dismiss / onboarding advance).
-            dismiss()
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
-            appState.present(.error(L10n.string("Identity creation failed"), message: error.localizedDescription))
-        }
-        isCreating = false
+        .interactiveDismissDisabled(model.isCreating)
     }
 }
