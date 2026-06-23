@@ -480,8 +480,10 @@ polling over re-running.
       - [x] template established + `RelaysView` → `RelaysViewModel` (commit `1356c5e`):
             `@Observable` store owns load/save/validation + UI state; view is pure
             rendering; store takes `AppState` as a method param (no retain)
+      - [x] `KeyPackagesView` → `KeyPackagesViewModel` (commit `42104fb`): CRUD
+            shape (list/publish/delete); pure presentation statics stay on the view
       - [ ] remaining settings cluster: ProfileEditView, NotificationSettingsView,
-            KeyPackagesView, PrivacySecuritySettingsView, IdentityView
+            PrivacySecuritySettingsView, IdentityView
       - [ ] Group / Profile / Onboarding / Diagnostics screens
 - [ ] Phase 5b — decompose ConversationViewModel into TimelineStore /
       MediaController / ComposerModel / StreamWatcher
