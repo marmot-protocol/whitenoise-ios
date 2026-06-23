@@ -834,7 +834,12 @@ final class ConversationViewModel {
             receivedAt: 1
         )
         _ = rebuildDeletedMessageIds()
+        _ = recomputeReactions(for: [reactionTargetMessageIdHex])
+    }
+
+    func forceFullReactionRecomputeForTesting() -> [String: [ReactionTally]] {
         _ = recomputeReactions()
+        return reactions
     }
 #endif
 
@@ -1098,13 +1103,29 @@ final class ConversationViewModel {
         guard update.groupIdHex == group.groupIdHex else { return }
 
         var projectionChanged = false
+        var changedReactionTargets: Set<String> = []
         // `changes` is authoritative for live deltas; the snapshot is still a bounded window.
         for change in update.changes {
             switch change {
             case .upsert(let trigger, let record):
+                let appRecord = Self.appMessageRecord(from: record)
+                if !appRecord.messageIdHex.isEmpty {
+                    changedReactionTargets.insert(appRecord.messageIdHex)
+                }
+                if case .reaction(let target) = MessageSemantics.classify(appRecord), !target.isEmpty {
+                    changedReactionTargets.insert(target)
+                }
                 recordFinalizedStreams(in: [record])
                 projectionChanged = applyTimelineRecord(record, trigger: trigger) || projectionChanged
             case .remove(let messageIdHex, _):
+                if !messageIdHex.isEmpty {
+                    changedReactionTargets.insert(messageIdHex)
+                }
+                if let existing = messageById[messageIdHex],
+                   case .reaction(let target) = MessageSemantics.classify(existing),
+                   !target.isEmpty {
+                    changedReactionTargets.insert(target)
+                }
                 projectionChanged = removeTimelineRecord(
                     messageIdHex: messageIdHex,
                     updateTimeline: false
@@ -1112,7 +1133,10 @@ final class ConversationViewModel {
             }
         }
         pruneMarkedReadMessageIds(force: true)
-        rebuildProjectedState(projectionChanged: projectionChanged)
+        rebuildProjectedState(
+            projectionChanged: projectionChanged,
+            changedReactionTargets: changedReactionTargets
+        )
         isLoading = false
     }
 
@@ -1407,11 +1431,17 @@ final class ConversationViewModel {
 
     private func rebuildProjectedState(
         rebuildTimeline shouldRebuildTimeline: Bool = true,
-        projectionChanged: Bool = false
+        projectionChanged: Bool = false,
+        changedReactionTargets: Set<String>? = nil
     ) {
         var changed = projectionChanged
-        changed = rebuildDeletedMessageIds() || changed
-        changed = recomputeReactions() || changed
+        let deletedChanged = rebuildDeletedMessageIds()
+        changed = deletedChanged || changed
+        if let changedReactionTargets, !deletedChanged {
+            changed = recomputeReactions(for: changedReactionTargets) || changed
+        } else {
+            changed = recomputeReactions() || changed
+        }
         if shouldRebuildTimeline {
             changed = rebuildTimeline() || changed
         }
@@ -2127,64 +2157,117 @@ final class ConversationViewModel {
         return deletedMessageIds.contains(messageIdHex)
     }
 
-    /// Rebuild the per-target reaction tallies from all reaction messages
-    /// (kind-7, emoji in content, target in the `e` tag). A reaction is dropped
-    /// when its own event id has been tombstoned by a delete (the un-react path).
+    /// Rebuild every per-target reaction tally. This path is reserved for full
+    /// projection refreshes or delete-state changes; live deltas should prefer
+    /// `recomputeReactions(for:)` so they don't rescan unrelated targets.
     @discardableResult
     private func recomputeReactions() -> Bool {
-        let me = myAccountId ?? ""
-        var byTarget: [String: [String: Set<String>]] = [:]
-
-        for (target, summary) in projectedReactionSummaries {
-            for reaction in summary.byEmoji where !reaction.emoji.isEmpty {
-                var emojis = byTarget[target] ?? [:]
-                emojis[reaction.emoji] = Set(reaction.senders)
-                byTarget[target] = emojis
-            }
-        }
-
-        for removal in optimisticReactionRemovals {
-            guard var emojis = byTarget[removal.targetMessageIdHex],
-                  var senders = emojis[removal.emoji]
-            else { continue }
-            senders.remove(removal.sender)
-            emojis[removal.emoji] = senders
-            byTarget[removal.targetMessageIdHex] = emojis
-        }
-
-        let ordered: [AppMessageRecordFfi] = reactionRecords.values
-            .sorted { $0.recordedAt < $1.recordedAt }
-        for record in ordered {
+        var targets = Set(projectedReactionSummaries.keys)
+        targets.formUnion(optimisticReactionRemovals.map(\.targetMessageIdHex))
+        // `reactionRecords` only holds local optimistic reaction events and is
+        // pruned when summaries confirm them, so the full path may scan it once
+        // to discover targets without reintroducing the old conversation-wide
+        // kind-7 sort on every live delta.
+        for record in reactionRecords.values {
             guard case .reaction(let target) = MessageSemantics.classify(record) else { continue }
-            // Un-react: the reaction event was deleted (kind-5 on its id).
-            if !record.messageIdHex.isEmpty, deletedMessageIds.contains(record.messageIdHex) {
-                continue
-            }
-            let emoji = record.plaintext
-            var emojis: [String: Set<String>] = byTarget[target] ?? [:]
-            if !emoji.isEmpty {
-                var senders: Set<String> = emojis[emoji] ?? []
-                senders.insert(record.sender)
-                emojis[emoji] = senders
-            }
-            byTarget[target] = emojis
+            targets.insert(target)
         }
 
+        let me = myAccountId ?? ""
         var result: [String: [ReactionTally]] = [:]
-        for (target, emojis) in byTarget {
-            var tallies: [ReactionTally] = []
-            for (emoji, senders) in emojis where !senders.isEmpty {
-                tallies.append(ReactionTally(emoji: emoji, count: senders.count, mine: senders.contains(me)))
+        for target in targets where !target.isEmpty {
+            let tallies = Self.reactionTallies(
+                for: target,
+                summary: projectedReactionSummaries[target],
+                optimisticRemovals: optimisticReactionRemovals,
+                optimisticRecords: reactionRecords,
+                deletedMessageIds: deletedMessageIds,
+                me: me
+            )
+            if !tallies.isEmpty {
+                result[target] = tallies
             }
-            guard !tallies.isEmpty else { continue }
-            tallies.sort { lhs, rhs in
-                lhs.count == rhs.count ? lhs.emoji < rhs.emoji : lhs.count > rhs.count
-            }
-            result[target] = tallies
         }
         guard reactions != result else { return false }
         reactions = result
         return true
+    }
+
+    /// Recompute only the supplied target messages. Live single-row projection
+    /// updates and local optimistic reaction toggles use this path so they don't
+    /// rebuild and sort reaction tallies for the whole loaded conversation.
+    @discardableResult
+    private func recomputeReactions(for targets: Set<String>) -> Bool {
+        guard !targets.isEmpty else { return false }
+        let me = myAccountId ?? ""
+        var next = reactions
+        for target in targets where !target.isEmpty {
+            let tallies = Self.reactionTallies(
+                for: target,
+                summary: projectedReactionSummaries[target],
+                optimisticRemovals: optimisticReactionRemovals,
+                optimisticRecords: reactionRecords,
+                deletedMessageIds: deletedMessageIds,
+                me: me
+            )
+            if tallies.isEmpty {
+                next[target] = nil
+            } else {
+                next[target] = tallies
+            }
+        }
+        guard reactions != next else { return false }
+        reactions = next
+        return true
+    }
+
+    nonisolated static func reactionTallies(
+        for target: String,
+        summary: TimelineReactionSummaryFfi?,
+        optimisticRemovals: Set<ReactionRemoval>,
+        optimisticRecords: [String: AppMessageRecordFfi],
+        deletedMessageIds: Set<String>,
+        me: String
+    ) -> [ReactionTally] {
+        var emojis: [String: Set<String>] = [:]
+
+        if let summary {
+            for reaction in summary.byEmoji where !reaction.emoji.isEmpty {
+                emojis[reaction.emoji] = Set(reaction.senders)
+            }
+        }
+
+        for removal in optimisticRemovals where removal.targetMessageIdHex == target {
+            guard var senders = emojis[removal.emoji] else { continue }
+            senders.remove(removal.sender)
+            emojis[removal.emoji] = senders
+        }
+
+        // Local optimistic reaction records are kind-7 messages: emoji content,
+        // target in the `e` tag. A reaction is dropped when its own event id has
+        // been tombstoned by a delete (the un-react path).
+        for record in optimisticRecords.values {
+            guard case .reaction(let recordTarget) = MessageSemantics.classify(record),
+                  recordTarget == target
+            else { continue }
+            if !record.messageIdHex.isEmpty, deletedMessageIds.contains(record.messageIdHex) {
+                continue
+            }
+            let emoji = record.plaintext
+            guard !emoji.isEmpty else { continue }
+            var senders: Set<String> = emojis[emoji] ?? []
+            senders.insert(record.sender)
+            emojis[emoji] = senders
+        }
+
+        var tallies: [ReactionTally] = []
+        for (emoji, senders) in emojis where !senders.isEmpty {
+            tallies.append(ReactionTally(emoji: emoji, count: senders.count, mine: senders.contains(me)))
+        }
+        tallies.sort { lhs, rhs in
+            lhs.count == rhs.count ? lhs.emoji < rhs.emoji : lhs.count > rhs.count
+        }
+        return tallies
     }
 
     /// Drop optimistic reaction placeholders that the server projection has now
@@ -3163,7 +3246,7 @@ final class ConversationViewModel {
             reactionRecords[key] = synthetic
             addedKey = key
         }
-        if recomputeReactions() {
+        if recomputeReactions(for: [message.messageIdHex]) {
             noteTimelineProjectionChanged()
         }
         Haptics.tap()
@@ -3189,7 +3272,7 @@ final class ConversationViewModel {
             if let removal { optimisticReactionRemovals.remove(removal) }
             if let clearedRemoval { optimisticReactionRemovals.insert(clearedRemoval) }
             for (key, record) in removedRecords { reactionRecords[key] = record }
-            if recomputeReactions() {
+            if recomputeReactions(for: [message.messageIdHex]) {
                 noteTimelineProjectionChanged()
             }
             Haptics.error()
