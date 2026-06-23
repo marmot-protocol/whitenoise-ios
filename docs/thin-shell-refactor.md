@@ -487,9 +487,16 @@ polling over re-running.
             toggles stay bound to AppState
       - [x] `IdentityView` → `IdentityViewModel` (commit `77bdb55`): nsec export
             flow + sheet/confirm flags; identity reads stay on AppState forwarders
-      - [ ] remaining settings cluster: ProfileEditView (heavy source-scrape
-            coupling — 4 sites), NotificationSettingsView (notification-lifecycle
-            entangled — do with care)
+      - [x] `NotificationSettingsView` → `NotificationSettingsViewModel`
+            (commit `fc90364`): the "entanglement" is in AppState's push methods
+            (which stay); the view was a clean state+actions conversion, no coupling
+      - [ ] `ProfileEditView` — DEFERRED: worst-coupled, ~6 source-scrape patterns
+            (`ProfileEditViewTests`, `ResolvedDisplayNameTests`,
+            `MarmotClientStorageReadOffloadTests`, the L10n-key guard) that split
+            across view (pictureURL, saveDisabled, the draft structs) and VM
+            (publish: relayPublishRelays/relayBootstrapRelays/reloadProfileProjection/
+            normalizedMetadata.ffi). Needs the scrape tests split view-vs-VM — do
+            it deliberately, not rushed.
       - [x] `ProfileView` → `ProfileViewModel` (commit `bae9530`): reference
             resolution + Message action; `npub`/`dismiss` passed as method params
       - [ ] Group / Onboarding / Diagnostics screens
