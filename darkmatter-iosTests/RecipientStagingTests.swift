@@ -72,6 +72,37 @@ struct RecipientStagingTests {
         #expect(warmedAccounts.isEmpty)
     }
 
+    @Test func pendingInputDeduplicatesAgainstMembersAddedDuringNormalizeAwait() async {
+        let staging = RecipientStagingModel()
+        let account = hex("44")
+        let concurrentAdd = stagedMember(memberRef: "npub1concurrent", accountIdHex: account)
+        let normalized = stagedMember(memberRef: hex("55"), accountIdHex: account)
+        let gate = NormalizeGate()
+        staging.pending = normalized.memberRef
+        var warmedAccounts: [String] = []
+
+        let addTask = Task { @MainActor in
+            await staging.addPending(
+                normalize: { _ in
+                    await gate.markStartedAndWait()
+                    return normalized
+                },
+                warmProfile: { warmedAccounts.append($0) }
+            )
+        }
+
+        await gate.waitUntilStarted()
+        staging.members = [concurrentAdd]
+        await gate.resume()
+        let result = await addTask.value
+
+        #expect(result)
+        #expect(staging.members == [concurrentAdd])
+        #expect(staging.pending.isEmpty)
+        #expect(staging.error == nil)
+        #expect(warmedAccounts.isEmpty)
+    }
+
     @Test func scannedProfileLinkStagesMember() async {
         let staging = RecipientStagingModel()
         let npub = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
@@ -114,5 +145,32 @@ struct RecipientStagingTests {
 
     private func hex(_ byte: String) -> String {
         String(repeating: byte, count: 32)
+    }
+}
+
+private actor NormalizeGate {
+    private var started = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+
+    func markStartedAndWait() async {
+        started = true
+        startWaiters.forEach { $0.resume() }
+        startWaiters.removeAll()
+        await withCheckedContinuation { continuation in
+            resumeContinuation = continuation
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard !started else { return }
+        await withCheckedContinuation { continuation in
+            startWaiters.append(continuation)
+        }
+    }
+
+    func resume() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
     }
 }
