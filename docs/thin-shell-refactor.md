@@ -618,11 +618,23 @@ polling over re-running.
               used surface), not just tests. NOT a pure projection peel like the four above.
               pagination state + the rebuild engine + accessors. The big atomic move that
               the send pipeline / stream watcher then delegate into.
+      - [x] `StreamWatcher` (VM 2572 → 2170, −402; new 513-line file): the agent-text
+            (QUIC) watch subsystem — watch tasks, preview-text accumulation, finalized-
+            stream cursor, synthetic stream + debug rows. Carved out *ahead* of the
+            TimelineStore core (reordered from the plan): the watcher is invoked from the
+            timeline ingest (VM calls `streamWatcher.watchStartIfNeeded`/
+            `recordFinalizedStreams`/`resolveFinalizedStream`/`dropMatchingStreamPreview`)
+            and writes its rows back through a narrow `StreamWatcherTimelineSink` the VM
+            implements, so the timeline mirror stays in the VM while the stream machinery
+            moves out. VM keeps thin forwarders (`applyStreamUpdate`,
+            `agentStreamStartIdToWatch`, `streamPreviewTimestamp`, the count testing
+            hooks) so no test call sites churn; three source-scrapes repointed to
+            `StreamWatcher.swift`. `shouldClearCompletedStreamWatch`/`appMessageRecord`
+            stay on the VM (the watcher calls them as statics).
       - [ ] After the core lands, the now-unblocked carves:
         - ComposerModel send pipeline (`sendText`/`sendMedia`/`sendInFlight`) writes
           optimistic pending rows into the timeline + reconciles them — that overlay
           belongs to TimelineStore, so the composer can't cleanly leave before it.
-        - StreamWatcher is invoked from the timeline ingest (`applyTimelineRecord`).
       - [ ] TimelineStore — the core (subscription mirror + `messageById` + optimistic
             overlay + pagination + the rebuild engine that drives the now-extracted
             markdown/media/reaction projection caches). The big one; unlocks the rest.

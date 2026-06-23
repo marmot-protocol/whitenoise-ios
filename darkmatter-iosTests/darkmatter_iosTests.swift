@@ -5881,7 +5881,7 @@ struct AgentStreamTests {
     }
 
     @Test func streamStartRecordedAtIsCarriedIntoLivePreview() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
 
         #expect(source.contains("startedAt: record.recordedAt"))
         #expect(source.contains("streamStartedAtById[streamId] = startedAt"))
@@ -5890,7 +5890,7 @@ struct AgentStreamTests {
     }
 
     @Test func streamChunkAppendUsesRunningLengthCounter() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
         let appendPattern =
             #"private func appendStreamChunk\(_ text: String, to streamId: String\) \{[\s\S]*"#
             + #"let currentLength = streamTextLengthById\[streamId\][\s\S]*"#
@@ -5903,12 +5903,12 @@ struct AgentStreamTests {
     }
 
     @Test func streamBubbleUpsertPreservesTimestampWithoutTimelineScan() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
         let functionStart = try #require(source.range(of: "private func upsertStreamBubble"))
-        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    private func recordFinalizedStreams"))
+        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    /// Tear down a live preview"))
         let upsertSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
 
-        #expect(upsertSource.contains("let itemTimestamp = transientTimelineItems[rowId]?.timestamp ?? timestamp"))
+        #expect(upsertSource.contains("let itemTimestamp = sink?.streamTransientItem(id: rowId)?.timestamp ?? timestamp"))
         #expect(upsertSource.contains("timestamp: itemTimestamp"))
         #expect(!upsertSource.contains("timeline.firstIndex"))
     }
@@ -6202,6 +6202,13 @@ struct AgentStreamTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
+
+    private var streamWatcherSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/StreamWatcher.swift")
     }
 
     @MainActor

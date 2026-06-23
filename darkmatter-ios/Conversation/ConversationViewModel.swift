@@ -142,24 +142,21 @@ final class ConversationViewModel {
     /// when the group roster (`groupMlsRefreshGeneration`) or resolved profile
     /// data (`AppState.profileRefreshGeneration`) actually changes.
     @ObservationIgnored private let mentionController = ComposerMentionController()
-    /// Live agent-stream watch tasks, keyed by stream id.
-    private var streamWatchTasks: [String: Task<Void, Never>] = [:]
-    /// Generation token per stream watch. A watch task only clears its own
-    /// `streamWatchTasks` entry on natural completion if the stored generation
-    /// still matches — mirroring the `NotificationDriver` completion guard so a
-    /// re-watch that reused the key isn't torn down by a stale task exit.
-    private var streamWatchGenerations: [String: UUID] = [:]
-    /// Guards a concurrent "latest" (nil stream id) watch from racing past the
-    /// post-await duplicate guard and opening an orphaned subscription (#48).
-    private var latestStreamWatchInFlight = false
-    /// Accumulated text per live stream, keyed by stream id.
-    private var streamText: [String: String] = [:]
-    private var streamTextLengthById: [String: Int] = [:]
+    /// Agent-text-stream (QUIC) watch subsystem. Invoked from the timeline ingest
+    /// (`watchStartIfNeeded`/`recordFinalizedStreams`/`resolveFinalizedStream`/
+    /// `dropMatchingStreamPreview`) and writes its synthetic stream/debug rows
+    /// back through `StreamWatcherTimelineSink` (this view model). Lazy so the
+    /// sink wiring captures a fully initialized self.
+    @ObservationIgnored private lazy var streamWatcher: StreamWatcher = {
+        let watcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
+        watcher.sink = self
+        return watcher
+    }()
 #if DEBUG
-    var streamTextEntryCountForTesting: Int { streamText.count }
-    var streamTextLengthEntryCountForTesting: Int { streamTextLengthById.count }
-    var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
-    var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
+    var streamTextEntryCountForTesting: Int { streamWatcher.streamTextEntryCountForTesting }
+    var streamTextLengthEntryCountForTesting: Int { streamWatcher.streamTextLengthEntryCountForTesting }
+    var scannedFinalizedMessageIdCountForTesting: Int { streamWatcher.scannedFinalizedMessageIdCountForTesting }
+    var finalizedStreamIdCountForTesting: Int { streamWatcher.finalizedStreamIdCountForTesting }
     var markedReadMessageIdsForTesting: Set<String> { readMarker.markedReadMessageIdsForTesting }
     var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
 
@@ -171,44 +168,13 @@ final class ConversationViewModel {
         readMarker.insertPendingReadMessageIdsForTesting(messageIds)
     }
 #endif
-    /// Streams that received a checkpoint snapshot. Their QUIC `.finished`
-    /// text is text-delta-only, so prefer the current preview at close.
-    private var streamsWithCheckpointPreview: Set<String> = []
-    /// Streams whose final anchor message has arrived. Once finalized, the
-    /// anchor's full text is authoritative and late live updates are ignored.
-    /// Populated both by scanning loaded anchor records and by live-stream
-    /// resolution (endStream/finalizeStreamBubble/resolveFinalizedStream), so it
-    /// is intentionally *not* pruned: live-resolution entries have no anchor
-    /// record in the window to re-derive from, and dropping any entry would let
-    /// a finalized stream be re-watched. Bounded by the conversation's distinct
-    /// stream count.
-    private var finalizedStreamIds: Set<String> = []
-    /// Message ids of anchor records already passed through
-    /// `recordFinalizedStreams`. Anchor records are immutable for a given
-    /// message id, so this lets us skip re-decoding `agentTextStreamJson` and
-    /// re-classifying the same record on every window/tail page. Bounded to the
-    /// currently loaded window via `pruneScannedFinalizedMessageIds()`.
-    private var scannedFinalizedMessageIds: Set<String> = []
-    /// Start-record timestamps for live previews, keyed by stream id.
-    private var streamStartedAtById: [String: UInt64] = [:]
-    private var streamSenderById: [String: String] = [:]
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
+    /// Written by `StreamWatcher` via the sink; consumed by `rebuildTimeline`.
     @ObservationIgnored private var streamDebugTimelineItems: [String: TimelineItem] = [:]
-    /// Monotonic insert order for QUIC debug rows; zero-padded in ids so
-    /// same-second ties sort correctly.
-    private var streamDebugEventSequence: UInt64 = 0
 
-    private var streamingDebugEnabled: Bool {
+    var streamingDebugEnabled: Bool {
         appState?.streamingDebugEnabled == true
     }
-
-    /// Live diagnostics for the agent-text-stream watch. Visible in the Xcode
-    /// console (and Console.app) under category "agent-stream". We log sizes and
-    /// counts rather than message text to avoid leaking chat content.
-    private static let streamLog = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.darkmatter",
-        category: "agent-stream"
-    )
 
     /// First-open load timings. Visible under category "conversation-load" in
     /// Console.app. Measures how long each Marmot read on the open path takes so
@@ -267,21 +233,6 @@ final class ConversationViewModel {
         }
     }
 
-    private struct AgentTextStreamProjection: Decodable {
-        var streamIdHex: String?
-        var status: String?
-
-        enum CodingKeys: String, CodingKey {
-            case streamIdHex = "stream_id_hex"
-            case status
-        }
-    }
-
-    private enum AgentTextStreamRecordType {
-        static let checkpoint: UInt8 = 0x04
-        static let abort: UInt8 = 0x05
-        static let finalNotice: UInt8 = 0x06
-    }
 
     var myAccountId: String? { appState?.activeAccount?.accountIdHex }
 
@@ -464,7 +415,7 @@ final class ConversationViewModel {
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
         tailRefreshTask?.cancel()
-        for task in streamWatchTasks.values { task.cancel() }
+        streamWatcher.cancelAll()
     }
 
     func start() async {
@@ -557,11 +508,7 @@ final class ConversationViewModel {
         readMarker.cancelPendingReadMarks()
         readMarker.clearMarks()
         cancelTimelineTailRefresh()
-        for task in streamWatchTasks.values {
-            task.cancel()
-        }
-        streamWatchTasks.removeAll()
-        streamWatchGenerations.removeAll()
+        streamWatcher.cancelAll()
     }
 
     private func resetOptimisticState() {
@@ -807,32 +754,26 @@ final class ConversationViewModel {
         }
     }
 
-    private func watchAgentStreamStartIfNeeded(_ record: AppMessageRecordFfi, trigger: TimelineUpdateTriggerFfi?) {
-        guard let streamIdHex = Self.agentStreamStartIdToWatch(
-            from: record,
-            finalizedStreamIds: finalizedStreamIds,
-            trigger: trigger
-        ) else { return }
-        Task { [weak self] in
-            await self?.startWatching(
-                sender: record.sender,
-                streamIdHex: streamIdHex,
-                startedAt: record.recordedAt
-            )
-        }
-    }
-
+    /// Forwarder retained for tests; the watch subsystem lives in `StreamWatcher`.
     static func agentStreamStartIdToWatch(
         from record: AppMessageRecordFfi,
         finalizedStreamIds: Set<String>,
         trigger: TimelineUpdateTriggerFfi?
     ) -> String? {
-        guard trigger == .agentStreamStarted,
-              case .agentStreamStart(let start) = MessageSemantics.classify(record),
-              let streamIdHex = MessageSemantics.normalizedStreamId(start.streamId),
-              !finalizedStreamIds.contains(streamIdHex)
-        else { return nil }
-        return streamIdHex
+        StreamWatcher.agentStreamStartIdToWatch(
+            from: record,
+            finalizedStreamIds: finalizedStreamIds,
+            trigger: trigger
+        )
+    }
+
+    func applyStreamUpdate(streamId: String, sender: String, update: AgentStreamUpdateFfi) {
+        streamWatcher.applyStreamUpdate(streamId: streamId, sender: sender, update: update)
+    }
+
+    /// Forwarder retained for tests; the watch subsystem lives in `StreamWatcher`.
+    nonisolated static func streamPreviewTimestamp(startedAt: UInt64?, fallback: UInt64) -> UInt64 {
+        StreamWatcher.streamPreviewTimestamp(startedAt: startedAt, fallback: fallback)
     }
 
     func applyTimelinePage(_ page: TimelinePageFfi, placement: TimelinePagePlacement) {
@@ -865,12 +806,12 @@ final class ConversationViewModel {
                 ) || projectionChanged
             }
         }
-        recordFinalizedStreams(in: page.messages)
+        streamWatcher.recordFinalizedStreams(in: page.messages)
         for record in page.messages {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
         }
         if shouldEvictAbsentRecords {
-            pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
+            streamWatcher.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         }
         pruneMarkedReadMessageIds(force: true)
         hasMoreBefore = page.hasMoreBefore
@@ -888,7 +829,7 @@ final class ConversationViewModel {
         for change in update.changes {
             switch change {
             case .upsert(let trigger, let record):
-                recordFinalizedStreams(in: [record])
+                streamWatcher.recordFinalizedStreams(in: [record])
                 projectionChanged = applyTimelineRecord(record, trigger: trigger) || projectionChanged
             case .remove(let messageIdHex, _):
                 projectionChanged = removeTimelineRecord(
@@ -913,12 +854,12 @@ final class ConversationViewModel {
         let records = hasMoreAfter
             ? page.messages.filter { existingMessageIds.contains($0.messageIdHex) }
             : page.messages
-        recordFinalizedStreams(in: records)
+        streamWatcher.recordFinalizedStreams(in: records)
         var projectionChanged = false
         for record in records {
             projectionChanged = applyTimelineRecord(record) || projectionChanged
         }
-        pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
+        streamWatcher.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         pruneMarkedReadMessageIds(force: true)
         if !hasMoreAfter {
             hasMoreBefore = page.hasMoreBefore
@@ -1110,8 +1051,8 @@ final class ConversationViewModel {
             replyTargetId: record.replyToMessageIdHex
         ) || projectionChanged
 
-        if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
-            projectionChanged = resolveFinalizedStream(streamId: streamId) || projectionChanged
+        if let streamId = StreamWatcher.finalizedStreamId(from: record, appRecord: appRecord) {
+            projectionChanged = streamWatcher.resolveFinalizedStream(streamId: streamId) || projectionChanged
         }
         if updateTimeline {
             if let item = visibleTimelineItem(
@@ -1123,8 +1064,8 @@ final class ConversationViewModel {
                 projectionChanged = removeTimelineItem(id: "msg:\(appRecord.messageIdHex)") || projectionChanged
             }
         }
-        dropMatchingStreamPreviewIfNeeded(for: appRecord, semantics: semantics, trigger: trigger)
-        watchAgentStreamStartIfNeeded(appRecord, trigger: trigger)
+        streamWatcher.dropMatchingStreamPreviewIfNeeded(for: appRecord, semantics: semantics, trigger: trigger)
+        streamWatcher.watchStartIfNeeded(appRecord, trigger: trigger)
         return projectionChanged
     }
 
@@ -1139,7 +1080,7 @@ final class ConversationViewModel {
         reactionProjections.removeSummary(forMessageId: messageIdHex)
         deletedProjections.removeProjected(forMessageId: messageIdHex)
         readMarker.forgetMarkIfNotPending(messageIdHex)
-        scannedFinalizedMessageIds.remove(messageIdHex)
+        streamWatcher.forgetScannedFinalized(messageIdHex)
         let timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
             : false
@@ -1202,7 +1143,7 @@ final class ConversationViewModel {
         if !streamingDebugEnabled {
             changed = !streamDebugTimelineItems.isEmpty
             streamDebugTimelineItems.removeAll()
-            streamDebugEventSequence = 0
+            streamWatcher.resetDebugSequence()
         }
         changed = rebuildTimeline() || changed
         if changed {
@@ -1542,80 +1483,6 @@ final class ConversationViewModel {
     /// so the generation-guard is observable without a live broker subscription.
     static func shouldClearCompletedStreamWatch(storedGeneration: UUID?, taskGeneration: UUID) -> Bool {
         storedGeneration == taskGeneration
-    }
-
-    /// Clear a stream watch entry when its task exits naturally (the broker
-    /// closed the stream by returning nil from next()). Generation-guarded:
-    /// only clears if the stored generation still matches this task, so a
-    /// re-watch that reused the key isn't torn down by a stale task's exit.
-    /// Mirrors `NotificationDriver.clearCompletedTask`.
-    private func clearCompletedStreamWatch(streamId: String, generation: UUID) {
-        guard Self.shouldClearCompletedStreamWatch(
-            storedGeneration: streamWatchGenerations[streamId],
-            taskGeneration: generation
-        ) else { return }
-        streamWatchTasks[streamId] = nil
-        streamWatchGenerations[streamId] = nil
-    }
-
-    /// Tear down a live preview that produced no usable transcript (the stream
-    /// failed). agentnoise falls back to a plain chat reply in that case, which
-    /// arrives as a normal message — so drop the preview and mark the stream
-    /// finalized so trailing updates can't recreate it.
-    private func endStream(streamId: String) {
-        finalizedStreamIds.insert(streamId)
-        streamWatchTasks[streamId]?.cancel()
-        streamWatchTasks[streamId] = nil
-        streamWatchGenerations[streamId] = nil
-        clearStreamPreviewText(streamId: streamId)
-        streamsWithCheckpointPreview.remove(streamId)
-        streamStartedAtById[streamId] = nil
-        streamSenderById[streamId] = nil
-        if removeStreamBubble(streamId: streamId) {
-            noteTimelineProjectionChanged()
-        }
-    }
-
-    /// Promote the transient live preview into a permanent received bubble
-    /// carrying the final transcript. The Final MLS anchor is authoritative; the
-    /// QUIC `.finished` transcript is a provisional fill if it lands first. Both
-    /// key the same `msg:stream:<id>` row, so whichever arrives later wins.
-    private func finalizeStreamBubble(streamId: String, sender: String, text: String) {
-        replaceStreamPreviewText(text, to: streamId)
-        guard hasStreamPreviewText(streamId: streamId) else {
-            endStream(streamId: streamId)
-            return
-        }
-        streamSenderById[streamId] = sender
-        upsertStreamBubble(streamId: streamId, sender: sender, status: .received)
-        finalizedStreamIds.insert(streamId)
-        streamWatchTasks[streamId]?.cancel()
-        streamWatchTasks[streamId] = nil
-        streamWatchGenerations[streamId] = nil
-        streamsWithCheckpointPreview.remove(streamId)
-        streamStartedAtById[streamId] = nil
-        streamSenderById[streamId] = nil
-        clearStreamPreviewText(streamId: streamId)
-    }
-
-    @discardableResult
-    private func resolveFinalizedStream(streamId: String) -> Bool {
-        finalizedStreamIds.insert(streamId)
-        streamWatchTasks[streamId]?.cancel()
-        streamWatchTasks[streamId] = nil
-        streamWatchGenerations[streamId] = nil
-        clearStreamPreviewText(streamId: streamId)
-        streamsWithCheckpointPreview.remove(streamId)
-        streamStartedAtById[streamId] = nil
-        streamSenderById[streamId] = nil
-        return removeStreamBubble(streamId: streamId)
-    }
-
-    @discardableResult
-    private func removeStreamBubble(streamId: String) -> Bool {
-        let rowId = "msg:stream:\(streamId)"
-        let backingChanged = transientTimelineItems.removeValue(forKey: rowId) != nil
-        return removeTimelineItem(id: rowId) || backingChanged
     }
 
     func isDeleted(_ messageIdHex: String) -> Bool {
@@ -2168,315 +2035,9 @@ final class ConversationViewModel {
         return MessageSemantics.normalizedStreamId(start.streamId)
     }
 
-    /// Watch a concrete live agent stream when the start payload names one;
-    /// otherwise fall back to the latest live stream in this group.
-    private func startWatching(sender: String, streamIdHex: String?, startedAt: UInt64? = nil) async {
-        guard let appState,
-              appState.canUseRuntimeForForegroundWork,
-              let accountRef = appState.activeAccountRef
-        else { return }
-        guard AgentStreamWatchAdmission.canStart(
-            streamIdHex: streamIdHex,
-            activeStreamIds: Set(streamWatchTasks.keys),
-            latestStreamWatchInFlight: latestStreamWatchInFlight
-        ) else { return }
-        if streamIdHex == nil { latestStreamWatchInFlight = true }
-        defer { if streamIdHex == nil { latestStreamWatchInFlight = false } }
-        do {
-            let insecureLocal = AgentStreamSecurity.insecureLocalEnabled(
-                developerMode: appState.developerMode
-            )
-            let subscription = try await appState.marmot.watchAgentTextStream(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                streamIdHex: streamIdHex,
-                serverCertDer: nil,
-                // Release builds always pass false here regardless of the
-                // developer-mode toggle, so a Settings switch can't disable
-                // TLS verification in production. See AgentStreamSecurity.
-                insecureLocal: insecureLocal
-            )
-            let streamId = subscription.streamIdHex()
-            if streamWatchTasks[streamId] != nil { return }
-            if finalizedStreamIds.contains(streamId) { return }
-            if let startedAt, startedAt > 0 {
-                streamStartedAtById[streamId] = startedAt
-            }
-            resetStreamPreviewText(streamId: streamId)
-            streamSenderById[streamId] = sender
-            Self.streamLog.info("watch opened: streamId=\(streamId, privacy: .public) developerMode=\(appState.developerMode, privacy: .public); waiting for text preview")
-            let generation = UUID()
-            let task = Task { [weak self] in
-                while !Task.isCancelled, let update = await subscription.next() {
-                    self?.applyStreamUpdate(streamId: streamId, sender: sender, update: update)
-                }
-                // The broker can close a stream silently by returning nil from
-                // next() without a .finished/.failed/abort update ever flowing
-                // through endStream/finalizeStreamBubble/resolveFinalizedStream.
-                // Clear our own entry on that natural exit so the admission
-                // guard doesn't treat the dead key as "already watching" and
-                // lock out re-subscription. Generation-guarded so a re-watch
-                // that reused the key isn't torn down by this stale exit.
-                self?.clearCompletedStreamWatch(streamId: streamId, generation: generation)
-            }
-            streamWatchTasks[streamId] = task
-            streamWatchGenerations[streamId] = generation
-        } catch {
-            // No resolvable start payload yet, or the broker is unreachable.
-            Self.streamLog.error("watch failed to open: streamId=\(streamIdHex ?? "<latest>", privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
-    }
-
-    func applyStreamUpdate(streamId: String, sender: String, update: AgentStreamUpdateFfi) {
-        // The final anchor already supplied the authoritative transcript.
-        if finalizedStreamIds.contains(streamId) { return }
-        switch update {
-        case .chunk(_, let text):
-            appendStreamDebugEvent(streamId: streamId, eventKind: "chunk", detail: streamDebugTextSummary(text))
-            appendStreamChunk(text, to: streamId)
-            upsertStreamBubbleIfNeeded(streamId: streamId, sender: sender, status: .streaming)
-        case .status(let seq, let status):
-            appendStreamDebugEvent(streamId: streamId, eventKind: "status", detail: "seq=\(seq) \(status)")
-        case .progress(let seq, let text):
-            appendStreamDebugEvent(streamId: streamId, eventKind: "progress", detail: "seq=\(seq) \(streamDebugTextSummary(text))")
-        case .record(_, let recordType, let text):
-            appendStreamDebugEvent(
-                streamId: streamId,
-                eventKind: "record(\(recordType))",
-                detail: streamDebugTextSummary(text)
-            )
-            switch recordType {
-            case AgentTextStreamRecordType.checkpoint:
-                streamsWithCheckpointPreview.insert(streamId)
-                replaceStreamPreviewText(text, to: streamId)
-                upsertStreamBubbleIfNeeded(streamId: streamId, sender: sender, status: .streaming)
-            case AgentTextStreamRecordType.abort:
-                endStream(streamId: streamId)
-            case AgentTextStreamRecordType.finalNotice:
-                break
-            default:
-                break
-            }
-        case .finished(let text, let transcriptHashHex, let chunkCount):
-            appendStreamDebugEvent(
-                streamId: streamId,
-                eventKind: "finished",
-                detail: "chunks=\(chunkCount) textLen=\(text.count)B hashLen=\(transcriptHashHex.count)"
-            )
-            // QUIC stream closed. Promote the preview to a permanent bubble using
-            // the streamed transcript; the authoritative MLS Final anchor will
-            // overwrite the same row if it arrives afterwards.
-            Self.streamLog.info("finished: streamId=\(streamId, privacy: .public) chunkCount=\(chunkCount) textLen=\(text.count)B hashLen=\(transcriptHashHex.count) — promoting preview to permanent bubble")
-            finalizeStreamBubble(
-                streamId: streamId,
-                sender: sender,
-                text: finishedPreviewText(streamId: streamId, text: text)
-            )
-        case .failed(let message):
-            appendStreamDebugEvent(streamId: streamId, eventKind: "failed", detail: message)
-            let previewLength = streamTextLengthById[streamId] ?? streamText[streamId]?.count ?? 0
-            Self.streamLog.error("failed: streamId=\(streamId, privacy: .public) gotText=\(previewLength)B reason=\(message, privacy: .public) — dropping live preview")
-            endStream(streamId: streamId)
-        }
-    }
-
-    private func appendStreamDebugEvent(streamId: String, eventKind: String, detail: String) {
-        guard streamingDebugEnabled else { return }
-        streamDebugEventSequence += 1
-        let sequence = streamDebugEventSequence
-        let now = UInt64(Date().timeIntervalSince1970)
-        let item = TimelineItem.streamDebugEvent(
-            id: "dbg:stream:\(streamId):\(now):\(String(format: "%010llu", sequence))",
-            streamId: streamId,
-            eventKind: eventKind,
-            detail: detail,
-            timestamp: now
-        )
-        streamDebugTimelineItems[item.id] = item
-        if upsertTimelineItem(item) {
-            noteTimelineProjectionChanged()
-        }
-    }
-
-    private func streamDebugTextSummary(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "(empty)" }
-        if trimmed.count <= 120 { return trimmed }
-        return "\(trimmed.prefix(120))… (\(trimmed.count) chars)"
-    }
-
-    private func appendStreamChunk(_ text: String, to streamId: String) {
-        let currentLength = streamTextLengthById[streamId] ?? streamText[streamId]?.count ?? 0
-        let remaining = ProfileSanitizer.maxMessageLength - currentLength
-        guard remaining > 0 else { return }
-        let cappedChunk = text.prefix(remaining)
-        guard !cappedChunk.isEmpty else { return }
-        var current = streamText[streamId] ?? ""
-        current.append(contentsOf: cappedChunk)
-        streamText[streamId] = current
-        streamTextLengthById[streamId] = currentLength + cappedChunk.count
-    }
-
-    private func replaceStreamPreviewText(_ text: String, to streamId: String) {
-        let capped = Self.cappedStreamText(text)
-        streamText[streamId] = capped.text
-        streamTextLengthById[streamId] = capped.length
-    }
-
-    private func resetStreamPreviewText(streamId: String) {
-        streamText[streamId] = ""
-        streamTextLengthById[streamId] = 0
-    }
-
-    private func clearStreamPreviewText(streamId: String) {
-        streamText[streamId] = nil
-        streamTextLengthById[streamId] = nil
-    }
-
-    private func hasStreamPreviewText(streamId: String) -> Bool {
-        guard let text = streamText[streamId] else { return false }
-        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func finishedPreviewText(streamId: String, text: String) -> String {
-        guard streamsWithCheckpointPreview.contains(streamId),
-              let preview = streamText[streamId],
-              !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return text
-        }
-        return preview
-    }
-
-    private static func cappedStreamText(_ text: String) -> (text: String, length: Int) {
-        let length = text.count
-        if length <= ProfileSanitizer.maxMessageLength {
-            return (text, length)
-        }
-        let capped = String(text.prefix(ProfileSanitizer.maxMessageLength))
-        return (capped, ProfileSanitizer.maxMessageLength)
-    }
-
-    nonisolated static func streamPreviewTimestamp(startedAt: UInt64?, fallback: UInt64) -> UInt64 {
-        guard let startedAt, startedAt > 0 else { return fallback }
-        return startedAt
-    }
-
-    private func streamPreviewTimestamp(for streamId: String) -> UInt64 {
-        let now = UInt64(Date().timeIntervalSince1970)
-        let timestamp = Self.streamPreviewTimestamp(
-            startedAt: streamStartedAtById[streamId],
-            fallback: now
-        )
-        streamStartedAtById[streamId] = timestamp
-        return timestamp
-    }
-
     /// Clamp outbound message text to the protocol's max length (#54).
     nonisolated static func cappedOutgoingText(_ text: String) -> String {
         String(text.prefix(ProfileSanitizer.maxMessageLength))
-    }
-
-    /// Create or update the synthetic bubble for a live stream (keyed by id).
-    private func upsertStreamBubbleIfNeeded(streamId: String, sender: String, status: MessageStatus) {
-        guard hasStreamPreviewText(streamId: streamId) else { return }
-        upsertStreamBubble(streamId: streamId, sender: sender, status: status)
-    }
-
-    private func upsertStreamBubble(streamId: String, sender: String, status: MessageStatus) {
-        let rowId = "msg:stream:\(streamId)"
-        streamSenderById[streamId] = sender
-        let timestamp = streamPreviewTimestamp(for: streamId)
-        let itemTimestamp = transientTimelineItems[rowId]?.timestamp ?? timestamp
-        let record = AppMessageRecordFfi(
-            messageIdHex: "",
-            direction: "received",
-            groupIdHex: group.groupIdHex,
-            sender: sender,
-            plaintext: streamText[streamId] ?? "",
-            kind: MessageSemantics.kindChat,
-            tags: [],
-            recordedAt: timestamp,
-            receivedAt: timestamp
-        )
-        let item = TimelineItem(
-            id: rowId,
-            kind: .message(record: record, status: status),
-            timestamp: itemTimestamp
-        )
-        transientTimelineItems[rowId] = item
-        if upsertTimelineItem(item) {
-            noteTimelineProjectionChanged()
-        }
-    }
-
-    private func recordFinalizedStreams(in records: [TimelineMessageRecordFfi]) {
-        for record in records {
-            // Anchor records are immutable for a given message id, so once a
-            // record has been scanned its finalized-stream classification can't
-            // change. Skip the JSON decode + classification on later pages.
-            let messageId = record.messageIdHex
-            if !messageId.isEmpty {
-                guard scannedFinalizedMessageIds.insert(messageId).inserted else { continue }
-            }
-            let appRecord = Self.appMessageRecord(from: record)
-            if let streamId = Self.finalizedStreamId(from: record, appRecord: appRecord) {
-                finalizedStreamIds.insert(streamId)
-            }
-        }
-    }
-
-    /// Bound `scannedFinalizedMessageIds` to the records still represented in
-    /// the loaded window. Records evicted from the window can reappear on a
-    /// later page, and re-scanning them then is idempotent (it only re-inserts
-    /// into `finalizedStreamIds`, which is never pruned), so dropping their
-    /// scan markers is safe and keeps the cache from growing without bound.
-    private func pruneScannedFinalizedMessageIds(keeping loadedMessageIds: Set<String>) {
-        guard !scannedFinalizedMessageIds.isEmpty else { return }
-        scannedFinalizedMessageIds.formIntersection(loadedMessageIds)
-    }
-
-    private static func finalizedStreamId(
-        from record: TimelineMessageRecordFfi,
-        appRecord: AppMessageRecordFfi
-    ) -> String? {
-        if let projection = agentTextStreamProjection(from: record),
-           projection.status == "finalized",
-           let streamId = MessageSemantics.normalizedStreamId(projection.streamIdHex) {
-            return streamId
-        }
-        if case .streamFinal(let streamId) = MessageSemantics.classify(appRecord) {
-            return streamId
-        }
-        return nil
-    }
-
-    private static func agentTextStreamProjection(from record: TimelineMessageRecordFfi) -> AgentTextStreamProjection? {
-        guard let json = record.agentTextStreamJson,
-              let data = json.data(using: .utf8)
-        else { return nil }
-        return try? JSONDecoder().decode(AgentTextStreamProjection.self, from: data)
-    }
-
-    private func dropMatchingStreamPreviewIfNeeded(
-        for record: AppMessageRecordFfi,
-        semantics: MessageSemantics.Kind,
-        trigger: TimelineUpdateTriggerFfi?
-    ) {
-        guard trigger != nil,
-              record.direction == "received"
-        else { return }
-        switch semantics {
-        case .chat, .reply, .media:
-            let streamIds = streamSenderById
-                .filter { $0.value == record.sender }
-                .map(\.key)
-            for streamId in streamIds {
-                endStream(streamId: streamId)
-            }
-        case .streamFinal, .reaction, .delete, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
-            return
-        }
     }
 
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
@@ -2568,5 +2129,42 @@ final class ConversationViewModel {
             Haptics.error()
             appState.present(.error(L10n.string("Reaction failed"), message: error.localizedDescription))
         }
+    }
+}
+
+// MARK: - StreamWatcher timeline sink
+
+extension ConversationViewModel: StreamWatcherTimelineSink {
+    @discardableResult
+    func streamUpsertTimelineItem(_ item: TimelineItem) -> Bool {
+        upsertTimelineItem(item)
+    }
+
+    @discardableResult
+    func streamRemoveTimelineItem(id: String) -> Bool {
+        removeTimelineItem(id: id)
+    }
+
+    func streamTransientItem(id: String) -> TimelineItem? {
+        transientTimelineItems[id]
+    }
+
+    func streamSetTransientItem(_ item: TimelineItem) {
+        transientTimelineItems[item.id] = item
+    }
+
+    @discardableResult
+    func streamRemoveTransientItem(id: String) -> Bool {
+        transientTimelineItems.removeValue(forKey: id) != nil
+    }
+
+    @discardableResult
+    func streamAppendDebugRow(_ item: TimelineItem) -> Bool {
+        streamDebugTimelineItems[item.id] = item
+        return upsertTimelineItem(item)
+    }
+
+    func streamNoteProjectionChanged() {
+        noteTimelineProjectionChanged()
     }
 }
