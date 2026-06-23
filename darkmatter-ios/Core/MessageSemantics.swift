@@ -164,9 +164,10 @@ nonisolated enum MessageSemantics {
     /// Parse all encrypted-media-v1 `imeta` tags, preserving tag order.
     ///
     /// `sourceEpoch` is not encoded in the public `imeta` fields; Marmot carries
-    /// it as record metadata. Timeline rows do not expose that metadata yet, so
-    /// callers that only need display previews can use the zero default, while
-    /// download paths should prefer `listMedia` records with the real epoch.
+    /// it as record metadata and now projects resolved timeline-row media with
+    /// the real epoch. Conversation display/download paths should mirror that row
+    /// projection. This parser is retained only for local optimistic or legacy
+    /// compatibility records that have no captured row projection yet.
     static func mediaAttachments(
         from tags: [MessageTagFfi],
         sourceEpoch: UInt64 = 0

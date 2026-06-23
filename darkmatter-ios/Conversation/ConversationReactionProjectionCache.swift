@@ -12,14 +12,16 @@ import MarmotKit
 ///   a target+emoji tally until an "un-react" lands server-side (#349).
 /// - `talliesByTarget` — the aggregated `[ReactionTally]` per target message.
 ///
-/// `recompute` folds the three inputs (plus the timeline's `deletedMessageIds`
-/// and the local account id, both passed in) into the tallies. The pure
-/// reconciliation that drops confirmed optimistic placeholders lives in
-/// `ConversationReactionPolicy`. Sibling to `ConversationMarkdownProjectionCache`
-/// / `ConversationMediaProjectionCache` — another row-display projection peeled
-/// out of the view model ahead of the core message mirror. The optimistic
-/// toggle's FFI + rollback orchestration stays in the view model; only the state
-/// and the aggregation live here.
+/// `recompute` folds the mirrored summary plus local optimistic diffs (and the
+/// timeline's `deletedMessageIds` / local account id, both passed in) into UI
+/// tallies. It does not rescan loaded timeline rows to rebuild server truth; the
+/// only `MessageSemantics` classification here is for optimistic records created
+/// by the local toggle path. The pure reconciliation that drops confirmed
+/// optimistic placeholders lives in `ConversationReactionPolicy`. Sibling to
+/// `ConversationMarkdownProjectionCache` / `ConversationMediaProjectionCache` —
+/// another row-display projection peeled out of the view model ahead of the core
+/// message mirror. The optimistic toggle's FFI + rollback orchestration stays in
+/// the view model; only the state and the aggregation live here.
 @MainActor
 final class ConversationReactionProjectionCache {
     private var summariesByTarget: [String: TimelineReactionSummaryFfi] = [:]

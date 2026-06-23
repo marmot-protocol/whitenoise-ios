@@ -473,6 +473,10 @@ polling over re-running.
       mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`
       timeline path + index maps + sourceEpoch recovery. Drop-bad now via the Rust
       row; Swift parser retained as the local/optimistic fallback (oracle unchanged)
+- [x] **Timeline projection boundary audit** — see
+      `docs/timeline-projection-boundary.md` for the field-by-field inventory.
+      Empty/nil row projections are authoritative, and tests pin no timeline
+      `listMedia`, no display-time `parseMarkdown`, and no source-epoch recovery.
 - [~] Phase 2 — extract services from AppState; AppState → composition root.
       3/5 done (`ProfileStore`, `AccountUnreadStore`, `AccountStore`). The two
       remaining services are **deferred to issues #389/#390** — organizational, lower
