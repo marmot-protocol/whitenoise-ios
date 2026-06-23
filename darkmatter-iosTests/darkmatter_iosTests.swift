@@ -4441,11 +4441,11 @@ struct ConversationTimelineProjectionTests {
         let reactionRecord = message(id: hex("22"), kind: MessageSemantics.kindReaction)
         let emptyId = message(id: "", kind: MessageSemantics.kindChat)
 
-        #expect(ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
-        #expect(!ConversationViewModel.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
+        #expect(ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
+        #expect(!ConversationReadMarker.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
     }
 
     @Test func markedReadDedupDropsMessagesOutsideCurrentTimelineWindow() throws {
@@ -4498,7 +4498,7 @@ struct ConversationTimelineProjectionTests {
         let pending = Set([hex("aa")])
         let stale = hex("ff")
 
-        let retained = ConversationViewModel.retainedMarkedReadMessageIds(
+        let retained = ConversationReadMarker.retainedMarkedReadMessageIds(
             loaded.union(pending).union([stale]),
             loadedMessageIds: loaded,
             pendingMessageIds: pending,
@@ -5274,10 +5274,12 @@ struct ConversationTimelineProjectionTests {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
         let viewSource = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
         let clientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
+        let readMarkerSource = try String(contentsOf: conversationReadMarkerSourceURL, encoding: .utf8)
 
-        #expect(source.contains("pendingReadMessageIds"))
-        #expect(source.contains("flushPendingReadMarks(accountRef:"))
-        #expect(source.contains("await client.markTimelineMessagesRead("))
+        // Read-marking coalescing + the async flush moved to ConversationReadMarker.
+        #expect(readMarkerSource.contains("pendingReadMessageIds"))
+        #expect(readMarkerSource.contains("flushPendingReadMarks(accountRef:"))
+        #expect(readMarkerSource.contains("await client.markTimelineMessagesRead("))
         #expect(source.contains("try await client.initializeChatReadState("))
         #expect(source.contains("try await client.timelineMessages("))
         // Timeline media now arrives resolved on the row (mediaReferencesByMessageId);
@@ -5345,6 +5347,13 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
+
+    private var conversationReadMarkerSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationReadMarker.swift")
     }
 
     private var conversationViewSourceURL: URL {

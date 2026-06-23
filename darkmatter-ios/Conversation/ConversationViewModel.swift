@@ -96,15 +96,12 @@ final class ConversationViewModel {
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
     private var readStateTask: Task<Void, Never>?
-    private var readMarkTask: Task<Void, Never>?
     private var tailRefreshTask: Task<Void, Never>?
     private var tailRefreshGeneration: UInt64 = 0
 
     private static let timelinePageLimit: UInt32 = 50
     private static let liveSubscriptionInitialRetryDelayNanoseconds: UInt64 = 500_000_000
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
-    private static let readMarkCoalescingDelayNanoseconds: UInt64 = 100_000_000
-    private static let maxMarkedReadMessageIds = Int(timelinePageLimit) * 4
     nonisolated static let maxSystemTimelineItems = 64
 
     /// Renderable timeline messages we've loaded by id.
@@ -127,6 +124,18 @@ final class ConversationViewModel {
     /// and no separate `listMedia` round-trip to recover `sourceEpoch`.
     @ObservationIgnored private var mediaReferencesByMessageId: [String: [MediaAttachmentReferenceFfi]] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
+    // Lazy so its `[weak self]` loaded-window closure can capture a fully
+    // initialized self; first touched on the post-start apply/mark paths.
+    @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
+        groupIdHex: group.groupIdHex,
+        maxMarkedReadMessageIds: Int(Self.timelinePageLimit) * 4,
+        appState: appState,
+        loadedMessageIds: { [weak self] in
+            guard let self else { return [] }
+            return Set(self.messageById.keys)
+        },
+        onChatListRowUpdated: onChatListRowUpdated
+    )
 #if DEBUG
     // Counts buildMediaItemProjection invocations across both record-backed and
     // classify-backed media paths so tests can catch accidental body-time rebuilds.
@@ -161,19 +170,15 @@ final class ConversationViewModel {
     var streamTextLengthEntryCountForTesting: Int { streamTextLengthById.count }
     var scannedFinalizedMessageIdCountForTesting: Int { scannedFinalizedMessageIds.count }
     var finalizedStreamIdCountForTesting: Int { finalizedStreamIds.count }
-    var markedReadMessageIdsForTesting: Set<String> { markedReadMessageIds }
+    var markedReadMessageIdsForTesting: Set<String> { readMarker.markedReadMessageIdsForTesting }
     var mediaItemProjectionBuildCountForTesting: Int { mediaItemProjectionBuildCountForTestingStorage }
 
     func insertMarkedReadMessageIdsForTesting(_ messageIds: Set<String>) {
-        markedReadMessageIds.formUnion(messageIds)
-        pruneMarkedReadMessageIds(force: true)
+        readMarker.insertMarkedReadMessageIdsForTesting(messageIds)
     }
 
     func insertPendingReadMessageIdsForTesting(_ messageIds: [String]) {
-        for messageId in messageIds {
-            guard pendingReadMessageIdSet.insert(messageId).inserted else { continue }
-            pendingReadMessageIds.append(messageId)
-        }
+        readMarker.insertPendingReadMessageIdsForTesting(messageIds)
     }
 #endif
     /// Streams that received a checkpoint snapshot. Their QUIC `.finished`
@@ -197,13 +202,6 @@ final class ConversationViewModel {
     /// Start-record timestamps for live previews, keyed by stream id.
     private var streamStartedAtById: [String: UInt64] = [:]
     private var streamSenderById: [String: String] = [:]
-    /// Message ids recently marked read or awaiting a coalesced mark-read flush.
-    /// This is a local dedup cache only; Marmot read marking is idempotent, so it
-    /// is pruned to the loaded window and capped instead of retaining every id
-    /// seen by the view model.
-    private var markedReadMessageIds: Set<String> = []
-    private var pendingReadMessageIds: [String] = []
-    private var pendingReadMessageIdSet: Set<String> = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
     @ObservationIgnored private var streamDebugTimelineItems: [String: TimelineItem] = [:]
     /// Monotonic insert order for QUIC debug rows; zero-padded in ids so
@@ -481,7 +479,6 @@ final class ConversationViewModel {
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
         readStateTask?.cancel()
-        readMarkTask?.cancel()
         tailRefreshTask?.cancel()
         for task in streamWatchTasks.values { task.cancel() }
     }
@@ -515,61 +512,11 @@ final class ConversationViewModel {
     }
 
     func markReadIfVisible(_ record: AppMessageRecordFfi) async {
-        guard Self.shouldMarkRead(
-            record,
-            isDeleted: isDeleted(record.messageIdHex),
-            alreadyMarked: markedReadMessageIds.contains(record.messageIdHex)
-        ),
-            let appState,
-            let accountRef = appState.activeAccountRef
-        else { return }
-
-        markedReadMessageIds.insert(record.messageIdHex)
-        enqueueReadMark(messageIdHex: record.messageIdHex, accountRef: accountRef)
-        pruneMarkedReadMessageIds()
-    }
-
-    static func shouldMarkRead(_ record: AppMessageRecordFfi, isDeleted: Bool, alreadyMarked: Bool) -> Bool {
-        !alreadyMarked
-            && !isDeleted
-            && !record.messageIdHex.isEmpty
-            && record.kind == MessageSemantics.kindChat
-    }
-
-    nonisolated static func retainedMarkedReadMessageIds(
-        _ current: Set<String>,
-        loadedMessageIds: Set<String>,
-        pendingMessageIds: Set<String>,
-        limit: Int
-    ) -> Set<String> {
-        let pending = current.intersection(pendingMessageIds)
-        let boundedLimit = max(0, limit)
-        guard boundedLimit > 0 else { return pending }
-
-        let loaded = current.intersection(loadedMessageIds)
-        let retainedCandidates = loaded.union(pending)
-        guard retainedCandidates.count > boundedLimit else {
-            return retainedCandidates
-        }
-
-        var retained = pending
-        let remainingCapacity = max(0, boundedLimit - retained.count)
-        if remainingCapacity > 0 {
-            for messageId in loaded.subtracting(retained).prefix(remainingCapacity) {
-                retained.insert(messageId)
-            }
-        }
-        return retained
+        await readMarker.markReadIfVisible(record, isDeleted: isDeleted(record.messageIdHex))
     }
 
     private func pruneMarkedReadMessageIds(force: Bool = false) {
-        guard force || markedReadMessageIds.count > Self.maxMarkedReadMessageIds else { return }
-        markedReadMessageIds = Self.retainedMarkedReadMessageIds(
-            markedReadMessageIds,
-            loadedMessageIds: Set(messageById.keys),
-            pendingMessageIds: pendingReadMessageIdSet,
-            limit: Self.maxMarkedReadMessageIds
-        )
+        readMarker.pruneMarkedReadMessageIds(force: force)
     }
 
     static func canDeleteMessage(
@@ -611,76 +558,6 @@ final class ConversationViewModel {
         }
     }
 
-    private func enqueueReadMark(messageIdHex: String, accountRef: String) {
-        guard pendingReadMessageIdSet.insert(messageIdHex).inserted else { return }
-        pendingReadMessageIds.append(messageIdHex)
-        scheduleReadMarkFlush(accountRef: accountRef)
-    }
-
-    private func scheduleReadMarkFlush(accountRef: String) {
-        guard readMarkTask == nil else { return }
-        readMarkTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.readMarkCoalescingDelayNanoseconds)
-            guard !Task.isCancelled else { return }
-            await self?.flushPendingReadMarks(accountRef: accountRef)
-        }
-    }
-
-    private func flushPendingReadMarks(accountRef: String) async {
-        readMarkTask = nil
-        let messageIds = pendingReadMessageIds
-        pendingReadMessageIds = []
-        guard !messageIds.isEmpty else {
-            pendingReadMessageIdSet = []
-            pruneMarkedReadMessageIds(force: true)
-            return
-        }
-        defer {
-            pendingReadMessageIdSet.subtract(messageIds)
-            pruneMarkedReadMessageIds(force: true)
-        }
-        guard let appState, appState.canUseRuntimeForForegroundWork else {
-            markedReadMessageIds.subtract(messageIds)
-            return
-        }
-        guard appState.activeAccountRef == accountRef else {
-            markedReadMessageIds.subtract(messageIds)
-            return
-        }
-
-        do {
-            let client = try appState.currentMarmotClient()
-            let results = await client.markTimelineMessagesRead(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                messageIdHexes: messageIds
-            )
-            for result in results where !result.succeeded {
-                markedReadMessageIds.remove(result.messageIdHex)
-            }
-            if let row = results.compactMap(\.row).last {
-                onChatListRowUpdated?(row)
-            }
-        } catch {
-            markedReadMessageIds.subtract(messageIds)
-        }
-
-        if !pendingReadMessageIds.isEmpty, appState.activeAccountRef == accountRef {
-            scheduleReadMarkFlush(accountRef: accountRef)
-        }
-    }
-
-    private func cancelPendingReadMarks() {
-        readMarkTask?.cancel()
-        readMarkTask = nil
-        if !pendingReadMessageIdSet.isEmpty {
-            markedReadMessageIds.subtract(pendingReadMessageIdSet)
-        }
-        pendingReadMessageIds = []
-        pendingReadMessageIdSet = []
-        pruneMarkedReadMessageIds(force: true)
-    }
-
     private func stopLiveSubscriptions() {
         timelineTask?.cancel()
         timelineTask = nil
@@ -693,8 +570,8 @@ final class ConversationViewModel {
         groupDetailsTask = nil
         readStateTask?.cancel()
         readStateTask = nil
-        cancelPendingReadMarks()
-        markedReadMessageIds.removeAll()
+        readMarker.cancelPendingReadMarks()
+        readMarker.clearMarks()
         cancelTimelineTailRefresh()
         for task in streamWatchTasks.values {
             task.cancel()
@@ -1305,9 +1182,7 @@ final class ConversationViewModel {
         mediaReferencesByMessageId[messageIdHex] = nil
         projectedReactionSummaries[messageIdHex] = nil
         projectedDeletedMessageIds.remove(messageIdHex)
-        if !pendingReadMessageIdSet.contains(messageIdHex) {
-            markedReadMessageIds.remove(messageIdHex)
-        }
+        readMarker.forgetMarkIfNotPending(messageIdHex)
         scannedFinalizedMessageIds.remove(messageIdHex)
         let timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
