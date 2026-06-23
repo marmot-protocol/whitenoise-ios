@@ -4514,7 +4514,7 @@ struct ConversationTimelineProjectionTests {
     @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
-        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*optimisticDeletedMessageIds\.insert"#))
+        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*deletedProjections\.insertOptimistic"#))
     }
 
     @Test func canDeleteMessageRequiresSenderOrAdminPermission() {

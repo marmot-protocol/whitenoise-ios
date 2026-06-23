@@ -595,7 +595,27 @@ polling over re-running.
               but the recompute only depends on `deletedMessageIds` (already its own
               projection, passed as a param) — not on `messageById`/timeline rows — so it
               peels cleanly now, shrinking what the core must carry.
-        - [ ] THEN the core: `messageById` mirror + optimistic overlay (pending sends) +
+        - [x] `ConversationDeletedMessageProjection` (VM 2590 → 2572): the last
+              optimistic-overlay projection peeled out. Folds projected deletes (ingest)
+              ∪ optimistic deletes into `deletedMessageIds`; `isDeleted` (already gated on
+              `timelineProjectionGeneration`) + the reaction recompute read through it.
+              `deleteMessage`/seed/reset/ingest route through the cache; every mutation
+              path already bumps the generation, so observation is unchanged. One
+              source-scrape (`deleteMessageChecksPermissionBeforeOptimisticTombstone`)
+              repointed to `deletedProjections.insertOptimistic`.
+        - [ ] THEN the core: `messageById` mirror + optimistic send overlay
+              (`transientTimelineItems`/`applyPendingOutgoingMessage`/`confirmSent`/
+              `reconcilePendingOutgoingMessage`) + pagination + the rebuild engine
+              (`rebuildTimeline`/`upsert`/`remove`/`assignTimeline`/`visibleTimelineItem`)
+              + the apply* ingest. This is the irreducible part: it has back-edges into
+              the stream watcher (`watchAgentStreamStartIfNeeded`,
+              `dropMatchingStreamPreviewIfNeeded`, `resolveFinalizedStream`,
+              `streamDebugTimelineItems`) and reads `streamingDebugEnabled`/`myAccountId`,
+              so a clean class lift needs a delegate for those hooks (or the StreamWatcher
+              carved first). The view observes `timeline`/`timelineProjectionGeneration`/
+              pagination flags, so a TimelineStore must re-forward them as `@Observable`
+              computed props. Needs app-run verification (the timeline is the app's most-
+              used surface), not just tests. NOT a pure projection peel like the four above.
               pagination state + the rebuild engine + accessors. The big atomic move that
               the send pipeline / stream watcher then delegate into.
       - [ ] After the core lands, the now-unblocked carves:

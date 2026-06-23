@@ -67,8 +67,6 @@ final class ConversationViewModel {
     private(set) var groupMemberDetails: [GroupMemberDetailsFfi] = []
     private(set) var groupMlsRefreshGeneration: UInt64 = 0
     private(set) var managementState: GroupManagementStateFfi?
-    /// Message ids tombstoned by the timeline projection or local optimistic deletes.
-    private(set) var deletedMessageIds: Set<String> = []
     /// Coarse invalidation token for projection data read through methods.
     private(set) var timelineProjectionGeneration = 0
     private(set) var hasMoreBefore = false
@@ -112,8 +110,9 @@ final class ConversationViewModel {
     /// state + aggregation live in the cache.
     @ObservationIgnored private let reactionProjections = ConversationReactionProjectionCache()
     @ObservationIgnored private let markdownProjections = ConversationMarkdownProjectionCache()
-    @ObservationIgnored private var projectedDeletedMessageIds: Set<String> = []
-    @ObservationIgnored private var optimisticDeletedMessageIds: Set<String> = []
+    /// Tombstone projection: projected deletes (ingest) ∪ optimistic deletes,
+    /// read via `isDeleted` and fed to the reaction recompute.
+    @ObservationIgnored private let deletedProjections = ConversationDeletedMessageProjection()
     @ObservationIgnored private var timelineSubscription: TimelineMessagesSubscription?
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
@@ -566,15 +565,15 @@ final class ConversationViewModel {
     }
 
     private func resetOptimisticState() {
-        let backingChanged = !optimisticDeletedMessageIds.isEmpty ||
+        let backingChanged = deletedProjections.hasOptimistic ||
             reactionProjections.hasOptimistic ||
             !systemTimelineItems.isEmpty ||
             mediaProjections.hasPending
-        optimisticDeletedMessageIds.removeAll()
+        deletedProjections.removeAllOptimistic()
         reactionProjections.removeAllOptimistic()
         systemTimelineItems.removeAll()
         mediaProjections.removeAllPending()
-        let deletedChanged = rebuildDeletedMessageIds()
+        let deletedChanged = deletedProjections.rebuild()
         let reactionsChanged = recomputeReactions()
         let timelineChanged = backingChanged ? rebuildTimeline() : false
         let changed = backingChanged || deletedChanged || reactionsChanged || timelineChanged
@@ -604,7 +603,7 @@ final class ConversationViewModel {
         emoji: String,
         sender: String
     ) {
-        optimisticDeletedMessageIds.insert(deletedMessageIdHex)
+        deletedProjections.insertOptimistic(deletedMessageIdHex)
         let reactionId = "optimistic-\(reactionTargetMessageIdHex)-\(emoji)"
         reactionProjections.setRecord(
             AppMessageRecordFfi(
@@ -620,7 +619,7 @@ final class ConversationViewModel {
             ),
             forKey: reactionId
         )
-        _ = rebuildDeletedMessageIds()
+        _ = deletedProjections.rebuild()
         _ = recomputeReactions()
     }
 #endif
@@ -1105,11 +1104,7 @@ final class ConversationViewModel {
             summary: record.reactions,
             me: myAccountId ?? ""
         )
-        if record.deleted {
-            projectedDeletedMessageIds.insert(record.messageIdHex)
-        } else {
-            projectedDeletedMessageIds.remove(record.messageIdHex)
-        }
+        deletedProjections.setProjected(deleted: record.deleted, forMessageId: record.messageIdHex)
         projectionChanged = reconcilePendingOutgoingMessage(
             with: appRecord,
             replyTargetId: record.replyToMessageIdHex
@@ -1142,7 +1137,7 @@ final class ConversationViewModel {
         replyPreviewsByMessageId[messageIdHex] = nil
         mediaProjections.removeReferences(forMessageId: messageIdHex)
         reactionProjections.removeSummary(forMessageId: messageIdHex)
-        projectedDeletedMessageIds.remove(messageIdHex)
+        deletedProjections.removeProjected(forMessageId: messageIdHex)
         readMarker.forgetMarkIfNotPending(messageIdHex)
         scannedFinalizedMessageIds.remove(messageIdHex)
         let timelineChanged = updateTimeline
@@ -1171,7 +1166,7 @@ final class ConversationViewModel {
         projectionChanged: Bool = false
     ) {
         var changed = projectionChanged
-        changed = rebuildDeletedMessageIds() || changed
+        changed = deletedProjections.rebuild() || changed
         changed = recomputeReactions() || changed
         if shouldRebuildTimeline {
             changed = rebuildTimeline() || changed
@@ -1179,14 +1174,6 @@ final class ConversationViewModel {
         if changed {
             noteTimelineProjectionChanged()
         }
-    }
-
-    @discardableResult
-    private func rebuildDeletedMessageIds() -> Bool {
-        let next = projectedDeletedMessageIds.union(optimisticDeletedMessageIds)
-        guard deletedMessageIds != next else { return false }
-        deletedMessageIds = next
-        return true
     }
 
     @discardableResult
@@ -1633,7 +1620,7 @@ final class ConversationViewModel {
 
     func isDeleted(_ messageIdHex: String) -> Bool {
         _ = timelineProjectionGeneration
-        return deletedMessageIds.contains(messageIdHex)
+        return deletedProjections.contains(messageIdHex)
     }
 
     /// Rebuild the per-target reaction tallies, folding the local optimistic
@@ -1642,7 +1629,7 @@ final class ConversationViewModel {
     /// and local account id.
     @discardableResult
     private func recomputeReactions() -> Bool {
-        reactionProjections.recompute(deletedMessageIds: deletedMessageIds, me: myAccountId ?? "")
+        reactionProjections.recompute(deletedMessageIds: deletedProjections.deletedMessageIds, me: myAccountId ?? "")
     }
 
     /// Prefer the event's own `recordedAt` so the timeline sorts by send time;
@@ -2151,8 +2138,8 @@ final class ConversationViewModel {
               !message.messageIdHex.isEmpty,
               Self.canDeleteMessage(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin)
         else { return }
-        optimisticDeletedMessageIds.insert(message.messageIdHex)
-        if rebuildDeletedMessageIds() {
+        deletedProjections.insertOptimistic(message.messageIdHex)
+        if deletedProjections.rebuild() {
             noteTimelineProjectionChanged()
         }
         do {
@@ -2163,8 +2150,8 @@ final class ConversationViewModel {
             )
             Haptics.warning()
         } catch {
-            optimisticDeletedMessageIds.remove(message.messageIdHex)
-            if rebuildDeletedMessageIds() {
+            deletedProjections.removeOptimistic(message.messageIdHex)
+            if deletedProjections.rebuild() {
                 noteTimelineProjectionChanged()
             }
             Haptics.error()
