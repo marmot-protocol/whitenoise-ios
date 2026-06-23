@@ -2009,7 +2009,7 @@ struct LocalizationCatalogTests {
                 #"L10n.string("Published \(summary.published) updates.")"#
             ),
             (
-                "darkmatter-ios/Settings/ProfileEditView.swift",
+                "darkmatter-ios/Settings/ProfileEditViewModel.swift",
                 #"L10n.string("Your kind:0 metadata is live on \(relays.count) relays.")"#
             ),
             (
@@ -3496,21 +3496,27 @@ struct NotificationServiceTests {
 struct ProfileEditViewTests {
     @Test func profilePictureDraftUsesPublicHTTPSPolicyBeforePublish() throws {
         let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
 
-        #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(picture)"))
+        // Avatar (view) + draft normalization (pure type, still in the view file).
+        #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(model.picture)"))
         #expect(source.contains("private var normalizedPictureURL: String?"))
         #expect(source.contains("ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString"))
         #expect(source.contains("picture: normalizedPictureURL"))
-        #expect(source.contains("profile: normalizedMetadata.ffi"))
+        // Publish wiring moved to the view model.
+        #expect(modelSource.contains("profile: normalizedMetadata.ffi"))
         #expect(!source.contains("picture: picture.isEmpty ? nil : picture"))
     }
 
     @Test func profileSaveIsDisabledForInvalidPictureDraft() throws {
         let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
 
+        // saveDisabled stays in the view (it also reads appState.activeAccountRef).
         #expect(source.contains(".disabled(saveDisabled)"))
         #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*currentDraft\.validationError != nil"#))
-        #expect(source.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
+        // Per-field validation messages moved to the view model.
+        #expect(modelSource.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
     }
 
     @Test func profileMetadataDraftSanitizesAndBoundsOutgoingFields() throws {
@@ -3557,6 +3563,13 @@ struct ProfileEditViewTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Settings/ProfileEditView.swift")
+    }
+
+    private var profileEditViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Settings/ProfileEditViewModel.swift")
     }
 }
 

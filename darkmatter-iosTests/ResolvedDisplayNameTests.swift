@@ -113,7 +113,7 @@ struct ResolvedDisplayNameTests {
     }
 
     @Test func profilePublishRefreshesProjectionCache() throws {
-        let source = try sourceString("darkmatter-ios/Settings/ProfileEditView.swift")
+        let source = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
 
         #expect(source.contains("await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)"))
     }

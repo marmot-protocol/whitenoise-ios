@@ -72,14 +72,14 @@ struct MarmotClientStorageReadOffloadTests {
 
         // MainActor-bound callers must await the accessors rather than computing
         // from a synchronous read.
-        let profileEditSource = try sourceString("darkmatter-ios/Settings/ProfileEditView.swift")
+        let profileEditSource = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
         #expect(
             profileEditSource.contains("await appState.relayPublishRelays(for:"),
-            "ProfileEditView does not await relayPublishRelays"
+            "ProfileEditViewModel does not await relayPublishRelays"
         )
         #expect(
             profileEditSource.contains("await appState.relayBootstrapRelays(for:"),
-            "ProfileEditView does not await relayBootstrapRelays"
+            "ProfileEditViewModel does not await relayBootstrapRelays"
         )
 
         // refreshProfile moved to ProfileStore (Phase 2); it reaches the async
