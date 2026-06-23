@@ -5,33 +5,24 @@ import MarmotKit
 /// chooses the account relay lists; iOS only supplies the edited metadata.
 struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var existingName: String?
-    @State private var displayName: String = ""
-    @State private var about: String = ""
-    @State private var picture: String = ""
-    @State private var nip05: String = ""
-    @State private var lud16: String = ""
-
-    @State private var isPublishing = false
-    @State private var error: String?
+    @State private var model = ProfileEditViewModel()
 
     var body: some View {
-        Form {
+        @Bindable var model = model
+        return Form {
             Section {
                 if let active = appState.activeAccount {
                     HStack(spacing: 12) {
                         AvatarBubble(
                             seed: active.accountIdHex,
-                            title: displayName.isEmpty
+                            title: model.displayName.isEmpty
                                 ? appState.shortNpub(forAccountIdHex: active.accountIdHex)
-                                : displayName,
-                            pictureURL: ProfileSanitizer.imageURL(picture)
+                                : model.displayName,
+                            pictureURL: ProfileSanitizer.imageURL(model.picture)
                         )
                         .frame(width: 56, height: 56)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(displayName.isEmpty ? L10n.string("Anonymous") : displayName)
+                            Text(model.displayName.isEmpty ? L10n.string("Anonymous") : model.displayName)
                                 .font(.headline)
                             Text(appState.shortNpub(forAccountIdHex: active.accountIdHex))
                                 .font(.caption.monospaced())
@@ -43,30 +34,30 @@ struct ProfileEditView: View {
             }
 
             Section("Profile") {
-                TextField("Display name", text: $displayName)
-                TextField("About", text: $about, axis: .vertical)
+                TextField("Display name", text: $model.displayName)
+                TextField("About", text: $model.about, axis: .vertical)
                     .lineLimit(2...5)
-                TextField("Picture URL", text: $picture)
+                TextField("Picture URL", text: $model.picture)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                if let invalidPictureMessage {
+                if let invalidPictureMessage = model.invalidPictureMessage {
                     Label(invalidPictureMessage, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
-                TextField("NIP-05 (name@domain)", text: $nip05)
+                TextField("NIP-05 (name@domain)", text: $model.nip05)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                if let invalidNip05Message {
+                if let invalidNip05Message = model.invalidNip05Message {
                     Label(invalidNip05Message, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
-                TextField("Lightning (lud16)", text: $lud16)
+                TextField("Lightning (lud16)", text: $model.lud16)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                if let invalidLud16Message {
+                if let invalidLud16Message = model.invalidLud16Message {
                     Label(invalidLud16Message, systemImage: "exclamationmark.triangle.fill")
                         .font(.footnote)
                         .foregroundStyle(.red)
@@ -75,13 +66,13 @@ struct ProfileEditView: View {
 
             Section {
                 Button {
-                    Task { await publish() }
+                    Task { await model.publish(using: appState) }
                 } label: {
                     HStack {
-                        if isPublishing {
+                        if model.isPublishing {
                             ProgressView().controlSize(.small)
                         }
-                        Text(isPublishing ? L10n.string("Publishing…") : L10n.string("Save profile"))
+                        Text(model.isPublishing ? L10n.string("Publishing…") : L10n.string("Save profile"))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 2)
                     }
@@ -91,7 +82,7 @@ struct ProfileEditView: View {
                 .disabled(saveDisabled)
             }
 
-            if let error {
+            if let error = model.error {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -100,112 +91,15 @@ struct ProfileEditView: View {
         }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await loadExisting() }
+        .task { await model.loadExisting(using: appState) }
     }
 
-    private var trimmedPicture: String {
-        picture.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var currentDraft: ProfileEditMetadataDraft {
-        ProfileEditMetadataDraft(
-            name: existingName,
-            displayName: displayName,
-            about: about,
-            picture: picture,
-            nip05: nip05,
-            lud16: lud16
-        )
-    }
-
-    private var normalizedPictureURL: String? {
-        ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString
-    }
-
+    /// Stays in the view because it also reads `appState.activeAccountRef`; the
+    /// draft validation it consults lives on the model's `currentDraft`.
     private var saveDisabled: Bool {
-        isPublishing
+        model.isPublishing
             || appState.activeAccountRef == nil
-            || currentDraft.validationError != nil
-    }
-
-    private var invalidPictureMessage: String? {
-        validationMessage(for: .picture)
-    }
-
-    private var invalidNip05Message: String? {
-        validationMessage(for: .nip05)
-    }
-
-    private var invalidLud16Message: String? {
-        validationMessage(for: .lud16)
-    }
-
-    private func validationMessage(for field: ProfileEditMetadataField) -> String? {
-        guard currentDraft.validationError == field else { return nil }
-        switch field {
-        case .picture:
-            return L10n.string("Only public HTTPS image URLs are allowed.")
-        case .nip05:
-            return L10n.string("Enter a valid NIP-05 address like name@example.com.")
-        case .lud16:
-            return L10n.string("Enter a valid Lightning address like name@example.com.")
-        }
-    }
-
-    @MainActor
-    private func loadExisting() async {
-        guard let id = appState.activeAccount?.accountIdHex else { return }
-        let cachedProfile = appState.profile(forAccountIdHex: id)
-        let loadedProfile = await appState.reloadProfileProjection(forAccountIdHex: id)?.profile
-        guard let profile = loadedProfile ?? cachedProfile else { return }
-        let formFields = ProfileEditFormFields(profile: profile)
-        existingName = formFields.name
-        // Only seed empty fields so we don't clobber in-progress edits.
-        if displayName.isEmpty { displayName = formFields.displayName }
-        if about.isEmpty { about = formFields.about }
-        if picture.isEmpty { picture = formFields.picture }
-        if nip05.isEmpty { nip05 = formFields.nip05 }
-        if lud16.isEmpty { lud16 = formFields.lud16 }
-    }
-
-    @MainActor
-    private func publish() async {
-        guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex
-        else { return }
-
-        let draft = currentDraft
-        if let validationError = draft.validationError {
-            Haptics.error()
-            error = validationMessage(for: validationError)
-            return
-        }
-        guard let normalizedMetadata = draft.normalizedMetadata else { return }
-
-        isPublishing = true
-        error = nil
-
-        do {
-            let relays = await appState.relayPublishRelays(for: accountRef)
-            let bootstrapRelays = await appState.relayBootstrapRelays(for: accountRef)
-            _ = try await appState.marmot.publishUserProfile(
-                accountRef: accountRef,
-                profile: normalizedMetadata.ffi,
-                defaultRelays: relays,
-                bootstrapRelays: bootstrapRelays
-            )
-            await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)
-            Haptics.success()
-            appState.present(.success(
-                L10n.string("Profile published"),
-                message: L10n.plural("Your kind:0 metadata is live on %lld relays.", Int64(relays.count))
-            ))
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
-            appState.present(.error(L10n.string("Couldn't publish profile"), message: error.localizedDescription))
-        }
-        isPublishing = false
+            || model.currentDraft.validationError != nil
     }
 }
 

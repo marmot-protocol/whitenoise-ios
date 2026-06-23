@@ -161,27 +161,28 @@ final class AppState {
         phase == .ready || phase == .onboarding
     }
 
-    /// All accounts known to marmot-app, refreshed after every account-changing call.
-    private(set) var accounts: [AccountSummaryFfi] = []
+    /// Account list + active selection. Owned by `AccountStore`; these forwarders
+    /// keep the `appState.accounts` / `activeAccountRef` / `activeAccount` call
+    /// sites and SwiftUI observation unchanged. AppState still drives the Marmot
+    /// account refresh and the identity lifecycle (create / import / sign-out).
+    @ObservationIgnored let accountStore = AccountStore()
+    var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
-    /// Cached per-account unread totals keyed by account id hex. Backed by
-    /// Marmot's materialized chat-list aggregate and patched from active-list
-    /// updates while the chats screen is live.
-    private(set) var accountUnreadSummariesByAccountId: [String: AccountUnreadFfi] = [:]
+    /// Per-account unread totals (account-switcher badges). Owned by
+    /// `AccountUnreadStore`; this read-only forwarder keeps the
+    /// `appState.accountUnreadSummariesByAccountId` call sites and SwiftUI
+    /// observation of the badges unchanged.
+    @ObservationIgnored let accountUnreadStore = AccountUnreadStore()
+    var accountUnreadSummariesByAccountId: [String: AccountUnreadFfi] {
+        accountUnreadStore.byAccountId
+    }
 
     /// The account whose chats / messages are currently displayed.
-    /// `nil` only between bootstrap and onboarding completion.
+    /// `nil` only between bootstrap and onboarding completion. Backed by
+    /// `AccountStore` (which persists it to UserDefaults).
     var activeAccountRef: String? {
-        didSet {
-            if let ref = activeAccountRef {
-                UserDefaults.standard.set(ref, forKey: Self.activeAccountKey)
-            } else {
-                // Clearing the ref (e.g. signing out of the only account)
-                // must remove the persisted value, otherwise the next launch
-                // resurrects the signed-out account from UserDefaults.
-                UserDefaults.standard.removeObject(forKey: Self.activeAccountKey)
-            }
-        }
+        get { accountStore.activeAccountRef }
+        set { accountStore.activeAccountRef = newValue }
     }
 
     /// Developer mode: surfaces extra debugging UI (e.g. MLS group internals
@@ -245,16 +246,10 @@ final class AppState {
     private var foregroundActivationTask: Task<Void, Never>?
     private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
-    @ObservationIgnored var profileFetchQueueTask: Task<Void, Never>?
-    @ObservationIgnored var queuedProfileFetchIDs: [String] = []
-    @ObservationIgnored var scheduledProfileFetchIDs: Set<String> = []
-    @ObservationIgnored var activeProfileFetchID: String?
-    @ObservationIgnored var profileProjectionCache: [String: ProfileDisplayProjection] = [:]
-    @ObservationIgnored var profileProjectionLoadTask: Task<Void, Never>?
-    @ObservationIgnored var queuedProfileProjectionLoadIDs: [String] = []
-    @ObservationIgnored var scheduledProfileProjectionLoadIDs: Set<String> = []
-    @ObservationIgnored var profileProjectionRefreshAfterLoadIDs: Set<String> = []
-    @ObservationIgnored var profileProjectionLoadVersions: [String: Int] = [:]
+    /// Profile projection cache + hydration/refresh queues. `profileRefreshGeneration`
+    /// stays on AppState (below) as the observed token; the store reads/bumps it
+    /// through its back-reference so SwiftUI observation is unchanged.
+    @ObservationIgnored let profileStore = ProfileStore()
     private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
@@ -317,7 +312,6 @@ final class AppState {
         )
     }
 
-    private static let activeAccountKey = "marmot.activeAccountRef"
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
     private static let recentReactionsKey = "marmot.recentReactions"
@@ -337,11 +331,11 @@ final class AppState {
         self.runtimeRelayUrls = client.relayUrls
         self.notifications = notifications
         self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
-        self.activeAccountRef = UserDefaults.standard.string(forKey: Self.activeAccountKey)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
+        self.profileStore.appState = self
     }
 
     convenience init(client: MarmotClient) {
@@ -353,8 +347,7 @@ final class AppState {
         foregroundActivationTask?.cancel()
         nativePushRegistrationTask?.cancel()
         runtimeSuspensionTask?.cancel()
-        profileFetchQueueTask?.cancel()
-        profileProjectionLoadTask?.cancel()
+        // ProfileStore cancels its own tasks in its deinit.
     }
 
     func noteProfileRefreshCompleted() {
@@ -769,8 +762,8 @@ final class AppState {
         do {
             try await refreshAccounts()
         } catch {
-            accounts.removeAll { $0.label == signingOut }
-            pruneAccountUnreadSummariesToCurrentAccounts()
+            accountStore.accounts.removeAll { $0.label == signingOut }
+            accountUnreadStore.pruneToCurrentAccounts(accounts)
             present(.error(L10n.string("Couldn't refresh accounts"), message: error.localizedDescription))
         }
 
@@ -793,8 +786,7 @@ final class AppState {
             // apply a projection back into the cache. This reclaims the accumulated
             // entries.
             cancelProfileFetchQueue()
-            profileProjectionCache.removeAll()
-            profileProjectionLoadVersions.removeAll()
+            profileStore.clearForSignOut()
             stopNotificationSubscription()
             phase = .onboarding
         } else {
@@ -1183,33 +1175,31 @@ final class AppState {
 
     @MainActor
     private func refreshAccounts() async throws {
-        accounts = try await runtimeClient().listAccounts()
+        accountStore.accounts = try await runtimeClient().listAccounts()
         await refreshAccountUnreadSummaries()
         updateProfileProjectionLocalAccountLabels()
         warmLocalAccountProfileProjections()
     }
 
+    /// Fetches the durable unread aggregate (client access is AppState's domain)
+    /// and feeds it to the store; on failure prunes stale entries.
     @MainActor
     func refreshAccountUnreadSummaries() async {
         guard !accounts.isEmpty else {
-            accountUnreadSummariesByAccountId = [:]
+            accountUnreadStore.refreshed(from: [], accounts: [])
             return
         }
-
         do {
             let summaries = try await runtimeClient().accountUnreadSummary()
-            accountUnreadSummariesByAccountId = AccountUnreadSummaryProjection.byAccountId(
-                summaries,
-                accounts: accounts
-            )
+            accountUnreadStore.refreshed(from: summaries, accounts: accounts)
         } catch {
-            pruneAccountUnreadSummariesToCurrentAccounts()
+            accountUnreadStore.pruneToCurrentAccounts(accounts)
         }
     }
 
     @MainActor
     func accountUnreadSummary(forAccountIdHex accountIdHex: String) -> AccountUnreadFfi? {
-        accountUnreadSummariesByAccountId[accountIdHex]
+        accountUnreadStore.summary(forAccountIdHex: accountIdHex)
     }
 
     @MainActor
@@ -1217,19 +1207,7 @@ final class AppState {
         accountIdHex: String,
         chatListRows: [ChatListRowFfi]
     ) {
-        guard accounts.contains(where: { $0.accountIdHex == accountIdHex }) else { return }
-        accountUnreadSummariesByAccountId[accountIdHex] = AccountUnreadSummaryProjection.summary(
-            accountIdHex: accountIdHex,
-            rows: chatListRows
-        )
-    }
-
-    @MainActor
-    private func pruneAccountUnreadSummariesToCurrentAccounts() {
-        let knownAccountIds = Set(accounts.map(\.accountIdHex))
-        accountUnreadSummariesByAccountId = accountUnreadSummariesByAccountId.filter {
-            knownAccountIds.contains($0.key)
-        }
+        accountUnreadStore.update(accountIdHex: accountIdHex, chatListRows: chatListRows, accounts: accounts)
     }
 
     // MARK: - Identity management
@@ -1269,10 +1247,7 @@ final class AppState {
         return summary
     }
 
-    var activeAccount: AccountSummaryFfi? {
-        guard let ref = activeAccountRef else { return nil }
-        return accounts.first { $0.label == ref }
-    }
+    var activeAccount: AccountSummaryFfi? { accountStore.activeAccount }
 
     /// Reads the published account relay-list projection off the MainActor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so

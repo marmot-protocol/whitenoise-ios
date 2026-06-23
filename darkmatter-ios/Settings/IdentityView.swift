@@ -7,15 +7,11 @@ import MarmotKit
 /// backups through Marmot's audited keystore APIs.
 struct IdentityView: View {
     @Environment(AppState.self) private var appState
-    @State private var showSignOutConfirm = false
-    @State private var showRawExportConfirm = false
-    @State private var showEncryptedExportSheet = false
-    @State private var exportShareText: String?
-    @State private var exportInFlight = false
-    @State private var exportError: String?
+    @State private var model = IdentityViewModel()
 
     var body: some View {
-        Form {
+        @Bindable var model = model
+        return Form {
             if let active = appState.activeAccount {
                 Section {
                     LabeledContent("Display name") {
@@ -48,26 +44,26 @@ struct IdentityView: View {
                 if active.localSigning {
                     Section {
                         Button {
-                            exportError = nil
-                            showRawExportConfirm = true
+                            model.exportError = nil
+                            model.showRawExportConfirm = true
                         } label: {
                             Label("Export raw nsec", systemImage: "key.fill")
                         }
-                        .disabled(exportInFlight)
+                        .disabled(model.exportInFlight)
 
                         Button {
-                            exportError = nil
-                            showEncryptedExportSheet = true
+                            model.exportError = nil
+                            model.showEncryptedExportSheet = true
                         } label: {
                             Label("Export encrypted nsec", systemImage: "lock.fill")
                         }
-                        .disabled(exportInFlight)
+                        .disabled(model.exportInFlight)
 
-                        if exportInFlight {
+                        if model.exportInFlight {
                             ProgressView("Preparing export")
                         }
 
-                        if let exportError {
+                        if let exportError = model.exportError {
                             Label(exportError, systemImage: "exclamationmark.triangle.fill")
                                 .foregroundStyle(.red)
                                 .font(.callout)
@@ -88,7 +84,7 @@ struct IdentityView: View {
 
             Section {
                 Button(role: .destructive) {
-                    showSignOutConfirm = true
+                    model.showSignOutConfirm = true
                 } label: {
                     Label("Sign out of this account", systemImage: "rectangle.portrait.and.arrow.right")
                 }
@@ -100,104 +96,58 @@ struct IdentityView: View {
         }
         .navigationTitle("Identity")
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $showSignOutConfirm) {
+        .fullScreenCover(isPresented: $model.showSignOutConfirm) {
             FullScreenConfirmationDialog(
                 title: "Sign out?",
                 message: "Signing out removes this account and its local key material from this device.",
                 systemImage: "rectangle.portrait.and.arrow.right",
                 destructiveTitle: "Sign out",
                 onConfirm: {
-                    showSignOutConfirm = false
+                    model.showSignOutConfirm = false
                     Task { await appState.signOut() }
                 },
-                onCancel: { showSignOutConfirm = false }
+                onCancel: { model.showSignOutConfirm = false }
             )
             .appAppearance()
         }
-        .fullScreenCover(isPresented: $showRawExportConfirm) {
+        .fullScreenCover(isPresented: $model.showRawExportConfirm) {
             FullScreenConfirmationDialog(
                 title: "Export raw nsec?",
                 message: "This reveals your private key in plaintext. The export is logged, and this account's key will be permanently marked as handled insecurely.",
                 systemImage: "key.fill",
                 destructiveTitle: "Export raw nsec",
                 onConfirm: {
-                    showRawExportConfirm = false
-                    Task { await exportRawNsec() }
+                    model.showRawExportConfirm = false
+                    Task { await model.exportRawNsec(using: appState) }
                 },
-                onCancel: { showRawExportConfirm = false }
+                onCancel: { model.showRawExportConfirm = false }
             )
             .appAppearance()
         }
-        .sheet(isPresented: $showEncryptedExportSheet) {
+        .sheet(isPresented: $model.showEncryptedExportSheet) {
             EncryptedNsecExportSheet(
-                isExporting: exportInFlight,
-                errorMessage: exportError,
+                isExporting: model.exportInFlight,
+                errorMessage: model.exportError,
                 onCancel: {
-                    showEncryptedExportSheet = false
-                    exportError = nil
+                    model.showEncryptedExportSheet = false
+                    model.exportError = nil
                 },
                 onExport: { passphrase in
-                    Task { await exportEncryptedNsec(passphrase: passphrase) }
+                    Task { await model.exportEncryptedNsec(passphrase: passphrase, using: appState) }
                 }
             )
             .appAppearance()
         }
-        .sheet(isPresented: exportSharePresented) {
-            if let exportShareText {
+        .sheet(isPresented: Binding(
+            get: { model.exportShareText != nil },
+            set: { if !$0 { model.exportShareText = nil } }
+        )) {
+            if let exportShareText = model.exportShareText {
                 ActivityShareSheet(items: [exportShareText]) {
-                    self.exportShareText = nil
+                    model.exportShareText = nil
                 }
                 .appAppearance()
             }
-        }
-    }
-
-    private var exportSharePresented: Binding<Bool> {
-        Binding(
-            get: { exportShareText != nil },
-            set: { isPresented in
-                if !isPresented {
-                    exportShareText = nil
-                }
-            }
-        )
-    }
-
-    @MainActor
-    private func exportRawNsec() async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        exportInFlight = true
-        exportError = nil
-        defer { exportInFlight = false }
-
-        do {
-            let nsec = try await appState.revealNsec(accountRef: accountRef)
-            exportShareText = nsec
-            Haptics.success()
-        } catch {
-            Haptics.error()
-            exportError = IdentityKeyExportPresentation.errorMessage(for: error)
-        }
-    }
-
-    @MainActor
-    private func exportEncryptedNsec(passphrase: String) async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        exportInFlight = true
-        exportError = nil
-        defer { exportInFlight = false }
-
-        do {
-            let ncryptsec = try await appState.exportEncryptedSecretKey(
-                accountRef: accountRef,
-                passphrase: passphrase
-            )
-            showEncryptedExportSheet = false
-            exportShareText = ncryptsec
-            Haptics.success()
-        } catch {
-            Haptics.error()
-            exportError = IdentityKeyExportPresentation.errorMessage(for: error)
         }
     }
 }

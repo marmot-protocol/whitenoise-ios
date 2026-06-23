@@ -97,6 +97,7 @@ extension TimelineMessageRecordFfi {
         replyToMessageIdHex: String?,
         replyPreview: TimelineReplyPreviewFfi?,
         mediaJson: String?,
+        media: [MediaAttachmentReferenceFfi] = [],
         agentTextStreamJson: String?,
         groupSystem: GroupSystemEventFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
@@ -119,6 +120,7 @@ extension TimelineMessageRecordFfi {
             replyToMessageIdHex: replyToMessageIdHex,
             replyPreview: replyPreview,
             mediaJson: mediaJson,
+            media: media,
             agentTextStreamJson: agentTextStreamJson,
             groupSystem: groupSystem,
             reactions: reactions,
@@ -136,6 +138,7 @@ extension TimelineReplyPreviewFfi {
         plaintext: String,
         kind: UInt64,
         mediaJson: String?,
+        media: [MediaAttachmentReferenceFfi] = [],
         agentTextStreamJson: String?,
         deleted: Bool
     ) {
@@ -146,6 +149,7 @@ extension TimelineReplyPreviewFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             mediaJson: mediaJson,
+            media: media,
             agentTextStreamJson: agentTextStreamJson,
             deleted: deleted
         )

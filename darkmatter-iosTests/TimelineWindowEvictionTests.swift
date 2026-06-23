@@ -76,6 +76,7 @@ private func timelineRecord(messageIdHex: String, timelineAt: UInt64) -> Timelin
         replyToMessageIdHex: nil,
         replyPreview: nil,
         mediaJson: nil,
+        media: [],
         agentTextStreamJson: nil,
         groupSystem: nil,
         reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),

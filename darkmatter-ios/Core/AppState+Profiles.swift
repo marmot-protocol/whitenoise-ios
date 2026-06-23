@@ -1,39 +1,11 @@
 import Foundation
 import MarmotKit
 
-struct ProfileProjectionRequest: Equatable, Sendable {
-    var accountIdHex: String
-    var localAccountLabel: String?
-}
-
-struct ProfileDisplayProjection: Equatable {
-    var profile: UserProfileMetadataFfi?
-    var projectedName: String?
-    var localAccountLabel: String?
-
-    var knownDisplayName: String? {
-        AppState.resolvedKnownDisplayName(
-            profile: profile,
-            projectedName: projectedName,
-            localAccountLabel: localAccountLabel
-        )
-    }
-
-    var avatarURL: URL? {
-        ProfileSanitizer.imageURL(profile?.picture)
-    }
-
-    var hasRemoteIdentity: Bool {
-        profile != nil || ProfileSanitizer.displayName(projectedName) != nil
-    }
-
-    func updatingLocalAccountLabel(_ label: String?) -> ProfileDisplayProjection {
-        var updated = self
-        updated.localAccountLabel = label
-        return updated
-    }
-}
-
+// Profile projection state + queues live in `ProfileStore` (owned by AppState).
+// These are thin forwarders so existing `appState.profile(...)` call sites are
+// unchanged; `npub`/`shortNpub` stay here because they read the binding, not the
+// projection cache. `profileRefreshGeneration` remains on AppState so SwiftUI
+// observation of these reads is unchanged.
 extension AppState {
     /// Full Nostr profile for an account id from the app-owned projection
     /// cache. A miss schedules off-main Marmot hydration and one relay refresh
@@ -41,7 +13,7 @@ extension AppState {
     @MainActor
     @discardableResult
     func profile(forAccountIdHex id: String) -> UserProfileMetadataFfi? {
-        cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.profile
+        profileStore.profile(forAccountIdHex: id)
     }
 
     /// A display name we actually *know* for an account: projected kind:0
@@ -50,7 +22,7 @@ extension AppState {
     /// fallback (e.g. an npub for a DM peer).
     @MainActor
     func knownDisplayName(forAccountIdHex id: String) -> String? {
-        cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.knownDisplayName
+        profileStore.knownDisplayName(forAccountIdHex: id)
     }
 
     /// Pure resolution of the best known display name from its three sources, in
@@ -98,7 +70,7 @@ extension AppState {
     /// Untrusted: only http(s) URLs with a host pass the sanitizer.
     @MainActor
     func avatarURL(forAccountIdHex id: String) -> URL? {
-        cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.avatarURL
+        profileStore.avatarURL(forAccountIdHex: id)
     }
 
     /// The `npub...` bech32 form of an account id hex, read from the binding.
@@ -116,338 +88,45 @@ extension AppState {
 
     @MainActor
     func warmProfileProjection(forAccountIdHex id: String, refreshAfterLoad: Bool = false) {
-        scheduleProfileProjectionLoad(forAccountIdHex: id, refreshAfterLoad: refreshAfterLoad)
+        profileStore.warmProfileProjection(forAccountIdHex: id, refreshAfterLoad: refreshAfterLoad)
     }
 
     @MainActor
     func warmLocalAccountProfileProjections() {
-        for account in accounts {
-            warmProfileProjection(forAccountIdHex: account.accountIdHex)
-        }
+        profileStore.warmLocalAccountProfileProjections()
     }
 
     @MainActor
     func updateProfileProjectionLocalAccountLabels() {
-        var localLabelsByID: [String: String] = [:]
-        for account in accounts {
-            localLabelsByID[account.accountIdHex] = account.label
-        }
-
-        var changed = false
-        for (id, label) in localLabelsByID {
-            let existing = profileProjectionCache[id] ?? ProfileDisplayProjection(
-                profile: nil,
-                projectedName: nil,
-                localAccountLabel: nil
-            )
-            let updated = existing.updatingLocalAccountLabel(label)
-            guard updated != existing else { continue }
-            profileProjectionCache[id] = updated
-            changed = true
-        }
-
-        for (id, projection) in profileProjectionCache where localLabelsByID[id] == nil {
-            let updated = projection.updatingLocalAccountLabel(nil)
-            guard updated != projection else { continue }
-            profileProjectionCache[id] = updated
-            changed = true
-        }
-
-        if changed {
-            noteProfileRefreshCompleted()
-        }
+        profileStore.updateProfileProjectionLocalAccountLabels()
     }
 
     @MainActor
     @discardableResult
     func reloadProfileProjection(forAccountIdHex id: String) async -> ProfileDisplayProjection? {
-        guard !id.isEmpty else { return nil }
-        guard canRefreshProfiles else { return profileProjectionCache[id] }
-
-        let version = bumpProfileProjectionLoadVersion(forAccountIdHex: id)
-        queuedProfileProjectionLoadIDs.removeAll { $0 == id }
-        scheduledProfileProjectionLoadIDs.remove(id)
-        profileProjectionRefreshAfterLoadIDs.remove(id)
-
-        let projection = await loadProfileProjection(forAccountIdHex: id)
-        guard !Task.isCancelled,
-              canRefreshProfiles,
-              profileProjectionLoadVersions[id] == version
-        else { return projection }
-
-        if let projection {
-            applyProfileProjection(projection, forAccountIdHex: id)
-        }
-        // This guarded load is the current one for `id` (its token still
-        // matches). With it complete, prune the version entry if nothing else
-        // is pending for `id`, bounding the map without disturbing tokens held
-        // by any other in-flight load (#353).
-        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
-        return projection
-    }
-
-    @MainActor
-    private func cachedProfileProjection(
-        forAccountIdHex id: String,
-        refreshAfterLoad: Bool
-    ) -> ProfileDisplayProjection? {
-        _ = profileRefreshGeneration
-        if let projection = profileProjectionCache[id] {
-            return projection
-        }
-        scheduleProfileProjectionLoad(forAccountIdHex: id, refreshAfterLoad: refreshAfterLoad)
-        return nil
-    }
-
-    @MainActor
-    private func scheduleProfileProjectionLoad(forAccountIdHex id: String, refreshAfterLoad: Bool) {
-        guard !id.isEmpty, canRefreshProfiles else { return }
-        if refreshAfterLoad {
-            profileProjectionRefreshAfterLoadIDs.insert(id)
-        }
-        guard !scheduledProfileProjectionLoadIDs.contains(id) else { return }
-
-        bumpProfileProjectionLoadVersion(forAccountIdHex: id)
-        scheduledProfileProjectionLoadIDs.insert(id)
-        queuedProfileProjectionLoadIDs.append(id)
-        startProfileProjectionLoadQueueIfNeeded()
-    }
-
-    @MainActor
-    private func startProfileProjectionLoadQueueIfNeeded() {
-        guard profileProjectionLoadTask == nil, !queuedProfileProjectionLoadIDs.isEmpty else { return }
-        profileProjectionLoadTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runProfileProjectionLoadQueue()
-        }
-    }
-
-    @MainActor
-    private func runProfileProjectionLoadQueue() async {
-        defer {
-            profileProjectionLoadTask = nil
-            if canRefreshProfiles, !queuedProfileProjectionLoadIDs.isEmpty {
-                startProfileProjectionLoadQueueIfNeeded()
-            }
-        }
-
-        while !Task.isCancelled, canRefreshProfiles, let id = nextQueuedProfileProjectionLoadID() {
-            let version = profileProjectionLoadVersions[id] ?? 0
-            let projection = await loadProfileProjection(forAccountIdHex: id)
-            guard !Task.isCancelled, canRefreshProfiles else { break }
-            guard profileProjectionLoadVersions[id] == version else { continue }
-
-            scheduledProfileProjectionLoadIDs.remove(id)
-            if let projection {
-                applyProfileProjection(projection, forAccountIdHex: id)
-            }
-
-            let shouldRefresh = profileProjectionRefreshAfterLoadIDs.remove(id) != nil
-            if shouldRefresh, projection?.hasRemoteIdentity != true {
-                scheduleProfileRefresh(forAccountIdHex: id)
-            }
-            // The queued load for `id` is the current one (token still matches)
-            // and is now applied. Prune its version entry when no further
-            // load/refresh work remains for `id` so the map stays bounded to
-            // in-flight work instead of growing per distinct id (#353).
-            pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
-        }
-    }
-
-    @MainActor
-    private func nextQueuedProfileProjectionLoadID() -> String? {
-        guard !queuedProfileProjectionLoadIDs.isEmpty else { return nil }
-        return queuedProfileProjectionLoadIDs.removeFirst()
-    }
-
-    @MainActor
-    private func loadProfileProjection(forAccountIdHex id: String) async -> ProfileDisplayProjection? {
-        let request = profileProjectionRequest(forAccountIdHex: id)
-        let projections = await MarmotClient.profileProjections(for: [request], marmot: marmot)
-        guard var projection = projections[id] else { return nil }
-        projection.localAccountLabel = localAccountLabel(forAccountIdHex: id)
-        return projection
-    }
-
-    @MainActor
-    private func profileProjectionRequest(forAccountIdHex id: String) -> ProfileProjectionRequest {
-        ProfileProjectionRequest(accountIdHex: id, localAccountLabel: localAccountLabel(forAccountIdHex: id))
-    }
-
-    @MainActor
-    private func localAccountLabel(forAccountIdHex id: String) -> String? {
-        accounts.first(where: { $0.accountIdHex == id })?.label
-    }
-
-    @MainActor
-    private func applyProfileProjection(_ projection: ProfileDisplayProjection, forAccountIdHex id: String) {
-        guard profileProjectionCache[id] != projection else { return }
-        profileProjectionCache[id] = projection
-        noteProfileRefreshCompleted()
-    }
-
-    @MainActor
-    @discardableResult
-    private func bumpProfileProjectionLoadVersion(forAccountIdHex id: String) -> Int {
-        let version = (profileProjectionLoadVersions[id] ?? 0) + 1
-        profileProjectionLoadVersions[id] = version
-        return version
-    }
-
-    /// Evict an account id's monotonic load-version token once its current
-    /// guarded load has settled (#353).
-    ///
-    /// The version map is the staleness guard for `reloadProfileProjection` and
-    /// `runProfileProjectionLoadQueue`: each load captures the id's token and,
-    /// after its `await`, only applies its result if the stored token still
-    /// matches — so an older suspended load whose token was superseded fails the
-    /// guard and discards its stale projection. That guard's correctness relies
-    /// on the token being *monotonic* per id; a whole-map reset would restart
-    /// the counter and let a superseded suspended load's captured token collide
-    /// with a freshly re-issued one (ABA), applying stale data.
-    ///
-    /// We therefore prune one id at a time, and only when:
-    ///   - `matching` is still the stored token (this is the latest load for the
-    ///     id, so removing the entry cannot strip a token a newer load relies
-    ///     on), and
-    ///   - no queued/scheduled/refresh-after work remains for the id (nothing
-    ///     pending will read the token before the next `bump` re-establishes a
-    ///     fresh value).
-    /// Any other in-flight load for the id has a *different*, higher token; it
-    /// never matches `matching`, so its later guard check still fails closed
-    /// after the entry is gone (a missing entry reads as `nil`, never equal to a
-    /// positive captured token). This bounds the map to ids with pending work
-    /// while preserving the monotonic-staleness invariant the guard needs.
-    @MainActor
-    private func pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex id: String, matching version: Int) {
-        guard profileProjectionLoadVersions[id] == version,
-              !queuedProfileProjectionLoadIDs.contains(id),
-              !scheduledProfileProjectionLoadIDs.contains(id),
-              !profileProjectionRefreshAfterLoadIDs.contains(id)
-        else { return }
-        profileProjectionLoadVersions.removeValue(forKey: id)
-    }
-
-    @MainActor
-    private func scheduleProfileRefresh(forAccountIdHex id: String) {
-        guard !id.isEmpty,
-              canRefreshProfiles,
-              !scheduledProfileFetchIDs.contains(id)
-        else { return }
-        scheduledProfileFetchIDs.insert(id)
-        queuedProfileFetchIDs.append(id)
-        startProfileFetchQueueIfNeeded()
-    }
-
-    @MainActor
-    private func startProfileFetchQueueIfNeeded() {
-        guard profileFetchQueueTask == nil, !queuedProfileFetchIDs.isEmpty else { return }
-        profileFetchQueueTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runProfileFetchQueue()
-        }
+        await profileStore.reloadProfileProjection(forAccountIdHex: id)
     }
 
     @MainActor
     func resumeProfileFetchQueueIfNeeded() {
-        guard canRefreshProfiles else { return }
-        startProfileProjectionLoadQueueIfNeeded()
-        startProfileFetchQueueIfNeeded()
-    }
-
-    @MainActor
-    private func runProfileFetchQueue() async {
-        defer {
-            profileFetchQueueTask = nil
-            activeProfileFetchID = nil
-            if canRefreshProfiles, !queuedProfileFetchIDs.isEmpty {
-                startProfileFetchQueueIfNeeded()
-            }
-        }
-
-        while !Task.isCancelled, canRefreshProfiles, let id = nextQueuedProfileFetchID() {
-            activeProfileFetchID = id
-            await refreshProfile(forAccountIdHex: id)
-            activeProfileFetchID = nil
-            scheduledProfileFetchIDs.remove(id)
-        }
-    }
-
-    @MainActor
-    private func nextQueuedProfileFetchID() -> String? {
-        guard !queuedProfileFetchIDs.isEmpty else { return nil }
-        return queuedProfileFetchIDs.removeFirst()
+        profileStore.resumeProfileFetchQueueIfNeeded()
     }
 
     @MainActor
     @discardableResult
     func cancelProfileFetchQueue() -> Task<Void, Never>? {
-        queuedProfileProjectionLoadIDs.removeAll()
-        scheduledProfileProjectionLoadIDs.removeAll()
-        profileProjectionRefreshAfterLoadIDs.removeAll()
-        // Deliberately do NOT clear `profileProjectionLoadVersions` here. This
-        // method runs on every background suspension (via
-        // `cancelForegroundMaintenance`), and a direct `reloadProfileProjection`
-        // caller can be suspended at its `await` with an already-captured
-        // version token. Resetting the whole map would restart the per-id
-        // counter; a later load for the same id would re-issue a token that
-        // collides with the suspended caller's captured value (ABA), letting it
-        // pass the staleness guard and apply stale data. The map is instead kept
-        // monotonic and bounded by `pruneProfileProjectionLoadVersionIfSettled`,
-        // which evicts an id only after its current guarded load completes with
-        // no pending work (#353). Full sign-out, where no in-flight load can
-        // race a re-bump, clears the map separately in `signOut()`.
-        let projectionTask = profileProjectionLoadTask
-        profileProjectionLoadTask = nil
-        projectionTask?.cancel()
-
-        queuedProfileFetchIDs.removeAll()
-        scheduledProfileFetchIDs.removeAll()
-        activeProfileFetchID = nil
-        let fetchTask = profileFetchQueueTask
-        profileFetchQueueTask = nil
-        fetchTask?.cancel()
-
-        guard projectionTask != nil || fetchTask != nil else { return nil }
-        return Task {
-            await projectionTask?.value
-            await fetchTask?.value
-        }
-    }
-
-    @MainActor
-    private func refreshProfile(forAccountIdHex id: String) async {
-        guard !Task.isCancelled,
-              canRefreshProfiles
-        else { return }
-
-        let relays: [String]
-        if let activeAccountRef {
-            relays = await relayBootstrapRelays(for: activeAccountRef)
-        } else {
-            relays = MarmotClient.seedRelays
-        }
-        do {
-            try await marmot.refreshProfile(accountIdHex: id, relays: relays)
-        } catch {
-            return
-        }
-
-        guard !Task.isCancelled else { return }
-        await reloadProfileProjection(forAccountIdHex: id)
+        profileStore.cancelProfileFetchQueue()
     }
 
     #if DEBUG
     @MainActor
     func runProfileFetchQueueForTesting() async {
-        await runProfileFetchQueue()
+        await profileStore.runProfileFetchQueueForTesting()
     }
 
-    /// Test hook for the post-load version-map eviction (#353). Mirrors the call
-    /// the guarded load sites make after applying a projection.
     @MainActor
     func pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex id: String, matching version: Int) {
-        pruneProfileProjectionLoadVersionIfSettled(forAccountIdHex: id, matching: version)
+        profileStore.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: id, matching: version)
     }
     #endif
 }

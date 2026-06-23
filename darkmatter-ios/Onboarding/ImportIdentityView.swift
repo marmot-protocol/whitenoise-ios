@@ -7,12 +7,10 @@ struct ImportIdentityView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var identity: String = ""
-    @State private var isImporting = false
-    @State private var error: String?
+    @State private var model = ImportIdentityViewModel()
 
     private var canSubmit: Bool {
-        !isImporting && Self.isPlausibleNsec(identity)
+        !model.isImporting && Self.isPlausibleNsec(model.identity)
     }
 
     /// A bech32 `nsec` is a fixed-width encoding of a 32-byte key: the `nsec1`
@@ -32,9 +30,10 @@ struct ImportIdentityView: View {
     }
 
     var body: some View {
-        Form {
+        @Bindable var model = model
+        return Form {
             Section {
-                TextField("nsec1…", text: $identity, axis: .vertical)
+                TextField("nsec1…", text: $model.identity, axis: .vertical)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(.body, design: .monospaced))
@@ -49,13 +48,13 @@ struct ImportIdentityView: View {
 
             Section {
                 Button {
-                    Task { await runImport() }
+                    Task { await model.runImport(using: appState, dismiss: { dismiss() }) }
                 } label: {
                     HStack {
-                        if isImporting {
+                        if model.isImporting {
                             ProgressView().controlSize(.small)
                         }
-                        Text(isImporting ? L10n.string("Importing…") : L10n.string("Import"))
+                        Text(model.isImporting ? L10n.string("Importing…") : L10n.string("Import"))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 2)
                     }
@@ -65,7 +64,7 @@ struct ImportIdentityView: View {
                 .disabled(!canSubmit)
             }
 
-            if let error {
+            if let error = model.error {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -75,30 +74,9 @@ struct ImportIdentityView: View {
         }
         .navigationTitle("Import Identity")
         .navigationBarTitleDisplayMode(.inline)
-        .interactiveDismissDisabled(isImporting)
+        .interactiveDismissDisabled(model.isImporting)
         .onDisappear {
-            identity = ""
-        }
-    }
-
-    @MainActor
-    private func runImport() async {
-        let trimmed = Self.consumeIdentityForImport(&identity)
-        isImporting = true
-        error = nil
-        defer {
-            SensitiveClipboard.clear(trimmed)
-            isImporting = false
-        }
-        do {
-            try await appState.importIdentity(trimmed)
-            Haptics.success()
-            appState.present(.success(L10n.string("Welcome back"), message: L10n.string("Identity imported.")))
-            dismiss()
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
-            appState.present(.error(L10n.string("Import failed"), message: error.localizedDescription))
+            model.identity = ""
         }
     }
 }

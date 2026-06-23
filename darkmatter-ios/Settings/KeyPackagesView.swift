@@ -11,18 +11,13 @@ import MarmotKit
 struct KeyPackagesView: View {
     @Environment(AppState.self) private var appState
 
-    @State private var packages: [AccountKeyPackageFfi] = []
-    @State private var lists: AccountRelayListsFfi?
-    @State private var isLoading = false
-    @State private var isPublishing = false
-    @State private var deletingEventIds: Set<String> = []
-    @State private var loadError: String?
+    @State private var model = KeyPackagesViewModel()
 
     var body: some View {
         Form {
-            let packageSections = Self.packageSections(for: packages)
+            let packageSections = Self.packageSections(for: model.packages)
 
-            if isLoading && packages.isEmpty {
+            if model.isLoading && model.packages.isEmpty {
                 Section {
                     HStack {
                         Spacer()
@@ -81,9 +76,9 @@ struct KeyPackagesView: View {
 
                 Section {
                     Button {
-                        Task { await publishNew() }
+                        Task { await model.publishNew(using: appState) }
                     } label: {
-                        if isPublishing {
+                        if model.isPublishing {
                             HStack(spacing: 8) {
                                 ProgressView().controlSize(.small)
                                 Text("Publishing…")
@@ -92,13 +87,13 @@ struct KeyPackagesView: View {
                             Label("Publish New Key Package", systemImage: "plus.square.on.square")
                         }
                     }
-                    .disabled(isPublishing || appState.activeAccountRef == nil)
+                    .disabled(model.isPublishing || appState.activeAccountRef == nil)
                 } footer: {
                     Text("Publishes a fresh KeyPackage event to your account outbox relays.")
                         .font(.footnote)
                 }
 
-                if let loadError {
+                if let loadError = model.loadError {
                     Section {
                         Label(loadError, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -110,12 +105,12 @@ struct KeyPackagesView: View {
         .navigationTitle("Key Packages")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if isLoading && !packages.isEmpty {
+            if model.isLoading && !model.packages.isEmpty {
                 ProgressView().controlSize(.small)
             }
         }
-        .task(id: appState.activeAccountRef) { await reload() }
-        .refreshable { await reload() }
+        .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
+        .refreshable { await model.reload(using: appState) }
     }
 
     // MARK: - Derived
@@ -147,7 +142,7 @@ struct KeyPackagesView: View {
 
     @ViewBuilder
     private func keyPackageRow(_ pkg: AccountKeyPackageFfi) -> some View {
-        let isDeleting = deletingEventIds.contains(pkg.eventIdHex)
+        let isDeleting = model.deletingEventIds.contains(pkg.eventIdHex)
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -183,7 +178,7 @@ struct KeyPackagesView: View {
         .opacity(isDeleting ? 0.5 : 1)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                Task { await delete(pkg) }
+                Task { await model.delete(pkg, using: appState) }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -271,72 +266,4 @@ struct KeyPackagesView: View {
             .joined(separator: ", ")
     }
 
-    // MARK: - Actions
-
-    @MainActor
-    private var bootstrapRelays: [String] {
-        lists.map(RelaySettings.bootstrapRelays(from:)) ?? MarmotClient.seedRelays
-    }
-
-    @MainActor
-    private func reload() async {
-        guard let ref = appState.activeAccountRef else {
-            packages = []
-            lists = nil
-            return
-        }
-        isLoading = true
-        loadError = nil
-        defer { isLoading = false }
-
-        do {
-            let loadedLists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
-            lists = loadedLists
-            packages = try await appState.marmot.accountKeyPackages(
-                accountRef: ref,
-                bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists)
-            )
-        } catch {
-            loadError = error.localizedDescription
-        }
-    }
-
-    @MainActor
-    private func publishNew() async {
-        guard let ref = appState.activeAccountRef else { return }
-        isPublishing = true
-        defer { isPublishing = false }
-
-        do {
-            _ = try await appState.marmot.publishNewKeyPackage(accountRef: ref)
-            Haptics.success()
-            appState.present(.success(L10n.string("New key package published")))
-            await reload()
-        } catch {
-            Haptics.error()
-            appState.present(.error(L10n.string("Publish failed"), message: error.localizedDescription))
-        }
-    }
-
-    @MainActor
-    private func delete(_ pkg: AccountKeyPackageFfi) async {
-        guard let ref = appState.activeAccountRef else { return }
-        let eventId = pkg.eventIdHex
-        deletingEventIds.insert(eventId)
-        defer { deletingEventIds.remove(eventId) }
-
-        do {
-            _ = try await appState.marmot.deleteAccountKeyPackage(
-                accountRef: ref,
-                eventIdHex: eventId,
-                relays: bootstrapRelays
-            )
-            Haptics.success()
-            appState.present(.success(L10n.string("Key package deleted")))
-            await reload()
-        } catch {
-            Haptics.error()
-            appState.present(.error(L10n.string("Delete failed"), message: error.localizedDescription))
-        }
-    }
 }

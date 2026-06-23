@@ -87,7 +87,7 @@ struct ResolvedDisplayNameTests {
     }
 
     @Test func profileHelpersReadProjectionCacheInsteadOfMarmotOnMainActor() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState+Profiles.swift")
+        let source = try sourceString("darkmatter-ios/Core/ProfileStore.swift")
 
         #expect(source.range(
             of: #"func profile\(forAccountIdHex id: String\) -> UserProfileMetadataFfi\? \{\s*cachedProfileProjection\(forAccountIdHex: id, refreshAfterLoad: true\)\?\.profile\s*\}"#,
@@ -104,7 +104,7 @@ struct ResolvedDisplayNameTests {
     }
 
     @Test func cacheMissHydrationIsDedupedBeforeRelayRefresh() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState+Profiles.swift")
+        let source = try sourceString("darkmatter-ios/Core/ProfileStore.swift")
 
         #expect(source.contains("scheduledProfileProjectionLoadIDs.contains(id)"))
         #expect(source.contains("profileProjectionRefreshAfterLoadIDs.insert(id)"))
@@ -113,7 +113,7 @@ struct ResolvedDisplayNameTests {
     }
 
     @Test func profilePublishRefreshesProjectionCache() throws {
-        let source = try sourceString("darkmatter-ios/Settings/ProfileEditView.swift")
+        let source = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
 
         #expect(source.contains("await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)"))
     }

@@ -824,23 +824,23 @@ struct AppStateBootstrapTests {
     @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
         let appState = try testAppState()
         let queued = [hex("11"), hex("22")]
-        appState.queuedProfileFetchIDs = queued
-        appState.scheduledProfileFetchIDs = Set(queued)
+        appState.profileStore.queuedProfileFetchIDs = queued
+        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
         appState.setAppSceneActive(false)
 
         await appState.runProfileFetchQueueForTesting()
 
-        #expect(appState.queuedProfileFetchIDs == queued)
-        #expect(appState.scheduledProfileFetchIDs == Set(queued))
-        #expect(appState.activeProfileFetchID == nil)
-        #expect(appState.profileFetchQueueTask == nil)
+        #expect(appState.profileStore.queuedProfileFetchIDs == queued)
+        #expect(appState.profileStore.scheduledProfileFetchIDs == Set(queued))
+        #expect(appState.profileStore.activeProfileFetchID == nil)
+        #expect(appState.profileStore.profileFetchQueueTask == nil)
     }
 
     @Test func profileFetchQueueRearmsPreservedIDsWhenRefreshIsAllowed() async throws {
         let appState = try testAppState()
         let queued = [hex("33")]
-        appState.queuedProfileFetchIDs = queued
-        appState.scheduledProfileFetchIDs = Set(queued)
+        appState.profileStore.queuedProfileFetchIDs = queued
+        appState.profileStore.scheduledProfileFetchIDs = Set(queued)
 
         appState.resumeProfileFetchQueueIfNeeded()
         let task = appState.cancelProfileFetchQueue()
@@ -861,20 +861,20 @@ struct AppStateBootstrapTests {
         // monotonic version map. Eviction happens instead via post-load pruning
         // and full sign-out — covered by the tests below.
         let appState = try testAppState()
-        appState.queuedProfileProjectionLoadIDs = [hex("44")]
-        appState.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
-        appState.profileProjectionRefreshAfterLoadIDs = [hex("55")]
-        appState.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
+        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("44")]
+        appState.profileStore.scheduledProfileProjectionLoadIDs = [hex("44"), hex("55")]
+        appState.profileStore.profileProjectionRefreshAfterLoadIDs = [hex("55")]
+        appState.profileStore.profileProjectionLoadVersions = [hex("44"): 3, hex("55"): 1]
 
         _ = appState.cancelProfileFetchQueue()
 
         // Sibling queues are cleared...
-        #expect(appState.queuedProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.scheduledProfileProjectionLoadIDs.isEmpty)
-        #expect(appState.profileProjectionRefreshAfterLoadIDs.isEmpty)
+        #expect(appState.profileStore.queuedProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileStore.scheduledProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileStore.profileProjectionRefreshAfterLoadIDs.isEmpty)
         // ...but the monotonic version map survives, so a suspended direct
         // reload's captured token cannot be reused by a re-bump after resume.
-        #expect(appState.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("44"): 3, hex("55"): 1])
     }
 
     @Test func settledProfileProjectionLoadPrunesItsVersionEntry() async throws {
@@ -883,12 +883,12 @@ struct AppStateBootstrapTests {
         // stays bounded to in-flight work rather than growing per distinct id
         // ever seen (#353).
         let appState = try testAppState()
-        appState.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
+        appState.profileStore.profileProjectionLoadVersions = [hex("66"): 7, hex("77"): 2]
 
         // id 66 settled at its current token, nothing pending -> evicted.
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("66"), matching: 7)
 
-        #expect(appState.profileProjectionLoadVersions == [hex("77"): 2])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("77"): 2])
     }
 
     @Test func prunePreservesVersionEntryWhenTokenSupersededOrWorkPending() async throws {
@@ -902,15 +902,15 @@ struct AppStateBootstrapTests {
 
         // (a) superseded token: a newer load bumped 88 from 4 to 5; an older
         // load settling with token 4 must NOT evict the live token 5.
-        appState.profileProjectionLoadVersions = [hex("88"): 5]
+        appState.profileStore.profileProjectionLoadVersions = [hex("88"): 5]
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("88"), matching: 4)
-        #expect(appState.profileProjectionLoadVersions == [hex("88"): 5])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("88"): 5])
 
         // (b) work still pending: matching token but the id is still queued.
-        appState.profileProjectionLoadVersions = [hex("99"): 1]
-        appState.queuedProfileProjectionLoadIDs = [hex("99")]
+        appState.profileStore.profileProjectionLoadVersions = [hex("99"): 1]
+        appState.profileStore.queuedProfileProjectionLoadIDs = [hex("99")]
         appState.pruneProfileProjectionLoadVersionIfSettledForTesting(forAccountIdHex: hex("99"), matching: 1)
-        #expect(appState.profileProjectionLoadVersions == [hex("99"): 1])
+        #expect(appState.profileStore.profileProjectionLoadVersions == [hex("99"): 1])
     }
 
     @Test func fullSignOutClearsProfileProjectionState() async throws {
@@ -924,18 +924,18 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
-        appState.profileProjectionCache = [
+        appState.profileStore.profileProjectionCache = [
             hex("aa"): ProfileDisplayProjection(profile: nil, projectedName: "Previous peer", localAccountLabel: nil),
             account.accountIdHex: ProfileDisplayProjection(profile: nil, projectedName: nil, localAccountLabel: account.label),
         ]
-        appState.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
+        appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9, account.accountIdHex: 2]
 
         await appState.signOut()
 
         #expect(appState.activeAccountRef == nil)
         #expect(appState.phase == .onboarding)
-        #expect(appState.profileProjectionCache.isEmpty)
-        #expect(appState.profileProjectionLoadVersions.isEmpty)
+        #expect(appState.profileStore.profileProjectionCache.isEmpty)
+        #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
     }
 
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
@@ -2001,15 +2001,15 @@ struct LocalizationCatalogTests {
                 #"L10n.string("\(memberCount) members")"#
             ),
             (
-                "darkmatter-ios/Group/GroupDetailsView.swift",
+                "darkmatter-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Invited \(refs.count) members")"#
             ),
             (
-                "darkmatter-ios/Group/GroupDetailsView.swift",
+                "darkmatter-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Published \(summary.published) updates.")"#
             ),
             (
-                "darkmatter-ios/Settings/ProfileEditView.swift",
+                "darkmatter-ios/Settings/ProfileEditViewModel.swift",
                 #"L10n.string("Your kind:0 metadata is live on \(relays.count) relays.")"#
             ),
             (
@@ -3496,21 +3496,27 @@ struct NotificationServiceTests {
 struct ProfileEditViewTests {
     @Test func profilePictureDraftUsesPublicHTTPSPolicyBeforePublish() throws {
         let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
 
-        #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(picture)"))
+        // Avatar (view) + draft normalization (pure type, still in the view file).
+        #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(model.picture)"))
         #expect(source.contains("private var normalizedPictureURL: String?"))
         #expect(source.contains("ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString"))
         #expect(source.contains("picture: normalizedPictureURL"))
-        #expect(source.contains("profile: normalizedMetadata.ffi"))
+        // Publish wiring moved to the view model.
+        #expect(modelSource.contains("profile: normalizedMetadata.ffi"))
         #expect(!source.contains("picture: picture.isEmpty ? nil : picture"))
     }
 
     @Test func profileSaveIsDisabledForInvalidPictureDraft() throws {
         let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
 
+        // saveDisabled stays in the view (it also reads appState.activeAccountRef).
         #expect(source.contains(".disabled(saveDisabled)"))
         #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*currentDraft\.validationError != nil"#))
-        #expect(source.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
+        // Per-field validation messages moved to the view model.
+        #expect(modelSource.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
     }
 
     @Test func profileMetadataDraftSanitizesAndBoundsOutgoingFields() throws {
@@ -3557,6 +3563,13 @@ struct ProfileEditViewTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Settings/ProfileEditView.swift")
+    }
+
+    private var profileEditViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Settings/ProfileEditViewModel.swift")
     }
 }
 
@@ -4013,12 +4026,15 @@ struct GroupImageSearchTests {
 
     @Test func groupDetailsSourceWiresAvatarMutationAndEditor() throws {
         let source = try String(contentsOf: groupDetailsSourceURL, encoding: .utf8)
+        let modelSource = try String(contentsOf: groupDetailsViewModelSourceURL, encoding: .utf8)
 
+        // View renders the editor + wires the callbacks; the avatar mutation runs
+        // in the view model.
         #expect(source.contains("onGroupChanged"))
         #expect(source.contains("refreshGroupManagementAndNotify"))
         #expect(source.contains("showGroupImageEditor"))
         #expect(source.contains("GroupImageURLSheet(initialURL: viewModel.group.avatarUrl)"))
-        #expect(source.contains("updateGroupAvatarUrl"))
+        #expect(modelSource.contains("updateGroupAvatarUrl"))
         #expect(source.contains(#"Label(viewModel.group.avatarUrl == nil ? "Set group image" : "Edit group image""#))
     }
 
@@ -4027,6 +4043,13 @@ struct GroupImageSearchTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Group/GroupDetailsView.swift")
+    }
+
+    private var groupDetailsViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Group/GroupDetailsViewModel.swift")
     }
 
     private var groupImageURLSheetSourceURL: URL {
@@ -4510,11 +4533,11 @@ struct ConversationTimelineProjectionTests {
         let reactionRecord = message(id: hex("22"), kind: MessageSemantics.kindReaction)
         let emptyId = message(id: "", kind: MessageSemantics.kindChat)
 
-        #expect(ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
-        #expect(!ConversationViewModel.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationViewModel.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
+        #expect(ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
+        #expect(!ConversationReadMarker.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
+        #expect(!ConversationReadMarker.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
     }
 
     @Test func markedReadDedupDropsMessagesOutsideCurrentTimelineWindow() throws {
@@ -4567,7 +4590,7 @@ struct ConversationTimelineProjectionTests {
         let pending = Set([hex("aa")])
         let stale = hex("ff")
 
-        let retained = ConversationViewModel.retainedMarkedReadMessageIds(
+        let retained = ConversationReadMarker.retainedMarkedReadMessageIds(
             loaded.union(pending).union([stale]),
             loadedMessageIds: loaded,
             pendingMessageIds: pending,
@@ -4583,7 +4606,7 @@ struct ConversationTimelineProjectionTests {
     @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
-        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*optimisticDeletedMessageIds\.insert"#))
+        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*deletedProjections\.insertOptimistic"#))
     }
 
     @Test func canDeleteMessageRequiresSenderOrAdminPermission() {
@@ -4683,11 +4706,12 @@ struct ConversationTimelineProjectionTests {
                 plaintext: parent.plaintext,
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
+                media: [],
                 agentTextStreamJson: nil,
                 deleted: false
             ),
             reactions: TimelineReactionSummaryFfi(
-                byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", senders: [hex("33"), hex("44")])],
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "👍", count: 2, senders: [hex("33"), hex("44")])],
                 userReactions: []
             )
         )
@@ -4739,6 +4763,7 @@ struct ConversationTimelineProjectionTests {
                 plaintext: approve.plaintext,
                 kind: MessageSemantics.kindChat,
                 mediaJson: nil,
+                media: [],
                 agentTextStreamJson: nil,
                 deleted: false
             )
@@ -4890,7 +4915,7 @@ struct ConversationTimelineProjectionTests {
             plaintext: loaded.plaintext,
             timelineAt: loaded.timelineAt,
             reactions: TimelineReactionSummaryFfi(
-                byEmoji: [TimelineReactionEmojiFfi(emoji: "🔥", senders: [hex("33")])],
+                byEmoji: [TimelineReactionEmojiFfi(emoji: "🔥", count: 1, senders: [hex("33")])],
                 userReactions: []
             )
         )
@@ -5327,13 +5352,22 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        // The timeline mirror + rebuild engine moved to TimelineStore (Phase 5b).
+        let source = try String(contentsOf: timelineStoreSourceURL, encoding: .utf8)
 
         #expect(source.matches(#"private func upsertTimelineItem\("#))
-        #expect(!source.matches(#"func applyPendingOutgoingMessage[\s\S]*?rebuildTimeline\("#))
-        #expect(!source.matches(#"private func upsertStreamBubble[\s\S]*?rebuildTimeline\("#))
+        // applyPendingOutgoingMessage uses the incremental upsert path, not a full
+        // rebuild. Scope the check to the function body (other methods legitimately
+        // call rebuildTimeline).
+        let pendingStart = try #require(source.range(of: "func applyPendingOutgoingMessage("))
+        let pendingEnd = try #require(source[pendingStart.upperBound...].range(of: "\n\n"))
+        let pendingSource = String(source[pendingStart.lowerBound..<pendingEnd.lowerBound])
+        #expect(pendingSource.contains("upsertTimelineItem(item)"))
+        #expect(!pendingSource.contains("rebuildTimeline"))
         #expect(source.contains("@ObservationIgnored private var replyTargetByMessageId"))
-        #expect(source.contains("@ObservationIgnored private var pendingMediaByRowId"))
+        // Pending optimistic media now lives in the media projection cache; its
+        // presence still proves the incremental (non-rebuild) mutation path.
+        #expect(source.contains("let mediaProjections = ConversationMediaProjectionCache()"))
         #expect(source.contains("private(set) var timelineProjectionGeneration"))
     }
 
@@ -5341,13 +5375,17 @@ struct ConversationTimelineProjectionTests {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
         let viewSource = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
         let clientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
+        let readMarkerSource = try String(contentsOf: conversationReadMarkerSourceURL, encoding: .utf8)
 
-        #expect(source.contains("pendingReadMessageIds"))
-        #expect(source.contains("flushPendingReadMarks(accountRef:"))
-        #expect(source.contains("await client.markTimelineMessagesRead("))
+        // Read-marking coalescing + the async flush moved to ConversationReadMarker.
+        #expect(readMarkerSource.contains("pendingReadMessageIds"))
+        #expect(readMarkerSource.contains("flushPendingReadMarks(accountRef:"))
+        #expect(readMarkerSource.contains("await client.markTimelineMessagesRead("))
         #expect(source.contains("try await client.initializeChatReadState("))
         #expect(source.contains("try await client.timelineMessages("))
-        #expect(source.contains("try await client.listMedia("))
+        // Timeline media now arrives resolved on the row (mirrored into the media
+        // projection cache); the VM no longer calls client.listMedia (the wrapper
+        // stays for other surfaces).
         #expect(source.contains("initialTimelineSnapshotTask"))
         #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
         #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
@@ -5359,7 +5397,7 @@ struct ConversationTimelineProjectionTests {
         #expect(!source.contains("groupSub.snapshot()"))
         #expect(source.contains("timelineSubscription.paginateBackwards"))
         #expect(source.contains("timelineSubscription.paginateForwards"))
-        #expect(source.contains("private(set) var hasMoreAfter"))
+        #expect(source.contains("var hasMoreAfter: Bool { timelineStore.hasMoreAfter }"))
         #expect(viewSource.contains("newerTimelineTrigger(viewModel: viewModel)"))
         #expect(viewSource.contains("viewModel.loadNewerTimelinePage()"))
         #expect(!source.contains("appState.marmot.markTimelineMessageRead("))
@@ -5374,27 +5412,27 @@ struct ConversationTimelineProjectionTests {
     }
 
     @Test func paginationProgressRequiresWindowEdgeMovement() {
-        #expect(ConversationViewModel.paginationMovedOlder(
+        #expect(ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: ["message-a", "message-b"]
         ))
-        #expect(!ConversationViewModel.paginationMovedOlder(
+        #expect(!ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: ["message-b", "message-c"]
         ))
-        #expect(!ConversationViewModel.paginationMovedOlder(
+        #expect(!ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
             nextMessageIds: []
         ))
-        #expect(ConversationViewModel.paginationMovedNewer(
+        #expect(ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: ["message-b", "message-c"]
         ))
-        #expect(!ConversationViewModel.paginationMovedNewer(
+        #expect(!ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: ["message-a", "message-b"]
         ))
-        #expect(!ConversationViewModel.paginationMovedNewer(
+        #expect(!ConversationPaginationPolicy.movedNewer(
             previousNewestMessageId: "message-b",
             nextMessageIds: []
         ))
@@ -5411,6 +5449,20 @@ struct ConversationTimelineProjectionTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
+
+    private var conversationReadMarkerSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/ConversationReadMarker.swift")
+    }
+
+    private var timelineStoreSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/TimelineStore.swift")
     }
 
     private var conversationViewSourceURL: URL {
@@ -5935,7 +5987,7 @@ struct AgentStreamTests {
     }
 
     @Test func streamStartRecordedAtIsCarriedIntoLivePreview() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
 
         #expect(source.contains("startedAt: record.recordedAt"))
         #expect(source.contains("streamStartedAtById[streamId] = startedAt"))
@@ -5944,7 +5996,7 @@ struct AgentStreamTests {
     }
 
     @Test func streamChunkAppendUsesRunningLengthCounter() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
         let appendPattern =
             #"private func appendStreamChunk\(_ text: String, to streamId: String\) \{[\s\S]*"#
             + #"let currentLength = streamTextLengthById\[streamId\][\s\S]*"#
@@ -5957,12 +6009,12 @@ struct AgentStreamTests {
     }
 
     @Test func streamBubbleUpsertPreservesTimestampWithoutTimelineScan() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
         let functionStart = try #require(source.range(of: "private func upsertStreamBubble"))
-        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    private func recordFinalizedStreams"))
+        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    /// Tear down a live preview"))
         let upsertSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
 
-        #expect(upsertSource.contains("let itemTimestamp = transientTimelineItems[rowId]?.timestamp ?? timestamp"))
+        #expect(upsertSource.contains("let itemTimestamp = sink?.streamTransientItem(id: rowId)?.timestamp ?? timestamp"))
         #expect(upsertSource.contains("timestamp: itemTimestamp"))
         #expect(!upsertSource.contains("timeline.firstIndex"))
     }
@@ -6256,6 +6308,13 @@ struct AgentStreamTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationViewModel.swift")
+    }
+
+    private var streamWatcherSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Conversation/StreamWatcher.swift")
     }
 
     @MainActor
@@ -6624,6 +6683,7 @@ struct MessageSemanticsTests {
             plaintext: #"{"v":1,"event_type":"tool_call","status":"started","text":"Searching"}"#,
             kind: MessageSemantics.kindAgentOperation,
             mediaJson: nil,
+            media: [],
             agentTextStreamJson: nil,
             deleted: false
         )
@@ -6861,39 +6921,7 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func mediaRecordReferenceLookupUsesIndexedNormalizedIdentity() throws {
-        var timelineReference = encryptedMediaReference(sourceEpoch: 0)
-        timelineReference.plaintextSha256 = timelineReference.plaintextSha256.uppercased()
-        timelineReference.ciphertextSha256 = timelineReference.ciphertextSha256.uppercased()
-        timelineReference.nonceHex = timelineReference.nonceHex.uppercased()
-        let listedReference = encryptedMediaReference(sourceEpoch: 42)
-        let messageId = hex("dd")
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "", id: hex("aa"))
-        )
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 0,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: listedReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                )
-            ]
-        ])
-
-        #expect(viewModel.mediaRecordReferenceIndexCountForTesting == 1)
-        #expect(viewModel.mediaRecordReferenceForTesting(matching: timelineReference) == listedReference)
-    }
-
-    @MainActor
-    @Test func timelineMediaItemsUseCachedSortedRecordProjection() throws {
+    @Test func timelineMediaItemsUseCachedReferenceProjection() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),
@@ -6918,32 +6946,8 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 1,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: secondReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                ),
-                MediaRecordFfi(
-                    messageIdHex: messageId,
-                    attachmentIndex: 0,
-                    direction: "received",
-                    groupIdHex: hex("aa"),
-                    sender: hex("11"),
-                    reference: firstReference,
-                    caption: nil,
-                    recordedAt: 1,
-                    receivedAt: 1
-                ),
-            ]
-        ])
+        // Row-resolved references arrive already ordered (Marmot preserves imeta order).
+        viewModel.replaceMediaReferencesForTesting([firstReference, secondReference], forMessageId: messageId)
 
         let firstRead = viewModel.mediaItems(for: item)
         let buildCountAfterProjection = viewModel.mediaItemProjectionBuildCountForTesting
@@ -6955,7 +6959,7 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func mediaRecordUpdateRefreshesOnlyChangedTimelineProjection() throws {
+    @Test func mediaReferenceUpdateRefreshesOnlyChangedTimelineProjection() throws {
         let messageId = hex("dd")
         let otherMessageId = hex("ee")
         let viewModel = ConversationViewModel(
@@ -6964,24 +6968,9 @@ struct MessageSemanticsTests {
         )
         let record = timelineRecord(messageIdHex: messageId, timelineAt: 1)
         let otherRecord = timelineRecord(messageIdHex: otherMessageId, timelineAt: 2)
-        let firstReference = encryptedMediaReference(
-            fileName: "first.jpg",
-            plaintextByte: "31",
-            ciphertextByte: "41",
-            sourceEpoch: 42
-        )
-        let replacementReference = encryptedMediaReference(
-            fileName: "replacement.jpg",
-            plaintextByte: "32",
-            ciphertextByte: "42",
-            sourceEpoch: 42
-        )
-        let otherReference = encryptedMediaReference(
-            fileName: "other.jpg",
-            plaintextByte: "33",
-            ciphertextByte: "43",
-            sourceEpoch: 42
-        )
+        let firstReference = encryptedMediaReference(fileName: "first.jpg", plaintextByte: "31", ciphertextByte: "41", sourceEpoch: 42)
+        let replacementReference = encryptedMediaReference(fileName: "replacement.jpg", plaintextByte: "32", ciphertextByte: "42", sourceEpoch: 42)
+        let otherReference = encryptedMediaReference(fileName: "other.jpg", plaintextByte: "33", ciphertextByte: "43", sourceEpoch: 42)
 
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [record, otherRecord], hasMoreBefore: false, hasMoreAfter: false),
@@ -6989,19 +6978,11 @@ struct MessageSemanticsTests {
         )
         let item = try #require(viewModel.timeline.first { $0.id == "msg:\(messageId)" })
         let otherItem = try #require(viewModel.timeline.first { $0.id == "msg:\(otherMessageId)" })
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: firstReference)
-            ],
-            otherMessageId: [
-                mediaRecord(messageIdHex: otherMessageId, attachmentIndex: 0, reference: otherReference)
-            ],
-        ])
+        viewModel.replaceMediaReferencesForTesting([firstReference], forMessageId: messageId)
+        viewModel.replaceMediaReferencesForTesting([otherReference], forMessageId: otherMessageId)
         let buildCountAfterInitialProjection = viewModel.mediaItemProjectionBuildCountForTesting
 
-        #expect(viewModel.replaceMediaRecordsForTesting([
-            mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: replacementReference)
-        ], forMessageId: messageId))
+        #expect(viewModel.replaceMediaReferencesForTesting([replacementReference], forMessageId: messageId))
         let updated = viewModel.mediaItems(for: item)
         let unchanged = viewModel.mediaItems(for: otherItem)
 
@@ -7067,11 +7048,7 @@ struct MessageSemanticsTests {
             placement: .window
         )
         let item = try #require(viewModel.timeline.first)
-        viewModel.replaceMediaRecordsForTesting([
-            messageId: [
-                mediaRecord(messageIdHex: messageId, attachmentIndex: 0, reference: listedReference)
-            ]
-        ])
+        viewModel.replaceMediaReferencesForTesting([listedReference], forMessageId: messageId)
         #expect(viewModel.mediaItems(for: item).map(\.fileName) == ["listed.jpg"])
 
         viewModel.installPendingMediaForTesting(rowId: item.id, items: [pending])
@@ -8829,7 +8806,7 @@ struct SensitiveClipboardTests {
     }
 
     @Test func importIdentityClearsPastedSecretOnEveryOutcome() throws {
-        let source = try String(contentsOf: importIdentityViewSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: importIdentityViewModelSourceURL, encoding: .utf8)
 
         #expect(source.matches(#"defer\s*\{[\s\S]{0,120}SensitiveClipboard\.clear\(trimmed\)"#))
         #expect(!source.matches(#"try await appState\.importIdentity\(trimmed\)[\s\S]{0,200}SensitiveClipboard\.clear\(trimmed\)"#))
@@ -8854,11 +8831,11 @@ struct SensitiveClipboardTests {
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
     }
 
-    private var importIdentityViewSourceURL: URL {
+    private var importIdentityViewModelSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityView.swift")
+            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityViewModel.swift")
     }
 }
 
@@ -8928,6 +8905,7 @@ private func timelineRecord(
         replyToMessageIdHex: replyToMessageIdHex,
         replyPreview: replyPreview,
         mediaJson: mediaJson,
+        media: [],
         agentTextStreamJson: agentTextStreamJson,
         reactions: reactions,
         deleted: deleted,

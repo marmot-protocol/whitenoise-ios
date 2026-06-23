@@ -107,3 +107,78 @@ enum ComposerMentionQuery {
         return updated
     }
 }
+
+/// Identifies the inputs the cached `@`-mention candidate list was built from.
+/// Both generations are monotonic: `rosterGeneration` bumps on group
+/// membership/admin changes, `profileGeneration` bumps when resolved
+/// display-name/avatar/npub data refreshes. A change in either invalidates the
+/// cache so freshly resolved names still surface in autocomplete. Non-private so
+/// the invalidation contract can be unit-tested (#300).
+nonisolated struct MentionCandidateCacheKey: Equatable {
+    let rosterGeneration: UInt64
+    let profileGeneration: Int
+}
+
+/// Builds + caches the conversation's `@`-mention candidate list and applies a
+/// selection back into the draft. Extracted from `ConversationViewModel`: it
+/// reads the roster (passed per call) but owns no conversation state beyond the
+/// keystroke-hot-path cache, which invalidates on roster/profile generation
+/// changes (#300).
+@MainActor
+final class ComposerMentionController {
+    private var cachedCandidates: [ComposerMentionCandidate]?
+    private var cachedKey: MentionCandidateCacheKey?
+
+    func candidates(
+        for draft: String,
+        appState: AppState?,
+        members: [AppGroupMemberRecordFfi],
+        groupMemberDetails: [GroupMemberDetailsFfi],
+        rosterGeneration: UInt64
+    ) -> [ComposerMentionCandidate] {
+        guard let appState,
+              let session = ComposerMentionQuery.active(in: draft),
+              !ComposerMentionQuery.looksLikeCompleteNpub(session.query)
+        else { return [] }
+        return ComposerMentionQuery.filter(
+            allCandidates(
+                appState: appState,
+                members: members,
+                groupMemberDetails: groupMemberDetails,
+                rosterGeneration: rosterGeneration
+            ),
+            matching: session.query
+        )
+    }
+
+    func applySelection(_ candidate: ComposerMentionCandidate, to draft: inout String) {
+        guard let session = ComposerMentionQuery.active(in: draft) else { return }
+        draft = ComposerMentionQuery.replacing(session: session, in: draft, with: candidate.npub)
+    }
+
+    private func allCandidates(
+        appState: AppState,
+        members: [AppGroupMemberRecordFfi],
+        groupMemberDetails: [GroupMemberDetailsFfi],
+        rosterGeneration: UInt64
+    ) -> [ComposerMentionCandidate] {
+        let key = MentionCandidateCacheKey(
+            rosterGeneration: rosterGeneration,
+            profileGeneration: appState.profileRefreshGeneration
+        )
+        if let cachedCandidates, cachedKey == key {
+            return cachedCandidates
+        }
+        let candidates: [ComposerMentionCandidate]
+        if !groupMemberDetails.isEmpty {
+            candidates = groupMemberDetails
+                .filter { !$0.isSelf }
+                .map { ComposerMentionCandidate(details: $0, appState: appState) }
+        } else {
+            candidates = members.compactMap { ComposerMentionCandidate(member: $0, appState: appState) }
+        }
+        cachedCandidates = candidates
+        cachedKey = key
+        return candidates
+    }
+}

@@ -5,29 +5,21 @@ import MarmotKit
 /// in Settings. Streams the top-level event firehose into a scrollable log.
 struct DiagnosticsView: View {
     @Environment(AppState.self) private var appState
-    @State private var entries: [LogEntry] = []
-    @State private var streaming = false
-    @State private var sendingToSelf = false
-
-    struct LogEntry: Identifiable {
-        let id = UUID()
-        let timestamp: Date
-        let text: String
-    }
+    @State private var model = DiagnosticsViewModel()
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Button {
-                    Task { await sendToSelf() }
+                    Task { await model.sendToSelf(using: appState) }
                 } label: {
                     Label("Send to self", systemImage: "paperplane.fill")
                 }
                 .buttonStyle(.bordered)
-                .disabled(sendingToSelf || appState.activeAccountRef == nil)
+                .disabled(model.sendingToSelf || appState.activeAccountRef == nil)
 
                 Button {
-                    entries.removeAll()
+                    model.clear()
                 } label: {
                     Label("Clear", systemImage: "trash")
                 }
@@ -37,10 +29,10 @@ struct DiagnosticsView: View {
                 Spacer()
 
                 HStack(spacing: 4) {
-                    Image(systemName: streaming ? "dot.radiowaves.left.and.right" : "circle.dotted")
-                        .foregroundStyle(streaming ? .green : .secondary)
-                        .symbolEffect(.variableColor.iterative, isActive: streaming)
-                    Text(streaming ? L10n.string("Live") : L10n.string("Idle"))
+                    Image(systemName: model.streaming ? "dot.radiowaves.left.and.right" : "circle.dotted")
+                        .foregroundStyle(model.streaming ? .green : .secondary)
+                        .symbolEffect(.variableColor.iterative, isActive: model.streaming)
+                    Text(model.streaming ? L10n.string("Live") : L10n.string("Idle"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -53,7 +45,7 @@ struct DiagnosticsView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(entries) { entry in
+                        ForEach(model.entries) { entry in
                             HStack(alignment: .top, spacing: 8) {
                                 Text(entry.timestamp.formatted(date: .omitted, time: .standard))
                                     .font(.caption.monospaced())
@@ -67,8 +59,8 @@ struct DiagnosticsView: View {
                     }
                     .padding(12)
                 }
-                .onChange(of: entries.count) { _, _ in
-                    if let last = entries.last {
+                .onChange(of: model.entries.count) { _, _ in
+                    if let last = model.entries.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
@@ -77,18 +69,8 @@ struct DiagnosticsView: View {
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.runtimeGeneration) {
-            streaming = true
-            defer { streaming = false }
-            let sub = appState.marmot.subscribeEvents()
-            for await event in SubscriptionDriver.events(sub) {
-                append(Self.diagnosticText(for: event))
-            }
+            await model.runEventStream(using: appState)
         }
-    }
-
-    private func append(_ text: String) {
-        entries.append(LogEntry(timestamp: Date(), text: text))
-        if entries.count > 500 { entries.removeFirst(entries.count - 500) }
     }
 
     static func diagnosticText(for event: MarmotEventFfi) -> String {
@@ -143,61 +125,6 @@ struct DiagnosticsView: View {
         }
     }
 
-    @MainActor
-    private func sendToSelf() async {
-        guard !sendingToSelf, let accountRef = appState.activeAccountRef else { return }
-        sendingToSelf = true
-        defer { sendingToSelf = false }
-
-        do {
-            let groupId = try await diagnosticGroupId(accountRef: accountRef)
-            _ = try await appState.marmot.sendText(
-                accountRef: accountRef,
-                groupIdHex: groupId,
-                text: DiagnosticSelfSend.pingText(now: Date())
-            )
-            append("sent ping to self in \(IdentityFormatter.short(groupId))")
-        } catch {
-            append("send-to-self failed: \(error.localizedDescription)")
-        }
-    }
-
-    private func diagnosticGroupId(accountRef: String) async throws -> String {
-        let rows = try await appState.currentMarmotClient().chatList(
-            accountRef: accountRef,
-            includeArchived: true
-        )
-        if let row = DiagnosticSelfSend.reusableGroup(
-            accountRef: accountRef,
-            rows: rows
-        ) {
-            try await archiveDiagnosticGroupIfNeeded(row, accountRef: accountRef)
-            return row.groupIdHex
-        }
-
-        let groupId = try await appState.marmot.createGroup(
-            accountRef: accountRef,
-            name: DiagnosticSelfSend.groupName,
-            memberRefs: [],
-            description: nil
-        )
-        DiagnosticSelfSend.remember(groupIdHex: groupId, accountRef: accountRef)
-        _ = try await appState.marmot.setGroupArchived(
-            accountRef: accountRef,
-            groupIdHex: groupId,
-            archived: true
-        )
-        return groupId
-    }
-
-    private func archiveDiagnosticGroupIfNeeded(_ row: ChatListRowFfi, accountRef: String) async throws {
-        guard !row.archived else { return }
-        _ = try await appState.marmot.setGroupArchived(
-            accountRef: accountRef,
-            groupIdHex: row.groupIdHex,
-            archived: true
-        )
-    }
 }
 
 enum DiagnosticSelfSend {

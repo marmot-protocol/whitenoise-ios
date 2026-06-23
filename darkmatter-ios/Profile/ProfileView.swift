@@ -20,10 +20,7 @@ struct ProfileView: View {
 
     let npub: String
 
-    @State private var hex: String?
-    @State private var creating = false
-    @State private var error: String?
-    @State private var copied = false
+    @State private var model = ProfileViewModel()
 
     var body: some View {
         NavigationStack {
@@ -31,9 +28,9 @@ struct ProfileView: View {
                 Spacer(minLength: 12)
 
                 AvatarBubble(
-                    seed: hex ?? npub,
+                    seed: model.hex ?? npub,
                     title: title,
-                    pictureURL: hex.flatMap { appState.avatarURL(forAccountIdHex: $0) }
+                    pictureURL: model.hex.flatMap { appState.avatarURL(forAccountIdHex: $0) }
                 )
                 .frame(width: 96, height: 96)
 
@@ -43,18 +40,18 @@ struct ProfileView: View {
 
                 Button(action: copyProfileReference) {
                     HStack(spacing: 8) {
-                        Text(copied ? L10n.string("Copied") : IdentityFormatter.short(displayReference))
+                        Text(model.copied ? L10n.string("Copied") : IdentityFormatter.short(displayReference))
                             .font(.system(.callout, design: .monospaced))
-                            .foregroundStyle(copied ? Color.green : Color.secondary)
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .foregroundStyle(model.copied ? Color.green : Color.secondary)
+                        Image(systemName: model.copied ? "checkmark" : "doc.on.doc")
                             .font(.caption)
-                            .foregroundStyle(copied ? Color.green : Color.accentColor)
+                            .foregroundStyle(model.copied ? Color.green : Color.accentColor)
                     }
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
 
-                if hex == nil {
+                if model.hex == nil {
                     Label("Couldn't read this profile code.", systemImage: "exclamationmark.triangle")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -62,7 +59,7 @@ struct ProfileView: View {
 
                 Spacer()
 
-                if let error {
+                if let error = model.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -71,10 +68,10 @@ struct ProfileView: View {
                 }
 
                 Button {
-                    Task { await message() }
+                    Task { await model.message(npub: npub, title: title, using: appState, dismiss: { dismiss() }) }
                 } label: {
                     HStack {
-                        if creating { ProgressView().controlSize(.small) }
+                        if model.creating { ProgressView().controlSize(.small) }
                         Label("Message", systemImage: "bubble.left.and.bubble.right.fill")
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 4)
@@ -83,7 +80,7 @@ struct ProfileView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.horizontal, 24)
-                .disabled(creating || hex == nil || appState.activeAccountRef == nil || isSelf)
+                .disabled(model.creating || model.hex == nil || appState.activeAccountRef == nil || isSelf)
             }
             .padding(.bottom, 16)
             .navigationTitle("Profile")
@@ -93,80 +90,32 @@ struct ProfileView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task { await resolve() }
+            .task { await model.resolve(npub: npub, using: appState) }
         }
     }
 
     private var title: String {
-        if let hex { return appState.displayName(forAccountIdHex: hex) }
+        if let hex = model.hex { return appState.displayName(forAccountIdHex: hex) }
         return IdentityFormatter.short(npub)
     }
 
     private var displayReference: String {
-        if let hex { return appState.npub(forAccountIdHex: hex) }
+        if let hex = model.hex { return appState.npub(forAccountIdHex: hex) }
         return npub
     }
 
     private var isSelf: Bool {
-        guard let hex else { return false }
+        guard let hex = model.hex else { return false }
         return appState.accounts.contains { $0.accountIdHex == hex }
-    }
-
-    @MainActor
-    private func resolve() async {
-        guard let reference = ProfileReferenceResolution.referenceForResolution(npub) else {
-            hex = nil
-            return
-        }
-        guard let client = try? appState.currentMarmotClient() else { return }
-        let resolvedHex = await client.accountIdHex(reference: reference)
-        guard !Task.isCancelled else { return }
-        hex = resolvedHex
-        if let hex {
-            // Trigger enrichment (cached read + background relay fetch).
-            _ = appState.profile(forAccountIdHex: hex)
-        }
     }
 
     private func copyProfileReference() {
         UIPasteboard.general.string = displayReference
         Haptics.selection()
-        withAnimation(.smooth(duration: 0.15)) { copied = true }
+        withAnimation(.smooth(duration: 0.15)) { model.copied = true }
         Task {
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            withAnimation(.smooth(duration: 0.2)) { copied = false }
+            withAnimation(.smooth(duration: 0.2)) { model.copied = false }
         }
-    }
-
-    @MainActor
-    private func message() async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        creating = true
-        error = nil
-        do {
-            let groupIdHex = try await appState.marmot.createGroup(
-                accountRef: accountRef,
-                name: "",
-                memberRefs: [hex ?? npub],
-                description: nil
-            )
-            Haptics.success()
-            dismiss()
-            appState.presentChat(groupIdHex: groupIdHex)
-        } catch let marmotError as MarmotKitError {
-            Haptics.error()
-            if case .MissingKeyPackage = marmotError {
-                self.error = L10n.formatted(
-                    "%@ hasn't published a compatible key package, so they can't be messaged yet.",
-                    title
-                )
-            } else {
-                self.error = marmotError.localizedDescription
-            }
-        } catch {
-            Haptics.error()
-            self.error = error.localizedDescription
-        }
-        creating = false
     }
 }

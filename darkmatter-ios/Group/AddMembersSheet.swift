@@ -7,22 +7,19 @@ struct AddMembersSheet: View {
     let normalize: (String) async throws -> MemberRefFfi
     let onSubmit: ([String]) async throws -> Void
 
-    @State private var members: [MemberRefFfi] = []
-    @State private var pending: String = ""
-    @State private var isInviting = false
-    @State private var error: String?
-    @State private var showScanner = false
+    @State private var model = AddMembersSheetViewModel()
 
     var body: some View {
-        NavigationStack {
+        @Bindable var model = model
+        return NavigationStack {
             Form {
                 Section("Invite") {
-                    ForEach(members, id: \.accountIdHex) { member in
+                    ForEach(model.members, id: \.accountIdHex) { member in
                         HStack(spacing: 8) {
                             StagedGroupMemberRow(member: member)
 
                             Button(role: .destructive) {
-                                members.removeAll { $0.accountIdHex == member.accountIdHex }
+                                model.members.removeAll { $0.accountIdHex == member.accountIdHex }
                             } label: {
                                 Image(systemName: "minus.circle.fill")
                                     .foregroundStyle(.red)
@@ -31,28 +28,28 @@ struct AddMembersSheet: View {
                         }
                     }
                     HStack {
-                        TextField("npub1…, nprofile1…, or hex public key", text: $pending)
+                        TextField("npub1…, nprofile1…, or hex public key", text: $model.pending)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
                         Button {
-                            Task { await addPending() }
+                            Task { await model.addPending(normalize: normalize, using: appState) }
                         } label: {
                             Image(systemName: "plus.circle.fill")
                                 .foregroundStyle(.tint)
                         }
-                        .disabled(pending.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(model.pending.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
 
                     Button {
-                        error = nil
-                        showScanner = true
+                        model.error = nil
+                        model.showScanner = true
                     } label: {
                         Label("Scan QR code", systemImage: "qrcode.viewfinder")
                     }
                 }
 
-                if let error {
+                if let error = model.error {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -66,99 +63,23 @@ struct AddMembersSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isInviting ? L10n.string("Inviting…") : L10n.string("Invite")) {
-                        Task { await invite() }
+                    Button(model.isInviting ? L10n.string("Inviting…") : L10n.string("Invite")) {
+                        Task { await model.invite(normalize: normalize, onSubmit: onSubmit, using: appState, dismiss: { dismiss() }) }
                     }
-                    .disabled(members.isEmpty || isInviting)
+                    .disabled(
+                        model.isInviting ||
+                        (model.members.isEmpty && model.pending.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    )
                 }
             }
-            .interactiveDismissDisabled(isInviting)
-            .fullScreenCover(isPresented: $showScanner) {
+            .interactiveDismissDisabled(model.isInviting)
+            .fullScreenCover(isPresented: $model.showScanner) {
                 ScannerSheet { result in
-                    showScanner = false
-                    addScanned(result)
+                    model.showScanner = false
+                    model.addScanned(result, normalize: normalize, using: appState)
                 }
                 .appAppearance()
             }
-        }
-    }
-
-    @discardableResult
-    private func add(_ raw: String) async -> Bool {
-        // Normalize off the MainActor; only hop back to mutate members/error (#260).
-        let normalizedResult = await AddMembersPresentation.normalizedMember(
-            raw,
-            normalize: normalize
-        )
-        switch normalizedResult {
-        case .empty:
-            return true
-        case .invalid:
-            Haptics.error()
-            self.error = L10n.string("Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.")
-            return false
-        case .normalized(let normalized):
-            // Stage against the live members list (post-await) so concurrent
-            // adds dedup correctly instead of racing on a stale snapshot.
-            switch AddMembersPresentation.stage(normalized, existingMembers: members) {
-            case .empty, .invalid:
-                return false
-            case .duplicate:
-                clearPendingIfUnchanged(raw)
-                error = nil
-                Haptics.selection()
-                return true
-            case .added(let updatedMembers, let addedMember):
-                members = updatedMembers
-                clearPendingIfUnchanged(raw)
-                error = nil
-                Haptics.success()
-                _ = appState.profile(forAccountIdHex: addedMember.accountIdHex)
-                return true
-            }
-        }
-    }
-
-    /// Clear the pending field only if it still holds the value we normalized,
-    /// so an older add completing off-main can't erase text the user typed
-    /// while the FFI was in flight (#260/#274).
-    private func clearPendingIfUnchanged(_ raw: String) {
-        if pending == raw {
-            pending = ""
-        }
-    }
-
-    @discardableResult
-    private func addPending() async -> Bool {
-        await add(pending)
-    }
-
-    private func addScanned(_ raw: String) {
-        Task { await add(raw) }
-    }
-
-    private func invite() async {
-        // Take the in-flight guard synchronously before the first await so a
-        // fast double-tap can't start two concurrent invite tasks while the
-        // off-main recipient normalization is still in flight (#260/#274).
-        guard !isInviting else { return }
-        isInviting = true
-        error = nil
-        guard await addPending() else {
-            isInviting = false
-            return
-        }
-        guard !members.isEmpty else {
-            isInviting = false
-            return
-        }
-        do {
-            try await onSubmit(members.map(\.memberRef))
-            isInviting = false
-            dismiss()
-        } catch {
-            isInviting = false
-            self.error = error.localizedDescription
         }
     }
 }

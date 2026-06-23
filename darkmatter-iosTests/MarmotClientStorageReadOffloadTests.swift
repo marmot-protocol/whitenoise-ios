@@ -28,8 +28,11 @@ struct MarmotClientStorageReadOffloadTests {
             "darkmatter-ios/Chats/AccountSwitcherSheet.swift",
             "darkmatter-ios/Chats/ChatsListViewModel.swift",
             "darkmatter-ios/Diagnostics/DiagnosticsView.swift",
+            "darkmatter-ios/Diagnostics/DiagnosticsViewModel.swift",
             "darkmatter-ios/Settings/KeyPackagesView.swift",
+            "darkmatter-ios/Settings/KeyPackagesViewModel.swift",
             "darkmatter-ios/Settings/RelaysView.swift",
+            "darkmatter-ios/Settings/RelaysViewModel.swift",
         ] {
             let source = try sourceString(relativePath)
             #expect(!source.contains("appState.marmot.chatList("), "\(relativePath) still calls sync chatList FFI directly")
@@ -69,23 +72,25 @@ struct MarmotClientStorageReadOffloadTests {
 
         // MainActor-bound callers must await the accessors rather than computing
         // from a synchronous read.
-        let profileEditSource = try sourceString("darkmatter-ios/Settings/ProfileEditView.swift")
+        let profileEditSource = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
         #expect(
             profileEditSource.contains("await appState.relayPublishRelays(for:"),
-            "ProfileEditView does not await relayPublishRelays"
+            "ProfileEditViewModel does not await relayPublishRelays"
         )
         #expect(
             profileEditSource.contains("await appState.relayBootstrapRelays(for:"),
-            "ProfileEditView does not await relayBootstrapRelays"
+            "ProfileEditViewModel does not await relayBootstrapRelays"
         )
 
-        let profilesSource = try sourceString("darkmatter-ios/Core/AppState+Profiles.swift")
+        // refreshProfile moved to ProfileStore (Phase 2); it reaches the async
+        // accessor through its AppState back-reference.
+        let profileStoreSource = try sourceString("darkmatter-ios/Core/ProfileStore.swift")
         #expect(
-            profilesSource.contains("await relayBootstrapRelays(for:"),
+            profileStoreSource.contains("await appState.relayBootstrapRelays(for:"),
             "refreshProfile does not await relayBootstrapRelays"
         )
         #expect(
-            !profilesSource.contains("map(relayBootstrapRelays(for:))"),
+            !profileStoreSource.contains("map(appState.relayBootstrapRelays(for:))"),
             "refreshProfile still uses the synchronous point-free relayBootstrapRelays accessor"
         )
     }

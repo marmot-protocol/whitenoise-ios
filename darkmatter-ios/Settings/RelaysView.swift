@@ -5,15 +5,11 @@ import MarmotKit
 ///
 /// Marmot owns the account relay lists. This screen reads the current
 /// projection and sends edits back through Marmot, which publishes the updated
-/// NIP-65 and inbox lists.
+/// NIP-65 and inbox lists. All load/save/validation lives in `RelaysViewModel`;
+/// this view is pure rendering.
 struct RelaysView: View {
     @Environment(AppState.self) private var appState
-    @State private var pendingUrl: String = ""
-    @State private var isSaving = false
-    @State private var saveError: String?
-    @State private var savedAt: Date?
-
-    @State private var lists: AccountRelayListsFfi?
+    @State private var model = RelaysViewModel()
 
     var body: some View {
         Form {
@@ -23,56 +19,59 @@ struct RelaysView: View {
         .navigationTitle("Relays")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if isSaving {
+            if model.isSaving {
                 ProgressView().controlSize(.small)
             } else {
                 EditButton()
             }
         }
-        .task(id: appState.activeAccountRef) { await reload() }
-        .refreshable { await reload() }
+        .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
+        .refreshable { await model.reload(using: appState) }
     }
 
     // MARK: - Account relays
 
     private var accountRelaysSection: some View {
         Section {
-            if lists == nil {
+            if model.lists == nil {
                 ProgressView("Loading relays")
             } else {
-                if currentRelays.isEmpty {
+                if model.currentRelays.isEmpty {
                     Text("No relays published")
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(currentRelays, id: \.self) { url in
+                ForEach(model.currentRelays, id: \.self) { url in
                     Text(url).font(.system(.body, design: .monospaced))
                 }
-                .onDelete(perform: deleteRelays)
+                .onDelete { model.deleteRelays(at: $0, using: appState) }
 
                 HStack {
-                    TextField("wss://relay.example.com", text: $pendingUrl)
+                    TextField(
+                        "wss://relay.example.com",
+                        text: Binding(get: { model.pendingUrl }, set: { model.pendingUrl = $0 })
+                    )
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
                         .font(.system(.body, design: .monospaced))
-                        .disabled(isSaving || lists == nil)
+                        .disabled(model.isSaving || model.lists == nil)
                     Button {
-                        addPending()
+                        model.addPending(using: appState)
                     } label: {
                         Image(systemName: "plus.circle.fill").foregroundStyle(.tint)
                     }
-                    .disabled(!canAdd)
+                    .disabled(!model.canAdd)
                 }
             }
 
-            if let saveError {
+            if let saveError = model.saveError {
                 Label(saveError, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)
                     .font(.callout)
             }
 
-            if let savedAt {
+            if let savedAt = model.savedAt {
                 Label(
                     L10n.formatted("Saved %@", savedAt.formatted(.relative(presentation: .named))),
                     systemImage: "checkmark.seal.fill"
@@ -92,7 +91,7 @@ struct RelaysView: View {
 
     @ViewBuilder
     private var publishedListsSection: some View {
-        if let lists {
+        if let lists = model.lists {
             Section {
                 relayListRow("NIP-65", systemImage: "list.bullet", list: lists.nip65)
                 relayListRow("Inbox", systemImage: "tray.and.arrow.down", list: lists.inbox)
@@ -140,87 +139,6 @@ struct RelaysView: View {
                     .padding(.vertical, 2)
                     .background(.quaternary, in: Capsule())
             }
-        }
-    }
-
-    // MARK: - Actions
-
-    private var currentRelays: [String] {
-        guard let lists else { return [] }
-        return RelaySettings.editableRelays(from: lists)
-    }
-
-    private var canAdd: Bool {
-        guard lists != nil,
-              !isSaving,
-              let normalized = RelaySettings.normalizedRelayURL(pendingUrl)
-        else { return false }
-        return !currentRelays.contains(normalized)
-    }
-
-    private func addPending() {
-        guard let normalized = RelaySettings.normalizedRelayURL(pendingUrl), canAdd else { return }
-        Task {
-            if await saveRelays(currentRelays + [normalized]) {
-                pendingUrl = ""
-            }
-        }
-    }
-
-    private func deleteRelays(at indexSet: IndexSet) {
-        var next = currentRelays
-        next.remove(atOffsets: indexSet)
-        Task { await saveRelays(next) }
-    }
-
-    @MainActor
-    private func reload() async {
-        guard let ref = appState.activeAccountRef else {
-            lists = nil
-            return
-        }
-        do {
-            lists = try await appState.currentMarmotClient().accountRelayLists(accountRef: ref)
-        } catch {
-            lists = nil
-        }
-    }
-
-    @MainActor
-    @discardableResult
-    private func saveRelays(_ relays: [String]) async -> Bool {
-        guard let accountRef = appState.activeAccountRef else { return false }
-        let normalized = RelaySettings.normalizedRelayURLs(relays)
-        guard !normalized.isEmpty else {
-            saveError = L10n.string("Keep at least one relay.")
-            Haptics.error()
-            return false
-        }
-
-        isSaving = true
-        saveError = nil
-        defer { isSaving = false }
-
-        do {
-            lists = try await RelaySettings.saveAccountRelays(
-                accountRef: accountRef,
-                relays: normalized,
-                currentLists: lists,
-                manager: appState.marmot
-            )
-            savedAt = Date()
-            Haptics.success()
-            appState.present(.success(L10n.string("Relay lists updated")))
-            return true
-        } catch {
-            if let failure = error as? RelaySettingsSaveFailure,
-               let reloadedLists = failure.reloadedLists {
-                lists = reloadedLists
-            }
-            Haptics.error()
-            saveError = error.localizedDescription
-            appState.present(.error(L10n.string("Relay update failed"), message: error.localizedDescription))
-            return false
         }
     }
 }
