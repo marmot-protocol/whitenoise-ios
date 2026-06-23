@@ -518,10 +518,15 @@ polling over re-running.
             draft/metadata types stay in the view file; `saveDisabled` stays in the
             view (reads `appState.activeAccountRef`). Five source-scrapes across 3 test
             files repointed to follow the moved publish/validation code.
-      - [ ] Remaining (large/structural only): GroupDetailsView (1016 lines — large).
+      - [x] `GroupDetailsView` → `GroupDetailsViewModel` (commit `a70af2c`): the last
+            screen (1016→670-line view + 376-line model). Conversation sub-view, so the
+            model holds the `ConversationViewModel` + `onGroupChanged` (bound at the top
+            of body, @ObservationIgnored), takes `AppState` as a method param + `dismiss`
+            for leave. `validatedGroupName` static stays; the 3 confirmation/help/error
+            enums became internal; 3 source-scrapes repointed.
+      - [x] **PHASE 4 COMPLETE — all 13 screens are view-models.**
             Pure-UI/navigation screens (WelcomeView, AppearanceSettingsView,
             AccountsView, AccountSwitcherSheet) have little/no logic to extract.
-            **All bounded screens are now converted (12 screens).**
 
 > **App-run verification (2026-06-22):** built + launched on the iPhone 17 Pro
 > sim. App boots healthy to Chats (not onboarding) → persisted account loads,
