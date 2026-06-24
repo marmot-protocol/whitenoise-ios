@@ -1,7 +1,8 @@
 import Foundation
 
-/// Dark Matter deep links. Formats: `darkmatter://profile/<profile-ref>` and
-/// `darkmatter://chat/<groupIdHex>`.
+/// App deep links. Formats: `<scheme>://profile/<profile-ref>` and
+/// `<scheme>://chat/<groupIdHex>`, where `<scheme>` is the per-flavor URL
+/// scheme (`whitenoise` in production, `whitenoise-staging` in staging).
 ///
 /// Used both for the QR codes the app generates and for routing inbound
 /// links — whether from the in-app scanner (which reads the raw string) or
@@ -13,7 +14,13 @@ nonisolated enum DeepLink: Equatable {
     case profile(npub: String)
     case chat(groupIdHex: String)
 
-    static let scheme = "darkmatter"
+    /// The URL scheme is flavor-specific (`whitenoise` vs. `whitenoise-staging`)
+    /// so side-by-side installs route their own links. Read from the Info.plist
+    /// `WNURLScheme` key (`$(WN_URL_SCHEME)`), falling back to production.
+    static let scheme: String =
+        (Bundle.main.object(forInfoDictionaryKey: "WNURLScheme") as? String)
+            .flatMap { $0.isEmpty ? nil : $0 }
+        ?? "whitenoise"
 
     var url: URL {
         switch self {

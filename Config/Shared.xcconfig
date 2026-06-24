@@ -1,0 +1,12 @@
+// Settings common to both flavors. Flavor-specific values live in
+// Production.xcconfig / Staging.xcconfig, which #include this file.
+// Local telemetry secrets come from AppBuildSettings.xcconfig.
+#include "AppBuildSettings.xcconfig"
+
+// Telemetry + native-push config shared by both flavors. Previously inlined
+// per build config in project.pbxproj.
+DARKMATTER_OTLP_ENDPOINT = "https://otlp.ipf.dev/v1/metrics"
+DARKMATTER_PUSH_RELAY_HINT = "wss://relay.eu.whitenoise.chat"
+DARKMATTER_PUSH_SERVER_PUBKEY_HEX = 73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04
+DARKMATTER_OTLP_BEARER_TOKEN = $(OTLP_TOKEN_DARKMATTER_IOS)
+DARKMATTER_AUDIT_LOG_BEARER_TOKEN = $(AUDIT_LOG_TOKEN_DARKMATTER_IOS)

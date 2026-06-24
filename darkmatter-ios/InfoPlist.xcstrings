@@ -1,214 +1,148 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "CFBundleDisplayName": {
-      "comment": "Bundle display name",
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Dark Matter"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "darkmatter-ios"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter"
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "darkmatter-ios"
           }
         }
       }
     },
-    "CFBundleName": {
-      "comment": "Bundle name",
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "new",
-            "value": "darkmatter-ios"
+    "NSCameraUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
           }
         },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter uses the camera to scan profile QR codes and take photos for encrypted chats."
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
           }
         },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
           }
         },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Dark Matter usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
           }
         },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
           }
         },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
           }
         },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "darkmatter-ios"
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
           }
         }
       }
     },
-    "NSCameraUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter uses the camera to scan profile QR codes and take photos for encrypted chats."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O Dark Matter usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
-          }
-        },
-        "tr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
-          }
-        }
-      }
-    },
-    "NSMicrophoneUsageDescription": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark Matter uses the microphone to record encrypted voice messages."
+    "NSMicrophoneUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Matter uses the microphone to record encrypted voice messages."
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }
