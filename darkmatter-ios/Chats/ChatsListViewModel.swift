@@ -367,34 +367,31 @@ final class ChatsListViewModel {
     }
 
     private func makeItem(for row: ChatListRowFfi) -> Item {
-        let details = groupDetailsCache[row.groupIdHex]
+        let display = display(for: row, details: groupDetailsCache[row.groupIdHex])
         return Item(
             row: row,
-            avatarURL: displayAvatarURL(for: row, details: details),
-            title: Self.displayTitle(for: row, details: details, appState: appState),
+            avatarURL: display.avatarURL,
+            title: display.title,
             mentionDisplayName: { [weak appState] entity in
                 appState?.mentionDisplayName(for: entity)
             }
         )
     }
 
-    private func displayAvatarURL(for row: ChatListRowFfi, details: GroupDetailsFfi?) -> URL? {
-        if let details, let appState {
-            let members = Self.memberRecords(from: details)
-            let otherMember = GroupDisplay.otherMemberAccount(
-                in: members,
-                myAccountId: appState.activeAccount?.accountIdHex
-            )
-            if let url = GroupDisplay.avatarURL(
-                group: details.group,
-                otherMember: otherMember,
-                memberCount: members.count,
-                appState: appState
-            ) {
-                return url
-            }
+    private func display(
+        for row: ChatListRowFfi,
+        details: GroupDetailsFfi?
+    ) -> (title: String, avatarURL: URL?) {
+        let fallbackAvatarURL = ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
+        guard let details, let appState else {
+            return (title: Item.sanitizedTitle(for: row), avatarURL: fallbackAvatarURL)
         }
-        return ProfileSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
+
+        let groupDisplay = Self.groupDisplay(for: details, appState: appState)
+        return (
+            title: GroupDisplay.title(for: groupDisplay, appState: appState),
+            avatarURL: GroupDisplay.avatarURL(for: groupDisplay, appState: appState) ?? fallbackAvatarURL
+        )
     }
 
     static func displayTitle(
@@ -402,20 +399,25 @@ final class ChatsListViewModel {
         details: GroupDetailsFfi?,
         appState: AppState?
     ) -> String {
-        if let details, let appState {
-            let members = memberRecords(from: details)
-            let otherMember = GroupDisplay.otherMemberAccount(
-                in: members,
-                myAccountId: appState.activeAccount?.accountIdHex
-            )
-            return GroupDisplay.title(
-                group: details.group,
-                otherMember: otherMember,
-                memberCount: members.count,
-                appState: appState
-            )
-        }
-        return Item.sanitizedTitle(for: row)
+        guard let details, let appState else { return Item.sanitizedTitle(for: row) }
+        let groupDisplay = groupDisplay(for: details, appState: appState)
+        return GroupDisplay.title(for: groupDisplay, appState: appState)
+    }
+
+    private static func groupDisplay(
+        for details: GroupDetailsFfi,
+        appState: AppState
+    ) -> GroupDisplay.Resolved {
+        let members = memberRecords(from: details)
+        let otherMember = GroupDisplay.otherMemberAccount(
+            in: members,
+            myAccountId: appState.activeAccount?.accountIdHex
+        )
+        return GroupDisplay.resolve(
+            group: details.group,
+            otherMember: otherMember,
+            memberCount: members.count
+        )
     }
 
     static func memberRecords(from details: GroupDetailsFfi) -> [AppGroupMemberRecordFfi] {

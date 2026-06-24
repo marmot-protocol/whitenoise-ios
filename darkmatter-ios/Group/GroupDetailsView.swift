@@ -173,16 +173,18 @@ struct GroupDetailsView: View {
     }
 
     private var headerSection: some View {
-        Section {
+        let groupDisplay = viewModel.groupDisplay
+        let displayTitle = viewModel.displayTitle(for: groupDisplay)
+        return Section {
             HStack(spacing: 14) {
                 AvatarBubble(
-                    seed: GroupDisplay.avatarSeed(group: viewModel.group, otherMember: viewModel.otherMember, memberCount: memberCount),
-                    title: viewModel.displayTitle,
-                    pictureURL: GroupDisplay.avatarURL(group: viewModel.group, otherMember: viewModel.otherMember, memberCount: memberCount, appState: appState)
+                    seed: GroupDisplay.avatarSeed(for: groupDisplay),
+                    title: displayTitle,
+                    pictureURL: GroupDisplay.avatarURL(for: groupDisplay, appState: appState)
                 )
                 .frame(width: 56, height: 56)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(viewModel.displayTitle)
+                    Text(displayTitle)
                         .font(.title3.weight(.semibold))
                     if let description = ProfileSanitizer.multilineText(
                         viewModel.group.description,

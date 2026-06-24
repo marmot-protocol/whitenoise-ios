@@ -232,24 +232,34 @@ final class ConversationViewModel {
         return initialMemberCount ?? 0
     }
 
+    /// Lazily resolves display inputs from the current group/member state.
+    /// Call sites that need multiple title/avatar values should capture this
+    /// once and pass it through rather than reading the property repeatedly.
+    var groupDisplay: GroupDisplay.Resolved {
+        GroupDisplay.resolve(
+            group: group,
+            otherMember: otherMember,
+            memberCount: displayMemberCount
+        )
+    }
+
     var displayTitle: String {
+        displayTitle(for: groupDisplay)
+    }
+
+    func displayTitle(for groupDisplay: GroupDisplay.Resolved) -> String {
         guard let appState else {
-            if let name = ProfileSanitizer.groupName(group.name) { return name }
+            if let name = groupDisplay.sanitizedName { return name }
             if let initialTitle = ProfileSanitizer.groupName(initialTitle) { return initialTitle }
             return IdentityFormatter.short(group.groupIdHex)
         }
         if members.isEmpty,
            groupMemberDetails.isEmpty,
            let initialTitle = ProfileSanitizer.groupName(initialTitle),
-           ProfileSanitizer.groupName(group.name) == nil {
+           groupDisplay.sanitizedName == nil {
             return initialTitle
         }
-        return GroupDisplay.title(
-            group: group,
-            otherMember: otherMember,
-            memberCount: displayMemberCount,
-            appState: appState
-        )
+        return GroupDisplay.title(for: groupDisplay, appState: appState)
     }
 
     var displaySubtitle: String {
