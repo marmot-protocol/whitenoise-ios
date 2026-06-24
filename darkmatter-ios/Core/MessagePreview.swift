@@ -7,6 +7,16 @@ import MarmotKit
 /// payloads; the chats list must do the same so it never shows a bare
 /// reaction/delete (or a kind-1200 stream-start signal) as the preview.
 enum MessagePreview {
+    // Reply-preview media JSON is peer-controlled. Keep the raw byte budget
+    // small because JSONSerialization materializes the whole blob before the
+    // tag/field scan budgets apply.
+    static let timelineMediaPreviewMaxJsonBytes = 64 * 1024
+    // Match the app's normal outgoing attachment ceiling so legitimate media
+    // messages keep accurate reply-preview counts while hostile extras clip.
+    static let timelineMediaPreviewMaxTags = MediaDraftProcessor.maxAttachmentCount + 2
+    static let timelineMediaPreviewMaxFieldsPerTag = 16
+    static let timelineMediaPreviewMaxFileNames = MediaDraftProcessor.maxAttachmentCount
+
     /// Whether a record should drive the chat-list preview. Skips agent-stream
     /// start signals and non-textual events (reactions, deletes). A kind-9
     /// stream-final is a real message and previews like any other chat.
@@ -135,17 +145,21 @@ enum MessagePreview {
     }
 
     private static func timelineMediaFileNames(from mediaJson: String) -> [String] {
-        guard let data = mediaJson.data(using: .utf8),
+        guard mediaJson.utf8.count <= timelineMediaPreviewMaxJsonBytes,
+              let data = mediaJson.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let imeta = root["imeta"] as? [[String]]
         else { return [] }
         var fileNames: [String] = []
-        for tag in imeta {
-            for field in tag.dropFirst() where field.hasPrefix("filename ") {
+        for tag in imeta.prefix(timelineMediaPreviewMaxTags) {
+            for field in tag.dropFirst().prefix(timelineMediaPreviewMaxFieldsPerTag) where field.hasPrefix("filename ") {
                 let name = String(field.dropFirst("filename ".count))
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if !name.isEmpty {
                     fileNames.append(name)
+                    if fileNames.count == timelineMediaPreviewMaxFileNames {
+                        return fileNames
+                    }
                     break
                 }
             }
