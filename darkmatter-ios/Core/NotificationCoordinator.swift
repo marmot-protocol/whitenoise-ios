@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import MarmotKit
 
 struct NativePushDisableCoordinator {
@@ -49,6 +50,21 @@ nonisolated enum NativePushRegistrationErrorDisposition {
             return .stopSync
         }
         return .recordFailure
+    }
+}
+
+nonisolated enum NativePushRelayHintPolicy {
+    static func relayHint(
+        from config: NativePushServerConfig,
+        seedRelays: [String] = AppContainerConfig.seedRelays,
+        defaultRelayHint: String = AppContainerConfig.pushNotificationRelayHint
+    ) -> String {
+        let allowedRelayHints = Set(seedRelays.compactMap(RelayURL.normalized))
+        if let relayHint = config.relayHint,
+           allowedRelayHints.contains(relayHint) {
+            return relayHint
+        }
+        return RelayURL.normalized(defaultRelayHint) ?? defaultRelayHint
     }
 }
 
@@ -133,6 +149,10 @@ final class NotificationCoordinator {
 
     private static let notificationSubscriptionInitialRetryDelayNanoseconds: UInt64 = 1_000_000_000
     private static let notificationSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 60_000_000_000
+    private static let pushRegistrationLog = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.darkmatter",
+        category: "push-registration"
+    )
 
     var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
 
@@ -391,16 +411,8 @@ final class NotificationCoordinator {
             platform: .apns,
             rawToken: tokenHex,
             serverPubkeyHex: config.serverPubkeyHex,
-            relayHint: Self.pushRegistrationRelayHint(from: config)
+            relayHint: NativePushRelayHintPolicy.relayHint(from: config)
         )
-    }
-
-    private static func pushRegistrationRelayHint(from config: NativePushServerConfig) -> String {
-        if let relayHint = config.relayHint,
-           AppContainerConfig.seedRelays.contains(relayHint) {
-            return relayHint
-        }
-        return AppContainerConfig.pushNotificationRelayHint
     }
 
     func syncNativePushRegistrationIfEnabled(host: NotificationCoordinatorHost) async {
@@ -445,7 +457,13 @@ final class NotificationCoordinator {
         }
 
         if let lastError {
-            host.present(.error(L10n.string("Push registration failed"), message: lastError.localizedDescription))
+            Self.pushRegistrationLog.warning(
+                "Native push registration sync failed: \(String(describing: lastError), privacy: .private)"
+            )
+            host.present(.error(
+                L10n.string("Push registration failed"),
+                message: L10n.string("We'll keep trying in the background.")
+            ))
         }
     }
 

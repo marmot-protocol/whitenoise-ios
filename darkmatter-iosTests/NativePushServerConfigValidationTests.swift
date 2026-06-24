@@ -44,4 +44,27 @@ struct NativePushServerConfigValidationTests {
             #expect(config?.relayHint == nil)
         }
     }
+
+    @Test func relayHintPolicyNormalizesSeedRelaysBeforeMembershipCheck() throws {
+        let config = try #require(NativePushServerConfig.current(
+            rawPubkey: validPubkey,
+            rawRelayHint: " WSS://Relay.Example/Nostr "
+        ))
+
+        #expect(NativePushRelayHintPolicy.relayHint(
+            from: config,
+            seedRelays: [" wss://relay.other.example ", "WSS://Relay.Example/Nostr"],
+            defaultRelayHint: "wss://fallback.example"
+        ) == "wss://relay.example/Nostr")
+    }
+
+    @Test func relayHintPolicyNormalizesFallbackRelayHint() {
+        let config = NativePushServerConfig(serverPubkeyHex: validPubkey, relayHint: "wss://unknown.example")
+
+        #expect(NativePushRelayHintPolicy.relayHint(
+            from: config,
+            seedRelays: ["wss://relay.example"],
+            defaultRelayHint: " WSS://Fallback.Example "
+        ) == "wss://fallback.example")
+    }
 }

@@ -505,12 +505,12 @@ polling over re-running.
             AppState keeps thin forwarders so existing call sites stay stable.
             **Tracked: marmot-protocol/darkmatter-ios#390**.
 
-      > **Leverage note (2026-06-23, updated for #390):** the remaining Phase 2
-      > service work is *organizational* — it relocates orchestration out of
-      > `AppState` but does not delete re-derivation or push logic into Rust (the
-      > thin-shell thesis, already realized by Phase 3 + the projection caches + the
-      > Phase 5b VM decomposition). `RuntimeLifecycle` remains high-cost because
-      > suspend/resume needs device/manual testing.
+> **Leverage note (2026-06-23, updated for #390):** the remaining Phase 2
+> service work is *organizational* — it relocates orchestration out of
+> `AppState` but does not delete re-derivation or push logic into Rust (the
+> thin-shell thesis, already realized by Phase 3 + the projection caches + the
+> Phase 5b VM decomposition). `RuntimeLifecycle` remains high-cost because
+> suspend/resume needs device/manual testing.
 - [ ] Phase 4 — screen-store template; convert view-embedded screens
       - [x] template established + `RelaysView` → `RelaysViewModel` (commit `1356c5e`):
             `@Observable` store owns load/save/validation + UI state; view is pure
