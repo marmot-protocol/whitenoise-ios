@@ -41,6 +41,7 @@ nonisolated enum LocalNotificationProjection {
         let content = contentText(
             trigger: update.trigger,
             isDm: update.isDm,
+            isMention: update.isMention,
             senderName: senderName,
             groupName: ProfileSanitizer.groupName(update.groupName),
             preview: preview
@@ -86,6 +87,7 @@ nonisolated enum LocalNotificationProjection {
     private static func contentText(
         trigger: NotificationTriggerFfi,
         isDm: Bool,
+        isMention: Bool,
         senderName: String,
         groupName: String?,
         preview: String?
@@ -100,6 +102,13 @@ nonisolated enum LocalNotificationProjection {
         case .newMessage:
             if isDm {
                 return (title: senderName, body: preview ?? L10n.string("New encrypted message"))
+            }
+            if isMention {
+                return (
+                    title: groupName ?? L10n.string("Group message"),
+                    body: preview.map { L10n.formatted("%@ mentioned you: %@", senderName, $0) }
+                        ?? L10n.formatted("%@ mentioned you", senderName)
+                )
             }
             return (
                 title: groupName ?? L10n.string("Group message"),

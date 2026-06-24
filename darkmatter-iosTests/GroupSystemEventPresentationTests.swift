@@ -67,6 +67,47 @@ struct GroupSystemEventPresentationTests {
         }
     }
 
+    @Test func displayTextRendersDisappearingTimerEnabled() {
+        let actor = hex("aa")
+        withAppLanguage(.english) {
+            let text = GroupSystemEventPresentation.displayText(
+                from: """
+                {"v":1,"system_type":"disappearing_timer_changed","data":{"actor":"\(actor)","old_retention_seconds":0,"new_retention_seconds":60}}
+                """,
+                displayName: testDisplayName
+            )
+
+            #expect(text == "Alice set disappearing messages to 1 minute")
+        }
+    }
+
+    @Test func displayTextRendersDisappearingTimerChanged() {
+        withAppLanguage(.english) {
+            let text = GroupSystemEventPresentation.displayText(
+                from: """
+                {"v":1,"system_type":"disappearing_timer_changed","data":{"old_retention_seconds":60,"new_retention_seconds":120}}
+                """,
+                displayName: testDisplayName
+            )
+
+            #expect(text == "Disappearing messages changed from 1 minute to 2 minutes")
+        }
+    }
+
+    @Test func displayTextRendersDisappearingTimerDisabled() {
+        let actor = hex("aa")
+        withAppLanguage(.english) {
+            let text = GroupSystemEventPresentation.displayText(
+                from: """
+                {"v":1,"system_type":"disappearing_timer_changed","data":{"actor":"\(actor)","old_retention_seconds":3600,"new_retention_seconds":0}}
+                """,
+                displayName: testDisplayName
+            )
+
+            #expect(text == "Alice turned off disappearing messages")
+        }
+    }
+
     @Test func displayTextFallsBackToSystemType() {
         withAppLanguage(.english) {
             let text = GroupSystemEventPresentation.displayText(

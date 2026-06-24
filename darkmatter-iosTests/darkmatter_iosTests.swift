@@ -2599,6 +2599,36 @@ struct NotificationPresentationTests {
         #expect(presentation?.body == "Bob: Ship it")
     }
 
+    @Test func groupMentionUsesMentionBodyPrefix() {
+        let update = notificationUpdate(
+            isDm: false,
+            isMention: true,
+            groupName: "Project Room",
+            senderName: "Bob",
+            previewText: "Ship it"
+        )
+
+        let presentation = LocalNotificationProjection.makePresentation(for: update)
+
+        #expect(presentation?.title == "Project Room")
+        #expect(presentation?.body == "Bob mentioned you: Ship it")
+    }
+
+    @Test func groupMentionWithoutPreviewUsesMentionFallback() {
+        let update = notificationUpdate(
+            isDm: false,
+            isMention: true,
+            groupName: nil,
+            senderName: "Bob",
+            previewText: nil
+        )
+
+        let presentation = LocalNotificationProjection.makePresentation(for: update)
+
+        #expect(presentation?.title == "Group message")
+        #expect(presentation?.body == "Bob mentioned you")
+    }
+
     @Test func notificationFallbacksUseFormattedLocalizationKeys() {
         let invite = notificationUpdate(
             trigger: .groupInvite,
@@ -9246,6 +9276,7 @@ private func notificationUpdate(
     accountIdHex: String = hex("11"),
     groupIdHex: String = "group-a",
     isDm: Bool = true,
+    isMention: Bool = false,
     groupName: String? = nil,
     senderName: String? = "Alice",
     previewText: String? = "Hello",
@@ -9264,6 +9295,7 @@ private func notificationUpdate(
         groupIdHex: groupIdHex,
         groupName: groupName,
         isDm: isDm,
+        isMention: isMention,
         messageIdHex: messageIdHex,
         sender: NotificationUserFfi(
             accountIdHex: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",

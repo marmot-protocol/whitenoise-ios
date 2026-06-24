@@ -1903,6 +1903,14 @@ public protocol MarmotProtocol : AnyObject {
     func updateGroupProfile(accountRef: String, groupIdHex: String, name: String?, description: String?) async throws  -> SendSummaryFfi
 
     /**
+     * Set the per-group disappearing-message retention, wrapping the engine's
+     * `update_message_retention`. `disappearing_message_secs` of `0` disables
+     * expiry; any positive value is the retention window in seconds. Thin
+     * passthrough over the already-public engine API (darkmatter#571).
+     */
+    func updateMessageRetention(accountRef: String, groupIdHex: String, disappearingMessageSecs: UInt64) async throws  -> SendSummaryFfi
+
+    /**
      * Encrypt plaintext attachments, upload the ciphertext blobs, and
      * optionally send the resulting media references into the group.
      */
@@ -3827,6 +3835,29 @@ open func updateGroupProfile(accountRef: String, groupIdHex: String, name: Strin
 }
 
     /**
+     * Set the per-group disappearing-message retention, wrapping the engine's
+     * `update_message_retention`. `disappearing_message_secs` of `0` disables
+     * expiry; any positive value is the retention window in seconds. Thin
+     * passthrough over the already-public engine API (darkmatter#571).
+     */
+open func updateMessageRetention(accountRef: String, groupIdHex: String, disappearingMessageSecs: UInt64)async throws  -> SendSummaryFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_update_message_retention(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterUInt64.lower(disappearingMessageSecs)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
      * Encrypt plaintext attachments, upload the ciphertext blobs, and
      * optionally send the resulting media references into the group.
      */
@@ -4631,7 +4662,7 @@ public func FfiConverterTypeAccountKeyPackageFfi_lower(_ value: AccountKeyPackag
 
 public struct AccountRelayListsFfi {
     public var complete: Bool
-    public var missing: [String]
+    public var missing: [MissingRelayListKindFfi]
     public var defaultRelays: [String]
     public var bootstrapRelays: [String]
     public var nip65: RelayListFfi
@@ -4639,7 +4670,7 @@ public struct AccountRelayListsFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(complete: Bool, missing: [String], defaultRelays: [String], bootstrapRelays: [String], nip65: RelayListFfi, inbox: RelayListFfi) {
+    public init(complete: Bool, missing: [MissingRelayListKindFfi], defaultRelays: [String], bootstrapRelays: [String], nip65: RelayListFfi, inbox: RelayListFfi) {
         self.complete = complete
         self.missing = missing
         self.defaultRelays = defaultRelays
@@ -4693,7 +4724,7 @@ public struct FfiConverterTypeAccountRelayListsFfi: FfiConverterRustBuffer {
         return
             try AccountRelayListsFfi(
                 complete: FfiConverterBool.read(from: &buf),
-                missing: FfiConverterSequenceString.read(from: &buf),
+                missing: FfiConverterSequenceTypeMissingRelayListKindFfi.read(from: &buf),
                 defaultRelays: FfiConverterSequenceString.read(from: &buf),
                 bootstrapRelays: FfiConverterSequenceString.read(from: &buf),
                 nip65: FfiConverterTypeRelayListFfi.read(from: &buf),
@@ -4703,7 +4734,7 @@ public struct FfiConverterTypeAccountRelayListsFfi: FfiConverterRustBuffer {
 
     public static func write(_ value: AccountRelayListsFfi, into buf: inout [UInt8]) {
         FfiConverterBool.write(value.complete, into: &buf)
-        FfiConverterSequenceString.write(value.missing, into: &buf)
+        FfiConverterSequenceTypeMissingRelayListKindFfi.write(value.missing, into: &buf)
         FfiConverterSequenceString.write(value.defaultRelays, into: &buf)
         FfiConverterSequenceString.write(value.bootstrapRelays, into: &buf)
         FfiConverterTypeRelayListFfi.write(value.nip65, into: &buf)
@@ -5337,6 +5368,11 @@ public struct AppGroupRecordFfi {
     public var avatarDim: String?
     public var avatarThumbhash: String?
     public var encryptedMedia: AppGroupEncryptedMediaComponentFfi
+    /**
+     * Per-group disappearing-message retention in seconds
+     * (`marmot.group.message-retention.v1`). `0` means messages never expire.
+     */
+    public var disappearingMessageSecs: UInt64
     public var archived: Bool
     public var pendingConfirmation: Bool
     public var welcomerAccountIdHex: String?
@@ -5348,7 +5384,11 @@ public struct AppGroupRecordFfi {
         /**
          * URL-based group avatar (`marmot.group.avatar-url.v1`), `None` when absent.
          * When set it takes precedence over a Blossom image avatar.
-         */avatarUrl: String?, avatarDim: String?, avatarThumbhash: String?, encryptedMedia: AppGroupEncryptedMediaComponentFfi, archived: Bool, pendingConfirmation: Bool, welcomerAccountIdHex: String?, viaWelcomeMessageIdHex: String?) {
+         */avatarUrl: String?, avatarDim: String?, avatarThumbhash: String?, encryptedMedia: AppGroupEncryptedMediaComponentFfi,
+        /**
+         * Per-group disappearing-message retention in seconds
+         * (`marmot.group.message-retention.v1`). `0` means messages never expire.
+         */disappearingMessageSecs: UInt64, archived: Bool, pendingConfirmation: Bool, welcomerAccountIdHex: String?, viaWelcomeMessageIdHex: String?) {
         self.groupIdHex = groupIdHex
         self.endpoint = endpoint
         self.name = name
@@ -5360,6 +5400,7 @@ public struct AppGroupRecordFfi {
         self.avatarDim = avatarDim
         self.avatarThumbhash = avatarThumbhash
         self.encryptedMedia = encryptedMedia
+        self.disappearingMessageSecs = disappearingMessageSecs
         self.archived = archived
         self.pendingConfirmation = pendingConfirmation
         self.welcomerAccountIdHex = welcomerAccountIdHex
@@ -5404,6 +5445,9 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         if lhs.encryptedMedia != rhs.encryptedMedia {
             return false
         }
+        if lhs.disappearingMessageSecs != rhs.disappearingMessageSecs {
+            return false
+        }
         if lhs.archived != rhs.archived {
             return false
         }
@@ -5431,6 +5475,7 @@ extension AppGroupRecordFfi: Equatable, Hashable {
         hasher.combine(avatarDim)
         hasher.combine(avatarThumbhash)
         hasher.combine(encryptedMedia)
+        hasher.combine(disappearingMessageSecs)
         hasher.combine(archived)
         hasher.combine(pendingConfirmation)
         hasher.combine(welcomerAccountIdHex)
@@ -5457,6 +5502,7 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
                 avatarDim: FfiConverterOptionString.read(from: &buf),
                 avatarThumbhash: FfiConverterOptionString.read(from: &buf),
                 encryptedMedia: FfiConverterTypeAppGroupEncryptedMediaComponentFfi.read(from: &buf),
+                disappearingMessageSecs: FfiConverterUInt64.read(from: &buf),
                 archived: FfiConverterBool.read(from: &buf),
                 pendingConfirmation: FfiConverterBool.read(from: &buf),
                 welcomerAccountIdHex: FfiConverterOptionString.read(from: &buf),
@@ -5476,6 +5522,7 @@ public struct FfiConverterTypeAppGroupRecordFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.avatarDim, into: &buf)
         FfiConverterOptionString.write(value.avatarThumbhash, into: &buf)
         FfiConverterTypeAppGroupEncryptedMediaComponentFfi.write(value.encryptedMedia, into: &buf)
+        FfiConverterUInt64.write(value.disappearingMessageSecs, into: &buf)
         FfiConverterBool.write(value.archived, into: &buf)
         FfiConverterBool.write(value.pendingConfirmation, into: &buf)
         FfiConverterOptionString.write(value.welcomerAccountIdHex, into: &buf)
@@ -7502,6 +7549,14 @@ public struct GroupSystemEventFfi {
     public var actorAccountIdHex: String?
     public var subjectAccountIdHex: String?
     public var name: String?
+    /**
+     * Previous disappearing-message retention in seconds; `0` means off.
+     */
+    public var oldRetentionSeconds: UInt64?
+    /**
+     * New disappearing-message retention in seconds; `0` means off.
+     */
+    public var newRetentionSeconds: UInt64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -7510,12 +7565,20 @@ public struct GroupSystemEventFfi {
          * Human-readable fallback from the row content. Prefer rendering from
          * `system_type` plus the structured fields so clients can localize and
          * render the local account as "you".
-         */text: String, actorAccountIdHex: String?, subjectAccountIdHex: String?, name: String?) {
+         */text: String, actorAccountIdHex: String?, subjectAccountIdHex: String?, name: String?,
+        /**
+         * Previous disappearing-message retention in seconds; `0` means off.
+         */oldRetentionSeconds: UInt64?,
+        /**
+         * New disappearing-message retention in seconds; `0` means off.
+         */newRetentionSeconds: UInt64?) {
         self.systemType = systemType
         self.text = text
         self.actorAccountIdHex = actorAccountIdHex
         self.subjectAccountIdHex = subjectAccountIdHex
         self.name = name
+        self.oldRetentionSeconds = oldRetentionSeconds
+        self.newRetentionSeconds = newRetentionSeconds
     }
 }
 
@@ -7538,6 +7601,12 @@ extension GroupSystemEventFfi: Equatable, Hashable {
         if lhs.name != rhs.name {
             return false
         }
+        if lhs.oldRetentionSeconds != rhs.oldRetentionSeconds {
+            return false
+        }
+        if lhs.newRetentionSeconds != rhs.newRetentionSeconds {
+            return false
+        }
         return true
     }
 
@@ -7547,6 +7616,8 @@ extension GroupSystemEventFfi: Equatable, Hashable {
         hasher.combine(actorAccountIdHex)
         hasher.combine(subjectAccountIdHex)
         hasher.combine(name)
+        hasher.combine(oldRetentionSeconds)
+        hasher.combine(newRetentionSeconds)
     }
 }
 
@@ -7562,7 +7633,9 @@ public struct FfiConverterTypeGroupSystemEventFfi: FfiConverterRustBuffer {
                 text: FfiConverterString.read(from: &buf),
                 actorAccountIdHex: FfiConverterOptionString.read(from: &buf),
                 subjectAccountIdHex: FfiConverterOptionString.read(from: &buf),
-                name: FfiConverterOptionString.read(from: &buf)
+                name: FfiConverterOptionString.read(from: &buf),
+                oldRetentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
+                newRetentionSeconds: FfiConverterOptionUInt64.read(from: &buf)
         )
     }
 
@@ -7572,6 +7645,8 @@ public struct FfiConverterTypeGroupSystemEventFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.actorAccountIdHex, into: &buf)
         FfiConverterOptionString.write(value.subjectAccountIdHex, into: &buf)
         FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionUInt64.write(value.oldRetentionSeconds, into: &buf)
+        FfiConverterOptionUInt64.write(value.newRetentionSeconds, into: &buf)
     }
 }
 
@@ -8943,6 +9018,7 @@ public struct NotificationUpdateFfi {
     public var groupIdHex: String
     public var groupName: String?
     public var isDm: Bool
+    public var isMention: Bool
     public var messageIdHex: String?
     public var sender: NotificationUserFfi
     public var receiver: NotificationUserFfi
@@ -8954,7 +9030,7 @@ public struct NotificationUpdateFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, reactionEmoji: String?, reactedToPreview: String?, timestampMs: Int64, isFromSelf: Bool) {
+    public init(notificationKey: String, conversationKey: String, trigger: NotificationTriggerFfi, accountRef: String, accountIdHex: String, groupIdHex: String, groupName: String?, isDm: Bool, isMention: Bool, messageIdHex: String?, sender: NotificationUserFfi, receiver: NotificationUserFfi, previewText: String?, reactionEmoji: String?, reactedToPreview: String?, timestampMs: Int64, isFromSelf: Bool) {
         self.notificationKey = notificationKey
         self.conversationKey = conversationKey
         self.trigger = trigger
@@ -8963,6 +9039,7 @@ public struct NotificationUpdateFfi {
         self.groupIdHex = groupIdHex
         self.groupName = groupName
         self.isDm = isDm
+        self.isMention = isMention
         self.messageIdHex = messageIdHex
         self.sender = sender
         self.receiver = receiver
@@ -9002,6 +9079,9 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         if lhs.isDm != rhs.isDm {
             return false
         }
+        if lhs.isMention != rhs.isMention {
+            return false
+        }
         if lhs.messageIdHex != rhs.messageIdHex {
             return false
         }
@@ -9038,6 +9118,7 @@ extension NotificationUpdateFfi: Equatable, Hashable {
         hasher.combine(groupIdHex)
         hasher.combine(groupName)
         hasher.combine(isDm)
+        hasher.combine(isMention)
         hasher.combine(messageIdHex)
         hasher.combine(sender)
         hasher.combine(receiver)
@@ -9065,6 +9146,7 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
                 groupIdHex: FfiConverterString.read(from: &buf),
                 groupName: FfiConverterOptionString.read(from: &buf),
                 isDm: FfiConverterBool.read(from: &buf),
+                isMention: FfiConverterBool.read(from: &buf),
                 messageIdHex: FfiConverterOptionString.read(from: &buf),
                 sender: FfiConverterTypeNotificationUserFfi.read(from: &buf),
                 receiver: FfiConverterTypeNotificationUserFfi.read(from: &buf),
@@ -9085,6 +9167,7 @@ public struct FfiConverterTypeNotificationUpdateFfi: FfiConverterRustBuffer {
         FfiConverterString.write(value.groupIdHex, into: &buf)
         FfiConverterOptionString.write(value.groupName, into: &buf)
         FfiConverterBool.write(value.isDm, into: &buf)
+        FfiConverterBool.write(value.isMention, into: &buf)
         FfiConverterOptionString.write(value.messageIdHex, into: &buf)
         FfiConverterTypeNotificationUserFfi.write(value.sender, into: &buf)
         FfiConverterTypeNotificationUserFfi.write(value.receiver, into: &buf)
@@ -13257,6 +13340,80 @@ extension MessageUpdateFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A relay list the account is missing, as a stable typed variant clients
+ * localize without parsing strings (darkmatter#565).
+ */
+
+public enum MissingRelayListKindFfi {
+
+    /**
+     * NIP-65 relay list — where this account publishes (outbox/write-side).
+     */
+    case nip65
+    /**
+     * Marmot inbox relay list — where this account receives (inbox/read-side).
+     */
+    case inbox
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMissingRelayListKindFfi: FfiConverterRustBuffer {
+    typealias SwiftType = MissingRelayListKindFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MissingRelayListKindFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .nip65
+
+        case 2: return .inbox
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MissingRelayListKindFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .nip65:
+            writeInt(&buf, Int32(1))
+
+
+        case .inbox:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMissingRelayListKindFfi_lift(_ buf: RustBuffer) throws -> MissingRelayListKindFfi {
+    return try FfiConverterTypeMissingRelayListKindFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMissingRelayListKindFfi_lower(_ value: MissingRelayListKindFfi) -> RustBuffer {
+    return FfiConverterTypeMissingRelayListKindFfi.lower(value)
+}
+
+
+
+extension MissingRelayListKindFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum NotificationCollectionStatusFfi {
 
@@ -15280,6 +15437,31 @@ fileprivate struct FfiConverterSequenceTypeMarkdownInlineFfi: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeMissingRelayListKindFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [MissingRelayListKindFfi]
+
+    public static func write(_ value: [MissingRelayListKindFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeMissingRelayListKindFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [MissingRelayListKindFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [MissingRelayListKindFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeMissingRelayListKindFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTimelineMessageChangeFfi: FfiConverterRustBuffer {
     typealias SwiftType = [TimelineMessageChangeFfi]
 
@@ -15710,6 +15892,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_profile() != 53035) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_update_message_retention() != 38717) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_upload_media() != 20405) {

@@ -599,12 +599,16 @@ enum RelaySettings {
         return sanitized.isEmpty ? [notPublishedMessage] : sanitized
     }
 
-    /// Sanitized form of `AccountRelayListsFfi.missing`, the relay-influenced
-    /// list of relay kinds/URLs not yet published, before it is joined into the
-    /// "Missing: …" footer. Same display-boundary hardening as
-    /// `publishedRelayRows`; entries that sanitize away are dropped.
-    static func missingRelayLabels(_ missing: [String]) -> [String] {
-        missing.compactMap { ProfileSanitizer.relayDisplayLine($0, maxLength: 120) }
+    /// Stable display labels for relay-list kinds not yet published.
+    static func missingRelayLabels(_ missing: [MissingRelayListKindFfi]) -> [String] {
+        missing.map {
+            switch $0 {
+            case .nip65:
+                L10n.string("NIP-65")
+            case .inbox:
+                L10n.string("Inbox")
+            }
+        }
     }
 
     static func bootstrapRelays(from lists: AccountRelayListsFfi) -> [String] {

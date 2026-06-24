@@ -223,6 +223,12 @@ struct GroupDetailsView: View {
                     .font(.system(.caption, design: .monospaced))
             }
             LabeledContent("Members", value: "\(memberCount)")
+            LabeledContent(
+                "Disappearing messages",
+                value: GroupSystemEventPresentation.retentionSettingLabel(
+                    seconds: viewModel.group.disappearingMessageSecs
+                )
+            )
             DisclosureGroup(isExpanded: $model.showRelays) {
                 // Stable per-row identity by position. Sanitized display strings can
                 // collide (distinct raw relays sanitize to the same line), so id: \.self

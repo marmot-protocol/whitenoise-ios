@@ -7,6 +7,45 @@ extension MarkdownDocumentFfi {
     }
 }
 
+extension AppGroupRecordFfi {
+    init(
+        groupIdHex: String,
+        endpoint: String,
+        name: String,
+        description: String,
+        admins: [String],
+        relays: [String],
+        nostrGroupIdHex: String,
+        avatarUrl: String?,
+        avatarDim: String?,
+        avatarThumbhash: String?,
+        encryptedMedia: AppGroupEncryptedMediaComponentFfi,
+        archived: Bool,
+        pendingConfirmation: Bool,
+        welcomerAccountIdHex: String?,
+        viaWelcomeMessageIdHex: String?
+    ) {
+        self.init(
+            groupIdHex: groupIdHex,
+            endpoint: endpoint,
+            name: name,
+            description: description,
+            admins: admins,
+            relays: relays,
+            nostrGroupIdHex: nostrGroupIdHex,
+            avatarUrl: avatarUrl,
+            avatarDim: avatarDim,
+            avatarThumbhash: avatarThumbhash,
+            encryptedMedia: encryptedMedia,
+            disappearingMessageSecs: 0,
+            archived: archived,
+            pendingConfirmation: pendingConfirmation,
+            welcomerAccountIdHex: welcomerAccountIdHex,
+            viaWelcomeMessageIdHex: viaWelcomeMessageIdHex
+        )
+    }
+}
+
 extension AppMessageRecordFfi {
     init(
         messageIdHex: String,

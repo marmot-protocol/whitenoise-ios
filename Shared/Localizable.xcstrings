@@ -29925,6 +29925,186 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "你的密码短语会加密导出的 ncryptsec1 备份。Marmot 永远不会存储它。" } },
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "你的密碼短語會加密匯出的 ncryptsec1 備份。Marmot 永遠不會儲存它。" } }
       }
+    },
+    "Off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Off" } }
+      }
+    },
+    "Disappearing messages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } }
+      }
+    },
+    "Disappearing messages turned off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } }
+      }
+    },
+    "%@ turned off disappearing messages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } }
+      }
+    },
+    "%@ set disappearing messages to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } }
+      }
+    },
+    "Disappearing messages set to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } }
+      }
+    },
+    "%@ changed disappearing messages from %@ to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } }
+      }
+    },
+    "Disappearing messages changed from %@ to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } }
+      }
+    },
+    "%@ mentioned you: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } }
+      }
+    },
+    "%@ mentioned you" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } }
+      }
+    },
+    "Open media gallery" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } }
+      }
+    },
+    "Play video" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "it" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } }
+      }
     }
   },
   "version" : "1.1"

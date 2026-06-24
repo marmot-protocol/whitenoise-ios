@@ -1,15 +1,16 @@
 import Testing
 import Foundation
 @testable import darkmatter_ios
+@testable import MarmotKit
 
-/// #365 — `RelaysView`'s "Published Relay Lists" section and "Missing" footer
-/// render relay URLs straight from `AccountRelayListsFfi` (parsed from
-/// relay-hosted NIP-65 / kind:10050 inbox events). Those are relay-influenced
-/// display strings, so they must be routed through the relay/URL display
-/// boundary sanitizer to strip bidi / zero-width / invisible-format characters
-/// that could visually spoof a host (Trojan-Source-style), matching the
-/// defense `KeyPackagesView.sanitizedRelays` and `GroupRelaysPresentation.rows`
-/// already apply (#298 / #306).
+/// #365 — `RelaysView`'s "Published Relay Lists" section renders relay URLs
+/// from relay-hosted NIP-65 / kind:10050 inbox events. Those are
+/// relay-influenced display strings, so they must be routed through the
+/// relay/URL display boundary sanitizer to strip bidi / zero-width /
+/// invisible-format characters that could visually spoof a host
+/// (Trojan-Source-style), matching the defense `KeyPackagesView.sanitizedRelays`
+/// and `GroupRelaysPresentation.rows` already apply (#298 / #306). The
+/// "Missing" footer is now enum-backed and should render stable local labels.
 @MainActor
 struct RelaysViewPresentationTests {
 
@@ -69,26 +70,8 @@ struct RelaysViewPresentationTests {
 
     // MARK: - Missing footer labels
 
-    @Test func stripsBidiAndZeroWidthFromMissingLabels() {
-        let labels = RelaySettings.missingRelayLabels([
-            "wss://relay\u{202E}evil.example",
-            "wss://a\u{200B}b.example"
-        ])
-
-        #expect(labels == ["wss://relayevil.example", "wss://ab.example"])
-        #expect(!labels.contains { $0.unicodeScalars.contains { [0x202E, 0x200B].contains($0.value) } })
-    }
-
-    @Test func dropsMissingLabelsThatSanitizeAway() {
-        // Entries that collapse to nothing renderable are dropped from the
-        // joined footer rather than contributing an empty fragment.
-        let labels = RelaySettings.missingRelayLabels(["\u{200B}", "wss://ok.example", "\u{FEFF}\u{202E}"])
-        #expect(labels == ["wss://ok.example"])
-    }
-
-    @Test func cleanMissingLabelsPassThroughUnchanged() {
-        let clean = ["NIP-65", "Inbox"]
-        #expect(RelaySettings.missingRelayLabels(clean) == clean)
+    @Test func missingLabelsRenderStableEnumNames() {
+        #expect(RelaySettings.missingRelayLabels([.nip65, .inbox]) == ["NIP-65", "Inbox"])
     }
 
     @Test func emptyMissingListYieldsNoLabels() {
