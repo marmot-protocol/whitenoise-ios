@@ -31,8 +31,12 @@ struct NotificationCoordinatorExtractionTests {
     }
 
     @Test func notificationCoordinatorKeepsForegroundResumePushIndependentFromCatchUp() throws {
+        // The catch-up gate + `catchUpAccounts()` FFI stay in
+        // NotificationCoordinator; the foreground-resume orchestration moved to
+        // RuntimeLifecycle (Phase 2, #389) and schedules push/profile
+        // maintenance back through AppState.
         let coordinatorSource = try sourceString("darkmatter-ios/Core/NotificationCoordinator.swift")
-        let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
+        let runtimeLifecycleSource = try sourceString("darkmatter-ios/Core/RuntimeLifecycle.swift")
 
         let catchUpStart = try #require(coordinatorSource.range(of: "func catchUpAfterForegroundActivation(host: NotificationCoordinatorHost) async {"))
         let catchUpEnd = try #require(coordinatorSource.range(of: "func setAppSceneActive", range: catchUpStart.upperBound..<coordinatorSource.endIndex))
@@ -40,30 +44,41 @@ struct NotificationCoordinatorExtractionTests {
         #expect(catchUpBody.contains("try await host.marmot.catchUpAccounts()"))
         #expect(!catchUpBody.contains("syncNativePushRegistrationIfEnabled"))
 
-        let resumeStart = try #require(appStateSource.range(of: "func resumeAfterForegroundActivation() async {"))
-        let resumeEnd = try #require(appStateSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
-        let resumeBody = String(appStateSource[resumeStart.lowerBound..<resumeEnd.lowerBound])
+        let resumeStart = try #require(runtimeLifecycleSource.range(of: "func resumeAfterForegroundActivation() async {"))
+        let resumeEnd = try #require(runtimeLifecycleSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
+        let resumeBody = String(runtimeLifecycleSource[resumeStart.lowerBound..<resumeEnd.lowerBound])
         #expect(resumeBody.matches(
             #"await catchUpAfterForegroundActivation\(\)\s+"#
                 + #"guard isAppSceneActive, !Task\.isCancelled else \{ return \}\s+"#
-                + #"scheduleNativePushRegistrationIfEnabled\(\)\s+"#
-                + #"resumeProfileFetchQueueIfNeeded\(\)"#
+                + #"appState\?\.scheduleNativePushRegistrationIfEnabled\(\)\s+"#
+                + #"appState\?\.resumeProfileFetchQueueIfNeeded\(\)"#
         ))
     }
 
     @Test func foregroundMaintenanceCancelsNativePushBeforeAwaitingForegroundTask() throws {
+        // `cancelForegroundMaintenance` moved to RuntimeLifecycle (Phase 2). It
+        // cancels native push (without awaiting) via the AppState wrapper
+        // `beginForegroundMaintenanceCancellation` (which drives
+        // `notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()`),
+        // awaits the foreground task, then drains the coordinator-owned push task
+        // through the AppState `cancelNativePushRegistrationTask` wrapper.
+        let runtimeLifecycleSource = try sourceString("darkmatter-ios/Core/RuntimeLifecycle.swift")
         let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
 
-        let cancelStart = try #require(appStateSource.range(of: "private func cancelForegroundMaintenance() async {"))
-        let cancelEnd = try #require(appStateSource.range(of: "static func nativePushEnabledAccountRefs", range: cancelStart.upperBound..<appStateSource.endIndex))
-        let cancelBody = appStateSource[cancelStart.lowerBound..<cancelEnd.lowerBound]
+        let cancelStart = try #require(runtimeLifecycleSource.range(of: "private func cancelForegroundMaintenance() async {"))
+        let cancelEnd = try #require(runtimeLifecycleSource.range(of: "private var phaseOwnsLiveRuntime", range: cancelStart.upperBound..<runtimeLifecycleSource.endIndex))
+        let cancelBody = runtimeLifecycleSource[cancelStart.lowerBound..<cancelEnd.lowerBound]
 
-        let cancelNativePush = try #require(cancelBody.range(of: "notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()"))
+        let beginMaintenance = try #require(cancelBody.range(of: "appState?.beginForegroundMaintenanceCancellation()"))
         let awaitForeground = try #require(cancelBody.range(of: "await foregroundTask?.value"))
-        let awaitNativePush = try #require(cancelBody.range(of: "await notificationCoordinator.cancelNativePushRegistrationTask()"))
+        let awaitNativePush = try #require(cancelBody.range(of: "await appState?.cancelNativePushRegistrationTask()"))
 
-        #expect(cancelNativePush.lowerBound < awaitForeground.lowerBound)
+        #expect(beginMaintenance.lowerBound < awaitForeground.lowerBound)
         #expect(awaitForeground.lowerBound < awaitNativePush.lowerBound)
+
+        // The "cancel without awaiting" still routes through NotificationCoordinator.
+        #expect(appStateSource.contains("func beginForegroundMaintenanceCancellation()"))
+        #expect(appStateSource.contains("notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()"))
     }
 
     @Test func notificationCoordinatorHostHidesConcreteAppStateWiring() throws {

@@ -164,7 +164,9 @@ struct AppStateBootstrapTests {
     }
 
     @Test func bootstrapReentryAwaitsInFlightTask() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        // Bootstrap orchestration moved to RuntimeLifecycle (Phase 2). AppState
+        // keeps a thin `@MainActor func bootstrap()` forwarder.
+        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
         let bootstrapPattern =
             #"func bootstrap\(\) async \{[\s\S]*"#
             + #"if let bootstrapTask \{[\s\S]*await bootstrapTask\.value[\s\S]*return[\s\S]*"#
@@ -175,21 +177,38 @@ struct AppStateBootstrapTests {
     }
 
     @Test func bootstrapFailureReleasesPartialRuntimeBeforeRetry() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        // Bootstrap + partial-runtime release moved to RuntimeLifecycle (Phase 2).
+        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
+        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
         let catchPattern =
             #"private func performBootstrap\(\) async \{[\s\S]*"#
             + #"catch \{[\s\S]*"#
             + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
-            + #"phase = \.failed\(error\.localizedDescription\)"#
+            + #"appState\.setPhase\(\.failed\(error\.localizedDescription\)\)"#
+        // The native-push task drain now hands back to AppState's
+        // `cancelNativePushRegistrationTask` (cancel + await) before the
+        // runtime shutdown + client release.
         let cleanupPattern =
             #"private func releaseRuntimeAfterStartupFailure\(\) async \{[\s\S]*"#
-            + #"notificationCoordinator\.stopNotificationSubscription\(\)[\s\S]*"#
-            + #"await notificationCoordinator\.cancelNativePushRegistrationTask\(\)[\s\S]*"#
+            + #"appState\?\.stopNotificationSubscription\(\)[\s\S]*"#
+            + #"await appState\?\.cancelNativePushRegistrationTask\(\)[\s\S]*"#
             + #"await client\.marmot\.shutdown\(\)[\s\S]*"#
             + #"self\.client = nil"#
+        // The drain-and-await itself stays in NotificationCoordinator (master
+        // #401); AppState only exposes a thin wrapper for RuntimeLifecycle.
+        let pushCancelPattern =
+            #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"#
+            + #"await notificationCoordinator\.cancelNativePushRegistrationTask\(\)"#
+        let coordinatorDrainPattern =
+            #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"#
+            + #"task\?\.cancel\(\)[\s\S]*"#
+            + #"await task\?\.value"#
 
         #expect(source.matches(catchPattern))
         #expect(source.matches(cleanupPattern))
+        #expect(appStateSource.matches(pushCancelPattern))
+        #expect(coordinatorSource.matches(coordinatorDrainPattern))
     }
 
     @Test func foregroundResumeFailureReleasesPartialRuntimeBeforeRetry() throws {
@@ -201,7 +220,8 @@ struct AppStateBootstrapTests {
         // rebuilding a fresh one. No injectable runtime seam exists to fail
         // `startRuntime()` after `client` is set without a real failing FFI, so
         // (as with #183) the catch contract is asserted at the source level.
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        // The foreground-resume path moved to RuntimeLifecycle (Phase 2).
+        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
         let resumeStart = try #require(
             source.range(of: "func resumeAfterForegroundActivation() async {")
         )
@@ -213,7 +233,7 @@ struct AppStateBootstrapTests {
         let catchPattern =
             #"catch \{[\s\S]*"#
             + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
-            + #"phase = \.failed\(error\.localizedDescription\)[\s\S]*"#
+            + #"appState\?\.setPhase\(\.failed\(error\.localizedDescription\)\)[\s\S]*"#
             + #"return"#
         #expect(resumeBody.matches(catchPattern))
     }
@@ -751,7 +771,8 @@ struct AppStateBootstrapTests {
     }
 
     @Test func foregroundActivationDoesNotPollForRuntimeSuspension() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        // The foreground-resume path moved to RuntimeLifecycle (Phase 2).
+        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
 
         #expect(!source.matches(#"(?s)func resumeAfterForegroundActivation\(\) async \{.*Task\.sleep"#))
         #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
@@ -812,7 +833,11 @@ struct AppStateBootstrapTests {
     }
 
     @Test func foregroundResumeSchedulesNativePushAfterBestEffortCatchUp() throws {
-        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        // The catch-up gate + `catchUpAccounts()` FFI stay in
+        // NotificationCoordinator (master #401); RuntimeLifecycle's resume path
+        // delegates to it and schedules push/profile maintenance back through
+        // AppState (Phase 2).
+        let runtimeLifecycleSource = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
         let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
         let catchUpStart = try #require(coordinatorSource.range(of: "func catchUpAfterForegroundActivation(host: NotificationCoordinatorHost) async {"))
         let catchUpEnd = try #require(coordinatorSource.range(of: "func setAppSceneActive", range: catchUpStart.upperBound..<coordinatorSource.endIndex))
@@ -821,15 +846,23 @@ struct AppStateBootstrapTests {
         #expect(catchUpBody.contains("try await host.marmot.catchUpAccounts()"))
         #expect(!catchUpBody.contains("syncNativePushRegistrationIfEnabled"))
 
-        let resumeStart = try #require(appStateSource.range(of: "func resumeAfterForegroundActivation() async {"))
-        let resumeEnd = try #require(appStateSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
-        let resumeBody = appStateSource[resumeStart.lowerBound..<resumeEnd.lowerBound]
+        // RuntimeLifecycle delegates catch-up back to AppState rather than
+        // duplicating the gate/FFI here.
+        let lifecycleCatchUpStart = try #require(runtimeLifecycleSource.range(of: "func catchUpAfterForegroundActivation() async {"))
+        let lifecycleCatchUpEnd = try #require(runtimeLifecycleSource.range(of: "func setAppSceneActive(_ active: Bool)"))
+        let lifecycleCatchUpBody = runtimeLifecycleSource[lifecycleCatchUpStart.lowerBound..<lifecycleCatchUpEnd.lowerBound]
+        #expect(lifecycleCatchUpBody.contains("await appState?.catchUpAfterForegroundActivation()"))
+        #expect(!lifecycleCatchUpBody.contains("catchUpAccounts()"))
+
+        let resumeStart = try #require(runtimeLifecycleSource.range(of: "func resumeAfterForegroundActivation() async {"))
+        let resumeEnd = try #require(runtimeLifecycleSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
+        let resumeBody = runtimeLifecycleSource[resumeStart.lowerBound..<resumeEnd.lowerBound]
 
         #expect(String(resumeBody).matches(
             #"await catchUpAfterForegroundActivation\(\)\s+"#
                 + #"guard isAppSceneActive, !Task\.isCancelled else \{ return \}\s+"#
-                + #"scheduleNativePushRegistrationIfEnabled\(\)\s+"#
-                + #"resumeProfileFetchQueueIfNeeded\(\)"#
+                + #"appState\?\.scheduleNativePushRegistrationIfEnabled\(\)\s+"#
+                + #"appState\?\.resumeProfileFetchQueueIfNeeded\(\)"#
         ))
     }
 
@@ -1159,6 +1192,13 @@ struct AppStateBootstrapTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Core/AppState.swift")
+    }
+
+    private var runtimeLifecycleSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Core/RuntimeLifecycle.swift")
     }
 
     private var marmotClientSourceURL: URL {
