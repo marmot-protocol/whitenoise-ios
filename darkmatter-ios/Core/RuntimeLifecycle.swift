@@ -254,7 +254,7 @@ final class RuntimeLifecycle {
         // irreversible teardown: suspending now would strand the app
         // foregrounded with `client == nil` and nothing to re-trigger resume
         // (#222). Hand back to a fresh foreground activation instead.
-        guard isAppSceneActive else {
+        guard !isAppSceneActive else {
             startForegroundActivation()
             return
         }
