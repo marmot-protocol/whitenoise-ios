@@ -30,8 +30,13 @@ final class ProfileViewModel {
     }
 
     func message(npub: String, title: String, using appState: AppState, dismiss: () -> Void) async {
-        guard let accountRef = appState.activeAccountRef else { return }
+        // Take the in-flight guard synchronously before the first await so a
+        // fast double-tap can't start two concurrent createGroup calls (which
+        // would create two duplicate 2-member groups with the same peer),
+        // mirroring NewChatSheetViewModel.create (#403).
+        guard !creating, let accountRef = appState.activeAccountRef else { return }
         creating = true
+        defer { creating = false }
         error = nil
         do {
             let client = try appState.currentMarmotClient()
@@ -58,6 +63,5 @@ final class ProfileViewModel {
             Haptics.error()
             self.error = error.localizedDescription
         }
-        creating = false
     }
 }
