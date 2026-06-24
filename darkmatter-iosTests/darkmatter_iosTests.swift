@@ -183,8 +183,8 @@ struct AppStateBootstrapTests {
             + #"phase = \.failed\(error\.localizedDescription\)"#
         let cleanupPattern =
             #"private func releaseRuntimeAfterStartupFailure\(\) async \{[\s\S]*"#
-            + #"pushTask\?\.cancel\(\)[\s\S]*"#
-            + #"await pushTask\?\.value[\s\S]*"#
+            + #"notificationCoordinator\.stopNotificationSubscription\(\)[\s\S]*"#
+            + #"await notificationCoordinator\.cancelNativePushRegistrationTask\(\)[\s\S]*"#
             + #"await client\.marmot\.shutdown\(\)[\s\S]*"#
             + #"self\.client = nil"#
 
@@ -302,26 +302,27 @@ struct AppStateBootstrapTests {
     }
 
     @Test func notificationPresentationPolicyRunsOnMainActor() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let source = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
         let presentationPattern =
-            #"present:\s*\{ \[weak self\] update in[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
+            #"present:\s*\{ \[weak self, weak host\] update in[\s\S]*"#
+            + #"guard let self, let host else \{ return \}[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
             + #"let localNotificationsEnabled = await self\.localNotificationsEnabledForPresentation\([\s\S]*"#
-            + #"accountRef: update\.accountRef[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
+            + #"accountRef: update\.accountRef,[\s\S]*host: host[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
             + #"let shouldPresent = await MainActor\.run \{[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return false \}[\s\S]*"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return false \}[\s\S]*"#
             + #"self\.noteNotificationSubscriptionDelivery\(\)[\s\S]*"#
             + #"self\.shouldPresentLocalNotification\([\s\S]*"#
-            + #"localNotificationsEnabled: localNotificationsEnabled[\s\S]*"#
+            + #"localNotificationsEnabled: localNotificationsEnabled,[\s\S]*host: host[\s\S]*"#
             + #"guard shouldPresent else \{ return \}[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(\) else \{ return \}[\s\S]*"#
-            + #"await self\.notifications\.present\(update: update\)"#
+            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
+            + #"await host\.notifications\.present\(update: update\)"#
         let oldPresentationPattern =
             #"present:\s*\{ \[weak self\] update in\s*"#
             + #"guard let self, self\.shouldPresentLocalNotification"#
 
-        #expect(source.matches(#"@MainActor\s+private func shouldPresentLocalNotification"#))
+        #expect(source.matches(#"private func shouldPresentLocalNotification"#))
         #expect(source.matches(presentationPattern))
         #expect(!source.matches(oldPresentationPattern))
     }
@@ -372,21 +373,22 @@ struct AppStateBootstrapTests {
     }
 
     @Test func notificationPresentationSettingsReadFailureFailsOpen() throws {
-        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
-        let helperStart = try #require(appStateSource.range(of: "private func localNotificationsEnabledForPresentation(accountRef: String) async -> Bool"))
-        let helperEnd = try #require(appStateSource.range(
+        let helperStart = try #require(coordinatorSource.range(of: "private func localNotificationsEnabledForPresentation("))
+        let helperEnd = try #require(coordinatorSource.range(
             of: "\n    }\n\n",
-            range: helperStart.upperBound..<appStateSource.endIndex
+            range: helperStart.upperBound..<coordinatorSource.endIndex
         ))
-        let localNotificationHelperSource = String(appStateSource[helperStart.lowerBound..<helperEnd.upperBound])
+        let localNotificationHelperSource = String(coordinatorSource[helperStart.lowerBound..<helperEnd.upperBound])
         let helperPattern =
-            #"private func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
+            #"private func localNotificationsEnabledForPresentation\([\s\S]*"#
+            + #"accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*"#
             + #"guard !Task\.isCancelled,[\s\S]*"#
-            + #"isAppSceneActive,[\s\S]*"#
-            + #"!runtimeSuspendedForBackground,[\s\S]*"#
-            + #"!isRuntimeSuspending,[\s\S]*"#
-            + #"let client[\s\S]*"#
+            + #"host\.isAppSceneActive,[\s\S]*"#
+            + #"!host\.runtimeSuspendedForBackground,[\s\S]*"#
+            + #"!host\.isRuntimeSuspendingForNotificationCoordinator,[\s\S]*"#
+            + #"let client = host\.client[\s\S]*"#
             + #"else \{ return true \}[\s\S]*"#
             + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)"#
         let clientHelperPattern =
@@ -402,9 +404,9 @@ struct AppStateBootstrapTests {
         #expect(!localNotificationHelperSource.contains("runtimeClient()"))
         #expect(!localNotificationHelperSource.contains("fatalError"))
         #expect(marmotClientSource.matches(clientHelperPattern))
-        #expect(appStateSource.matches(policyPattern))
-        #expect(!appStateSource.contains("return try marmot.notificationSettings(accountRef: accountRef).localNotificationsEnabled"))
-        #expect(!appStateSource.matches(#"localNotificationsEnabled:\s*\(try\? marmot\.notificationSettings"#))
+        #expect(coordinatorSource.matches(policyPattern))
+        #expect(!coordinatorSource.contains("return try host.marmot.notificationSettings(accountRef: accountRef).localNotificationsEnabled"))
+        #expect(!coordinatorSource.matches(#"localNotificationsEnabled:\s*\(try\? .*notificationSettings"#))
     }
 
     @Test func settingsReadRuntimeGateRejectsSuspensionWindows() {
@@ -454,29 +456,38 @@ struct AppStateBootstrapTests {
 
     @Test func settingsReadAccessorsGateSuspensionAndUseClientWrappers() throws {
         let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
         let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
 
         let foregroundSettingsReadClientPattern =
-            #"private func foregroundSettingsReadClient\(\) -> MarmotClient\? \{[\s\S]*"#
+            #"private func foregroundSettingsReadClient\(host: NotificationCoordinatorHost\) -> MarmotClient\? \{[\s\S]*"#
             + #"SettingsReadRuntimeGate\.canRead\([\s\S]*"#
             + #"isTaskCancelled: Task\.isCancelled,[\s\S]*"#
-            + #"isAppSceneActive: isAppSceneActive,[\s\S]*"#
-            + #"runtimeSuspendedForBackground: runtimeSuspendedForBackground,[\s\S]*"#
-            + #"isRuntimeSuspending: isRuntimeSuspending,[\s\S]*"#
+            + #"isAppSceneActive: host\.isAppSceneActive,[\s\S]*"#
+            + #"runtimeSuspendedForBackground: host\.runtimeSuspendedForBackground,[\s\S]*"#
+            + #"isRuntimeSuspending: host\.isRuntimeSuspendingForNotificationCoordinator,[\s\S]*"#
             + #"hasRuntimeClient: liveClient != nil[\s\S]*"#
             + #"let liveClient[\s\S]*"#
             + #"else \{ return nil \}[\s\S]*"#
             + #"return liveClient"#
-        #expect(appStateSource.matches(foregroundSettingsReadClientPattern))
+        #expect(coordinatorSource.matches(foregroundSettingsReadClientPattern))
+        #expect(coordinatorSource.matches(
+            #"func notificationSettings\([\s\S]*for accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
+                + #"guard let client = foregroundSettingsReadClient\(host: host\) else \{ return nil \}[\s\S]*"#
+                + #"return try\? await client\.notificationSettings\(accountRef: accountRef\)"#
+        ))
+        #expect(coordinatorSource.matches(
+            #"func pushRegistration\([\s\S]*for accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*\) async -> PushRegistrationFfi\? \{[\s\S]*"#
+                + #"guard let client = foregroundSettingsReadClient\(host: host\) else \{ return nil \}[\s\S]*"#
+                + #"return try\? await client\.pushRegistration\(accountRef: accountRef\)"#
+        ))
         #expect(appStateSource.matches(
             #"func notificationSettings\(for accountRef: String\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
-                + #"guard let client = foregroundSettingsReadClient\(\) else \{ return nil \}[\s\S]*"#
-                + #"return try\? await client\.notificationSettings\(accountRef: accountRef\)"#
+                + #"await notificationCoordinator\.notificationSettings\(for: accountRef, host: self\)"#
         ))
         #expect(appStateSource.matches(
             #"func pushRegistration\(for accountRef: String\) async -> PushRegistrationFfi\? \{[\s\S]*"#
-                + #"guard let client = foregroundSettingsReadClient\(\) else \{ return nil \}[\s\S]*"#
-                + #"return try\? await client\.pushRegistration\(accountRef: accountRef\)"#
+                + #"await notificationCoordinator\.pushRegistration\(for: accountRef, host: self\)"#
         ))
         #expect(marmotClientSource.matches(
             #"func notificationSettings\(accountRef: String\) async throws -> NotificationSettingsFfi \{[\s\S]*"#
@@ -801,17 +812,18 @@ struct AppStateBootstrapTests {
     }
 
     @Test func foregroundResumeSchedulesNativePushAfterBestEffortCatchUp() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-        let catchUpStart = try #require(source.range(of: "func catchUpAfterForegroundActivation() async {"))
-        let catchUpEnd = try #require(source.range(of: "func setAppSceneActive(_ active: Bool)"))
-        let catchUpBody = source[catchUpStart.lowerBound..<catchUpEnd.lowerBound]
+        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
+        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
+        let catchUpStart = try #require(coordinatorSource.range(of: "func catchUpAfterForegroundActivation(host: NotificationCoordinatorHost) async {"))
+        let catchUpEnd = try #require(coordinatorSource.range(of: "func setAppSceneActive", range: catchUpStart.upperBound..<coordinatorSource.endIndex))
+        let catchUpBody = coordinatorSource[catchUpStart.lowerBound..<catchUpEnd.lowerBound]
 
-        #expect(catchUpBody.contains("try await marmot.catchUpAccounts()"))
-        #expect(!catchUpBody.contains("syncNativePushRegistrationIfEnabled()"))
+        #expect(catchUpBody.contains("try await host.marmot.catchUpAccounts()"))
+        #expect(!catchUpBody.contains("syncNativePushRegistrationIfEnabled"))
 
-        let resumeStart = try #require(source.range(of: "func resumeAfterForegroundActivation() async {"))
-        let resumeEnd = try #require(source.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
-        let resumeBody = source[resumeStart.lowerBound..<resumeEnd.lowerBound]
+        let resumeStart = try #require(appStateSource.range(of: "func resumeAfterForegroundActivation() async {"))
+        let resumeEnd = try #require(appStateSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
+        let resumeBody = appStateSource[resumeStart.lowerBound..<resumeEnd.lowerBound]
 
         #expect(String(resumeBody).matches(
             #"await catchUpAfterForegroundActivation\(\)\s+"#
@@ -1154,6 +1166,13 @@ struct AppStateBootstrapTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Core/MarmotClient.swift")
+    }
+
+    private var notificationCoordinatorSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Core/NotificationCoordinator.swift")
     }
 
     private var appSourceURL: URL {

@@ -36,10 +36,11 @@ struct SendDispatchAndCancellationTests {
     /// departing account's registration, then let the remaining account schedule
     /// its own fresh sync.
     @Test func signOutDrainsNativePushRegistrationBeforeAccountCleanup() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState.swift")
+        let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
+        let coordinatorSource = try sourceString("darkmatter-ios/Core/NotificationCoordinator.swift")
         let cleanupPattern =
             #"func signOut\(\) async \{[\s\S]*"# +
-            #"await cancelNativePushRegistrationTask\(\)[\s\S]*"# +
+            #"await notificationCoordinator\.cancelNativePushRegistrationTask\(\)[\s\S]*"# +
             #"marmot\.clearPushRegistration\(accountRef: signingOut\)"#
         let reschedulePattern =
             #"func signOut\(\) async \{[\s\S]*"# +
@@ -47,14 +48,14 @@ struct SendDispatchAndCancellationTests {
             #"if activeAccountRef == nil \{[\s\S]*phase = \.onboarding[\s\S]*"# +
             #"\} else \{[\s\S]*scheduleNativePushRegistrationIfEnabled\(\)"#
         let cancelHelperPattern =
-            #"private func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"# +
+            #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"# +
             #"let task = nativePushRegistrationTask[\s\S]*"# +
             #"nativePushRegistrationTask = nil[\s\S]*"# +
             #"task\?\.cancel\(\)[\s\S]*await task\?\.value"#
 
-        #expect(sourceContains(cleanupPattern, in: source))
-        #expect(sourceContains(reschedulePattern, in: source))
-        #expect(sourceContains(cancelHelperPattern, in: source))
+        #expect(sourceContains(cleanupPattern, in: appStateSource))
+        #expect(sourceContains(reschedulePattern, in: appStateSource))
+        #expect(sourceContains(cancelHelperPattern, in: coordinatorSource))
     }
 
     /// #258 — scheduleNativePushRegistrationIfEnabled must drain the prior
@@ -65,14 +66,14 @@ struct SendDispatchAndCancellationTests {
     /// syncNativePushRegistrationIfEnabled() — mirroring the drain in
     /// cancelNativePushRegistrationTask().
     @Test func scheduleNativePushDrainsPriorTaskBeforeNewSync() throws {
-        let source = try sourceString("darkmatter-ios/Core/AppState.swift")
+        let source = try sourceString("darkmatter-ios/Core/NotificationCoordinator.swift")
         let drainPattern =
-            #"func scheduleNativePushRegistrationIfEnabled\(\) \{[\s\S]*"# +
+            #"func scheduleNativePushRegistrationIfEnabled\(host: NotificationCoordinatorHost\) \{[\s\S]*"# +
             #"let previousTask = nativePushRegistrationTask[\s\S]*"# +
             #"previousTask\?\.cancel\(\)[\s\S]*"# +
-            #"nativePushRegistrationTask = Task \{ \[weak self\] in[\s\S]*"# +
+            #"nativePushRegistrationTask = Task \{ \[weak self, weak host\] in[\s\S]*"# +
             #"await previousTask\?\.value[\s\S]*"# +
-            #"await syncNativePushRegistrationIfEnabled\(\)"#
+            #"await self\.syncNativePushRegistrationIfEnabled\(host: host\)"#
         #expect(sourceContains(drainPattern, in: source))
     }
 
