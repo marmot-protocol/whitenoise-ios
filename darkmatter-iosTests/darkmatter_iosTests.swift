@@ -8940,72 +8940,57 @@ struct ReplyPreviewLayoutTests {
 @MainActor
 struct SensitiveClipboardTests {
 
-    @Test func clearWipesPasteboardWhenItStillHoldsTheSecret() {
+    @Test func clearWipesPasteboardWhenUserHasNotChangedItSinceCapture() {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
         let secret = "nsec1examplesecretkeythatshouldnotleak"
         pasteboard.string = secret
+        let token = SensitiveClipboard.capture(from: pasteboard)
 
-        SensitiveClipboard.clear(secret, from: pasteboard)
+        SensitiveClipboard.clear(matching: token, from: pasteboard)
 
         #expect(pasteboard.string == nil || pasteboard.string?.isEmpty == true)
         #expect(!pasteboard.hasStrings)
     }
 
-    @Test func clearLeavesPasteboardAloneWhenContentsDifferFromSecret() {
-        let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
-        let secret = "nsec1examplesecretkeythatshouldnotleak"
-        let unrelated = "https://example.com/some-link"
-        pasteboard.string = unrelated
-
-        SensitiveClipboard.clear(secret, from: pasteboard)
-
-        #expect(pasteboard.string == unrelated)
-    }
-
-    @Test func clearIgnoresWhitespaceAroundSecretWhenComparing() {
+    @Test func clearLeavesPasteboardAloneWhenUserCopiedSomethingElseAfterCapture() {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
         let secret = "nsec1examplesecretkeythatshouldnotleak"
         pasteboard.string = secret
+        let token = SensitiveClipboard.capture(from: pasteboard)
 
-        SensitiveClipboard.clear("  \n\(secret)\n  ", from: pasteboard)
-
-        #expect(!pasteboard.hasStrings)
-    }
-
-    @Test func clearIgnoresWhitespaceAroundPasteboardValueWhenComparing() {
-        let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
-        let secret = "nsec1examplesecretkeythatshouldnotleak"
-        pasteboard.string = "  \n\(secret)\n  "
-
-        SensitiveClipboard.clear(secret, from: pasteboard)
-
-        #expect(!pasteboard.hasStrings)
-    }
-
-    @Test func clearIsNoOpWhenSecretIsEmpty() {
-        let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
-        let unrelated = "something else"
+        // User copies something new after the secret was captured — this bumps
+        // the pasteboard's changeCount, so the clear must back off.
+        let unrelated = "https://example.com/some-link"
         pasteboard.string = unrelated
 
-        SensitiveClipboard.clear("", from: pasteboard)
-        SensitiveClipboard.clear("   \n  ", from: pasteboard)
+        SensitiveClipboard.clear(matching: token, from: pasteboard)
 
         #expect(pasteboard.string == unrelated)
     }
 
-    @Test func clearIsNoOpWhenPasteboardHasNoString() {
+    @Test func clearIsNoOpWhenPasteboardHasNoStringEvenIfChangeCountMatches() {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
         pasteboard.items = []
+        let token = SensitiveClipboard.capture(from: pasteboard)
 
-        SensitiveClipboard.clear("nsec1secret", from: pasteboard)
+        SensitiveClipboard.clear(matching: token, from: pasteboard)
 
         #expect(!pasteboard.hasStrings)
+    }
+
+    @Test func clearDoesNotReadPasteboardStringToGateTheWipe() throws {
+        // Regression guard for issue #409: gating the clear on the raw string
+        // (UIPasteboard.string) raises the iOS 16+ paste-disclosure banner and
+        // registers a clipboard access. The clear path must rely on changeCount
+        // / hasStrings only and never read .string.
+        let source = try String(contentsOf: sensitiveClipboardSourceURL, encoding: .utf8)
+        let clearBody = source.components(separatedBy: "static func clear(")
+        #expect(clearBody.count == 2)
+        #expect(!(clearBody.last ?? "").contains("pasteboard.string"))
+        #expect((clearBody.last ?? "").contains("pasteboard.changeCount"))
     }
 
     @Test func copyStoresSensitiveTextWithExpirationOptions() throws {
@@ -9029,11 +9014,57 @@ struct SensitiveClipboardTests {
         #expect(!source.contains("UIPasteboard.general.string = viewModel.displayBody(of: record)"))
     }
 
-    @Test func importIdentityClearsPastedSecretOnEveryOutcome() throws {
-        let source = try String(contentsOf: importIdentityViewModelSourceURL, encoding: .utf8)
+    // Regression test for the #409 PR review BLOCKING finding: a nil token
+    // (no genuine paste observed — the nsec was typed/autofilled, or the user
+    // pasted then copied unrelated content so the token was never captured for
+    // the live generation) must NEVER wipe the clipboard.
+    @Test func shouldClearReturnsFalseWhenNoPasteWasObserved() {
+        #expect(SensitiveClipboard.shouldClear(
+            capturedChangeCount: nil,
+            currentChangeCount: 7,
+            hasStrings: true
+        ) == false)
+    }
 
-        #expect(source.matches(#"defer\s*\{[\s\S]{0,120}SensitiveClipboard\.clear\(trimmed\)"#))
-        #expect(!source.matches(#"try await appState\.importIdentity\(trimmed\)[\s\S]{0,200}SensitiveClipboard\.clear\(trimmed\)"#))
+    @Test func shouldClearReturnsTrueWhenGenerationUnchangedAndHasStrings() {
+        #expect(SensitiveClipboard.shouldClear(
+            capturedChangeCount: 4,
+            currentChangeCount: 4,
+            hasStrings: true
+        ) == true)
+    }
+
+    // User copied something after the paste: the generation advanced, so we
+    // must not clobber their newer content.
+    @Test func shouldClearReturnsFalseWhenGenerationAdvancedAfterPaste() {
+        #expect(SensitiveClipboard.shouldClear(
+            capturedChangeCount: 4,
+            currentChangeCount: 5,
+            hasStrings: true
+        ) == false)
+    }
+
+    @Test func shouldClearReturnsFalseWhenPasteboardHasNoStrings() {
+        #expect(SensitiveClipboard.shouldClear(
+            capturedChangeCount: 4,
+            currentChangeCount: 4,
+            hasStrings: false
+        ) == false)
+    }
+
+    // A nil token routed through clear(matching:) must be a guaranteed no-op,
+    // even when the pasteboard currently holds an unrelated string — this is
+    // the typed/autofilled or paste-then-copy-unrelated case from the #409
+    // blocking finding.
+    @Test func clearIsNoOpWhenTokenIsNilEvenIfPasteboardHasStrings() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let unrelated = "https://example.com/unrelated"
+        pasteboard.string = unrelated
+
+        SensitiveClipboard.clear(matching: nil, from: pasteboard)
+
+        #expect(pasteboard.string == unrelated)
     }
 
     private func makeIsolatedPasteboard() -> UIPasteboard {
@@ -9053,13 +9084,6 @@ struct SensitiveClipboardTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("darkmatter-ios/Conversation/ConversationView.swift")
-    }
-
-    private var importIdentityViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Onboarding/ImportIdentityViewModel.swift")
     }
 }
 
