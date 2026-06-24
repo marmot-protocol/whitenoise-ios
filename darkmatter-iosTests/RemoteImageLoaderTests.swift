@@ -127,6 +127,24 @@ struct RemoteImageLoaderTests {
         #expect(!source.contains("cost: data.count"))
     }
 
+    @Test func avatarLoaderCachesFailuresAndCoalescesInFlightLoads() throws {
+        let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
+
+        // Regression for #404: failed avatar loads must not re-fetch on every
+        // relayout, and simultaneous rows for the same URL should share a
+        // single network task before size-specific decode.
+        #expect(source.contains("private static let failureCacheTTL: TimeInterval"))
+        #expect(source.contains("NSCache<NSString, CachedFailure>"))
+        #expect(source.contains("failureCacheKey(for: url)"))
+        #expect(source.contains("failureCache.object(forKey: failureKey)"))
+        #expect(source.contains("failureCache.setObject("))
+        #expect(source.contains("Date().addingTimeInterval(failureCacheTTL)"))
+        #expect(source.contains("private static var inFlightTasks: [String: Task<Data, Error>] = [:]"))
+        #expect(source.contains("if let inFlightTask = inFlightTasks[keyString]"))
+        #expect(source.contains("inFlightTasks[keyString] = task"))
+        #expect(source.contains("inFlightTasks[keyString] = nil"))
+    }
+
     @Test func avatarLoaderCacheCostExceedsCompressedBytesForHighlyCompressibleImage() throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1

@@ -293,31 +293,107 @@ enum RemoteAvatarImageLoader {
         }
     }
 
+    private final class CachedFailure: NSObject {
+        let errorCode: URLError.Code
+        let expiresAt: Date
+
+        init(error: Error, expiresAt: Date) {
+            self.errorCode = (error as? URLError)?.code ?? .cannotLoadFromNetwork
+            self.expiresAt = expiresAt
+        }
+
+        var error: URLError {
+            URLError(errorCode)
+        }
+
+        var isExpired: Bool {
+            Date() >= expiresAt
+        }
+    }
+
+    private static let failureCacheTTL: TimeInterval = 5 * 60
+
     private static let cache: NSCache<NSString, CachedImage> = {
         let cache = NSCache<NSString, CachedImage>()
         cache.totalCostLimit = 20 * 1024 * 1024
         return cache
     }()
 
+    private static let failureCache: NSCache<NSString, CachedFailure> = {
+        let cache = NSCache<NSString, CachedFailure>()
+        cache.countLimit = 500
+        return cache
+    }()
+
+    private static var inFlightTasks: [String: Task<Data, Error>] = [:]
+
     static func image(for url: URL, maxPixelSize: Int, scale: CGFloat) async throws -> UIImage {
         let targetPixelSize = max(maxPixelSize, 1)
         let key = cacheKey(for: url, maxPixelSize: targetPixelSize)
+        let failureKey = failureCacheKey(for: url)
+        let failureKeyString = failureKey as String
         if let cached = cache.object(forKey: key)?.image {
             return cached
         }
 
-        let data = try await RemoteImageFetch.imageData(for: url)
-        guard let image = await RemoteImageDecoder.downsampledImage(
-            from: data,
-            maxPixelSize: targetPixelSize,
-            scale: scale
-        ) else { throw URLError(.cannotDecodeContentData) }
+        if let cachedFailure = failureCache.object(forKey: failureKey) {
+            if cachedFailure.isExpired {
+                failureCache.removeObject(forKey: failureKey)
+            } else {
+                throw cachedFailure.error
+            }
+        }
 
-        cache.setObject(CachedImage(image: image), forKey: key, cost: DecodedImageCost.decodedBitmapByteCost(for: image))
-        return image
+        do {
+            let data = try await imageData(for: url, keyString: failureKeyString)
+            guard let image = await RemoteImageDecoder.downsampledImage(
+                from: data,
+                maxPixelSize: targetPixelSize,
+                scale: scale
+            ) else { throw URLError(.cannotDecodeContentData) }
+
+            failureCache.removeObject(forKey: failureKey)
+            cache.setObject(
+                CachedImage(image: image),
+                forKey: key,
+                cost: DecodedImageCost.decodedBitmapByteCost(for: image)
+            )
+            return image
+        } catch {
+            if !(error is CancellationError) {
+                failureCache.setObject(
+                    CachedFailure(error: error, expiresAt: Date().addingTimeInterval(failureCacheTTL)),
+                    forKey: failureKey
+                )
+            }
+            throw error
+        }
+    }
+
+    private static func imageData(for url: URL, keyString: String) async throws -> Data {
+        if let inFlightTask = inFlightTasks[keyString] {
+            return try await inFlightTask.value
+        }
+
+        let task = Task {
+            try await RemoteImageFetch.imageData(for: url)
+        }
+        inFlightTasks[keyString] = task
+        do {
+            let data = try await task.value
+            inFlightTasks[keyString] = nil
+            return data
+        } catch {
+            inFlightTasks[keyString] = nil
+            throw error
+        }
     }
 
     private static func cacheKey(for url: URL, maxPixelSize: Int) -> NSString {
         "\(url.absoluteString):\(maxPixelSize)" as NSString
+    }
+
+    private static func failureCacheKey(for url: URL) -> NSString {
+        url.absoluteString as NSString
     }
 }
