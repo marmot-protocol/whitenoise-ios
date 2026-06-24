@@ -29,7 +29,7 @@ final class ImportIdentityViewModel {
 
     func runImport(using appState: AppState, dismiss: () -> Void) async {
         let trimmed = ImportIdentityView.consumeIdentityForImport(&identity)
-        let clipboardToken = clipboardTokenForImportedIdentity(trimmed)
+        let clipboardToken = consumeClipboardTokenForImportedIdentity(trimmed)
         isImporting = true
         error = nil
         defer {
@@ -49,7 +49,11 @@ final class ImportIdentityViewModel {
         }
     }
 
-    func recordPastedClipboardToken(_ token: SensitiveClipboard.Token, resultingIdentity: String) {
+    func recordPastedClipboardToken(_ token: SensitiveClipboard.Token?, resultingIdentity: String) {
+        guard let token else {
+            clearPastedClipboardToken()
+            return
+        }
         let normalized = resultingIdentity.trimmingCharacters(in: .whitespacesAndNewlines)
         guard ImportIdentityView.isPlausibleNsec(normalized) else {
             clearPastedClipboardToken()
@@ -63,6 +67,11 @@ final class ImportIdentityViewModel {
         let normalized = importedIdentity.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized == pastedClipboardIdentity else { return nil }
         return pastedClipboardToken
+    }
+
+    func consumeClipboardTokenForImportedIdentity(_ importedIdentity: String) -> SensitiveClipboard.Token? {
+        defer { clearPastedClipboardToken() }
+        return clipboardTokenForImportedIdentity(importedIdentity)
     }
 
     func clearPastedClipboardToken() {

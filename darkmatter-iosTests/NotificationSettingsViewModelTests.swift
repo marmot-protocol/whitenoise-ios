@@ -174,11 +174,11 @@ private final class NotificationSettingsViewModelDataSourceStub: NotificationSet
 
     func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi {
         guard let activeAccountRef else { throw NotificationSettingsActionError.noActiveAccount }
-        return notificationSettings(accountRef: activeAccountRef, nativePushEnabled: enabled)
+        return darkmatter_iosTests.notificationSettings(accountRef: activeAccountRef, nativePushEnabled: enabled)
     }
 
     func syncNativePushRegistration(accountRef: String) async throws -> PushRegistrationFfi {
-        pushRegistration(accountRef: accountRef)
+        darkmatter_iosTests.pushRegistration(accountRef: accountRef)
     }
 
     func waitUntilSetLocalNotificationsStarted() async {

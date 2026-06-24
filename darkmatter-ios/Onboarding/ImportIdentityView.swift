@@ -95,7 +95,7 @@ struct ImportIdentityView: View {
 private struct PasteAwareNsecField: UIViewRepresentable {
     @Binding var text: String
     let placeholder: String
-    let onPaste: (SensitiveClipboard.Token, String) -> Void
+    let onPaste: (SensitiveClipboard.Token?, String) -> Void
 
     /// Roughly three lines tall so it matches the old `lineLimit(3...6)` field.
     private static let minimumLineCount: CGFloat = 3
@@ -120,6 +120,8 @@ private struct PasteAwareNsecField: UIViewRepresentable {
         textView.spellCheckingType = .no
         textView.smartInsertDeleteType = .no
         textView.textContentType = .none
+        textView.accessibilityLabel = L10n.string("Identity")
+        textView.accessibilityHint = L10n.string("Paste your nsec secret key.")
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let placeholderLabel = UILabel()
@@ -128,6 +130,7 @@ private struct PasteAwareNsecField: UIViewRepresentable {
         placeholderLabel.adjustsFontForContentSizeCategory = true
         placeholderLabel.textColor = .placeholderText
         placeholderLabel.numberOfLines = 0
+        placeholderLabel.isAccessibilityElement = false
         placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
         textView.addSubview(placeholderLabel)
         NSLayoutConstraint.activate([
@@ -177,13 +180,18 @@ private struct PasteAwareNsecField: UIViewRepresentable {
 /// dictation, or drag-and-drop — so this is the trustworthy signal for the
 /// `SensitiveClipboard` clear gate.
 private final class PasteInterceptingTextView: UITextView {
-    var onPaste: ((SensitiveClipboard.Token, String) -> Void)?
+    var onPaste: ((SensitiveClipboard.Token?, String) -> Void)?
 
     override func paste(_ sender: Any?) {
+        let priorText = text ?? ""
+        let priorLength = (priorText as NSString).length
+        let fieldWasEmpty = priorText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let replacesWholeField = selectedRange.location == 0 && selectedRange.length == priorLength
+
         // Snapshot the generation BEFORE the paste mutates anything; capture
         // reads only changeCount metadata (no `.string`, no banner).
         let token = SensitiveClipboard.capture()
         super.paste(sender)
-        onPaste?(token, text ?? "")
+        onPaste?(fieldWasEmpty || replacesWholeField ? token : nil, text ?? "")
     }
 }

@@ -8988,9 +8988,10 @@ struct SensitiveClipboardTests {
         // / hasStrings only and never read .string.
         let source = try String(contentsOf: sensitiveClipboardSourceURL, encoding: .utf8)
         let clearBody = source.components(separatedBy: "static func clear(")
+        let body = clearBody.last ?? ""
         #expect(clearBody.count == 2)
-        #expect(!(clearBody.last ?? "").contains("pasteboard.string"))
-        #expect((clearBody.last ?? "").contains("pasteboard.changeCount"))
+        #expect(!body.contains(".string"))
+        #expect(body.contains("pasteboard.changeCount"))
     }
 
     @Test func copyStoresSensitiveTextWithExpirationOptions() throws {
@@ -9067,6 +9068,23 @@ struct SensitiveClipboardTests {
         #expect(pasteboard.string == unrelated)
     }
 
+    @Test func importClearIgnoresNilTokenFromPartialPasteIntoExistingText() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let fragment = "nsec-fragment-from-clipboard"
+        let resultingNsec = validNsec(filledWith: "d")
+        pasteboard.string = fragment
+        let model = ImportIdentityViewModel()
+
+        model.recordPastedClipboardToken(nil, resultingIdentity: resultingNsec)
+        SensitiveClipboard.clear(
+            matching: model.clipboardTokenForImportedIdentity(resultingNsec),
+            from: pasteboard
+        )
+
+        #expect(pasteboard.string == fragment)
+    }
+
     @Test func importClearIgnoresTokenFromNonNsecPasteEditedIntoNsec() {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
@@ -9111,11 +9129,14 @@ struct SensitiveClipboardTests {
         let model = ImportIdentityViewModel()
 
         model.recordPastedClipboardToken(token, resultingIdentity: " \n\(nsec)\n ")
+        let clipboardToken = model.consumeClipboardTokenForImportedIdentity(nsec)
         SensitiveClipboard.clear(
-            matching: model.clipboardTokenForImportedIdentity(nsec),
+            matching: clipboardToken,
             from: pasteboard
         )
 
+        #expect(clipboardToken != nil)
+        #expect(model.clipboardTokenForImportedIdentity(nsec) == nil)
         #expect(!pasteboard.hasStrings)
     }
 
