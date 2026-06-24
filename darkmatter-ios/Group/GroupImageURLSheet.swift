@@ -281,10 +281,10 @@ struct GroupImageURLSheet: View {
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .disabled(isSearching || isSaving)
-                    .onSubmit { Task { await search() } }
+                    .onSubmit { startSearch() }
 
                 Button {
-                    Task { await search() }
+                    startSearch()
                 } label: {
                     if isSearching {
                         ProgressView()
@@ -359,7 +359,11 @@ struct GroupImageURLSheet: View {
     }
 
     private var searchButtonDisabled: Bool {
-        isSearching || isSaving || searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        Self.preparedSearchQuery(
+            searchQuery,
+            isSearching: isSearching,
+            isSaving: isSaving
+        ) == nil
     }
 
     private var previewTitle: String {
@@ -378,18 +382,56 @@ struct GroupImageURLSheet: View {
         ProfileSanitizer.imageURL(draft)
     }
 
-    private func search() async {
-        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return }
+    static func preparedSearchQuery(
+        _ rawQuery: String,
+        isSearching: Bool,
+        isSaving: Bool
+    ) -> String? {
+        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, !isSearching, !isSaving else { return nil }
+        return query
+    }
+
+    static func shouldApplySearchCompletion(
+        issuedQuery: String,
+        currentQuery: String,
+        isCancelled: Bool
+    ) -> Bool {
+        !isCancelled && issuedQuery == currentQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func startSearch() {
+        // Claim the in-flight guard synchronously before scheduling the task so
+        // button taps and submit events cannot launch overlapping searches.
+        guard let query = Self.preparedSearchQuery(
+            searchQuery,
+            isSearching: isSearching,
+            isSaving: isSaving
+        ) else { return }
         isSearching = true
         searchError = nil
+        Task { await search(query: query) }
+    }
+
+    private func search(query: String) async {
         defer { isSearching = false }
         do {
-            searchResults = try await searchClient.search(query)
-            if searchResults.isEmpty {
+            let results = try await searchClient.search(query)
+            guard Self.shouldApplySearchCompletion(
+                issuedQuery: query,
+                currentQuery: searchQuery,
+                isCancelled: Task.isCancelled
+            ) else { return }
+            searchResults = results
+            if results.isEmpty {
                 searchError = L10n.string("No usable HTTPS images found.")
             }
         } catch {
+            guard Self.shouldApplySearchCompletion(
+                issuedQuery: query,
+                currentQuery: searchQuery,
+                isCancelled: Task.isCancelled
+            ) else { return }
             searchError = error.localizedDescription
         }
     }
