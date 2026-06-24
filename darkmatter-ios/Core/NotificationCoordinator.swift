@@ -156,6 +156,7 @@ final class NotificationCoordinator {
 
     var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
 
+    @MainActor
     deinit {
         nativePushRegistrationTask?.cancel()
     }
