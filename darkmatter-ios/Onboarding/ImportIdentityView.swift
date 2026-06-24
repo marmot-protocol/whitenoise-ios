@@ -37,11 +37,11 @@ struct ImportIdentityView: View {
                 PasteAwareNsecField(
                     text: $model.identity,
                     placeholder: "nsec1…",
-                    onPaste: {
+                    onPaste: { token, resultingIdentity in
                         // Capture the clipboard generation at the moment of a
-                        // genuine user paste — the only signal that proves the
-                        // clipboard still holds the pasted secret (#409).
-                        model.pastedClipboardToken = SensitiveClipboard.capture()
+                        // genuine user paste, then tie it to the post-paste
+                        // field value so later edits cannot clear stale data.
+                        model.recordPastedClipboardToken(token, resultingIdentity: resultingIdentity)
                     }
                 )
                 .privacySensitive()
@@ -95,7 +95,7 @@ struct ImportIdentityView: View {
 private struct PasteAwareNsecField: UIViewRepresentable {
     @Binding var text: String
     let placeholder: String
-    let onPaste: () -> Void
+    let onPaste: (SensitiveClipboard.Token, String) -> Void
 
     /// Roughly three lines tall so it matches the old `lineLimit(3...6)` field.
     private static let minimumLineCount: CGFloat = 3
@@ -177,12 +177,13 @@ private struct PasteAwareNsecField: UIViewRepresentable {
 /// dictation, or drag-and-drop — so this is the trustworthy signal for the
 /// `SensitiveClipboard` clear gate.
 private final class PasteInterceptingTextView: UITextView {
-    var onPaste: (() -> Void)?
+    var onPaste: ((SensitiveClipboard.Token, String) -> Void)?
 
     override func paste(_ sender: Any?) {
-        // Snapshot the generation BEFORE the paste mutates anything; the
-        // closure reads only changeCount metadata (no `.string`, no banner).
-        onPaste?()
+        // Snapshot the generation BEFORE the paste mutates anything; capture
+        // reads only changeCount metadata (no `.string`, no banner).
+        let token = SensitiveClipboard.capture()
         super.paste(sender)
+        onPaste?(token, text ?? "")
     }
 }

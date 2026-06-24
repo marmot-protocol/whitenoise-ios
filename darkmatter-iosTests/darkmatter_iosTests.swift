@@ -9067,9 +9067,65 @@ struct SensitiveClipboardTests {
         #expect(pasteboard.string == unrelated)
     }
 
+    @Test func importClearIgnoresTokenFromNonNsecPasteEditedIntoNsec() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let unrelated = "https://example.com/unrelated"
+        pasteboard.string = unrelated
+        let token = SensitiveClipboard.capture(from: pasteboard)
+        let model = ImportIdentityViewModel()
+
+        model.recordPastedClipboardToken(token, resultingIdentity: unrelated)
+        SensitiveClipboard.clear(
+            matching: model.clipboardTokenForImportedIdentity(validNsec(filledWith: "a")),
+            from: pasteboard
+        )
+
+        #expect(pasteboard.string == unrelated)
+    }
+
+    @Test func importClearIgnoresTokenWhenPastedNsecWasEditedToDifferentNsec() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let pastedNsec = validNsec(filledWith: "a")
+        let importedNsec = validNsec(filledWith: "b")
+        pasteboard.string = pastedNsec
+        let token = SensitiveClipboard.capture(from: pasteboard)
+        let model = ImportIdentityViewModel()
+
+        model.recordPastedClipboardToken(token, resultingIdentity: pastedNsec)
+        SensitiveClipboard.clear(
+            matching: model.clipboardTokenForImportedIdentity(importedNsec),
+            from: pasteboard
+        )
+
+        #expect(pasteboard.string == pastedNsec)
+    }
+
+    @Test func importClearUsesTokenWhenImportedNsecStillMatchesPastedNsec() {
+        let pasteboard = makeIsolatedPasteboard()
+        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let nsec = validNsec(filledWith: "c")
+        pasteboard.string = nsec
+        let token = SensitiveClipboard.capture(from: pasteboard)
+        let model = ImportIdentityViewModel()
+
+        model.recordPastedClipboardToken(token, resultingIdentity: " \n\(nsec)\n ")
+        SensitiveClipboard.clear(
+            matching: model.clipboardTokenForImportedIdentity(nsec),
+            from: pasteboard
+        )
+
+        #expect(!pasteboard.hasStrings)
+    }
+
     private func makeIsolatedPasteboard() -> UIPasteboard {
         let name = UIPasteboard.Name("dev.ipf.darkmatter.tests.sensitive-clipboard-\(UUID().uuidString)")
         return UIPasteboard(name: name, create: true)!
+    }
+
+    private func validNsec(filledWith character: Character) -> String {
+        "nsec1" + String(repeating: String(character), count: 58)
     }
 
     private var sensitiveClipboardSourceURL: URL {
