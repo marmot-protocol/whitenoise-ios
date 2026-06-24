@@ -44,6 +44,8 @@ enum GroupDisplay {
         )
     }
 
+    /// Test seam: inject the sanitizer to assert a resolved display only
+    /// sanitizes the group name once.
     static func resolve(
         group: AppGroupRecordFfi,
         otherMember: String?,

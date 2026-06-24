@@ -232,6 +232,9 @@ final class ConversationViewModel {
         return initialMemberCount ?? 0
     }
 
+    /// Lazily resolves display inputs from the current group/member state.
+    /// Call sites that need multiple title/avatar values should capture this
+    /// once and pass it through rather than reading the property repeatedly.
     var groupDisplay: GroupDisplay.Resolved {
         GroupDisplay.resolve(
             group: group,
