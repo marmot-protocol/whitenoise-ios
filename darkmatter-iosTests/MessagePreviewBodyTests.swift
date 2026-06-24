@@ -79,6 +79,76 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.isPreviewable(record) == true)
         #expect(MessagePreview.body(record) == "hello world")
     }
+
+    @Test func timelineReplyMediaFallbackCapsPeerControlledFileNames() {
+        let imeta = (0..<(MessagePreview.timelineMediaPreviewMaxFileNames + 3)).map {
+            [MessageSemantics.imetaTag, "filename file\($0).png"]
+        }
+        let preview = timelineReplyPreview(mediaJson: mediaPreviewJson(imeta: imeta))
+
+        #expect(MessagePreview.body(preview) == "📎 \(MessagePreview.timelineMediaPreviewMaxFileNames) attachments")
+    }
+
+    @Test func timelineReplyMediaFallbackPreservesNormalAttachmentCeilingCount() {
+        let imeta = (0..<MediaDraftProcessor.maxAttachmentCount).map {
+            [MessageSemantics.imetaTag, "filename file\($0).png"]
+        }
+        let preview = timelineReplyPreview(mediaJson: mediaPreviewJson(imeta: imeta))
+
+        #expect(MessagePreview.body(preview) == "📎 \(MediaDraftProcessor.maxAttachmentCount) attachments")
+    }
+
+    @Test func timelineReplyMediaFallbackDoesNotInspectTagsPastBudget() {
+        let emptyTags = Array(
+            repeating: [MessageSemantics.imetaTag],
+            count: MessagePreview.timelineMediaPreviewMaxTags
+        )
+        let preview = timelineReplyPreview(
+            mediaJson: mediaPreviewJson(imeta: emptyTags + [[MessageSemantics.imetaTag, "filename late.png"]])
+        )
+
+        #expect(MessagePreview.body(preview) == "📎 Attachment")
+    }
+
+    @Test func timelineReplyMediaFallbackDoesNotInspectFieldsPastBudget() {
+        let ignoredFields = Array(
+            repeating: "field ignored",
+            count: MessagePreview.timelineMediaPreviewMaxFieldsPerTag
+        )
+        let preview = timelineReplyPreview(
+            mediaJson: mediaPreviewJson(
+                imeta: [[MessageSemantics.imetaTag] + ignoredFields + ["filename late.png"]]
+            )
+        )
+
+        #expect(MessagePreview.body(preview) == "📎 Attachment")
+    }
+
+    @Test func timelineReplyMediaFallbackRejectsOversizedMediaJson() {
+        let oversizedJson = "{\"imeta\":[],\"padding\":\"" +
+            String(repeating: "x", count: MessagePreview.timelineMediaPreviewMaxJsonBytes) +
+            "\"}"
+        let preview = timelineReplyPreview(mediaJson: oversizedJson)
+
+        #expect(MessagePreview.body(preview) == "📎 Attachment")
+    }
+}
+
+private func timelineReplyPreview(mediaJson: String) -> TimelineReplyPreviewFfi {
+    TimelineReplyPreviewFfi(
+        messageIdHex: hex("dd"),
+        sender: hex("11"),
+        plaintext: "",
+        kind: MessageSemantics.kindChat,
+        mediaJson: mediaJson,
+        agentTextStreamJson: nil,
+        deleted: false
+    )
+}
+
+private func mediaPreviewJson(imeta: [[String]]) -> String {
+    let data = try! JSONSerialization.data(withJSONObject: ["imeta": imeta])
+    return String(data: data, encoding: .utf8)!
 }
 
 private func previewRecord(
