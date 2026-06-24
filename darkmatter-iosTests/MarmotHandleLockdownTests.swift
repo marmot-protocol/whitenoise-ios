@@ -15,13 +15,16 @@ import Testing
 /// enforcement in `MarmotClientStorageReadOffloadTests`.
 struct MarmotHandleLockdownTests {
 
-    /// The seam files allowed to touch the raw `Marmot` handle.
-    /// `MarmotClient` owns it; `AppState` is the lifecycle/bootstrap seam; and
-    /// `NotificationCoordinator` owns notification subscription/push orchestration.
-    /// Every other file in the app target must route through `currentMarmotClient()`
-    /// and the `MarmotClient` wrappers.
+    /// The seam files allowed to touch the raw `Marmot` handle. `MarmotClient`
+    /// owns it; `AppState` is the lifecycle/bootstrap composition seam;
+    /// `RuntimeLifecycle` is the runtime suspend/resume + bootstrap seam carved
+    /// out of `AppState` (Phase 2); and `NotificationCoordinator` owns
+    /// notification subscription/push orchestration. Every other file in the app
+    /// target must route through `currentMarmotClient()` and the `MarmotClient`
+    /// wrappers.
     private static let seamFiles: Set<String> = [
         "darkmatter-ios/Core/AppState.swift",
+        "darkmatter-ios/Core/RuntimeLifecycle.swift",
         "darkmatter-ios/Core/NotificationCoordinator.swift",
         "darkmatter-ios/Core/MarmotClient.swift",
     ]
@@ -53,7 +56,8 @@ struct MarmotHandleLockdownTests {
             offenders.isEmpty,
             """
             These feature files reach the raw Marmot handle (a `.marmot` access \
-            outside AppState.swift / NotificationCoordinator.swift / MarmotClient.swift). \
+            outside AppState.swift / RuntimeLifecycle.swift / \
+            NotificationCoordinator.swift / MarmotClient.swift). \
             Route them through `appState.currentMarmotClient()` and the `MarmotClient` \
             wrappers (#395):
             \(offenders.joined(separator: "\n"))

@@ -47,6 +47,9 @@ struct SendDispatchAndCancellationTests {
             #"activeAccountRef = accounts\.first\?\.label[\s\S]*"# +
             #"if activeAccountRef == nil \{[\s\S]*phase = \.onboarding[\s\S]*"# +
             #"\} else \{[\s\S]*scheduleNativePushRegistrationIfEnabled\(\)"#
+        // `cancelNativePushRegistrationTask` widened from `private` to internal
+        // (Phase 2) so RuntimeLifecycle's partial-runtime release can drain it;
+        // the body (capture, nil, cancel, await) is unchanged.
         let cancelHelperPattern =
             #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"# +
             #"let task = nativePushRegistrationTask[\s\S]*"# +

@@ -55,8 +55,15 @@ final class AppState {
     /// a live runtime exactly like `.ready` does — the suspend/resume machinery
     /// must treat them the same. Maintenance that needs an active account
     /// (notification subscription, push registration) stays gated on `.ready`.
-    private var phaseOwnsLiveRuntime: Bool {
+    /// Read by `RuntimeLifecycle` through its back-reference.
+    var phaseOwnsLiveRuntime: Bool {
         phase == .ready || phase == .onboarding
+    }
+
+    /// Mutator used by `RuntimeLifecycle` (which owns bootstrap/resume) to drive
+    /// the router; `phase` stays `private(set)` so feature code can't write it.
+    func setPhase(_ newPhase: Phase) {
+        phase = newPhase
     }
 
     /// Account list + active selection. Owned by `AccountStore`; these forwarders
@@ -127,28 +134,31 @@ final class AppState {
         UserDefaults.standard.set(recentReactions, forKey: Self.recentReactionsKey)
     }
 
+    /// Runtime-lifecycle ownership: the live `MarmotClient`, the
+    /// foreground/suspension gates, the runtime generation, bootstrap, and the
+    /// background suspend / foreground resume orchestration. Carved out of
+    /// `AppState` (Phase 2); AppState keeps the thin forwarders below so call
+    /// sites are unchanged. Wired (`configure(appState:)`) in init.
+    @ObservationIgnored let runtimeLifecycle: RuntimeLifecycle
+
     /// The live FFI runtime. Released (`nil`) while the app is suspended in the
     /// background so its SQLite storage in the shared App Group container is
     /// closed and its file lock freed — otherwise iOS terminates the app at
     /// suspension with `0xdead10cc` ("held a file lock in a shared container").
-    /// Rebuilt on foreground in `resumeAfterForegroundActivation`.
-    @ObservationIgnored private(set) var client: MarmotClient?
-    private let runtimeRootPath: String
-    private let runtimeRelayUrls: [String]
+    /// Rebuilt on foreground in `resumeAfterForegroundActivation`. Owned by
+    /// `RuntimeLifecycle`; this computed forwarder keeps the `appState.client`
+    /// call sites (and the AppState-internal notification/settings reads)
+    /// unchanged. Not observed (it forwards to `RuntimeLifecycle`'s
+    /// `@ObservationIgnored client`), matching the original raw-handle semantics.
+    var client: MarmotClient? { runtimeLifecycle.client }
     let notifications: AppNotifications
     @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
-    private var bootstrapTask: Task<Void, Never>?
-    private var bootstrapTaskID = UUID()
-    private var foregroundActivationTask: Task<Void, Never>?
-    private var runtimeSuspensionTask: Task<Void, Never>?
     /// Profile projection cache + hydration/refresh queues. `profileRefreshGeneration`
     /// stays on AppState (below) as the observed token; the store reads/bumps it
     /// through its back-reference so SwiftUI observation is unchanged.
     @ObservationIgnored let profileStore = ProfileStore()
-    private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
-    private var isRuntimeSuspending = false
     /// True only while `signOut()` is tearing down the departing account. Set
     /// before any of sign-out's `await` suspension points and cleared once the
     /// account is removed and `accounts` refreshed. `scheduleNativePushRegistrationIfEnabled()`
@@ -157,17 +167,25 @@ final class AppState {
     /// account whose registration sign-out just cleared (#320, residual of
     /// #7/#111). MainActor-owned; mutated only on the MainActor.
     private var isSigningOut = false
-    private(set) var isAppSceneActive = true
-    private(set) var runtimeSuspendedForBackground = false
-    /// True while the runtime is being (re)started after a background
-    /// suspension. During this window the account worker is still hydrating and
-    /// running its initial relay catch-up, so live reads (timeline tail, group
-    /// roster) are briefly blocked. Conversation chrome surfaces a "Connecting…"
-    /// status off this flag instead of appearing frozen. MainActor-owned.
-    private(set) var isRuntimeWarmingUp = false
-    private(set) var runtimeGeneration = 0
+    /// Scene-phase flag. Owned here (not on `RuntimeLifecycle`) because many
+    /// non-lifecycle gates read it (notification presentation, settings reads,
+    /// push scheduling, routing); `RuntimeLifecycle` writes it through its
+    /// back-reference from the scene-phase entry points so every gate computes
+    /// the same boolean.
+    var isAppSceneActive = true
     private(set) var profileRefreshGeneration = 0
-    @ObservationIgnored private let suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig
+
+    /// Forwarders to `RuntimeLifecycle`, which owns the runtime-gate state. Keep
+    /// the `appState.runtimeSuspendedForBackground` / `isRuntimeWarmingUp` /
+    /// `runtimeGeneration` call sites (views, view models, policies, tests) and
+    /// SwiftUI observation unchanged.
+    var runtimeSuspendedForBackground: Bool { runtimeLifecycle.runtimeSuspendedForBackground }
+    var isRuntimeWarmingUp: Bool { runtimeLifecycle.isRuntimeWarmingUp }
+    var runtimeGeneration: Int { runtimeLifecycle.runtimeGeneration }
+    /// Whether the runtime is mid-suspension. AppState-internal only: the
+    /// notification-presentation and settings-read gates that stay on AppState
+    /// read it bare.
+    private var isRuntimeSuspending: Bool { runtimeLifecycle.isRuntimeSuspendingNow }
 
     /// Most recent transient banner. View code reads this via the
     /// `.toastHost()` modifier on the root view.
@@ -184,28 +202,14 @@ final class AppState {
     var pendingChatAccountRef: String? { navigation.pendingChatAccountRef }
     var pendingChatMessageIdHex: String? { navigation.pendingChatMessageIdHex }
     var visibleChat: VisibleChatRoute? { navigation.visibleChat }
-    var telemetryBuildConfig: TelemetryBuildConfig {
-        client?.telemetryConfig ?? suspendedRuntimeTelemetryBuildConfig
-    }
+    /// Live runtime config when present, cached fallback while suspended.
+    /// Forwards to `RuntimeLifecycle` (which holds both the client and the
+    /// fallback); do not recompute `TelemetryBuildConfig.current()` here.
+    var telemetryBuildConfig: TelemetryBuildConfig { runtimeLifecycle.telemetryBuildConfig }
     var notificationSubscriptionActive: Bool { notificationCoordinator.notificationSubscriptionActive }
-    var canRefreshProfiles: Bool {
-        isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
-    }
-    var canUseRuntimeForLocalForegroundWork: Bool {
-        ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: isAppSceneActive,
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending,
-            hasRuntimeClient: client != nil
-        )
-    }
-    var canUseRuntimeForForegroundWork: Bool {
-        ForegroundRuntimeWorkGate.canUseForegroundWork(
-            isAppSceneActive: isAppSceneActive,
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending
-        )
-    }
+    var canRefreshProfiles: Bool { runtimeLifecycle.canRefreshProfiles }
+    var canUseRuntimeForLocalForegroundWork: Bool { runtimeLifecycle.canUseRuntimeForLocalForegroundWork }
+    var canUseRuntimeForForegroundWork: Bool { runtimeLifecycle.canUseRuntimeForForegroundWork }
 
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
@@ -219,16 +223,17 @@ final class AppState {
         notifications: AppNotifications,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig
     ) {
-        self.client = client
-        self.runtimeRootPath = client.rootPath
-        self.runtimeRelayUrls = client.relayUrls
+        self.runtimeLifecycle = RuntimeLifecycle(
+            client: client,
+            suspendedRuntimeTelemetryBuildConfig: suspendedRuntimeTelemetryBuildConfig
+        )
         self.notifications = notifications
-        self.suspendedRuntimeTelemetryBuildConfig = suspendedRuntimeTelemetryBuildConfig
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.recentReactions = UserDefaults.standard.stringArray(forKey: Self.recentReactionsKey)
             ?? Self.defaultReactions
         self.profileStore.appState = self
+        self.runtimeLifecycle.configure(appState: self)
     }
 
     convenience init(client: MarmotClient) {
@@ -236,10 +241,9 @@ final class AppState {
     }
 
     deinit {
-        bootstrapTask?.cancel()
-        foregroundActivationTask?.cancel()
-        runtimeSuspensionTask?.cancel()
         // ProfileStore cancels its own tasks in its deinit.
+        // RuntimeLifecycle cancels its own lifecycle tasks in its deinit.
+        // NotificationCoordinator cancels its native-push task in its deinit.
     }
 
     func noteProfileRefreshCompleted() {
@@ -291,88 +295,17 @@ final class AppState {
     }
 
     private func runtimeClient() throws -> MarmotClient {
-        if let client { return client }
-        let restored = try makeRuntime()
-        client = restored
-        return restored
-    }
-
-    /// Build a fresh runtime from the captured on-disk root and relay set. Used
-    /// to restore the runtime after a background suspension released it.
-    private func makeRuntime() throws -> MarmotClient {
-        try MarmotClient(rootPath: runtimeRootPath, relayUrls: runtimeRelayUrls)
-    }
-
-    private func startCurrentRuntime() async throws {
-        try await runtimeClient().startRuntime()
+        try runtimeLifecycle.runtimeClient()
     }
 
     // MARK: - Bootstrap
 
     /// Brings the runtime online and refreshes the account list. Called once
-    /// per app launch.
+    /// per app launch. Owned by `RuntimeLifecycle`; this forwarder keeps the
+    /// `appState.bootstrap()` scene-task call site unchanged.
     @MainActor
     func bootstrap() async {
-        if let bootstrapTask {
-            await bootstrapTask.value
-            return
-        }
-        let id = UUID()
-        bootstrapTaskID = id
-        let task = Task { @MainActor [weak self] in
-            guard let self else { return }
-            await self.performBootstrap()
-        }
-        bootstrapTask = task
-        await task.value
-        clearCompletedBootstrapTask(id: id)
-    }
-
-    @MainActor
-    private func performBootstrap() async {
-        do {
-            try await startCurrentRuntime()
-            noteRuntimeForegroundReadyAfterSuspension()
-            try await refreshAccounts()
-            if accounts.isEmpty {
-                phase = .onboarding
-            } else {
-                if activeAccountRef == nil
-                    || !accounts.contains(where: { $0.label == activeAccountRef }) {
-                    activeAccountRef = accounts.first?.label
-                }
-                phase = .ready
-                // Warm the active account's profile (name + avatar) right away
-                // so it's visible without waiting for a screen to request it.
-                if let activeId = activeAccount?.accountIdHex {
-                    warmProfileProjection(forAccountIdHex: activeId, refreshAfterLoad: true)
-                }
-                startReadyForegroundMaintenance()
-            }
-        } catch {
-            await releaseRuntimeAfterStartupFailure()
-            phase = .failed(error.localizedDescription)
-        }
-    }
-
-    /// Tear down a partially-created runtime after a failed start so the next
-    /// Retry rebuilds a fresh one. Shared by the bootstrap and foreground-resume
-    /// failure paths: both set `client` to a new instance and then start it, so
-    /// both must release that instance (shutdown + `client = nil`) on failure —
-    /// otherwise `runtimeClient()` returns the stale, broken client and Retry
-    /// re-invokes `startRuntime()` on a runtime whose `start()` already failed.
-    private func releaseRuntimeAfterStartupFailure() async {
-        notificationCoordinator.stopNotificationSubscription()
-        await notificationCoordinator.cancelNativePushRegistrationTask()
-        if let client {
-            await client.marmot.shutdown()
-            self.client = nil
-        }
-    }
-
-    private func clearCompletedBootstrapTask(id: UUID) {
-        guard bootstrapTaskID == id else { return }
-        bootstrapTask = nil
+        await runtimeLifecycle.bootstrap()
     }
 
     @MainActor
@@ -382,20 +315,26 @@ final class AppState {
         startReadyForegroundMaintenance(scheduleNativePushRegistration: scheduleNativePushRegistration)
     }
 
+    /// Internal (not `private`) so `RuntimeLifecycle.performBootstrap` can hand
+    /// back the account-scoped maintenance once the runtime is ready.
     @MainActor
-    private func startReadyForegroundMaintenance(scheduleNativePushRegistration: Bool = true) {
+    func startReadyForegroundMaintenance(scheduleNativePushRegistration: Bool = true) {
         notificationCoordinator.startReadyForegroundMaintenance(
             host: self,
             scheduleNativePushRegistration: scheduleNativePushRegistration
         )
     }
 
+    /// Internal (not `private`) so the `RuntimeLifecycle` resume path can start
+    /// the subscription once a `.ready` runtime is back online.
     @MainActor
-    private func startNotificationSubscription() {
+    func startNotificationSubscription() {
         notificationCoordinator.startNotificationSubscription(host: self)
     }
 
-    private func stopNotificationSubscription() {
+    /// Internal (not `private`) so `RuntimeLifecycle` can stop the subscription
+    /// from its suspend and startup-failure-release paths.
+    func stopNotificationSubscription() {
         notificationCoordinator.stopNotificationSubscription()
     }
 
@@ -561,6 +500,24 @@ final class AppState {
         notificationCoordinator.scheduleNativePushRegistrationIfEnabled(host: self)
     }
 
+    /// Cancels and drains the native-push registration task. The task itself is
+    /// owned by `NotificationCoordinator` (master #401); this internal wrapper
+    /// lets `RuntimeLifecycle.releaseRuntimeAfterStartupFailure` /
+    /// `cancelForegroundMaintenance` drain it without reaching into the
+    /// coordinator directly. Also called by `signOut()`.
+    func cancelNativePushRegistrationTask() async {
+        await notificationCoordinator.cancelNativePushRegistrationTask()
+    }
+
+    /// Synchronously cancels the in-flight native-push registration task without
+    /// awaiting it. Wraps `NotificationCoordinator` for the scene-phase entry
+    /// points in `RuntimeLifecycle` (`setAppSceneActive`,
+    /// `startRuntimeSuspension`); the drain-and-await happens later in
+    /// `cancelForegroundMaintenance`.
+    func cancelNativePushRegistrationTaskSync() {
+        notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
+    }
+
     func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi? {
         guard let client = foregroundSettingsReadClient() else { return nil }
         return try await client.relayTelemetrySettings()
@@ -630,174 +587,43 @@ final class AppState {
         }
     }
 
+    /// Foreground relay catch-up. Delegates to `NotificationCoordinator` (master
+    /// #401), which owns the catch-up gate/in-flight flag. Internal (not
+    /// `private`) so `RuntimeLifecycle`'s resume path can sequence it without
+    /// duplicating the catch-up state.
     func catchUpAfterForegroundActivation() async {
         await notificationCoordinator.catchUpAfterForegroundActivation(host: self)
     }
 
+    /// Scene-phase entry points. Owned by `RuntimeLifecycle`; these forwarders
+    /// keep the `darkmatter_iosApp.swift` scene wiring and the test call sites
+    /// (`appState.setAppSceneActive`/`startForegroundActivation`/
+    /// `startRuntimeSuspension`) unchanged.
     func setAppSceneActive(_ active: Bool) {
-        isAppSceneActive = active
-        if !active {
-            foregroundActivationTask?.cancel()
-            notificationCoordinator.setAppSceneActive(active)
-        }
+        runtimeLifecycle.setAppSceneActive(active)
     }
 
     @discardableResult
     func startForegroundActivation() -> Task<Void, Never> {
-        isAppSceneActive = true
-        foregroundActivationTask?.cancel()
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await resumeAfterForegroundActivation()
-        }
-        foregroundActivationTask = task
-        return task
+        runtimeLifecycle.startForegroundActivation()
     }
 
     @discardableResult
     func startRuntimeSuspension() -> Task<Void, Never> {
-        isAppSceneActive = false
-        foregroundActivationTask?.cancel()
-        notificationCoordinator.setAppSceneActive(false)
-        if let runtimeSuspensionTask {
-            return runtimeSuspensionTask
-        }
-
-        let task = Task { [weak self] in
-            guard let self else { return }
-            await prepareForBackgroundSuspension()
-        }
-        runtimeSuspensionTask = task
-        return task
+        runtimeLifecycle.startRuntimeSuspension()
     }
 
-    func prepareForBackgroundSuspension() async {
-        defer { runtimeSuspensionTask = nil }
-        await cancelForegroundMaintenance()
-        // `isAppSceneActive` is owned by the synchronous scene-phase entry
-        // points (`startRuntimeSuspension` / `startForegroundActivation` /
-        // `setAppSceneActive`), which run in true scene-delivery order. After
-        // the `await` above a racing foreground activation may have flipped the
-        // scene back to active. Re-check the authoritative flag before the
-        // irreversible teardown: suspending now would strand the app
-        // foregrounded with `client == nil` and nothing to re-trigger resume
-        // (#222). Hand back to a fresh foreground activation instead.
-        guard !isAppSceneActive else {
-            startForegroundActivation()
-            return
-        }
-        guard phaseOwnsLiveRuntime,
-              !runtimeSuspendedForBackground,
-              !isRuntimeSuspending
-        else { return }
-
-        isRuntimeSuspending = true
-        defer { finishRuntimeSuspensionWait() }
-        stopNotificationSubscription()
-        await marmot.shutdown()
-        // Release the FFI handle so Rust drops the runtime and closes its
-        // SQLite storage in the shared App Group container. Holding the handle
-        // alive across suspension (only swapping it on resume) keeps that
-        // file lock held, which is what iOS kills the app for with
-        // `0xdead10cc`. Rebuilt in `resumeAfterForegroundActivation`.
-        client = nil
-        runtimeSuspendedForBackground = true
-    }
-
-    func resumeAfterForegroundActivation() async {
-        await waitForRuntimeSuspensionToFinish()
-        guard phaseOwnsLiveRuntime, !Task.isCancelled else { return }
-
-        if runtimeSuspendedForBackground {
-            isRuntimeWarmingUp = true
-            // Cleared on both the success and failure exits of the restart so a
-            // failed resume doesn't strand the "Connecting…" chrome on.
-            defer { isRuntimeWarmingUp = false }
-            do {
-                let restored = try makeRuntime()
-                client = restored
-                try await restored.startRuntime()
-                noteRuntimeForegroundReadyAfterSuspension()
-                // The notification subscription needs an active account, so it
-                // only belongs to `.ready`. An `.onboarding` resume rebuilds the
-                // runtime (releasing the suspended App Group SQLite lock) but
-                // mirrors `performBootstrap`'s onboarding branch, which starts no
-                // subscription. The subscription begins when onboarding completes
-                // via `startReadyForegroundMaintenance()` (#338).
-                if phase == .ready {
-                    startNotificationSubscription()
-                }
-            } catch {
-                // Release the partial runtime before showing the failure screen
-                // so Retry → bootstrap() → runtimeClient() rebuilds a fresh
-                // runtime instead of reusing this instance whose start() failed.
-                await releaseRuntimeAfterStartupFailure()
-                phase = .failed(error.localizedDescription)
-                return
-            }
-        }
-
-        guard isAppSceneActive, !Task.isCancelled else { return }
-        // The remaining maintenance is account-scoped and no-ops safely in
-        // `.onboarding`: `catchUpAfterForegroundActivation` is `.ready`-gated by
-        // `ForegroundNotificationSyncPolicy`, and the push-registration / profile
-        // queue paths find no accounts to act on while onboarding.
-        await catchUpAfterForegroundActivation()
-        guard isAppSceneActive, !Task.isCancelled else { return }
-        scheduleNativePushRegistrationIfEnabled()
-        resumeProfileFetchQueueIfNeeded()
-    }
-
-    private func noteRuntimeForegroundReadyAfterSuspension() {
-        guard runtimeSuspendedForBackground || isRuntimeSuspending else { return }
-        runtimeSuspendedForBackground = false
-        finishRuntimeSuspensionWait()
-        runtimeGeneration += 1
-    }
-
-    private func waitForRuntimeSuspensionToFinish() async {
-        guard isRuntimeSuspending else { return }
-        let waiterID = UUID()
-
-        await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard isRuntimeSuspending, !Task.isCancelled else {
-                    continuation.resume()
-                    return
-                }
-                runtimeSuspensionWaiters[waiterID] = continuation
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.resumeRuntimeSuspensionWaiter(id: waiterID)
-            }
-        }
-    }
-
-    private func finishRuntimeSuspensionWait() {
-        isRuntimeSuspending = false
-        let waiters = Array(runtimeSuspensionWaiters.values)
-        runtimeSuspensionWaiters.removeAll()
-        for waiter in waiters {
-            waiter.resume()
-        }
-    }
-
-    private func resumeRuntimeSuspensionWaiter(id: UUID) {
-        runtimeSuspensionWaiters.removeValue(forKey: id)?.resume()
-    }
-
-    private func cancelForegroundMaintenance() async {
-        let foregroundTask = foregroundActivationTask
-        foregroundActivationTask = nil
-        foregroundTask?.cancel()
-
+    /// Cancels the AppState-side foreground maintenance for the lifecycle
+    /// suspension path: it cancels (without awaiting) the
+    /// `NotificationCoordinator`-owned native-push registration task and the
+    /// profile fetch queue, returning the now-cancelled profile task for
+    /// `RuntimeLifecycle.cancelForegroundMaintenance` to drain. The native-push
+    /// drain itself goes back through `cancelNativePushRegistrationTask()` so the
+    /// task stays owned by `NotificationCoordinator` (master #401).
+    @MainActor
+    func beginForegroundMaintenanceCancellation() -> Task<Void, Never>? {
         notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
-        let profileTask = cancelProfileFetchQueue()
-
-        await foregroundTask?.value
-        await notificationCoordinator.cancelNativePushRegistrationTask()
-        await profileTask?.value
+        return cancelProfileFetchQueue()
     }
 
     static func nativePushEnabledAccountRefs(
@@ -810,8 +636,12 @@ final class AppState {
         )
     }
 
+    /// Internal (not `private`) so `RuntimeLifecycle.performBootstrap` can drive
+    /// the account refresh once the runtime is online. The account refresh
+    /// itself stays on AppState (it is account/profile maintenance, not
+    /// lifecycle).
     @MainActor
-    private func refreshAccounts() async throws {
+    func refreshAccounts() async throws {
         accountStore.accounts = try await runtimeClient().listAccounts()
         await refreshAccountUnreadSummaries()
         updateProfileProjectionLocalAccountLabels()
@@ -934,15 +764,20 @@ final class AppState {
     #if DEBUG
     /// Drives the suspend/resume lifecycle tasks to quiescence so tests can
     /// drive the real scene-phase entry points (`startRuntimeSuspension` /
-    /// `startForegroundActivation`) and then await the terminal state. A
-    /// suspension that re-checks the scene and reschedules a resume (#222)
-    /// chains a fresh `foregroundActivationTask`; resume never reschedules a
-    /// suspension, so awaiting suspension, then the (possibly rescheduled)
-    /// foreground activation, then native-push registration drains the chain.
+    /// `startForegroundActivation`) and then await the terminal state. Forwards
+    /// to `RuntimeLifecycle` (which owns the suspension/foreground tasks) and
+    /// drains the AppState-owned native-push task last.
     @MainActor
     func drainRuntimeLifecycleTasksForTesting() async {
-        await runtimeSuspensionTask?.value
-        await foregroundActivationTask?.value
+        await runtimeLifecycle.drainRuntimeLifecycleTasksForTesting()
+    }
+
+    /// Drains the in-flight native-push registration task so
+    /// `RuntimeLifecycle.drainRuntimeLifecycleTasksForTesting` can flush the
+    /// `NotificationCoordinator`-owned task as the last step of the lifecycle
+    /// chain.
+    @MainActor
+    func nativePushRegistrationTaskValueForTesting() async {
         await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
     }
 
