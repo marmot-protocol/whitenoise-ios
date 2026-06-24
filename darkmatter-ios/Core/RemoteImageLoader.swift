@@ -294,24 +294,24 @@ enum RemoteAvatarImageLoader {
     }
 
     private final class CachedFailure: NSObject {
-        let errorCode: URLError.Code
+        let error: Error
         let expiresAt: Date
 
         init(error: Error, expiresAt: Date) {
-            self.errorCode = (error as? URLError)?.code ?? .cannotLoadFromNetwork
+            self.error = error
             self.expiresAt = expiresAt
         }
 
-        var error: URLError {
-            URLError(errorCode)
-        }
-
-        var isExpired: Bool {
-            Date() >= expiresAt
+        func isExpired(now: Date = Date()) -> Bool {
+            now >= expiresAt
         }
     }
 
-    private static let failureCacheTTL: TimeInterval = 5 * 60
+    /// Short negative-cache window: long enough to dampen layout/scroll retry
+    /// storms, short enough that a transiently broken avatar can recover soon.
+    private static let failureCacheTTL: TimeInterval = 60
+    /// Bound peer-controlled bad URL churn independently from decoded-image cost.
+    private static let failureCacheCountLimit = 500
 
     private static let cache: NSCache<NSString, CachedImage> = {
         let cache = NSCache<NSString, CachedImage>()
@@ -321,7 +321,7 @@ enum RemoteAvatarImageLoader {
 
     private static let failureCache: NSCache<NSString, CachedFailure> = {
         let cache = NSCache<NSString, CachedFailure>()
-        cache.countLimit = 500
+        cache.countLimit = failureCacheCountLimit
         return cache
     }()
 
@@ -336,12 +336,8 @@ enum RemoteAvatarImageLoader {
             return cached
         }
 
-        if let cachedFailure = failureCache.object(forKey: failureKey) {
-            if cachedFailure.isExpired {
-                failureCache.removeObject(forKey: failureKey)
-            } else {
-                throw cachedFailure.error
-            }
+        if let cachedFailure = cachedFailureError(for: failureKey) {
+            throw cachedFailure
         }
 
         do {
@@ -360,33 +356,60 @@ enum RemoteAvatarImageLoader {
             )
             return image
         } catch {
-            if !(error is CancellationError) {
-                failureCache.setObject(
-                    CachedFailure(error: error, expiresAt: Date().addingTimeInterval(failureCacheTTL)),
-                    forKey: failureKey
-                )
-            }
+            cacheFailure(error, for: failureKey)
             throw error
         }
     }
 
     private static func imageData(for url: URL, keyString: String) async throws -> Data {
+        try await imageData(for: url, keyString: keyString) { url in
+            try await RemoteImageFetch.imageData(for: url)
+        }
+    }
+
+    private static func imageData(
+        for url: URL,
+        keyString: String,
+        fetch: @escaping @Sendable (URL) async throws -> Data
+    ) async throws -> Data {
         if let inFlightTask = inFlightTasks[keyString] {
+            // A just-completed task may still be present until its owner resumes
+            // and clears the slot; reusing that result is safe and still avoids
+            // a redundant fetch for simultaneous rows.
             return try await inFlightTask.value
         }
 
         let task = Task {
-            try await RemoteImageFetch.imageData(for: url)
+            try await fetch(url)
         }
         inFlightTasks[keyString] = task
-        do {
-            let data = try await task.value
-            inFlightTasks[keyString] = nil
-            return data
-        } catch {
-            inFlightTasks[keyString] = nil
-            throw error
+        defer { inFlightTasks[keyString] = nil }
+        return try await task.value
+    }
+
+    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+        guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
+        if cachedFailure.isExpired(now: now) {
+            failureCache.removeObject(forKey: key)
+            return nil
         }
+        return cachedFailure.error
+    }
+
+    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+        guard shouldCacheFailure(error) else { return }
+        failureCache.setObject(
+            CachedFailure(error: error, expiresAt: now.addingTimeInterval(failureCacheTTL)),
+            forKey: key
+        )
+    }
+
+    private static func shouldCacheFailure(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if (error as? URLError)?.code == .cancelled { return false }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled { return false }
+        return true
     }
 
     private static func cacheKey(for url: URL, maxPixelSize: Int) -> NSString {
@@ -396,4 +419,32 @@ enum RemoteAvatarImageLoader {
     private static func failureCacheKey(for url: URL) -> NSString {
         url.absoluteString as NSString
     }
+
+    #if DEBUG
+    static func resetCachesForTesting() {
+        cache.removeAllObjects()
+        failureCache.removeAllObjects()
+        inFlightTasks.removeAll()
+    }
+
+    static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
+        cacheFailure(error, for: failureCacheKey(for: url), now: now)
+    }
+
+    static func cachedFailureForTesting(for url: URL, now: Date = Date()) -> Error? {
+        cachedFailureError(for: failureCacheKey(for: url), now: now)
+    }
+
+    static func shouldCacheFailureForTesting(_ error: Error) -> Bool {
+        shouldCacheFailure(error)
+    }
+
+    static func imageDataForTesting(
+        for url: URL,
+        keyString: String,
+        fetch: @escaping @Sendable (URL) async throws -> Data
+    ) async throws -> Data {
+        try await imageData(for: url, keyString: keyString, fetch: fetch)
+    }
+    #endif
 }
