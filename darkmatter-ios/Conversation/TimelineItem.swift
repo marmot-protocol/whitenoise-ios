@@ -57,10 +57,37 @@ extension TimelineItem {
         record.receivedAt > 0 ? min(record.recordedAt, record.receivedAt) : record.recordedAt
     }
 
+    /// Deterministic row id for a confirmed message, derived purely from the
+    /// record's `messageIdHex`. Pure and total: the same input always yields the
+    /// same id and it never mints identity of its own, so it is safe to call on
+    /// every idempotent rebuild (#411). An empty `messageIdHex` degrades to the
+    /// stable `"msg:"` prefix rather than a per-call UUID — still idempotent,
+    /// though the `message(_:status:)` factory asserts against that degenerate
+    /// input in debug.
+    static func messageRowId(forMessageIdHex messageIdHex: String) -> String {
+        "msg:\(messageIdHex)"
+    }
+
+    /// Confirmed message row keyed by the record's stable `messageIdHex`.
+    ///
+    /// This factory is used during the idempotent timeline rebuild
+    /// (`TimelineStore.rebuildTimeline` / `visibleTimelineItem`), so it must
+    /// return the *same* id every call for the same record. It therefore
+    /// requires a non-empty `messageIdHex` and never mints identity of its own:
+    /// a freshly-generated id would change on each rebuild, forcing spurious
+    /// diffs and leaking the markdown/media/reaction projection caches keyed by
+    /// the prior id (#411). Rows that have no server message id (optimistic
+    /// sends, live stream bubbles) must use `pendingMessage(tempId:record:)` or
+    /// build the row directly with an explicit stable id instead.
     static func message(_ record: AppMessageRecordFfi, status: MessageStatus? = nil) -> TimelineItem {
+        assert(
+            !record.messageIdHex.isEmpty,
+            "TimelineItem.message requires a confirmed record with a non-empty messageIdHex; "
+                + "use pendingMessage(tempId:record:) for rows without a server id"
+        )
         let resolved = status ?? (record.direction == "sent" ? .sent : .received)
         return TimelineItem(
-            id: "msg:\(record.messageIdHex.isEmpty ? UUID().uuidString : record.messageIdHex)",
+            id: messageRowId(forMessageIdHex: record.messageIdHex),
             kind: .message(record: record, status: resolved),
             timestamp: sortTimestamp(for: record)
         )
