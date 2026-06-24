@@ -43,6 +43,24 @@ struct NotificationActionGateTests {
         gate.end()
         #expect(gate.isRunning == false)
     }
+
+    @Test func reloadTicketIsUnavailableWhileActionIsRunning() {
+        var gate = NotificationActionGate()
+        #expect(gate.tryBegin() == true)
+        #expect(gate.reloadTicket() == nil)
+    }
+
+    @Test func actionStartInvalidatesExistingReloadTicket() {
+        var gate = NotificationActionGate()
+        let ticket = gate.reloadTicket()
+        #expect(ticket != nil)
+        #expect(gate.canApplyReload(startedAt: ticket!) == true)
+
+        #expect(gate.tryBegin() == true)
+        #expect(gate.canApplyReload(startedAt: ticket!) == false)
+        gate.end()
+        #expect(gate.canApplyReload(startedAt: ticket!) == false)
+    }
 }
 
 /// Verifies the view model exposes the gate's state through `isSaving`, which the

@@ -13,6 +13,7 @@ import MarmotKit
 @MainActor
 struct NotificationActionGate {
     private(set) var isRunning = false
+    private var generation = 0
 
     /// Attempts to claim the gate. Returns `true` and marks it running when no
     /// action is in flight; returns `false` when one already is (caller must not
@@ -20,12 +21,27 @@ struct NotificationActionGate {
     /// so two concurrent tasks cannot both observe `false` and both begin.
     mutating func tryBegin() -> Bool {
         guard !isRunning else { return false }
+        generation += 1
         isRunning = true
         return true
     }
 
+    /// Returns a ticket that lets a reload apply only if no action starts before
+    /// its awaited reads finish. Reloads do not claim the mutating-action gate,
+    /// but stale reload completions are discarded instead of overwriting a newer
+    /// action result.
+    func reloadTicket() -> Int? {
+        guard !isRunning else { return nil }
+        return generation
+    }
+
+    func canApplyReload(startedAt ticket: Int) -> Bool {
+        !isRunning && generation == ticket
+    }
+
     /// Releases the gate so the next action may begin.
     mutating func end() {
+        generation += 1
         isRunning = false
     }
 }
@@ -38,10 +54,10 @@ struct NotificationActionGate {
 /// `AppState` rather than retaining it.
 ///
 /// All mutating actions are funneled through `runSaving`, which claims a single
-/// `NotificationActionGate` before doing any work. This serializes local/native
-/// push mutations: a later completion from an older task can no longer overwrite
-/// `settings` or `registration` state produced by a newer action, because the
-/// newer action never starts while the older one is in flight.
+/// `NotificationActionGate` before doing any work. Plain reloads take a gate
+/// ticket and discard their results if an action starts before their awaited
+/// reads finish. Together these keep older completions from overwriting
+/// `settings` or `registration` state produced by a newer action.
 @MainActor
 @Observable
 final class NotificationSettingsViewModel {
@@ -89,16 +105,24 @@ final class NotificationSettingsViewModel {
     }
 
     func reload(using appState: AppState) async {
-        authorizationStatus = await appState.notifications.authorizationStatus()
-        guard let accountRef = appState.activeAccountRef else {
+        guard let reloadTicket = actionGate.reloadTicket() else { return }
+        let accountRef = appState.activeAccountRef
+        let reloadedAuthorizationStatus = await appState.notifications.authorizationStatus()
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else { return }
+        authorizationStatus = reloadedAuthorizationStatus
+        guard let accountRef else {
             settings = nil
             registration = nil
             return
         }
-        if let reloadedSettings = await appState.notificationSettings(for: accountRef) {
+        let reloadedSettings = await appState.notificationSettings(for: accountRef)
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else { return }
+        if let reloadedSettings {
             settings = reloadedSettings
         }
-        if let reloadedRegistration = await appState.pushRegistration(for: accountRef) {
+        let reloadedRegistration = await appState.pushRegistration(for: accountRef)
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else { return }
+        if let reloadedRegistration {
             registration = reloadedRegistration
         }
     }
@@ -107,9 +131,9 @@ final class NotificationSettingsViewModel {
         await runSaving {
             do {
                 settings = try await appState.setLocalNotificationsEnabled(enabled)
+                authorizationStatus = await appState.notifications.authorizationStatus()
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
                 Haptics.error()
                 errorMessage = error.localizedDescription
@@ -121,9 +145,14 @@ final class NotificationSettingsViewModel {
         await runSaving {
             do {
                 settings = try await appState.setNativePushEnabled(enabled)
+                authorizationStatus = await appState.notifications.authorizationStatus()
+                if enabled, let accountRef = appState.activeAccountRef {
+                    registration = await appState.pushRegistration(for: accountRef)
+                } else if !enabled {
+                    registration = nil
+                }
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
                 Haptics.error()
                 errorMessage = error.localizedDescription
@@ -136,9 +165,10 @@ final class NotificationSettingsViewModel {
             do {
                 let granted = try await appState.notifications.requestAuthorizationAndRegister()
                 guard granted else { throw NotificationSettingsActionError.permissionDenied }
+                authorizationStatus = await appState.notifications.authorizationStatus()
                 savedAt = Date()
-                await reload(using: appState)
             } catch {
+                authorizationStatus = await appState.notifications.authorizationStatus()
                 Haptics.error()
                 errorMessage = error.localizedDescription
             }
@@ -149,13 +179,13 @@ final class NotificationSettingsViewModel {
         await runSaving {
             do {
                 _ = try await appState.notifications.refreshApnsToken()
+                authorizationStatus = await appState.notifications.authorizationStatus()
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
+                authorizationStatus = await appState.notifications.authorizationStatus()
                 Haptics.error()
                 errorMessage = error.localizedDescription
-                await reload(using: appState)
             }
         }
     }
@@ -167,7 +197,6 @@ final class NotificationSettingsViewModel {
                 registration = try await appState.syncNativePushRegistration(accountRef: accountRef)
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
                 Haptics.error()
                 errorMessage = error.localizedDescription
