@@ -51,6 +51,33 @@ struct NotificationCoordinatorExtractionTests {
         ))
     }
 
+    @Test func foregroundMaintenanceCancelsNativePushBeforeAwaitingForegroundTask() throws {
+        let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
+
+        let cancelStart = try #require(appStateSource.range(of: "private func cancelForegroundMaintenance() async {"))
+        let cancelEnd = try #require(appStateSource.range(of: "static func nativePushEnabledAccountRefs", range: cancelStart.upperBound..<appStateSource.endIndex))
+        let cancelBody = appStateSource[cancelStart.lowerBound..<cancelEnd.lowerBound]
+
+        let cancelNativePush = try #require(cancelBody.range(of: "notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()"))
+        let awaitForeground = try #require(cancelBody.range(of: "await foregroundTask?.value"))
+        let awaitNativePush = try #require(cancelBody.range(of: "await notificationCoordinator.cancelNativePushRegistrationTask()"))
+
+        #expect(cancelNativePush.lowerBound < awaitForeground.lowerBound)
+        #expect(awaitForeground.lowerBound < awaitNativePush.lowerBound)
+    }
+
+    @Test func notificationCoordinatorHostHidesConcreteAppStateWiring() throws {
+        let coordinatorSource = try sourceString("darkmatter-ios/Core/NotificationCoordinator.swift")
+        let appStateSource = try sourceString("darkmatter-ios/Core/AppState.swift")
+
+        #expect(!coordinatorSource.contains("appStateForNotifications"))
+        #expect(!coordinatorSource.contains("func cancel()"))
+        #expect(coordinatorSource.contains("func configureNotifications()"))
+        #expect(coordinatorSource.contains("host.configureNotifications()"))
+        #expect(appStateSource.contains("func configureNotifications()"))
+        #expect(appStateSource.contains("notifications.configure(appState: self)"))
+    }
+
     private func sourceString(_ relativePath: String) throws -> String {
         let url = URL(filePath: #filePath)
             .deletingLastPathComponent()

@@ -84,30 +84,6 @@ nonisolated enum SettingsReadRuntimeGate {
     }
 }
 
-nonisolated enum ForegroundRuntimeWorkGate {
-    static func canUseLocalForegroundWork(
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        hasRuntimeClient: Bool
-    ) -> Bool {
-        isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-            && hasRuntimeClient
-    }
-
-    static func canUseForegroundWork(
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool
-    ) -> Bool {
-        isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-    }
-}
-
 /// Decision point for whether `scheduleNativePushRegistrationIfEnabled()` may
 /// spawn a fresh registration sync. Pure so the guard — including the
 /// sign-out window (#320) — is observable in tests without reaching into
@@ -130,7 +106,6 @@ nonisolated enum NativePushRegistrationScheduleGate {
 
 @MainActor
 protocol NotificationCoordinatorHost: AnyObject {
-    var appStateForNotifications: AppState { get }
     var phase: AppState.Phase { get }
     var activeAccountRef: String? { get }
     var accounts: [AccountSummaryFfi] { get }
@@ -144,6 +119,7 @@ protocol NotificationCoordinatorHost: AnyObject {
     var visibleChat: VisibleChatRoute? { get }
 
     func currentMarmotClient() throws -> MarmotClient
+    func configureNotifications()
     func present(_ toast: Toast)
 }
 
@@ -164,16 +140,11 @@ final class NotificationCoordinator {
         nativePushRegistrationTask?.cancel()
     }
 
-    func cancel() {
-        notificationDriver.stop()
-        nativePushRegistrationTask?.cancel()
-    }
-
     func startReadyForegroundMaintenance(
         host: NotificationCoordinatorHost,
         scheduleNativePushRegistration: Bool = true
     ) {
-        host.notifications.configure(appState: host.appStateForNotifications)
+        host.configureNotifications()
         startNotificationSubscription(host: host)
         if scheduleNativePushRegistration {
             scheduleNativePushRegistrationIfEnabled(host: host)

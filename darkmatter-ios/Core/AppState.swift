@@ -2,6 +2,29 @@ import Foundation
 import Observation
 import MarmotKit
 
+nonisolated enum ForegroundRuntimeWorkGate {
+    static func canUseLocalForegroundWork(
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool,
+        hasRuntimeClient: Bool
+    ) -> Bool {
+        isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+            && hasRuntimeClient
+    }
+
+    static func canUseForegroundWork(
+        isAppSceneActive: Bool,
+        runtimeSuspendedForBackground: Bool,
+        isRuntimeSuspending: Bool
+    ) -> Bool {
+        isAppSceneActive
+            && !runtimeSuspendedForBackground
+            && !isRuntimeSuspending
+    }
+}
 
 /// Root observable state for the app.
 ///
@@ -769,6 +792,7 @@ final class AppState {
         foregroundActivationTask = nil
         foregroundTask?.cancel()
 
+        notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
         let profileTask = cancelProfileFetchQueue()
 
         await foregroundTask?.value
@@ -931,7 +955,10 @@ final class AppState {
 }
 
 extension AppState: NotificationCoordinatorHost {
-    var appStateForNotifications: AppState { self }
+    func configureNotifications() {
+        notifications.configure(appState: self)
+    }
+
     var isRuntimeSuspendingForNotificationCoordinator: Bool { isRuntimeSuspending }
     var isSigningOutForNotificationCoordinator: Bool { isSigningOut }
 }
