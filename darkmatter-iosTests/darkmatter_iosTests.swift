@@ -7017,16 +7017,6 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func mediaReferenceMatchingIgnoresOnlySourceEpoch() {
-        let timelineReference = encryptedMediaReference(sourceEpoch: 0)
-        let listedReference = encryptedMediaReference(sourceEpoch: 42)
-        let differentCiphertext = encryptedMediaReference(ciphertextByte: "45", sourceEpoch: 42)
-
-        #expect(ConversationViewModel.sameMediaAttachment(listedReference, timelineReference))
-        #expect(!ConversationViewModel.sameMediaAttachment(differentCiphertext, timelineReference))
-    }
-
-    @MainActor
     @Test func timelineMediaItemsUseCachedReferenceProjection() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
@@ -7098,7 +7088,7 @@ struct MessageSemanticsTests {
     }
 
     @MainActor
-    @Test func timelineMediaItemsUseCachedClassifiedMediaProjection() throws {
+    @Test func timelineMediaItemsDoNotClassifyTagsWhenRowProjectionIsEmpty() throws {
         let messageId = hex("dd")
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),
@@ -7121,8 +7111,8 @@ struct MessageSemanticsTests {
         let firstRead = viewModel.mediaItems(for: item)
         let secondRead = viewModel.mediaItems(for: item)
 
-        #expect(firstRead.map(\.fileName) == ["classified.jpg"])
-        #expect(secondRead == firstRead)
+        #expect(firstRead.isEmpty)
+        #expect(secondRead.isEmpty)
         #expect(viewModel.mediaItemProjectionBuildCountForTesting == buildCountAfterProjection)
     }
 

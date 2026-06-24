@@ -12,8 +12,10 @@ import MarmotKit
 ///   keyed by the pending/transient row id. Takes precedence over the projection
 ///   so a just-sent bubble renders before its confirmed row arrives.
 /// - `projectionsByRowId` — the built `MessageMediaAttachment` display items per
-///   row, derived from the references (or a tag-classification fallback for
-///   records with no captured row projection).
+///   row, derived from the references. If a row mirror is present but empty, that
+///   empty projection is authoritative; the tag-classification fallback is only
+///   for local rows that have no captured Rust projection yet (optimistic upload /
+///   compatibility records).
 ///
 /// Sibling to `ConversationMarkdownProjectionCache` — both peel the row-display
 /// projections out of the view model ahead of the core message mirror. This one
@@ -43,10 +45,13 @@ final class ConversationMediaProjectionCache {
 
     func build(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
         // Prefer the row-resolved references (correct source_epoch, drop-bad).
-        // Fall back to tag classification only for records with no captured row
-        // projection (e.g. local/optimistic sends before the confirmed row).
+        // A present-but-empty mirror is authoritative: Rust saw the row and chose
+        // no media, so do not re-derive media from tags here. Fall back to tag
+        // classification only when there is no captured row projection at all
+        // (e.g. local/optimistic sends before the confirmed row is mirrored).
         let references: [MediaAttachmentReferenceFfi]
-        if let rowReferences = referencesByMessageId[record.messageIdHex], !rowReferences.isEmpty {
+        if let rowReferences = referencesByMessageId[record.messageIdHex] {
+            guard !rowReferences.isEmpty else { return [] }
             references = rowReferences
         } else if case .media(let classified) = MessageSemantics.classify(record) {
             references = classified

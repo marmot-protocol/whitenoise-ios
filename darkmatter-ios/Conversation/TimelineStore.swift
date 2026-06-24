@@ -21,6 +21,22 @@ import MarmotKit
 /// `StreamWatcherTimelineSink`; the apply ingest calls back into the watcher for
 /// finalized-stream resolution + live-preview teardown. The view model wires
 /// both refs at init.
+///
+/// Thin-shell ownership boundary:
+/// - Binding projection mirrors: `messageById`, `messageStatusById`,
+///   `replyTargetByMessageId`, `replyProjectionKnownMessageIds`,
+///   `replyPreviewsByMessageId`, row media/reaction/delete inputs, pagination
+///   edges. These are copied from timeline rows and never repaired from another
+///   Marmot read.
+/// - UI optimistic overlays: pending/failed sends, pending media, optimistic
+///   reaction toggles, optimistic delete tombstones, session system rows, and
+///   stream/debug preview rows.
+/// - Compatibility fallbacks: tag parsing is allowed only for local/transient
+///   records that have no row projection yet; row-projected `nil` / empty values
+///   are authoritative. Reply text may fall back to an already-loaded target row
+///   when Rust provided the target id but not a preview.
+/// - UI derivations kept here: loaded-window ordering, markdown display blocks
+///   from Rust `contentTokens`, and lightweight display attachment models.
 @Observable
 @MainActor
 final class TimelineStore {
@@ -34,6 +50,10 @@ final class TimelineStore {
     /// Renderable timeline messages we've loaded by id.
     @ObservationIgnored private var messageById: [String: AppMessageRecordFfi] = [:]
     @ObservationIgnored private var messageStatusById: [String: MessageStatus] = [:]
+    /// Message ids for which Rust's `replyToMessageIdHex` projection has been
+    /// mirrored. Presence with no entry in `replyTargetByMessageId` means the row
+    /// authoritatively has no reply target, so do not recover one from tags.
+    @ObservationIgnored private var replyProjectionKnownMessageIds: Set<String> = []
     @ObservationIgnored private var replyTargetByMessageId: [String: String] = [:]
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
@@ -100,15 +120,7 @@ final class TimelineStore {
     /// The quoted preview (sender name + text) for a reply bubble, if resolvable.
     func replyPreview(for record: AppMessageRecordFfi) -> (name: String, text: String)? {
         _ = timelineProjectionGeneration
-        let targetId: String?
-        if let projectedTargetId = replyTargetByMessageId[record.messageIdHex] {
-            targetId = projectedTargetId
-        } else if case .reply(let semanticTargetId) = MessageSemantics.classify(record) {
-            targetId = semanticTargetId
-        } else {
-            targetId = nil
-        }
-        guard let targetId else {
+        guard let targetId = replyTargetId(for: record) else {
             return nil
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
@@ -274,7 +286,14 @@ final class TimelineStore {
         projectionChanged = true
         messageById[appRecord.messageIdHex] = appRecord
         messageStatusById[appRecord.messageIdHex] = appRecord.direction == "sent" ? .sent : .received
-        replyTargetByMessageId[appRecord.messageIdHex] = record.replyToMessageIdHex
+        replyProjectionKnownMessageIds.insert(appRecord.messageIdHex)
+        if let projectedReplyTarget = record.replyToMessageIdHex, !projectedReplyTarget.isEmpty {
+            replyTargetByMessageId[appRecord.messageIdHex] = projectedReplyTarget
+        } else {
+            // Keep the "known nil" mirror explicit by clearing any previous target
+            // for this row; guarded readers then suppress legacy tag fallback.
+            replyTargetByMessageId[appRecord.messageIdHex] = nil
+        }
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
         // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
         // mirror it instead of re-classifying tags or a separate listMedia pass.
@@ -314,6 +333,7 @@ final class TimelineStore {
         let existed = messageById[messageIdHex] != nil
         messageById[messageIdHex] = nil
         messageStatusById[messageIdHex] = nil
+        replyProjectionKnownMessageIds.remove(messageIdHex)
         replyTargetByMessageId[messageIdHex] = nil
         replyPreviewsByMessageId[messageIdHex] = nil
         mediaProjections.removeReferences(forMessageId: messageIdHex)
@@ -451,7 +471,10 @@ final class TimelineStore {
     }
 
     private func replyTargetId(for record: AppMessageRecordFfi) -> String? {
-        replyTargetByMessageId[record.messageIdHex] ?? ConversationViewModel.replyTargetMessageId(in: record)
+        if replyProjectionKnownMessageIds.contains(record.messageIdHex) {
+            return replyTargetByMessageId[record.messageIdHex]
+        }
+        return ConversationViewModel.replyTargetMessageId(in: record)
     }
 
     // MARK: - Reactions
@@ -504,6 +527,10 @@ final class TimelineStore {
             receivedAt: record.receivedAt
         )
         if !realId.isEmpty {
+            // A confirmed real-id row is still an optimistic local echo until
+            // Marmot mirrors the authoritative timeline row, so leave it out of
+            // replyProjectionKnownMessageIds. Reply fallbacks stay local-only in
+            // that window.
             if messageById[realId] == nil {
                 messageById[realId] = confirmed
                 projectionChanged = true

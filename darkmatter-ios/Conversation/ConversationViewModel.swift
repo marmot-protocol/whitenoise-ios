@@ -1055,16 +1055,6 @@ final class ConversationViewModel {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
-    static func sameMediaAttachment(
-        _ lhs: MediaAttachmentReferenceFfi,
-        _ rhs: MediaAttachmentReferenceFfi
-    ) -> Bool {
-        lhs.version == rhs.version
-            && lhs.plaintextSha256.lowercased() == rhs.plaintextSha256.lowercased()
-            && lhs.ciphertextSha256.lowercased() == rhs.ciphertextSha256.lowercased()
-            && lhs.nonceHex.lowercased() == rhs.nonceHex.lowercased()
-    }
-
 #if DEBUG
     @discardableResult
     func replaceMediaReferencesForTesting(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) -> Bool {
