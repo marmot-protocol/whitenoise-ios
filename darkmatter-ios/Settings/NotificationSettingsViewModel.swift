@@ -2,6 +2,44 @@ import Foundation
 import UserNotifications
 import MarmotKit
 
+/// Minimal seam used by `NotificationSettingsViewModel` so account/reload races
+/// can be tested without constructing a full `AppState` runtime.
+@MainActor
+protocol NotificationSettingsViewModelDataSource: AnyObject {
+    var activeAccountRef: String? { get }
+
+    func notificationAuthorizationStatus() async -> UNAuthorizationStatus
+    func requestNotificationAuthorizationAndRegister() async throws -> Bool
+    func refreshNotificationApnsToken() async throws -> String
+    func notificationSettings(for accountRef: String) async -> NotificationSettingsFfi?
+    func pushRegistration(for accountRef: String) async -> PushRegistrationFfi?
+    func setLocalNotificationsEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi
+    func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi
+    func syncNativePushRegistration(accountRef: String) async throws -> PushRegistrationFfi
+}
+
+extension AppState: NotificationSettingsViewModelDataSource {
+    func notificationAuthorizationStatus() async -> UNAuthorizationStatus {
+        await notifications.authorizationStatus()
+    }
+
+    func requestNotificationAuthorizationAndRegister() async throws -> Bool {
+        try await notifications.requestAuthorizationAndRegister()
+    }
+
+    func refreshNotificationApnsToken() async throws -> String {
+        try await notifications.refreshApnsToken()
+    }
+}
+
+/// Keeps action results account-scoped after awaits: a result produced for one
+/// account must not be published after the screen has switched to another.
+nonisolated enum NotificationSettingsActionApplyPolicy {
+    static func canApplyResult(startedFor actionAccountRef: String?, currentAccountRef: String?) -> Bool {
+        actionAccountRef == currentAccountRef
+    }
+}
+
 /// Serializes notification settings actions so only one mutating operation runs
 /// at a time. The view disables controls while saving, but each button launches
 /// its own async `Task`, so rapid taps or re-entrant calls can still arrive
@@ -13,6 +51,7 @@ import MarmotKit
 @MainActor
 struct NotificationActionGate {
     private(set) var isRunning = false
+    private var generation = 0
 
     /// Attempts to claim the gate. Returns `true` and marks it running when no
     /// action is in flight; returns `false` when one already is (caller must not
@@ -20,12 +59,29 @@ struct NotificationActionGate {
     /// so two concurrent tasks cannot both observe `false` and both begin.
     mutating func tryBegin() -> Bool {
         guard !isRunning else { return false }
+        generation += 1
         isRunning = true
         return true
     }
 
+    /// Returns a ticket that lets a reload apply only if no action starts before
+    /// its awaited reads finish. Reloads do not claim the mutating-action gate,
+    /// but stale reload completions are discarded instead of overwriting a newer
+    /// action result. `generation` is intentionally bumped on both `tryBegin()`
+    /// and `end()` so a ticket issued before an action cannot become valid again
+    /// after that action completes.
+    func reloadTicket() -> Int? {
+        guard !isRunning else { return nil }
+        return generation
+    }
+
+    func canApplyReload(startedAt ticket: Int) -> Bool {
+        !isRunning && generation == ticket
+    }
+
     /// Releases the gate so the next action may begin.
     mutating func end() {
+        generation += 1
         isRunning = false
     }
 }
@@ -34,14 +90,15 @@ struct NotificationActionGate {
 /// push-registration / authorization state and the toggle/refresh/sync actions,
 /// so the view is pure rendering. The push orchestration lives in AppState's
 /// methods (which this calls); the view keeps the reads of `appState.notifications`
-/// and the `NativePushServerConfig`-derived footer/sync gate. Methods take
-/// `AppState` rather than retaining it.
+/// and the `NativePushServerConfig`-derived footer/sync gate. Methods take an
+/// AppState-compatible data source rather than retaining it.
 ///
 /// All mutating actions are funneled through `runSaving`, which claims a single
-/// `NotificationActionGate` before doing any work. This serializes local/native
-/// push mutations: a later completion from an older task can no longer overwrite
-/// `settings` or `registration` state produced by a newer action, because the
-/// newer action never starts while the older one is in flight.
+/// `NotificationActionGate` before doing any work. Plain reloads take a gate
+/// ticket and discard their results if an action starts before their awaited
+/// reads finish. Dropped reloads are replayed after the action gate opens again,
+/// and action completions only publish state if the active account still matches
+/// the account that started the action.
 @MainActor
 @Observable
 final class NotificationSettingsViewModel {
@@ -52,6 +109,7 @@ final class NotificationSettingsViewModel {
     var savedAt: Date?
 
     private var actionGate = NotificationActionGate()
+    private var reloadRequestedAfterAction = false
 
     /// Whether a mutating action is currently in flight. Mirrors the action gate
     /// so the view can disable controls and show progress.
@@ -81,94 +139,190 @@ final class NotificationSettingsViewModel {
     /// action gate for the full duration (including every `await` inside `body`).
     /// Returns early without side effects when an action is already running, so
     /// rapid taps or re-entrant calls cannot start overlapping mutations.
-    private func runSaving(_ body: () async -> Void) async {
+    private func runSaving(
+        using appState: any NotificationSettingsViewModelDataSource,
+        _ body: () async -> Void
+    ) async {
         guard actionGate.tryBegin() else { return }
         errorMessage = nil
-        defer { actionGate.end() }
         await body()
+        actionGate.end()
+        await drainDeferredReload(using: appState)
     }
 
-    func reload(using appState: AppState) async {
-        authorizationStatus = await appState.notifications.authorizationStatus()
-        guard let accountRef = appState.activeAccountRef else {
+    private func requestReloadAfterAction() {
+        reloadRequestedAfterAction = true
+    }
+
+    private func drainDeferredReload(using appState: any NotificationSettingsViewModelDataSource) async {
+        guard reloadRequestedAfterAction else { return }
+        reloadRequestedAfterAction = false
+        await reload(using: appState)
+    }
+
+    private func deferOrReload(using appState: any NotificationSettingsViewModelDataSource) async {
+        if actionGate.isRunning {
+            requestReloadAfterAction()
+        } else {
+            await reload(using: appState)
+        }
+    }
+
+    private func canApplyActionResult(
+        startedFor accountRef: String?,
+        using appState: any NotificationSettingsViewModelDataSource
+    ) -> Bool {
+        guard NotificationSettingsActionApplyPolicy.canApplyResult(
+            startedFor: accountRef,
+            currentAccountRef: appState.activeAccountRef
+        ) else {
+            requestReloadAfterAction()
+            return false
+        }
+        return true
+    }
+
+    func reload(using appState: any NotificationSettingsViewModelDataSource) async {
+        guard let reloadTicket = actionGate.reloadTicket() else {
+            requestReloadAfterAction()
+            return
+        }
+        let accountRef = appState.activeAccountRef
+        let reloadedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else {
+            await deferOrReload(using: appState)
+            return
+        }
+        authorizationStatus = reloadedAuthorizationStatus
+        guard let accountRef else {
             settings = nil
             registration = nil
             return
         }
-        if let reloadedSettings = await appState.notificationSettings(for: accountRef) {
-            settings = reloadedSettings
+        let reloadedSettings = await appState.notificationSettings(for: accountRef)
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else {
+            await deferOrReload(using: appState)
+            return
         }
-        if let reloadedRegistration = await appState.pushRegistration(for: accountRef) {
-            registration = reloadedRegistration
+        settings = reloadedSettings
+        let reloadedRegistration = await appState.pushRegistration(for: accountRef)
+        guard actionGate.canApplyReload(startedAt: reloadTicket), appState.activeAccountRef == accountRef else {
+            await deferOrReload(using: appState)
+            return
         }
+        registration = reloadedRegistration
     }
 
-    func setLocalNotifications(_ enabled: Bool, using appState: AppState) async {
-        await runSaving {
+    func setLocalNotifications(_ enabled: Bool, using appState: any NotificationSettingsViewModelDataSource) async {
+        await runSaving(using: appState) {
+            let accountRef = appState.activeAccountRef
             do {
-                settings = try await appState.setLocalNotificationsEnabled(enabled)
+                let updatedSettings = try await appState.setLocalNotificationsEnabled(enabled)
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                settings = updatedSettings
+                authorizationStatus = updatedAuthorizationStatus
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
                 errorMessage = error.localizedDescription
             }
         }
     }
 
-    func setNativePush(_ enabled: Bool, using appState: AppState) async {
-        await runSaving {
+    func setNativePush(_ enabled: Bool, using appState: any NotificationSettingsViewModelDataSource) async {
+        await runSaving(using: appState) {
+            let accountRef = appState.activeAccountRef
             do {
-                settings = try await appState.setNativePushEnabled(enabled)
+                let updatedSettings = try await appState.setNativePushEnabled(enabled)
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                let updatedRegistration: PushRegistrationFfi?
+                if enabled, let accountRef {
+                    updatedRegistration = await appState.pushRegistration(for: accountRef)
+                } else {
+                    updatedRegistration = nil
+                }
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                settings = updatedSettings
+                authorizationStatus = updatedAuthorizationStatus
+                if enabled {
+                    if let updatedRegistration {
+                        registration = updatedRegistration
+                    } else if registration?.accountRef != accountRef {
+                        registration = nil
+                    }
+                } else {
+                    registration = nil
+                }
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
                 errorMessage = error.localizedDescription
             }
         }
     }
 
-    func requestApnsToken(using appState: AppState) async {
-        await runSaving {
+    func requestApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
+        await runSaving(using: appState) {
+            let accountRef = appState.activeAccountRef
             do {
-                let granted = try await appState.notifications.requestAuthorizationAndRegister()
+                let granted = try await appState.requestNotificationAuthorizationAndRegister()
                 guard granted else { throw NotificationSettingsActionError.permissionDenied }
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 savedAt = Date()
-                await reload(using: appState)
+                requestReloadAfterAction()
             } catch {
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
                 errorMessage = error.localizedDescription
             }
         }
     }
 
-    func refreshApnsToken(using appState: AppState) async {
-        await runSaving {
+    func refreshApnsToken(using appState: any NotificationSettingsViewModelDataSource) async {
+        await runSaving(using: appState) {
+            let accountRef = appState.activeAccountRef
             do {
-                _ = try await appState.notifications.refreshApnsToken()
+                _ = try await appState.refreshNotificationApnsToken()
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 savedAt = Date()
+                requestReloadAfterAction()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
+                let updatedAuthorizationStatus = await appState.notificationAuthorizationStatus()
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                authorizationStatus = updatedAuthorizationStatus
                 Haptics.error()
                 errorMessage = error.localizedDescription
-                await reload(using: appState)
             }
         }
     }
 
-    func syncNativeRegistration(using appState: AppState) async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        await runSaving {
+    func syncNativeRegistration(using appState: any NotificationSettingsViewModelDataSource) async {
+        await runSaving(using: appState) {
+            guard let accountRef = appState.activeAccountRef else { return }
             do {
-                registration = try await appState.syncNativePushRegistration(accountRef: accountRef)
+                let updatedRegistration = try await appState.syncNativePushRegistration(accountRef: accountRef)
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
+                registration = updatedRegistration
                 savedAt = Date()
                 Haptics.success()
-                await reload(using: appState)
             } catch {
+                guard canApplyActionResult(startedFor: accountRef, using: appState) else { return }
                 Haptics.error()
                 errorMessage = error.localizedDescription
             }
