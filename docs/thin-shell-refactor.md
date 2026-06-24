@@ -474,17 +474,19 @@ polling over re-running.
             subscription factories) now route through thin `MarmotClient` wrappers;
             `MarmotClient` conforms to `AccountRelayListManaging` so the relay-save
             path takes `manager: client`. The raw `Marmot` handle is now reachable
-            only from `AppState` (lifecycle/bootstrap/notifications seam) and
-            `MarmotClient` itself, enforced by `MarmotHandleLockdownTests`.
+            only from `AppState` (lifecycle/bootstrap seam), `NotificationCoordinator`
+            (notification orchestration seam), and `MarmotClient` itself, enforced
+            by `MarmotHandleLockdownTests`.
 - [x] Phase 3 — merged (darkmatter#570) + bindings synced (127fe17) + fixtures migrated
 - [x] **Phase 5a (media slice)** — done (commit `4d46058`, +56/−242): `record.media`
       mirrored at ingest into `mediaReferencesByMessageId`; deleted the `listMedia`
       timeline path + index maps + sourceEpoch recovery. Drop-bad now via the Rust
       row; Swift parser retained as the local/optimistic fallback (oracle unchanged)
 - [~] Phase 2 — extract services from AppState; AppState → composition root.
-      3/5 done (`ProfileStore`, `AccountUnreadStore`, `AccountStore`). The two
-      remaining services are **deferred to issues #389/#390** — organizational, lower
-      leverage, high (device) verification cost; see the leverage note below.
+      4/5 done (`ProfileStore`, `AccountUnreadStore`, `AccountStore`,
+      `NotificationCoordinator`). `RuntimeLifecycle` remains deferred to #389 —
+      organizational, lower leverage, high (device) verification cost; see the
+      leverage note below.
       - [x] `ProfileStore` (commit `8e7f089`): profile cache + load/refresh queues
             → `@MainActor ProfileStore`; `profileRefreshGeneration` stays on AppState
             for observation; AppState+Profiles.swift now thin forwarders
@@ -497,18 +499,18 @@ polling over re-running.
       - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
             most entangled; verify suspend/resume by running the app, not just tests.
             **Tracked: marmot-protocol/darkmatter-ios#389** (deferred — see leverage note below).
-      - [ ] `NotificationCoordinator` (subscription runner, native-push, catch-up).
-            **Tracked: marmot-protocol/darkmatter-ios#390** (deferred — see leverage note below).
+      - [x] `NotificationCoordinator`: notification subscription runner + retry
+            toast, native-push registration sync, notification settings toggles,
+            and foreground catch-up → `@MainActor @Observable NotificationCoordinator`;
+            AppState keeps thin forwarders so existing call sites stay stable.
+            **Tracked: marmot-protocol/darkmatter-ios#390**.
 
-      > **Leverage note (2026-06-23):** the two remaining Phase 2 services are
-      > *organizational* — they relocate orchestration out of `AppState` but do not
-      > delete re-derivation or push logic into Rust (the thin-shell thesis, already
-      > realized by Phase 3 + the projection caches + the Phase 5b VM decomposition).
-      > `AppState`'s lifecycle/notification code is also already partly factored
-      > (`NotificationDriver`, the policy types). Their value is *defensive* (isolate +
-      > test-pin a fragile, invariant-dense area) and their verification cost is high
-      > (suspend/resume + background push need device/manual testing). Deprioritized to
-      > issues #389/#390; not blocking the refactor's core goal.
+      > **Leverage note (2026-06-23, updated for #390):** the remaining Phase 2
+      > service work is *organizational* — it relocates orchestration out of
+      > `AppState` but does not delete re-derivation or push logic into Rust (the
+      > thin-shell thesis, already realized by Phase 3 + the projection caches + the
+      > Phase 5b VM decomposition). `RuntimeLifecycle` remains high-cost because
+      > suspend/resume needs device/manual testing.
 - [ ] Phase 4 — screen-store template; convert view-embedded screens
       - [x] template established + `RelaysView` → `RelaysViewModel` (commit `1356c5e`):
             `@Observable` store owns load/save/validation + UI state; view is pure

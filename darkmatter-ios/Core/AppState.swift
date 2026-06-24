@@ -2,131 +2,6 @@ import Foundation
 import Observation
 import MarmotKit
 
-struct NativePushDisableCoordinator {
-    let setNativePushEnabled: (Bool) async throws -> NotificationSettingsFfi
-    let clearPushRegistration: () async throws -> Void
-
-    func disable() async throws -> NotificationSettingsFfi {
-        let disabledSettings = try await setNativePushEnabled(false)
-        do {
-            try await clearPushRegistration()
-            return disabledSettings
-        } catch {
-            _ = try? await setNativePushEnabled(true)
-            throw error
-        }
-    }
-}
-
-struct NativePushEnableCoordinator {
-    let setNativePushEnabled: (Bool) async throws -> NotificationSettingsFfi
-    let syncPushRegistration: () async throws -> Void
-
-    func enable() async throws -> NotificationSettingsFfi {
-        let enabledSettings = try await setNativePushEnabled(true)
-        do {
-            try await syncPushRegistration()
-            return enabledSettings
-        } catch NotificationSettingsActionError.missingApnsToken {
-            // APNS token delivery is asynchronous; the app delegate will retry
-            // registration as soon as iOS provides the token.
-            return enabledSettings
-        } catch {
-            _ = try? await setNativePushEnabled(false)
-            throw error
-        }
-    }
-}
-
-nonisolated enum NativePushRegistrationErrorDisposition {
-    case stopSync
-    case recordFailure
-
-    static func disposition(for error: Error) -> Self {
-        if error is CancellationError { return .stopSync }
-        if let settingsError = error as? NotificationSettingsActionError,
-           case .missingApnsToken = settingsError {
-            return .stopSync
-        }
-        return .recordFailure
-    }
-}
-
-nonisolated enum NotificationPresentationRuntimeGate {
-    static func canPresent(
-        isTaskCancelled: Bool,
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        hasRuntimeClient: Bool
-    ) -> Bool {
-        !isTaskCancelled
-            && isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-            && hasRuntimeClient
-    }
-}
-
-nonisolated enum SettingsReadRuntimeGate {
-    static func canRead(
-        isTaskCancelled: Bool,
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        hasRuntimeClient: Bool
-    ) -> Bool {
-        !isTaskCancelled
-            && isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-            && hasRuntimeClient
-    }
-}
-
-nonisolated enum ForegroundRuntimeWorkGate {
-    static func canUseLocalForegroundWork(
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        hasRuntimeClient: Bool
-    ) -> Bool {
-        isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-            && hasRuntimeClient
-    }
-
-    static func canUseForegroundWork(
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool
-    ) -> Bool {
-        isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-    }
-}
-
-/// Decision point for whether `scheduleNativePushRegistrationIfEnabled()` may
-/// spawn a fresh registration sync. Pure so the guard — including the
-/// sign-out window (#320) — is observable in tests without reaching into
-/// MainActor-private state. A token-driven reschedule must be suppressed while
-/// the scene is inactive, the runtime is suspended/suspending, or a sign-out is
-/// tearing down the departing account.
-nonisolated enum NativePushRegistrationScheduleGate {
-    static func canSchedule(
-        isAppSceneActive: Bool,
-        runtimeSuspendedForBackground: Bool,
-        isRuntimeSuspending: Bool,
-        isSigningOut: Bool
-    ) -> Bool {
-        isAppSceneActive
-            && !runtimeSuspendedForBackground
-            && !isRuntimeSuspending
-            && !isSigningOut
-    }
-}
 
 /// Root observable state for the app.
 ///
@@ -238,20 +113,18 @@ final class AppState {
     private let runtimeRootPath: String
     private let runtimeRelayUrls: [String]
     let notifications: AppNotifications
+    @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
-    private let notificationDriver = NotificationDriver()
     private var bootstrapTask: Task<Void, Never>?
     private var bootstrapTaskID = UUID()
     private var foregroundActivationTask: Task<Void, Never>?
-    private var nativePushRegistrationTask: Task<Void, Never>?
     private var runtimeSuspensionTask: Task<Void, Never>?
     /// Profile projection cache + hydration/refresh queues. `profileRefreshGeneration`
     /// stays on AppState (below) as the observed token; the store reads/bumps it
     /// through its back-reference so SwiftUI observation is unchanged.
     @ObservationIgnored let profileStore = ProfileStore()
     private var runtimeSuspensionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
-    private var isForegroundCatchUpRunning = false
     private var isRuntimeSuspending = false
     /// True only while `signOut()` is tearing down the departing account. Set
     /// before any of sign-out's `await` suspension points and cleared once the
@@ -261,7 +134,6 @@ final class AppState {
     /// account whose registration sign-out just cleared (#320, residual of
     /// #7/#111). MainActor-owned; mutated only on the MainActor.
     private var isSigningOut = false
-    private var notificationSubscriptionFailureToastPresented = false
     private(set) var isAppSceneActive = true
     private(set) var runtimeSuspendedForBackground = false
     /// True while the runtime is being (re)started after a background
@@ -292,7 +164,7 @@ final class AppState {
     var telemetryBuildConfig: TelemetryBuildConfig {
         client?.telemetryConfig ?? suspendedRuntimeTelemetryBuildConfig
     }
-    var notificationSubscriptionActive: Bool { notificationDriver.isRunning }
+    var notificationSubscriptionActive: Bool { notificationCoordinator.notificationSubscriptionActive }
     var canRefreshProfiles: Bool {
         isAppSceneActive && !runtimeSuspendedForBackground && !isRuntimeSuspending
     }
@@ -315,8 +187,6 @@ final class AppState {
     private static let developerModeKey = "marmot.developerMode"
     private static let streamingDebugModeKey = "marmot.streamingDebugMode"
     private static let recentReactionsKey = "marmot.recentReactions"
-    private static let notificationSubscriptionInitialRetryDelayNanoseconds: UInt64 = 1_000_000_000
-    private static let notificationSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 60_000_000_000
     private static let defaultSuspendedRuntimeTelemetryBuildConfig = TelemetryBuildConfig.current()
     static let agentTextStreamQuicBrokerCandidate = "quic://quic-broker.ipf.dev:4450"
     static let agentTextStreamQuicCandidates = [agentTextStreamQuicBrokerCandidate]
@@ -345,7 +215,6 @@ final class AppState {
     deinit {
         bootstrapTask?.cancel()
         foregroundActivationTask?.cancel()
-        nativePushRegistrationTask?.cancel()
         runtimeSuspensionTask?.cancel()
         // ProfileStore cancels its own tasks in its deinit.
     }
@@ -470,11 +339,8 @@ final class AppState {
     /// otherwise `runtimeClient()` returns the stale, broken client and Retry
     /// re-invokes `startRuntime()` on a runtime whose `start()` already failed.
     private func releaseRuntimeAfterStartupFailure() async {
-        stopNotificationSubscription()
-        let pushTask = nativePushRegistrationTask
-        nativePushRegistrationTask = nil
-        pushTask?.cancel()
-        await pushTask?.value
+        notificationCoordinator.stopNotificationSubscription()
+        await notificationCoordinator.cancelNativePushRegistrationTask()
         if let client {
             await client.marmot.shutdown()
             self.client = nil
@@ -495,109 +361,29 @@ final class AppState {
 
     @MainActor
     private func startReadyForegroundMaintenance(scheduleNativePushRegistration: Bool = true) {
-        notifications.configure(appState: self)
-        startNotificationSubscription()
-        if scheduleNativePushRegistration {
-            scheduleNativePushRegistrationIfEnabled()
-        }
+        notificationCoordinator.startReadyForegroundMaintenance(
+            host: self,
+            scheduleNativePushRegistration: scheduleNativePushRegistration
+        )
     }
 
     @MainActor
     private func startNotificationSubscription() {
-        notificationSubscriptionFailureToastPresented = false
-        let runner = NotificationSubscriptionRunner(
-            initialRetryDelayNanoseconds: Self.notificationSubscriptionInitialRetryDelayNanoseconds,
-            maximumRetryDelayNanoseconds: Self.notificationSubscriptionMaximumRetryDelayNanoseconds,
-            subscribe: { [weak self] in
-                guard let self else { throw CancellationError() }
-                let subscription = try await self.marmot.subscribeNotifications()
-                return SubscriptionDriver.notifications(subscription)
-            },
-            present: { [weak self] update in
-                guard let self else { return }
-                guard self.canPresentRuntimeNotificationUpdate() else { return }
-                let localNotificationsEnabled = await self.localNotificationsEnabledForPresentation(
-                    accountRef: update.accountRef
-                )
-                guard self.canPresentRuntimeNotificationUpdate() else { return }
-                let shouldPresent = await MainActor.run {
-                    guard self.canPresentRuntimeNotificationUpdate() else { return false }
-                    self.noteNotificationSubscriptionDelivery()
-                    return self.shouldPresentLocalNotification(
-                        update,
-                        localNotificationsEnabled: localNotificationsEnabled
-                    )
-                }
-                guard shouldPresent else { return }
-                guard self.canPresentRuntimeNotificationUpdate() else { return }
-                await self.notifications.present(update: update)
-            },
-            reportError: { [weak self] error in
-                guard let self else { return }
-                await MainActor.run {
-                    self.reportNotificationSubscriptionError(error)
-                }
-            }
-        )
-        notificationDriver.start(runner: runner)
+        notificationCoordinator.startNotificationSubscription(host: self)
     }
 
     private func stopNotificationSubscription() {
-        notificationDriver.stop()
-        notificationSubscriptionFailureToastPresented = false
+        notificationCoordinator.stopNotificationSubscription()
     }
 
     @MainActor
-    func reportNotificationSubscriptionError(_: Error) {
-        guard !notificationSubscriptionFailureToastPresented else { return }
-        notificationSubscriptionFailureToastPresented = true
-        present(
-            .error(
-                L10n.string("Notifications unavailable"),
-                message: L10n.string("We'll keep trying in the background.")
-            )
-        )
+    func reportNotificationSubscriptionError(_ error: Error) {
+        notificationCoordinator.reportNotificationSubscriptionError(error, host: self)
     }
 
     @MainActor
     func noteNotificationSubscriptionDelivery() {
-        notificationSubscriptionFailureToastPresented = false
-    }
-
-    @MainActor
-    private func shouldPresentLocalNotification(
-        _ update: NotificationUpdateFfi,
-        localNotificationsEnabled: Bool
-    ) -> Bool {
-        LocalNotificationSuppressionPolicy.shouldPresent(
-            localNotificationsEnabled: localNotificationsEnabled,
-            appSceneActive: isAppSceneActive,
-            updateAccountRef: update.accountRef,
-            updateGroupIdHex: update.groupIdHex,
-            visibleChat: visibleChat
-        )
-    }
-
-    @MainActor
-    private func canPresentRuntimeNotificationUpdate() -> Bool {
-        NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: Task.isCancelled,
-            isAppSceneActive: isAppSceneActive,
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending,
-            hasRuntimeClient: client != nil
-        )
-    }
-
-    @MainActor
-    private func localNotificationsEnabledForPresentation(accountRef: String) async -> Bool {
-        guard !Task.isCancelled,
-              isAppSceneActive,
-              !runtimeSuspendedForBackground,
-              !isRuntimeSuspending,
-              let client
-        else { return true }
-        return await client.localNotificationsEnabledForPresentation(accountRef: accountRef)
+        notificationCoordinator.noteNotificationSubscriptionDelivery()
     }
 
     /// Returns the already-live foreground runtime for settings reads, or nil
@@ -621,86 +407,25 @@ final class AppState {
     // MARK: - Notifications
 
     func notificationSettings(for accountRef: String) async -> NotificationSettingsFfi? {
-        guard let client = foregroundSettingsReadClient() else { return nil }
-        return try? await client.notificationSettings(accountRef: accountRef)
+        await notificationCoordinator.notificationSettings(for: accountRef, host: self)
     }
 
     func pushRegistration(for accountRef: String) async -> PushRegistrationFfi? {
-        guard let client = foregroundSettingsReadClient() else { return nil }
-        return try? await client.pushRegistration(accountRef: accountRef)
+        await notificationCoordinator.pushRegistration(for: accountRef, host: self)
     }
 
     @discardableResult
     func setLocalNotificationsEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi {
-        guard let accountRef = activeAccountRef else {
-            throw NotificationSettingsActionError.noActiveAccount
-        }
-        if enabled {
-            let granted = try await notifications.requestAuthorization()
-            guard granted else { throw NotificationSettingsActionError.permissionDenied }
-        }
-        return try marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: enabled)
+        try await notificationCoordinator.setLocalNotificationsEnabled(enabled, host: self)
     }
 
     @discardableResult
     func setNativePushEnabled(_ enabled: Bool) async throws -> NotificationSettingsFfi {
-        guard let accountRef = activeAccountRef else {
-            throw NotificationSettingsActionError.noActiveAccount
-        }
-
-        if enabled {
-            guard NativePushServerConfig.current() != nil else {
-                throw NotificationSettingsActionError.nativePushNotConfigured
-            }
-            let granted = try await notifications.requestAuthorizationAndRegister()
-            guard granted else { throw NotificationSettingsActionError.permissionDenied }
-            return try await enableNativePush(accountRef: accountRef)
-        } else {
-            return try await disableNativePush(accountRef: accountRef)
-        }
-    }
-
-    private func enableNativePush(accountRef: String) async throws -> NotificationSettingsFfi {
-        let coordinator = NativePushEnableCoordinator(
-            setNativePushEnabled: { [marmot] enabled in
-                try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
-            },
-            syncPushRegistration: { [self] in
-                _ = try await syncNativePushRegistration(accountRef: accountRef)
-            }
-        )
-        return try await coordinator.enable()
-    }
-
-    private func disableNativePush(accountRef: String) async throws -> NotificationSettingsFfi {
-        let coordinator = NativePushDisableCoordinator(
-            setNativePushEnabled: { [marmot] enabled in
-                try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
-            },
-            clearPushRegistration: { [marmot] in
-                try await marmot.clearPushRegistration(accountRef: accountRef)
-            }
-        )
-        return try await coordinator.disable()
+        try await notificationCoordinator.setNativePushEnabled(enabled, host: self)
     }
 
     private func enableNotificationsByDefault(for accountRef: String) async {
-        do {
-            let granted = try await notifications.requestAuthorization()
-            guard granted else {
-                _ = try? marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: false)
-                return
-            }
-
-            _ = try marmot.setLocalNotificationsEnabled(accountRef: accountRef, enabled: true)
-
-            guard NativePushServerConfig.current() != nil else { return }
-            notifications.registerForRemoteNotifications()
-            _ = try await enableNativePush(accountRef: accountRef)
-        } catch {
-            // Notification defaults are best-effort: account activation should
-            // still succeed if iOS permission or push registration is blocked.
-        }
+        await notificationCoordinator.enableNotificationsByDefault(for: accountRef, host: self)
     }
 
     /// Switches the active account, signing it back in first when it was
@@ -748,7 +473,7 @@ final class AppState {
         // below.
         isSigningOut = true
         defer { isSigningOut = false }
-        await cancelNativePushRegistrationTask()
+        await notificationCoordinator.cancelNativePushRegistrationTask()
         try? await marmot.clearPushRegistration(accountRef: signingOut)
         _ = try? await marmot.setNativePushEnabled(accountRef: signingOut, enabled: false)
 
@@ -802,102 +527,15 @@ final class AppState {
 
     @discardableResult
     func syncNativePushRegistration(accountRef: String) async throws -> PushRegistrationFfi {
-        guard let config = NativePushServerConfig.current() else {
-            throw NotificationSettingsActionError.nativePushNotConfigured
-        }
-        guard let tokenHex = notifications.apnsTokenHex, !tokenHex.isEmpty else {
-            throw NotificationSettingsActionError.missingApnsToken
-        }
-        return try await marmot.upsertPushRegistration(
-            accountRef: accountRef,
-            platform: .apns,
-            rawToken: tokenHex,
-            serverPubkeyHex: config.serverPubkeyHex,
-            relayHint: Self.pushRegistrationRelayHint(from: config)
-        )
-    }
-
-    private static func pushRegistrationRelayHint(from config: NativePushServerConfig) -> String {
-        if let relayHint = config.relayHint,
-           AppContainerConfig.seedRelays.contains(relayHint) {
-            return relayHint
-        }
-        return AppContainerConfig.pushNotificationRelayHint
+        try await notificationCoordinator.syncNativePushRegistration(accountRef: accountRef, host: self)
     }
 
     func syncNativePushRegistrationIfEnabled() async {
-        guard isAppSceneActive,
-              !runtimeSuspendedForBackground,
-              !isRuntimeSuspending,
-              !Task.isCancelled
-        else { return }
-
-        let accountRefs = await nativePushEnabledAccountRefs()
-        guard !accountRefs.isEmpty,
-              NativePushServerConfig.current() != nil
-        else { return }
-
-        if NativePushRegistrationPolicy.shouldRequestRemoteToken(
-            accountRefs: accountRefs,
-            currentToken: notifications.apnsTokenHex
-        ) {
-            await notifications.registerForRemoteNotificationsIfAuthorized()
-        }
-
-        guard notifications.apnsTokenHex?.isEmpty == false else { return }
-
-        var lastError: Error?
-        for accountRef in accountRefs {
-            guard isAppSceneActive,
-                  !runtimeSuspendedForBackground,
-                  !isRuntimeSuspending,
-                  !Task.isCancelled
-            else { return }
-
-            do {
-                _ = try await syncNativePushRegistration(accountRef: accountRef)
-            } catch {
-                switch NativePushRegistrationErrorDisposition.disposition(for: error) {
-                case .stopSync:
-                    return
-                case .recordFailure:
-                    lastError = error
-                }
-            }
-        }
-
-        if let lastError {
-            present(.error(L10n.string("Push registration failed"), message: lastError.localizedDescription))
-        }
+        await notificationCoordinator.syncNativePushRegistrationIfEnabled(host: self)
     }
 
     func scheduleNativePushRegistrationIfEnabled() {
-        guard NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: isAppSceneActive,
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending,
-            isSigningOut: isSigningOut
-        ) else { return }
-        let previousTask = nativePushRegistrationTask
-        previousTask?.cancel()
-        nativePushRegistrationTask = Task { [weak self] in
-            // Drain the prior (now-cancelled) registration task before starting
-            // a fresh sync so overlapping per-account upsertPushRegistration FFI
-            // writes cannot run concurrently. The per-account loop only checks
-            // Task.isCancelled *between* accounts, so without this await a
-            // reschedule (e.g. on token arrival) could issue two concurrent
-            // upsertPushRegistration calls. Mirrors cancelNativePushRegistrationTask().
-            await previousTask?.value
-            guard let self else { return }
-            await syncNativePushRegistrationIfEnabled()
-        }
-    }
-
-    private func cancelNativePushRegistrationTask() async {
-        let task = nativePushRegistrationTask
-        nativePushRegistrationTask = nil
-        task?.cancel()
-        await task?.value
+        notificationCoordinator.scheduleNativePushRegistrationIfEnabled(host: self)
     }
 
     func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi? {
@@ -970,30 +608,14 @@ final class AppState {
     }
 
     func catchUpAfterForegroundActivation() async {
-        guard ForegroundNotificationSyncPolicy.shouldCatchUp(
-            appPhase: phase,
-            isCatchUpRunning: isForegroundCatchUpRunning,
-            isAppSceneActive: isAppSceneActive,
-            runtimeSuspendedForBackground: runtimeSuspendedForBackground,
-            isRuntimeSuspending: isRuntimeSuspending
-        ) else { return }
-
-        isForegroundCatchUpRunning = true
-        defer { isForegroundCatchUpRunning = false }
-
-        do {
-            try await marmot.catchUpAccounts()
-        } catch {
-            // Foreground catch-up is a best-effort safety net. The live
-            // subscription and NSE path continue to handle notification flow.
-        }
+        await notificationCoordinator.catchUpAfterForegroundActivation(host: self)
     }
 
     func setAppSceneActive(_ active: Bool) {
         isAppSceneActive = active
         if !active {
             foregroundActivationTask?.cancel()
-            nativePushRegistrationTask?.cancel()
+            notificationCoordinator.setAppSceneActive(active)
         }
     }
 
@@ -1013,7 +635,7 @@ final class AppState {
     func startRuntimeSuspension() -> Task<Void, Never> {
         isAppSceneActive = false
         foregroundActivationTask?.cancel()
-        nativePushRegistrationTask?.cancel()
+        notificationCoordinator.setAppSceneActive(false)
         if let runtimeSuspensionTask {
             return runtimeSuspensionTask
         }
@@ -1147,14 +769,10 @@ final class AppState {
         foregroundActivationTask = nil
         foregroundTask?.cancel()
 
-        let pushTask = nativePushRegistrationTask
-        nativePushRegistrationTask = nil
-        pushTask?.cancel()
-
         let profileTask = cancelProfileFetchQueue()
 
         await foregroundTask?.value
-        await pushTask?.value
+        await notificationCoordinator.cancelNativePushRegistrationTask()
         await profileTask?.value
     }
 
@@ -1162,20 +780,9 @@ final class AppState {
         accountRefs: [String],
         runtimeClient: () throws -> MarmotClient
     ) async -> [String] {
-        do {
-            let client = try runtimeClient()
-            return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)
-        } catch {
-            // Native push sync is best-effort; skip this pass and retry on the
-            // next foreground/token event once runtime rebuild succeeds.
-            return []
-        }
-    }
-
-    private func nativePushEnabledAccountRefs() async -> [String] {
-        await Self.nativePushEnabledAccountRefs(
-            accountRefs: accounts.map(\.label),
-            runtimeClient: { try self.runtimeClient() }
+        await NotificationCoordinator.nativePushEnabledAccountRefs(
+            accountRefs: accountRefs,
+            runtimeClient: runtimeClient
         )
     }
 
@@ -1312,7 +919,7 @@ final class AppState {
     func drainRuntimeLifecycleTasksForTesting() async {
         await runtimeSuspensionTask?.value
         await foregroundActivationTask?.value
-        await nativePushRegistrationTask?.value
+        await notificationCoordinator.drainNativePushRegistrationTaskForTesting()
     }
 
     /// Exposes the sign-out teardown guard (#320) so tests can assert it is
@@ -1321,4 +928,10 @@ final class AppState {
     @MainActor
     var isSigningOutForTesting: Bool { isSigningOut }
     #endif
+}
+
+extension AppState: NotificationCoordinatorHost {
+    var appStateForNotifications: AppState { self }
+    var isRuntimeSuspendingForNotificationCoordinator: Bool { isRuntimeSuspending }
+    var isSigningOutForNotificationCoordinator: Bool { isSigningOut }
 }

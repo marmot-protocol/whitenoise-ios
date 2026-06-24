@@ -5,8 +5,9 @@ import Testing
 /// #395 — final "handle lockdown" step of the thin-shell refactor. All Marmot
 /// access from feature code (views / view-models / stores) must go through
 /// `MarmotClient`'s wrappers and subscription factories; the raw `Marmot`
-/// handle must be unreachable outside the two documented seam files:
-/// `AppState.swift` (lifecycle/bootstrap/notifications seam) and
+/// handle must be unreachable outside the documented seam files:
+/// `AppState.swift` (lifecycle/bootstrap seam),
+/// `NotificationCoordinator.swift` (notification orchestration seam), and
 /// `MarmotClient.swift` (the wrapper that owns the handle).
 ///
 /// This is a source-guard test by design: the "no raw handle in feature code"
@@ -14,12 +15,14 @@ import Testing
 /// enforcement in `MarmotClientStorageReadOffloadTests`.
 struct MarmotHandleLockdownTests {
 
-    /// The two — and only two — files allowed to touch the raw `Marmot` handle.
-    /// `MarmotClient` owns it; `AppState` is the lifecycle/bootstrap/notification
-    /// seam. Every other file in the app target must route through
-    /// `currentMarmotClient()` and the `MarmotClient` wrappers.
+    /// The seam files allowed to touch the raw `Marmot` handle.
+    /// `MarmotClient` owns it; `AppState` is the lifecycle/bootstrap seam; and
+    /// `NotificationCoordinator` owns notification subscription/push orchestration.
+    /// Every other file in the app target must route through `currentMarmotClient()`
+    /// and the `MarmotClient` wrappers.
     private static let seamFiles: Set<String> = [
         "darkmatter-ios/Core/AppState.swift",
+        "darkmatter-ios/Core/NotificationCoordinator.swift",
         "darkmatter-ios/Core/MarmotClient.swift",
     ]
 
@@ -50,9 +53,9 @@ struct MarmotHandleLockdownTests {
             offenders.isEmpty,
             """
             These feature files reach the raw Marmot handle (a `.marmot` access \
-            outside AppState.swift / MarmotClient.swift). Route them through \
-            `appState.currentMarmotClient()` and the `MarmotClient` wrappers \
-            (#395):
+            outside AppState.swift / NotificationCoordinator.swift / MarmotClient.swift). \
+            Route them through `appState.currentMarmotClient()` and the `MarmotClient` \
+            wrappers (#395):
             \(offenders.joined(separator: "\n"))
             """
         )
