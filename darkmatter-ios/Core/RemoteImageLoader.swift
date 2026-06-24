@@ -293,31 +293,158 @@ enum RemoteAvatarImageLoader {
         }
     }
 
+    private final class CachedFailure: NSObject {
+        let error: Error
+        let expiresAt: Date
+
+        init(error: Error, expiresAt: Date) {
+            self.error = error
+            self.expiresAt = expiresAt
+        }
+
+        func isExpired(now: Date = Date()) -> Bool {
+            now >= expiresAt
+        }
+    }
+
+    /// Short negative-cache window: long enough to dampen layout/scroll retry
+    /// storms, short enough that a transiently broken avatar can recover soon.
+    private static let failureCacheTTL: TimeInterval = 60
+    /// Bound peer-controlled bad URL churn independently from decoded-image cost.
+    private static let failureCacheCountLimit = 500
+
     private static let cache: NSCache<NSString, CachedImage> = {
         let cache = NSCache<NSString, CachedImage>()
         cache.totalCostLimit = 20 * 1024 * 1024
         return cache
     }()
 
+    private static let failureCache: NSCache<NSString, CachedFailure> = {
+        let cache = NSCache<NSString, CachedFailure>()
+        cache.countLimit = failureCacheCountLimit
+        return cache
+    }()
+
+    private static var inFlightTasks: [String: Task<Data, Error>] = [:]
+
     static func image(for url: URL, maxPixelSize: Int, scale: CGFloat) async throws -> UIImage {
         let targetPixelSize = max(maxPixelSize, 1)
         let key = cacheKey(for: url, maxPixelSize: targetPixelSize)
+        let failureKey = failureCacheKey(for: url)
+        let failureKeyString = failureKey as String
         if let cached = cache.object(forKey: key)?.image {
             return cached
         }
 
-        let data = try await RemoteImageFetch.imageData(for: url)
-        guard let image = await RemoteImageDecoder.downsampledImage(
-            from: data,
-            maxPixelSize: targetPixelSize,
-            scale: scale
-        ) else { throw URLError(.cannotDecodeContentData) }
+        if let cachedFailure = cachedFailureError(for: failureKey) {
+            throw cachedFailure
+        }
 
-        cache.setObject(CachedImage(image: image), forKey: key, cost: DecodedImageCost.decodedBitmapByteCost(for: image))
-        return image
+        do {
+            let data = try await imageData(for: url, keyString: failureKeyString)
+            guard let image = await RemoteImageDecoder.downsampledImage(
+                from: data,
+                maxPixelSize: targetPixelSize,
+                scale: scale
+            ) else { throw URLError(.cannotDecodeContentData) }
+
+            failureCache.removeObject(forKey: failureKey)
+            cache.setObject(
+                CachedImage(image: image),
+                forKey: key,
+                cost: DecodedImageCost.decodedBitmapByteCost(for: image)
+            )
+            return image
+        } catch {
+            cacheFailure(error, for: failureKey)
+            throw error
+        }
+    }
+
+    private static func imageData(for url: URL, keyString: String) async throws -> Data {
+        try await imageData(for: url, keyString: keyString) { url in
+            try await RemoteImageFetch.imageData(for: url)
+        }
+    }
+
+    private static func imageData(
+        for url: URL,
+        keyString: String,
+        fetch: @escaping @Sendable (URL) async throws -> Data
+    ) async throws -> Data {
+        if let inFlightTask = inFlightTasks[keyString] {
+            // A just-completed task may still be present until its owner resumes
+            // and clears the slot; reusing that result is safe and still avoids
+            // a redundant fetch for simultaneous rows.
+            return try await inFlightTask.value
+        }
+
+        let task = Task {
+            try await fetch(url)
+        }
+        inFlightTasks[keyString] = task
+        defer { inFlightTasks[keyString] = nil }
+        return try await task.value
+    }
+
+    private static func cachedFailureError(for key: NSString, now: Date = Date()) -> Error? {
+        guard let cachedFailure = failureCache.object(forKey: key) else { return nil }
+        if cachedFailure.isExpired(now: now) {
+            failureCache.removeObject(forKey: key)
+            return nil
+        }
+        return cachedFailure.error
+    }
+
+    private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+        guard shouldCacheFailure(error) else { return }
+        failureCache.setObject(
+            CachedFailure(error: error, expiresAt: now.addingTimeInterval(failureCacheTTL)),
+            forKey: key
+        )
+    }
+
+    private static func shouldCacheFailure(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if (error as? URLError)?.code == .cancelled { return false }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled { return false }
+        return true
     }
 
     private static func cacheKey(for url: URL, maxPixelSize: Int) -> NSString {
         "\(url.absoluteString):\(maxPixelSize)" as NSString
     }
+
+    private static func failureCacheKey(for url: URL) -> NSString {
+        url.absoluteString as NSString
+    }
+
+    #if DEBUG
+    static func resetCachesForTesting() {
+        cache.removeAllObjects()
+        failureCache.removeAllObjects()
+        inFlightTasks.removeAll()
+    }
+
+    static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
+        cacheFailure(error, for: failureCacheKey(for: url), now: now)
+    }
+
+    static func cachedFailureForTesting(for url: URL, now: Date = Date()) -> Error? {
+        cachedFailureError(for: failureCacheKey(for: url), now: now)
+    }
+
+    static func shouldCacheFailureForTesting(_ error: Error) -> Bool {
+        shouldCacheFailure(error)
+    }
+
+    static func imageDataForTesting(
+        for url: URL,
+        keyString: String,
+        fetch: @escaping @Sendable (URL) async throws -> Data
+    ) async throws -> Data {
+        try await imageData(for: url, keyString: keyString, fetch: fetch)
+    }
+    #endif
 }

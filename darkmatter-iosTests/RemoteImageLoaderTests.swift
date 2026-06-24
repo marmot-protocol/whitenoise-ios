@@ -127,6 +127,69 @@ struct RemoteImageLoaderTests {
         #expect(!source.contains("cost: data.count"))
     }
 
+    @Test func avatarLoaderCachesFailuresWithTTLAndPreservesError() throws {
+        let url = try #require(URL(string: "https://example.com/broken-avatar.png"))
+        let now = Date()
+        RemoteAvatarImageLoader.resetCachesForTesting()
+        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+
+        RemoteAvatarImageLoader.cacheFailureForTesting(URLError(.badServerResponse), for: url, now: now)
+
+        let cached = try #require(
+            RemoteAvatarImageLoader.cachedFailureForTesting(
+                for: url,
+                now: now.addingTimeInterval(30)
+            ) as? URLError
+        )
+        #expect(cached.code == .badServerResponse)
+        #expect(
+            RemoteAvatarImageLoader.cachedFailureForTesting(
+                for: url,
+                now: now.addingTimeInterval(61)
+            ) == nil
+        )
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(CancellationError()))
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(URLError(.cancelled)))
+        #expect(!RemoteAvatarImageLoader.shouldCacheFailureForTesting(
+            NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled)
+        ))
+    }
+
+    @Test func avatarLoaderCoalescesInFlightDataLoadsByURLKey() async throws {
+        let url = try #require(URL(string: "https://example.com/avatar.png"))
+        let data = Data([0xCA, 0xFE])
+        let probe = RemoteImageFetchProbe(data: data)
+        RemoteAvatarImageLoader.resetCachesForTesting()
+        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+
+        let first = Task { @MainActor in
+            try await RemoteAvatarImageLoader.imageDataForTesting(
+                for: url,
+                keyString: url.absoluteString
+            ) { _ in
+                await probe.fetch()
+            }
+        }
+        await probe.waitUntilStarted()
+
+        let second = Task { @MainActor in
+            try await RemoteAvatarImageLoader.imageDataForTesting(
+                for: url,
+                keyString: url.absoluteString
+            ) { _ in
+                await probe.fetch()
+            }
+        }
+
+        await probe.release()
+        let firstData = try await first.value
+        let secondData = try await second.value
+
+        #expect(firstData == data)
+        #expect(secondData == data)
+        #expect(await probe.callCount() == 1)
+    }
+
     @Test func avatarLoaderCacheCostExceedsCompressedBytesForHighlyCompressibleImage() throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
@@ -204,5 +267,51 @@ struct RemoteImageLoaderTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: repoRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+}
+
+private actor RemoteImageFetchProbe {
+    private let data: Data
+    private var fetchCount = 0
+    private var startedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+    private var isReleased = false
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    func fetch() async -> Data {
+        fetchCount += 1
+        for waiter in startedWaiters {
+            waiter.resume()
+        }
+        startedWaiters.removeAll()
+
+        if !isReleased {
+            await withCheckedContinuation { continuation in
+                releaseWaiters.append(continuation)
+            }
+        }
+        return data
+    }
+
+    func waitUntilStarted() async {
+        guard fetchCount == 0 else { return }
+        await withCheckedContinuation { continuation in
+            startedWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        for waiter in releaseWaiters {
+            waiter.resume()
+        }
+        releaseWaiters.removeAll()
+    }
+
+    func callCount() -> Int {
+        fetchCount
     }
 }
