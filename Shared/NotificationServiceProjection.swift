@@ -14,6 +14,28 @@ nonisolated enum NotificationServiceSettingsReadPolicy {
             return true
         }
     }
+
+    // `decision` invokes the `localNotificationsEnabled` predicate once per
+    // record while filtering. The NSE's underlying predicate is a synchronous
+    // `marmot.notificationSettings(accountRef:)` FFI read + decode, so an offline
+    // backlog of N records issues N FFI reads inside the extension's tight (~8 s)
+    // wake budget even though distinct accounts are typically 1–2. Wrap the read
+    // so each distinct `accountRef` is resolved at most once per wake. The
+    // predicate runs single-threaded on the NSE's MainActor while `decision`
+    // filters synchronously, so a captured plain dictionary needs no locking.
+    static func memoizingLocalNotificationsEnabled(
+        read: @escaping (String) -> Bool
+    ) -> (String) -> Bool {
+        var cache: [String: Bool] = [:]
+        return { accountRef in
+            if let cached = cache[accountRef] {
+                return cached
+            }
+            let resolved = read(accountRef)
+            cache[accountRef] = resolved
+            return resolved
+        }
+    }
 }
 
 nonisolated enum NotificationServiceProjection {

@@ -3359,6 +3359,67 @@ struct NotificationServiceProjectionTests {
         ))
     }
 
+    @Test func memoizingReadResolvesEachDistinctAccountAtMostOncePerWake() {
+        // A backlog of many records spanning only a couple of distinct accounts
+        // must not issue one settings read per record (the NSE's read is a
+        // synchronous FFI call inside the ~8 s wake budget). Wrapping the read
+        // with the memoizing policy should resolve each distinct accountRef once.
+        var readCounts: [String: Int] = [:]
+        let memoized = NotificationServiceSettingsReadPolicy.memoizingLocalNotificationsEnabled { accountRef in
+            readCounts[accountRef, default: 0] += 1
+            return accountRef == "account-enabled"
+        }
+
+        let notifications = (0..<40).map { index -> NotificationUpdateFfi in
+            // Alternate between two accounts so distinct count is 2, records 40.
+            let accountRef = index.isMultiple(of: 2) ? "account-enabled" : "account-disabled"
+            return notificationUpdate(
+                notificationKey: "notif-\(index)",
+                accountRef: accountRef,
+                timestampMs: Int64(10_000 - index)
+            )
+        }
+        let collection = BackgroundNotificationCollectionFfi(
+            status: .newData,
+            notifications: notifications,
+            error: nil
+        )
+
+        let decision = NotificationServiceProjection.decision(
+            for: collection,
+            localNotificationsEnabled: memoized
+        )
+
+        // Each distinct account is read exactly once despite 40 records.
+        #expect(readCounts == ["account-enabled": 1, "account-disabled": 1])
+
+        // Memoization must not change the filtering outcome: only enabled-account
+        // records survive, newest first.
+        guard case let .decorate(primary, _) = decision else {
+            Issue.record("expected decorate decision, got \(decision)")
+            return
+        }
+        #expect(primary.route.accountRef == "account-enabled")
+    }
+
+    @Test func memoizingReadReturnsStableValuePerAccount() {
+        // The cached value, not a fresh read, is returned on repeated calls for
+        // the same account; distinct accounts each get their own read.
+        var readCount = 0
+        let memoized = NotificationServiceSettingsReadPolicy.memoizingLocalNotificationsEnabled { accountRef in
+            readCount += 1
+            return accountRef == "yes"
+        }
+
+        #expect(memoized("yes"))
+        #expect(memoized("yes"))
+        #expect(!memoized("no"))
+        #expect(!memoized("no"))
+
+        // One read per distinct account: "yes" once, "no" once.
+        #expect(readCount == 2)
+    }
+
     @Test func settingsReadPolicySuppressesOnlyExplicitFalse() {
         #expect(NotificationServiceSettingsReadPolicy.localNotificationsEnabled {
             true
