@@ -31,9 +31,17 @@ struct RemoteImageLoaderTests {
         let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
 
         #expect(source.contains("static let maximumImageBytes = 2 * 1024 * 1024"))
-        #expect(source.contains("session.bytes(for: request)"))
-        #expect(source.contains("response.expectedContentLength > Int64(maximumImageBytes)"))
-        #expect(source.contains("throw URLError(.dataLengthExceedsMaximum)"))
+        // The image fetch buffers through the chunked `BoundedDataCollector`
+        // delegate (one callback per network read), not a per-byte async loop.
+        #expect(source.contains("URLSessionDataDelegate"))
+        #expect(source.contains("task.delegate = collector"))
+        // The image path drives the shared chunked download with its own cap.
+        #expect(source.contains("download(request, maximumResponseBytes: maximumImageBytes)"))
+        #expect(source.contains("BoundedDataCollector(maximumResponseBytes: cap)"))
+        // The oversized-response rejection still uses the byte cap (now on the
+        // collector's running total) and the same `URLError`.
+        #expect(source.contains("response.expectedContentLength > Int64(maximumResponseBytes)"))
+        #expect(source.contains("URLError(.dataLengthExceedsMaximum)"))
         #expect(source.contains("CGImageSourceCreateThumbnailAtIndex"))
         #expect(source.contains("kCGImageSourceThumbnailMaxPixelSize"))
         #expect(!source.contains("UIImage(data: data)"))
@@ -42,32 +50,37 @@ struct RemoteImageLoaderTests {
     @Test func remoteImageFetchDataCapsResponseBytes() throws {
         let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
 
-        // `data(for:)` (used by the DuckDuckGo image-search fetch) must stream
-        // with the same early-abort byte cap as `imageData(for:)`, not buffer
-        // an unbounded response via `session.data(for:)`.
+        // `data(for:)` (used by the DuckDuckGo image-search fetch) must enforce
+        // the same early-abort byte cap as `imageData(for:)` via the chunked
+        // `BoundedDataCollector`, not buffer an unbounded response and not walk
+        // the body one `UInt8` at a time.
         #expect(source.contains("static let maximumResponseBytes ="))
         #expect(source.contains("response.expectedContentLength > Int64(maximumResponseBytes)"))
-        #expect(source.contains("data.count < maximumResponseBytes"))
+        // Running-total cap lives in the collector's pure decision helper.
+        #expect(source.contains("data.count + chunk.count <= maximumResponseBytes"))
+        #expect(source.contains("download(request, maximumResponseBytes: maximumResponseBytes)"))
         #expect(!source.contains("try await session.data(for: request)"))
+        #expect(!source.contains("session.bytes(for: request)"))
     }
 
     @Test func remoteImageFetchDataRejectsNon2xxStatus() throws {
         let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
 
-        // `data(for:)` must validate a 2xx HTTP status before buffering/returning
-        // the body, mirroring `imageData(for:)`. Without this, a 4xx/5xx error
-        // page (or a refused-redirect response) is handed to the DuckDuckGo
-        // image-search result parser as if it were a valid search payload.
-        // The guard must appear twice in this file: once in `data(for:)` and
-        // once in `imageData(for:)`.
+        // Both fetch paths route through `BoundedDataCollector`, whose
+        // `didReceive response` callback validates a 2xx HTTP status and
+        // cancels (recording `.badServerResponse`) before any body chunk is
+        // buffered. Without this, a 4xx/5xx error page (or a refused-redirect
+        // response) would be handed to the DuckDuckGo image-search result
+        // parser as if it were a valid search payload.
         let statusGuard = "(200..<300).contains(http.statusCode)"
-        let occurrences = source.components(separatedBy: statusGuard).count - 1
-        #expect(occurrences >= 2)
+        #expect(source.contains(statusGuard))
 
-        // The byte-cap check must come after the status guard so an error body
-        // is rejected before any bytes are streamed/buffered.
-        let dataFunc = "static func data(for request: URLRequest) async throws -> (Data, URLResponse) {"
-        if let bodyStart = source.range(of: dataFunc) {
+        // The status guard must precede both the oversized-length rejection and
+        // the body-buffering decision so a non-2xx body is refused before any
+        // bytes are admitted. All three live in the collector's response/data
+        // callbacks; assert the textual ordering of the decision points.
+        let collectorMarker = "didReceive response: URLResponse"
+        if let bodyStart = source.range(of: collectorMarker) {
             let body = String(source[bodyStart.upperBound...])
             let guardIndex = body.range(of: statusGuard)?.lowerBound
             let capIndex = body.range(of: "response.expectedContentLength > Int64(maximumResponseBytes)")?.lowerBound
@@ -76,8 +89,11 @@ struct RemoteImageLoaderTests {
             if let guardIndex, let capIndex {
                 #expect(guardIndex < capIndex)
             }
+            // Non-2xx records the badServerResponse error and cancels.
+            #expect(body.contains("URLError(.badServerResponse)"))
+            #expect(body.contains("completionHandler(.cancel)"))
         } else {
-            Issue.record("data(for:) signature not found")
+            Issue.record("BoundedDataCollector didReceive-response callback not found")
         }
     }
 
@@ -140,6 +156,47 @@ struct RemoteImageLoaderTests {
 
         let image = try #require(decoded)
         #expect(max(image.size.width, image.size.height) <= 20)
+    }
+
+    @Test func remoteImageFetchUsesChunkedDelegateNotPerByteLoop() throws {
+        // Regression for #407: both `data(for:)` and `imageData(for:)` must
+        // download through a `URLSessionDataDelegate` that receives whole `Data`
+        // chunks (one callback per network read) and enforce the byte cap on the
+        // running total. A per-byte `URLSession.AsyncBytes` loop walks a 2 MB
+        // avatar in ~2,000,000 async iterations — a remote-amplification CPU
+        // lever — which the chunked delegate eliminates.
+        let source = try sourceString("darkmatter-ios/Core/RemoteImageLoader.swift")
+
+        // No per-byte async loop or scalar append remains on any fetch path.
+        #expect(!source.contains("for try await byte in bytes"))
+        #expect(!source.contains("data.append(byte)"))
+        #expect(!source.contains("chunk.append(byte)"))
+        #expect(!source.contains("session.bytes(for: request)"))
+
+        // The chunked delegate exists and receives whole `Data` chunks via the
+        // `didReceive data:` callback, routing them through the pure cap helper.
+        #expect(source.contains("URLSessionDataDelegate"))
+        #expect(source.contains("didReceive data: Data"))
+        #expect(source.contains("func appendWithinLimit(_ chunk: Data) -> Bool"))
+        #expect(source.contains("task.delegate = collector"))
+    }
+
+    @Test func boundedDataCollectorRejectsChunkThatExceedsCap() {
+        // Behavioral coverage of the pure byte-cap decision point (#407): the
+        // collector appends whole chunks only when they fit, never partially,
+        // and accepts a chunk that lands exactly on the cap boundary.
+        let collector = BoundedDataCollector(maximumResponseBytes: 10)
+
+        #expect(collector.appendWithinLimit(Data(repeating: 0xAB, count: 6)))
+        #expect(collector.data.count == 6)
+
+        // 6 + 6 = 12 > 10: rejected without partially appending.
+        #expect(!collector.appendWithinLimit(Data(repeating: 0xCD, count: 6)))
+        #expect(collector.data.count == 6)
+
+        // 6 + 4 = 10: exactly the cap, allowed.
+        #expect(collector.appendWithinLimit(Data(repeating: 0xEF, count: 4)))
+        #expect(collector.data.count == 10)
     }
 
     private func sourceString(_ relativePath: String) throws -> String {
