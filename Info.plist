@@ -2,18 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>DarkmatterPushRelayHint</key>
-	<string>$(DARKMATTER_PUSH_RELAY_HINT)</string>
-	<key>DarkmatterPushServerPubkeyHex</key>
-	<string>$(DARKMATTER_PUSH_SERVER_PUBKEY_HEX)</string>
-	<key>DarkmatterTelemetryOTLPEndpoint</key>
-	<string>$(DARKMATTER_OTLP_ENDPOINT)</string>
-	<key>DarkmatterTelemetryBearerToken</key>
-	<string>$(DARKMATTER_OTLP_BEARER_TOKEN)</string>
-	<key>DarkmatterAuditLogBearerToken</key>
-	<string>$(DARKMATTER_AUDIT_LOG_BEARER_TOKEN)</string>
-	<key>DarkmatterTelemetryEnvironment</key>
-	<string>$(DARKMATTER_TELEMETRY_ENVIRONMENT)</string>
+	<key>WhiteNoisePushRelayHint</key>
+	<string>$(WHITENOISE_PUSH_RELAY_HINT)</string>
+	<key>WhiteNoisePushServerPubkeyHex</key>
+	<string>$(WHITENOISE_PUSH_SERVER_PUBKEY_HEX)</string>
+	<key>WhiteNoiseTelemetryOTLPEndpoint</key>
+	<string>$(WHITENOISE_OTLP_ENDPOINT)</string>
+	<key>WhiteNoiseTelemetryBearerToken</key>
+	<string>$(WHITENOISE_OTLP_BEARER_TOKEN)</string>
+	<key>WhiteNoiseAuditLogBearerToken</key>
+	<string>$(WHITENOISE_AUDIT_LOG_BEARER_TOKEN)</string>
+	<key>WhiteNoiseTelemetryEnvironment</key>
+	<string>$(WHITENOISE_TELEMETRY_ENVIRONMENT)</string>
 	<key>CFBundleDisplayName</key>
 	<string>$(WN_DISPLAY_NAME)</string>
 	<key>AppGroupIdentifier</key>

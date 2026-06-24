@@ -13,4 +13,4 @@ APP_GROUP_IDENTIFIER = group.dev.ipf.whitenoise.ios.staging
 KEYCHAIN_ACCESS_GROUP = $(AppIdentifierPrefix)dev.ipf.whitenoise.ios.staging
 
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Staging
-DARKMATTER_TELEMETRY_ENVIRONMENT = staging
+WHITENOISE_TELEMETRY_ENVIRONMENT = staging

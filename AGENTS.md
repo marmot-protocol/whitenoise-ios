@@ -6,14 +6,14 @@ This repo is a SwiftUI iOS app around the Darkmatter/Marmot Rust runtime. Read t
 
 ## Start Here
 
-- Main app entry point: `darkmatter-ios/darkmatter_iosApp.swift`
-- Global state and runtime ownership: `darkmatter-ios/Core/AppState.swift`
-- Marmot wrapper: `darkmatter-ios/Core/MarmotClient.swift`
+- Main app entry point: `whitenoise-ios/whitenoise_iosApp.swift`
+- Global state and runtime ownership: `whitenoise-ios/Core/AppState.swift`
+- Marmot wrapper: `whitenoise-ios/Core/MarmotClient.swift`
 - Shared app/extension config: `Shared/AppContainerConfig.swift`
 - Notification projection: `Shared/LocalNotificationProjection.swift`
 - NSE projection policy: `Shared/NotificationServiceProjection.swift`
-- Transcript export: `darkmatter-ios/Core/ConversationTranscriptExport.swift`
-- Media cache and draft image processing: `darkmatter-ios/Conversation/MessageMediaAttachment.swift`
+- Transcript export: `whitenoise-ios/Core/ConversationTranscriptExport.swift`
+- Media cache and draft image processing: `whitenoise-ios/Conversation/MessageMediaAttachment.swift`
 - Manual release checks: `docs/manual-tests.md`
 
 ## Architecture
@@ -62,7 +62,7 @@ Regenerate with:
 or:
 
 ```sh
-DARKMATTER_DIR=/path/to/darkmatter ./scripts/sync-bindings.sh
+DARKMATTER_DIR=/path/to/whitenoise ./scripts/sync-bindings.sh
 ```
 
 Do not patch generated binding files directly. Change Rust/UniFFI, regenerate, then validate the iOS app.
@@ -71,9 +71,9 @@ Do not patch generated binding files directly. Change Rust/UniFFI, regenerate, t
 
 The app uses privacy-preserving MIP-05 native push.
 
-- Main app bundle ID: `dev.ipf.darkmatter`
-- NSE bundle ID: `dev.ipf.darkmatter.NotificationService`
-- App Group: `group.dev.ipf.darkmatter`
+- Main app bundle ID: `dev.ipf.whitenoise`
+- NSE bundle ID: `dev.ipf.whitenoise.NotificationService`
+- App Group: `group.dev.ipf.whitenoise`
 
 Rules for notification work:
 
@@ -173,15 +173,15 @@ Useful commands:
 
 ```sh
 xcodebuild test \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios \
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
 ```sh
 xcodebuild build \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios \
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios \
   -configuration Release \
   -destination 'generic/platform=iOS'
 ```

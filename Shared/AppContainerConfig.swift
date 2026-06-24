@@ -82,8 +82,8 @@ nonisolated enum AppContainerConfig {
 }
 
 nonisolated struct NativePushServerConfig: Equatable {
-    static let serverPubkeyInfoKey = "DarkmatterPushServerPubkeyHex"
-    static let relayHintInfoKey = "DarkmatterPushRelayHint"
+    static let serverPubkeyInfoKey = "WhiteNoisePushServerPubkeyHex"
+    static let relayHintInfoKey = "WhiteNoisePushRelayHint"
 
     let serverPubkeyHex: String
     let relayHint: String?

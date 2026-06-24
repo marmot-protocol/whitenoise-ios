@@ -1,6 +1,6 @@
-# Dark Matter iOS — Manual Test Matrix
+# WhiteNoise iOS — Manual Test Matrix
 
-These checks complement the automated test suites (`darkmatter-iosTests`
+These checks complement the automated test suites (`whitenoise-iosTests`
 Swift Testing module and `marmot-uniffi`'s Rust integration tests). They
 cover the user-visible flows that aren't economical to automate yet.
 

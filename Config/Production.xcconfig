@@ -13,4 +13,4 @@ APP_GROUP_IDENTIFIER = group.dev.ipf.whitenoise.ios
 KEYCHAIN_ACCESS_GROUP = $(AppIdentifierPrefix)dev.ipf.whitenoise.ios
 
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
-DARKMATTER_TELEMETRY_ENVIRONMENT = production
+WHITENOISE_TELEMETRY_ENVIRONMENT = production
