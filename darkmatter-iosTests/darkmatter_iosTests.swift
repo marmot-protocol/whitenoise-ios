@@ -4068,9 +4068,14 @@ struct GroupImageSearchTests {
         let source = try groupImageURLSheetSource()
 
         #expect(source.contains("static let maximumImageBytes = 2 * 1024 * 1024"))
-        #expect(source.contains("session.bytes(for: request)"))
-        #expect(source.contains("response.expectedContentLength > Int64(maximumImageBytes)"))
-        #expect(source.contains("throw URLError(.dataLengthExceedsMaximum)"))
+        // #407: the thumbnail fetch downloads through the chunked
+        // `BoundedDataCollector` delegate (one callback per network read) with
+        // the byte cap enforced on the running total, not a per-byte async loop.
+        #expect(source.contains("URLSessionDataDelegate"))
+        #expect(source.contains("task.delegate = collector"))
+        #expect(!source.contains("session.bytes(for: request)"))
+        #expect(source.contains("response.expectedContentLength > Int64(maximumResponseBytes)"))
+        #expect(source.contains("URLError(.dataLengthExceedsMaximum)"))
         #expect(source.contains("CGImageSourceCreateThumbnailAtIndex"))
         #expect(source.contains("kCGImageSourceThumbnailMaxPixelSize"))
         #expect(!source.contains("UIImage(data: data)"))

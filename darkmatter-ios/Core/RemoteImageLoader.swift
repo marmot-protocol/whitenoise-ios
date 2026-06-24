@@ -34,6 +34,121 @@ nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelega
     }
 }
 
+/// Per-fetch download delegate that buffers a response in whole `Data` chunks
+/// (one delegate callback per network read), enforcing a hard byte cap on the
+/// running total. This replaces consuming `URLSession.bytes(for:)` one `UInt8`
+/// at a time, which drove millions of async-sequence iterations per response
+/// (#407): a 2 MB avatar is now a few dozen chunk appends, not ~2,000,000.
+///
+/// Each instance owns the state for a single task, so the continuation /
+/// recorded-error storage is touched only from that task's delegate callbacks.
+/// `@unchecked Sendable` is sound here: instances are not shared across tasks
+/// and `URLSession` serializes a task's delegate callbacks.
+nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    let maximumResponseBytes: Int
+    private(set) var data = Data()
+
+    private var continuation: CheckedContinuation<(Data, URLResponse), Error>?
+    private var recordedError: Error?
+    private var didResume = false
+
+    init(maximumResponseBytes: Int) {
+        self.maximumResponseBytes = maximumResponseBytes
+    }
+
+    /// Pure, byte-cap decision point (#407). Appends the whole `chunk` in a
+    /// single `Data.append(_:)` only if it fits within `maximumResponseBytes`;
+    /// returns `false` WITHOUT appending when it would exceed the cap. Never
+    /// iterates byte-by-byte.
+    func appendWithinLimit(_ chunk: Data) -> Bool {
+        guard data.count + chunk.count <= maximumResponseBytes else { return false }
+        data.append(chunk)
+        return true
+    }
+
+    /// Stores the continuation that `didCompleteWithError` resumes. Set before
+    /// `task.resume()`.
+    func setContinuation(_ continuation: CheckedContinuation<(Data, URLResponse), Error>) {
+        self.continuation = continuation
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode)
+        else {
+            recordedError = URLError(.badServerResponse)
+            completionHandler(.cancel)
+            return
+        }
+
+        if response.expectedContentLength > Int64(maximumResponseBytes) {
+            recordedError = URLError(.dataLengthExceedsMaximum)
+            completionHandler(.cancel)
+            return
+        }
+
+        if response.expectedContentLength > 0 {
+            data.reserveCapacity(Int(min(response.expectedContentLength, Int64(maximumResponseBytes))))
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    ) {
+        guard appendWithinLimit(data) else {
+            recordedError = URLError(.dataLengthExceedsMaximum)
+            dataTask.cancel()
+            return
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard !didResume else { return }
+        didResume = true
+        let continuation = self.continuation
+        self.continuation = nil
+
+        if let recordedError {
+            continuation?.resume(throwing: recordedError)
+            return
+        }
+        if let error {
+            continuation?.resume(throwing: error)
+            return
+        }
+        guard let response = task.response else {
+            continuation?.resume(throwing: URLError(.badServerResponse))
+            return
+        }
+        continuation?.resume(returning: (data, response))
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        // Preserve the SSRF redirect allowlist even though a per-task delegate
+        // is set: a per-task delegate overrides the session delegate, so the
+        // redirect guard must be re-applied here.
+        completionHandler(RemoteImageRedirectGuard.isRedirectAllowed(to: request.url) ? request : nil)
+    }
+}
+
 nonisolated enum RemoteImageFetch {
     static let maximumImageBytes = 2 * 1024 * 1024
     /// Byte cap for non-image responses (e.g. the DuckDuckGo image-search
@@ -63,26 +178,13 @@ nonisolated enum RemoteImageFetch {
     )
 
     static func data(for request: URLRequest) async throws -> (Data, URLResponse) {
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode)
-        else { throw URLError(.badServerResponse) }
-
-        if response.expectedContentLength > Int64(maximumResponseBytes) {
-            throw URLError(.dataLengthExceedsMaximum)
-        }
-
-        var data = Data()
-        if response.expectedContentLength > 0 {
-            data.reserveCapacity(Int(min(response.expectedContentLength, Int64(maximumResponseBytes))))
-        }
-        for try await byte in bytes {
-            guard data.count < maximumResponseBytes else {
-                throw URLError(.dataLengthExceedsMaximum)
-            }
-            data.append(byte)
-        }
-        return (data, response)
+        // A `BoundedDataCollector` per-task delegate receives whole `Data`
+        // chunks (one callback per network read) and enforces the byte cap on
+        // the running total, cancelling the task the moment it would exceed
+        // `maximumResponseBytes`. The non-2xx guard, the oversized
+        // `expectedContentLength` rejection, and the SSRF redirect guard all
+        // live in the collector's delegate callbacks (#407).
+        return try await download(request, maximumResponseBytes: maximumResponseBytes)
     }
 
     static func imageData(for url: URL) async throws -> Data {
@@ -90,26 +192,21 @@ nonisolated enum RemoteImageFetch {
             for: url,
             accept: remoteImageAcceptHeader
         )
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode)
-        else { throw URLError(.badServerResponse) }
-
-        if response.expectedContentLength > Int64(maximumImageBytes) {
-            throw URLError(.dataLengthExceedsMaximum)
-        }
-
-        var data = Data()
-        if response.expectedContentLength > 0 {
-            data.reserveCapacity(Int(min(response.expectedContentLength, Int64(maximumImageBytes))))
-        }
-        for try await byte in bytes {
-            guard data.count < maximumImageBytes else {
-                throw URLError(.dataLengthExceedsMaximum)
-            }
-            data.append(byte)
-        }
+        let (data, _) = try await download(request, maximumResponseBytes: maximumImageBytes)
         return data
+    }
+
+    private static func download(
+        _ request: URLRequest,
+        maximumResponseBytes cap: Int
+    ) async throws -> (Data, URLResponse) {
+        let collector = BoundedDataCollector(maximumResponseBytes: cap)
+        let task = session.dataTask(with: request)
+        task.delegate = collector
+        return try await withCheckedThrowingContinuation { continuation in
+            collector.setContinuation(continuation)
+            task.resume()
+        }
     }
 
     static func request(for url: URL, accept: String) -> URLRequest {
