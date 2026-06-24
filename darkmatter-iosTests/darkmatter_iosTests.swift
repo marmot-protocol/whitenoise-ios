@@ -4087,6 +4087,11 @@ struct GroupImageSearchTests {
         ))
         #expect(!GroupImageURLSheet.shouldApplySearchCompletion(
             issuedQuery: "marmot",
+            currentQuery: "   ",
+            isCancelled: false
+        ))
+        #expect(!GroupImageURLSheet.shouldApplySearchCompletion(
+            issuedQuery: "marmot",
             currentQuery: "marmot",
             isCancelled: true
         ))

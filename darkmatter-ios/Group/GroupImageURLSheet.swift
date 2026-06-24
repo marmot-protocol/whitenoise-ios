@@ -417,6 +417,8 @@ struct GroupImageURLSheet: View {
         defer { isSearching = false }
         do {
             let results = try await searchClient.search(query)
+            // The synchronous isSearching claim is the overlap guard. This stamp
+            // check is defensive for future cancellation or editable-in-flight paths.
             guard Self.shouldApplySearchCompletion(
                 issuedQuery: query,
                 currentQuery: searchQuery,
