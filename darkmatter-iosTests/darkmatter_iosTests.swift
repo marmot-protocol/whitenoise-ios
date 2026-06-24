@@ -4149,6 +4149,52 @@ struct GroupImageSearchTests {
         #expect(!GroupImageURLSheet.shouldRejectSave(hasDraft: false, resolvedURL: nil, isRemoval: true))
     }
 
+    @Test func groupImageSearchClaimsInFlightGuardBeforeStartingTask() {
+        #expect(GroupImageURLSheet.preparedSearchQuery(
+            "  marmot  ",
+            isSearching: false,
+            isSaving: false
+        ) == "marmot")
+        #expect(GroupImageURLSheet.preparedSearchQuery(
+            "   ",
+            isSearching: false,
+            isSaving: false
+        ) == nil)
+        #expect(GroupImageURLSheet.preparedSearchQuery(
+            "marmot",
+            isSearching: true,
+            isSaving: false
+        ) == nil)
+        #expect(GroupImageURLSheet.preparedSearchQuery(
+            "marmot",
+            isSearching: false,
+            isSaving: true
+        ) == nil)
+    }
+
+    @Test func groupImageSearchDiscardsCancelledOrStaleCompletions() {
+        #expect(GroupImageURLSheet.shouldApplySearchCompletion(
+            issuedQuery: "marmot",
+            currentQuery: "  marmot  ",
+            isCancelled: false
+        ))
+        #expect(!GroupImageURLSheet.shouldApplySearchCompletion(
+            issuedQuery: "marmot",
+            currentQuery: "stoat",
+            isCancelled: false
+        ))
+        #expect(!GroupImageURLSheet.shouldApplySearchCompletion(
+            issuedQuery: "marmot",
+            currentQuery: "   ",
+            isCancelled: false
+        ))
+        #expect(!GroupImageURLSheet.shouldApplySearchCompletion(
+            issuedQuery: "marmot",
+            currentQuery: "marmot",
+            isCancelled: true
+        ))
+    }
+
     @Test func groupImageWebSearchUsesEphemeralNetworking() throws {
         let source = try groupImageURLSheetSource()
 
