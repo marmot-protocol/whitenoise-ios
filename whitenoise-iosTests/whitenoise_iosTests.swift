@@ -148,6 +148,18 @@ struct AppStateBootstrapTests {
         }
     }
 
+    @Test func createIdentityViewModelGuardsInFlightCreatesBeforeAwait() throws {
+        let source = try String(contentsOf: createIdentityViewModelSourceURL, encoding: .utf8)
+        let guardedCreatePattern =
+            #"func runCreate\(using appState: AppState, dismiss: \(\) -> Void\) async \{[\s\S]*"#
+            + #"guard !isCreating else \{ return \}[\s\S]*"#
+            + #"isCreating = true[\s\S]*"#
+            + #"defer \{ isCreating = false \}[\s\S]*"#
+            + #"try await appState\.createIdentity\(\)"#
+
+        #expect(source.matches(guardedCreatePattern))
+    }
+
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
         let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
 
@@ -1192,6 +1204,13 @@ struct AppStateBootstrapTests {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("whitenoise-ios/Core/AppState.swift")
+    }
+
+    private var createIdentityViewModelSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("darkmatter-ios/Onboarding/CreateIdentityViewModel.swift")
     }
 
     private var runtimeLifecycleSourceURL: URL {
