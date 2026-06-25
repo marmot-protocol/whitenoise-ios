@@ -983,6 +983,49 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
     }
 
+    @Test func partialSignOutEvictsDepartedLocalAccountProjectionState() async throws {
+        // A partial sign-out keeps the app in the ready phase, but the departed
+        // local account must not remain as a cached peer projection. If that
+        // pubkey later appears as a DM/group peer, the UI should miss the app
+        // cache and refresh instead of rendering the removed account's stale
+        // display name/avatar (#430). Its stale load token must also be removed
+        // or superseded so suspended loads cannot re-apply it after sign-out.
+        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
+        let appState = seeded.appState
+        let accountA = seeded.accounts[0]
+        let accountB = seeded.accounts[1]
+        let peerID = hex("aa")
+        appState.activeAccountRef = accountA.label
+        appState.profileStore.profileProjectionCache = [
+            accountA.accountIdHex: ProfileDisplayProjection(
+                profile: nil,
+                projectedName: "Departed account",
+                localAccountLabel: accountA.label
+            ),
+            accountB.accountIdHex: ProfileDisplayProjection(
+                profile: nil,
+                projectedName: "Remaining account",
+                localAccountLabel: accountB.label
+            ),
+            peerID: ProfileDisplayProjection(profile: nil, projectedName: "Existing peer", localAccountLabel: nil),
+        ]
+        appState.profileStore.profileProjectionLoadVersions = [
+            accountA.accountIdHex: 3,
+            accountB.accountIdHex: 7,
+        ]
+
+        await appState.signOut()
+
+        #expect(appState.activeAccountRef == accountB.label)
+        #expect(appState.phase == .ready)
+        #expect(appState.profileStore.profileProjectionCache[accountA.accountIdHex] == nil)
+        #expect(appState.profileStore.profileProjectionCache[accountB.accountIdHex]?.localAccountLabel == accountB.label)
+        #expect(appState.profileStore.profileProjectionCache[peerID]?.projectedName == "Existing peer")
+        #expect(appState.profileStore.profileProjectionLoadVersions[accountA.accountIdHex] != 3)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
         // account's push registration so the push server stops delivering
