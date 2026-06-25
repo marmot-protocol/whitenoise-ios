@@ -4585,6 +4585,18 @@ struct ChatsListProjectionTests {
         #expect(viewModel.archivedItems.isEmpty)
     }
 
+    @Test func swipeLeaveReflectsLocalProjectionRemovalImmediately() throws {
+        // Regression for #429: `leave(groupIdHex:)` is a private SwiftUI action
+        // with Marmot side effects, so assert the successful leave path is wired
+        // to the existing row-removal helper instead of waiting for a transport
+        // subscription event that local projection writes do not emit.
+        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
+
+        #expect(source.matches(
+            #"func leave\(groupIdHex: String\) async \{[\s\S]*?try await client\.leaveGroup\([\s\S]*?viewModel\?\.removeChatListRow\(groupIdHex: groupIdHex\)[\s\S]*?Haptics\.warning\(\)"#
+        ))
+    }
+
     @Test func intersectingDictionaryKeepsOnlySurvivingKeys() throws {
         let cache = ["a": 1, "b": 2, "c": 3]
         let pruned = ChatsListViewModel.intersecting(cache, with: ["a", "c", "z"])
