@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import Synchronization
 import UIKit
 import UniformTypeIdentifiers
 
@@ -43,17 +44,26 @@ nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelega
 /// Each instance owns the state for a single task, so the continuation /
 /// recorded-error storage is touched only from that task's delegate callbacks:
 /// instances are not shared across tasks and `URLSession` serializes a task's
-/// delegate callbacks.
-nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
+/// delegate callbacks. The per-instance state still lives behind a `Mutex` so
+/// the class is a checked `Sendable` (the delegate reference crosses isolation
+/// domains) without resorting to `@unchecked Sendable`.
+nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate, Sendable {
     let maximumResponseBytes: Int
-    private(set) var data = Data()
 
-    private var continuation: CheckedContinuation<(Data, URLResponse), Error>?
-    private var recordedError: Error?
-    private var didResume = false
+    private struct State {
+        var data = Data()
+        var continuation: CheckedContinuation<(Data, URLResponse), Error>?
+        var recordedError: Error?
+        var didResume = false
+    }
+    private let state = Mutex(State())
 
     init(maximumResponseBytes: Int) {
         self.maximumResponseBytes = maximumResponseBytes
+    }
+
+    var data: Data {
+        state.withLock { $0.data }
     }
 
     /// Pure, byte-cap decision point (#407). Appends the whole `chunk` in a
@@ -61,15 +71,17 @@ nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
     /// returns `false` WITHOUT appending when it would exceed the cap. Never
     /// iterates byte-by-byte.
     func appendWithinLimit(_ chunk: Data) -> Bool {
-        guard data.count + chunk.count <= maximumResponseBytes else { return false }
-        data.append(chunk)
-        return true
+        state.withLock { state in
+            guard state.data.count + chunk.count <= maximumResponseBytes else { return false }
+            state.data.append(chunk)
+            return true
+        }
     }
 
     /// Stores the continuation that `didCompleteWithError` resumes. Set before
     /// `task.resume()`.
     func setContinuation(_ continuation: CheckedContinuation<(Data, URLResponse), Error>) {
-        self.continuation = continuation
+        state.withLock { $0.continuation = continuation }
     }
 
     func urlSession(
@@ -81,19 +93,20 @@ nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
         guard let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode)
         else {
-            recordedError = URLError(.badServerResponse)
+            state.withLock { $0.recordedError = URLError(.badServerResponse) }
             completionHandler(.cancel)
             return
         }
 
         if response.expectedContentLength > Int64(maximumResponseBytes) {
-            recordedError = URLError(.dataLengthExceedsMaximum)
+            state.withLock { $0.recordedError = URLError(.dataLengthExceedsMaximum) }
             completionHandler(.cancel)
             return
         }
 
         if response.expectedContentLength > 0 {
-            data.reserveCapacity(Int(min(response.expectedContentLength, Int64(maximumResponseBytes))))
+            let reserve = Int(min(response.expectedContentLength, Int64(maximumResponseBytes)))
+            state.withLock { $0.data.reserveCapacity(reserve) }
         }
         completionHandler(.allow)
     }
@@ -104,7 +117,7 @@ nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
         didReceive data: Data
     ) {
         guard appendWithinLimit(data) else {
-            recordedError = URLError(.dataLengthExceedsMaximum)
+            state.withLock { $0.recordedError = URLError(.dataLengthExceedsMaximum) }
             dataTask.cancel()
             return
         }
@@ -115,24 +128,31 @@ nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        guard !didResume else { return }
-        didResume = true
-        let continuation = self.continuation
-        self.continuation = nil
+        // Resolve the resume decision under the lock, but resume the continuation
+        // outside it so no caller code runs while the mutex is held.
+        let pending: (continuation: CheckedContinuation<(Data, URLResponse), Error>, recordedError: Error?, data: Data)? =
+            state.withLock { state in
+                guard !state.didResume else { return nil }
+                state.didResume = true
+                guard let continuation = state.continuation else { return nil }
+                state.continuation = nil
+                return (continuation, state.recordedError, state.data)
+            }
+        guard let pending else { return }
 
-        if let recordedError {
-            continuation?.resume(throwing: recordedError)
+        if let recordedError = pending.recordedError {
+            pending.continuation.resume(throwing: recordedError)
             return
         }
         if let error {
-            continuation?.resume(throwing: error)
+            pending.continuation.resume(throwing: error)
             return
         }
         guard let response = task.response else {
-            continuation?.resume(throwing: URLError(.badServerResponse))
+            pending.continuation.resume(throwing: URLError(.badServerResponse))
             return
         }
-        continuation?.resume(returning: (data, response))
+        pending.continuation.resume(returning: (pending.data, response))
     }
 
     func urlSession(
