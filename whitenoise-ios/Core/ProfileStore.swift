@@ -127,9 +127,10 @@ final class ProfileStore {
     /// Clears projection state scoped to a local account that was removed while
     /// another account remains active. Unlike `clearForSignOut()`, this cannot
     /// reset the whole version map: profile refresh is still enabled, and a
-    /// suspended load for this id may resume after the account switch. Supersede
-    /// that id's token instead, so the stale load fails closed without disturbing
-    /// other in-flight profile work.
+    /// suspended load for this id may resume after the account switch. If this id
+    /// has queued or in-flight projection work, leave a bumped token behind on
+    /// purpose so the stale load fails closed without an ABA collision; when no
+    /// work exists, avoid creating new per-id version-map residue.
     func clearForAccountRemoval(accountIdHex id: String) {
         guard !id.isEmpty else { return }
 
