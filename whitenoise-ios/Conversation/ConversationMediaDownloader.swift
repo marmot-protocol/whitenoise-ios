@@ -66,12 +66,12 @@ final class ConversationMediaDownloader {
         guard let appState, let accountRef = appState.activeAccountRef else {
             throw MediaDataError.missingAccount
         }
-        // Row references already carry the real source_epoch, so the reference
-        // is directly downloadable — no listMedia round-trip to recover it.
         let client = try appState.currentMarmotClient()
         return try await inFlight.data(
             for: MediaDownloadInFlightKey(reference: reference)
         ) {
+            // Row references already carry the real source_epoch, so the reference
+            // is directly downloadable — no listMedia round-trip to recover it.
             let result = try await client.downloadMedia(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
