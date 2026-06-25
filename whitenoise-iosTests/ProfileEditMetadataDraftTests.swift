@@ -50,13 +50,13 @@ struct ProfileEditMetadataDraftTests {
         #expect(metadata.displayName == "Alice 🎉")
     }
 
-    @Test func publishRejectsReentrantCallsBeforeStartingWork() throws {
+    @Test func publishRejectsReentrantCallsAtEntry() throws {
         // The publish side effect goes through the real Marmot client, so pin the
-        // view-model's synchronous entry guard at the source boundary: a second
-        // tap must return before reading the draft or publishing kind:0 metadata.
+        // view-model's synchronous entry guard as the first statement: a second
+        // tap must return before any draft/client/publish work starts.
         let source = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
 
-        #expect(source.matches(#"func publish\(using appState: AppState\) async \{\s*guard !isPublishing else \{ return \}[\s\S]*let draft = currentDraft"#))
+        #expect(source.matches(#"func publish\(using appState: AppState\) async \{\s*guard !isPublishing else \{ return \}"#))
     }
 
     private func sourceString(_ relativePath: String) throws -> String {
