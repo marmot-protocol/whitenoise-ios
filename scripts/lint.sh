@@ -13,12 +13,12 @@
 #
 # Exits non-zero on:
 #   - swiftlint not installed
-#   - swiftlint version below required floor
+#   - swiftlint version not the exact pin (must match CI)
 #   - any lint violation (--strict)
 
 set -euo pipefail
 
-REQUIRED_SWIFTLINT_VERSION="0.57.0"   # bump in lockstep with .github/workflows/lint.yml
+REQUIRED_SWIFTLINT_VERSION="0.63.2"   # bump in lockstep with .github/workflows/lint.yml
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
@@ -30,12 +30,15 @@ if ! command -v swiftlint >/dev/null 2>&1; then
     exit 127
 fi
 
-# ── precheck: swiftlint version floor ────────────────────────────────
+# ── precheck: swiftlint version pin ──────────────────────────────────
+# Pinned exactly (not a floor) so local results match the version CI installs;
+# SwiftLint rule sets drift between releases, so a newer local version can pass
+# locally yet fail the CI gate.
 ACTUAL_VERSION="$(swiftlint version 2>/dev/null || echo 0.0.0)"
-if [[ "$(printf '%s\n%s\n' "$REQUIRED_SWIFTLINT_VERSION" "$ACTUAL_VERSION" | sort -V | head -n1)" \
-      != "$REQUIRED_SWIFTLINT_VERSION" ]]; then
-    echo "error: swiftlint $ACTUAL_VERSION is below required floor $REQUIRED_SWIFTLINT_VERSION." >&2
-    echo "       Upgrade with: brew upgrade swiftlint" >&2
+if [[ "$ACTUAL_VERSION" != "$REQUIRED_SWIFTLINT_VERSION" ]]; then
+    echo "error: swiftlint $ACTUAL_VERSION does not match the pinned $REQUIRED_SWIFTLINT_VERSION." >&2
+    echo "       CI runs exactly $REQUIRED_SWIFTLINT_VERSION; a different local version can pass here but fail CI." >&2
+    echo "       Get it from: https://github.com/realm/SwiftLint/releases/tag/$REQUIRED_SWIFTLINT_VERSION" >&2
     exit 2
 fi
 
