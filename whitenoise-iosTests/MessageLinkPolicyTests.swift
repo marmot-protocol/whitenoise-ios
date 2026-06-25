@@ -16,13 +16,13 @@ struct MessageLinkPolicyTests {
     }
 
     @Test func whitenoiseDeepLinksRouteInApp() {
-        #expect(action("whitenoise://profile/\(validNpub)") == .openProfile(npub: validNpub))
-        #expect(action("whitenoise://chat/\(groupIdHex)") == .openChat(groupIdHex: groupIdHex))
+        #expect(action("\(DeepLink.scheme)://profile/\(validNpub)") == .openProfile(npub: validNpub))
+        #expect(action("\(DeepLink.scheme)://chat/\(groupIdHex)") == .openChat(groupIdHex: groupIdHex))
     }
 
     @Test func whitenoiseChatRejectsNonGroupIdPayloads() {
-        #expect(action("whitenoise://chat/abc") == .blocked)
-        #expect(action("whitenoise://unknown/route") == .blocked)
+        #expect(action("\(DeepLink.scheme)://chat/abc") == .blocked)
+        #expect(action("\(DeepLink.scheme)://unknown/route") == .blocked)
     }
 
     @Test func nostrProfileUrisRouteToProfile() {

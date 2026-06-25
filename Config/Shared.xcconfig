@@ -5,8 +5,12 @@
 
 // Telemetry + native-push config shared by both flavors. Previously inlined
 // per build config in project.pbxproj.
-WHITENOISE_OTLP_ENDPOINT = "https://otlp.ipf.dev/v1/metrics"
-WHITENOISE_PUSH_RELAY_HINT = "wss://relay.eu.whitenoise.chat"
+// `//` starts an xcconfig comment, so the scheme separator is assembled from a
+// single-slash helper that expands after comment parsing; otherwise these URLs
+// truncate to `https:` / `wss:`.
+WN_SLASH = /
+WHITENOISE_OTLP_ENDPOINT = https:$(WN_SLASH)$(WN_SLASH)otlp.ipf.dev/v1/metrics
+WHITENOISE_PUSH_RELAY_HINT = wss:$(WN_SLASH)$(WN_SLASH)relay.eu.whitenoise.chat
 WHITENOISE_PUSH_SERVER_PUBKEY_HEX = 73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04
 WHITENOISE_OTLP_BEARER_TOKEN = $(OTLP_TOKEN_WHITENOISE_IOS)
 WHITENOISE_AUDIT_LOG_BEARER_TOKEN = $(AUDIT_LOG_TOKEN_WHITENOISE_IOS)

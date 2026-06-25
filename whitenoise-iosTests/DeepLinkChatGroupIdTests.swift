@@ -7,15 +7,14 @@ struct DeepLinkChatGroupIdTests {
     private let valid64 = String(repeating: "a", count: 64)
 
     @Test func acceptsAndLowercases64CharHexGroupId() {
-        #expect(DeepLink.parse(string: "whitenoise://chat/\(valid64)") == .chat(groupIdHex: valid64))
-        #expect(DeepLink.parse(string: "whitenoise://chat/\(valid64.uppercased())") == .chat(groupIdHex: valid64))
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/\(valid64)") == .chat(groupIdHex: valid64))
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/\(valid64.uppercased())") == .chat(groupIdHex: valid64))
     }
 
     @Test func rejectsNon64CharOrNonHexGroupId() {
-        // The old isHex check accepted any-length hex; these must now fail.
-        #expect(DeepLink.parse(string: "whitenoise://chat/abc") == nil)
-        #expect(DeepLink.parse(string: "whitenoise://chat/\(String(repeating: "a", count: 63))") == nil)
-        #expect(DeepLink.parse(string: "whitenoise://chat/\(String(repeating: "a", count: 65))") == nil)
-        #expect(DeepLink.parse(string: "whitenoise://chat/\(String(repeating: "z", count: 64))") == nil)
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/abc") == nil)
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/\(String(repeating: "a", count: 63))") == nil)
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/\(String(repeating: "a", count: 65))") == nil)
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://chat/\(String(repeating: "z", count: 64))") == nil)
     }
 }

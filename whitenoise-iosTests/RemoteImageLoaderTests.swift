@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 @testable import whitenoise_ios
 
 @MainActor
+@Suite(.serialized)
 struct RemoteImageLoaderTests {
     @Test func avatarBubbleDoesNotUseAsyncImageForPeerControlledURLs() throws {
         let source = try sourceString("whitenoise-ios/Chats/ChatRow.swift")
@@ -180,6 +181,12 @@ struct RemoteImageLoaderTests {
                 await probe.fetch()
             }
         }
+
+        // Let `second` run up to its in-flight coalescing await on the MainActor
+        // before releasing the fetch. Otherwise `first` can complete and clear
+        // the in-flight slot before `second` checks it, making `second` start a
+        // second fetch and racing the single-fetch expectation.
+        for _ in 0..<10 { await Task.yield() }
 
         await probe.release()
         let firstData = try await first.value

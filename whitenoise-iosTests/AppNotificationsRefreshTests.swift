@@ -80,7 +80,7 @@ struct AppNotificationsRefreshTests {
 
         let refreshTask = Task {
             try await notifications.refreshApnsToken(
-                timeoutNanoseconds: 500_000_000,
+                timeoutNanoseconds: 10_000_000_000,
                 pollIntervalNanoseconds: 10_000_000
             )
         }

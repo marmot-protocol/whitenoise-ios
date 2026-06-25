@@ -110,7 +110,7 @@ struct RecipientStagingTests {
         let added = stagedMember(memberRef: npub, accountIdHex: account)
 
         let result = await staging.addScanned(
-            "whitenoise://profile/\(npub)",
+            "\(DeepLink.scheme)://profile/\(npub)",
             normalize: { stagedMember(memberRef: $0, accountIdHex: account) }
         )
 

@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 import UIKit
 import AVFoundation
-@testable import WhiteNoise_ios
+@testable import whitenoise_ios
 @testable import MarmotKit
 
 private let notificationDefaultsTestGate = AsyncTestGate()
@@ -1191,35 +1191,35 @@ struct AppStateBootstrapTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/AppState.swift")
+            .appendingPathComponent("whitenoise-ios/Core/AppState.swift")
     }
 
     private var runtimeLifecycleSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/RuntimeLifecycle.swift")
+            .appendingPathComponent("whitenoise-ios/Core/RuntimeLifecycle.swift")
     }
 
     private var marmotClientSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/MarmotClient.swift")
+            .appendingPathComponent("whitenoise-ios/Core/MarmotClient.swift")
     }
 
     private var notificationCoordinatorSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/NotificationCoordinator.swift")
+            .appendingPathComponent("whitenoise-ios/Core/NotificationCoordinator.swift")
     }
 
     private var appSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/WhiteNoise_iosApp.swift")
+            .appendingPathComponent("whitenoise-ios/whitenoise_iosApp.swift")
     }
 
 }
@@ -1361,7 +1361,7 @@ struct NotificationSubscriptionRetryTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/NotificationDriver.swift")
+            .appendingPathComponent("whitenoise-ios/Core/NotificationDriver.swift")
     }
 }
 
@@ -2052,27 +2052,27 @@ struct LocalizationCatalogTests {
     @Test func dynamicLocalizationsUseStaticFormatKeysInSource() throws {
         let dynamicCountKeys = [
             (
-                "WhiteNoise-ios/Conversation/ConversationViewModel.swift",
+                "whitenoise-ios/Conversation/ConversationViewModel.swift",
                 #"L10n.string("\(memberCount) members")"#
             ),
             (
-                "WhiteNoise-ios/Conversation/ConversationView.swift",
+                "whitenoise-ios/Conversation/ConversationView.swift",
                 #"L10n.string("\(memberCount) members")"#
             ),
             (
-                "WhiteNoise-ios/Group/GroupDetailsViewModel.swift",
+                "whitenoise-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Invited \(refs.count) members")"#
             ),
             (
-                "WhiteNoise-ios/Group/GroupDetailsViewModel.swift",
+                "whitenoise-ios/Group/GroupDetailsViewModel.swift",
                 #"L10n.string("Published \(summary.published) updates.")"#
             ),
             (
-                "WhiteNoise-ios/Settings/ProfileEditViewModel.swift",
+                "whitenoise-ios/Settings/ProfileEditViewModel.swift",
                 #"L10n.string("Your kind:0 metadata is live on \(relays.count) relays.")"#
             ),
             (
-                "WhiteNoise-ios/Core/GroupDisplay.swift",
+                "whitenoise-ios/Core/GroupDisplay.swift",
                 #"L10n.string("\(memberCount) person group")"#
             ),
             (
@@ -2084,7 +2084,7 @@ struct LocalizationCatalogTests {
                 #"L10n.string("\(senderName) sent a message")"#
             ),
             (
-                "WhiteNoise-ios/Chats/ChatRow.swift",
+                "whitenoise-ios/Chats/ChatRow.swift",
                 #"L10n.string("You: \(body)")"#
             ),
         ]
@@ -2124,7 +2124,7 @@ struct LocalizationCatalogTests {
             #"\.accessibilityHint\("((?:[^"\\]|\\.)*)""#
         ].map { try! NSRegularExpression(pattern: $0) }
 
-        for relativePath in try swiftSourcePaths(in: ["WhiteNoise-ios", "Shared"]) {
+        for relativePath in try swiftSourcePaths(in: ["whitenoise-ios", "Shared"]) {
             let source = try readSource(relativePath)
             let nsRange = NSRange(source.startIndex..<source.endIndex, in: source)
             for pattern in patterns {
@@ -2221,7 +2221,7 @@ struct LocalizationCatalogTests {
     }
 
     @Test func infoPlistCatalogLocalizesCameraPermissionCopy() throws {
-        let catalog = try readCatalog("WhiteNoise-ios/InfoPlist.xcstrings")
+        let catalog = try readCatalog("whitenoise-ios/InfoPlist.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
         let cameraUsage = try #require(strings["NSCameraUsageDescription"] as? [String: Any])
         let localizations = try #require(cameraUsage["localizations"] as? [String: Any])
@@ -2234,7 +2234,7 @@ struct LocalizationCatalogTests {
     }
 
     @Test func infoPlistCatalogCoversLaunchLanguages() throws {
-        let catalog = try readCatalog("WhiteNoise-ios/InfoPlist.xcstrings")
+        let catalog = try readCatalog("whitenoise-ios/InfoPlist.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
 
         for key in ["CFBundleDisplayName", "CFBundleName", "NSCameraUsageDescription"] {
@@ -2542,7 +2542,7 @@ struct DiagnosticsPresentationTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Diagnostics/DiagnosticsView.swift")
+            .appendingPathComponent("whitenoise-ios/Diagnostics/DiagnosticsView.swift")
     }
 }
 
@@ -2866,26 +2866,27 @@ struct NativePushRegistrationPolicyTests {
     }
 
     @Test func nativePushEnabledLookupIsOffloadedBeforeRegistrationSync() throws {
-        let appStateSource = try sourceString("WhiteNoise-ios/Core/AppState.swift")
-        let marmotClientSource = try sourceString("WhiteNoise-ios/Core/MarmotClient.swift")
+        // Native-push reconciliation moved from AppState into NotificationCoordinator.
+        let coordinatorSource = try sourceString("whitenoise-ios/Core/NotificationCoordinator.swift")
+        let marmotClientSource = try sourceString("whitenoise-ios/Core/MarmotClient.swift")
 
-        #expect(appStateSource.contains("let accountRefs = await nativePushEnabledAccountRefs()"))
-        #expect(appStateSource.contains("private func nativePushEnabledAccountRefs() async -> [String]"))
-        #expect(appStateSource.contains("return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)"))
-        #expect(!appStateSource.contains("guard !nativePushEnabledAccountRefs().isEmpty else { return }"))
+        #expect(coordinatorSource.contains("let accountRefs = await nativePushEnabledAccountRefs(host: host)"))
+        #expect(coordinatorSource.contains("func nativePushEnabledAccountRefs(host: NotificationCoordinatorHost) async -> [String]"))
+        #expect(coordinatorSource.contains("return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)"))
+        #expect(!coordinatorSource.contains("guard !nativePushEnabledAccountRefs().isEmpty else { return }"))
         #expect(marmotClientSource.contains("Task.detached(priority: .utility)"))
         #expect(marmotClientSource.contains("marmot.notificationSettings(accountRef: accountRef)"))
     }
 
     @Test func defaultEnablePathUsesTransactionalNativePushEnable() throws {
-        let source = try sourceString("WhiteNoise-ios/Core/AppState.swift")
-        let start = try #require(source.range(of: "private func enableNotificationsByDefault(for accountRef: String) async {"))
-        let end = try #require(source[start.upperBound...].range(of: "\n    /// Signs out of the active account"))
+        let source = try sourceString("whitenoise-ios/Core/NotificationCoordinator.swift")
+        let start = try #require(source.range(of: "func enableNotificationsByDefault("))
+        let end = try #require(source[start.upperBound...].range(of: "func syncNativePushRegistration("))
         let body = source[start.lowerBound..<end.lowerBound]
 
-        #expect(body.contains("_ = try await enableNativePush(accountRef: accountRef)"))
-        #expect(!body.contains("marmot.setNativePushEnabled(accountRef: accountRef, enabled: true)"))
-        #expect(!body.contains("syncNativePushRegistration(accountRef: accountRef)"))
+        #expect(body.contains("_ = try await enableNativePush(accountRef: accountRef, host: host)"))
+        #expect(!body.contains("setNativePushEnabled(accountRef: accountRef, enabled: true)"))
+        #expect(!body.contains("syncNativePushRegistration(accountRef: accountRef, host: host)"))
     }
 
     @Test func remoteTokenIsRequestedOnlyWhenEnabledAccountsLackAToken() {
@@ -3712,14 +3713,14 @@ struct ProfileEditViewTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Settings/ProfileEditView.swift")
+            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditView.swift")
     }
 
     private var profileEditViewModelSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Settings/ProfileEditViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditViewModel.swift")
     }
 }
 
@@ -4283,28 +4284,28 @@ struct GroupImageSearchTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Group/GroupDetailsView.swift")
+            .appendingPathComponent("whitenoise-ios/Group/GroupDetailsView.swift")
     }
 
     private var groupDetailsViewModelSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Group/GroupDetailsViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Group/GroupDetailsViewModel.swift")
     }
 
     private var groupImageURLSheetSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Group/GroupImageURLSheet.swift")
+            .appendingPathComponent("whitenoise-ios/Group/GroupImageURLSheet.swift")
     }
 
     private var remoteImageLoaderSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/RemoteImageLoader.swift")
+            .appendingPathComponent("whitenoise-ios/Core/RemoteImageLoader.swift")
     }
 
     private func groupImageURLSheetSource() throws -> String {
@@ -4320,11 +4321,11 @@ struct DeepLinkTests {
         let profileURL = DeepLink.profile(npub: "npub?query#fragment/child").url
         let chatURL = DeepLink.chat(groupIdHex: "ABC?query#fragment/child").url
 
-        #expect(profileURL.absoluteString == "WhiteNoise://profile/npub%3Fquery%23fragment%2Fchild")
+        #expect(profileURL.absoluteString == "\(DeepLink.scheme)://profile/npub%3Fquery%23fragment%2Fchild")
         #expect(profileURL.query == nil)
         #expect(profileURL.fragment == nil)
 
-        #expect(chatURL.absoluteString == "WhiteNoise://chat/ABC%3Fquery%23fragment%2Fchild")
+        #expect(chatURL.absoluteString == "\(DeepLink.scheme)://chat/ABC%3Fquery%23fragment%2Fchild")
         #expect(chatURL.query == nil)
         #expect(chatURL.fragment == nil)
     }
@@ -4664,7 +4665,7 @@ struct ChatsListProjectionTests {
         // first cache write so a group pruned during the await cannot strand
         // entries. `[\s\S]` matches across newlines.
         #expect(source.matches(
-            #"try\? await appState\.marmot\.groupDetails\([\s\S]*?guard let row = self\.rowByGroupId\[groupId\] else \{ continue \}[\s\S]*?self\.groupDetailsCache\[groupId\] ="#
+            #"try\? await client\.groupDetails\([\s\S]*?guard let row = self\.rowByGroupId\[groupId\] else \{ continue \}[\s\S]*?self\.groupDetailsCache\[groupId\] ="#
         ))
         // The avatar reinsertion must key off the guarded `row`, not a fresh
         // optional lookup that reads as nil for an absent group.
@@ -4767,14 +4768,14 @@ struct ChatsListProjectionTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Chats/ChatsListViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Chats/ChatsListViewModel.swift")
     }
 
     private var chatsListViewSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Chats/ChatsListView.swift")
+            .appendingPathComponent("whitenoise-ios/Chats/ChatsListView.swift")
     }
 }
 
@@ -5701,35 +5702,35 @@ struct ConversationTimelineProjectionTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationViewModel.swift")
     }
 
     private var conversationReadMarkerSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationReadMarker.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationReadMarker.swift")
     }
 
     private var timelineStoreSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/TimelineStore.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/TimelineStore.swift")
     }
 
     private var conversationViewSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationView.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
     }
 
     private var marmotClientSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Core/MarmotClient.swift")
+            .appendingPathComponent("whitenoise-ios/Core/MarmotClient.swift")
     }
 
     private func messageIds(in items: [TimelineItem]) -> [String] {
@@ -5865,7 +5866,7 @@ struct GroupManagementPresentationTests {
         let nprofileHex = "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
 
         #expect(
-            AddMembersPresentation.memberRef(fromScannedPayload: "WhiteNoise://profile/\(npub)") == npub
+            AddMembersPresentation.memberRef(fromScannedPayload: "\(DeepLink.scheme)://profile/\(npub)") == npub
         )
         #expect(
             AddMembersPresentation.memberRef(fromScannedPayload: "nostr:\(npub)") == npub
@@ -5877,7 +5878,7 @@ struct GroupManagementPresentationTests {
             AddMembersPresentation.memberRef(fromScannedPayload: "nostr:\(nprofile)") == nprofileHex
         )
         #expect(
-            AddMembersPresentation.memberRef(fromScannedPayload: "WhiteNoise://profile/\(nprofile)") == nprofileHex
+            AddMembersPresentation.memberRef(fromScannedPayload: "\(DeepLink.scheme)://profile/\(nprofile)") == nprofileHex
         )
         #expect(
             DeepLink.parse(string: "nostr:\(nprofile)") == .profile(npub: nprofileHex)
@@ -6535,14 +6536,14 @@ struct AgentStreamTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationViewModel.swift")
     }
 
     private var streamWatcherSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/StreamWatcher.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/StreamWatcher.swift")
     }
 
     @MainActor
@@ -7579,7 +7580,7 @@ struct MessageSemanticsTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/MessageMediaAttachment.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/MessageMediaAttachment.swift")
     }
 }
 
@@ -7999,7 +8000,7 @@ struct ComposerAudioDraftPreviewPresentationTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ComposerBar.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ComposerBar.swift")
     }
 }
 
@@ -8934,7 +8935,7 @@ struct TimelineBottomTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationView.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
     }
 }
 
@@ -9165,21 +9166,24 @@ struct SensitiveClipboardTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Onboarding/SensitiveClipboard.swift")
+            .appendingPathComponent("whitenoise-ios/Onboarding/SensitiveClipboard.swift")
     }
 
     private var conversationViewSourceURL: URL {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("WhiteNoise-ios/Conversation/ConversationView.swift")
+            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
     }
 }
 
 func withAppLanguage<T>(_ language: AppLanguage, perform body: () throws -> T) rethrows -> T {
     let defaults = AppLanguage.defaults
     let previousValue = defaults.object(forKey: AppLanguage.storageKey)
-    AppLanguage.setCurrentRawValue(language.rawValue)
+    // Post to an isolated center so flipping the test language can't drive
+    // SwiftUI observers of NotificationCenter.default to publish off the
+    // (frequently background) test thread.
+    AppLanguage.setCurrentRawValue(language.rawValue, notificationCenter: NotificationCenter())
     defer {
         if let previousValue {
             defaults.set(previousValue, forKey: AppLanguage.storageKey)
