@@ -448,6 +448,9 @@ struct ChatsListView: View {
                 accountRef: ref,
                 groupIdHex: groupIdHex
             )
+            // The chats subscription only fires on transport events, not local
+            // projection writes, so drop the left group's row immediately.
+            viewModel?.removeChatListRow(groupIdHex: groupIdHex)
             Haptics.warning()
         } catch {
             Haptics.error()
