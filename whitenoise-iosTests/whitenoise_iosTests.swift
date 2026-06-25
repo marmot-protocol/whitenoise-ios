@@ -148,16 +148,19 @@ struct AppStateBootstrapTests {
         }
     }
 
-    @Test func createIdentityViewModelGuardsInFlightCreatesBeforeAwait() throws {
+    @Test func createIdentityViewModelSourcePlacesReentryGuardBeforeCreateCall() throws {
         let source = try String(contentsOf: createIdentityViewModelSourceURL, encoding: .utf8)
-        let guardedCreatePattern =
-            #"func runCreate\(using appState: AppState, dismiss: \(\) -> Void\) async \{[\s\S]*"#
-            + #"guard !isCreating else \{ return \}[\s\S]*"#
-            + #"isCreating = true[\s\S]*"#
-            + #"defer \{ isCreating = false \}[\s\S]*"#
-            + #"try await appState\.createIdentity\(\)"#
+        let runCreateStart = try #require(source.range(of: "func runCreate("))
+        let runCreateSource = source[runCreateStart.lowerBound...]
 
-        #expect(source.matches(guardedCreatePattern))
+        let guardRange = try #require(runCreateSource.range(of: "guard !isCreating else { return }"))
+        let createFlagRange = try #require(runCreateSource.range(of: "isCreating = true"))
+        let resetRange = try #require(runCreateSource.range(of: "defer { isCreating = false }"))
+        let createCallRange = try #require(runCreateSource.range(of: "try await appState.createIdentity()"))
+
+        #expect(guardRange.lowerBound < createFlagRange.lowerBound)
+        #expect(createFlagRange.lowerBound < resetRange.lowerBound)
+        #expect(resetRange.lowerBound < createCallRange.lowerBound)
     }
 
     @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
