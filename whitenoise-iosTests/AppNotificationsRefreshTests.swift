@@ -11,20 +11,19 @@ struct AppNotificationsRefreshTests {
         let created = AppNotifications(
             authorizationStatusProvider: { .authorized },
             remoteNotificationRegistrar: {
-                clearedBeforeRegister = notifications?.apnsTokenHex == nil
+                if notifications?.apnsTokenHex == nil {
+                    clearedBeforeRegister = true
+                    notifications?.recordDeviceToken(Data([0x01, 0x02]))
+                }
             }
         )
         notifications = created
         created.recordDeviceToken(Data([0xab, 0xcd]))
 
-        let refreshTask = Task {
-            try await created.refreshApnsToken(
-                timeoutNanoseconds: 500_000_000,
-                pollIntervalNanoseconds: 10_000_000
-            )
-        }
-        refreshTask.cancel()
-        await Task.yield()
+        _ = try await created.refreshApnsToken(
+            timeoutNanoseconds: 500_000_000,
+            pollIntervalNanoseconds: 10_000_000
+        )
 
         #expect(clearedBeforeRegister)
     }
