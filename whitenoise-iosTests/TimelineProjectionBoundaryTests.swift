@@ -116,6 +116,14 @@ struct TimelineProjectionBoundaryTests {
         #expect(!sources.contains("mediaRecordReference(matching:"))
     }
 
+    @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() throws {
+        let source = try sourceString("darkmatter-ios/Conversation/ConversationMediaDownloader.swift")
+        let cacheProbeCount = source.components(separatedBy: "MessageMediaCache.cachedData(for:").count - 1
+
+        #expect(cacheProbeCount == 1)
+        #expect(!source.contains("let downloadableReference = reference"))
+    }
+
     @Test func displayTimelineDoesNotParseMarkdownAtRenderTime() throws {
         let displaySources = try [
             "whitenoise-ios/Conversation/ConversationView.swift",

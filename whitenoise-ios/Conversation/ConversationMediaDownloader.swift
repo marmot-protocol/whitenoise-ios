@@ -68,20 +68,16 @@ final class ConversationMediaDownloader {
         }
         // Row references already carry the real source_epoch, so the reference
         // is directly downloadable — no listMedia round-trip to recover it.
-        let downloadableReference = reference
-        if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
-            return cached
-        }
         let client = try appState.currentMarmotClient()
         return try await inFlight.data(
-            for: MediaDownloadInFlightKey(reference: downloadableReference)
+            for: MediaDownloadInFlightKey(reference: reference)
         ) {
             let result = try await client.downloadMedia(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
-                reference: downloadableReference
+                reference: reference
             )
-            await MessageMediaCache.store(result.plaintext, for: downloadableReference)
+            await MessageMediaCache.store(result.plaintext, for: reference)
             return result.plaintext
         }
     }
