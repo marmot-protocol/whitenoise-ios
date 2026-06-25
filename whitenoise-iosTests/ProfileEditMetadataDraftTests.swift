@@ -54,7 +54,7 @@ struct ProfileEditMetadataDraftTests {
         // The publish side effect goes through the real Marmot client, so pin the
         // view-model's synchronous entry guard as the first statement: a second
         // tap must return before any draft/client/publish work starts.
-        let source = try sourceString("darkmatter-ios/Settings/ProfileEditViewModel.swift")
+        let source = try sourceString("whitenoise-ios/Settings/ProfileEditViewModel.swift")
 
         #expect(source.matches(#"func publish\(using appState: AppState\) async \{\s*guard !isPublishing else \{ return \}"#))
     }
