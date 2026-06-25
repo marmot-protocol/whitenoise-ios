@@ -120,7 +120,7 @@ nonisolated enum NotificationServiceProjection {
         return LocalNotificationPresentation(
             identifier: route.notificationKey,
             threadIdentifier: primary.threadIdentifier,
-            title: L10n.string("Darkmatter"),
+            title: L10n.string("WhiteNoise"),
             body: L10n.plural("%lld more messages", Int64(overflowCount)),
             route: route,
             timestamp: primary.timestamp,

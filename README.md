@@ -1,8 +1,4 @@
-<p align="center">
-  <img src="darkmatter-ios/darkmatter.icon/Assets/noise_1024.png" width="112" alt="Dark Matter app icon" />
-</p>
-
-<h1 align="center">Dark Matter iOS</h1>
+<h1 align="center">WhiteNoise iOS</h1>
 
 <p align="center">
   <strong>Private MLS group messaging for iPhone, powered by the Marmot Rust runtime.</strong>
@@ -12,7 +8,7 @@
   SwiftUI interface. Rust cryptographic core. Generic APNS wakes. Local-first diagnostics.
 </p>
 
-Dark Matter iOS is the native iPhone client for the Dark Matter/Marmot secure messaging stack. The app gives iOS users a polished SwiftUI chat experience while delegating accounts, MLS group state, storage, relay catch-up, message processing, encrypted media, push-token cryptography, telemetry, and audit-log plumbing to the vendored `MarmotKit` UniFFI package.
+WhiteNoise iOS is the native iPhone client for the Dark Matter/Marmot secure messaging stack. The app gives iOS users a polished SwiftUI chat experience while delegating accounts, MLS group state, storage, relay catch-up, message processing, encrypted media, push-token cryptography, telemetry, and audit-log plumbing to the vendored `MarmotKit` UniFFI package.
 
 The project is intentionally split along the platform boundary: Swift owns presentation, navigation, lifecycle, notifications, and Apple integration; Marmot owns protocol state and durable encrypted data.
 
@@ -28,7 +24,7 @@ The project is intentionally split along the platform boundary: Swift owns prese
 
 ## Architecture
 
-`darkmatter-ios` is a SwiftUI app wrapped around a Rust runtime:
+`whitenoise-ios` is a SwiftUI app wrapped around a Rust runtime:
 
 - SwiftUI owns the app shell, onboarding, settings, chat UI, navigation, sheets, toasts, and foreground/background lifecycle.
 - `AppState` is the observable hub for global app state. It owns the live `MarmotClient`, the active account, pending navigation, visible-chat tracking, notification subscriptions, native push sync, and runtime suspend/resume.
@@ -38,9 +34,9 @@ The project is intentionally split along the platform boundary: Swift owns prese
 
 ## Project Map
 
-- `darkmatter-ios/` - main SwiftUI app target.
-- `darkmatter-ios/Core/` - app state, Marmot client setup, lifecycle, notifications, routing, telemetry, diagnostics helpers, and shared UI utilities.
-- `darkmatter-ios/Chats/`, `Conversation/`, `Group/`, `Settings/`, `Profile/`, `Onboarding/` - feature screens and view models.
+- `whitenoise-ios/` - main SwiftUI app target.
+- `whitenoise-ios/Core/` - app state, Marmot client setup, lifecycle, notifications, routing, telemetry, diagnostics helpers, and shared UI utilities.
+- `whitenoise-ios/Chats/`, `Conversation/`, `Group/`, `Settings/`, `Profile/`, `Onboarding/` - feature screens and view models.
 - `NotificationServiceExtension/` - APNS wake handling and local notification decoration.
 - `Shared/` - extension-safe code shared by the app and notification extension.
 - `Vendored/MarmotKit/` - generated UniFFI Swift bindings and the prebuilt Marmot static library xcframework.
@@ -56,24 +52,24 @@ The project is intentionally split along the platform boundary: Swift owns prese
 
 Current identifiers:
 
-- Main app bundle ID: `dev.ipf.darkmatter`
-- Notification Service Extension bundle ID: `dev.ipf.darkmatter.NotificationService`
-- App Group: `group.dev.ipf.darkmatter`
+- Main app bundle ID: `dev.ipf.whitenoise.ios`
+- Notification Service Extension bundle ID: `dev.ipf.whitenoise.ios.NotificationService`
+- App Group: `group.dev.ipf.whitenoise.ios`
 
 ## Build And Test
 
 List project targets and schemes:
 
 ```sh
-xcodebuild -list -project darkmatter-ios.xcodeproj
+xcodebuild -list -project whitenoise-ios.xcodeproj
 ```
 
 Build for a simulator:
 
 ```sh
 xcodebuild build \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios \
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
@@ -81,8 +77,8 @@ Run unit tests:
 
 ```sh
 xcodebuild test \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios \
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
@@ -90,8 +86,8 @@ Build the device release artifact:
 
 ```sh
 xcodebuild build \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios \
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios \
   -configuration Release \
   -destination 'generic/platform=iOS'
 ```
@@ -100,8 +96,8 @@ If a simulator name is unavailable on your machine, list local destinations:
 
 ```sh
 xcodebuild -showdestinations \
-  -project darkmatter-ios.xcodeproj \
-  -scheme darkmatter-ios
+  -project whitenoise-ios.xcodeproj \
+  -scheme whitenoise-ios
 ```
 
 ## MarmotKit Bindings
@@ -135,10 +131,10 @@ Do not hand-edit generated files in `Vendored/MarmotKit`. Change Rust/UniFFI, re
 
 Telemetry is compiled into the vendored MarmotKit bundle with the `otlp-export` feature. The app reads these Xcode build settings through `Info.plist`:
 
-- `DARKMATTER_OTLP_ENDPOINT` - default `https://otlp.ipf.dev/v1/metrics`
-- `DARKMATTER_OTLP_BEARER_TOKEN` - defaults to `$(OTLP_TOKEN_DARKMATTER_IOS)`
-- `DARKMATTER_TELEMETRY_ENVIRONMENT` - `staging` or `production`; TestFlight builds are staging
-- `DARKMATTER_AUDIT_LOG_BEARER_TOKEN` - defaults to `$(AUDIT_LOG_TOKEN_DARKMATTER_IOS)`
+- `WHITENOISE_OTLP_ENDPOINT` - default `https://otlp.ipf.dev/v1/metrics`
+- `WHITENOISE_OTLP_BEARER_TOKEN` - defaults to `$(OTLP_TOKEN_WHITENOISE_IOS)`
+- `WHITENOISE_TELEMETRY_ENVIRONMENT` - `staging` or `production`; TestFlight builds are staging
+- `WHITENOISE_AUDIT_LOG_BEARER_TOKEN` - defaults to `$(AUDIT_LOG_TOKEN_WHITENOISE_IOS)`
 
 Put local secrets in `Config/TelemetrySecrets.xcconfig` and do not commit real tokens. Audit-log uploads use the endpoint compiled into MarmotKit and a token separate from OTLP, because the audit tracker and metrics collector are different services.
 

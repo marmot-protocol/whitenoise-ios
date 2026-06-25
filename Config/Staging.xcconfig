@@ -1,0 +1,16 @@
+// Staging flavor. Installs side-by-side as dev.ipf.whitenoise.ios.staging.
+#include "Shared.xcconfig"
+
+WN_FLAVOR = staging
+WN_DISPLAY_NAME = WhiteNoise (Staging)
+WN_URL_SCHEME = whitenoise-staging
+
+PRODUCT_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios.staging
+NSE_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios.staging.NotificationService
+
+// NSE shares the app's App Group and keychain group (keyed to the app bundle id).
+APP_GROUP_IDENTIFIER = group.dev.ipf.whitenoise.ios.staging
+KEYCHAIN_ACCESS_GROUP = $(AppIdentifierPrefix)dev.ipf.whitenoise.ios.staging
+
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon-Staging
+WHITENOISE_TELEMETRY_ENVIRONMENT = staging

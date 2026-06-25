@@ -1,0 +1,968 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key></key>
+	<string></string>
+	<key>%@ (IDN/punycode)</key>
+	<string>%@ (IDN/Punycode)</string>
+	<key>%@ (IDN/punycode: %@)</key>
+	<string>%@ (IDN/Punycode: %@)</string>
+	<key>%@ added %@</key>
+	<string>%@ hat %@ hinzugefügt</string>
+	<key>%@ changed disappearing messages from %@ to %@</key>
+	<string>%@ changed disappearing messages from %@ to %@</string>
+	<key>%@ hasn't published a compatible key package yet.</key>
+	<string>%@ hat noch kein kompatibles Schlüsselpaket veröffentlicht.</string>
+	<key>%@ hasn't published a compatible key package, so they can't be added yet.</key>
+	<string>%@ hat kein kompatibles Schlüsselpaket veröffentlicht und kann daher noch nicht hinzugefügt werden.</string>
+	<key>%@ hasn't published a compatible key package, so they can't be messaged yet.</key>
+	<string>%@ hat kein kompatibles Schlüsselpaket veröffentlicht, daher können noch keine Nachrichten gesendet werden.</string>
+	<key>%@ info</key>
+	<string>%@-Info</string>
+	<key>%@ is no longer an admin</key>
+	<string>%@ ist kein Administrator mehr</string>
+	<key>%@ left</key>
+	<string>%@ hat die Gruppe verlassen</string>
+	<key>%@ made %@ an admin</key>
+	<string>%@ hat %@ zum Administrator gemacht</string>
+	<key>%@ mentioned you</key>
+	<string>%@ mentioned you</string>
+	<key>%@ mentioned you: %@</key>
+	<string>%@ mentioned you: %@</string>
+	<key>%@ removed %@</key>
+	<string>%@ hat %@ entfernt</string>
+	<key>%@ removed %@ as admin</key>
+	<string>%@ hat %@ als Administrator entfernt</string>
+	<key>%@ sent a message</key>
+	<string>%@ hat eine Nachricht gesendet</string>
+	<key>%@ set disappearing messages to %@</key>
+	<string>%@ set disappearing messages to %@</string>
+	<key>%@ turned off disappearing messages</key>
+	<string>%@ turned off disappearing messages</string>
+	<key>%@ was added</key>
+	<string>%@ wurde hinzugefügt</string>
+	<key>%@ was made an admin</key>
+	<string>%@ wurde zum Administrator gemacht</string>
+	<key>%@ was removed</key>
+	<string>%@ wurde entfernt</string>
+	<key>%lld</key>
+	<string>%lld</string>
+	<key>+%lld</key>
+	<string>+%lld</string>
+	<key>1 member</key>
+	<string>1 Mitglied</string>
+	<key>APNS did not return a new device token in time. Try again, or check notification permission in Settings.</key>
+	<string>APNS hat nicht rechtzeitig ein neues Geräte-Token zurückgegeben. Versuche es erneut oder prüfe die Benachrichtigungsberechtigung in den Einstellungen.</string>
+	<key>APNS has not returned a device token yet.</key>
+	<string>APNS hat noch kein Geräte-Token zurückgegeben.</string>
+	<key>APNS registration failed: %@</key>
+	<string>APNS-Registrierung fehlgeschlagen: %@</string>
+	<key>APNS token</key>
+	<string>APNS-Token</string>
+	<key>About</key>
+	<string>Über</string>
+	<key>Account</key>
+	<string>Konto</string>
+	<key>Account Relays</key>
+	<string>Konto-Relays</string>
+	<key>Accounts</key>
+	<string>Konten</string>
+	<key>Active</key>
+	<string>Aktiv</string>
+	<key>Add Account</key>
+	<string>Konto hinzufügen</string>
+	<key>Add Members</key>
+	<string>Mitglieder hinzufügen</string>
+	<key>Add attachment</key>
+	<string>Anhang hinzufügen</string>
+	<key>Add photo</key>
+	<string>Foto hinzufügen</string>
+	<key>Adds debugging tools, including MLS group internals and diagnostics. Streaming debug shows every agent-stream MLS event and live QUIC update in the conversation timeline. The diagnostics console can log message text and account activity on this device.</key>
+	<string>Fügt Debugging-Werkzeuge hinzu, darunter MLS-Gruppeninterna und Diagnosen. Streaming-Debug zeigt jedes Agent-Stream-MLS-Ereignis und jede Live-QUIC-Aktualisierung in der Konversationschronik. Die Diagnosekonsole kann Nachrichtentext und Kontoaktivität auf diesem Gerät protokollieren.</string>
+	<key>Adds debugging tools, including MLS group internals and diagnostics. The diagnostics console can log message text and account activity on this device.</key>
+	<string>Integriert Debugging-Tools, einschließlich MLS-Gruppeninterna und Diagnosefunktionen. Die Diagnosekonsole kann Nachrichtentexte und Kontoaktivitäten auf diesem Gerät protokollieren.</string>
+	<key>Admin</key>
+	<string>Admin</string>
+	<key>Admin removed</key>
+	<string>Administrator entfernt</string>
+	<key>Admins</key>
+	<string>Administratoren</string>
+	<key>All relay lists are published.</key>
+	<string>Alle Staffellisten werden veröffentlicht.</string>
+	<key>Analytics &amp; Telemetry</key>
+	<string>Analytics &amp; Telemetry</string>
+	<key>Anonymous</key>
+	<string>Anonym</string>
+	<key>Anonymous Telemetry</key>
+	<string>Anonyme Telemetrie</string>
+	<key>Appearance</key>
+	<string>Erscheinungsbild</string>
+	<key>Archive</key>
+	<string>Archivieren</string>
+	<key>Archive Group</key>
+	<string>Archivgruppe</string>
+	<key>Archived</key>
+	<string>Archiviert</string>
+	<key>Archiving hides the group from your main chats list. It doesn't change your membership or notify anyone.</key>
+	<string>Durch die Archivierung wird die Gruppe aus Ihrer Hauptchatliste ausgeblendet. Es ändert nichts an Ihrer Mitgliedschaft und benachrichtigt niemanden.</string>
+	<key>Attach File</key>
+	<string>Attach File</string>
+	<key>Attachment</key>
+	<string>Anhang</string>
+	<key>Audit Log Files</key>
+	<string>Audit Log Files</string>
+	<key>Audit Logging</key>
+	<string>Audit Logging</string>
+	<key>Authorized</key>
+	<string>Autorisiert</string>
+	<key>Backup</key>
+	<string>Sicherung</string>
+	<key>Built on</key>
+	<string>Aufgebaut</string>
+	<key>Camera access denied. Enable it in Settings to scan QR codes.</key>
+	<string>Kamerazugriff verweigert. Aktivieren Sie es in den Einstellungen, um QR-Codes zu scannen.</string>
+	<key>Camera is not available on this device</key>
+	<string>Die Kamera ist auf diesem Gerät nicht verfügbar</string>
+	<key>Cancel</key>
+	<string>Abbrechen</string>
+	<key>Cancel recording</key>
+	<string>Cancel recording</string>
+	<key>Cancel reply</key>
+	<string>Antwort abbrechen</string>
+	<key>Chat archived</key>
+	<string>Chat archiviert</string>
+	<key>Chat created</key>
+	<string>Chat erstellt</string>
+	<key>Chat unarchived</key>
+	<string>Chat nicht archiviert</string>
+	<key>Chat unavailable</key>
+	<string>Chat nicht verfügbar</string>
+	<key>Chats</key>
+	<string>Chats</string>
+	<key>Choose whether WhiteNoise follows your device appearance or always uses a light or dark theme.</key>
+	<string>Wähle, ob WhiteNoise dem Erscheinungsbild deines Geräts folgt oder immer ein helles oder dunkles Design verwendet.</string>
+	<key>Clear</key>
+	<string>Löschen</string>
+	<key>Clear search</key>
+	<string>Suche löschen</string>
+	<key>Close</key>
+	<string>Schließen</string>
+	<key>Completed task</key>
+	<string>Erledigte Aufgabe</string>
+	<key>Configured</key>
+	<string>Konfiguriert</string>
+	<key>Connecting…</key>
+	<string>Verbinden…</string>
+	<key>Copied</key>
+	<string>Kopiert</string>
+	<key>Copied to clipboard</key>
+	<string>In die Zwischenablage kopiert</string>
+	<key>Copies %@</key>
+	<string>Kopiert %@</string>
+	<key>Copy</key>
+	<string>Kopieren</string>
+	<key>Copy npub</key>
+	<string>npub kopieren</string>
+	<key>Couldn't add attachment</key>
+	<string>Couldn't add attachment</string>
+	<key>Couldn't add photo</key>
+	<string>Foto konnte nicht hinzugefügt werden</string>
+	<key>Couldn't archive chat</key>
+	<string>Der Chat konnte nicht archiviert werden</string>
+	<key>Couldn't change admin</key>
+	<string>Der Administrator konnte nicht geändert werden</string>
+	<key>Couldn't create chat</key>
+	<string>Chat konnte nicht erstellt werden</string>
+	<key>Couldn't delete message</key>
+	<string>Die Nachricht konnte nicht gelöscht werden</string>
+	<key>Couldn't leave chat</key>
+	<string>Konnte den Chat nicht verlassen</string>
+	<key>Couldn't leave group</key>
+	<string>Gruppe konnte nicht verlassen werden</string>
+	<key>Couldn't load chats</key>
+	<string>Chats konnten nicht geladen werden</string>
+	<key>Couldn't load conversation</key>
+	<string>Konversation konnte nicht geladen werden</string>
+	<key>Couldn't publish profile</key>
+	<string>Profil konnte nicht veröffentlicht werden</string>
+	<key>Couldn't read this profile code.</key>
+	<string>Dieser Profilcode konnte nicht gelesen werden.</string>
+	<key>Couldn't record audio</key>
+	<string>Couldn't record audio</string>
+	<key>Couldn't refresh accounts</key>
+	<string>Konten konnten nicht aktualisiert werden</string>
+	<key>Couldn't remove member</key>
+	<string>Mitglied konnte nicht entfernt werden</string>
+	<key>Couldn't rename group</key>
+	<string>Die Gruppe konnte nicht umbenannt werden</string>
+	<key>Couldn't render QR</key>
+	<string>QR konnte nicht gerendert werden</string>
+	<key>Couldn't sign in</key>
+	<string>Anmeldung fehlgeschlagen</string>
+	<key>Couldn't sign out</key>
+	<string>Abmelden fehlgeschlagen</string>
+	<key>Couldn't start the camera.</key>
+	<string>Die Kamera konnte nicht gestartet werden.</string>
+	<key>Couldn't step down</key>
+	<string>Konnte nicht zurücktreten</string>
+	<key>Couldn't update archive</key>
+	<string>Archiv konnte nicht aktualisiert werden</string>
+	<key>Couldn't update group image</key>
+	<string>Gruppenbild konnte nicht aktualisiert werden</string>
+	<key>Create</key>
+	<string>Erstellen</string>
+	<key>Create New Identity</key>
+	<string>Neue Identität erstellen</string>
+	<key>Creating…</key>
+	<string>Erstelle…</string>
+	<key>Dark</key>
+	<string>Dunkel</string>
+	<key>WhiteNoise</key>
+	<string>WhiteNoise</string>
+	<key>WhiteNoise</key>
+	<string>WhiteNoise</string>
+	<key>Delete</key>
+	<string>Löschen</string>
+	<key>Delete All Audit Logs</key>
+	<string>Alle Audit-Protokolle löschen</string>
+	<key>Delete all audit logs?</key>
+	<string>Alle Audit-Protokolle löschen?</string>
+	<key>Delete failed</key>
+	<string>Das Löschen ist fehlgeschlagen</string>
+	<key>Deletes every local audit JSONL file on this device. Live recorders rotate to fresh files when audit logging is still on.</key>
+	<string>Löscht jede lokale Audit-JSONL-Datei auf diesem Gerät. Live-Rekorder wechseln zu neuen Dateien, wenn die Audit-Protokollierung noch aktiv ist.</string>
+	<key>Deleting audit logs</key>
+	<string>Audit-Protokolle werden gelöscht</string>
+	<key>Delivery</key>
+	<string>Lieferung</string>
+	<key>Denied</key>
+	<string>Abgelehnt</string>
+	<key>Description</key>
+	<string>Beschreibung</string>
+	<key>Details</key>
+	<string>Einzelheiten</string>
+	<key>Developer</key>
+	<string>Entwickler</string>
+	<key>Developer mode</key>
+	<string>Entwicklermodus</string>
+	<key>Diagnostics</key>
+	<string>Diagnose</string>
+	<key>Dictation</key>
+	<string>Diktat</string>
+	<key>Disappearing messages</key>
+	<string>Disappearing messages</string>
+	<key>Disappearing messages changed from %@ to %@</key>
+	<string>Disappearing messages changed from %@ to %@</string>
+	<key>Disappearing messages set to %@</key>
+	<string>Disappearing messages set to %@</string>
+	<key>Disappearing messages turned off</key>
+	<string>Disappearing messages turned off</string>
+	<key>Discovered on relays</key>
+	<string>Auf Relais entdeckt</string>
+	<key>Display name</key>
+	<string>Anzeigename</string>
+	<key>Done</key>
+	<string>Fertig</string>
+	<key>EVENT ID</key>
+	<string>EREIGNIS-ID</string>
+	<key>Edit group image</key>
+	<string>Gruppenbild bearbeiten</string>
+	<key>Edit group name</key>
+	<string>Gruppennamen bearbeiten</string>
+	<key>Emoji and stickers</key>
+	<string>Emoji und Sticker</string>
+	<key>Encrypted export</key>
+	<string>Verschlüsselter Export</string>
+	<key>Encrypted export failed: %@</key>
+	<string>Verschlüsselter Export fehlgeschlagen: %@</string>
+	<key>End-to-end encrypted group messaging.</key>
+	<string>Ende-zu-Ende-verschlüsselte Gruppennachrichten.</string>
+	<key>Enter a passphrase.</key>
+	<string>Gib eine Passphrase ein.</string>
+	<key>Enter a search term.</key>
+	<string>Gib einen Suchbegriff ein.</string>
+	<key>Enter a valid Lightning address like name@example.com.</key>
+	<string>Gib eine gültige Lightning-Adresse wie name@example.com ein.</string>
+	<key>Enter a valid NIP-05 address like name@example.com.</key>
+	<string>Gib eine gültige NIP-05-Adresse wie name@example.com ein.</string>
+	<key>Enter a valid npub, nprofile, Nostr URI, profile link, or hex public key.</key>
+	<string>Geben Sie einen gültigen npub-, nprofile-, Nostr-URI, einen Profillink oder einen öffentlichen Hex-Schlüssel ein.</string>
+	<key>Ephemeral</key>
+	<string>Vergänglich</string>
+	<key>Epoch</key>
+	<string>Epoche</string>
+	<key>Everyone in the group will see the new name.</key>
+	<string>Jeder in der Gruppe wird den neuen Namen sehen.</string>
+	<key>Export</key>
+	<string>Exportieren</string>
+	<key>Export Conversation Transcript</key>
+	<string>Konversationstranskript exportieren</string>
+	<key>Export encrypted nsec</key>
+	<string>Verschlüsseltes nsec exportieren</string>
+	<key>Export failed</key>
+	<string>Export fehlgeschlagen</string>
+	<key>Export raw nsec</key>
+	<string>Rohes nsec exportieren</string>
+	<key>Exports the raw inner Nostr event history for this group as JSON (kinds 9, 1200–1210, and related metadata), ordered by time. Use Share to copy or save the file.</key>
+	<string>Exportiert den rohen inneren Nostr-Ereignisverlauf für diese Gruppe als JSON (Kinds 9, 1200–1210 und zugehörige Metadaten), nach Zeit sortiert. Verwende Teilen, um die Datei zu kopieren oder zu sichern.</string>
+	<key>Filter</key>
+	<string>Filter</string>
+	<key>Filter chats</key>
+	<string>Chats filtern</string>
+	<key>Finish recording</key>
+	<string>Finish recording</string>
+	<key>Found on your account outbox relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.</key>
+	<string>Found on your account outbox relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.</string>
+	<key>Found on your key-package relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.</key>
+	<string>Auf Ihren Schlüsselpaket-Relays gefunden, aber nicht auf diesem Gerät gespeichert – höchstwahrscheinlich von einem anderen Gerät oder einer älteren Sitzung veröffentlicht. Löschen, um es außer Betrieb zu setzen.</string>
+	<key>Generate Identity</key>
+	<string>Identität generieren</string>
+	<key>Generates a fresh Nostr identity and stores the secret key securely in your device's Keychain.</key>
+	<string>Erzeugt eine neue Nostr-Identität und speichert den geheimen Schlüssel sicher im Schlüsselbund Ihres Geräts.</string>
+	<key>Group ID</key>
+	<string>Gruppen-ID</string>
+	<key>Group archived</key>
+	<string>Gruppe archiviert</string>
+	<key>Group avatar changed</key>
+	<string>Gruppenavatar geändert</string>
+	<key>Group details</key>
+	<string>Gruppendetails</string>
+	<key>Group image</key>
+	<string>Gruppenbild</string>
+	<key>Group image removed</key>
+	<string>Gruppenbild entfernt</string>
+	<key>Group image updated</key>
+	<string>Gruppenbild aktualisiert</string>
+	<key>Group invite</key>
+	<string>Gruppeneinladung</string>
+	<key>Group membership updated</key>
+	<string>Gruppenmitgliedschaft aktualisiert</string>
+	<key>Group message</key>
+	<string>Gruppennachricht</string>
+	<key>Group name</key>
+	<string>Gruppenname</string>
+	<key>Group name updated</key>
+	<string>Gruppenname aktualisiert</string>
+	<key>Group renamed</key>
+	<string>Gruppe umbenannt</string>
+	<key>Group renamed to %@</key>
+	<string>Gruppe umbenannt in %@</string>
+	<key>Group unarchived</key>
+	<string>Gruppe nicht archiviert</string>
+	<key>Identities</key>
+	<string>Identitäten</string>
+	<key>Identity</key>
+	<string>Identität</string>
+	<key>Identity &amp; Keys</key>
+	<string>Identität &amp; Schlüssel</string>
+	<key>Identity creation failed</key>
+	<string>Die Erstellung der Identität ist fehlgeschlagen</string>
+	<key>Identity imported.</key>
+	<string>Identität importiert.</string>
+	<key>Idle</key>
+	<string>Inaktiv</string>
+	<key>Image</key>
+	<string>Bild</string>
+	<key>Image URL</key>
+	<string>Bild-URL</string>
+	<key>Image search</key>
+	<string>Bildersuche</string>
+	<key>Image search is temporarily unavailable.</key>
+	<string>Die Bildersuche ist vorübergehend nicht verfügbar.</string>
+	<key>Image search returned an unexpected response.</key>
+	<string>Die Bildersuche hat eine unerwartete Antwort zurückgegeben.</string>
+	<key>Import</key>
+	<string>Importieren</string>
+	<key>Import Existing nsec</key>
+	<string>Vorhandenes nsec importieren</string>
+	<key>Import Identity</key>
+	<string>Identität importieren</string>
+	<key>Import failed</key>
+	<string>Der Import ist fehlgeschlagen</string>
+	<key>Importing…</key>
+	<string>Importiere…</string>
+	<key>Inbox</key>
+	<string>Posteingang</string>
+	<key>Invalid image URL</key>
+	<string>Ungültige Bild-URL</string>
+	<key>Invitation to %@</key>
+	<string>Einladung zu %@</string>
+	<key>Invite</key>
+	<string>Einladen</string>
+	<key>Invite failed</key>
+	<string>Die Einladung ist fehlgeschlagen</string>
+	<key>Invited 1 member</key>
+	<string>1 Mitglied eingeladen</string>
+	<key>Inviting members…</key>
+	<string>Mitglieder einladen…</string>
+	<key>Inviting…</key>
+	<string>Einladend…</string>
+	<key>It may still be syncing. Try again in a moment.</key>
+	<string>Es wird möglicherweise noch synchronisiert. Versuche es gleich erneut.</string>
+	<key>Just you</key>
+	<string>Nur du</string>
+	<key>Keep at least one relay.</key>
+	<string>Behalten Sie mindestens ein Relais.</string>
+	<key>Key Package</key>
+	<string>Schlüsselpaket</string>
+	<key>Key Packages</key>
+	<string>Schlüsselpakete</string>
+	<key>Key package deleted</key>
+	<string>Schlüsselpaket gelöscht</string>
+	<key>Language</key>
+	<string>Sprache</string>
+	<key>Last token list update</key>
+	<string>Letzte Aktualisierung der Tokenliste</string>
+	<key>Leave</key>
+	<string>Verlassen</string>
+	<key>Leave Group</key>
+	<string>Gruppe verlassen</string>
+	<key>Leave this group?</key>
+	<string>Diese Gruppe verlassen?</string>
+	<key>Leaving group…</key>
+	<string>Gruppe verlassen…</string>
+	<key>Leaving will step you down as admin first.</key>
+	<string>Wenn Sie das Unternehmen verlassen, werden Sie zunächst als Administrator entlassen.</string>
+	<key>Light</key>
+	<string>Hell</string>
+	<key>Lightning (lud16)</key>
+	<string>Blitz (lud16)</string>
+	<key>Live</key>
+	<string>Live</string>
+	<key>Loading MLS state…</key>
+	<string>Laden des MLS-Status…</string>
+	<key>Loading audit logs</key>
+	<string>Loading audit logs</string>
+	<key>Loading key packages</key>
+	<string>Schlüsselpakete werden geladen</string>
+	<key>Loading push notification state…</key>
+	<string>Push-Benachrichtigungsstatus wird geladen…</string>
+	<key>Loading relays</key>
+	<string>Laderelais</string>
+	<key>Local account cleanup did not finish.</key>
+	<string>Die lokale Kontobereinigung wurde nicht abgeschlossen.</string>
+	<key>Local leaf</key>
+	<string>Lokales Blatt</string>
+	<key>Local notifications</key>
+	<string>Lokale Benachrichtigungen</string>
+	<key>Local only</key>
+	<string>Nur lokal</string>
+	<key>Local registration</key>
+	<string>Lokale Registrierung</string>
+	<key>Local signing</key>
+	<string>Lokale Signierung</string>
+	<key>MLS group (developer)</key>
+	<string>MLS-Gruppe (Entwickler)</string>
+	<key>Made admin</key>
+	<string>Zum Admin gemacht</string>
+	<key>Make Admin</key>
+	<string>Machen Sie Admin</string>
+	<key>Make another member an admin before removing the last admin.</key>
+	<string>Machen Sie ein anderes Mitglied zum Administrator, bevor Sie den letzten Administrator entfernen.</string>
+	<key>Making admin…</key>
+	<string>Administrator erstellen…</string>
+	<key>Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them.</key>
+	<string>Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them.</string>
+	<key>MarmotKit %@</key>
+	<string>MarmotKit %@</string>
+	<key>Media is not available in this group</key>
+	<string>Medien sind in dieser Gruppe nicht verfügbar</string>
+	<key>Member actions</key>
+	<string>Mitgliederaktionen</string>
+	<key>Member removed</key>
+	<string>Mitglied entfernt</string>
+	<key>Members</key>
+	<string>Mitglieder</string>
+	<key>Members (MLS)</key>
+	<string>Mitglieder (MLS)</string>
+	<key>Membership changed</key>
+	<string>Mitgliedschaft geändert</string>
+	<key>Message</key>
+	<string>Nachricht</string>
+	<key>Microphone access is needed to record voice messages.</key>
+	<string>Microphone access is needed to record voice messages.</string>
+	<key>Missing: %@. Add a relay to publish them.</key>
+	<string>Fehlt: %@. Fügen Sie ein Relay hinzu, um sie zu veröffentlichen.</string>
+	<key>More emoji</key>
+	<string>Mehr Emoji</string>
+	<key>My Code</key>
+	<string>Mein Code</string>
+	<key>My QR code</key>
+	<string>Mein QR-Code</string>
+	<key>NIP-05 (name@domain)</key>
+	<string>NIP-05 (Name@Domäne)</string>
+	<key>NIP-65</key>
+	<string>NIP-65</string>
+	<key>Native push</key>
+	<string>Native Push</string>
+	<key>Native push is unavailable in this build until a WhiteNoise push server public key is configured.</key>
+	<string>Nativer Push ist in diesem Build erst verfügbar, wenn ein öffentlicher Schlüssel des WhiteNoise-Push-Servers konfiguriert ist.</string>
+	<key>Native push registers only an encrypted APNS token with WhiteNoise. Apple receives generic notification wakes.</key>
+	<string>Native Push registriert nur ein verschlüsseltes APNS-Token mit WhiteNoise. Apple erhält generische Benachrichtigungen.</string>
+	<key>Native push server configuration is missing.</key>
+	<string>Die Konfiguration des nativen Push-Servers fehlt.</string>
+	<key>Network</key>
+	<string>Netzwerk</string>
+	<key>New Chat</key>
+	<string>Neuer Chat</string>
+	<key>New Identity</key>
+	<string>Neue Identität</string>
+	<key>New chat</key>
+	<string>Neuer Chat</string>
+	<key>New encrypted message</key>
+	<string>Neue verschlüsselte Nachricht</string>
+	<key>New key package published</key>
+	<string>Neues Schlüsselpaket veröffentlicht</string>
+	<key>New message</key>
+	<string>Neue Nachricht</string>
+	<key>No active account is selected.</key>
+	<string>Es ist kein aktives Konto ausgewählt.</string>
+	<key>No active account.</key>
+	<string>Kein aktives Konto.</string>
+	<key>No archived chats</key>
+	<string>Keine archivierten Chats</string>
+	<key>No audit logs on this device.</key>
+	<string>No audit logs on this device.</string>
+	<key>No camera available on this device.</key>
+	<string>Auf diesem Gerät ist keine Kamera verfügbar.</string>
+	<key>No chats yet</key>
+	<string>Noch keine Chats</string>
+	<key>No image selected</key>
+	<string>Kein Bild ausgewählt</string>
+	<key>No key packages found.</key>
+	<string>Keine Schlüsselpakete gefunden.</string>
+	<key>No messages yet</key>
+	<string>Noch keine Nachrichten</string>
+	<key>No relays configured.</key>
+	<string>Keine Relais konfiguriert.</string>
+	<key>No relays published</key>
+	<string>Keine Relais veröffentlicht</string>
+	<key>No unread chats</key>
+	<string>Keine ungelesenen Chats</string>
+	<key>No usable HTTPS images found.</key>
+	<string>Keine verwendbaren HTTPS-Bilder gefunden.</string>
+	<key>Nostr group ID</key>
+	<string>Nostr Gruppen-ID</string>
+	<key>Not configured</key>
+	<string>Nicht konfiguriert</string>
+	<key>Not delivered</key>
+	<string>Nicht geliefert</string>
+	<key>Not published</key>
+	<string>Nicht veröffentlicht</string>
+	<key>Not received</key>
+	<string>Nicht empfangen</string>
+	<key>Not requested</key>
+	<string>Nicht angefordert</string>
+	<key>Notification failed</key>
+	<string>Die Benachrichtigung ist fehlgeschlagen</string>
+	<key>Notifications</key>
+	<string>Benachrichtigungen</string>
+	<key>Notifications are disabled in system settings.</key>
+	<string>Benachrichtigungen sind in den Systemeinstellungen deaktiviert.</string>
+	<key>Notifications unavailable</key>
+	<string>Benachrichtigungen nicht verfügbar</string>
+	<key>OK</key>
+	<string>OK</string>
+	<key>Off</key>
+	<string>Off</string>
+	<key>Online</key>
+	<string>Online</string>
+	<key>Only admins can add or manage members.</key>
+	<string>Nur Administratoren können Mitglieder hinzufügen oder verwalten.</string>
+	<key>Only admins can manage group members.</key>
+	<string>Nur Administratoren können Gruppenmitglieder verwalten.</string>
+	<key>Only public HTTPS image URLs are allowed.</key>
+	<string>Nur öffentliche HTTPS-Bild-URLs sind erlaubt.</string>
+	<key>Open</key>
+	<string>Öffnen</string>
+	<key>Open WhiteNoise to view the invite</key>
+	<string>Öffnen Sie WhiteNoise, um die Einladung anzuzeigen</string>
+	<key>Open Diagnostics</key>
+	<string>Öffnen Sie die Diagnose</string>
+	<key>Open attachment</key>
+	<string>Open attachment</string>
+	<key>Open link?</key>
+	<string>Link öffnen?</string>
+	<key>Open media gallery</key>
+	<string>Open media gallery</string>
+	<key>Open task</key>
+	<string>Offene Aufgabe</string>
+	<key>Open video fullscreen</key>
+	<string>Video im Vollbildmodus öffnen</string>
+	<key>Optional</key>
+	<string>Optional</string>
+	<key>Other accounts use these key packages to invite you into MLS groups. "Synced" means the package is also visible on your account outbox relays; "Local only" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).</key>
+	<string>Other accounts use these key packages to invite you into MLS groups. "Synced" means the package is also visible on your account outbox relays; "Local only" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).</string>
+	<key>Other accounts use these key packages to invite you into MLS groups. "Synced" means the package is also visible on your key-package relays; "Local only" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).</key>
+	<string>Andere Konten verwenden diese Schlüsselpakete, um Sie in MLS-Gruppen einzuladen. „Synchronisiert“ bedeutet, dass das Paket auch auf Ihren Schlüsselpaket-Relays sichtbar ist; „Nur lokal“ bedeutet, dass dieses Gerät es hat, die Relais es aber gerade nicht zurückgegeben haben (es wurde möglicherweise nicht repliziert oder die Relais haben nicht geantwortet).</string>
+	<key>Passphrase</key>
+	<string>Passphrase</string>
+	<key>Paste your nsec (bech32 secret key). Public npub values are for sharing and cannot sign in.</key>
+	<string>Fügen Sie Ihren nsec (bech32-Geheimschlüssel) ein. Öffentliche npub-Werte dienen der Freigabe und können nicht angemeldet werden.</string>
+	<key>Pause audio message</key>
+	<string>Pause audio message</string>
+	<key>Permission</key>
+	<string>Erlaubnis</string>
+	<key>Photo Library</key>
+	<string>Fotomediathek</string>
+	<key>Picture URL</key>
+	<string>Bild-URL</string>
+	<key>Play audio message</key>
+	<string>Play audio message</string>
+	<key>Play video</key>
+	<string>Play video</string>
+	<key>Playback speed</key>
+	<string>Playback speed</string>
+	<key>Point the camera at a WhiteNoise profile QR</key>
+	<string>Richten Sie die Kamera auf ein WhiteNoise-Profil QR</string>
+	<key>Preferences</key>
+	<string>Voreinstellungen</string>
+	<key>Preparing export</key>
+	<string>Export wird vorbereitet</string>
+	<key>Privacy &amp; Security</key>
+	<string>Privacy &amp; Security</string>
+	<key>Profile</key>
+	<string>Profil</string>
+	<key>Profile published</key>
+	<string>Profil veröffentlicht</string>
+	<key>Provisional</key>
+	<string>Provisorisch</string>
+	<key>Public key</key>
+	<string>Öffentlicher Schlüssel</string>
+	<key>Publish New Key Package</key>
+	<string>Neues Schlüsselpaket veröffentlichen</string>
+	<key>Publish failed</key>
+	<string>Die Veröffentlichung ist fehlgeschlagen</string>
+	<key>Published %@</key>
+	<string>Veröffentlicht %@</string>
+	<key>Published %u updates.</key>
+	<string>Veröffentlichte %u-Updates.</string>
+	<key>Published 1 update.</key>
+	<string>1 Update veröffentlicht.</string>
+	<key>Published Relay Lists</key>
+	<string>Veröffentlichte Relay-Listen</string>
+	<key>Published from this device</key>
+	<string>Von diesem Gerät aus veröffentlicht</string>
+	<key>Publishes a fresh KeyPackage event to your account outbox relays.</key>
+	<string>Publishes a fresh KeyPackage event to your account outbox relays.</string>
+	<key>Publishes a fresh KeyPackage event to your configured key-package relays.</key>
+	<string>Veröffentlicht ein neues KeyPackage-Ereignis für Ihre konfigurierten Schlüsselpaket-Relays.</string>
+	<key>Publishing group update.</key>
+	<string>Aktualisierung der Veröffentlichungsgruppe.</string>
+	<key>Publishing…</key>
+	<string>Veröffentlichung…</string>
+	<key>Push notifications (developer)</key>
+	<string>Push-Benachrichtigungen (Entwickler)</string>
+	<key>Push registration failed</key>
+	<string>Push-Registrierung fehlgeschlagen</string>
+	<key>Push server</key>
+	<string>Push-Server</string>
+	<key>QUIC · %@</key>
+	<string>QUIC · %@</string>
+	<key>Raw export reveals your private key in plaintext and permanently marks it as handled insecurely. Encrypted export creates an ncryptsec1 backup protected by your passphrase without revealing the raw key.</key>
+	<string>Der Roh-Export zeigt deinen privaten Schlüssel im Klartext und markiert ihn dauerhaft als unsicher behandelt. Der verschlüsselte Export erstellt eine durch deine Passphrase geschützte ncryptsec1-Sicherung, ohne den Rohschlüssel offenzulegen.</string>
+	<key>React</key>
+	<string>Reagieren</string>
+	<key>Reaction failed</key>
+	<string>Reaktion fehlgeschlagen</string>
+	<key>Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists.</key>
+	<string>Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists.</string>
+	<key>Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65, inbox, and key-package relay lists.</key>
+	<string>Lesen Sie aus Marmots Account-Relay-Listen. Änderungen werden über Marmot in Ihren NIP-65-, Posteingangs- und Schlüsselpaket-Relay-Listen veröffentlicht.</string>
+	<key>Read-only</key>
+	<string>Nur lesen</string>
+	<key>Received</key>
+	<string>Empfangen</string>
+	<key>Recipients</key>
+	<string>Empfänger</string>
+	<key>Refresh</key>
+	<string>Refresh</string>
+	<key>Refresh APNS Token</key>
+	<string>APNS-Token aktualisieren</string>
+	<key>Relay hints</key>
+	<string>Hinweise zum Staffellauf</string>
+	<key>Relay lists updated</key>
+	<string>Staffellisten aktualisiert</string>
+	<key>Relay only</key>
+	<string>Nur Relais</string>
+	<key>Relay update failed</key>
+	<string>Das Relay-Update ist fehlgeschlagen</string>
+	<key>Relays</key>
+	<string>Relais</string>
+	<key>Remove</key>
+	<string>Entfernen</string>
+	<key>Remove Admin</key>
+	<string>Admin entfernen</string>
+	<key>Remove attachment</key>
+	<string>Remove attachment</string>
+	<key>Remove from Group</key>
+	<string>Aus Gruppe entfernen</string>
+	<key>Remove image</key>
+	<string>Bild entfernen</string>
+	<key>Remove photo</key>
+	<string>Foto entfernen</string>
+	<key>Remove this member?</key>
+	<string>Dieses Mitglied entfernen?</string>
+	<key>Removing admin…</key>
+	<string>Administrator wird entfernt…</string>
+	<key>Removing member…</key>
+	<string>Mitglied wird entfernt…</string>
+	<key>Renamed to %@</key>
+	<string>Umbenannt in %@</string>
+	<key>Reply</key>
+	<string>Antworten</string>
+	<key>Replying to %@</key>
+	<string>Antwort auf %@</string>
+	<key>Request APNS Token</key>
+	<string>Fordern Sie das APNS-Token an</string>
+	<key>Required components</key>
+	<string>Erforderliche Komponenten</string>
+	<key>Restarting</key>
+	<string>Restarting</string>
+	<key>Retry</key>
+	<string>Erneut versuchen</string>
+	<key>Save</key>
+	<string>Speichern</string>
+	<key>Save profile</key>
+	<string>Profil speichern</string>
+	<key>Saved %@</key>
+	<string>Gespeichert %@</string>
+	<key>Saved locally.</key>
+	<string>Lokal gespeichert.</string>
+	<key>Saving</key>
+	<string>Sparen</string>
+	<key>Scan</key>
+	<string>Scan</string>
+	<key>Scan QR Code</key>
+	<string>QR-Code scannen</string>
+	<key>Scan QR code</key>
+	<string>QR-Code scannen</string>
+	<key>Scroll to latest message</key>
+	<string>Scrollen Sie zur neuesten Nachricht</string>
+	<key>Search</key>
+	<string>Suchen</string>
+	<key>Search chats</key>
+	<string>Chats suchen</string>
+	<key>Search the web</key>
+	<string>Im Web suchen</string>
+	<key>Send</key>
+	<string>Senden</string>
+	<key>Send Audit Log</key>
+	<string>Send Audit Log</string>
+	<key>Send audit log?</key>
+	<string>Send audit log?</string>
+	<key>Send failed</key>
+	<string>Senden fehlgeschlagen</string>
+	<key>Send the first message to get started.</key>
+	<string>Senden Sie die erste Nachricht, um loszulegen.</string>
+	<key>Send to self</key>
+	<string>An mich selbst senden</string>
+	<key>Sending…</key>
+	<string>Senden…</string>
+	<key>Sent</key>
+	<string>Gesendet</string>
+	<key>Set group image</key>
+	<string>Gruppenbild festlegen</string>
+	<key>Set group name</key>
+	<string>Gruppennamen festlegen</string>
+	<key>Settings</key>
+	<string>Einstellungen</string>
+	<key>Show profile QR code</key>
+	<string>Profil anzeigen QR-Code</string>
+	<key>Sign out</key>
+	<string>Abmelden</string>
+	<key>Sign out of this account</key>
+	<string>Melden Sie sich von diesem Konto ab</string>
+	<key>Sign out?</key>
+	<string>Abmelden?</string>
+	<key>Signed out</key>
+	<string>Abgemeldet</string>
+	<key>Signing out only forgets which account is active. Identities and their key material stay in the device keychain so you can sign back in.</key>
+	<string>Beim Abmelden wird nur vergessen, welches Konto aktiv ist. Identitäten und ihr Schlüsselmaterial bleiben im Schlüsselbund des Geräts, sodass Sie sich erneut anmelden können.</string>
+	<key>Signing out removes this account and its local key material from this device.</key>
+	<string>Durch das Abmelden werden dieses Konto und sein lokales Schlüsselmaterial von diesem Gerät entfernt.</string>
+	<key>Someone</key>
+	<string>Jemand</string>
+	<key>Start a conversation by inviting someone with their npub.</key>
+	<string>Beginnen Sie ein Gespräch, indem Sie jemanden mit seinem npub einladen.</string>
+	<key>Starts dictation in search.</key>
+	<string>Startet die Diktierfunktion in der Suche.</string>
+	<key>Startup failed</key>
+	<string>Der Start ist fehlgeschlagen</string>
+	<key>Status</key>
+	<string>Status</string>
+	<key>Step Down</key>
+	<string>Treten Sie zurück</string>
+	<key>Step Down as Admin</key>
+	<string>Als Admin zurücktreten</string>
+	<key>Step down as admin before leaving the group.</key>
+	<string>Treten Sie als Administrator zurück, bevor Sie die Gruppe verlassen.</string>
+	<key>Step down as admin?</key>
+	<string>Als Administrator zurücktreten?</string>
+	<key>Stepping down before leaving…</key>
+	<string>Vor dem Verlassen zurücktreten …</string>
+	<key>Stepping down…</key>
+	<string>Rücktritt …</string>
+	<key>Streaming debug</key>
+	<string>Streaming-Debug</string>
+	<key>Streaming…</key>
+	<string>Streaming…</string>
+	<key>Swipe a chat to archive it; archived chats stay active and still notify you.</key>
+	<string>Wischen Sie über einen Chat, um ihn zu archivieren. Archivierte Chats bleiben aktiv und benachrichtigen Sie weiterhin.</string>
+	<key>Sync Native Registration</key>
+	<string>Native Registrierung synchronisieren</string>
+	<key>Synced</key>
+	<string>Synchronisiert</string>
+	<key>System</key>
+	<string>System</string>
+	<key>System follows your device language. Other choices update WhiteNoise immediately.</key>
+	<string>System folgt der Sprache deines Geräts. Andere Optionen aktualisieren WhiteNoise sofort.</string>
+	<key>Take Photo</key>
+	<string>Foto aufnehmen</string>
+	<key>Telemetry</key>
+	<string>Telemetrie</string>
+	<key>That QR code isn't a WhiteNoise profile.</key>
+	<string>Dieser QR-Code ist kein WhiteNoise-Profil.</string>
+	<key>That attachment could not be opened.</key>
+	<string>That attachment could not be opened.</string>
+	<key>That attachment could not be prepared.</key>
+	<string>That attachment could not be prepared.</string>
+	<key>That attachment is too large to send.</key>
+	<string>That attachment is too large to send.</string>
+	<key>That file type is not supported.</key>
+	<string>That file type is not supported.</string>
+	<key>That image could not be opened.</key>
+	<string>Dieses Bild konnte nicht geöffnet werden.</string>
+	<key>That image could not be prepared.</key>
+	<string>Dieses Bild konnte nicht vorbereitet werden.</string>
+	<key>That image is too large to send.</key>
+	<string>Dieses Bild ist zu groß zum Senden.</string>
+	<key>That member is already an admin.</key>
+	<string>Dieses Mitglied ist bereits Administrator.</string>
+	<key>That member is no longer in this group.</key>
+	<string>Dieses Mitglied ist nicht mehr in dieser Gruppe.</string>
+	<key>That member is not an admin.</key>
+	<string>Dieses Mitglied ist kein Administrator.</string>
+	<key>The account keystore is unavailable right now.</key>
+	<string>Der Kontoschlüsselspeicher ist derzeit nicht verfügbar.</string>
+	<key>Theme</key>
+	<string>Design</string>
+	<key>They'll stop receiving new messages in this group.</key>
+	<string>Sie erhalten in dieser Gruppe keine neuen Nachrichten mehr.</string>
+	<key>Thinking</key>
+	<string>Denkt nach</string>
+	<key>This account cannot export a private key.</key>
+	<string>Dieses Konto kann keinen privaten Schlüssel exportieren.</string>
+	<key>This attachment is not ready yet.</key>
+	<string>Dieser Anhang ist noch nicht bereit.</string>
+	<key>This group is inactive. You can't send new messages.</key>
+	<string>Diese Gruppe ist inaktiv. Du kannst keine neuen Nachrichten senden.</string>
+	<key>This link opens %@:
+%@</key>
+	<string>Dieser Link öffnet %@:
+%@</string>
+	<key>This link opens:
+%@</key>
+	<string>Dieser Link öffnet:
+%@</string>
+	<key>This message was deleted</key>
+	<string>Diese Nachricht wurde gelöscht</string>
+	<key>This permanently removes every local audit JSONL file on this device.</key>
+	<string>Dies entfernt dauerhaft jede lokale Audit-JSONL-Datei auf diesem Gerät.</string>
+	<key>Token fingerprint</key>
+	<string>Token-Fingerabdruck</string>
+	<key>Token fingerprints</key>
+	<string>Token-Fingerabdrücke</string>
+	<key>Tokens</key>
+	<string>Token</string>
+	<key>Unarchive</key>
+	<string>Dearchivieren</string>
+	<key>Unarchive Group</key>
+	<string>Gruppe dearchivieren</string>
+	<key>Unclassified key packages</key>
+	<string>Unclassified key packages</string>
+	<key>Unknown</key>
+	<string>Unbekannt</string>
+	<key>Unread</key>
+	<string>Ungelesen</string>
+	<key>Updating group image…</key>
+	<string>Gruppenbild wird aktualisiert …</string>
+	<key>Updating group name…</key>
+	<string>Gruppenname wird aktualisiert…</string>
+	<key>Uploads %@ to %@.</key>
+	<string>Uploads %@ to %@.</string>
+	<key>Use a public HTTPS image URL.</key>
+	<string>Verwende eine öffentliche HTTPS-Bild-URL.</string>
+	<key>Version</key>
+	<string>Version</string>
+	<key>Version %@ (%@)</key>
+	<string>Version %@ (%@)</string>
+	<key>Video attachment</key>
+	<string>Video attachment</string>
+	<key>Voice message</key>
+	<string>Sprachnachricht</string>
+	<key>Voice recording could not start.</key>
+	<string>Voice recording could not start.</string>
+	<key>We'll keep trying in the background.</key>
+	<string>Wir versuchen es im Hintergrund weiter.</string>
+	<key>Web search sends your query and IP address to DuckDuckGo and image hosts.</key>
+	<string>Die Websuche sendet deine Suchanfrage und IP-Adresse an DuckDuckGo und Bildanbieter.</string>
+	<key>Welcome back</key>
+	<string>Willkommen zurück</string>
+	<key>Writes local audit JSONL files for forensic review. Changing this restarts the local runtime immediately.</key>
+	<string>Writes local audit JSONL files for forensic review. Changing this restarts the local runtime immediately.</string>
+	<key>Writes local audit JSONL files for forensic review. Toggling applies immediately to running sessions.</key>
+	<string>Schreibt lokale Audit-JSONL-Dateien für forensische Überprüfung. Umschalten gilt sofort für laufende Sitzungen.</string>
+	<key>Yesterday</key>
+	<string>Gestern</string>
+	<key>You</key>
+	<string>Du</string>
+	<key>You can send up to %lld attachments at once</key>
+	<string>You can send up to %lld attachments at once</string>
+	<key>You left the group</key>
+	<string>Du hast die Gruppe verlassen</string>
+	<key>You sent a message</key>
+	<string>Sie haben eine Nachricht gesendet</string>
+	<key>You stepped down as admin</key>
+	<string>Sie sind als Administrator zurückgetreten</string>
+	<key>You'll stay in the group, but another admin will need to restore your admin status.</key>
+	<string>Sie bleiben in der Gruppe, aber ein anderer Administrator muss Ihren Administratorstatus wiederherstellen.</string>
+	<key>You'll step down as admin first, then stop receiving messages from this group.</key>
+	<string>Sie treten zunächst als Administrator zurück und erhalten dann keine Nachrichten mehr von dieser Gruppe.</string>
+	<key>You'll stop receiving messages from this group. Other members will see a system message.</key>
+	<string>Sie erhalten keine Nachrichten mehr von dieser Gruppe. Andere Mitglieder sehen eine Systemmeldung.</string>
+	<key>You're the only admin. Make another member an admin before you leave.</key>
+	<string>Sie sind der einzige Administrator. Machen Sie ein anderes Mitglied zum Administrator, bevor Sie gehen.</string>
+	<key>You: %@</key>
+	<string>Sie: %@</string>
+	<key>Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it.</key>
+	<string>Deine Passphrase verschlüsselt die exportierte ncryptsec1-Sicherung. Marmot speichert sie nie.</string>
+	<key>https://example.com/image.jpg</key>
+	<string>https://example.com/image.jpg</string>
+	<key>id: %@</key>
+	<string>ID: %@</string>
+	<key>leaf %u</key>
+	<string>Blatt %u</string>
+	<key>local</key>
+	<string>lokal</string>
+	<key>now</key>
+	<string>jetzt</string>
+	<key>npub</key>
+	<string>npub</string>
+	<key>npub1…, nprofile1…, or hex public key</key>
+	<string>npub1…, nprofile1… oder hexadezimaler öffentlicher Schlüssel</string>
+	<key>nsec1…</key>
+	<string>nsec1…</string>
+	<key>stale</key>
+	<string>abgestanden</string>
+	<key>stream %@</key>
+	<string>Stream %@</string>
+	<key>wss://relay.example.com</key>
+	<string>wss://relay.example.com</string>
+	<key>·</key>
+	<string>·</string>
+	<key>“Online” means this account's runtime worker is active in the app right now (subscribed to its relays). It doesn't reflect key access.</key>
+	<string>„Online“ bedeutet, dass der Laufzeit-Worker dieses Kontos gerade in der App aktiv ist (seine Relays abonniert hat). Es spiegelt nicht den Schlüsselzugriff wider.</string>
+</dict>
+</plist>

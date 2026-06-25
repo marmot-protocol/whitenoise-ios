@@ -4,11 +4,11 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.dev.ipf.darkmatter</string>
+		<string>$(APP_GROUP_IDENTIFIER)</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)dev.ipf.darkmatter</string>
+		<string>$(KEYCHAIN_ACCESS_GROUP)</string>
 	</array>
 </dict>
 </plist>

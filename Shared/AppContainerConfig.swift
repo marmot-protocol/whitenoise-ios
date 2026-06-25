@@ -19,7 +19,19 @@ nonisolated enum AppContainerError: Error, LocalizedError, Equatable {
 }
 
 nonisolated enum AppContainerConfig {
-    static let appGroupIdentifier = "group.dev.ipf.darkmatter"
+    /// The App Group is flavor-specific (production vs. staging) and both the
+    /// app and the NSE link this file, so it can't be a compile-time constant.
+    /// Each target's Info.plist carries `AppGroupIdentifier` = `$(APP_GROUP_IDENTIFIER)`
+    /// from its flavor xcconfig. A missing value means a build misconfiguration;
+    /// fail hard rather than silently fall back to the production group, which
+    /// would fork a staging build's data into the wrong container.
+    static let appGroupIdentifier: String = {
+        guard let identifier = (Bundle.main.object(forInfoDictionaryKey: "AppGroupIdentifier") as? String)
+            .flatMap({ $0.isEmpty ? nil : $0 }) else {
+            fatalError("AppGroupIdentifier is missing from Info.plist; cannot resolve the shared App Group container.")
+        }
+        return identifier
+    }()
     static let marmotDirectoryName = "Marmot"
     static let seedRelays = [
         "wss://relay.eu.whitenoise.chat",
@@ -70,8 +82,8 @@ nonisolated enum AppContainerConfig {
 }
 
 nonisolated struct NativePushServerConfig: Equatable {
-    static let serverPubkeyInfoKey = "DarkmatterPushServerPubkeyHex"
-    static let relayHintInfoKey = "DarkmatterPushRelayHint"
+    static let serverPubkeyInfoKey = "WhiteNoisePushServerPubkeyHex"
+    static let relayHintInfoKey = "WhiteNoisePushRelayHint"
 
     let serverPubkeyHex: String
     let relayHint: String?

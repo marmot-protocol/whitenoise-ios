@@ -8,6 +8,6 @@ ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
 
 Notes:
-- Regenerate with: darkmatter-ios/scripts/sync-bindings.sh
+- Regenerate with: whitenoise-ios/scripts/sync-bindings.sh
 - A "-dirty" suffix means the darkmatter working tree had uncommitted
   changes when this bundle was built.

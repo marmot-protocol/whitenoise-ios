@@ -364,6 +364,71 @@
         }
       }
     },
+    "%@ changed disappearing messages from %@ to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ changed disappearing messages from %@ to %@"
+          }
+        }
+      }
+    },
     "%@ hasn't published a compatible key package yet." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -800,6 +865,136 @@
         }
       }
     },
+    "%@ mentioned you" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you"
+          }
+        }
+      }
+    },
+    "%@ mentioned you: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ mentioned you: %@"
+          }
+        }
+      }
+    },
     "%@ removed %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -987,6 +1182,136 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 發送了一則訊息"
+          }
+        }
+      }
+    },
+    "%@ set disappearing messages to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ set disappearing messages to %@"
+          }
+        }
+      }
+    },
+    "%@ turned off disappearing messages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ turned off disappearing messages"
           }
         }
       }
@@ -4686,15 +5011,60 @@
     },
     "Backup" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Sicherung" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Copia de seguridad" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sauvegarde" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Backup" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Backup" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Резервная копия" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Yedekleme" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "备份" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "備份" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia de seguridad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarde"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Резервная копия"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yedekleme"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "備份"
+          }
+        }
       }
     },
     "Built on" : {
@@ -5354,61 +5724,61 @@
         }
       }
     },
-    "Choose whether Dark Matter follows your device appearance or always uses a light or dark theme." : {
+    "Choose whether WhiteNoise follows your device appearance or always uses a light or dark theme." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle, ob Dark Matter dem Erscheinungsbild deines Geräts folgt oder immer ein helles oder dunkles Design verwendet."
+            "value" : "Wähle, ob WhiteNoise dem Erscheinungsbild deines Geräts folgt oder immer ein helles oder dunkles Design verwendet."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige si Dark Matter sigue la apariencia de tu dispositivo o usa siempre un tema claro u oscuro."
+            "value" : "Elige si WhiteNoise sigue la apariencia de tu dispositivo o usa siempre un tema claro u oscuro."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez si Dark Matter suit l’apparence de votre appareil ou utilise toujours un thème clair ou sombre."
+            "value" : "Choisissez si WhiteNoise suit l’apparence de votre appareil ou utilise toujours un thème clair ou sombre."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scegli se Dark Matter segue l’aspetto del dispositivo o usa sempre un tema chiaro o scuro."
+            "value" : "Scegli se WhiteNoise segue l’aspetto del dispositivo o usa sempre un tema chiaro o scuro."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escolha se o Dark Matter segue a aparência do dispositivo ou sempre usa um tema claro ou escuro."
+            "value" : "Escolha se o WhiteNoise segue a aparência do dispositivo ou sempre usa um tema claro ou escuro."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выберите, будет ли Dark Matter следовать оформлению устройства или всегда использовать светлую либо тёмную тему."
+            "value" : "Выберите, будет ли WhiteNoise следовать оформлению устройства или всегда использовать светлую либо тёмную тему."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter’ın cihaz görünümünü mü izleyeceğini yoksa her zaman açık ya da koyu tema mı kullanacağını seçin."
+            "value" : "WhiteNoise’ın cihaz görünümünü mü izleyeceğini yoksa her zaman açık ya da koyu tema mı kullanacağını seçin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "选择 Dark Matter 是跟随设备外观，还是始终使用浅色或深色主题。"
+            "value" : "选择 WhiteNoise 是跟随设备外观，还是始终使用浅色或深色主题。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選擇 Dark Matter 要跟隨裝置外觀，還是永遠使用淺色或深色主題。"
+            "value" : "選擇 WhiteNoise 要跟隨裝置外觀，還是永遠使用淺色或深色主題。"
           }
         }
       }
@@ -7678,120 +8048,120 @@
         }
       }
     },
-    "Dark Matter" : {
+    "WhiteNoise" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dark Matter"
+            "value" : "WhiteNoise"
           }
         }
       }
     },
-    "Darkmatter" : {
+    "WhiteNoise" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Darkmatter"
+            "value" : "WhiteNoise"
           }
         }
       }
@@ -8656,6 +9026,266 @@
         }
       }
     },
+    "Disappearing messages" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages"
+          }
+        }
+      }
+    },
+    "Disappearing messages changed from %@ to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages changed from %@ to %@"
+          }
+        }
+      }
+    },
+    "Disappearing messages set to %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages set to %@"
+          }
+        }
+      }
+    },
+    "Disappearing messages turned off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disappearing messages turned off"
+          }
+        }
+      }
+    },
     "Discovered on relays" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9022,28 +9652,118 @@
     },
     "Encrypted export" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsselter Export" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportación cifrada" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Export chiffré" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esportazione crittografata" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportação criptografada" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Зашифрованный экспорт" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli dışa aktarma" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加密导出" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加密匯出" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschlüsselter Export"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportación cifrada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export chiffré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esportazione crittografata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportação criptografada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Зашифрованный экспорт"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Şifreli dışa aktarma"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加密导出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加密匯出"
+          }
+        }
       }
     },
     "Encrypted export failed: %@" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsselter Export fehlgeschlagen: %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Error al exportar cifrado: %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Échec de l'export chiffré : %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esportazione crittografata non riuscita: %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Falha na exportação criptografada: %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Не удалось экспортировать зашифрованные данные: %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli dışa aktarma başarısız oldu: %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "加密导出失败：%@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "加密匯出失敗：%@" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschlüsselter Export fehlgeschlagen: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error al exportar cifrado: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de l'export chiffré : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esportazione crittografata non riuscita: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falha na exportação criptografada: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось экспортировать зашифрованные данные: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Şifreli dışa aktarma başarısız oldu: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加密导出失败：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "加密匯出失敗：%@"
+          }
+        }
       }
     },
     "End-to-end encrypted group messaging." : {
@@ -9107,15 +9827,60 @@
     },
     "Enter a passphrase." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gib eine Passphrase ein." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Introduce una frase de contraseña." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Saisissez une phrase secrète." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Inserisci una passphrase." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Insira uma frase secreta." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Введите парольную фразу." } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Bir parola girin." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "输入密码短语。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "輸入密碼短語。" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib eine Passphrase ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce una frase de contraseña."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez une phrase secrète."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci una passphrase."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insira uma frase secreta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите парольную фразу."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir parola girin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入密码短语。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入密碼短語。"
+          }
+        }
       }
     },
     "Enter a search term." : {
@@ -9594,15 +10359,60 @@
     },
     "Export" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Exportieren" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exporter" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esporta" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportar" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспортировать" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Dışa aktar" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "导出" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "匯出" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dışa aktar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出"
+          }
+        }
       }
     },
     "Export Conversation Transcript" : {
@@ -9665,15 +10475,60 @@
     },
     "Export encrypted nsec" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verschlüsseltes nsec exportieren" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Exportar nsec cifrado" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exporter le nsec chiffré" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Esporta nsec crittografato" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Exportar nsec criptografado" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспортировать зашифрованный nsec" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Şifreli nsec'i dışa aktar" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "导出加密 nsec" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "匯出加密 nsec" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschlüsseltes nsec exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar nsec cifrado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le nsec chiffré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta nsec crittografato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar nsec criptografado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать зашифрованный nsec"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Şifreli nsec'i dışa aktar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出加密 nsec"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出加密 nsec"
+          }
+        }
       }
     },
     "Export failed" : {
@@ -15914,120 +16769,120 @@
         }
       }
     },
-    "Native push is unavailable in this build until a Darkmatter push server public key is configured." : {
+    "Native push is unavailable in this build until a WhiteNoise push server public key is configured." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nativer Push ist in diesem Build erst verfügbar, wenn ein öffentlicher Schlüssel des Darkmatter-Push-Servers konfiguriert ist."
+            "value" : "Nativer Push ist in diesem Build erst verfügbar, wenn ein öffentlicher Schlüssel des WhiteNoise-Push-Servers konfiguriert ist."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La inserción nativa no está disponible en esta compilación hasta que se configure una clave pública del servidor de inserción Darkmatter."
+            "value" : "La inserción nativa no está disponible en esta compilación hasta que se configure una clave pública del servidor de inserción WhiteNoise."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le push natif n'est pas disponible dans cette version jusqu'à ce qu'une clé publique du serveur push Darkmatter soit configurée."
+            "value" : "Le push natif n'est pas disponible dans cette version jusqu'à ce qu'une clé publique du serveur push WhiteNoise soit configurée."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il push nativo non è disponibile in questa build finché non viene configurata una chiave pubblica del server push Darkmatter."
+            "value" : "Il push nativo non è disponibile in questa build finché non viene configurata una chiave pubblica del server push WhiteNoise."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O push nativo não estará disponível nesta compilação até que uma chave pública do servidor push Darkmatter seja configurada."
+            "value" : "O push nativo não estará disponível nesta compilação até que uma chave pública do servidor push WhiteNoise seja configurada."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Собственная рассылка недоступна в этой сборке до тех пор, пока не будет настроен открытый ключ push-сервера Darkmatter."
+            "value" : "Собственная рассылка недоступна в этой сборке до тех пор, пока не будет настроен открытый ключ push-сервера WhiteNoise."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bir Darkmatter push sunucusu ortak anahtarı yapılandırılana kadar bu yapıda yerel push kullanılamaz."
+            "value" : "Bir WhiteNoise push sunucusu ortak anahtarı yapılandırılana kadar bu yapıda yerel push kullanılamaz."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在配置 Darkmatter 推送服务器公钥之前，本机推送在此版本中不可用。"
+            "value" : "在配置 WhiteNoise 推送服务器公钥之前，本机推送在此版本中不可用。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在配置 Darkmatter 推播伺服器公鑰之前，本機推送在此版本中不可用。"
+            "value" : "在配置 WhiteNoise 推播伺服器公鑰之前，本機推送在此版本中不可用。"
           }
         }
       }
     },
-    "Native push registers only an encrypted APNS token with Darkmatter. Apple receives generic notification wakes." : {
+    "Native push registers only an encrypted APNS token with WhiteNoise. Apple receives generic notification wakes." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Native Push registriert nur ein verschlüsseltes APNS-Token mit Darkmatter. Apple erhält generische Benachrichtigungen."
+            "value" : "Native Push registriert nur ein verschlüsseltes APNS-Token mit WhiteNoise. Apple erhält generische Benachrichtigungen."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La inserción nativa registra solo un token APNS cifrado con Darkmatter. Apple recibe alertas de notificación genéricas."
+            "value" : "La inserción nativa registra solo un token APNS cifrado con WhiteNoise. Apple recibe alertas de notificación genéricas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le push natif enregistre uniquement un jeton APNS crypté avec Darkmatter. Apple reçoit des réveils de notification génériques."
+            "value" : "Le push natif enregistre uniquement un jeton APNS crypté avec WhiteNoise. Apple reçoit des réveils de notification génériques."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Il push nativo registra solo un token APNS crittografato con Darkmatter. Apple riceve attivazioni di notifiche generiche."
+            "value" : "Il push nativo registra solo un token APNS crittografato con WhiteNoise. Apple riceve attivazioni di notifiche generiche."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O push nativo registra apenas um token APNS criptografado com Darkmatter. A Apple recebe notificações genéricas."
+            "value" : "O push nativo registra apenas um token APNS criptografado com WhiteNoise. A Apple recebe notificações genéricas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Встроенная push-регистрация регистрирует только зашифрованный токен APNS с помощью Darkmatter. Apple получает стандартные уведомления о пробуждении."
+            "value" : "Встроенная push-регистрация регистрирует только зашифрованный токен APNS с помощью WhiteNoise. Apple получает стандартные уведомления о пробуждении."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yerel push, yalnızca Darkmatter ile şifrelenmiş bir APNS jetonunu kaydeder. Apple genel bildirim uyandırmalarını alır."
+            "value" : "Yerel push, yalnızca WhiteNoise ile şifrelenmiş bir APNS jetonunu kaydeder. Apple genel bildirim uyandırmalarını alır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本机推送仅向 Darkmatter 注册加密的 APNS 令牌。 Apple 收到通用通知唤醒。"
+            "value" : "本机推送仅向 WhiteNoise 注册加密的 APNS 令牌。 Apple 收到通用通知唤醒。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本機推送僅向 Darkmatter 註冊加密的 APNS 令牌。 Apple 收到通用通知喚醒。"
+            "value" : "本機推送僅向 WhiteNoise 註冊加密的 APNS 令牌。 Apple 收到通用通知喚醒。"
           }
         }
       }
@@ -18162,6 +19017,7 @@
     },
     "nsec1…" : {
       "comment" : "A placeholder for a user to enter a Bech32 secret key.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -18216,6 +19072,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "nsec1…"
+          }
+        }
+      }
+    },
+    "Off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
           }
         }
       }
@@ -18641,61 +19562,61 @@
         }
       }
     },
-    "Open Darkmatter to view the invite" : {
+    "Open WhiteNoise to view the invite" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Öffnen Sie Darkmatter, um die Einladung anzuzeigen"
+            "value" : "Öffnen Sie WhiteNoise, um die Einladung anzuzeigen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abra Darkmatter para ver la invitación."
+            "value" : "Abra WhiteNoise para ver la invitación."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvrez Darkmatter pour afficher l'invitation"
+            "value" : "Ouvrez WhiteNoise pour afficher l'invitation"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apri Darkmatter per visualizzare l'invito"
+            "value" : "Apri WhiteNoise per visualizzare l'invito"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Abra Darkmatter para visualizar o convite"
+            "value" : "Abra WhiteNoise para visualizar o convite"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Откройте Darkmatter, чтобы просмотреть приглашение."
+            "value" : "Откройте WhiteNoise, чтобы просмотреть приглашение."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Daveti görüntülemek için Darkmatter'yu açın"
+            "value" : "Daveti görüntülemek için WhiteNoise'yu açın"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Darkmatter 查看邀请"
+            "value" : "打开 WhiteNoise 查看邀请"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開啟 Darkmatter 看邀請"
+            "value" : "開啟 WhiteNoise 看邀請"
           }
         }
       }
@@ -18814,6 +19735,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "開啟連結？"
+          }
+        }
+      }
+    },
+    "Open media gallery" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open media gallery"
           }
         }
       }
@@ -19116,15 +20102,60 @@
     },
     "Passphrase" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Passphrase" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Frase de contraseña" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Phrase secrète" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Passphrase" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Frase secreta" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Парольная фраза" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Parola" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "密码短语" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "密碼短語" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passphrase"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frase de contraseña"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phrase secrète"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passphrase"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frase secreta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Парольная фраза"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parola"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密码短语"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密碼短語"
+          }
+        }
       }
     },
     "Paste your nsec (bech32 secret key). Public npub values are for sharing and cannot sign in." : {
@@ -19182,6 +20213,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "貼上您的 nsec（bech32 金鑰）。公共 npub 值用於共享，無法登入。"
+          }
+        }
+      }
+    },
+    "Paste your nsec secret key." : {
+      "comment" : "Accessibility hint for the nsec field, instructing the user to paste their secret key.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge deinen geheimen nsec-Schlüssel ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pega tu clave secreta nsec."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collez votre clé secrète nsec."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incolla la tua chiave segreta nsec."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cole sua chave secreta nsec."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вставьте свой секретный ключ nsec."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nsec gizli anahtarınızı yapıştırın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴你的 nsec 私钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "貼上你的 nsec 私鑰。"
           }
         }
       }
@@ -19495,6 +20586,71 @@
         }
       }
     },
+    "Play video" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play video"
+          }
+        }
+      }
+    },
     "Playback speed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -19560,61 +20716,61 @@
         }
       }
     },
-    "Point the camera at a Dark Matter profile QR" : {
+    "Point the camera at a WhiteNoise profile QR" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Richten Sie die Kamera auf ein Dark Matter-Profil QR"
+            "value" : "Richten Sie die Kamera auf ein WhiteNoise-Profil QR"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Apunte la cámara a un perfil Dark Matter QR"
+            "value" : "Apunte la cámara a un perfil WhiteNoise QR"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pointez la caméra vers un profil Dark Matter QR"
+            "value" : "Pointez la caméra vers un profil WhiteNoise QR"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Punta la fotocamera su un profilo Dark Matter QR"
+            "value" : "Punta la fotocamera su un profilo WhiteNoise QR"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aponte a câmera para um perfil Dark Matter QR"
+            "value" : "Aponte a câmera para um perfil WhiteNoise QR"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Наведите камеру на профиль Dark Matter QR."
+            "value" : "Наведите камеру на профиль WhiteNoise QR."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kamerayı bir Dark Matter profili QR'ya doğrultun"
+            "value" : "Kamerayı bir WhiteNoise profili QR'ya doğrultun"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将相机对准 Dark Matter 配置文件 QR"
+            "value" : "将相机对准 WhiteNoise 配置文件 QR"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "將相機對準 Dark Matter 設定檔 QR"
+            "value" : "將相機對準 WhiteNoise 設定檔 QR"
           }
         }
       }
@@ -19680,15 +20836,60 @@
     },
     "Preparing export" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Export wird vorbereitet" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Preparando exportación" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Préparation de l'export" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Preparazione dell'esportazione" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Preparando exportação" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Подготовка экспорта" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Dışa aktarma hazırlanıyor" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在准备导出" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在準備匯出" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export wird vorbereitet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando exportación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation de l'export"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparazione dell'esportazione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando exportação"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовка экспорта"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dışa aktarma hazırlanıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备导出"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在準備匯出"
+          }
+        }
       }
     },
     "Privacy & Security" : {
@@ -21159,15 +22360,60 @@
     },
     "Raw export reveals your private key in plaintext and permanently marks it as handled insecurely. Encrypted export creates an ncryptsec1 backup protected by your passphrase without revealing the raw key." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Roh-Export zeigt deinen privaten Schlüssel im Klartext und markiert ihn dauerhaft als unsicher behandelt. Der verschlüsselte Export erstellt eine durch deine Passphrase geschützte ncryptsec1-Sicherung, ohne den Rohschlüssel offenzulegen." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "La exportación sin procesar revela tu clave privada en texto claro y la marca permanentemente como tratada de forma insegura. La exportación cifrada crea una copia ncryptsec1 protegida por tu frase de contraseña sin revelar la clave sin procesar." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "L'export brut révèle votre clé privée en clair et la marque définitivement comme manipulée de façon non sécurisée. L'export chiffré crée une sauvegarde ncryptsec1 protégée par votre phrase secrète sans révéler la clé brute." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "L'esportazione grezza mostra la tua chiave privata in chiaro e la contrassegna in modo permanente come gestita in modo non sicuro. L'esportazione crittografata crea un backup ncryptsec1 protetto dalla tua passphrase senza rivelare la chiave grezza." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "A exportação bruta revela sua chave privada em texto puro e a marca permanentemente como manipulada de forma insegura. A exportação criptografada cria um backup ncryptsec1 protegido pela sua frase secreta sem revelar a chave bruta." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Экспорт в сыром виде раскрывает ваш приватный ключ открытым текстом и навсегда помечает его как обработанный небезопасно. Зашифрованный экспорт создает резервную копию ncryptsec1, защищенную парольной фразой, не раскрывая исходный ключ." } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Ham dışa aktarma özel anahtarınızı düz metin olarak gösterir ve kalıcı olarak güvensiz şekilde işlendi diye işaretler. Şifreli dışa aktarma, ham anahtarı göstermeden parolanızla korunan bir ncryptsec1 yedeği oluşturur." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "原始导出会以明文显示你的私钥，并永久标记为已不安全处理。加密导出会创建受密码短语保护的 ncryptsec1 备份，而不会暴露原始密钥。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "原始匯出會以明文顯示你的私鑰，並永久標記為已不安全處理。加密匯出會建立受密碼短語保護的 ncryptsec1 備份，而不會暴露原始金鑰。" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Roh-Export zeigt deinen privaten Schlüssel im Klartext und markiert ihn dauerhaft als unsicher behandelt. Der verschlüsselte Export erstellt eine durch deine Passphrase geschützte ncryptsec1-Sicherung, ohne den Rohschlüssel offenzulegen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La exportación sin procesar revela tu clave privada en texto claro y la marca permanentemente como tratada de forma insegura. La exportación cifrada crea una copia ncryptsec1 protegida por tu frase de contraseña sin revelar la clave sin procesar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'export brut révèle votre clé privée en clair et la marque définitivement comme manipulée de façon non sécurisée. L'export chiffré crée une sauvegarde ncryptsec1 protégée par votre phrase secrète sans révéler la clé brute."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'esportazione grezza mostra la tua chiave privata in chiaro e la contrassegna in modo permanente come gestita in modo non sicuro. L'esportazione crittografata crea un backup ncryptsec1 protetto dalla tua passphrase senza rivelare la chiave grezza."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A exportação bruta revela sua chave privada em texto puro e a marca permanentemente como manipulada de forma insegura. A exportação criptografada cria um backup ncryptsec1 protegido pela sua frase secreta sem revelar a chave bruta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспорт в сыром виде раскрывает ваш приватный ключ открытым текстом и навсегда помечает его как обработанный небезопасно. Зашифрованный экспорт создает резервную копию ncryptsec1, защищенную парольной фразой, не раскрывая исходный ключ."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ham dışa aktarma özel anahtarınızı düz metin olarak gösterir ve kalıcı olarak güvensiz şekilde işlendi diye işaretler. Şifreli dışa aktarma, ham anahtarı göstermeden parolanızla korunan bir ncryptsec1 yedeği oluşturur."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原始导出会以明文显示你的私钥，并永久标记为已不安全处理。加密导出会创建受密码短语保护的 ncryptsec1 备份，而不会暴露原始密钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原始匯出會以明文顯示你的私鑰，並永久標記為已不安全處理。加密匯出會建立受密碼短語保護的 ncryptsec1 備份，而不會暴露原始金鑰。"
+          }
+        }
       }
     },
     "React" : {
@@ -25864,61 +27110,61 @@
         }
       }
     },
-    "System follows your device language. Other choices update Dark Matter immediately." : {
+    "System follows your device language. Other choices update WhiteNoise immediately." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "System folgt der Sprache deines Geräts. Andere Optionen aktualisieren Dark Matter sofort."
+            "value" : "System folgt der Sprache deines Geräts. Andere Optionen aktualisieren WhiteNoise sofort."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sistema sigue el idioma de tu dispositivo. Las demás opciones actualizan Dark Matter de inmediato."
+            "value" : "Sistema sigue el idioma de tu dispositivo. Las demás opciones actualizan WhiteNoise de inmediato."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Système suit la langue de votre appareil. Les autres choix mettent Dark Matter à jour immédiatement."
+            "value" : "Système suit la langue de votre appareil. Les autres choix mettent WhiteNoise à jour immédiatement."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sistema segue la lingua del dispositivo. Le altre opzioni aggiornano Dark Matter immediatamente."
+            "value" : "Sistema segue la lingua del dispositivo. Le altre opzioni aggiornano WhiteNoise immediatamente."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sistema segue o idioma do dispositivo. Outras opções atualizam o Dark Matter imediatamente."
+            "value" : "Sistema segue o idioma do dispositivo. Outras opções atualizam o WhiteNoise imediatamente."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Системный вариант следует языку устройства. Другие варианты сразу обновляют Dark Matter."
+            "value" : "Системный вариант следует языку устройства. Другие варианты сразу обновляют WhiteNoise."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sistem, cihaz dilinizi izler. Diğer seçimler Dark Matter’ı hemen günceller."
+            "value" : "Sistem, cihaz dilinizi izler. Diğer seçimler WhiteNoise’ı hemen günceller."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“系统”会跟随设备语言。其他选项会立即更新 Dark Matter。"
+            "value" : "“系统”会跟随设备语言。其他选项会立即更新 WhiteNoise。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「系統」會跟隨裝置語言。其他選項會立即更新 Dark Matter。"
+            "value" : "「系統」會跟隨裝置語言。其他選項會立即更新 WhiteNoise。"
           }
         }
       }
@@ -26665,76 +27911,121 @@
         }
       }
     },
-    "That QR code isn't a Dark Matter profile." : {
+    "That QR code isn't a WhiteNoise profile." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieser QR-Code ist kein Dark Matter-Profil."
+            "value" : "Dieser QR-Code ist kein WhiteNoise-Profil."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ese código QR no es un perfil Dark Matter."
+            "value" : "Ese código QR no es un perfil WhiteNoise."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ce code QR n'est pas un profil Dark Matter."
+            "value" : "Ce code QR n'est pas un profil WhiteNoise."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Quel codice QR non è un profilo Dark Matter."
+            "value" : "Quel codice QR non è un profilo WhiteNoise."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esse código QR não é um perfil Dark Matter."
+            "value" : "Esse código QR não é um perfil WhiteNoise."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Этот код QR не является профилем Dark Matter."
+            "value" : "Этот код QR не является профилем WhiteNoise."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu QR kodu bir Dark Matter profili değil."
+            "value" : "Bu QR kodu bir WhiteNoise profili değil."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该 QR 代码不是 Dark Matter 配置文件。"
+            "value" : "该 QR 代码不是 WhiteNoise 配置文件。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此 QR 程式碼不是 Dark Matter 設定檔。"
+            "value" : "此 QR 程式碼不是 WhiteNoise 設定檔。"
           }
         }
       }
     },
     "The account keystore is unavailable right now." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Kontoschlüsselspeicher ist derzeit nicht verfügbar." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El almacén de claves de la cuenta no está disponible ahora." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le magasin de clés du compte est indisponible pour le moment." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "L'archivio chiavi dell'account non è disponibile al momento." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "O armazenamento de chaves da conta não está disponível agora." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Хранилище ключей аккаунта сейчас недоступно." } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Hesap anahtar deposu şu anda kullanılamıyor." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "帐户密钥库当前不可用。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "帳戶金鑰庫目前無法使用。" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Kontoschlüsselspeicher ist derzeit nicht verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El almacén de claves de la cuenta no está disponible ahora."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le magasin de clés du compte est indisponible pour le moment."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'archivio chiavi dell'account non è disponibile al momento."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O armazenamento de chaves da conta não está disponível agora."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранилище ключей аккаунта сейчас недоступно."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hesap anahtar deposu şu anda kullanılamıyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帐户密钥库当前不可用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帳戶金鑰庫目前無法使用。"
+          }
+        }
       }
     },
     "Theme" : {
@@ -26917,15 +28208,60 @@
     },
     "This account cannot export a private key." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Konto kann keinen privaten Schlüssel exportieren." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta cuenta no puede exportar una clave privada." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ce compte ne peut pas exporter de clé privée." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Questo account non può esportare una chiave privata." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Esta conta não pode exportar uma chave privada." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Этот аккаунт не может экспортировать приватный ключ." } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Bu hesap özel anahtar dışa aktaramaz." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "此帐户无法导出私钥。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "此帳戶無法匯出私鑰。" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Konto kann keinen privaten Schlüssel exportieren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta cuenta no puede exportar una clave privada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce compte ne peut pas exporter de clé privée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo account non può esportare una chiave privata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta conta não pode exportar uma chave privada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот аккаунт не может экспортировать приватный ключ."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu hesap özel anahtar dışa aktaramaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此帐户无法导出私钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此帳戶無法匯出私鑰。"
+          }
+        }
       }
     },
     "This attachment is not ready yet." : {
@@ -29915,195 +31251,60 @@
     },
     "Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Deine Passphrase verschlüsselt die exportierte ncryptsec1-Sicherung. Marmot speichert sie nie." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tu frase de contraseña cifra la copia ncryptsec1 exportada. Marmot nunca la almacena." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Votre phrase secrète chiffre la sauvegarde ncryptsec1 exportée. Marmot ne la stocke jamais." } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "La tua passphrase crittografa il backup ncryptsec1 esportato. Marmot non la memorizza mai." } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Sua frase secreta criptografa o backup ncryptsec1 exportado. O Marmot nunca a armazena." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Ваша парольная фраза шифрует экспортированную резервную копию ncryptsec1. Marmot никогда ее не сохраняет." } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Parolanız dışa aktarılan ncryptsec1 yedeğini şifreler. Marmot bunu asla saklamaz." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "你的密码短语会加密导出的 ncryptsec1 备份。Marmot 永远不会存储它。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "你的密碼短語會加密匯出的 ncryptsec1 備份。Marmot 永遠不會儲存它。" } }
-      }
-    },
-    "Off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Off" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Off" } }
-      }
-    },
-    "Disappearing messages" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages" } }
-      }
-    },
-    "Disappearing messages turned off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages turned off" } }
-      }
-    },
-    "%@ turned off disappearing messages" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ turned off disappearing messages" } }
-      }
-    },
-    "%@ set disappearing messages to %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ set disappearing messages to %@" } }
-      }
-    },
-    "Disappearing messages set to %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages set to %@" } }
-      }
-    },
-    "%@ changed disappearing messages from %@ to %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ changed disappearing messages from %@ to %@" } }
-      }
-    },
-    "Disappearing messages changed from %@ to %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Disappearing messages changed from %@ to %@" } }
-      }
-    },
-    "%@ mentioned you: %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you: %@" } }
-      }
-    },
-    "%@ mentioned you" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ mentioned you" } }
-      }
-    },
-    "Open media gallery" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Open media gallery" } }
-      }
-    },
-    "Play video" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "it" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "pt" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "tr" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Play video" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Passphrase verschlüsselt die exportierte ncryptsec1-Sicherung. Marmot speichert sie nie."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu frase de contraseña cifra la copia ncryptsec1 exportada. Marmot nunca la almacena."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre phrase secrète chiffre la sauvegarde ncryptsec1 exportée. Marmot ne la stocke jamais."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tua passphrase crittografa il backup ncryptsec1 esportato. Marmot non la memorizza mai."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sua frase secreta criptografa o backup ncryptsec1 exportado. O Marmot nunca a armazena."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваша парольная фраза шифрует экспортированную резервную копию ncryptsec1. Marmot никогда ее не сохраняет."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parolanız dışa aktarılan ncryptsec1 yedeğini şifreler. Marmot bunu asla saklamaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的密码短语会加密导出的 ncryptsec1 备份。Marmot 永远不会存储它。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的密碼短語會加密匯出的 ncryptsec1 備份。Marmot 永遠不會儲存它。"
+          }
+        }
       }
     }
   },

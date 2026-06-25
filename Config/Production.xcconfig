@@ -1,0 +1,16 @@
+// Production flavor. Installs as dev.ipf.whitenoise.ios.
+#include "Shared.xcconfig"
+
+WN_FLAVOR = production
+WN_DISPLAY_NAME = WhiteNoise
+WN_URL_SCHEME = whitenoise
+
+PRODUCT_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios
+NSE_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios.NotificationService
+
+// NSE shares the app's App Group and keychain group (keyed to the app bundle id).
+APP_GROUP_IDENTIFIER = group.dev.ipf.whitenoise.ios
+KEYCHAIN_ACCESS_GROUP = $(AppIdentifierPrefix)dev.ipf.whitenoise.ios
+
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+WHITENOISE_TELEMETRY_ENVIRONMENT = production
