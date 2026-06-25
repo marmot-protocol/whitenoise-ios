@@ -173,7 +173,7 @@ Notifications, Identity management.
 > in its own `AppState+Profiles.swift` and is a dumb-mirror cache + two queues.
 >
 > *Mechanics:*
-> - New `darkmatter-ios/Core/ProfileStore.swift`: a `@MainActor` class (NOT
+> - New `whitenoise-ios/Core/ProfileStore.swift`: a `@MainActor` class (NOT
 >   `@Observable` — see observation note) with `weak var appState: AppState?`.
 >   Move both structs (`ProfileProjectionRequest`, `ProfileDisplayProjection`)
 >   and all the machinery from `AppState+Profiles.swift` into it.
@@ -431,12 +431,12 @@ total across the split stores).
 
 ```sh
 # Unit/behavior tests
-xcodebuild test -project darkmatter-ios.xcodeproj -scheme darkmatter-ios \
+xcodebuild test -project whitenoise-ios.xcodeproj -scheme "Whitenoise (Production)" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 # Release build sanity (binding changes)
-xcodebuild build -project darkmatter-ios.xcodeproj -scheme darkmatter-ios \
-  -configuration Release -destination 'generic/platform=iOS'
+xcodebuild build -project whitenoise-ios.xcodeproj -scheme "Whitenoise (Production)" \
+  -configuration Release-Production -destination 'generic/platform=iOS'
 
 # Format gate
 git diff --check
@@ -502,12 +502,12 @@ polling over re-running.
             store; AppState forwarders + still drives refresh/identity lifecycle
       - [ ] `RuntimeLifecycle` (bootstrap, suspend/resume, gates, gen, bg tasks) —
             most entangled; verify suspend/resume by running the app, not just tests.
-            **Tracked: marmot-protocol/darkmatter-ios#389** (deferred — see leverage note below).
+            **Tracked: marmot-protocol/whitenoise-ios#389** (deferred — see leverage note below).
       - [x] `NotificationCoordinator`: notification subscription runner + retry
             toast, native-push registration sync, notification settings toggles,
             and foreground catch-up → `@MainActor @Observable NotificationCoordinator`;
             AppState keeps thin forwarders so existing call sites stay stable.
-            **Tracked: marmot-protocol/darkmatter-ios#390**.
+            **Tracked: marmot-protocol/whitenoise-ios#390**.
 
 > **Leverage note (2026-06-23, updated for #390):** the remaining Phase 2
 > service work is *organizational* — it relocates orchestration out of

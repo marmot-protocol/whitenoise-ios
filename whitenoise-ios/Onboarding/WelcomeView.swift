@@ -17,7 +17,7 @@ struct WelcomeView: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.tint)
 
-                    Text("WhiteNoise")
+                    Text("White Noise")
                         .font(.largeTitle.weight(.semibold))
 
                     Text("End-to-end encrypted group messaging.")

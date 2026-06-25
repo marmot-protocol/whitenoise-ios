@@ -31,7 +31,7 @@ final class NewChatSheetViewModel {
         Task {
             await add(
                 raw,
-                invalidMessage: L10n.string("That QR code isn't a WhiteNoise profile."),
+                invalidMessage: L10n.string("That QR code isn't a White Noise profile."),
                 using: appState
             )
         }

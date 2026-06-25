@@ -1,6 +1,6 @@
 # Agent Notes
 
-This repo is a SwiftUI iOS app around the Darkmatter/Marmot Rust runtime. Read this before changing code.
+This repo is a SwiftUI iOS app around the Marmot Rust runtime. Read this before changing code.
 
 `AGENTS.md` is the canonical agent guidance file. `CLAUDE.md` should remain a symlink to this file for Claude-based tooling.
 
@@ -71,9 +71,11 @@ Do not patch generated binding files directly. Change Rust/UniFFI, regenerate, t
 
 The app uses privacy-preserving MIP-05 native push.
 
-- Main app bundle ID: `dev.ipf.whitenoise`
-- NSE bundle ID: `dev.ipf.whitenoise.NotificationService`
-- App Group: `group.dev.ipf.whitenoise`
+- Main app bundle ID: `dev.ipf.whitenoise.ios`
+- NSE bundle ID: `dev.ipf.whitenoise.ios.NotificationService`
+- App Group: `group.dev.ipf.whitenoise.ios`
+- Production URL scheme: `whitenoise`
+- Staging URL scheme: `whitenoise-staging`
 
 Rules for notification work:
 
@@ -174,15 +176,15 @@ Useful commands:
 ```sh
 xcodebuild test \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios \
+  -scheme "Whitenoise (Production)" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
 ```sh
 xcodebuild build \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios \
-  -configuration Release \
+  -scheme "Whitenoise (Production)" \
+  -configuration Release-Production \
   -destination 'generic/platform=iOS'
 ```
 

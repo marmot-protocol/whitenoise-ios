@@ -1,4 +1,4 @@
-# WhiteNoise iOS — Manual Test Matrix
+# White Noise iOS — Manual Test Matrix
 
 These checks complement the automated test suites (`whitenoise-iosTests`
 Swift Testing module and `marmot-uniffi`'s Rust integration tests). They
@@ -111,7 +111,7 @@ before every release tag.
 - [ ] Settings → Identity: tapping the Public key and npub rows copies the
       full value and shows the inline **Copied** state.
 - [ ] Settings → QR button opens **My Code**; tapping the npub copies it,
-      the share button shares a `darkmatter://profile/<npub>` link, and
+      the share button shares a `whitenoise://profile/<npub>` link, and
       Scan QR Code routes a valid profile QR to the profile sheet.
 - [ ] Settings → Identity → Sign out removes the active account and its
       local key material from the device; with multiple accounts, the app

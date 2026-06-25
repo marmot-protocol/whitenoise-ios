@@ -80,7 +80,7 @@ enum MarkdownMessageBuilder {
     /// this allowlist is the render-side gate against javascript:/data:/file:.
     private static let allowedLinkSchemes: Set<String> = [
         "http", "https", "mailto", "tel",
-        "darkmatter", "whitenoise", "whitenoise-staging", "nostr",
+        "whitenoise", "whitenoise-staging", "nostr",
     ]
 
     struct Budget {

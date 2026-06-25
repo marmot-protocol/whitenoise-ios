@@ -18,7 +18,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("Choose whether WhiteNoise follows your device appearance or always uses a light or dark theme.")
+                Text("Choose whether White Noise follows your device appearance or always uses a light or dark theme.")
             }
 
             Section {
@@ -38,7 +38,7 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Language")
             } footer: {
-                Text("System follows your device language. Other choices update WhiteNoise immediately.")
+                Text("System follows your device language. Other choices update White Noise immediately.")
             }
         }
         .navigationTitle("Appearance")

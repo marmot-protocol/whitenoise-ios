@@ -14,9 +14,10 @@ nonisolated enum DeepLink: Equatable {
     case profile(npub: String)
     case chat(groupIdHex: String)
 
-    /// The URL scheme is flavor-specific (`whitenoise` vs. `whitenoise-staging`)
-    /// so side-by-side installs route their own links. Read from the Info.plist
-    /// `WNURLScheme` key (`$(WN_URL_SCHEME)`), falling back to production.
+    /// The URL scheme is flavor-specific (`whitenoise` vs.
+    /// `whitenoise-staging`) so side-by-side installs route their own links.
+    /// Read from the Info.plist `WNURLScheme` key (`$(WN_URL_SCHEME)`),
+    /// falling back to production.
     static let scheme: String =
         (Bundle.main.object(forInfoDictionaryKey: "WNURLScheme") as? String)
             .flatMap { $0.isEmpty ? nil : $0 }
@@ -37,7 +38,7 @@ nonisolated enum DeepLink: Equatable {
         components.host = host
         components.percentEncodedPath = "/" + encodedPathComponent(pathComponent)
         guard let url = components.url else {
-            assertionFailure("Failed to build WhiteNoise deep link")
+            assertionFailure("Failed to build White Noise deep link")
             return URL(fileURLWithPath: "/")
         }
         return url
@@ -51,7 +52,7 @@ nonisolated enum DeepLink: Equatable {
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
     )
 
-    /// Parse a `whitenoise://…` URL.
+    /// Parse a White Noise app URL.
     static func parse(_ url: URL) -> DeepLink? {
         guard url.scheme?.lowercased() == scheme else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
@@ -70,7 +71,7 @@ nonisolated enum DeepLink: Equatable {
         default:
             break
         }
-        // Tolerate whitenoise://<profile-ref>
+        // Tolerate <scheme>://<profile-ref>
         if let host = url.host,
            let memberRef = NostrProfileReference.memberRef(fromReference: host) {
             return .profile(npub: memberRef)

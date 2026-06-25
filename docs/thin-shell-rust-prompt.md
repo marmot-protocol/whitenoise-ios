@@ -7,7 +7,7 @@ Copy this whole file as the task prompt in a `darkmatter` repo session
 
 ## Context
 
-The iOS app (`darkmatter-ios`) is being refactored into a thin UI shell over
+The iOS app (`whitenoise-ios`) is being refactored into a thin UI shell over
 these bindings. The library already projects almost everything iOS needs on each
 timeline row. This task closes the **one** real gap so iOS can stop
 reconstructing data through a secondary call, plus one optional polish item.

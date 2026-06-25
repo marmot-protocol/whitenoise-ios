@@ -1,6 +1,6 @@
 # Timeline projection boundary
 
-This is the audit inventory for darkmatter-ios#396. The rule from `docs/thin-shell-refactor.md` still applies: iOS may mirror Marmot projections and layer UI-local optimism on top, but it must not build a competing source of truth for timeline state.
+This is the audit inventory for whitenoise-ios#396. The rule from `docs/thin-shell-refactor.md` still applies: iOS may mirror Marmot projections and layer UI-local optimism on top, but it must not build a competing source of truth for timeline state.
 
 ## Binding projection mirrors
 

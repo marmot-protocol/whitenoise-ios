@@ -173,7 +173,7 @@ final class NotificationService: UNNotificationServiceExtension {
 
     private func applyFallback(to content: UNMutableNotificationContent) {
         if content.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            content.title = L10n.string("WhiteNoise")
+            content.title = L10n.string("White Noise")
         }
         if content.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             content.body = L10n.string("New encrypted message")

@@ -13,7 +13,8 @@ nonisolated enum MessageLinkAction: Equatable {
 nonisolated enum MessageLinkPolicy {
 
     private static let externalSchemes: Set<String> = [
-        "http", "https", "mailto", "tel", "whitenoise", "whitenoise-staging",
+        "http", "https", "mailto", "tel",
+        "whitenoise", "whitenoise-staging",
     ]
 
     static func action(for url: URL) -> MessageLinkAction {

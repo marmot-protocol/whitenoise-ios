@@ -119,9 +119,9 @@ struct NotificationSettingsView: View {
 
     private var deliveryFooter: String {
         if NativePushServerConfig.current() == nil {
-            return L10n.string("Native push is unavailable in this build until a WhiteNoise push server public key is configured.")
+            return L10n.string("Native push is unavailable in this build until a White Noise push server public key is configured.")
         }
-        return L10n.string("Native push registers only an encrypted APNS token with WhiteNoise. Apple receives generic notification wakes.")
+        return L10n.string("Native push registers only an encrypted APNS token with White Noise. Apple receives generic notification wakes.")
     }
 }
 
