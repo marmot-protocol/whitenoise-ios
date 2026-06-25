@@ -7,17 +7,18 @@ import UserNotifications
 struct AppNotificationsRefreshTests {
     @Test func refreshClearsCachedTokenBeforeReregistering() async throws {
         var clearedBeforeRegister = false
-        var notifications: AppNotifications!
-        notifications = AppNotifications(
+        var notifications: AppNotifications?
+        let created = AppNotifications(
             authorizationStatusProvider: { .authorized },
             remoteNotificationRegistrar: {
-                clearedBeforeRegister = notifications.apnsTokenHex == nil
+                clearedBeforeRegister = notifications?.apnsTokenHex == nil
             }
         )
-        notifications.recordDeviceToken(Data([0xab, 0xcd]))
+        notifications = created
+        created.recordDeviceToken(Data([0xab, 0xcd]))
 
         let refreshTask = Task {
-            try await notifications.refreshApnsToken(
+            try await created.refreshApnsToken(
                 timeoutNanoseconds: 500_000_000,
                 pollIntervalNanoseconds: 10_000_000
             )
@@ -29,16 +30,17 @@ struct AppNotificationsRefreshTests {
     }
 
     @Test func refreshReturnsTokenDeliveredAfterReregistration() async throws {
-        var notifications: AppNotifications!
-        notifications = AppNotifications(
+        var notifications: AppNotifications?
+        let created = AppNotifications(
             authorizationStatusProvider: { .authorized },
             remoteNotificationRegistrar: {
-                notifications.recordDeviceToken(Data([0x01, 0x02]))
+                notifications?.recordDeviceToken(Data([0x01, 0x02]))
             }
         )
-        notifications.recordDeviceToken(Data([0xab, 0xcd]))
+        notifications = created
+        created.recordDeviceToken(Data([0xab, 0xcd]))
 
-        let token = try await notifications.refreshApnsToken(
+        let token = try await created.refreshApnsToken(
             timeoutNanoseconds: 500_000_000,
             pollIntervalNanoseconds: 10_000_000
         )

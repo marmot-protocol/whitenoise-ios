@@ -614,7 +614,7 @@ final class TimelineStore {
         mediaProjections.replaceReferences(
             references,
             forMessageId: messageIdHex,
-            itemResolver: { [unowned self] in visibleTimelineItem(forMessageId: $0) }
+            itemResolver: { [weak self] in self?.visibleTimelineItem(forMessageId: $0) }
         )
     }
 

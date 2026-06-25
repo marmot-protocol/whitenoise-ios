@@ -41,10 +41,10 @@ nonisolated final class RemoteImageRedirectGuard: NSObject, URLSessionTaskDelega
 /// (#407): a 2 MB avatar is now a few dozen chunk appends, not ~2,000,000.
 ///
 /// Each instance owns the state for a single task, so the continuation /
-/// recorded-error storage is touched only from that task's delegate callbacks.
-/// `@unchecked Sendable` is sound here: instances are not shared across tasks
-/// and `URLSession` serializes a task's delegate callbacks.
-nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+/// recorded-error storage is touched only from that task's delegate callbacks:
+/// instances are not shared across tasks and `URLSession` serializes a task's
+/// delegate callbacks.
+nonisolated final class BoundedDataCollector: NSObject, URLSessionDataDelegate {
     let maximumResponseBytes: Int
     private(set) var data = Data()
 
@@ -231,10 +231,6 @@ nonisolated enum RemoteImageFetch {
 }
 
 nonisolated enum RemoteImageDecoder {
-    private struct SendableImage: @unchecked Sendable {
-        let image: UIImage
-    }
-
     static func isAllowedRemoteImageType(_ typeIdentifier: CFString?) -> Bool {
         guard let typeIdentifier,
               let type = UTType(typeIdentifier as String)
@@ -245,7 +241,7 @@ nonisolated enum RemoteImageDecoder {
     static func downsampledImage(from data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
         let targetPixelSize = max(maxPixelSize, 1)
         let imageScale = max(scale, 1)
-        let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
+        return await Task.detached(priority: .utility) { () -> UIImage? in
             let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
             guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
                 return nil
@@ -262,9 +258,8 @@ nonisolated enum RemoteImageDecoder {
             guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
                 return nil
             }
-            return SendableImage(image: UIImage(cgImage: cgImage, scale: imageScale, orientation: .up))
+            return UIImage(cgImage: cgImage, scale: imageScale, orientation: .up)
         }.value
-        return decoded?.image
     }
 }
 
