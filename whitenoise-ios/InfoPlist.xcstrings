@@ -1,72 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "CFBundleDisplayName" : {
-      "comment" : "Bundle display name",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "WhiteNoise"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WhiteNoise"
-          }
-        }
-      }
-    },
     "CFBundleName" : {
       "comment" : "Bundle name",
       "extractionState" : "extracted_with_value",
@@ -139,61 +73,61 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
+            "value" : "White Noise verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise uses the camera to scan profile QR codes and take photos for encrypted chats."
+            "value" : "White Noise uses the camera to scan profile QR codes and take photos for encrypted chats."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
+            "value" : "White Noise usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
+            "value" : "White Noise utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
+            "value" : "White Noise usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O WhiteNoise usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
+            "value" : "O White Noise usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
+            "value" : "White Noise использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
+            "value" : "White Noise, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
+            "value" : "White Noise 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
+            "value" : "White Noise 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
           }
         }
       }
@@ -204,7 +138,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "WhiteNoise uses the microphone to record encrypted voice messages."
+            "value" : "White Noise uses the microphone to record encrypted voice messages."
           }
         }
       }

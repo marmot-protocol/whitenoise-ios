@@ -97,7 +97,7 @@ nonisolated enum LocalNotificationProjection {
             return (
                 title: L10n.string("Group invite"),
                 body: groupName.map { L10n.formatted("Invitation to %@", $0) }
-                    ?? L10n.string("Open WhiteNoise to view the invite")
+                    ?? L10n.string("Open White Noise to view the invite")
             )
         case .newMessage:
             if isDm {

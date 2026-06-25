@@ -40,7 +40,16 @@ struct MessageLinkPolicyTests {
     }
 
     @Test func externalSchemesAskForConfirmation() {
-        for raw in ["https://example.com/a?b=c", "http://example.com", "mailto:a@b.com", "tel:+15551234567", "whitenoise://x"] {
+        let otherFlavorScheme = DeepLink.scheme == "whitenoise-staging"
+            ? "whitenoise"
+            : "whitenoise-staging"
+        for raw in [
+            "https://example.com/a?b=c",
+            "http://example.com",
+            "mailto:a@b.com",
+            "tel:+15551234567",
+            "\(otherFlavorScheme)://x",
+        ] {
             let url = URL(string: raw)!
             #expect(MessageLinkPolicy.action(for: url) == .confirmExternal(url), "url: \(raw)")
         }
@@ -126,7 +135,13 @@ struct MessageLinkPolicyTests {
     }
 
     @Test func dangerousAndUnknownSchemesAreBlocked() {
-        for raw in ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,x", "ftp://h/x", "ssh://h"] {
+        for raw in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "data:text/html,x",
+            "ftp://h/x",
+            "ssh://h",
+        ] {
             #expect(action(raw) == .blocked, "url: \(raw)")
         }
     }

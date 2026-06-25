@@ -2,7 +2,7 @@
 #include "Shared.xcconfig"
 
 WN_FLAVOR = staging
-WN_DISPLAY_NAME = WhiteNoise (Staging)
+WN_DISPLAY_NAME = White Noise (Staging)
 WN_URL_SCHEME = whitenoise-staging
 
 PRODUCT_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios.staging

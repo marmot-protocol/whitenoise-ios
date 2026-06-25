@@ -1975,7 +1975,7 @@ struct LocalizationCatalogTests {
             "Language",
             "Preferences",
             "New encrypted message",
-            "That QR code isn't a WhiteNoise profile.",
+            "That QR code isn't a White Noise profile.",
             "Couldn't create chat",
             "Push registration failed"
         ]
@@ -2228,7 +2228,7 @@ struct LocalizationCatalogTests {
 
         let english = try localizedValue("NSCameraUsageDescription", locale: "en", in: strings)
         #expect(english != "NSCameraUsageDescription")
-        #expect(english == "WhiteNoise uses the camera to scan profile QR codes and take photos for encrypted chats.")
+        #expect(english == "White Noise uses the camera to scan profile QR codes and take photos for encrypted chats.")
         #expect(localizations["fr"] != nil)
         #expect(localizations["zh-Hant"] != nil)
     }
@@ -2237,7 +2237,11 @@ struct LocalizationCatalogTests {
         let catalog = try readCatalog("whitenoise-ios/InfoPlist.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
 
-        for key in ["CFBundleDisplayName", "CFBundleName", "NSCameraUsageDescription"] {
+        // CFBundleDisplayName is flavor-specific (`WN_DISPLAY_NAME`), so it
+        // must not be localized to a static value that would hide "(Staging)".
+        #expect(strings["CFBundleDisplayName"] == nil)
+
+        for key in ["CFBundleName", "NSCameraUsageDescription"] {
             for locale in ["en"] + expectedLocales {
                 #expect(!(try localizedValue(key, locale: locale, in: strings)).isEmpty)
             }
@@ -2695,6 +2699,12 @@ struct NotificationPresentationTests {
             groupName: "Project Room",
             previewText: nil
         )
+        let inviteWithoutGroupName = notificationUpdate(
+            trigger: .groupInvite,
+            isDm: false,
+            groupName: nil,
+            previewText: nil
+        )
         let groupMessage = notificationUpdate(
             isDm: false,
             groupName: nil,
@@ -2703,6 +2713,7 @@ struct NotificationPresentationTests {
         )
 
         #expect(LocalNotificationProjection.makePresentation(for: invite)?.body == L10n.formatted("Invitation to %@", "Project Room"))
+        #expect(LocalNotificationProjection.makePresentation(for: inviteWithoutGroupName)?.body == L10n.string("Open White Noise to view the invite"))
         #expect(LocalNotificationProjection.makePresentation(for: groupMessage)?.body == L10n.formatted("%@ sent a message", "Bob"))
     }
 
@@ -3303,6 +3314,7 @@ struct NotificationServiceProjectionTests {
 
         // The trailing entry is a coalesced summary, not an abandoned record.
         let summary = additional.last!
+        #expect(summary.title == L10n.string("White Noise"))
         #expect(summary.body == L10n.plural("%lld more messages", Int64(overflow)))
         // Summary carries no message content/preview from the overflow records.
         for index in (1 + cap)..<total {
@@ -5895,7 +5907,7 @@ struct GroupManagementPresentationTests {
         #expect(AddMembersPresentation.memberRef(fromScannedPayload: invalidNpub) == nil)
         #expect(AddMembersPresentation.memberRef(fromScannedPayload: "nostr:\(invalidNpub)") == nil)
         #expect(
-            AddMembersPresentation.memberRef(fromScannedPayload: "WhiteNoise://profile/\(invalidNpub)") == nil
+            AddMembersPresentation.memberRef(fromScannedPayload: "whitenoise://profile/\(invalidNpub)") == nil
         )
         #expect(DeepLink.parse(string: "nostr:\(invalidNpub)") == nil)
     }
@@ -5911,7 +5923,7 @@ struct GroupManagementPresentationTests {
         #expect(DeepLink.parse(string: "nostr:\(crafted)") == nil)
         #expect(AddMembersPresentation.memberRef(fromScannedPayload: crafted) == nil)
         #expect(
-            AddMembersPresentation.memberRef(fromScannedPayload: "WhiteNoise://profile/\(crafted)") == nil
+            AddMembersPresentation.memberRef(fromScannedPayload: "whitenoise://profile/\(crafted)") == nil
         )
     }
 

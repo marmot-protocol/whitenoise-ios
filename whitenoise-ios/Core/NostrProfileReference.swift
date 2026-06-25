@@ -36,7 +36,7 @@ nonisolated enum NostrProfileReference {
             return memberRef(fromReference: rest)
         }
 
-        if let reference = reference(fromDarkMatterURLString: trimmed) {
+        if let reference = reference(fromDeepLinkURLString: trimmed) {
             return memberRef(fromReference: reference)
         }
 
@@ -79,7 +79,7 @@ nonisolated enum NostrProfileReference {
         return nil
     }
 
-    private static func reference(fromDarkMatterURLString raw: String) -> String? {
+    private static func reference(fromDeepLinkURLString raw: String) -> String? {
         guard let url = URL(string: raw),
               url.scheme?.lowercased() == DeepLink.scheme
         else { return nil }

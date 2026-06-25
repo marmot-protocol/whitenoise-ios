@@ -80,12 +80,12 @@ struct Bech32CharsetLookupTests {
         #expect(NostrProfileReference.pubkeyHex(fromBech32: overlongNpub) == nil)
         #expect(NostrProfileReference.memberRef(from: "nostr:\(overlongNprofile)") == nil)
         #expect(DeepLink.parse(string: overlongNpub) == nil)
-        #expect(DeepLink.parse(string: "whitenoise://profile/\(overlongNprofile)") == nil)
+        #expect(DeepLink.parse(string: "\(DeepLink.scheme)://profile/\(overlongNprofile)") == nil)
     }
 
     @Test func rejectsOverlongRawInputsBeforeURLFallback() {
         let overlongRaw = String(repeating: "x", count: 257)
-        let overlongURL = "whitenoise://profile/" + String(repeating: "q", count: 300)
+        let overlongURL = "\(DeepLink.scheme)://profile/" + String(repeating: "q", count: 300)
 
         #expect(NostrProfileReference.memberRef(from: overlongRaw) == nil)
         #expect(NostrProfileReference.memberRef(from: overlongURL) == nil)

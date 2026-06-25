@@ -1,4 +1,4 @@
-<h1 align="center">WhiteNoise iOS</h1>
+<h1 align="center">White Noise iOS</h1>
 
 <p align="center">
   <strong>Private MLS group messaging for iPhone, powered by the Marmot Rust runtime.</strong>
@@ -8,7 +8,7 @@
   SwiftUI interface. Rust cryptographic core. Generic APNS wakes. Local-first diagnostics.
 </p>
 
-WhiteNoise iOS is the native iPhone client for the Dark Matter/Marmot secure messaging stack. The app gives iOS users a polished SwiftUI chat experience while delegating accounts, MLS group state, storage, relay catch-up, message processing, encrypted media, push-token cryptography, telemetry, and audit-log plumbing to the vendored `MarmotKit` UniFFI package.
+White Noise iOS is the native iPhone client for the Dark Matter/Marmot secure messaging stack. The app gives iOS users a polished SwiftUI chat experience while delegating accounts, MLS group state, storage, relay catch-up, message processing, encrypted media, push-token cryptography, telemetry, and audit-log plumbing to the vendored `MarmotKit` UniFFI package.
 
 The project is intentionally split along the platform boundary: Swift owns presentation, navigation, lifecycle, notifications, and Apple integration; Marmot owns protocol state and durable encrypted data.
 
@@ -50,11 +50,19 @@ The project is intentionally split along the platform boundary: Swift owns prese
 - Apple developer signing configured for device builds, APNS, App Groups, and the Notification Service Extension.
 - The sibling Dark Matter Rust repo at `../darkmatter` only when regenerating Marmot bindings. Normal Swift builds use the vendored `MarmotKit` bundle.
 
-Current identifiers:
+Production identifiers:
 
 - Main app bundle ID: `dev.ipf.whitenoise.ios`
 - Notification Service Extension bundle ID: `dev.ipf.whitenoise.ios.NotificationService`
 - App Group: `group.dev.ipf.whitenoise.ios`
+- URL scheme: `whitenoise`
+
+Staging identifiers:
+
+- Main app bundle ID: `dev.ipf.whitenoise.ios.staging`
+- Notification Service Extension bundle ID: `dev.ipf.whitenoise.ios.staging.NotificationService`
+- App Group: `group.dev.ipf.whitenoise.ios.staging`
+- URL scheme: `whitenoise-staging`
 
 ## Build And Test
 
@@ -64,31 +72,41 @@ List project targets and schemes:
 xcodebuild -list -project whitenoise-ios.xcodeproj
 ```
 
-Build for a simulator:
+Build production for a simulator:
 
 ```sh
 xcodebuild build \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios \
+  -scheme "Whitenoise (Production)" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-Run unit tests:
+Run unit tests with the production scheme:
 
 ```sh
 xcodebuild test \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios \
+  -scheme "Whitenoise (Production)" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-Build the device release artifact:
+Build the production device release artifact:
 
 ```sh
 xcodebuild build \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios \
-  -configuration Release \
+  -scheme "Whitenoise (Production)" \
+  -configuration Release-Production \
+  -destination 'generic/platform=iOS'
+```
+
+Build the staging device release artifact:
+
+```sh
+xcodebuild build \
+  -project whitenoise-ios.xcodeproj \
+  -scheme "Whitenoise (Staging)" \
+  -configuration Release-Staging \
   -destination 'generic/platform=iOS'
 ```
 
@@ -97,7 +115,7 @@ If a simulator name is unavailable on your machine, list local destinations:
 ```sh
 xcodebuild -showdestinations \
   -project whitenoise-ios.xcodeproj \
-  -scheme whitenoise-ios
+  -scheme "Whitenoise (Production)"
 ```
 
 ## MarmotKit Bindings

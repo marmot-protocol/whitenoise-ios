@@ -144,7 +144,7 @@ struct ProfileQRView: View {
 
     private func handleScan(_ raw: String) {
         guard case let .profile(scannedNpub) = DeepLink.parse(string: raw) else {
-            scanError = L10n.string("That QR code isn't a WhiteNoise profile.")
+            scanError = L10n.string("That QR code isn't a White Noise profile.")
             Haptics.error()
             return
         }
@@ -180,7 +180,7 @@ struct ScannerSheet: View {
                             .background(.black.opacity(0.6), in: .rect(cornerRadius: 12))
                             .padding(.bottom, 40)
                     } else {
-                        Text("Point the camera at a WhiteNoise profile QR")
+                        Text("Point the camera at a White Noise profile QR")
                             .font(.callout)
                             .foregroundStyle(.white)
                             .padding()

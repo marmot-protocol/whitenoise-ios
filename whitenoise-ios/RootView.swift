@@ -36,7 +36,7 @@ private struct BootstrapSplash: View {
                     .font(.system(size: 56, weight: .light))
                     .symbolRenderingMode(.hierarchical)
                     .foregroundStyle(.tint)
-                Text("WhiteNoise")
+                Text("White Noise")
                     .font(.title.weight(.semibold))
                     .foregroundStyle(.primary)
             }

@@ -2,7 +2,7 @@
 #include "Shared.xcconfig"
 
 WN_FLAVOR = production
-WN_DISPLAY_NAME = WhiteNoise
+WN_DISPLAY_NAME = White Noise
 WN_URL_SCHEME = whitenoise
 
 PRODUCT_BUNDLE_IDENTIFIER = dev.ipf.whitenoise.ios
