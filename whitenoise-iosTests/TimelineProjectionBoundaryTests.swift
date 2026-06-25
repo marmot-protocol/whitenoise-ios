@@ -117,7 +117,7 @@ struct TimelineProjectionBoundaryTests {
     }
 
     @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() throws {
-        let source = try sourceString("darkmatter-ios/Conversation/ConversationMediaDownloader.swift")
+        let source = try sourceString("whitenoise-ios/Conversation/ConversationMediaDownloader.swift")
 
         #expect(source.matches(#"guard let reference = media\.reference else \{[\s\S]*if let cached = await MessageMediaCache\.cachedData\(for: reference\)"#))
         #expect(!source.matches(#"guard let appState[\s\S]*MessageMediaCache\.cachedData\(for:"#))
