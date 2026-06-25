@@ -1213,7 +1213,7 @@ struct AppStateBootstrapTests {
         URL(filePath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("darkmatter-ios/Onboarding/CreateIdentityViewModel.swift")
+            .appendingPathComponent("whitenoise-ios/Onboarding/CreateIdentityViewModel.swift")
     }
 
     private var runtimeLifecycleSourceURL: URL {
