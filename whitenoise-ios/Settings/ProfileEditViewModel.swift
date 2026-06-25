@@ -64,6 +64,7 @@ final class ProfileEditViewModel {
     }
 
     func publish(using appState: AppState) async {
+        guard !isPublishing else { return }
         guard let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex
         else { return }
