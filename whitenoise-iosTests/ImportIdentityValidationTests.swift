@@ -27,4 +27,22 @@ struct ImportIdentityValidationTests {
         #expect(consumed == nsec)
         #expect(identity.isEmpty)
     }
+
+    /// #439 — a fast double-tap must not start two concurrent imports. The
+    /// synchronous in-flight gate `runImport` takes before consuming the visible
+    /// secret admits only the first caller; a re-entrant call is rejected without
+    /// re-arming the flag or touching the field.
+    @Test @MainActor func beginImportIfIdleRejectsReentrantImport() {
+        let model = ImportIdentityViewModel()
+        model.identity = "nsec1" + String(repeating: "a", count: 58)
+
+        #expect(model.beginImportIfIdle())
+        #expect(model.isImporting)
+
+        // A second tap before the first import completes is rejected and leaves
+        // the visible secret untouched for the still-running first import.
+        #expect(!model.beginImportIfIdle())
+        #expect(model.isImporting)
+        #expect(!model.identity.isEmpty)
+    }
 }
