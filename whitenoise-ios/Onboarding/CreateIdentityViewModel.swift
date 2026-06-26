@@ -10,7 +10,9 @@ final class CreateIdentityViewModel {
     var error: String?
 
     func runCreate(using appState: AppState, dismiss: () -> Void) async {
+        guard !isCreating else { return }
         isCreating = true
+        defer { isCreating = false }
         error = nil
         do {
             try await appState.createIdentity()
@@ -22,6 +24,5 @@ final class CreateIdentityViewModel {
             self.error = error.localizedDescription
             appState.present(.error(L10n.string("Identity creation failed"), message: error.localizedDescription))
         }
-        isCreating = false
     }
 }
