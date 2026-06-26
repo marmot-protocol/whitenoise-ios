@@ -1016,7 +1016,7 @@ nonisolated enum MessageAudioBubblePresentation {
     }
 
     static func durationLabel(_ duration: Double?) -> String? {
-        guard let duration else { return nil }
+        guard let duration, duration.isFinite else { return nil }
         let total = max(0, Int(duration.rounded(.down)))
         return "\(total / 60):\(String(format: "%02d", total % 60))"
     }
