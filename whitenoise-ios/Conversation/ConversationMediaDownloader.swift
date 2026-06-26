@@ -79,7 +79,7 @@ final class ConversationMediaDownloader {
     private let downloadMedia: DownloadMedia
 
     init(
-        cache: ConversationMediaCacheAccessing = DefaultConversationMediaCache(),
+        cache: ConversationMediaCacheAccessing? = nil,
         downloadMedia: @escaping DownloadMedia = { client, accountRef, groupIdHex, reference in
             try await client.downloadMedia(
                 accountRef: accountRef,
@@ -88,7 +88,7 @@ final class ConversationMediaDownloader {
             )
         }
     ) {
-        self.cache = cache
+        self.cache = cache ?? DefaultConversationMediaCache()
         self.downloadMedia = downloadMedia
     }
 
@@ -111,8 +111,8 @@ final class ConversationMediaDownloader {
         ) {
             // Row references already carry the real source_epoch, so the reference
             // is directly downloadable — no listMedia round-trip to recover it.
-            let result = try await downloadMedia(client, accountRef, groupIdHex, reference)
-            await cache.store(result.plaintext, for: reference)
+            let result = try await self.downloadMedia(client, accountRef, groupIdHex, reference)
+            await self.cache.store(result.plaintext, for: reference)
             return result.plaintext
         }
     }
