@@ -15,8 +15,18 @@ run() {
     -destination "$DESTINATION" \
     -resultBundlePath "$RESULT_BUNDLE" \
     ONLY_ACTIVE_ARCH=YES \
-    CODE_SIGNING_ALLOWED=NO
+    CODE_SIGN_STYLE=Manual \
+    DEVELOPMENT_TEAM="" \
+    PROVISIONING_PROFILE_SPECIFIER="" \
+    CODE_SIGN_IDENTITY="-" \
+    CODE_SIGNING_ALLOWED=YES
 }
+# Sign ad-hoc with no team rather than skipping signing. The App Group
+# entitlement is embedded only when signing runs; without it,
+# containerURL(forSecurityApplicationGroupIdentifier:) returns nil and the test
+# host fatal-errors initializing Marmot storage at launch. The simulator reads
+# the app group from the simulated entitlements, which carry no team prefix, so
+# manual ad-hoc signing works on a CI runner with no signing identity.
 
 if command -v xcbeautify >/dev/null 2>&1; then
   set -o pipefail
