@@ -167,6 +167,10 @@ final class AppState {
     /// account whose registration sign-out just cleared (#320, residual of
     /// #7/#111). MainActor-owned; mutated only on the MainActor.
     private var isSigningOut = false
+    /// Account refs with an activation already running. Set before signed-out
+    /// reactivation awaits so rapid repeated taps cannot start duplicate sign-ins.
+    /// MainActor-owned; mutated only by `activateAccount`.
+    private var activatingAccountRefs = Set<String>()
     /// Scene-phase flag. Owned here (not on `RuntimeLifecycle`) because many
     /// non-lifecycle gates read it (notification presentation, settings reads,
     /// push scheduling, routing); `RuntimeLifecycle` writes it through its
@@ -396,6 +400,8 @@ final class AppState {
     func activateAccount(_ accountRef: String) async {
         guard accountRef != activeAccountRef else { return }
         guard let account = accounts.first(where: { $0.label == accountRef }) else { return }
+        guard activatingAccountRefs.insert(accountRef).inserted else { return }
+        defer { activatingAccountRefs.remove(accountRef) }
 
         if account.signedOut {
             do {
