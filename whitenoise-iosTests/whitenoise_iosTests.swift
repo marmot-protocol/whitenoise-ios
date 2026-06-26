@@ -736,6 +736,84 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    /// #445: if the app is backgrounded while `performBootstrap` is still in
+    /// flight, the runtime is already started but `phase` is still
+    /// `.bootstrapping`, so a suspension that lands during bootstrap fails the
+    /// `phaseOwnsLiveRuntime` guard and clears itself. Bootstrap then promotes to
+    /// `.onboarding`, leaving a started runtime holding the shared App Group
+    /// SQLite lock across suspension (the `0xdead10cc` watchdog-kill class).
+    /// Bootstrap must re-arm suspension once the scene is inactive at the point
+    /// it sets a live-runtime-owning phase.
+    @Test func bootstrapWhileSceneInactiveReArmsSuspensionInOnboarding() async throws {
+        let appState = try testAppState()
+
+        // The real background entry point lands while the app is still in the
+        // initial `.bootstrapping` phase. It bails before bootstrap starts the
+        // runtime-owning phase, but records that bootstrap must re-arm it.
+        await appState.startRuntimeSuspension().value
+        await appState.bootstrap()
+        // Drain the suspension bootstrap re-armed.
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        // `.onboarding` owns the live runtime, but with the scene inactive the
+        // runtime must be torn down (handle released, App Group lock freed)
+        // rather than left started in the background.
+        #expect(appState.phase == .onboarding)
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+        #expect(!appState.notificationSubscriptionActive)
+
+        resetPersistedActiveAccountRef()
+    }
+
+    @Test func bootstrapWhileOnlyInactiveDoesNotStartBackgroundSuspension() async throws {
+        let appState = try testAppState()
+
+        // `.inactive` only flips the scene-active gate; the actual teardown is
+        // reserved for the `.background` entry point (`startRuntimeSuspension`).
+        appState.setAppSceneActive(false)
+        await appState.bootstrap()
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        #expect(appState.phase == .onboarding)
+        #expect(!appState.isAppSceneActive)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.client != nil)
+
+        await appState.startRuntimeSuspension().value
+        resetPersistedActiveAccountRef()
+    }
+
+    /// #445 (ready variant): the same bootstrap↔background race for an app that
+    /// resolves to `.ready` (accounts on disk). Bootstrap must re-arm suspension
+    /// instead of starting `.ready`-only foreground maintenance and leaving the
+    /// started runtime alive in the background.
+    @Test func bootstrapWhileSceneInactiveReArmsSuspensionWhenReady() async throws {
+        // Seed an account on disk, then build a fresh AppState so the next
+        // bootstrap starts from `.bootstrapping` and resolves to `.ready`.
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let seedClient = try #require(seeded.appState.client)
+        await stopReadyRuntime(seeded.appState)
+        let appState = AppState(client: try seedClient.freshRuntime(), notifications: deniedNotifications())
+
+        // The first background-suspension attempt lands during `.bootstrapping`
+        // and bails; bootstrap must re-arm it after it promotes to `.ready`.
+        await appState.startRuntimeSuspension().value
+        await appState.bootstrap()
+        await appState.drainRuntimeLifecycleTasksForTesting()
+
+        #expect(appState.phase == .ready)
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+        // Foreground-only maintenance must not have been left as the follow-up:
+        // the subscription belongs to a live foreground `.ready` runtime.
+        #expect(!appState.notificationSubscriptionActive)
+
+        resetPersistedActiveAccountRef()
+    }
+
     @Test func bootstrapRetryAfterSuspendedRuntimeClearsForegroundGates() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
