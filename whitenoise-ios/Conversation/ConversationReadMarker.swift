@@ -122,17 +122,21 @@ final class ConversationReadMarker {
     }
 
     private func flushPendingReadMarks(accountRef: String) async {
-        readMarkTask = nil
+        // Keep `readMarkTask` non-nil for the whole round-trip so read marks
+        // enqueued during the awaited FFI cannot schedule an overlapping flush.
+        // Clearing it (and re-arming any follow-up) only happens at flush exit.
         let messageIds = pendingReadMessageIds
         pendingReadMessageIds = []
         guard !messageIds.isEmpty else {
             pendingReadMessageIdSet = []
             pruneMarkedReadMessageIds(force: true)
+            finishFlush(accountRef: accountRef)
             return
         }
         defer {
             pendingReadMessageIdSet.subtract(messageIds)
             pruneMarkedReadMessageIds(force: true)
+            finishFlush(accountRef: accountRef)
         }
         guard let appState, appState.canUseRuntimeForForegroundWork else {
             markedReadMessageIds.subtract(messageIds)
@@ -159,10 +163,15 @@ final class ConversationReadMarker {
         } catch {
             markedReadMessageIds.subtract(messageIds)
         }
+    }
 
-        if !pendingReadMessageIds.isEmpty, appState.activeAccountRef == accountRef {
-            scheduleReadMarkFlush(accountRef: accountRef)
-        }
+    /// Clears the in-flight task, then re-arms a follow-up flush for any ids
+    /// enqueued during the round-trip. Clearing must come first so
+    /// `scheduleReadMarkFlush`'s `guard readMarkTask == nil` can pass.
+    private func finishFlush(accountRef: String) {
+        readMarkTask = nil
+        guard !pendingReadMessageIds.isEmpty, appState?.activeAccountRef == accountRef else { return }
+        scheduleReadMarkFlush(accountRef: accountRef)
     }
 
     func cancelPendingReadMarks() {

@@ -4951,6 +4951,34 @@ struct ConversationTimelineProjectionTests {
         #expect(!retained.contains(stale))
     }
 
+    // The single-in-flight coalescing contract requires `readMarkTask` to stay
+    // non-nil across the awaited `markTimelineMessagesRead` round-trip; clearing
+    // it before the await lets a concurrent enqueue spawn an overlapping flush.
+    // The overlap can only happen against a live runtime/FFI, so lock the
+    // ordering invariant at the source level instead of standing up a fake runtime.
+    @Test func readMarkFlushKeepsTaskInFlightUntilFinishFlush() throws {
+        let source = try String(contentsOf: conversationReadMarkerSourceURL, encoding: .utf8)
+
+        // `flushPendingReadMarks` must not clear the task before awaiting the FFI;
+        // the only `readMarkTask = nil` assignments are cancellation and finishFlush.
+        #expect(source.matches(
+            #"private func flushPendingReadMarks\(accountRef: String\) async \{(?:(?!readMarkTask = nil)[\s\S])*?await client\.markTimelineMessagesRead\("#
+        ))
+        // The flush clears the task and re-arms a follow-up only via finishFlush,
+        // and clearing happens before scheduleReadMarkFlush so the guard can pass.
+        #expect(source.matches(
+            #"private func finishFlush\(accountRef: String\) \{\s*readMarkTask = nil[\s\S]*?scheduleReadMarkFlush\(accountRef: accountRef\)"#
+        ))
+        // Both flush exit paths present in this function (empty queue + defer)
+        // route through finishFlush so the task is always cleared.
+        #expect(source.matches(
+            #"guard !messageIds\.isEmpty else \{[\s\S]*?finishFlush\(accountRef: accountRef\)"#
+        ))
+        #expect(source.matches(
+            #"defer \{[\s\S]*?finishFlush\(accountRef: accountRef\)"#
+        ))
+    }
+
     @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
         let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
 
