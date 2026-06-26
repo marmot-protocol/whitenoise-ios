@@ -426,6 +426,7 @@ private struct ComposerAudioDraftInput: View {
     @State private var isLoading = false
     @State private var didFail = false
     @State private var progressTask: Task<Void, Never>?
+    @State private var audioSessionLease: VoiceAudioSession.Lease?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -494,6 +495,7 @@ private struct ComposerAudioDraftInput: View {
         if isPlaying {
             player?.pause()
             isPlaying = false
+            releaseAudioSession()
             return
         }
         if player == nil || didFail {
@@ -516,16 +518,31 @@ private struct ComposerAudioDraftInput: View {
             isLoading = false
             didFail = true
             isPlaying = false
+            releaseAudioSession()
         }
     }
 
     private func playLoadedAudio() {
         guard let player else { return }
+        do {
+            releaseAudioSession()
+            audioSessionLease = try VoiceAudioSession.configureForPlayback()
+        } catch {
+            didFail = true
+            isPlaying = false
+            return
+        }
         if player.currentTime >= player.duration {
             player.currentTime = 0
             progress = 0
         }
-        player.play()
+        guard player.play() else {
+            didFail = true
+            isPlaying = false
+            releaseAudioSession()
+            return
+        }
+        didFail = false
         isPlaying = true
         startProgressLoop()
     }
@@ -540,6 +557,7 @@ private struct ComposerAudioDraftInput: View {
                 progress = min(1, max(0, CGFloat(player.currentTime / duration)))
                 if !player.isPlaying {
                     isPlaying = false
+                    releaseAudioSession()
                     if progress >= 0.995 {
                         progress = 0
                         player.currentTime = 0
@@ -556,6 +574,12 @@ private struct ComposerAudioDraftInput: View {
         player?.stop()
         player = nil
         isPlaying = false
+        releaseAudioSession()
+    }
+
+    private func releaseAudioSession() {
+        VoiceAudioSession.deactivate(audioSessionLease)
+        audioSessionLease = nil
     }
 }
 
