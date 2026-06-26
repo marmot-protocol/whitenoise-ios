@@ -34,7 +34,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
                 probe.firstCancelled = Task.isCancelled
             }
         }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await waitUntil { probe.firstStarted }
 
         #expect(probe.firstStarted)
         #expect(viewModel.hasTimelineTailRefreshTaskForTesting)
@@ -42,7 +42,9 @@ struct TimelineTailRefreshTaskLifetimeTests {
         viewModel.scheduleTimelineTailRefreshForTesting {
             probe.secondRan = true
         }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        await waitUntil {
+            probe.firstCancelled && probe.secondRan && !viewModel.hasTimelineTailRefreshTaskForTesting
+        }
 
         #expect(probe.firstCancelled)
         #expect(probe.secondRan)
@@ -64,6 +66,19 @@ struct TimelineTailRefreshTaskLifetimeTests {
 
         viewModel.cancelTimelineTailRefreshForTesting()
         #expect(!viewModel.hasTimelineTailRefreshTaskForTesting)
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutNanoseconds: UInt64 = 5_000_000_000,
+    pollIntervalNanoseconds: UInt64 = 5_000_000,
+    _ condition: () -> Bool
+) async {
+    let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+    while DispatchTime.now().uptimeNanoseconds < deadline {
+        if condition() { return }
+        try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
     }
 }
 

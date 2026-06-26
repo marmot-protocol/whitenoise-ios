@@ -1900,13 +1900,23 @@ struct AppContainerConfigTests {
         ])
     }
 
-    @Test func productionPushServerConfigIsPresent() {
-        let config = NativePushServerConfig.current()
+    @Test func pushServerConfigMatchesBuildFlavor() throws {
+        // The push server pubkey is flavor-specific (`WHITENOISE_PUSH_SERVER_PUBKEY_HEX`),
+        // so assert against the value for the flavor this test bundle was built
+        // with rather than hardcoding production; the test runs under Staging in CI.
+        let config = try #require(NativePushServerConfig.current())
 
-        #expect(config?.serverPubkeyHex == "73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04")
-        #expect(config?.relayHint == "wss://relay.eu.whitenoise.chat")
-        #expect(config?.relayHint == AppContainerConfig.pushNotificationRelayHint)
-        #expect(AppContainerConfig.seedRelays.contains(config?.relayHint ?? ""))
+        let expectedPubkeyByFlavor = [
+            "production": "73a4996bd18de19f6ac5f6ad42f5f2671eba6e5b739ea9695f07b00b0693fc04",
+            "staging": "94186f72f66d09f94ca33599fda4b39cd8ac403769647658252dc48b8318f0c9"
+        ]
+        let flavor = try #require(Bundle.main.object(forInfoDictionaryKey: "WNFlavor") as? String)
+        let expectedPubkey = try #require(expectedPubkeyByFlavor[flavor])
+
+        #expect(config.serverPubkeyHex == expectedPubkey)
+        #expect(config.relayHint == "wss://relay.eu.whitenoise.chat")
+        #expect(config.relayHint == AppContainerConfig.pushNotificationRelayHint)
+        #expect(AppContainerConfig.seedRelays.contains(config.relayHint ?? ""))
     }
 
     @Test func marmotRootUsesStableDirectoryName() {
@@ -2302,9 +2312,26 @@ struct LocalizationCatalogTests {
         let catalog = try readCatalog("whitenoise-ios/InfoPlist.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
 
-        // CFBundleDisplayName is flavor-specific (`WN_DISPLAY_NAME`), so it
-        // must not be localized to a static value that would hide staging.
-        #expect(strings["CFBundleDisplayName"] == nil)
+        // CFBundleDisplayName is flavor-specific (`WN_DISPLAY_NAME`). Xcode's IDE
+        // auto-extracts a development-language placeholder (`state` "new",
+        // resolved against the Release-Production default config) into this
+        // catalog on every build, and there is no build setting that suppresses
+        // it. That placeholder is NOT compiled into the built app's
+        // `.lproj/InfoPlist.strings`, so it cannot override the flavor display
+        // name (verified: a Staging build with the entry present still ships
+        // "WN Staging" with no localized override). Only a *translated*
+        // localization would actually hide staging, so fail on that alone
+        // rather than on the harmless auto-extracted placeholder.
+        if let displayName = strings["CFBundleDisplayName"] as? [String: Any] {
+            let localizations = (displayName["localizations"] as? [String: Any]) ?? [:]
+            for (locale, entry) in localizations {
+                let state = ((entry as? [String: Any])?["stringUnit"] as? [String: Any])?["state"] as? String
+                #expect(
+                    state != "translated",
+                    "CFBundleDisplayName must not carry a translated value (\(locale)); it would hide the flavor display name."
+                )
+            }
+        }
 
         for key in ["CFBundleName", "NSCameraUsageDescription"] {
             for locale in ["en"] + expectedLocales {

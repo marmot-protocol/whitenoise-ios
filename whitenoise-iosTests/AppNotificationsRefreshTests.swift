@@ -72,26 +72,27 @@ struct AppNotificationsRefreshTests {
         #expect(notifications.apnsTokenHex == "01")
     }
 
-    @Test func refreshThrowsWhenRegistrationFails() async throws {
-        let notifications = AppNotifications(
+    @Test func refreshThrowsWhenRegistrationFails() async {
+        // Inject the failure through the registrar so it is recorded after
+        // refreshApnsToken clears prior state, rather than racing a fixed sleep
+        // against task scheduling (which flakes under load).
+        var notifications: AppNotifications?
+        let created = AppNotifications(
             authorizationStatusProvider: { .authorized },
-            remoteNotificationRegistrar: {}
+            remoteNotificationRegistrar: {
+                notifications?.recordRegistrationFailure(
+                    NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "simulator unavailable"])
+                )
+            }
         )
-        notifications.recordDeviceToken(Data([0x01]))
-
-        let refreshTask = Task {
-            try await notifications.refreshApnsToken(
-                timeoutNanoseconds: 10_000_000_000,
-                pollIntervalNanoseconds: 10_000_000
-            )
-        }
-        try await Task.sleep(nanoseconds: 20_000_000)
-        notifications.recordRegistrationFailure(
-            NSError(domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "simulator unavailable"])
-        )
+        notifications = created
+        created.recordDeviceToken(Data([0x01]))
 
         do {
-            _ = try await refreshTask.value
+            _ = try await created.refreshApnsToken(
+                timeoutNanoseconds: 500_000_000,
+                pollIntervalNanoseconds: 10_000_000
+            )
             Issue.record("expected refresh to fail when APNS registration fails")
         } catch let error as NotificationSettingsActionError {
             guard case let .apnsRegistrationFailed(message) = error else {
