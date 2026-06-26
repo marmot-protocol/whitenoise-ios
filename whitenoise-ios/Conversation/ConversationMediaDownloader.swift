@@ -45,13 +45,52 @@ final class MediaDownloadInFlightStore {
     }
 }
 
+@MainActor
+protocol ConversationMediaCacheAccessing {
+    func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data?
+    func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) async
+}
+
+struct DefaultConversationMediaCache: ConversationMediaCacheAccessing {
+    func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
+        await MessageMediaCache.cachedData(for: reference)
+    }
+
+    func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) async {
+        await MessageMediaCache.store(data, for: reference)
+    }
+}
+
 /// Owns the conversation media download path: local-bytes/cache short-circuits,
 /// then a deduplicated decrypt+download through Marmot with a write-back into the
-/// encrypted-media cache. Extracted from `ConversationViewModel`; the group id and
+/// decrypted-media cache. Extracted from `ConversationViewModel`; the group id and
 /// active `AppState` are passed per call so this stays free of conversation state.
 @MainActor
 final class ConversationMediaDownloader {
+    typealias DownloadMedia = @MainActor (
+        _ client: MarmotClient,
+        _ accountRef: String,
+        _ groupIdHex: String,
+        _ reference: MediaAttachmentReferenceFfi
+    ) async throws -> MediaDownloadResultFfi
+
     private let inFlight = MediaDownloadInFlightStore()
+    private let cache: ConversationMediaCacheAccessing
+    private let downloadMedia: DownloadMedia
+
+    init(
+        cache: ConversationMediaCacheAccessing? = nil,
+        downloadMedia: @escaping DownloadMedia = { client, accountRef, groupIdHex, reference in
+            try await client.downloadMedia(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                reference: reference
+            )
+        }
+    ) {
+        self.cache = cache ?? DefaultConversationMediaCache()
+        self.downloadMedia = downloadMedia
+    }
 
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data {
         if let localData = media.localData {
@@ -60,28 +99,20 @@ final class ConversationMediaDownloader {
         guard let reference = media.reference else {
             throw MediaDataError.missingReference
         }
-        if let cached = await MessageMediaCache.cachedData(for: reference) {
+        if let cached = await cache.cachedData(for: reference) {
             return cached
         }
         guard let appState, let accountRef = appState.activeAccountRef else {
             throw MediaDataError.missingAccount
         }
-        // Row references already carry the real source_epoch, so the reference
-        // is directly downloadable — no listMedia round-trip to recover it.
-        let downloadableReference = reference
-        if let cached = await MessageMediaCache.cachedData(for: downloadableReference) {
-            return cached
-        }
         let client = try appState.currentMarmotClient()
         return try await inFlight.data(
-            for: MediaDownloadInFlightKey(reference: downloadableReference)
+            for: MediaDownloadInFlightKey(reference: reference)
         ) {
-            let result = try await client.downloadMedia(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                reference: downloadableReference
-            )
-            await MessageMediaCache.store(result.plaintext, for: downloadableReference)
+            // Row references already carry the real source_epoch, so the reference
+            // is directly downloadable — no listMedia round-trip to recover it.
+            let result = try await self.downloadMedia(client, accountRef, groupIdHex, reference)
+            await self.cache.store(result.plaintext, for: reference)
             return result.plaintext
         }
     }
