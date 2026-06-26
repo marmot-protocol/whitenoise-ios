@@ -112,7 +112,7 @@ nonisolated enum LocalNotificationProjection {
             }
             return (
                 title: groupName ?? L10n.string("Group message"),
-                body: preview.map { "\(senderName): \($0)" }
+                body: preview.map { L10n.formatted("%@: %@", senderName, $0) }
                     ?? L10n.formatted("%@ sent a message", senderName)
             )
         }

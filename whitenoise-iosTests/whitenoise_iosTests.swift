@@ -2714,17 +2714,27 @@ struct NotificationPresentationTests {
     }
 
     @Test func groupMessageUsesGroupTitleAndSenderBodyPrefix() {
-        let update = notificationUpdate(
-            isDm: false,
-            groupName: " Project\nRoom ",
-            senderName: "Bob",
-            previewText: "Ship it"
-        )
+        withAppLanguage(.english) {
+            let update = notificationUpdate(
+                isDm: false,
+                groupName: " Project\nRoom ",
+                senderName: "Bob",
+                previewText: "Ship it"
+            )
 
-        let presentation = LocalNotificationProjection.makePresentation(for: update)
+            let presentation = LocalNotificationProjection.makePresentation(for: update)
 
-        #expect(presentation?.title == "Project Room")
-        #expect(presentation?.body == "Bob: Ship it")
+            #expect(presentation?.title == "Project Room")
+            #expect(presentation?.body == "Bob: Ship it")
+        }
+    }
+
+    @Test func groupMessagePreviewBodyUsesFormattedLocalizationKey() throws {
+        let projectionSource = try String(contentsOf: localNotificationProjectionSourceURL, encoding: .utf8)
+        let catalogSource = try String(contentsOf: localizableCatalogSourceURL, encoding: .utf8)
+
+        #expect(projectionSource.matches(#"preview\.map\s*\{\s*L10n\.formatted\("%@: %@",\s*senderName,\s*\$0\)\s*\}"#))
+        #expect(catalogSource.contains(#""%@: %@" : {"#))
     }
 
     @Test func groupMentionUsesMentionBodyPrefix() {
@@ -2808,6 +2818,20 @@ struct NotificationPresentationTests {
 
         #expect(presentation?.title == "01234567…abcdef")
         #expect(presentation?.body == "New encrypted message")
+    }
+
+    private var localNotificationProjectionSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "Shared/LocalNotificationProjection.swift")
+    }
+
+    private var localizableCatalogSourceURL: URL {
+        URL(filePath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "Shared/Localizable.xcstrings")
     }
 }
 
