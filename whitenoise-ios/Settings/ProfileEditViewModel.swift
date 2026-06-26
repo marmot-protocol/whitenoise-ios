@@ -64,6 +64,7 @@ final class ProfileEditViewModel {
     }
 
     func publish(using appState: AppState) async {
+        guard !isPublishing else { return }
         guard let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex
         else { return }
@@ -77,6 +78,7 @@ final class ProfileEditViewModel {
         guard let normalizedMetadata = draft.normalizedMetadata else { return }
 
         isPublishing = true
+        defer { isPublishing = false }
         error = nil
 
         do {
@@ -100,6 +102,5 @@ final class ProfileEditViewModel {
             self.error = error.localizedDescription
             appState.present(.error(L10n.string("Couldn't publish profile"), message: error.localizedDescription))
         }
-        isPublishing = false
     }
 }
