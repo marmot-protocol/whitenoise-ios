@@ -63,7 +63,7 @@ struct DefaultConversationMediaCache: ConversationMediaCacheAccessing {
 
 /// Owns the conversation media download path: local-bytes/cache short-circuits,
 /// then a deduplicated decrypt+download through Marmot with a write-back into the
-/// encrypted-media cache. Extracted from `ConversationViewModel`; the group id and
+/// decrypted-media cache. Extracted from `ConversationViewModel`; the group id and
 /// active `AppState` are passed per call so this stays free of conversation state.
 @MainActor
 final class ConversationMediaDownloader {

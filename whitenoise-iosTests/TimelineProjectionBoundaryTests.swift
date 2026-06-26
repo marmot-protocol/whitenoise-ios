@@ -148,9 +148,11 @@ struct TimelineProjectionBoundaryTests {
         #expect(cached.cachedDataCalls == 1)
         #expect(cached.storedPayloads == [downloaded.data])
         #expect(cached.storedReferenceHashes == [reference.plaintextSha256])
+        #expect(cached.storedSourceEpochs == [reference.sourceEpoch])
         #expect(downloaded.accountRefs == ["account-a"])
         #expect(downloaded.groupIds == [testGroupId])
         #expect(downloaded.referenceHashes == [reference.plaintextSha256])
+        #expect(downloaded.sourceEpochs == [reference.sourceEpoch])
     }
 
     @Test func displayTimelineDoesNotParseMarkdownAtRenderTime() throws {
@@ -274,6 +276,7 @@ private final class CountingConversationMediaCache: ConversationMediaCacheAccess
     private(set) var cachedDataCalls = 0
     private(set) var storedPayloads: [Data] = []
     private(set) var storedReferenceHashes: [String] = []
+    private(set) var storedSourceEpochs: [UInt64] = []
     var cachedDataToReturn: Data?
 
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
@@ -284,6 +287,7 @@ private final class CountingConversationMediaCache: ConversationMediaCacheAccess
     func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) async {
         storedPayloads.append(data)
         storedReferenceHashes.append(reference.plaintextSha256)
+        storedSourceEpochs.append(reference.sourceEpoch)
     }
 }
 
@@ -293,6 +297,7 @@ private final class DownloadMediaSpy {
     private(set) var accountRefs: [String] = []
     private(set) var groupIds: [String] = []
     private(set) var referenceHashes: [String] = []
+    private(set) var sourceEpochs: [UInt64] = []
 
     init(data: Data) {
         self.data = data
@@ -308,6 +313,7 @@ private final class DownloadMediaSpy {
         accountRefs.append(accountRef)
         groupIds.append(groupIdHex)
         referenceHashes.append(reference.plaintextSha256)
+        sourceEpochs.append(reference.sourceEpoch)
         return MediaDownloadResultFfi(
             plaintext: data,
             fileName: reference.fileName,
