@@ -19,8 +19,11 @@ autofix:
     @swiftlint lint --fix --config .swiftlint.yml || true
     @./scripts/lint.sh
 
+test:
+    @./scripts/test.sh
+
 # Full pre-commit gate. Runs the exact same command CI runs.
-# If this is green locally, the CI lint job will be green too — they share
 precommit:
     @./scripts/lint.sh
+    @./scripts/test.sh
     @echo "✓ precommit (lint only)"
