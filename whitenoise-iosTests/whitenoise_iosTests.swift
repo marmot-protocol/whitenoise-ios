@@ -742,8 +742,52 @@ struct AppStateBootstrapTests {
     /// `phaseOwnsLiveRuntime` guard and clears itself. Bootstrap then promotes to
     /// `.onboarding`, leaving a started runtime holding the shared App Group
     /// SQLite lock across suspension (the `0xdead10cc` watchdog-kill class).
-    /// Bootstrap must re-arm suspension once the scene is inactive at the point
-    /// it sets a live-runtime-owning phase.
+    /// Bootstrap must keep that suspension chained through phase promotion (or
+    /// re-arm it if no bootstrap task existed yet).
+    @Test func backgroundSuspensionTaskWaitsForInFlightBootstrapBeforeEnding() async throws {
+        let appState = try testAppState()
+        let checkpoint = AsyncTestCheckpoint()
+
+        appState.runtimeLifecycle.afterBootstrapRuntimeStartForTesting = {
+            await checkpoint.pause()
+        }
+        let bootstrapTask = Task { @MainActor in
+            await appState.bootstrap()
+        }
+        await checkpoint.waitUntilPaused()
+
+        #expect(appState.phase == .bootstrapping)
+        #expect(appState.client != nil)
+
+        let suspensionTask = appState.startRuntimeSuspension()
+        var suspensionCompleted = false
+        let observer = Task { @MainActor in
+            await suspensionTask.value
+            suspensionCompleted = true
+        }
+
+        await Task.yield()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(!suspensionCompleted)
+        #expect(appState.phase == .bootstrapping)
+        #expect(appState.client != nil)
+
+        await checkpoint.release()
+        await bootstrapTask.value
+        await suspensionTask.value
+        await observer.value
+
+        #expect(suspensionCompleted)
+        #expect(appState.phase == .onboarding)
+        #expect(!appState.isAppSceneActive)
+        #expect(appState.runtimeSuspendedForBackground)
+        #expect(appState.client == nil)
+        #expect(!appState.notificationSubscriptionActive)
+
+        resetPersistedActiveAccountRef()
+    }
+
     @Test func bootstrapWhileSceneInactiveReArmsSuspensionInOnboarding() async throws {
         let appState = try testAppState()
 
@@ -9840,6 +9884,43 @@ private func waitForExpectation(
         try await Task.sleep(nanoseconds: pollingIntervalNanoseconds)
     }
     #expect(predicate())
+}
+
+private actor AsyncTestCheckpoint {
+    private var isPaused = false
+    private var isReleased = false
+    private var pausedWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseWaiters: [CheckedContinuation<Void, Never>] = []
+
+    func pause() async {
+        isPaused = true
+        let waiters = pausedWaiters
+        pausedWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+
+        guard !isReleased else { return }
+        await withCheckedContinuation { continuation in
+            releaseWaiters.append(continuation)
+        }
+    }
+
+    func waitUntilPaused() async {
+        guard !isPaused else { return }
+        await withCheckedContinuation { continuation in
+            pausedWaiters.append(continuation)
+        }
+    }
+
+    func release() {
+        isReleased = true
+        let waiters = releaseWaiters
+        releaseWaiters.removeAll()
+        for waiter in waiters {
+            waiter.resume()
+        }
+    }
 }
 
 private actor AsyncTestGate {

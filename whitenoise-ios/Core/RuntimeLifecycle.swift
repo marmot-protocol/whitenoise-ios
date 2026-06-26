@@ -44,6 +44,9 @@ final class RuntimeLifecycle {
     /// only flips `isAppSceneActive`; it must not tear the runtime down until the
     /// app actually reaches `.background`.
     @ObservationIgnored private var bootstrapNeedsBackgroundSuspensionRecheck = false
+#if DEBUG
+    @ObservationIgnored var afterBootstrapRuntimeStartForTesting: (() async -> Void)?
+#endif
     /// Observed (like the original AppState stored flag) so the foreground/local
     /// runtime gates that fold it in stay reactive.
     private var isRuntimeSuspending = false
@@ -155,6 +158,11 @@ final class RuntimeLifecycle {
         guard let appState else { return }
         do {
             try await startCurrentRuntime()
+#if DEBUG
+            if let afterBootstrapRuntimeStartForTesting {
+                await afterBootstrapRuntimeStartForTesting()
+            }
+#endif
             noteRuntimeForegroundReadyAfterSuspension()
             try await appState.refreshAccounts()
             if appState.accounts.isEmpty {
@@ -169,11 +177,11 @@ final class RuntimeLifecycle {
                 }
                 appState.setPhase(.ready)
                 // If the app was backgrounded during bootstrap, the suspension
-                // task already bailed at `phaseOwnsLiveRuntime` (phase was still
-                // `.bootstrapping`) and cleared itself, so the started runtime
-                // would otherwise stay alive across suspension holding the shared
-                // App Group SQLite lock (0xdead10cc). Re-arm suspension and skip
-                // the `.ready`-only foreground maintenance below.
+                // task that landed at `.bootstrapping` must be chained through
+                // bootstrap (or re-armed if it already bailed), so the started
+                // runtime is not left alive across suspension holding the shared
+                // App Group SQLite lock (0xdead10cc). Skip the `.ready`-only
+                // foreground maintenance below in that backgrounded case.
                 if reconcileBackgroundSuspensionAfterBootstrap() { return }
                 // Warm the active account's profile (name + avatar) right away
                 // so it's visible without waiting for a screen to request it.
@@ -191,15 +199,17 @@ final class RuntimeLifecycle {
     /// Symmetry guard for the bootstrap↔suspension race. `performBootstrap`
     /// starts the runtime and only later promotes `phase` out of
     /// `.bootstrapping`; a real background transition that lands while bootstrap
-    /// is awaiting reaches `prepareForBackgroundSuspension`, fails the
-    /// `phaseOwnsLiveRuntime` guard, and clears its suspension task — leaving a
-    /// started runtime with the shared App Group SQLite lock held once bootstrap
-    /// promotes the phase (the `0xdead10cc` watchdog-kill class).
+    /// is awaiting reaches `prepareForBackgroundSuspension`. The suspension task
+    /// now waits for the in-flight bootstrap before re-evaluating the live-runtime
+    /// guards, so the UIKit background task that awaits it remains open until the
+    /// runtime is actually released. If the original suspension task had already
+    /// bailed (for example, it arrived before bootstrap created `bootstrapTask`),
+    /// this helper re-arms it after phase promotion.
     ///
-    /// Call this *after* `setPhase(.onboarding/.ready)` so the re-armed
+    /// Call this *after* `setPhase(.onboarding/.ready)` so the pending/re-armed
     /// suspension passes `phaseOwnsLiveRuntime` and actually tears the runtime
-    /// down. Returns `true` when it re-armed suspension so the `.ready` caller
-    /// can skip starting foreground-only maintenance. A plain `.inactive`
+    /// down. Returns `true` when a background suspension is pending so the `.ready`
+    /// caller can skip starting foreground-only maintenance. A plain `.inactive`
     /// transition does not set `bootstrapNeedsBackgroundSuspensionRecheck`, so it
     /// continues to avoid starting suspension before the app reaches
     /// `.background`.
@@ -300,6 +310,18 @@ final class RuntimeLifecycle {
         guard !isAppSceneActive else {
             startForegroundActivation()
             return
+        }
+        // Background suspension can arrive after bootstrap starts the runtime but
+        // before it promotes `phase` out of `.bootstrapping`. Keep this original
+        // suspension task alive so the UIKit background task that awaits it stays
+        // open until bootstrap finishes and the live-runtime guard can pass.
+        if appState?.phase == .bootstrapping,
+           let bootstrapTask {
+            await bootstrapTask.value
+            guard !isAppSceneActive else {
+                startForegroundActivation()
+                return
+            }
         }
         guard phaseOwnsLiveRuntime,
               !runtimeSuspendedForBackground,
