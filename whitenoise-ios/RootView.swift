@@ -27,19 +27,10 @@ struct RootView: View {
 private struct BootstrapSplash: View {
     var body: some View {
         ZStack {
-            // Solid background: white in light mode, black in dark mode.
             Color(.systemBackground)
                 .ignoresSafeArea()
-
-            VStack(spacing: 18) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 56, weight: .light))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.tint)
-                Text("White Noise")
-                    .font(.title.weight(.semibold))
-                    .foregroundStyle(.primary)
-            }
+            Image("WnLogo")
+                .accessibilityHidden(true)
         }
     }
 }
