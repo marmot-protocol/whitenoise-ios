@@ -23,6 +23,13 @@ final class AddMembersSheetViewModel {
         await recipients.addPending(normalize: normalize, warmProfile: warmProfile(using: appState))
     }
 
+    /// Silent auto-stage on input change: stages a complete pasted/typed
+    /// reference without requiring the "+" tap, and without erroring on partial
+    /// input.
+    func autoStagePending(normalize: @escaping RecipientStagingModel.Normalize, using appState: AppState) async {
+        await recipients.autoStagePendingIfComplete(normalize: normalize, warmProfile: warmProfile(using: appState))
+    }
+
     func addScanned(_ raw: String, normalize: @escaping RecipientStagingModel.Normalize, using appState: AppState) {
         Task { await add(raw, normalize: normalize, using: appState) }
     }

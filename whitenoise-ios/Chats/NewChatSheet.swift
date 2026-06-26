@@ -45,6 +45,12 @@ struct NewChatSheet: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
+                            .onChange(of: recipients.pending) {
+                                Task { await model.autoStagePending(using: appState) }
+                            }
+                            .onSubmit {
+                                Task { await model.addPending(using: appState) }
+                            }
                         Button {
                             Task { await model.addPending(using: appState) }
                         } label: {

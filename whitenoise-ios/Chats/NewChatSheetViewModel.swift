@@ -16,6 +16,16 @@ final class NewChatSheetViewModel {
         await recipients.addPending(normalize: normalize(using: appState), warmProfile: warmProfile(using: appState))
     }
 
+    /// Silent auto-stage on input change: stages a complete pasted/typed
+    /// reference without requiring the "+" tap, and without erroring on partial
+    /// input.
+    func autoStagePending(using appState: AppState) async {
+        await recipients.autoStagePendingIfComplete(
+            normalize: normalize(using: appState),
+            warmProfile: warmProfile(using: appState)
+        )
+    }
+
     @discardableResult
     func add(_ raw: String, invalidMessage: String, using appState: AppState) async -> Bool {
         await recipients.add(

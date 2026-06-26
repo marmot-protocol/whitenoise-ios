@@ -33,6 +33,12 @@ struct AddMembersSheet: View {
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
                             .font(.system(.body, design: .monospaced))
+                            .onChange(of: recipients.pending) {
+                                Task { await model.autoStagePending(normalize: normalize, using: appState) }
+                            }
+                            .onSubmit {
+                                Task { await model.addPending(normalize: normalize, using: appState) }
+                            }
                         Button {
                             Task { await model.addPending(normalize: normalize, using: appState) }
                         } label: {
@@ -129,6 +135,14 @@ enum AddMembersPresentation {
         case empty
         case invalid
         case normalized(MemberRefFfi)
+    }
+
+    /// True when `raw` already parses to a complete, valid profile reference
+    /// (npub/nprofile with a good checksum, or 64-char hex). Lets the input
+    /// field decide whether to auto-stage without flashing errors while a
+    /// partial reference is still being typed. Synchronous — no Marmot hop.
+    static func isCompleteReference(_ raw: String) -> Bool {
+        memberRef(fromScannedPayload: raw) != nil
     }
 
     static func memberRef(fromScannedPayload raw: String) -> String? {

@@ -128,6 +128,60 @@ struct RecipientStagingTests {
         #expect(staging.pending == "newer text")
     }
 
+    @Test func isCompleteReferenceRecognizesFinishedReferences() {
+        #expect(AddMembersPresentation.isCompleteReference(hex("ab")))
+        #expect(AddMembersPresentation.isCompleteReference(
+            "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+        ))
+    }
+
+    @Test func isCompleteReferenceRejectsPartialOrInvalidInput() {
+        #expect(!AddMembersPresentation.isCompleteReference(""))
+        #expect(!AddMembersPresentation.isCompleteReference("npub1"))
+        #expect(!AddMembersPresentation.isCompleteReference("npub1partialnotchecksummed"))
+        #expect(!AddMembersPresentation.isCompleteReference("not a profile"))
+        #expect(!AddMembersPresentation.isCompleteReference(String(repeating: "a", count: 63)))
+    }
+
+    @Test func autoStageStagesCompleteReferenceWithoutExplicitTap() async {
+        let staging = RecipientStagingModel()
+        let candidate = stagedMember(accountIdHex: hex("66"))
+        staging.pending = candidate.accountIdHex
+        var warmedAccounts: [String] = []
+
+        await staging.autoStagePendingIfComplete(
+            normalize: { stagedMember(accountIdHex: $0) },
+            warmProfile: { warmedAccounts.append($0) }
+        )
+
+        #expect(staging.members == [candidate])
+        #expect(staging.pending.isEmpty)
+        #expect(staging.error == nil)
+        #expect(warmedAccounts == [candidate.accountIdHex])
+    }
+
+    @Test func autoStageIgnoresPartialInputWithoutErrorOrNormalize() async {
+        let staging = RecipientStagingModel()
+        staging.pending = "npub1partial"
+
+        await staging.autoStagePendingIfComplete(normalize: { _ in throw TestError.unexpectedNormalize })
+
+        #expect(staging.members.isEmpty)
+        #expect(staging.pending == "npub1partial")
+        #expect(staging.error == nil)
+    }
+
+    @Test func autoStageStaysSilentWhenNormalizeFailsOnCompleteReference() async {
+        let staging = RecipientStagingModel()
+        staging.pending = hex("77")
+
+        await staging.autoStagePendingIfComplete(normalize: { _ in throw TestError.unexpectedNormalize })
+
+        #expect(staging.members.isEmpty)
+        #expect(staging.pending == hex("77"))
+        #expect(staging.error == nil)
+    }
+
     private enum TestError: Error {
         case unexpectedNormalize
     }
