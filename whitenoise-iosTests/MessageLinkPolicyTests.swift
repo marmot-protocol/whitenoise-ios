@@ -80,6 +80,21 @@ struct MessageLinkPolicyTests {
         }
     }
 
+    /// Regression for #427: a crafted `xn--` host punycode-decodes to a label
+    /// carrying a bidi override (`xn--paypal-dm0c` → `pay\u{202E}pal`). The
+    /// decoder output must be re-sanitized after decode so U+202E (and any
+    /// other bidi/control/invisible-format scalar) never reaches the
+    /// confirmation alert text and visually reorders the displayed host.
+    @Test func externalConfirmationStripsBidiFromPunycodeDecodedHost() {
+        withAppLanguage(.english) {
+            let url = URL(string: "https://xn--paypal-dm0c.example/path")!
+            let text = MessageExternalLinkConfirmation.displayText(for: url)
+
+            #expect(!text.unicodeScalars.contains { $0.value == 0x202E })
+            #expect(text.contains("paypal.example (IDN/punycode: xn--paypal-dm0c.example)"))
+        }
+    }
+
     /// Regression for #254: a crafted `xn--` label can drive the punycode
     /// decoder's `i` accumulator to exactly `Int.max`, which previously made
     /// the unguarded `n += i / outputCount` add trap. The decoder must bail to

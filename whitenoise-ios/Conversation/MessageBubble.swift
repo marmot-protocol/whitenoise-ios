@@ -539,7 +539,15 @@ nonisolated enum MessageExternalLinkConfirmation {
             }
         }
 
-        return (decodedLabels.joined(separator: "."), isInternationalized)
+        // `decodePunycodeLabel` can emit bidi/control/invisible-format scalars
+        // (e.g. U+202E RLO from `xn--paypal-dm0c`), which would visually reorder
+        // the host shown in the confirmation alert. The host string was
+        // sanitized *before* decode, so re-strip the decoder output with the
+        // stricter relay/URL display policy before it is rendered. If nothing
+        // renderable survives, fall back to the raw (already-sanitized) host.
+        let joined = decodedLabels.joined(separator: ".")
+        let safe = ProfileSanitizer.relayDisplayLine(joined, maxLength: joined.count) ?? host
+        return (safe, isInternationalized)
     }
 
     private static func elided(_ text: String, maxCharacters: Int) -> String {
