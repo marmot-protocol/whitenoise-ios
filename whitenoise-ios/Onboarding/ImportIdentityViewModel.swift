@@ -28,9 +28,14 @@ final class ImportIdentityViewModel {
     private var pastedClipboardIdentity: String?
 
     func runImport(using appState: AppState, dismiss: () -> Void) async {
+        // Take the in-flight guard synchronously before consuming/clearing the
+        // visible secret and before the first await so a fast double-tap can't
+        // start two concurrent imports — the second would otherwise consume an
+        // already-cleared field — while SwiftUI's `.disabled(!canSubmit)` render
+        // still lags the tap (#439).
+        guard beginImportIfIdle() else { return }
         let trimmed = ImportIdentityView.consumeIdentityForImport(&identity)
         let clipboardToken = consumeClipboardTokenForImportedIdentity(trimmed)
-        isImporting = true
         error = nil
         defer {
             SensitiveClipboard.clear(matching: clipboardToken)
@@ -47,6 +52,16 @@ final class ImportIdentityViewModel {
             self.error = error.localizedDescription
             appState.present(.error(L10n.string("Import failed"), message: error.localizedDescription))
         }
+    }
+
+    /// Synchronous in-flight gate for `runImport`. Returns `true` and marks the
+    /// import in-flight only when idle; a re-entrant call returns `false` without
+    /// touching the visible secret. Extracted so the double-tap guard is testable
+    /// without standing up an `AppState`/Marmot runtime (#439).
+    func beginImportIfIdle() -> Bool {
+        guard !isImporting else { return false }
+        isImporting = true
+        return true
     }
 
     func recordPastedClipboardToken(_ token: SensitiveClipboard.Token?, resultingIdentity: String) {
