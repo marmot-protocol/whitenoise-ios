@@ -54,6 +54,11 @@ final class TimelineStore {
     /// mirrored. Presence with no entry in `replyTargetByMessageId` means the row
     /// authoritatively has no reply target, so do not recover one from tags.
     @ObservationIgnored private var replyProjectionKnownMessageIds: Set<String> = []
+    /// Real message ids returned by a successful send before Marmot has mirrored
+    /// the durable timeline row. These remain local echoes and must not be evicted
+    /// by a racing subscription window snapshot that was captured before the row
+    /// appeared in the projected window.
+    @ObservationIgnored private var confirmedPendingTimelineRecordIds: Set<String> = []
     @ObservationIgnored private var replyTargetByMessageId: [String: String] = [:]
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
@@ -193,6 +198,7 @@ final class TimelineStore {
         if shouldEvictAbsentRecords {
             let incomingMessageIds = Set(page.messages.map(\.messageIdHex).filter { !$0.isEmpty })
             for messageId in Array(messageById.keys) where !incomingMessageIds.contains(messageId) {
+                guard !confirmedPendingTimelineRecordIds.contains(messageId) else { continue }
                 projectionChanged = removeTimelineRecord(
                     messageIdHex: messageId,
                     updateTimeline: false
@@ -293,6 +299,7 @@ final class TimelineStore {
         projectionChanged = true
         messageById[appRecord.messageIdHex] = appRecord
         messageStatusById[appRecord.messageIdHex] = appRecord.direction == "sent" ? .sent : .received
+        confirmedPendingTimelineRecordIds.remove(appRecord.messageIdHex)
         replyProjectionKnownMessageIds.insert(appRecord.messageIdHex)
         if let projectedReplyTarget = record.replyToMessageIdHex, !projectedReplyTarget.isEmpty {
             replyTargetByMessageId[appRecord.messageIdHex] = projectedReplyTarget
@@ -340,6 +347,7 @@ final class TimelineStore {
         let existed = messageById[messageIdHex] != nil
         messageById[messageIdHex] = nil
         messageStatusById[messageIdHex] = nil
+        confirmedPendingTimelineRecordIds.remove(messageIdHex)
         replyProjectionKnownMessageIds.remove(messageIdHex)
         replyTargetByMessageId[messageIdHex] = nil
         replyPreviewsByMessageId[messageIdHex] = nil
@@ -566,6 +574,9 @@ final class TimelineStore {
             // Marmot mirrors the authoritative timeline row, so leave it out of
             // replyProjectionKnownMessageIds. Reply fallbacks stay local-only in
             // that window.
+            if !replyProjectionKnownMessageIds.contains(realId) {
+                confirmedPendingTimelineRecordIds.insert(realId)
+            }
             if messageById[realId] == nil {
                 messageById[realId] = confirmed
                 projectionChanged = true
