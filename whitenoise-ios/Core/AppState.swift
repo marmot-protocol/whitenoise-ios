@@ -422,6 +422,9 @@ final class AppState {
     @MainActor
     func signOut() async {
         guard let signingOut = activeAccountRef else { return }
+        let signingOutAccountIdHex = accounts
+            .first(where: { $0.label == signingOut })?
+            .accountIdHex
         // Block any APNS-token-driven reschedule for the duration of the
         // teardown. `recordDeviceToken` (MainActor) can land on any of the
         // `await` suspension points below and call
@@ -483,6 +486,9 @@ final class AppState {
             stopNotificationSubscription()
             phase = .onboarding
         } else {
+            if let signingOutAccountIdHex {
+                profileStore.clearForAccountRemoval(accountIdHex: signingOutAccountIdHex)
+            }
             scheduleNativePushRegistrationIfEnabled()
         }
     }
