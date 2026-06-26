@@ -12,13 +12,13 @@ struct WelcomeView: View {
                 Spacer()
 
                 VStack(spacing: 18) {
-                    Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 64, weight: .light))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.tint)
+                    VStack(spacing: 12) {
+                        Image("WnLogo")
+                            .accessibilityHidden(true)
 
-                    Text("White Noise")
-                        .font(.largeTitle.weight(.semibold))
+                        Text("White Noise")
+                            .font(.largeTitle.weight(.semibold))
+                    }
 
                     Text("End-to-end encrypted group messaging.")
                         .font(.callout)
@@ -28,7 +28,8 @@ struct WelcomeView: View {
                 }
 
                 Spacer()
-
+            }
+            .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 14) {
                     Button {
                         showCreate = true
