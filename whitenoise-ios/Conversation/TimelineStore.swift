@@ -58,6 +58,12 @@ final class TimelineStore {
     /// the durable timeline row. These remain local echoes and must not be evicted
     /// by a racing subscription window snapshot that was captured before the row
     /// appeared in the projected window.
+    ///
+    /// Invariant: an id enters here only when `confirmSent` maps a temp row to
+    /// the same real id Marmot will later use in `TimelineMessageRecordFfi`.
+    /// It leaves only when `applyTimelineRecord` mirrors that durable row or
+    /// `removeTimelineRecord` drops the row; otherwise a stale entry would keep
+    /// eviction immunity after the backend made an authoritative decision.
     @ObservationIgnored private var confirmedPendingTimelineRecordIds: Set<String> = []
     @ObservationIgnored private var replyTargetByMessageId: [String: String] = [:]
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
@@ -572,8 +578,9 @@ final class TimelineStore {
         if !realId.isEmpty {
             // A confirmed real-id row is still an optimistic local echo until
             // Marmot mirrors the authoritative timeline row, so leave it out of
-            // replyProjectionKnownMessageIds. Reply fallbacks stay local-only in
-            // that window.
+            // replyProjectionKnownMessageIds. See
+            // confirmedPendingTimelineRecordIds for the eviction-immunity
+            // lifecycle; reply fallbacks stay local-only in that window.
             if !replyProjectionKnownMessageIds.contains(realId) {
                 confirmedPendingTimelineRecordIds.insert(realId)
             }
