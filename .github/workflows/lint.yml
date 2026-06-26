@@ -1,0 +1,51 @@
+name: Lint
+
+on:
+  pull_request:
+    paths:
+      - 'whitenoise-ios/**'
+      - 'whitenoise-iosTests/**'
+      - 'Shared/**'
+      - 'NotificationServiceExtension/**'
+      - '.swiftlint.yml'
+      - 'scripts/lint.sh'
+      - 'justfile'
+      - '.github/workflows/lint.yml'
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+
+jobs:
+  swiftlint:
+    name: SwiftLint (Airbnb config, --strict)
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install SwiftLint
+        env:
+          # Keep in lockstep with REQUIRED_SWIFTLINT_VERSION in scripts/lint.sh.
+          SWIFTLINT_VERSION: "0.63.2"
+        run: |
+          curl -fsSL -o /tmp/swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/portable_swiftlint.zip"
+          unzip -o /tmp/swiftlint.zip -d /tmp/swiftlint >/dev/null
+          sudo install /tmp/swiftlint/swiftlint /usr/local/bin/swiftlint
+          swiftlint version
+
+      - name: Run lint
+        env:
+          CI: true
+        run: ./scripts/lint.sh

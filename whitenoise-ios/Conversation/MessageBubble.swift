@@ -1618,18 +1618,13 @@ private struct MessageFullscreenVideoPlayerView: View {
 }
 
 nonisolated enum MessageAudioPlayerPreparer {
-    private struct PreparedPlayer: @unchecked Sendable {
-        let player: AVAudioPlayer
-    }
-
     static func preparedPlayer(from data: Data) async throws -> AVAudioPlayer {
-        let prepared = try await detachedPreparedValue(priority: .userInitiated) { () throws -> PreparedPlayer in
+        try await detachedPreparedValue(priority: .userInitiated) { () throws -> AVAudioPlayer in
             let next = try AVAudioPlayer(data: data)
             next.enableRate = true
             next.prepareToPlay()
-            return PreparedPlayer(player: next)
+            return next
         }
-        return prepared.player
     }
 
     static func duration(from data: Data) async -> Double? {
@@ -1638,10 +1633,10 @@ nonisolated enum MessageAudioPlayerPreparer {
         }
     }
 
-    static func detachedPreparedValue<Value: Sendable>(
+    static func detachedPreparedValue<Value>(
         priority: TaskPriority,
-        _ operation: @escaping @Sendable () throws -> Value
-    ) async throws -> Value {
+        _ operation: @escaping @Sendable () throws -> sending Value
+    ) async throws -> sending Value {
         try await Task.detached(priority: priority) {
             try operation()
         }.value
@@ -2141,10 +2136,6 @@ enum MessageVideoThumbnailDecoder {
 }
 
 enum MessageMediaThumbnailDecoder {
-    private struct SendableImage: @unchecked Sendable {
-        let image: UIImage
-    }
-
     private final class CachedThumbnail: NSObject {
         let image: UIImage
         let sourceData: Data
@@ -2185,8 +2176,8 @@ enum MessageMediaThumbnailDecoder {
     static func image(data: Data, maxPixelSize: Int, scale: CGFloat) async -> UIImage? {
         let targetPixelSize = max(1, maxPixelSize)
         let imageScale = max(1, scale)
-        let decoded = await Task.detached(priority: .utility) { () -> SendableImage? in
-            guard let image = decodeThumbnailImage(
+        return await Task.detached(priority: .utility) { () -> UIImage? in
+            decodeThumbnailImage(
                 data: data,
                 targetPixelSize: targetPixelSize,
                 imageScale: imageScale,
@@ -2196,12 +2187,8 @@ enum MessageMediaThumbnailDecoder {
                 createThumbnail: { source, options in
                     CGImageSourceCreateThumbnailAtIndex(source, 0, options)
                 }
-            ) else {
-                return nil
-            }
-            return SendableImage(image: image)
+            )
         }.value
-        return decoded?.image
     }
 
     nonisolated static func decodeThumbnailImage(

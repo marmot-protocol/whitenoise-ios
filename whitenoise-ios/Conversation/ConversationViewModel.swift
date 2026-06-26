@@ -54,7 +54,7 @@ typealias TimelineTailRefreshOperation = @MainActor () async -> Void
 final class ConversationViewModel {
 
     /// One emoji's tally on a target message.
-    struct ReactionTally: Identifiable, Hashable {
+    nonisolated struct ReactionTally: Identifiable, Hashable {
         let emoji: String
         let count: Int
         let mine: Bool

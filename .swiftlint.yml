@@ -1,0 +1,103 @@
+# .swiftlint.yml — whitenoise-ios
+#
+# Base config: Airbnb Swift Style Guide
+#   https://github.com/airbnb/swift  (the repo-root swiftlint.yml is a symlink
+#   to Sources/AirbnbSwiftFormatTool/swiftlint.yml — that's the real upstream)
+#
+# To regenerate the Airbnb baseline portion of this file:
+#   curl -fsSL https://raw.githubusercontent.com/airbnb/swift/master/Sources/AirbnbSwiftFormatTool/swiftlint.yml \
+#       -o .swiftlint.airbnb.yml
+# Then diff against this file's "BEGIN AIRBNB BASE" .. "END AIRBNB BASE" block.
+# The only intentional drift is the `excluded:` block: it lives in the
+# WHITENOISE-IOS LOCAL OVERLAY at the top of this file (merged with our paths)
+# instead of inside the Airbnb base. Everything else under "BEGIN AIRBNB BASE"
+# is byte-identical to upstream.
+
+# ──────────────────────────────────────────────────────────────────────
+# WHITENOISE-IOS LOCAL OVERLAY (top — single source for included/excluded)
+# ──────────────────────────────────────────────────────────────────────
+
+included:
+  - whitenoise-ios
+  - whitenoise-iosTests
+  - Shared
+  - NotificationServiceExtension
+
+excluded:
+  # Standard build noise (Airbnb upstream also lists Carthage / Pods / .build).
+  - Carthage
+  - Pods
+  - .build
+  - DerivedData
+  - build
+
+  # Vendored binaries and generated code (anything under any Vendored/ tree).
+  - "**/Vendored/**"
+  - "**/*.xcframework"
+  - "**/.build"
+  - "**/DerivedData"
+
+# ──────────────────────────────────────────────────────────────────────
+# BEGIN AIRBNB BASE
+# Copied verbatim from
+#   https://raw.githubusercontent.com/airbnb/swift/master/Sources/AirbnbSwiftFormatTool/swiftlint.yml
+# Intentional drift: upstream's `excluded:` block (Carthage / Pods / .build)
+# was relocated into the WHITENOISE-IOS LOCAL OVERLAY above so we have a single
+# merged exclusion list (YAML duplicate top-level keys would otherwise stomp
+# each other). Everything else below this line is byte-identical.
+# ──────────────────────────────────────────────────────────────────────
+
+only_rules:
+  - fatal_error_message
+  - implicitly_unwrapped_optional
+  - legacy_cggeometry_functions
+  - legacy_constant
+  - legacy_constructor
+  - legacy_nsgeometry_functions
+  - unused_optional_binding
+  - unowned_variable_capture
+  - superfluous_disable_command
+  - invalid_swiftlint_command
+  - custom_rules
+
+indentation: 2
+
+custom_rules:
+  no_objcMembers:
+    name: "@objcMembers"
+    regex: "@objcMembers"
+    message: "Explicitly use @objc on each member you want to expose to Objective-C"
+    severity: error
+  no_direct_standard_out_logs:
+    name: "Writing log messages directly to standard out is disallowed"
+    regex: "(\\bprint|\\bdebugPrint|\\bdump|Swift\\.print|Swift\\.debugPrint|Swift\\.dump|_printChanges)\\s*\\("
+    match_kinds:
+    - identifier
+    message: "Don't commit `print(…)`, `debugPrint(…)`, `dump(…)`, or `_printChanges()` as they write to standard out in release. Either log to a dedicated logging system or silence this warning in debug-only scenarios explicitly using `// swiftlint:disable:next no_direct_standard_out_logs`"
+    severity: error
+  no_file_literal:
+    name: "#file is disallowed"
+    regex: "(\\b#file\\b)"
+    match_kinds:
+    - identifier
+    message: "Instead of #file, use #fileID"
+    severity: error
+  no_filepath_literal:
+    name: "#filePath is disallowed"
+    regex: "(\\b#filePath\\b)"
+    match_kinds:
+    - identifier
+    message: "Instead of #filePath, use #fileID."
+    severity: error
+  no_unchecked_sendable:
+    name: "`@unchecked Sendable` is discouraged."
+    regex: "@unchecked Sendable"
+    match_kinds:
+    - attribute.builtin
+    - typeidentifier
+    message: "Instead of using `@unchecked Sendable`, consider a safe alternative like a standard `Sendable` conformance or using `@preconcurrency import`. If you really must use `@unchecked Sendable`, you can add a `// swiftlint:disable:next no_unchecked_sendable` annotation with an explanation for how we know the type is thread-safe, and why we have to use @unchecked Sendable instead of Sendable. More explanation and suggested safe alternatives are available at https://github.com/airbnb/swift#unchecked-sendable."
+    severity: error
+
+# ──────────────────────────────────────────────────────────────────────
+# END AIRBNB BASE
+# ──────────────────────────────────────────────────────────────────────

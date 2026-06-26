@@ -421,14 +421,6 @@ nonisolated enum MediaDraftProcessor {
         }
     }
 
-    private struct SendableAttachment: @unchecked Sendable {
-        let attachment: MediaDraftAttachment
-    }
-
-    private struct SendableImage: @unchecked Sendable {
-        let image: UIImage
-    }
-
     static func preparedAttachment(from data: Data, fileName: String?) async throws -> MediaDraftAttachment {
         try await preparedAttachment(from: data, fileName: fileName, typeIdentifier: nil)
     }
@@ -438,31 +430,29 @@ nonisolated enum MediaDraftProcessor {
         fileName: String?,
         typeIdentifier: String?
     ) async throws -> MediaDraftAttachment {
-        let prepared = try await Task.detached(priority: .userInitiated) { () async throws -> SendableAttachment in
-            try await SendableAttachment(attachment: preparedAttachmentValue(
+        try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
+            try await preparedAttachmentValue(
                 from: data,
                 fileName: fileName,
                 typeIdentifier: typeIdentifier
-            ))
+            )
         }.value
-        return prepared.attachment
     }
 
     static func preparedAttachment(fromFileURL url: URL) async throws -> MediaDraftAttachment {
-        let prepared = try await Task.detached(priority: .userInitiated) { () async throws -> SendableAttachment in
+        try await Task.detached(priority: .userInitiated) { () async throws -> MediaDraftAttachment in
             let resourceValues = try url.resourceValues(forKeys: [.contentTypeKey, .nameKey])
             let data = try Data(contentsOf: url)
-            return try await SendableAttachment(attachment: preparedAttachmentValue(
+            return try await preparedAttachmentValue(
                 from: data,
                 fileName: resourceValues.name ?? url.lastPathComponent,
                 typeIdentifier: resourceValues.contentType?.identifier
-            ))
+            )
         }.value
-        return prepared.attachment
     }
 
     static func preparedVoiceAttachment(from recording: VoiceRecordingResult) async throws -> MediaDraftAttachment {
-        let prepared = try await Task.detached(priority: .userInitiated) { () throws -> SendableAttachment in
+        try await Task.detached(priority: .userInitiated) { () throws -> MediaDraftAttachment in
             defer { try? FileManager.default.removeItem(at: recording.url) }
             let data = try Data(contentsOf: recording.url)
             guard data.count <= maxAttachmentBytes else {
@@ -473,24 +463,21 @@ nonisolated enum MediaDraftProcessor {
                 fallbackStem: "voice-\(Int(Date().timeIntervalSince1970))",
                 fallbackExtension: "m4a"
             )
-            return SendableAttachment(attachment: MediaDraftAttachment(
+            return MediaDraftAttachment(
                 fileName: fileName,
                 mediaType: "audio/mp4",
                 data: data,
                 dim: nil,
                 durationSeconds: recording.durationSeconds,
                 waveformSamples: MediaWaveformAnalyzer.normalized(recording.waveformSamples)
-            ))
+            )
         }.value
-        return prepared.attachment
     }
 
-    static func preparedAttachment(from image: UIImage, fileName: String?) async throws -> MediaDraftAttachment {
-        let sendableImage = SendableImage(image: image)
-        let prepared = try await Task.detached(priority: .userInitiated) { () throws -> SendableAttachment in
-            try SendableAttachment(attachment: attachment(from: sendableImage.image, fileName: fileName))
+    static func preparedAttachment(from image: sending UIImage, fileName: String?) async throws -> MediaDraftAttachment {
+        try await Task.detached(priority: .userInitiated) { () throws -> MediaDraftAttachment in
+            try attachment(from: image, fileName: fileName)
         }.value
-        return prepared.attachment
     }
 
     static func attachment(from data: Data, fileName: String?) throws -> MediaDraftAttachment {
