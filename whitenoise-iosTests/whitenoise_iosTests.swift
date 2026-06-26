@@ -8350,6 +8350,12 @@ struct MessageAudioBubblePresentationTests {
         #expect(MessageAudioBubblePresentation.durationLabel(65) == "1:05")
     }
 
+    @Test func nonFiniteDurationDoesNotReserveLabelSpace() {
+        #expect(MessageAudioBubblePresentation.durationLabel(.nan) == nil)
+        #expect(MessageAudioBubblePresentation.durationLabel(.infinity) == nil)
+        #expect(MessageAudioBubblePresentation.durationLabel(-.infinity) == nil)
+    }
+
     @Test func audioMetadataCacheKeySurvivesSourceEpochRefresh() {
         let initial = attachment(
             id: "row:\(hex("33")):0:0",
