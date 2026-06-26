@@ -116,12 +116,41 @@ struct TimelineProjectionBoundaryTests {
         #expect(!sources.contains("mediaRecordReference(matching:"))
     }
 
-    @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() throws {
-        let source = try sourceString("whitenoise-ios/Conversation/ConversationMediaDownloader.swift")
+    @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
+        let reference = mediaReference(sourceEpoch: 7)
+        let media = MessageMediaAttachment(
+            id: "message-a:\(reference.plaintextSha256):0:0",
+            reference: reference,
+            fileName: reference.fileName,
+            mediaType: reference.mediaType,
+            dim: nil,
+            localData: nil
+        )
+        let cached = CountingConversationMediaCache()
+        let downloaded = DownloadMediaSpy(data: Data([0x09, 0x0a, 0x0b]))
+        let downloader = ConversationMediaDownloader(
+            cache: cached,
+            downloadMedia: { client, accountRef, groupIdHex, reference in
+                try await downloaded.download(
+                    client: client,
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    reference: reference
+                )
+            }
+        )
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-a"
 
-        #expect(source.matches(#"guard let reference = media\.reference else \{[\s\S]*if let cached = await MessageMediaCache\.cachedData\(for: reference\)"#))
-        #expect(!source.matches(#"guard let appState[\s\S]*MessageMediaCache\.cachedData\(for:"#))
-        #expect(!source.contains("let downloadableReference = reference"))
+        let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+
+        #expect(data == downloaded.data)
+        #expect(cached.cachedDataCalls == 1)
+        #expect(cached.storedPayloads == [downloaded.data])
+        #expect(cached.storedReferenceHashes == [reference.plaintextSha256])
+        #expect(downloaded.accountRefs == ["account-a"])
+        #expect(downloaded.groupIds == [testGroupId])
+        #expect(downloaded.referenceHashes == [reference.plaintextSha256])
     }
 
     @Test func displayTimelineDoesNotParseMarkdownAtRenderTime() throws {
@@ -236,6 +265,54 @@ struct TimelineProjectionBoundaryTests {
             pendingConfirmation: false,
             welcomerAccountIdHex: nil,
             viaWelcomeMessageIdHex: nil
+        )
+    }
+}
+
+@MainActor
+private final class CountingConversationMediaCache: ConversationMediaCacheAccessing {
+    private(set) var cachedDataCalls = 0
+    private(set) var storedPayloads: [Data] = []
+    private(set) var storedReferenceHashes: [String] = []
+    var cachedDataToReturn: Data?
+
+    func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
+        cachedDataCalls += 1
+        return cachedDataToReturn
+    }
+
+    func store(_ data: Data, for reference: MediaAttachmentReferenceFfi) async {
+        storedPayloads.append(data)
+        storedReferenceHashes.append(reference.plaintextSha256)
+    }
+}
+
+@MainActor
+private final class DownloadMediaSpy {
+    let data: Data
+    private(set) var accountRefs: [String] = []
+    private(set) var groupIds: [String] = []
+    private(set) var referenceHashes: [String] = []
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    func download(
+        client: MarmotClient,
+        accountRef: String,
+        groupIdHex: String,
+        reference: MediaAttachmentReferenceFfi
+    ) async throws -> MediaDownloadResultFfi {
+        _ = client
+        accountRefs.append(accountRef)
+        groupIds.append(groupIdHex)
+        referenceHashes.append(reference.plaintextSha256)
+        return MediaDownloadResultFfi(
+            plaintext: data,
+            fileName: reference.fileName,
+            mediaType: reference.mediaType,
+            sizeBytes: UInt64(data.count)
         )
     }
 }
