@@ -56,15 +56,111 @@ struct TimelineWindowEvictionTests {
         #expect(!ids.contains(removed.messageIdHex))
         #expect(ids.contains(retained.messageIdHex))
     }
+
+    @MainActor
+    @Test func confirmedSentMessageSurvivesWindowPageUntilMirrored() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: testGroup()
+        )
+        let retained = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
+        let tempId = "pending-1"
+        let confirmedId = hexId(2)
+        let pending = pendingSentRecord(timelineAt: 2)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
+        viewModel.confirmSent(tempId: tempId, record: pending, messageId: confirmedId)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        var ids = timelineMessageIds(in: viewModel)
+        #expect(ids.contains(retained.messageIdHex))
+        #expect(ids.contains(confirmedId))
+
+        let mirrored = timelineRecord(
+            messageIdHex: confirmedId,
+            timelineAt: 2,
+            direction: "sent"
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained, mirrored], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: false, hasMoreAfter: false),
+            placement: .window
+        )
+
+        ids = timelineMessageIds(in: viewModel)
+        #expect(ids.contains(retained.messageIdHex))
+        #expect(!ids.contains(confirmedId))
+    }
+
+    @MainActor
+    @Test func confirmedSentMessageSurvivesEdgeFlagChangeUntilMirrored() throws {
+        let viewModel = ConversationViewModel(
+            appState: AppState(client: try MarmotClient.testClient()),
+            group: testGroup()
+        )
+        let retained = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
+        let tempId = "pending-edge"
+        let confirmedId = hexId(3)
+        let pending = pendingSentRecord(timelineAt: 2)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: true, hasMoreAfter: true),
+            placement: .window
+        )
+        viewModel.applyPendingOutgoingMessage(tempId: tempId, record: pending)
+        viewModel.confirmSent(tempId: tempId, record: pending, messageId: confirmedId)
+
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: false, hasMoreAfter: true),
+            placement: .window
+        )
+
+        var ids = timelineMessageIds(in: viewModel)
+        #expect(ids.contains(retained.messageIdHex))
+        #expect(ids.contains(confirmedId))
+
+        let mirrored = timelineRecord(
+            messageIdHex: confirmedId,
+            timelineAt: 2,
+            direction: "sent"
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained, mirrored], hasMoreBefore: false, hasMoreAfter: true),
+            placement: .window
+        )
+        viewModel.applyTimelinePage(
+            TimelinePageFfi(messages: [retained], hasMoreBefore: true, hasMoreAfter: true),
+            placement: .window
+        )
+
+        ids = timelineMessageIds(in: viewModel)
+        #expect(ids.contains(retained.messageIdHex))
+        #expect(!ids.contains(confirmedId))
+    }
 }
 
 private let testGroupId = String(repeating: "b", count: 64)
 
-private func timelineRecord(messageIdHex: String, timelineAt: UInt64) -> TimelineMessageRecordFfi {
+private func timelineRecord(
+    messageIdHex: String,
+    timelineAt: UInt64,
+    direction: String = "received"
+) -> TimelineMessageRecordFfi {
     TimelineMessageRecordFfi(
         messageIdHex: messageIdHex,
         sourceMessageIdHex: nil,
-        direction: "received",
+        direction: direction,
         groupIdHex: testGroupId,
         sender: String(repeating: "a", count: 64),
         plaintext: "message \(timelineAt)",
@@ -83,6 +179,20 @@ private func timelineRecord(messageIdHex: String, timelineAt: UInt64) -> Timelin
         deleted: false,
         deletedByMessageIdHex: nil,
         invalidationStatus: nil
+    )
+}
+
+private func pendingSentRecord(timelineAt: UInt64) -> AppMessageRecordFfi {
+    AppMessageRecordFfi(
+        messageIdHex: "",
+        direction: "sent",
+        groupIdHex: testGroupId,
+        sender: String(repeating: "a", count: 64),
+        plaintext: "just sent",
+        kind: MessageSemantics.kindChat,
+        tags: [],
+        recordedAt: timelineAt,
+        receivedAt: timelineAt
     )
 }
 
