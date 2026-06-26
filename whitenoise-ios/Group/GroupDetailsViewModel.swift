@@ -33,6 +33,9 @@ final class GroupDetailsViewModel {
     // before any method runs.
     @ObservationIgnored var conversation: ConversationViewModel?
     @ObservationIgnored var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
+#if DEBUG
+    @ObservationIgnored var setGroupArchivedForTesting: (@MainActor (String, String, Bool) async throws -> AppGroupRecordFfi)?
+#endif
 
     func invite(refs: [String], using appState: AppState) async throws {
         guard let conversation, let accountRef = appState.activeAccountRef else { throw GroupDetailsActionError.noActiveAccount }
@@ -214,13 +217,34 @@ final class GroupDetailsViewModel {
 
     func setArchived(_ archived: Bool, using appState: AppState) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
+        guard !membershipActionInFlight else { return }
+        membershipActionInFlight = true
+        defer { membershipActionInFlight = false }
         do {
+            let record: AppGroupRecordFfi
+#if DEBUG
+            if let setGroupArchivedForTesting {
+                record = try await setGroupArchivedForTesting(
+                    accountRef,
+                    conversation.group.groupIdHex,
+                    archived
+                )
+            } else {
+                let client = try appState.currentMarmotClient()
+                record = try await client.setGroupArchived(
+                    accountRef: accountRef,
+                    groupIdHex: conversation.group.groupIdHex,
+                    archived: archived
+                )
+            }
+#else
             let client = try appState.currentMarmotClient()
-            let record = try await client.setGroupArchived(
+            record = try await client.setGroupArchived(
                 accountRef: accountRef,
                 groupIdHex: conversation.group.groupIdHex,
                 archived: archived
             )
+#endif
             conversation.applyGroupRecord(record)
             onGroupChanged(record)
             await refreshVisibleDebugState(using: appState)
