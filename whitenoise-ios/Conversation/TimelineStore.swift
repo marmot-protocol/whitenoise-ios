@@ -60,7 +60,13 @@ final class TimelineStore {
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
     /// Transient QUIC debug rows keyed by timeline id (streaming debug only).
     /// Written by `StreamWatcher` via the sink; consumed by `rebuildTimeline`.
+    /// Bounded to a recent window (`maxStreamDebugTimelineItems`) so a long-lived
+    /// stream can't grow this map for the conversation's lifetime (#431).
     @ObservationIgnored private var streamDebugTimelineItems: [String: TimelineItem] = [:]
+
+    /// Upper bound on retained streaming-debug rows. Higher than
+    /// `maxSystemTimelineItems` because debug events are far higher volume.
+    nonisolated static let maxStreamDebugTimelineItems = 256
 
     @ObservationIgnored let markdownProjections = ConversationMarkdownProjectionCache()
     @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
@@ -93,6 +99,7 @@ final class TimelineStore {
 #if DEBUG
     var mediaItemProjectionBuildCountForTesting: Int { mediaProjections.buildCountForTesting }
     var mediaReferenceCountForTesting: Int { mediaProjections.referenceCountForTesting }
+    var streamDebugTimelineItemCountForTesting: Int { streamDebugTimelineItems.count }
 #endif
 
     // MARK: - Loaded-window queries
@@ -406,6 +413,34 @@ final class TimelineStore {
         }
     }
 
+    /// Insert `item` into `items` and evict the oldest rows so at most `limit`
+    /// remain, returning the ids removed. Ordering mirrors the timeline sort
+    /// (`timestamp` then `id`), so eviction matches display order and the
+    /// monotonic per-event sequence baked into debug ids keeps same-second
+    /// events in insertion order. Pure and total for unit coverage (#431).
+    nonisolated static func retainStreamDebugTimelineItems(
+        _ items: inout [String: TimelineItem],
+        appending item: TimelineItem,
+        limit: Int = maxStreamDebugTimelineItems
+    ) -> [String] {
+        items[item.id] = item
+        let boundedLimit = max(0, limit)
+        guard boundedLimit > 0 else {
+            let evicted = Array(items.keys)
+            items.removeAll()
+            return evicted
+        }
+        guard items.count > boundedLimit else { return [] }
+        let ordered = items.values.sorted { lhs, rhs in
+            lhs.timestamp == rhs.timestamp ? lhs.id < rhs.id : lhs.timestamp < rhs.timestamp
+        }
+        let evicted = ordered.prefix(items.count - boundedLimit).map(\.id)
+        for evictedId in evicted {
+            items.removeValue(forKey: evictedId)
+        }
+        return evicted
+    }
+
     func refreshProfileDependentTimelineProjections() {
         if markdownProjections.rebuild(for: timeline, onlyRowsWithMentions: true, resolver: mentionDisplayNameResolver) {
             noteProjectionChanged()
@@ -691,8 +726,18 @@ extension TimelineStore: StreamWatcherTimelineSink {
 
     @discardableResult
     func streamAppendDebugRow(_ item: TimelineItem) -> Bool {
-        streamDebugTimelineItems[item.id] = item
-        return upsertTimelineItem(item)
+        let evictedIds = TimelineStore.retainStreamDebugTimelineItems(
+            &streamDebugTimelineItems,
+            appending: item,
+            limit: TimelineStore.maxStreamDebugTimelineItems
+        )
+        var changed = false
+        for evictedId in evictedIds {
+            changed = removeTimelineItem(id: evictedId) || changed
+        }
+        // The newest row was evicted by the cap itself (limit <= 0); nothing to show.
+        guard streamDebugTimelineItems[item.id] != nil else { return changed }
+        return upsertTimelineItem(item) || changed
     }
 
     func streamNoteProjectionChanged() {
