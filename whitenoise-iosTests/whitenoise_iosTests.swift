@@ -2238,7 +2238,7 @@ struct LocalizationCatalogTests {
         let strings = try #require(catalog["strings"] as? [String: Any])
 
         // CFBundleDisplayName is flavor-specific (`WN_DISPLAY_NAME`), so it
-        // must not be localized to a static value that would hide "(Staging)".
+        // must not be localized to a static value that would hide staging.
         #expect(strings["CFBundleDisplayName"] == nil)
 
         for key in ["CFBundleName", "NSCameraUsageDescription"] {
