@@ -1393,6 +1393,18 @@ public protocol MarmotProtocol : AnyObject {
     func deleteAuditLogFile(path: String) async throws  -> AuditLogDeleteResultFfi
 
     /**
+     * Delete this group's local app data without performing an MLS leave. The
+     * caller should cancel any active UI subscriptions for the group before
+     * invoking the wipe. The runtime removes the active transport route, then
+     * transactionally drops the chat-list/account projection, plaintext app
+     * events, timeline rows, agent-stream projection rows, push-token rows, and
+     * cached encrypted-media epoch secrets. MLS/OpenMLS group state is left
+     * intact; a future fresh group delivery can recreate a local chat row.
+     * Returns true if any local rows or a live route were removed.
+     */
+    func deleteGroupLocal(accountRef: String, groupIdHex: String) async throws  -> Bool
+
+    /**
      * Mark `target_message_id` deleted for the whole group. This is a
      * tombstone — the original stays in everyone's store; clients render a
      * "message deleted" placeholder.
@@ -1686,6 +1698,14 @@ public protocol MarmotProtocol : AnyObject {
      * existing keystore validation.
      */
     func revealNsec(accountRef: String) throws  -> String
+
+    /**
+     * Securely scrub and prune expired disappearing-message plaintext for a
+     * group according to its active retention component. The media hash list
+     * identifies pruned encrypted-media blobs so host apps can purge their own
+     * decrypted-media disk caches keyed by ciphertext hash.
+     */
+    func secureDeleteExpired(accountRef: String, groupIdHex: String) async throws  -> SecureDeleteExpiredResultFfi
 
     /**
      * Step down as an admin of `group_id_hex` (demote the active account).
@@ -2293,6 +2313,33 @@ open func deleteAuditLogFile(path: String)async throws  -> AuditLogDeleteResultF
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeAuditLogDeleteResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
+}
+
+    /**
+     * Delete this group's local app data without performing an MLS leave. The
+     * caller should cancel any active UI subscriptions for the group before
+     * invoking the wipe. The runtime removes the active transport route, then
+     * transactionally drops the chat-list/account projection, plaintext app
+     * events, timeline rows, agent-stream projection rows, push-token rows, and
+     * cached encrypted-media epoch secrets. MLS/OpenMLS group state is left
+     * intact; a future fresh group delivery can recreate a local chat row.
+     * Returns true if any local rows or a live route were removed.
+     */
+open func deleteGroupLocal(accountRef: String, groupIdHex: String)async throws  -> Bool {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_delete_group_local(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
             errorHandler: FfiConverterTypeMarmotKitError.lift
         )
 }
@@ -3181,6 +3228,29 @@ open func revealNsec(accountRef: String)throws  -> String {
         FfiConverterString.lower(accountRef),$0
     )
 })
+}
+
+    /**
+     * Securely scrub and prune expired disappearing-message plaintext for a
+     * group according to its active retention component. The media hash list
+     * identifies pruned encrypted-media blobs so host apps can purge their own
+     * decrypted-media disk caches keyed by ciphertext hash.
+     */
+open func secureDeleteExpired(accountRef: String, groupIdHex: String)async throws  -> SecureDeleteExpiredResultFfi {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_secure_delete_expired(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSecureDeleteExpiredResultFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError.lift
+        )
 }
 
     /**
@@ -5920,11 +5990,13 @@ public func FfiConverterTypeAuditLogFileFfi_lower(_ value: AuditLogFileFfi) -> R
 
 public struct AuditLogSettingsFfi {
     public var enabled: Bool
+    public var dataMode: AuditDataModeFfi
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(enabled: Bool) {
+    public init(enabled: Bool, dataMode: AuditDataModeFfi) {
         self.enabled = enabled
+        self.dataMode = dataMode
     }
 }
 
@@ -5935,11 +6007,15 @@ extension AuditLogSettingsFfi: Equatable, Hashable {
         if lhs.enabled != rhs.enabled {
             return false
         }
+        if lhs.dataMode != rhs.dataMode {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(enabled)
+        hasher.combine(dataMode)
     }
 }
 
@@ -5951,12 +6027,14 @@ public struct FfiConverterTypeAuditLogSettingsFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogSettingsFfi {
         return
             try AuditLogSettingsFfi(
-                enabled: FfiConverterBool.read(from: &buf)
+                enabled: FfiConverterBool.read(from: &buf),
+                dataMode: FfiConverterTypeAuditDataModeFfi.read(from: &buf)
         )
     }
 
     public static func write(_ value: AuditLogSettingsFfi, into buf: inout [UInt8]) {
         FfiConverterBool.write(value.enabled, into: &buf)
+        FfiConverterTypeAuditDataModeFfi.write(value.dataMode, into: &buf)
     }
 }
 
@@ -6199,15 +6277,13 @@ public func FfiConverterTypeAuditLogUploadResultFfi_lower(_ value: AuditLogUploa
 
 
 public struct AuditLogUploadSourceFfi {
-    public var accountLabel: String?
     public var deviceLabel: String?
     public var platform: String?
     public var appVersion: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(accountLabel: String?, deviceLabel: String?, platform: String?, appVersion: String?) {
-        self.accountLabel = accountLabel
+    public init(deviceLabel: String?, platform: String?, appVersion: String?) {
         self.deviceLabel = deviceLabel
         self.platform = platform
         self.appVersion = appVersion
@@ -6218,9 +6294,6 @@ public struct AuditLogUploadSourceFfi {
 
 extension AuditLogUploadSourceFfi: Equatable, Hashable {
     public static func ==(lhs: AuditLogUploadSourceFfi, rhs: AuditLogUploadSourceFfi) -> Bool {
-        if lhs.accountLabel != rhs.accountLabel {
-            return false
-        }
         if lhs.deviceLabel != rhs.deviceLabel {
             return false
         }
@@ -6234,7 +6307,6 @@ extension AuditLogUploadSourceFfi: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(accountLabel)
         hasher.combine(deviceLabel)
         hasher.combine(platform)
         hasher.combine(appVersion)
@@ -6249,7 +6321,6 @@ public struct FfiConverterTypeAuditLogUploadSourceFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogUploadSourceFfi {
         return
             try AuditLogUploadSourceFfi(
-                accountLabel: FfiConverterOptionString.read(from: &buf),
                 deviceLabel: FfiConverterOptionString.read(from: &buf),
                 platform: FfiConverterOptionString.read(from: &buf),
                 appVersion: FfiConverterOptionString.read(from: &buf)
@@ -6257,7 +6328,6 @@ public struct FfiConverterTypeAuditLogUploadSourceFfi: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: AuditLogUploadSourceFfi, into buf: inout [UInt8]) {
-        FfiConverterOptionString.write(value.accountLabel, into: &buf)
         FfiConverterOptionString.write(value.deviceLabel, into: &buf)
         FfiConverterOptionString.write(value.platform, into: &buf)
         FfiConverterOptionString.write(value.appVersion, into: &buf)
@@ -6569,6 +6639,8 @@ public struct ChatListRowFfi {
     public var lastMessage: ChatListMessagePreviewFfi?
     public var unreadCount: UInt64
     public var hasUnread: Bool
+    public var unreadMentionCount: UInt64
+    public var unreadMention: Bool
     public var firstUnreadMessageIdHex: String?
     public var lastReadMessageIdHex: String?
     public var lastReadTimelineAt: UInt64?
@@ -6576,7 +6648,7 @@ public struct ChatListRowFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(groupIdHex: String, archived: Bool, pendingConfirmation: Bool, title: String, groupName: String, avatarUrl: String?, avatar: ChatListAvatarFfi?, lastMessage: ChatListMessagePreviewFfi?, unreadCount: UInt64, hasUnread: Bool, firstUnreadMessageIdHex: String?, lastReadMessageIdHex: String?, lastReadTimelineAt: UInt64?, updatedAt: UInt64) {
+    public init(groupIdHex: String, archived: Bool, pendingConfirmation: Bool, title: String, groupName: String, avatarUrl: String?, avatar: ChatListAvatarFfi?, lastMessage: ChatListMessagePreviewFfi?, unreadCount: UInt64, hasUnread: Bool, unreadMentionCount: UInt64, unreadMention: Bool, firstUnreadMessageIdHex: String?, lastReadMessageIdHex: String?, lastReadTimelineAt: UInt64?, updatedAt: UInt64) {
         self.groupIdHex = groupIdHex
         self.archived = archived
         self.pendingConfirmation = pendingConfirmation
@@ -6587,6 +6659,8 @@ public struct ChatListRowFfi {
         self.lastMessage = lastMessage
         self.unreadCount = unreadCount
         self.hasUnread = hasUnread
+        self.unreadMentionCount = unreadMentionCount
+        self.unreadMention = unreadMention
         self.firstUnreadMessageIdHex = firstUnreadMessageIdHex
         self.lastReadMessageIdHex = lastReadMessageIdHex
         self.lastReadTimelineAt = lastReadTimelineAt
@@ -6628,6 +6702,12 @@ extension ChatListRowFfi: Equatable, Hashable {
         if lhs.hasUnread != rhs.hasUnread {
             return false
         }
+        if lhs.unreadMentionCount != rhs.unreadMentionCount {
+            return false
+        }
+        if lhs.unreadMention != rhs.unreadMention {
+            return false
+        }
         if lhs.firstUnreadMessageIdHex != rhs.firstUnreadMessageIdHex {
             return false
         }
@@ -6654,6 +6734,8 @@ extension ChatListRowFfi: Equatable, Hashable {
         hasher.combine(lastMessage)
         hasher.combine(unreadCount)
         hasher.combine(hasUnread)
+        hasher.combine(unreadMentionCount)
+        hasher.combine(unreadMention)
         hasher.combine(firstUnreadMessageIdHex)
         hasher.combine(lastReadMessageIdHex)
         hasher.combine(lastReadTimelineAt)
@@ -6679,6 +6761,8 @@ public struct FfiConverterTypeChatListRowFfi: FfiConverterRustBuffer {
                 lastMessage: FfiConverterOptionTypeChatListMessagePreviewFfi.read(from: &buf),
                 unreadCount: FfiConverterUInt64.read(from: &buf),
                 hasUnread: FfiConverterBool.read(from: &buf),
+                unreadMentionCount: FfiConverterUInt64.read(from: &buf),
+                unreadMention: FfiConverterBool.read(from: &buf),
                 firstUnreadMessageIdHex: FfiConverterOptionString.read(from: &buf),
                 lastReadMessageIdHex: FfiConverterOptionString.read(from: &buf),
                 lastReadTimelineAt: FfiConverterOptionUInt64.read(from: &buf),
@@ -6697,6 +6781,8 @@ public struct FfiConverterTypeChatListRowFfi: FfiConverterRustBuffer {
         FfiConverterOptionTypeChatListMessagePreviewFfi.write(value.lastMessage, into: &buf)
         FfiConverterUInt64.write(value.unreadCount, into: &buf)
         FfiConverterBool.write(value.hasUnread, into: &buf)
+        FfiConverterUInt64.write(value.unreadMentionCount, into: &buf)
+        FfiConverterBool.write(value.unreadMention, into: &buf)
         FfiConverterOptionString.write(value.firstUnreadMessageIdHex, into: &buf)
         FfiConverterOptionString.write(value.lastReadMessageIdHex, into: &buf)
         FfiConverterOptionUInt64.write(value.lastReadTimelineAt, into: &buf)
@@ -7832,11 +7918,21 @@ public func FfiConverterTypeLocalPushRegistrationDebugFfi_lower(_ value: LocalPu
 
 public struct MarkdownDocumentFfi {
     public var blocks: [MarkdownBlockFfi]
+    /**
+     * True when the input exceeded the FFI Markdown safety cap and `blocks`
+     * were parsed from a UTF-8-boundary prefix.
+     */
+    public var truncated: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(blocks: [MarkdownBlockFfi]) {
+    public init(blocks: [MarkdownBlockFfi],
+        /**
+         * True when the input exceeded the FFI Markdown safety cap and `blocks`
+         * were parsed from a UTF-8-boundary prefix.
+         */truncated: Bool) {
         self.blocks = blocks
+        self.truncated = truncated
     }
 }
 
@@ -7847,11 +7943,15 @@ extension MarkdownDocumentFfi: Equatable, Hashable {
         if lhs.blocks != rhs.blocks {
             return false
         }
+        if lhs.truncated != rhs.truncated {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(blocks)
+        hasher.combine(truncated)
     }
 }
 
@@ -7863,12 +7963,14 @@ public struct FfiConverterTypeMarkdownDocumentFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MarkdownDocumentFfi {
         return
             try MarkdownDocumentFfi(
-                blocks: FfiConverterSequenceTypeMarkdownBlockFfi.read(from: &buf)
+                blocks: FfiConverterSequenceTypeMarkdownBlockFfi.read(from: &buf),
+                truncated: FfiConverterBool.read(from: &buf)
         )
     }
 
     public static func write(_ value: MarkdownDocumentFfi, into buf: inout [UInt8]) {
         FfiConverterSequenceTypeMarkdownBlockFfi.write(value.blocks, into: &buf)
+        FfiConverterBool.write(value.truncated, into: &buf)
     }
 }
 
@@ -10212,6 +10314,72 @@ public func FfiConverterTypeRuntimeProjectionUpdateFfi_lower(_ value: RuntimePro
 }
 
 
+public struct SecureDeleteExpiredResultFfi {
+    public var prunedMessages: UInt64
+    public var mediaCiphertextSha256: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(prunedMessages: UInt64, mediaCiphertextSha256: [String]) {
+        self.prunedMessages = prunedMessages
+        self.mediaCiphertextSha256 = mediaCiphertextSha256
+    }
+}
+
+
+
+extension SecureDeleteExpiredResultFfi: Equatable, Hashable {
+    public static func ==(lhs: SecureDeleteExpiredResultFfi, rhs: SecureDeleteExpiredResultFfi) -> Bool {
+        if lhs.prunedMessages != rhs.prunedMessages {
+            return false
+        }
+        if lhs.mediaCiphertextSha256 != rhs.mediaCiphertextSha256 {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(prunedMessages)
+        hasher.combine(mediaCiphertextSha256)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSecureDeleteExpiredResultFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SecureDeleteExpiredResultFfi {
+        return
+            try SecureDeleteExpiredResultFfi(
+                prunedMessages: FfiConverterUInt64.read(from: &buf),
+                mediaCiphertextSha256: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SecureDeleteExpiredResultFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.prunedMessages, into: &buf)
+        FfiConverterSequenceString.write(value.mediaCiphertextSha256, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecureDeleteExpiredResultFfi_lift(_ buf: RustBuffer) throws -> SecureDeleteExpiredResultFfi {
+    return try FfiConverterTypeSecureDeleteExpiredResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSecureDeleteExpiredResultFfi_lower(_ value: SecureDeleteExpiredResultFfi) -> RustBuffer {
+    return FfiConverterTypeSecureDeleteExpiredResultFfi.lower(value)
+}
+
+
 public struct SendSummaryFfi {
     public var published: UInt32
     public var messageIds: [String]
@@ -11759,6 +11927,79 @@ public func FfiConverterTypeAppGroupHydrationQuarantineReasonFfi_lower(_ value: 
 
 
 extension AppGroupHydrationQuarantineReasonFfi: Equatable, Hashable {}
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Forensic audit data mode exposed to host apps.
+ */
+
+public enum AuditDataModeFfi {
+
+    /**
+     * Default safety posture: obfuscated/hashed identifiers, no plaintext.
+     */
+    case obfuscatedSensitiveData
+    /**
+     * Explicit opt-in: decrypted content and full identifiers where useful.
+     */
+    case fullData
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuditDataModeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = AuditDataModeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditDataModeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .obfuscatedSensitiveData
+
+        case 2: return .fullData
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AuditDataModeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .obfuscatedSensitiveData:
+            writeInt(&buf, Int32(1))
+
+
+        case .fullData:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditDataModeFfi_lift(_ buf: RustBuffer) throws -> AuditDataModeFfi {
+    return try FfiConverterTypeAuditDataModeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuditDataModeFfi_lower(_ value: AuditDataModeFfi) -> RustBuffer {
+    return FfiConverterTypeAuditDataModeFfi.lower(value)
+}
+
+
+
+extension AuditDataModeFfi: Equatable, Hashable {}
 
 
 
@@ -15654,6 +15895,9 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_delete_audit_log_file() != 6934) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_delete_group_local() != 3764) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_delete_message() != 13951) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15796,6 +16040,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 4639) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_secure_delete_expired() != 16091) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_self_demote_admin() != 8845) {
