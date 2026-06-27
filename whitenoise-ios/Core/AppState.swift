@@ -576,7 +576,7 @@ final class AppState {
     @MainActor
     @discardableResult
     func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi {
-        try await marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: enabled))
+        try await marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: enabled,  dataMode: .fullData))
     }
 
     func auditLogFiles() async throws -> [AuditLogFileFfi]? {

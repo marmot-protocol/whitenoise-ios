@@ -101,7 +101,6 @@ struct TelemetryBuildConfig: Equatable {
             endpoint: nil,
             authorizationBearerToken: auditLogBearerToken,
             source: AuditLogUploadSourceFfi(
-                accountLabel: nil,
                 deviceLabel: deviceModelIdentifier,
                 platform: "ios",
                 appVersion: serviceVersion
