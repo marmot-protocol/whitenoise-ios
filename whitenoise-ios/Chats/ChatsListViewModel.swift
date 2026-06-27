@@ -573,6 +573,8 @@ final class ChatsListViewModel {
             lastMessage: nil,
             unreadCount: 0,
             hasUnread: false,
+            unreadMentionCount: 0,
+            unreadMention: false,
             firstUnreadMessageIdHex: nil,
             lastReadMessageIdHex: nil,
             lastReadTimelineAt: nil,
