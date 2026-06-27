@@ -8,7 +8,7 @@ import Testing
 struct MarkdownPlainTextTests {
 
     private func doc(_ blocks: [MarkdownBlockFfi]) -> MarkdownDocumentFfi {
-        MarkdownDocumentFfi(blocks: blocks)
+        MarkdownDocumentFfi(blocks: blocks, truncated: false)
     }
 
     @Test func stylingSyntaxIsDroppedAndTextKept() {
