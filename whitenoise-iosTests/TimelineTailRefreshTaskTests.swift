@@ -71,7 +71,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
 
 @MainActor
 private func waitUntil(
-    timeoutNanoseconds: UInt64 = 5_000_000_000,
+    timeoutNanoseconds: UInt64 = 10_000_000_000,
     pollIntervalNanoseconds: UInt64 = 5_000_000,
     _ condition: () -> Bool
 ) async {

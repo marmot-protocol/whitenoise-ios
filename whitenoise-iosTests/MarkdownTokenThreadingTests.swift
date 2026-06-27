@@ -11,7 +11,7 @@ struct MarkdownTokenThreadingTests {
 
     private let tokens = MarkdownDocumentFfi(blocks: [
         .paragraph(inlines: [.strong(children: [.text(content: "hi")])])
-    ])
+    ], truncated: false)
 
     @Test func timelineConversionKeepsContentTokens() {
         let record = TimelineMessageRecordFfi(

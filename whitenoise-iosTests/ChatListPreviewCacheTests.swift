@@ -13,7 +13,7 @@ struct ChatListPreviewCacheTests {
                 .text(content: "Hello "),
                 .nostrMention(entity: MarkdownNostrEntityFfi(hrp: .npub, bech32: bech32)),
             ]),
-        ])
+        ], truncated: false)
         var resolverCalls = 0
 
         let item = ChatsListViewModel.Item(
@@ -87,6 +87,8 @@ struct ChatListPreviewCacheTests {
             lastMessage: lastMessage,
             unreadCount: 0,
             hasUnread: false,
+            unreadMentionCount: 0,
+            unreadMention: false,
             firstUnreadMessageIdHex: nil,
             lastReadMessageIdHex: nil,
             lastReadTimelineAt: nil,
@@ -98,7 +100,7 @@ struct ChatListPreviewCacheTests {
         messageIdHex: String = "01",
         sender: String = "sender",
         plaintext: String = "hello",
-        contentTokens: MarkdownDocumentFfi = MarkdownDocumentFfi(blocks: []),
+        contentTokens: MarkdownDocumentFfi = MarkdownDocumentFfi(blocks: [], truncated: false),
         kind: UInt64 = MessageSemantics.kindChat,
         timelineAt: UInt64 = 1,
         deleted: Bool = false

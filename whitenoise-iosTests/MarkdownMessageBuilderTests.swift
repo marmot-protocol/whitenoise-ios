@@ -10,7 +10,7 @@ import SwiftUI
 struct MarkdownMessageBuilderTests {
 
     private func doc(_ blocks: [MarkdownBlockFfi]) -> MarkdownDocumentFfi {
-        MarkdownDocumentFfi(blocks: blocks)
+        MarkdownDocumentFfi(blocks: blocks, truncated: false)
     }
 
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {

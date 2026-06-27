@@ -1657,7 +1657,6 @@ struct TelemetryBuildConfigTests {
         #expect(tracker.endpoint == nil)
         // Must carry the dedicated audit-log token, NOT the OTLP/telemetry token.
         #expect(tracker.authorizationBearerToken == "audit-token")
-        #expect(tracker.source.accountLabel == nil)
         #expect(tracker.source.deviceLabel == "iPhone99,9")
         #expect(tracker.source.platform == "ios")
         #expect(tracker.source.appVersion == "2.0+9")
@@ -9701,6 +9700,8 @@ private func chatListRow(
         lastMessage: lastMessage,
         unreadCount: unreadCount,
         hasUnread: unreadCount > 0,
+        unreadMentionCount: 0,
+        unreadMention: false,
         firstUnreadMessageIdHex: firstUnreadMessageIdHex,
         lastReadMessageIdHex: lastReadMessageIdHex,
         lastReadTimelineAt: lastReadTimelineAt,

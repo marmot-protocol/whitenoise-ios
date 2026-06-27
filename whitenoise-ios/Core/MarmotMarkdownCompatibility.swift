@@ -3,7 +3,7 @@ import MarmotKit
 
 extension MarkdownDocumentFfi {
     static var emptyDocument: MarkdownDocumentFfi {
-        MarkdownDocumentFfi(blocks: [])
+        MarkdownDocumentFfi(blocks: [], truncated: false)
     }
 }
 
