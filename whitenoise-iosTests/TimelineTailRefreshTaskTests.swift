@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -27,11 +28,11 @@ struct TimelineTailRefreshTaskLifetimeTests {
         let probe = TailRefreshTaskProbe()
 
         viewModel.scheduleTimelineTailRefreshForTesting {
-            probe.firstStarted = true
-            do {
-                try await Task.sleep(nanoseconds: 5_000_000_000)
-            } catch {
-                probe.firstCancelled = Task.isCancelled
+            probe.markFirstStarted()
+            await withTaskCancellationHandler {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            } onCancel: {
+                probe.markFirstCancelled()
             }
         }
         await waitUntil { probe.firstStarted }
@@ -40,7 +41,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
         #expect(viewModel.hasTimelineTailRefreshTaskForTesting)
 
         viewModel.scheduleTimelineTailRefreshForTesting {
-            probe.secondRan = true
+            probe.markSecondRan()
         }
         await waitUntil {
             probe.firstCancelled && probe.secondRan && !viewModel.hasTimelineTailRefreshTaskForTesting
@@ -82,11 +83,22 @@ private func waitUntil(
     }
 }
 
-@MainActor
-private final class TailRefreshTaskProbe {
-    var firstStarted = false
-    var firstCancelled = false
-    var secondRan = false
+private final class TailRefreshTaskProbe: Sendable {
+    private struct State {
+        var firstStarted = false
+        var firstCancelled = false
+        var secondRan = false
+    }
+
+    private let state = Mutex(State())
+
+    var firstStarted: Bool { state.withLock { $0.firstStarted } }
+    var firstCancelled: Bool { state.withLock { $0.firstCancelled } }
+    var secondRan: Bool { state.withLock { $0.secondRan } }
+
+    func markFirstStarted() { state.withLock { $0.firstStarted = true } }
+    func markFirstCancelled() { state.withLock { $0.firstCancelled = true } }
+    func markSecondRan() { state.withLock { $0.secondRan = true } }
 }
 
 private func testGroup() -> AppGroupRecordFfi {
