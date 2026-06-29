@@ -41,10 +41,12 @@ Conversation initial positioning may hide timeline content until the first
 layout-driven scroll to the bottom or targeted message has settled. Keep that
 path cancellable and tied to scroll/layout callbacks, not fixed delay chains.
 
-Prefer behavior-level regression tests over `String(contentsOf:)` source
-scrapes. When a private SwiftUI or async path needs coverage, extract a small
-pure helper for the decision point first; reserve source checks for constraints
-that truly cannot be observed otherwise.
+Do not write tests that assert on source text via `String(contentsOf:)` (or
+any other read of a `.swift` file's contents). They test that code is *spelled*
+a certain way, not that it *behaves* a certain way, so they pass while broken
+and break on harmless rewrites. When a private SwiftUI or async path needs
+coverage, extract a small pure helper for the decision point and assert on its
+behavior instead.
 
 `Shared/` is compiled into both the main app and the Notification Service Extension. Keep code there extension-safe. Do not use `UIApplication`, app delegates, SwiftUI views, or APIs unavailable to extensions from shared files.
 Keep keyboard notification adapters and other SwiftUI/UIKit-only helpers in the app target; `Shared/` may hold CoreGraphics-only layout constants that the extension can compile safely.
@@ -155,7 +157,7 @@ Do not add a second storage path for data Marmot already owns.
 - Recipient-staging sheets should parse with `AddMembersPresentation`, normalize through Marmot to `MemberRefFfi`, and deduplicate staged recipients by `accountIdHex` rather than raw input text.
 - Do not use `abs` on wrapped or peer-influenced integer hashes; use magnitude or unsigned modulo helpers that are safe for `Int.min`.
 - Import identity flows should consume and clear pasted nsec state before awaiting Marmot, while still clearing matching pasteboard contents on every outcome.
-- Profile edits must normalize and length-bound outgoing kind:0 metadata before publishing: display names and about text go through `ProfileSanitizer`, picture URLs must be public HTTPS, and NIP-05/lud16 drafts must validate as address-shaped values before async publish starts.
+- Profile edits must normalize and length-bound outgoing kind:0 metadata before publishing: display names and about text go through `ProfileSanitizer`, and NIP-05 drafts must validate as address-shaped values before async publish starts. Picture and lud16 are not editable in the profile form; they are carried forward verbatim from the existing metadata on republish (so a kind:0 replacement never blanks them) and are intentionally not re-validated here. (`ProfileSanitizer.imageURL` still gates picture URLs everywhere an image is *displayed* — that is a separate, display-side rule that stays.)
 - Pasted, scanned, and deep-linked profile references must reject overlong bech32 inputs before lowercasing, URL parsing, checksum verification, or TLV conversion.
 - Profile references from QR scans, deep links, and pasted input must be validated before routing or staging: `npub` and `nprofile` need valid bech32 checksums, and hex public keys should be normalized to lowercase.
 - Conversation reply-order normalization runs during timeline rebuilds and single-row inserts; keep it linear over the timeline and avoid fixpoint loops that rebuild message indexes per pass.
