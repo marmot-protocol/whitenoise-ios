@@ -1693,9 +1693,12 @@ public protocol MarmotProtocol : AnyObject {
      * SENSITIVE: revealing the raw key is logged to the per-account audit log
      * and permanently marks the account's NIP-49 KEY_SECURITY_BYTE as 0x00
      * ("handled insecurely"). The returned string is computed on demand and is
-     * never cached by the engine; the caller should display it transiently and
-     * drop it. Refuses unknown / public-only / cross-account refs via the
-     * existing keystore validation.
+     * never cached by the engine. The Rust runtime keeps the nsec in
+     * `Zeroizing<String>` until this UniFFI return boundary. UniFFI can lower
+     * only a plain `String`, so the final clone here is the intentional point
+     * where Rust's zeroizing guarantee stops; the caller should display the
+     * host-owned string transiently and drop it. Refuses unknown / public-only
+     * / cross-account refs via the existing keystore validation.
      */
     func revealNsec(accountRef: String) throws  -> String
 
@@ -3218,9 +3221,12 @@ open func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String)as
      * SENSITIVE: revealing the raw key is logged to the per-account audit log
      * and permanently marks the account's NIP-49 KEY_SECURITY_BYTE as 0x00
      * ("handled insecurely"). The returned string is computed on demand and is
-     * never cached by the engine; the caller should display it transiently and
-     * drop it. Refuses unknown / public-only / cross-account refs via the
-     * existing keystore validation.
+     * never cached by the engine. The Rust runtime keeps the nsec in
+     * `Zeroizing<String>` until this UniFFI return boundary. UniFFI can lower
+     * only a plain `String`, so the final clone here is the intentional point
+     * where Rust's zeroizing guarantee stops; the caller should display the
+     * host-owned string transiently and drop it. Refuses unknown / public-only
+     * / cross-account refs via the existing keystore validation.
      */
 open func revealNsec(accountRef: String)throws  -> String {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError.lift) {
@@ -7635,6 +7641,7 @@ public struct GroupSystemEventFfi {
     public var actorAccountIdHex: String?
     public var subjectAccountIdHex: String?
     public var name: String?
+    public var oldName: String?
     /**
      * Previous disappearing-message retention in seconds; `0` means off.
      */
@@ -7651,7 +7658,7 @@ public struct GroupSystemEventFfi {
          * Human-readable fallback from the row content. Prefer rendering from
          * `system_type` plus the structured fields so clients can localize and
          * render the local account as "you".
-         */text: String, actorAccountIdHex: String?, subjectAccountIdHex: String?, name: String?,
+         */text: String, actorAccountIdHex: String?, subjectAccountIdHex: String?, name: String?, oldName: String?,
         /**
          * Previous disappearing-message retention in seconds; `0` means off.
          */oldRetentionSeconds: UInt64?,
@@ -7663,6 +7670,7 @@ public struct GroupSystemEventFfi {
         self.actorAccountIdHex = actorAccountIdHex
         self.subjectAccountIdHex = subjectAccountIdHex
         self.name = name
+        self.oldName = oldName
         self.oldRetentionSeconds = oldRetentionSeconds
         self.newRetentionSeconds = newRetentionSeconds
     }
@@ -7687,6 +7695,9 @@ extension GroupSystemEventFfi: Equatable, Hashable {
         if lhs.name != rhs.name {
             return false
         }
+        if lhs.oldName != rhs.oldName {
+            return false
+        }
         if lhs.oldRetentionSeconds != rhs.oldRetentionSeconds {
             return false
         }
@@ -7702,6 +7713,7 @@ extension GroupSystemEventFfi: Equatable, Hashable {
         hasher.combine(actorAccountIdHex)
         hasher.combine(subjectAccountIdHex)
         hasher.combine(name)
+        hasher.combine(oldName)
         hasher.combine(oldRetentionSeconds)
         hasher.combine(newRetentionSeconds)
     }
@@ -7720,6 +7732,7 @@ public struct FfiConverterTypeGroupSystemEventFfi: FfiConverterRustBuffer {
                 actorAccountIdHex: FfiConverterOptionString.read(from: &buf),
                 subjectAccountIdHex: FfiConverterOptionString.read(from: &buf),
                 name: FfiConverterOptionString.read(from: &buf),
+                oldName: FfiConverterOptionString.read(from: &buf),
                 oldRetentionSeconds: FfiConverterOptionUInt64.read(from: &buf),
                 newRetentionSeconds: FfiConverterOptionUInt64.read(from: &buf)
         )
@@ -7731,6 +7744,7 @@ public struct FfiConverterTypeGroupSystemEventFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.actorAccountIdHex, into: &buf)
         FfiConverterOptionString.write(value.subjectAccountIdHex, into: &buf)
         FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionString.write(value.oldName, into: &buf)
         FfiConverterOptionUInt64.write(value.oldRetentionSeconds, into: &buf)
         FfiConverterOptionUInt64.write(value.newRetentionSeconds, into: &buf)
     }
@@ -16039,7 +16053,7 @@ private var initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_retry_hydrate_quarantined_group() != 51443) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 4639) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 63603) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_secure_delete_expired() != 16091) {
