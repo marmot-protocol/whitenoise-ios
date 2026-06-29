@@ -24,9 +24,9 @@ struct ProfileEditMetadataDraftTests {
             name: "alice",
             displayName: "Alice 🎉",
             about: "",
-            picture: "",
             nip05: "alice@example.com",
-            lud16: ""
+            preservedPicture: nil,
+            preservedLud16: nil
         )
 
         let metadata = try #require(draft.normalizedMetadata)
@@ -40,14 +40,24 @@ struct ProfileEditMetadataDraftTests {
             name: nil,
             displayName: "Alice 🎉",
             about: "",
-            picture: "",
             nip05: "",
-            lud16: ""
+            preservedPicture: nil,
+            preservedLud16: nil
         )
 
         let metadata = try #require(draft.normalizedMetadata)
         #expect(metadata.name == nil)
         #expect(metadata.displayName == "Alice 🎉")
+    }
+
+    @Test func seedsEmptyFieldOnSameAccountReloadWithoutClobberingEdits() {
+        #expect(ProfileEditFieldSeeding.seeded(current: "", loaded: "Alice", isNewAccount: false) == "Alice")
+        #expect(ProfileEditFieldSeeding.seeded(current: "Al", loaded: "Alice", isNewAccount: false) == "Al")
+    }
+
+    @Test func adoptsNewAccountValueEvenWhenFieldIsNonEmpty() {
+        #expect(ProfileEditFieldSeeding.seeded(current: "Alice", loaded: "Bob", isNewAccount: true) == "Bob")
+        #expect(ProfileEditFieldSeeding.seeded(current: "Alice", loaded: "", isNewAccount: true) == "")
     }
 
     @Test func publishRejectsReentrantCallsAtEntry() throws {

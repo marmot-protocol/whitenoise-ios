@@ -7,7 +7,15 @@ struct AccountsView: View {
 
     var body: some View {
         Form {
-            Section("Identities") {
+            Section {
+                Button {
+                    showAdd = true
+                } label: {
+                    Label("Add Profile", systemImage: "plus.circle.fill")
+                }
+            }
+
+            Section {
                 ForEach(appState.accounts, id: \.label) { account in
                     Button {
                         Task { await appState.activateAccount(account.label) }
@@ -17,16 +25,8 @@ struct AccountsView: View {
                     .buttonStyle(.plain)
                 }
             }
-
-            Section {
-                Button {
-                    showAdd = true
-                } label: {
-                    Label("Add Account", systemImage: "plus.circle.fill")
-                }
-            }
         }
-        .navigationTitle("Accounts")
+        .navigationTitle("Profiles")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
             NavigationStack {

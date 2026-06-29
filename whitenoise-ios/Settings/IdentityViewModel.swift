@@ -7,7 +7,6 @@ import Foundation
 @MainActor
 @Observable
 final class IdentityViewModel {
-    var showSignOutConfirm = false
     var showRawExportConfirm = false
     var showEncryptedExportSheet = false
     var exportShareText: String?
