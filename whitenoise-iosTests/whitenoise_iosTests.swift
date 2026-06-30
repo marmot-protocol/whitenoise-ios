@@ -3889,15 +3889,17 @@ struct NotificationServiceTests {
 }
 
 struct ProfileEditViewTests {
-    @Test func profileSaveIsDisabledForInvalidDraft() throws {
-        let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
-        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
+    @MainActor
+    @Test func profileSaveIsDisabledForInvalidDraft() {
+        let viewModel = ProfileEditViewModel()
 
-        // saveDisabled stays in the view (it also reads appState.activeAccountRef).
-        #expect(source.contains(".disabled(saveDisabled)"))
-        #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*currentDraft\.validationError != nil"#))
-        // The only editable address validation left is NIP-05.
-        #expect(modelSource.contains(#"L10n.string("Enter a valid NIP-05 address like name@example.com.")"#))
+        viewModel.nip05 = "alice example.com"
+        #expect(viewModel.currentDraft.validationError == .nip05)
+        #expect(viewModel.invalidNip05Message == L10n.string("Enter a valid NIP-05 address like name@example.com."))
+
+        viewModel.nip05 = "alice@example.com"
+        #expect(viewModel.currentDraft.validationError == nil)
+        #expect(viewModel.invalidNip05Message == nil)
     }
 
     @Test func profileMetadataDraftSanitizesEditableFields() throws {
@@ -3945,20 +3947,6 @@ struct ProfileEditViewTests {
 
         #expect(invalidNip05.validationError == .nip05)
         #expect(invalidNip05.normalizedMetadata == nil)
-    }
-
-    private var profileEditSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditView.swift")
-    }
-
-    private var profileEditViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditViewModel.swift")
     }
 }
 
