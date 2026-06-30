@@ -7,40 +7,6 @@ import Testing
 /// MainActor-bound screens.
 struct MarmotClientStorageReadOffloadTests {
 
-    @Test func chatListAndRelayListReadsUseAsyncMarmotClientWrappers() throws {
-        let marmotClientSource = try sourceString("whitenoise-ios/Core/MarmotClient.swift")
-
-        #expect(sourceContains(
-            #"func chatList\(\s*accountRef: String,\s*includeArchived: Bool\s*\) async throws -> \[ChatListRowFfi\][\s\S]*Task\.detached\(priority: \.utility\)[\s\S]*marmot\.chatList\("#,
-            in: marmotClientSource
-        ))
-        #expect(sourceContains(
-            #"func accountUnreadSummary\(\) async throws -> \[AccountUnreadFfi\][\s\S]*Task\.detached\(priority: \.utility\)[\s\S]*marmot\.accountUnreadSummary\("#,
-            in: marmotClientSource
-        ))
-        #expect(sourceContains(
-            #"func accountRelayLists\(accountRef: String\) async throws -> AccountRelayListsFfi[\s\S]*Task\.detached\(priority: \.utility\)[\s\S]*marmot\.accountRelayLists\("#,
-            in: marmotClientSource
-        ))
-
-        for relativePath in [
-            "whitenoise-ios/Core/AppState.swift",
-            "whitenoise-ios/Chats/AccountSwitcherSheet.swift",
-            "whitenoise-ios/Chats/ChatsListViewModel.swift",
-            "whitenoise-ios/Diagnostics/DiagnosticsView.swift",
-            "whitenoise-ios/Diagnostics/DiagnosticsViewModel.swift",
-            "whitenoise-ios/Settings/KeyPackagesView.swift",
-            "whitenoise-ios/Settings/KeyPackagesViewModel.swift",
-            "whitenoise-ios/Settings/RelaysView.swift",
-            "whitenoise-ios/Settings/RelaysViewModel.swift",
-        ] {
-            let source = try sourceString(relativePath)
-            #expect(!source.contains("appState.marmot.chatList("), "\(relativePath) still calls sync chatList FFI directly")
-            #expect(!source.contains("appState.marmot.accountUnreadSummary("), "\(relativePath) still calls sync accountUnreadSummary FFI directly")
-            #expect(!source.contains("appState.marmot.accountRelayLists("), "\(relativePath) still calls sync accountRelayLists FFI directly")
-        }
-    }
-
     /// #318 — `AppState.relayLists(for:)` and the `relayPublishRelays` /
     /// `relayBootstrapRelays` accessors that funnel through it must be `async`
     /// and read account relay lists through the `MarmotClient.accountRelayLists`

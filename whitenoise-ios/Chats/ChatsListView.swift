@@ -6,7 +6,7 @@ struct ChatsListView: View {
     @Environment(AppState.self) private var appState
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
-    @State private var showSwitcher = false
+    @State private var showSettings = false
     @State private var path: [ChatNavigationTarget] = []
     @State private var searchText = ""
     @State private var searchEditing = false
@@ -67,7 +67,7 @@ struct ChatsListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    accountSwitcher
+                    settingsButton
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     filterMenu
@@ -87,9 +87,16 @@ struct ChatsListView: View {
                 NewChatSheet()
                     .appAppearance()
             }
-            .sheet(isPresented: $showSwitcher) {
-                AccountSwitcherSheet()
-                    .appAppearance()
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    SettingsView()
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Done") { showSettings = false }
+                            }
+                        }
+                }
+                .appAppearance()
             }
             .task(id: subscriptionScope) {
                 // Own both creation and binding here so bind() can't be skipped
@@ -129,7 +136,7 @@ struct ChatsListView: View {
             messageIdHex: appState.pendingChatMessageIdHex
         )
         showNewChat = false
-        showSwitcher = false
+        showSettings = false
         dismissSearchKeyboard()
         scope = .active
         path = [target]
@@ -416,9 +423,9 @@ struct ChatsListView: View {
         }
     }
 
-    private var accountSwitcher: some View {
+    private var settingsButton: some View {
         Button {
-            showSwitcher = true
+            showSettings = true
         } label: {
             if let active = appState.activeAccount {
                 AvatarBubble(
@@ -436,7 +443,7 @@ struct ChatsListView: View {
         // of sitting inside a glass capsule with padding; the shadow above
         // preserves the raised, tappable affordance.
         .buttonStyle(.plain)
-        .accessibilityLabel("Accounts")
+        .accessibilityLabel("Settings")
     }
 
     @MainActor

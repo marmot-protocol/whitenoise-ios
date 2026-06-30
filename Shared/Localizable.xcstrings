@@ -1,6 +1,419 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Profiles" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfiles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profils"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profili"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfis"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Профили"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profiller"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "個人資料"
+          }
+        }
+      }
+    },
+    "Add Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agregar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter un profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil ekle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增個人資料"
+          }
+        }
+      }
+    },
+    "Sign out of this profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melden Sie sich von diesem Profil ab"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar sesión en este perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se déconnecter de ce profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esci da questo profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sair deste perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выйти из этого профиля"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profildeki oturumu kapat"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出此个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登出此個人資料"
+          }
+        }
+      }
+    },
+    "Signing out removes this profile and its local key material from this device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch das Abmelden werden dieses Profil und sein lokales Schlüsselmaterial von diesem Gerät entfernt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar sesión elimina este perfil y su material de llaves local de este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La déconnexion supprime ce profil et ses clés locales de cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uscire rimuove questo profilo e il suo materiale di chiave locale da questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sair remove este perfil e seu material de chave local deste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выход удаляет этот профиль и его локальный ключевой материал с этого устройства."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oturumu kapatmak bu profili ve yerel anahtar materyalini bu cihazdan kaldırır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "注销会从此设备移除此个人资料及其本地密钥材料。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登出會從此裝置移除此個人資料及其本機金鑰材料。"
+          }
+        }
+      }
+    },
+    "Profile keys" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilschlüssel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Llaves del perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clés du profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiavi del profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chaves do perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ключи профиля"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil anahtarları"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "资料密钥"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "個人資料金鑰"
+          }
+        }
+      }
+    },
+    "Switch Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil wechseln"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer de profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambia profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trocar de perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сменить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil değiştir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切換個人資料"
+          }
+        }
+      }
+    },
+    "Edit Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil bearbeiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifier le profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modifica profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editar perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Редактировать профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profili düzenle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "編輯個人資料"
+          }
+        }
+      }
+    },
     "" : {
       "localizations" : {
         "de" : {
@@ -132,7 +545,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\"En línea\" significa que el trabajador en tiempo de ejecución de esta cuenta está activo en la aplicación en este momento (suscrito a sus retransmisiones). No refleja el acceso clave."
+            "value" : "\"En línea\" significa que el trabajador en tiempo de ejecución de esta cuenta está activo en la aplicación en este momento (suscrito a sus retransmisiones). No refleja el acceso a las llaves."
           }
         },
         "fr" : {
@@ -441,7 +854,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ aún no ha publicado un paquete de claves compatible."
+            "value" : "%@ aún no ha publicado un paquete de llaves compatible."
           }
         },
         "fr" : {
@@ -500,7 +913,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ no ha publicado un paquete de claves compatibles, por lo que no se pueden agregar todavía."
+            "value" : "%@ no ha publicado un paquete de llaves compatible, por lo que no se pueden agregar todavía."
           }
         },
         "fr" : {
@@ -559,7 +972,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ no ha publicado un paquete de claves compatible, por lo que aún no se les puede enviar mensajes."
+            "value" : "%@ no ha publicado un paquete de llaves compatible, por lo que aún no se les puede enviar mensajes."
           }
         },
         "fr" : {
@@ -3338,65 +3751,6 @@
         }
       }
     },
-    "Accounts" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Konten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cuentas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Comptes"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Account"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contas"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Аккаунты"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hesaplar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "账号"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "帳號"
-          }
-        }
-      }
-    },
     "Active" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3452,65 +3806,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用中"
-          }
-        }
-      }
-    },
-    "Add Account" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Konto hinzufügen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agregar cuenta"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajouter un compte"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aggiungi account"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adicionar conta"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавить аккаунт"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hesap Ekle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加账户"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新增帳戶"
           }
         }
       }
@@ -10080,7 +10375,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ingrese un URI npub, nprofile, Nostr válido, un enlace de perfil o una clave pública hexadecimal."
+            "value" : "Ingrese un URI npub, nprofile, Nostr válido, un enlace de perfil o una llave pública hexadecimal."
           }
         },
         "fr" : {
@@ -10968,7 +11263,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se encuentra en los relés de su paquete de claves, pero no se almacena en este dispositivo; probablemente se publique desde otro dispositivo o una sesión anterior. Eliminar para retirarlo."
+            "value" : "Se encuentra en los relés de su paquete de llaves, pero no se almacena en este dispositivo; probablemente se publique desde otro dispositivo o una sesión anterior. Eliminar para retirarlo."
           }
         },
         "fr" : {
@@ -11086,7 +11381,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Genera una nueva identidad Nostr y almacena la clave secreta de forma segura en el llavero de su dispositivo."
+            "value" : "Genera una nueva identidad Nostr y almacena la llave secreta de forma segura en el llavero de su dispositivo."
           }
         },
         "fr" : {
@@ -12161,65 +12456,6 @@
         }
       }
     },
-    "Identities" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identitäten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identidades"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identités"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identità"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identidades"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Личности"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kimlikler"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "身份"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "身分"
-          }
-        }
-      }
-    },
     "Identity" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12275,65 +12511,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "身分"
-          }
-        }
-      }
-    },
-    "Identity & Keys" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identität & Schlüssel"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identidad y llaves"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identité et clés"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identità e chiavi"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identidade e chaves"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Идентификатор и ключи"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kimlik ve anahtarlar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "身份和密钥"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "身分和金鑰"
           }
         }
       }
@@ -14059,7 +14236,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Paquete clave"
+            "value" : "Paquete de llaves"
           }
         },
         "fr" : {
@@ -14947,7 +15124,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cargando paquetes de claves"
+            "value" : "Cargando paquetes de llaves"
           }
         },
         "fr" : {
@@ -16787,7 +16964,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La inserción nativa no está disponible en esta compilación hasta que se configure una clave pública del servidor de inserción White Noise."
+            "value" : "La inserción nativa no está disponible en esta compilación hasta que se configure una llave pública del servidor de inserción WhiteNoise."
           }
         },
         "fr" : {
@@ -17259,7 +17436,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nuevo paquete de claves publicado"
+            "value" : "Nuevo paquete de llaves publicado"
           }
         },
         "fr" : {
@@ -17910,7 +18087,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No se encontraron paquetes clave."
+            "value" : "No se encontraron paquetes de llaves."
           }
         },
         "fr" : {
@@ -18974,7 +19151,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "npub1…, nprofile1… o clave pública hexadecimal"
+            "value" : "npub1…, nprofile1… o llave pública hexadecimal"
           }
         },
         "fr" : {
@@ -20059,7 +20236,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Otras cuentas utilizan estos paquetes de claves para invitarlo a grupos MLS. \"Sincronizado\" significa que el paquete también es visible en los relés de su paquete clave; \"Solo local\" significa que este dispositivo lo tiene pero los relés no lo devolvieron en este momento (es posible que no se haya replicado o que los relés no respondieron)."
+            "value" : "Otras cuentas utilizan estos paquetes de llaves para invitarlo a grupos MLS. \"Sincronizado\" significa que el paquete también es visible en los relés de su paquete de llaves; \"Solo local\" significa que este dispositivo lo tiene pero los relés no lo devolvieron en este momento (es posible que no se haya replicado o que los relés no respondieron)."
           }
         },
         "fr" : {
@@ -20176,7 +20353,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pegue su nsec (clave secreta de bech32). Los valores públicos npub son para compartir y no pueden iniciar sesión."
+            "value" : "Pegue su nsec (llave secreta de bech32). Los valores públicos npub son para compartir y no pueden iniciar sesión."
           }
         },
         "fr" : {
@@ -20236,7 +20413,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pega tu clave secreta nsec."
+            "value" : "Pega tu llave secreta nsec."
           }
         },
         "fr" : {
@@ -20899,61 +21076,60 @@
       }
     },
     "Privacy & Security" : {
-      "comment" : "A heading for the privacy and security settings screen.",
-      "isCommentAutoGenerated" : true,
+      "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Datenschutz & Sicherheit"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Privacidad y seguridad"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Confidentialité et sécurité"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Privacy e sicurezza"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Privacidade e segurança"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Конфиденциальность и безопасность"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "Gizlilik ve güvenlik"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "隐私与安全"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Privacy & Security"
+            "value" : "隱私與安全"
           }
         }
       }
@@ -21961,7 +22137,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Publica un evento KeyPackage nuevo en los relés de paquetes de claves configurados."
+            "value" : "Publica un evento KeyPackage nuevo en los relés de paquetes de llaves configurados."
           }
         },
         "fr" : {
@@ -22375,7 +22551,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La exportación sin procesar revela tu clave privada en texto claro y la marca permanentemente como tratada de forma insegura. La exportación cifrada crea una copia ncryptsec1 protegida por tu frase de contraseña sin revelar la clave sin procesar."
+            "value" : "La exportación sin procesar revela tu llave privada en texto claro y la marca permanentemente como tratada de forma insegura. La exportación cifrada crea una copia ncryptsec1 protegida por tu frase de contraseña sin revelar la llave sin procesar."
           }
         },
         "fr" : {
@@ -22612,7 +22788,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Leer de las listas de retransmisión de cuentas de Marmot. Las ediciones se publican a través de Marmot en su NIP-65, bandeja de entrada y listas de retransmisión de paquetes de claves."
+            "value" : "Leer de las listas de retransmisión de cuentas de Marmot. Las ediciones se publican a través de Marmot en su NIP-65, bandeja de entrada y listas de retransmisión de paquetes de llaves."
           }
         },
         "fr" : {
@@ -25694,65 +25870,6 @@
         }
       }
     },
-    "Sign out of this account" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Melden Sie sich von diesem Konto ab"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar sesión en esta cuenta"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se déconnecter de ce compte"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esci da questo account"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sair desta conta"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выйти из этой учетной записи"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu hesaptaki oturumu kapat"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出此帐户"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登出此帳戶"
-          }
-        }
-      }
-    },
     "Sign out?" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25765,7 +25882,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Desconectar?"
+            "value" : "¿Cerrar sesión?"
           }
         },
         "fr" : {
@@ -25883,7 +26000,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al cerrar sesión solo se olvida qué cuenta está activa. Las identidades y su material clave permanecen en el llavero del dispositivo para que puedas volver a iniciar sesión."
+            "value" : "Al cerrar sesión solo se olvida qué cuenta está activa. Las identidades y su material de llaves permanecen en el llavero del dispositivo para que puedas volver a iniciar sesión."
           }
         },
         "fr" : {
@@ -25926,66 +26043,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "註銷只會忘記哪個帳戶處於活動狀態。身分及其密鑰材料保留在裝置鑰匙圈中，以便您可以重新登入。"
-          }
-        }
-      }
-    },
-    "Signing out removes this account and its local key material from this device." : {
-      "comment" : "A footer for the identity view, describing the",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Durch das Abmelden werden dieses Konto und sein lokales Schlüsselmaterial von diesem Gerät entfernt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar sesión elimina esta cuenta y su material de claves local de este dispositivo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La déconnexion supprime ce compte et ses clés locales de cet appareil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uscire rimuove questo account e il suo materiale di chiave locale da questo dispositivo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sair remove esta conta e seu material de chave local deste dispositivo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выход удаляет эту учетную запись и ее локальный ключевой материал с этого устройства."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oturumu kapatmak bu hesabı ve yerel anahtar materyalini bu cihazdan kaldırır."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "注销会从此设备移除此帐户及其本地密钥材料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "登出會從此裝置移除此帳戶及其本機金鑰材料。"
           }
         }
       }
@@ -27987,7 +28044,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "El almacén de claves de la cuenta no está disponible ahora."
+            "value" : "El almacén de llaves de la cuenta no está disponible ahora."
           }
         },
         "fr" : {
@@ -28223,7 +28280,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta cuenta no puede exportar una clave privada."
+            "value" : "Esta cuenta no puede exportar una llave privada."
           }
         },
         "fr" : {

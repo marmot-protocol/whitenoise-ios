@@ -1,10 +1,11 @@
 import SwiftUI
 import MarmotKit
 
-/// Per-account identity inspector. Shows the projected display name, the
-/// public key (hex) and its npub (bech32) as tap-to-copy rows, plus signing
-/// + runtime status. Local-signing accounts can export raw or encrypted nsec
-/// backups through Marmot's audited keystore APIs.
+/// Per-account identity inspector. Shows the public key (hex) and its npub
+/// (bech32) as tap-to-copy rows, plus signing + runtime status. Local-signing
+/// accounts can export raw or encrypted nsec backups through Marmot's audited
+/// keystore APIs. Profile fields (display name, etc.) are edited separately in
+/// `ProfileEditView`.
 struct IdentityView: View {
     @Environment(AppState.self) private var appState
     @State private var model = IdentityViewModel()
@@ -14,10 +15,6 @@ struct IdentityView: View {
         return Form {
             if let active = appState.activeAccount {
                 Section {
-                    LabeledContent("Display name") {
-                        Text(appState.displayName(forAccountIdHex: active.accountIdHex))
-                            .foregroundStyle(.primary)
-                    }
                     CopyableValueRow(
                         label: "Public key",
                         display: IdentityFormatter.short(active.accountIdHex),
@@ -81,35 +78,9 @@ struct IdentityView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-
-            Section {
-                Button(role: .destructive) {
-                    model.showSignOutConfirm = true
-                } label: {
-                    Label("Sign out of this account", systemImage: "rectangle.portrait.and.arrow.right")
-                }
-                .disabled(appState.activeAccount == nil)
-            } footer: {
-                Text("Signing out removes this account and its local key material from this device.")
-                    .font(.footnote)
-            }
         }
         .navigationTitle("Identity")
         .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(isPresented: $model.showSignOutConfirm) {
-            FullScreenConfirmationDialog(
-                title: "Sign out?",
-                message: "Signing out removes this account and its local key material from this device.",
-                systemImage: "rectangle.portrait.and.arrow.right",
-                destructiveTitle: "Sign out",
-                onConfirm: {
-                    model.showSignOutConfirm = false
-                    Task { await appState.signOut() }
-                },
-                onCancel: { model.showSignOutConfirm = false }
-            )
-            .appAppearance()
-        }
         .fullScreenCover(isPresented: $model.showRawExportConfirm) {
             FullScreenConfirmationDialog(
                 title: "Export raw nsec?",

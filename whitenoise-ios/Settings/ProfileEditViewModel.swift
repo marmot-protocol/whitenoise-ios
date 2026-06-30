@@ -14,37 +14,34 @@ final class ProfileEditViewModel {
     var existingName: String?
     var displayName = ""
     var about = ""
-    var picture = ""
     var nip05 = ""
-    var lud16 = ""
+    // Not user-editable here; preserved so a kind:0 republish keeps them.
+    var existingPicture: String?
+    var existingLud16: String?
 
     var isPublishing = false
     var error: String?
+
+    private(set) var loadedAccountIdHex: String?
 
     var currentDraft: ProfileEditMetadataDraft {
         ProfileEditMetadataDraft(
             name: existingName,
             displayName: displayName,
             about: about,
-            picture: picture,
             nip05: nip05,
-            lud16: lud16
+            preservedPicture: existingPicture,
+            preservedLud16: existingLud16
         )
     }
 
-    var invalidPictureMessage: String? { validationMessage(for: .picture) }
     var invalidNip05Message: String? { validationMessage(for: .nip05) }
-    var invalidLud16Message: String? { validationMessage(for: .lud16) }
 
     func validationMessage(for field: ProfileEditMetadataField) -> String? {
         guard currentDraft.validationError == field else { return nil }
         switch field {
-        case .picture:
-            return L10n.string("Only public HTTPS image URLs are allowed.")
         case .nip05:
             return L10n.string("Enter a valid NIP-05 address like name@example.com.")
-        case .lud16:
-            return L10n.string("Enter a valid Lightning address like name@example.com.")
         }
     }
 
@@ -52,21 +49,34 @@ final class ProfileEditViewModel {
         guard let id = appState.activeAccount?.accountIdHex else { return }
         let cachedProfile = appState.profile(forAccountIdHex: id)
         let loadedProfile = await appState.reloadProfileProjection(forAccountIdHex: id)?.profile
+        // The reload is async; if the active account changed under us, drop the
+        // result rather than seed this editor with another account's metadata.
+        guard appState.activeAccount?.accountIdHex == id else { return }
         guard let profile = loadedProfile ?? cachedProfile else { return }
+        let isNewAccount = loadedAccountIdHex != id
         let formFields = ProfileEditFormFields(profile: profile)
         existingName = formFields.name
-        // Only seed empty fields so we don't clobber in-progress edits.
-        if displayName.isEmpty { displayName = formFields.displayName }
-        if about.isEmpty { about = formFields.about }
-        if picture.isEmpty { picture = formFields.picture }
-        if nip05.isEmpty { nip05 = formFields.nip05 }
-        if lud16.isEmpty { lud16 = formFields.lud16 }
+        // Carry picture and lud16 forward as-is so saving never wipes them.
+        existingPicture = formFields.picture.isEmpty ? nil : formFields.picture
+        existingLud16 = formFields.lud16.isEmpty ? nil : formFields.lud16
+        displayName = ProfileEditFieldSeeding.seeded(
+            current: displayName, loaded: formFields.displayName, isNewAccount: isNewAccount
+        )
+        about = ProfileEditFieldSeeding.seeded(
+            current: about, loaded: formFields.about, isNewAccount: isNewAccount
+        )
+        nip05 = ProfileEditFieldSeeding.seeded(
+            current: nip05, loaded: formFields.nip05, isNewAccount: isNewAccount
+        )
+        loadedAccountIdHex = id
     }
 
     func publish(using appState: AppState) async {
         guard !isPublishing else { return }
         guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex
+              let accountIdHex = appState.activeAccount?.accountIdHex,
+              // Never republish fields loaded for a now-inactive account.
+              loadedAccountIdHex == accountIdHex
         else { return }
 
         let draft = currentDraft

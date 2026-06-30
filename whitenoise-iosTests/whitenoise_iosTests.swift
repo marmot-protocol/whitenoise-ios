@@ -3889,39 +3889,27 @@ struct NotificationServiceTests {
 }
 
 struct ProfileEditViewTests {
-    @Test func profilePictureDraftUsesPublicHTTPSPolicyBeforePublish() throws {
-        let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
-        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
+    @MainActor
+    @Test func profileSaveIsDisabledForInvalidDraft() {
+        let viewModel = ProfileEditViewModel()
 
-        // Avatar (view) + draft normalization (pure type, still in the view file).
-        #expect(source.contains("pictureURL: ProfileSanitizer.imageURL(model.picture)"))
-        #expect(source.contains("private var normalizedPictureURL: String?"))
-        #expect(source.contains("ProfileSanitizer.imageURL(trimmedPicture)?.absoluteString"))
-        #expect(source.contains("picture: normalizedPictureURL"))
-        // Publish wiring moved to the view model.
-        #expect(modelSource.contains("profile: normalizedMetadata.ffi"))
-        #expect(!source.contains("picture: picture.isEmpty ? nil : picture"))
+        viewModel.nip05 = "alice example.com"
+        #expect(viewModel.currentDraft.validationError == .nip05)
+        #expect(viewModel.invalidNip05Message == L10n.string("Enter a valid NIP-05 address like name@example.com."))
+
+        viewModel.nip05 = "alice@example.com"
+        #expect(viewModel.currentDraft.validationError == nil)
+        #expect(viewModel.invalidNip05Message == nil)
     }
 
-    @Test func profileSaveIsDisabledForInvalidPictureDraft() throws {
-        let source = try String(contentsOf: profileEditSourceURL, encoding: .utf8)
-        let modelSource = try String(contentsOf: profileEditViewModelSourceURL, encoding: .utf8)
-
-        // saveDisabled stays in the view (it also reads appState.activeAccountRef).
-        #expect(source.contains(".disabled(saveDisabled)"))
-        #expect(source.matches(#"private var saveDisabled: Bool \{[\s\S]*currentDraft\.validationError != nil"#))
-        // Per-field validation messages moved to the view model.
-        #expect(modelSource.contains(#"L10n.string("Only public HTTPS image URLs are allowed.")"#))
-    }
-
-    @Test func profileMetadataDraftSanitizesAndBoundsOutgoingFields() throws {
+    @Test func profileMetadataDraftSanitizesEditableFields() throws {
         let draft = ProfileEditMetadataDraft(
             name: " alice\u{202E}\n ",
             displayName: " Alice\u{202E}\nEvil ",
             about: String(repeating: "a", count: ProfileSanitizer.maxAboutLength + 25),
-            picture: " https://example.com/avatar.png ",
             nip05: " ALICE@Example.COM ",
-            lud16: " Sats+Tips@Lightning.Example "
+            preservedPicture: nil,
+            preservedLud16: nil
         )
 
         let metadata = try #require(draft.normalizedMetadata)
@@ -3929,42 +3917,36 @@ struct ProfileEditViewTests {
         #expect(metadata.name == "alice")
         #expect(metadata.displayName == "Alice Evil")
         #expect(metadata.about?.count == ProfileSanitizer.maxAboutLength)
-        #expect(metadata.picture == "https://example.com/avatar.png")
         #expect(metadata.nip05 == "alice@example.com")
-        #expect(metadata.lud16 == "sats+tips@lightning.example")
     }
 
-    @Test func profileMetadataDraftRejectsInvalidFieldsBeforePublish() {
-        let invalidPicture = ProfileEditMetadataDraft(
-            name: nil, displayName: "", about: "", picture: "http://example.com/a.png", nip05: "", lud16: ""
+    @Test func profilePreservesExistingPictureAndLud16Verbatim() throws {
+        // Picture and lud16 are not editable here; whatever the profile already
+        // had must round-trip unchanged so a kind:0 replacement never wipes them,
+        // even when the stored value wouldn't pass the editable-field validators.
+        let draft = ProfileEditMetadataDraft(
+            name: nil,
+            displayName: "Alice",
+            about: "",
+            nip05: "",
+            preservedPicture: "http://legacy.example/a.png",
+            preservedLud16: "weird-but-existing"
         )
+
+        #expect(draft.validationError == nil)
+        let metadata = try #require(draft.normalizedMetadata)
+        #expect(metadata.picture == "http://legacy.example/a.png")
+        #expect(metadata.lud16 == "weird-but-existing")
+    }
+
+    @Test func profileMetadataDraftRejectsInvalidNip05BeforePublish() {
         let invalidNip05 = ProfileEditMetadataDraft(
-            name: nil, displayName: "", about: "", picture: "", nip05: "alice example.com", lud16: ""
-        )
-        let invalidLud16 = ProfileEditMetadataDraft(
-            name: nil, displayName: "", about: "", picture: "", nip05: "", lud16: "alice@"
+            name: nil, displayName: "", about: "", nip05: "alice example.com",
+            preservedPicture: nil, preservedLud16: nil
         )
 
-        #expect(invalidPicture.validationError == .picture)
         #expect(invalidNip05.validationError == .nip05)
-        #expect(invalidLud16.validationError == .lud16)
-        #expect(invalidPicture.normalizedMetadata == nil)
         #expect(invalidNip05.normalizedMetadata == nil)
-        #expect(invalidLud16.normalizedMetadata == nil)
-    }
-
-    private var profileEditSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditView.swift")
-    }
-
-    private var profileEditViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Settings/ProfileEditViewModel.swift")
     }
 }
 
