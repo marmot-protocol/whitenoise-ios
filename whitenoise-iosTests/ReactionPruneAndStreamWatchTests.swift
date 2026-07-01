@@ -316,6 +316,34 @@ struct ReactionTargetTallyTests {
         #expect(viewModel.forceFullReactionRecomputeForTesting() == targetedAfterRemove)
     }
 
+    @MainActor
+    @Test func toggleRecomputesOnlyItsOwnTargetNotUnrelatedSummaries() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "no-such-account"
+        let viewModel = ConversationViewModel(appState: appState, group: testGroup())
+
+        viewModel.timelineStore.reactionProjections.setSummary(
+            reactionSummary(emoji: "👀", senders: [other]),
+            forMessageId: otherTarget
+        )
+        #expect(viewModel.reactions[otherTarget] == nil)
+
+        let messageOnTarget = AppMessageRecordFfi(
+            messageIdHex: target,
+            direction: "received",
+            groupIdHex: groupId,
+            sender: other,
+            plaintext: "hi",
+            kind: MessageSemantics.kindChat,
+            tags: [],
+            recordedAt: 1,
+            receivedAt: 1
+        )
+        await viewModel.toggleReaction("🔥", on: messageOnTarget)
+
+        #expect(viewModel.reactions[otherTarget] == nil)
+    }
+
     private func reactionSummary(emoji: String, senders: [String]) -> TimelineReactionSummaryFfi {
         TimelineReactionSummaryFfi(
             byEmoji: [TimelineReactionEmojiFfi(emoji: emoji, count: UInt32(senders.count), senders: senders)],
