@@ -41,14 +41,7 @@ struct ChatRow: View {
                         .monospacedDigit()
                 }
                 if item.hasUnread {
-                    Text(unreadBadgeText)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .monospacedDigit()
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.accentColor))
-                        .accessibilityLabel(L10n.plural("%llu unread messages", UInt64(item.unreadCount)))
+                    UnreadCountBadge(count: item.unreadCount)
                 }
             }
         }
@@ -83,9 +76,6 @@ struct ChatRow: View {
         return RelativeTime.short(Date(timeIntervalSince1970: TimeInterval(latest.timelineAt)))
     }
 
-    private var unreadBadgeText: String {
-        item.unreadCount > 99 ? "99+" : "\(item.unreadCount)"
-    }
 }
 
 /// Circular avatar. Renders the profile picture when a URL is provided,

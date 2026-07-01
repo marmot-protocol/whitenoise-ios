@@ -28,6 +28,7 @@ struct AccountsView: View {
         }
         .navigationTitle("Profiles")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await appState.refreshAccountUnreadSummaries() }
         .sheet(isPresented: $showAdd) {
             NavigationStack {
                 WelcomeView()
@@ -59,7 +60,12 @@ struct AccountsView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 8) {
+                if let unreadCount = Self.unreadBadgeCount(
+                    for: appState.accountUnreadSummary(forAccountIdHex: account.accountIdHex)
+                ) {
+                    UnreadCountBadge(count: unreadCount)
+                }
                 if account.label == appState.activeAccountRef {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
@@ -81,5 +87,12 @@ struct AccountsView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// The unread count a Profiles row shows for an account, or `nil` when the
+    /// badge should be hidden — no summary yet, or nothing unread.
+    static func unreadBadgeCount(for summary: AccountUnreadFfi?) -> UInt64? {
+        guard let summary, summary.hasUnread else { return nil }
+        return summary.unreadCount
     }
 }
