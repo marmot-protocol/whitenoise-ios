@@ -1,7 +1,7 @@
 import SwiftUI
 import MarmotKit
 
-/// Compose a new MLS group. Add one or more recipients by profile reference.
+/// Compose a new MLS group. Add one or more members by profile reference.
 /// Optional group name — auto-omitted for 2-member groups so the chats list
 /// renders them as DMs.
 struct NewChatSheet: View {
@@ -11,7 +11,11 @@ struct NewChatSheet: View {
     @State private var model = NewChatSheetViewModel()
 
     private var canSubmit: Bool {
-        !model.recipients.members.isEmpty && !model.isCreating && appState.activeAccountRef != nil
+        AddMembersPresentation.canCreate(
+            stagedCount: model.memberPicker.members.count,
+            isCreating: model.isCreating,
+            hasActiveAccount: appState.activeAccountRef != nil
+        )
     }
 
     static func normalizedGroupName(_ raw: String) -> String {
@@ -24,55 +28,19 @@ struct NewChatSheet: View {
 
     var body: some View {
         @Bindable var model = model
-        @Bindable var recipients = model.recipients
         return NavigationStack {
             Form {
-                Section("Recipients") {
-                    ForEach(recipients.members, id: \.accountIdHex) { member in
-                        HStack {
-                            StagedGroupMemberRow(member: member)
-                            Button(role: .destructive) {
-                                recipients.members.removeAll { $0.accountIdHex == member.accountIdHex }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .foregroundStyle(.red)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    HStack {
-                        TextField("npub1…, nprofile1…, or hex public key", text: $recipients.pending)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .font(.system(.body, design: .monospaced))
-                        Button {
-                            Task { await model.addPending(using: appState) }
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.tint)
-                        }
-                        .disabled(recipients.pending.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-
-                    Button {
-                        recipients.error = nil
-                        recipients.showScanner = true
-                    } label: {
-                        Label("Scan QR code", systemImage: "qrcode.viewfinder")
-                    }
-                }
+                MemberPickerView(
+                    model: model.memberPicker,
+                    title: "Recipients",
+                    normalize: { try await appState.currentMarmotClient().normalizeMemberRef(memberRef: $0) },
+                    scanInvalidMessage: L10n.string("That QR code isn't a White Noise profile.")
+                )
 
                 Section("Optional") {
                     TextField("Group name", text: $model.groupName)
                     TextField("Description", text: $model.groupDescription, axis: .vertical)
                         .lineLimit(2...4)
-                }
-
-                if let error = recipients.error {
-                    Section {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
                 }
             }
             .navigationTitle("New Chat")
@@ -89,13 +57,6 @@ struct NewChatSheet: View {
                 }
             }
             .interactiveDismissDisabled(model.isCreating)
-            .fullScreenCover(isPresented: $recipients.showScanner) {
-                ScannerSheet { result in
-                    recipients.showScanner = false
-                    model.handleScan(result, using: appState)
-                }
-                .appAppearance()
-            }
         }
     }
 }
