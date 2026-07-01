@@ -6,6 +6,15 @@ enum NotificationServiceRenderDecision: Equatable {
     case fallback
 }
 
+nonisolated enum NotificationServiceTimeoutPolicy {
+    static func shouldApplyTimeoutFallback(
+        applyingFallbackForTimeout: Bool,
+        didApplyRenderDecision: Bool
+    ) -> Bool {
+        applyingFallbackForTimeout && !didApplyRenderDecision
+    }
+}
+
 nonisolated enum NotificationServiceSettingsReadPolicy {
     static func localNotificationsEnabled(readSetting: () throws -> Bool) -> Bool {
         do {

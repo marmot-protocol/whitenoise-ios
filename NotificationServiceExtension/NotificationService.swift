@@ -130,15 +130,7 @@ final class NotificationService: UNNotificationServiceExtension {
         _ content: UNMutableNotificationContent,
         with presentation: LocalNotificationPresentation
     ) {
-        content.title = presentation.title
-        content.body = presentation.body
-        content.sound = .default
-        content.threadIdentifier = presentation.threadIdentifier
-        var userInfo = content.userInfo
-        for (key, value) in presentation.userInfo {
-            userInfo[key] = value
-        }
-        content.userInfo = userInfo
+        NotificationContentDecorator.apply(presentation, to: content)
     }
 
     private func startAdditionalPresentations(
@@ -149,7 +141,7 @@ final class NotificationService: UNNotificationServiceExtension {
             for presentation in additionalPresentations {
                 let request = UNNotificationRequest(
                     identifier: presentation.identifier,
-                    content: notificationContent(for: presentation),
+                    content: NotificationContentDecorator.makeContent(for: presentation),
                     trigger: nil
                 )
                 try? await UNUserNotificationCenter.current().add(request)
@@ -157,18 +149,6 @@ final class NotificationService: UNNotificationServiceExtension {
         }
         additionalPresentationTask = task
         return task
-    }
-
-    private func notificationContent(
-        for presentation: LocalNotificationPresentation
-    ) -> UNMutableNotificationContent {
-        let content = UNMutableNotificationContent()
-        content.title = presentation.title
-        content.body = presentation.body
-        content.sound = .default
-        content.threadIdentifier = presentation.threadIdentifier
-        content.userInfo = presentation.userInfo
-        return content
     }
 
     private func applyFallback(to content: UNMutableNotificationContent) {
@@ -182,7 +162,10 @@ final class NotificationService: UNNotificationServiceExtension {
 
     private func finish(applyingFallbackForTimeout: Bool = false) {
         guard let contentHandler, let bestAttemptContent else { return }
-        if applyingFallbackForTimeout, !didApplyRenderDecision {
+        if NotificationServiceTimeoutPolicy.shouldApplyTimeoutFallback(
+            applyingFallbackForTimeout: applyingFallbackForTimeout,
+            didApplyRenderDecision: didApplyRenderDecision
+        ) {
             applyFallback(to: bestAttemptContent)
         }
         self.contentHandler = nil

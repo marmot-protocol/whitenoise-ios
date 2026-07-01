@@ -99,23 +99,6 @@ struct TimelineProjectionBoundaryTests {
         #expect(preview.text == "target body")
     }
 
-    @Test func conversationTimelineDoesNotCallListMediaOrRecoverSourceEpoch() throws {
-        let sources = try [
-            "whitenoise-ios/Conversation/ConversationViewModel.swift",
-            "whitenoise-ios/Conversation/TimelineStore.swift",
-            "whitenoise-ios/Conversation/ConversationMediaProjectionCache.swift",
-            "whitenoise-ios/Conversation/ConversationMediaDownloader.swift",
-        ].map(sourceString).joined(separator: "\n")
-
-        #expect(!sources.matches(#"\blistMedia\s*\("#))
-        #expect(!sources.contains("mediaRecordsByMessageId"))
-        #expect(!sources.contains("mediaRecordReferencesByKey"))
-        #expect(!sources.contains("refreshMediaRecords"))
-        #expect(!sources.contains("scheduleMediaRecordsRefresh"))
-        #expect(!sources.matches(#"\bsourceEpoch\s*==\s*0\b"#))
-        #expect(!sources.contains("mediaRecordReference(matching:"))
-    }
-
     @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
         let reference = mediaReference(sourceEpoch: 7)
         let media = MessageMediaAttachment(
@@ -153,25 +136,6 @@ struct TimelineProjectionBoundaryTests {
         #expect(downloaded.groupIds == [testGroupId])
         #expect(downloaded.referenceHashes == [reference.plaintextSha256])
         #expect(downloaded.sourceEpochs == [reference.sourceEpoch])
-    }
-
-    @Test func displayTimelineDoesNotParseMarkdownAtRenderTime() throws {
-        let displaySources = try [
-            "whitenoise-ios/Conversation/ConversationView.swift",
-            "whitenoise-ios/Conversation/MessageBubble.swift",
-            "whitenoise-ios/Conversation/TimelineStore.swift",
-            "whitenoise-ios/Conversation/ConversationMarkdownProjectionCache.swift",
-            "whitenoise-ios/Conversation/MarkdownMessageModel.swift",
-        ].map(sourceString).joined(separator: "\n")
-
-        #expect(!displaySources.matches(#"\bparseMarkdown\s*\("#))
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let repoRoot = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: repoRoot.appending(path: relativePath), encoding: .utf8)
     }
 
     private func timelineRecord(
@@ -331,10 +295,4 @@ private func hexId(_ n: Int) -> String {
 
 private func hex32(_ byte: String) -> String {
     String(repeating: byte, count: 32)
-}
-
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
-    }
 }

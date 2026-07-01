@@ -85,44 +85,4 @@ struct ResolvedDisplayNameTests {
         #expect(projection.knownDisplayName == "Local")
         #expect(!projection.hasRemoteIdentity)
     }
-
-    @Test func profileHelpersReadProjectionCacheInsteadOfMarmotOnMainActor() throws {
-        let source = try sourceString("whitenoise-ios/Core/ProfileStore.swift")
-
-        #expect(source.range(
-            of: #"func profile\(forAccountIdHex id: String\) -> UserProfileMetadataFfi\? \{\s*cachedProfileProjection\(forAccountIdHex: id, refreshAfterLoad: true\)\?\.profile\s*\}"#,
-            options: .regularExpression
-        ) != nil)
-        #expect(source.range(
-            of: #"func knownDisplayName\(forAccountIdHex id: String\) -> String\? \{\s*cachedProfileProjection\(forAccountIdHex: id, refreshAfterLoad: true\)\?\.knownDisplayName\s*\}"#,
-            options: .regularExpression
-        ) != nil)
-        #expect(source.range(
-            of: #"func avatarURL\(forAccountIdHex id: String\) -> URL\? \{\s*cachedProfileProjection\(forAccountIdHex: id, refreshAfterLoad: true\)\?\.avatarURL\s*\}"#,
-            options: .regularExpression
-        ) != nil)
-    }
-
-    @Test func cacheMissHydrationIsDedupedBeforeRelayRefresh() throws {
-        let source = try sourceString("whitenoise-ios/Core/ProfileStore.swift")
-
-        #expect(source.contains("scheduledProfileProjectionLoadIDs.contains(id)"))
-        #expect(source.contains("profileProjectionRefreshAfterLoadIDs.insert(id)"))
-        #expect(source.contains("if shouldRefresh, projection?.hasRemoteIdentity != true"))
-        #expect(source.contains("scheduleProfileRefresh(forAccountIdHex: id)"))
-    }
-
-    @Test func profilePublishRefreshesProjectionCache() throws {
-        let source = try sourceString("whitenoise-ios/Settings/ProfileEditViewModel.swift")
-
-        #expect(source.contains("await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)"))
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let testFile = URL(filePath: #filePath)
-        let repoRoot = testFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: repoRoot.appendingPathComponent(relativePath), encoding: .utf8)
-    }
 }

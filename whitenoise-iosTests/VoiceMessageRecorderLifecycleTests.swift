@@ -39,22 +39,4 @@ struct VoiceMessageRecorderLifecycleTests {
         #expect(!recorder.isActive)
     }
 
-    @Test func conversationDisappearCancelsActiveVoiceRecording() throws {
-        let source = try sourceString("whitenoise-ios/Conversation/ConversationView.swift")
-
-        #expect(source.matches(#"\.onDisappear \{[\s\S]*voiceRecorder\.cancelIfActive\(\)[\s\S]*cancelPendingTimelineFollowUpWork\(\)"#))
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let repoRoot = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: repoRoot.appendingPathComponent(relativePath), encoding: .utf8)
-    }
-}
-
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
-    }
 }

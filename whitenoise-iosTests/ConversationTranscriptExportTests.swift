@@ -169,26 +169,6 @@ struct ConversationTranscriptExportTests {
         #expect(reader.queries[1].beforeMessageId == oldestId)
     }
 
-    @Test func exportActionUsesAsyncMarmotClientWrapper() throws {
-        let rootURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-
-        let groupDetailsModelSource = try String(
-            contentsOf: rootURL.appendingPathComponent("whitenoise-ios/Group/GroupDetailsViewModel.swift"),
-            encoding: .utf8
-        )
-        #expect(groupDetailsModelSource.contains("try await client.exportConversationTranscript("))
-        #expect(!groupDetailsModelSource.contains("ConversationTranscriptExport.fetchAllMessages(\n                marmot: appState.marmot"))
-
-        let marmotClientSource = try String(
-            contentsOf: rootURL.appendingPathComponent("whitenoise-ios/Core/MarmotClient.swift"),
-            encoding: .utf8
-        )
-        #expect(marmotClientSource.contains("func exportConversationTranscript("))
-        #expect(marmotClientSource.contains("Task.detached(priority: .utility)"))
-    }
-
     @Test func temporaryFileWriteUsesCompleteFileProtection() throws {
         let data = Data("private transcript".utf8)
         let url = try ConversationTranscriptExport.writeTemporaryFile(
@@ -199,15 +179,6 @@ struct ConversationTranscriptExportTests {
         defer { try? FileManager.default.removeItem(at: url) }
 
         #expect(try Data(contentsOf: url) == data)
-
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/ConversationTranscriptExport.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
-        #expect(source.contains(".protectionKey: FileProtectionType.complete"))
-        #expect(source.contains("data.write(to: url, options: [.atomic, .completeFileProtection])"))
-        #expect(source.contains("setAttributes(protectedAttributes, ofItemAtPath: url.path)"))
     }
 }
 

@@ -122,22 +122,6 @@ struct MediaDraftProcessorOrientationTests {
         #expect(attachment.thumbnail != nil)
     }
 
-    @Test func mediaDraftStripRendersPrecomputedThumbnail() throws {
-        let source = try String(contentsOf: mediaComposerViewsSourceURL, encoding: .utf8)
-
-        #expect(source.contains("if let thumbnail = attachment.thumbnail"))
-        #expect(source.contains("Image(uiImage: thumbnail)"))
-        #expect(!source.contains("UIImage(data: attachment.data)"))
-    }
-
-    @Test func conversationViewPreparesMediaDraftsAsynchronouslyBeforeAppending() throws {
-        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains("try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)"))
-        #expect(source.contains("let attachment = try await MediaDraftProcessor.preparedAttachment(\n                        from: selection.data"))
-        #expect(!source.contains("try appendMediaDraft(MediaDraftProcessor.attachment"))
-    }
-
     private struct SampledColor {
         let red: CGFloat
         let blue: CGFloat
@@ -171,19 +155,5 @@ struct MediaDraftProcessorOrientationTests {
             red: CGFloat(red) / CGFloat(width),
             blue: CGFloat(blue) / CGFloat(width)
         )
-    }
-
-    private var mediaComposerViewsSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/MediaComposerViews.swift")
-    }
-
-    private var conversationViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
     }
 }

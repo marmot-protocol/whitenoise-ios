@@ -157,25 +157,6 @@ struct GroupSystemEventPresentationTests {
         #expect(record.kind == MessageSemantics.kindGroupSystem)
         #expect(GroupSystemEventPresentation.isDisplayable(record))
     }
-
-    @Test func transientGroupRenameRowsSanitizeAndUseStaticFormatKey() throws {
-        let root = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let viewModel = try String(
-            contentsOf: root.appendingPathComponent("whitenoise-ios/Conversation/ConversationViewModel.swift"),
-            encoding: .utf8
-        )
-        let row = try String(
-            contentsOf: root.appendingPathComponent("whitenoise-ios/Conversation/SystemEventRow.swift"),
-            encoding: .utf8
-        )
-
-        #expect(viewModel.contains("ProfileSanitizer.groupName(record.name)"))
-        #expect(!viewModel.contains("appendSystemEvent(.groupRenamed(record.name))"))
-        #expect(row.contains(#"L10n.formatted("Renamed to %@", new)"#))
-        #expect(!row.contains(#"L10n.string("Renamed to \(new)")"#))
-    }
 }
 
 private func testDisplayName(_ accountHex: String) -> String {

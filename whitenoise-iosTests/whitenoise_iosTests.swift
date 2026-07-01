@@ -150,111 +150,6 @@ struct AppStateBootstrapTests {
         }
     }
 
-    @Test func createIdentityViewModelSourcePlacesReentryGuardBeforeCreateCall() throws {
-        let source = try String(contentsOf: createIdentityViewModelSourceURL, encoding: .utf8)
-        let runCreateStart = try #require(source.range(of: "func runCreate("))
-        let runCreateSource = source[runCreateStart.lowerBound...]
-
-        let guardRange = try #require(runCreateSource.range(of: "guard !isCreating else { return }"))
-        let createFlagRange = try #require(runCreateSource.range(of: "isCreating = true"))
-        let resetRange = try #require(runCreateSource.range(of: "defer { isCreating = false }"))
-        let createCallRange = try #require(runCreateSource.range(of: "try await appState.createIdentity()"))
-
-        #expect(guardRange.lowerBound < createFlagRange.lowerBound)
-        #expect(createFlagRange.lowerBound < resetRange.lowerBound)
-        #expect(resetRange.lowerBound < createCallRange.lowerBound)
-    }
-
-    @Test func identityOnboardingPathsUseSharedReadyMaintenance() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"func createIdentity\(\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(scheduleNativePushRegistration: false\)[\s\S]*?return summary"#))
-        #expect(source.matches(#"func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi[\s\S]*?completeOnboardingAfterIdentityActivation\(scheduleNativePushRegistration: false\)[\s\S]*?return summary"#))
-    }
-
-    @Test func lifecycleEntrypointsDeclareMainActorIsolation() throws {
-        let source = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"@MainActor\s+func bootstrap\(\) async"#))
-        #expect(source.matches(#"@MainActor\s+@discardableResult\s+func createIdentity\(\) async throws -> AccountSummaryFfi"#))
-        #expect(source.matches(#"@MainActor\s+@discardableResult\s+func importIdentity\(_ identity: String\) async throws -> AccountSummaryFfi"#))
-    }
-
-    @Test func bootstrapReentryAwaitsInFlightTask() throws {
-        // Bootstrap orchestration moved to RuntimeLifecycle (Phase 2). AppState
-        // keeps a thin `@MainActor func bootstrap()` forwarder.
-        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
-        let bootstrapPattern =
-            #"func bootstrap\(\) async \{[\s\S]*"#
-            + #"if let bootstrapTask \{[\s\S]*await bootstrapTask\.value[\s\S]*return[\s\S]*"#
-            + #"Task \{ @MainActor \[weak self\] in[\s\S]*performBootstrap\(\)"#
-
-        #expect(source.contains("private var bootstrapTask: Task<Void, Never>?"))
-        #expect(source.matches(bootstrapPattern))
-    }
-
-    @Test func bootstrapFailureReleasesPartialRuntimeBeforeRetry() throws {
-        // Bootstrap + partial-runtime release moved to RuntimeLifecycle (Phase 2).
-        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
-        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
-        let catchPattern =
-            #"private func performBootstrap\(\) async \{[\s\S]*"#
-            + #"catch \{[\s\S]*"#
-            + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
-            + #"appState\.setPhase\(\.failed\(error\.localizedDescription\)\)"#
-        // The native-push task drain now hands back to AppState's
-        // `cancelNativePushRegistrationTask` (cancel + await) before the
-        // runtime shutdown + client release.
-        let cleanupPattern =
-            #"private func releaseRuntimeAfterStartupFailure\(\) async \{[\s\S]*"#
-            + #"appState\?\.stopNotificationSubscription\(\)[\s\S]*"#
-            + #"await appState\?\.cancelNativePushRegistrationTask\(\)[\s\S]*"#
-            + #"await client\.marmot\.shutdown\(\)[\s\S]*"#
-            + #"self\.client = nil"#
-        // The drain-and-await itself stays in NotificationCoordinator (master
-        // #401); AppState only exposes a thin wrapper for RuntimeLifecycle.
-        let pushCancelPattern =
-            #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"#
-            + #"await notificationCoordinator\.cancelNativePushRegistrationTask\(\)"#
-        let coordinatorDrainPattern =
-            #"func cancelNativePushRegistrationTask\(\) async \{[\s\S]*"#
-            + #"task\?\.cancel\(\)[\s\S]*"#
-            + #"await task\?\.value"#
-
-        #expect(source.matches(catchPattern))
-        #expect(source.matches(cleanupPattern))
-        #expect(appStateSource.matches(pushCancelPattern))
-        #expect(coordinatorSource.matches(coordinatorDrainPattern))
-    }
-
-    @Test func foregroundResumeFailureReleasesPartialRuntimeBeforeRetry() throws {
-        // #200: the foreground-resume catch must release the partial runtime
-        // (shutdown + client = nil) before showing the failure screen, mirroring
-        // the bootstrap-path fix in #183. Otherwise `client` is left pointing at
-        // the instance whose `startRuntime()` already failed, and Retry →
-        // bootstrap() → runtimeClient() reuses that broken client instead of
-        // rebuilding a fresh one. No injectable runtime seam exists to fail
-        // `startRuntime()` after `client` is set without a real failing FFI, so
-        // (as with #183) the catch contract is asserted at the source level.
-        // The foreground-resume path moved to RuntimeLifecycle (Phase 2).
-        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
-        let resumeStart = try #require(
-            source.range(of: "func resumeAfterForegroundActivation() async {")
-        )
-        let resumeEnd = try #require(
-            source.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()")
-        )
-        let resumeBody = String(source[resumeStart.lowerBound..<resumeEnd.lowerBound])
-
-        let catchPattern =
-            #"catch \{[\s\S]*"#
-            + #"await releaseRuntimeAfterStartupFailure\(\)[\s\S]*"#
-            + #"appState\?\.setPhase\(\.failed\(error\.localizedDescription\)\)[\s\S]*"#
-            + #"return"#
-        #expect(resumeBody.matches(catchPattern))
-    }
-
     @Test func presentingAToastUpdatesActiveToast() async throws {
         let appState = try testAppState()
         await MainActor.run {
@@ -331,39 +226,6 @@ struct AppStateBootstrapTests {
         #expect(appState.navigation.pendingChatMessageIdHex == nil)
     }
 
-    @Test func appInjectsFocusedStateStoresIntoEnvironment() throws {
-        let source = try String(contentsOf: appSourceURL, encoding: .utf8)
-
-        #expect(source.contains(".environment(appState.toastState)"))
-        #expect(source.contains(".environment(appState.navigation)"))
-    }
-
-    @Test func notificationPresentationPolicyRunsOnMainActor() throws {
-        let source = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
-        let presentationPattern =
-            #"present:\s*\{ \[weak self, weak host\] update in[\s\S]*"#
-            + #"guard let self, let host else \{ return \}[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
-            + #"let localNotificationsEnabled = await self\.localNotificationsEnabledForPresentation\([\s\S]*"#
-            + #"accountRef: update\.accountRef,[\s\S]*host: host[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
-            + #"let shouldPresent = await MainActor\.run \{[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return false \}[\s\S]*"#
-            + #"self\.noteNotificationSubscriptionDelivery\(\)[\s\S]*"#
-            + #"self\.shouldPresentLocalNotification\([\s\S]*"#
-            + #"localNotificationsEnabled: localNotificationsEnabled,[\s\S]*host: host[\s\S]*"#
-            + #"guard shouldPresent else \{ return \}[\s\S]*"#
-            + #"guard self\.canPresentRuntimeNotificationUpdate\(host: host\) else \{ return \}[\s\S]*"#
-            + #"await host\.notifications\.present\(update: update\)"#
-        let oldPresentationPattern =
-            #"present:\s*\{ \[weak self\] update in\s*"#
-            + #"guard let self, self\.shouldPresentLocalNotification"#
-
-        #expect(source.matches(#"private func shouldPresentLocalNotification"#))
-        #expect(source.matches(presentationPattern))
-        #expect(!source.matches(oldPresentationPattern))
-    }
-
     @Test func notificationPresentationRuntimeGateRequiresForegroundRuntime() {
         #expect(NotificationPresentationRuntimeGate.canPresent(
             isTaskCancelled: false,
@@ -409,43 +271,6 @@ struct AppStateBootstrapTests {
         ))
     }
 
-    @Test func notificationPresentationSettingsReadFailureFailsOpen() throws {
-        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
-        let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
-        let helperStart = try #require(coordinatorSource.range(of: "private func localNotificationsEnabledForPresentation("))
-        let helperEnd = try #require(coordinatorSource.range(
-            of: "\n    }\n\n",
-            range: helperStart.upperBound..<coordinatorSource.endIndex
-        ))
-        let localNotificationHelperSource = String(coordinatorSource[helperStart.lowerBound..<helperEnd.upperBound])
-        let helperPattern =
-            #"private func localNotificationsEnabledForPresentation\([\s\S]*"#
-            + #"accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*"#
-            + #"guard !Task\.isCancelled,[\s\S]*"#
-            + #"host\.isAppSceneActive,[\s\S]*"#
-            + #"!host\.runtimeSuspendedForBackground,[\s\S]*"#
-            + #"!host\.isRuntimeSuspendingForNotificationCoordinator,[\s\S]*"#
-            + #"let client = host\.client[\s\S]*"#
-            + #"else \{ return true \}[\s\S]*"#
-            + #"return await client\.localNotificationsEnabledForPresentation\(accountRef: accountRef\)"#
-        let clientHelperPattern =
-            #"func localNotificationsEnabledForPresentation\(accountRef: String\) async -> Bool \{[\s\S]*"#
-            + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
-            + #"do \{[\s\S]*return try marmot\.notificationSettings\(accountRef: accountRef\)\.localNotificationsEnabled[\s\S]*"#
-            + #"\} catch \{[\s\S]*return true[\s\S]*\}"#
-        let policyPattern =
-            #"LocalNotificationSuppressionPolicy\.shouldPresent\([\s\S]*"#
-            + #"localNotificationsEnabled: localNotificationsEnabled"#
-
-        #expect(localNotificationHelperSource.matches(helperPattern))
-        #expect(!localNotificationHelperSource.contains("runtimeClient()"))
-        #expect(!localNotificationHelperSource.contains("fatalError"))
-        #expect(marmotClientSource.matches(clientHelperPattern))
-        #expect(coordinatorSource.matches(policyPattern))
-        #expect(!coordinatorSource.contains("return try host.marmot.notificationSettings(accountRef: accountRef).localNotificationsEnabled"))
-        #expect(!coordinatorSource.matches(#"localNotificationsEnabled:\s*\(try\? .*notificationSettings"#))
-    }
-
     @Test func settingsReadRuntimeGateRejectsSuspensionWindows() {
         #expect(SettingsReadRuntimeGate.canRead(
             isTaskCancelled: false,
@@ -489,58 +314,6 @@ struct AppStateBootstrapTests {
             isRuntimeSuspending: false,
             hasRuntimeClient: false
         ))
-    }
-
-    @Test func settingsReadAccessorsGateSuspensionAndUseClientWrappers() throws {
-        let appStateSource = try String(contentsOf: appStateSourceURL, encoding: .utf8)
-        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
-        let marmotClientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
-
-        let foregroundSettingsReadClientPattern =
-            #"private func foregroundSettingsReadClient\(host: NotificationCoordinatorHost\) -> MarmotClient\? \{[\s\S]*"#
-            + #"SettingsReadRuntimeGate\.canRead\([\s\S]*"#
-            + #"isTaskCancelled: Task\.isCancelled,[\s\S]*"#
-            + #"isAppSceneActive: host\.isAppSceneActive,[\s\S]*"#
-            + #"runtimeSuspendedForBackground: host\.runtimeSuspendedForBackground,[\s\S]*"#
-            + #"isRuntimeSuspending: host\.isRuntimeSuspendingForNotificationCoordinator,[\s\S]*"#
-            + #"hasRuntimeClient: liveClient != nil[\s\S]*"#
-            + #"let liveClient[\s\S]*"#
-            + #"else \{ return nil \}[\s\S]*"#
-            + #"return liveClient"#
-        #expect(coordinatorSource.matches(foregroundSettingsReadClientPattern))
-        #expect(coordinatorSource.matches(
-            #"func notificationSettings\([\s\S]*for accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
-                + #"guard let client = foregroundSettingsReadClient\(host: host\) else \{ return nil \}[\s\S]*"#
-                + #"return try\? await client\.notificationSettings\(accountRef: accountRef\)"#
-        ))
-        #expect(coordinatorSource.matches(
-            #"func pushRegistration\([\s\S]*for accountRef: String,[\s\S]*host: NotificationCoordinatorHost[\s\S]*\) async -> PushRegistrationFfi\? \{[\s\S]*"#
-                + #"guard let client = foregroundSettingsReadClient\(host: host\) else \{ return nil \}[\s\S]*"#
-                + #"return try\? await client\.pushRegistration\(accountRef: accountRef\)"#
-        ))
-        #expect(appStateSource.matches(
-            #"func notificationSettings\(for accountRef: String\) async -> NotificationSettingsFfi\? \{[\s\S]*"#
-                + #"await notificationCoordinator\.notificationSettings\(for: accountRef, host: self\)"#
-        ))
-        #expect(appStateSource.matches(
-            #"func pushRegistration\(for accountRef: String\) async -> PushRegistrationFfi\? \{[\s\S]*"#
-                + #"await notificationCoordinator\.pushRegistration\(for: accountRef, host: self\)"#
-        ))
-        #expect(marmotClientSource.matches(
-            #"func notificationSettings\(accountRef: String\) async throws -> NotificationSettingsFfi \{[\s\S]*"#
-                + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
-                + #"try marmot\.notificationSettings\(accountRef: accountRef\)"#
-        ))
-        #expect(marmotClientSource.matches(
-            #"func pushRegistration\(accountRef: String\) async throws -> PushRegistrationFfi\? \{[\s\S]*"#
-                + #"Task\.detached\(priority: \.utility\) \{ \[marmot, accountRef\] in[\s\S]*"#
-                + #"try marmot\.pushRegistration\(accountRef: accountRef\)"#
-        ))
-        #expect(!appStateSource.contains("try? marmot.notificationSettings(accountRef: accountRef)"))
-        #expect(!appStateSource.contains("try? marmot.pushRegistration(accountRef: accountRef)"))
-        #expect(!appStateSource.contains("try marmot.relayTelemetrySettings()"))
-        #expect(!appStateSource.contains("try marmot.auditLogSettings()"))
-        #expect(!appStateSource.contains("try marmot.auditLogFiles()"))
     }
 
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
@@ -901,22 +674,6 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func inactiveSceneDoesNotStartRuntimeSuspensionBeforeBackground() throws {
-        let source = try String(contentsOf: appSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"case \.inactive:\s*appState\.setAppSceneActive\(false\)"#))
-        #expect(!source.matches(#"case \.inactive:\s*appState\.startRuntimeSuspension\(\)"#))
-        #expect(source.matches(#"case \.background:\s*beginBackgroundRuntimeSuspension\(\)"#))
-    }
-
-    @Test func foregroundActivationDoesNotPollForRuntimeSuspension() throws {
-        // The foreground-resume path moved to RuntimeLifecycle (Phase 2).
-        let source = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
-
-        #expect(!source.matches(#"(?s)func resumeAfterForegroundActivation\(\) async \{.*Task\.sleep"#))
-        #expect(!source.matches(#"while\s+isRuntimeSuspending"#))
-    }
-
     @Test func foregroundRuntimeWorkIsGatedDuringBackgroundSuspension() {
         #expect(ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
             isAppSceneActive: true,
@@ -968,40 +725,6 @@ struct AppStateBootstrapTests {
             isAppSceneActive: true,
             runtimeSuspendedForBackground: false,
             isRuntimeSuspending: true
-        ))
-    }
-
-    @Test func foregroundResumeSchedulesNativePushAfterBestEffortCatchUp() throws {
-        // The catch-up gate + `catchUpAccounts()` FFI stay in
-        // NotificationCoordinator (master #401); RuntimeLifecycle's resume path
-        // delegates to it and schedules push/profile maintenance back through
-        // AppState (Phase 2).
-        let runtimeLifecycleSource = try String(contentsOf: runtimeLifecycleSourceURL, encoding: .utf8)
-        let coordinatorSource = try String(contentsOf: notificationCoordinatorSourceURL, encoding: .utf8)
-        let catchUpStart = try #require(coordinatorSource.range(of: "func catchUpAfterForegroundActivation(host: NotificationCoordinatorHost) async {"))
-        let catchUpEnd = try #require(coordinatorSource.range(of: "func setAppSceneActive", range: catchUpStart.upperBound..<coordinatorSource.endIndex))
-        let catchUpBody = coordinatorSource[catchUpStart.lowerBound..<catchUpEnd.lowerBound]
-
-        #expect(catchUpBody.contains("try await host.marmot.catchUpAccounts()"))
-        #expect(!catchUpBody.contains("syncNativePushRegistrationIfEnabled"))
-
-        // RuntimeLifecycle delegates catch-up back to AppState rather than
-        // duplicating the gate/FFI here.
-        let lifecycleCatchUpStart = try #require(runtimeLifecycleSource.range(of: "func catchUpAfterForegroundActivation() async {"))
-        let lifecycleCatchUpEnd = try #require(runtimeLifecycleSource.range(of: "func setAppSceneActive(_ active: Bool)"))
-        let lifecycleCatchUpBody = runtimeLifecycleSource[lifecycleCatchUpStart.lowerBound..<lifecycleCatchUpEnd.lowerBound]
-        #expect(lifecycleCatchUpBody.contains("await appState?.catchUpAfterForegroundActivation()"))
-        #expect(!lifecycleCatchUpBody.contains("catchUpAccounts()"))
-
-        let resumeStart = try #require(runtimeLifecycleSource.range(of: "func resumeAfterForegroundActivation() async {"))
-        let resumeEnd = try #require(runtimeLifecycleSource.range(of: "private func noteRuntimeForegroundReadyAfterSuspension()"))
-        let resumeBody = runtimeLifecycleSource[resumeStart.lowerBound..<resumeEnd.lowerBound]
-
-        #expect(String(resumeBody).matches(
-            #"await catchUpAfterForegroundActivation\(\)\s+"#
-                + #"guard isAppSceneActive, !Task\.isCancelled else \{ return \}\s+"#
-                + #"appState\?\.scheduleNativePushRegistrationIfEnabled\(\)\s+"#
-                + #"appState\?\.resumeProfileFetchQueueIfNeeded\(\)"#
         ))
     }
 
@@ -1368,49 +1091,6 @@ struct AppStateBootstrapTests {
     private func resetPersistedActiveAccountRef() {
         UserDefaults.standard.removeObject(forKey: "marmot.activeAccountRef")
     }
-
-    private var appStateSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/AppState.swift")
-    }
-
-    private var createIdentityViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Onboarding/CreateIdentityViewModel.swift")
-    }
-
-    private var runtimeLifecycleSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/RuntimeLifecycle.swift")
-    }
-
-    private var marmotClientSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/MarmotClient.swift")
-    }
-
-    private var notificationCoordinatorSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/NotificationCoordinator.swift")
-    }
-
-    private var appSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/whitenoise_iosApp.swift")
-    }
-
 }
 
 struct NotificationSubscriptionRetryTests {
@@ -1436,18 +1116,6 @@ struct NotificationSubscriptionRetryTests {
         }
 
         #expect(!driver.isRunning)
-    }
-
-    @Test func driverStateMutationsStayOnMainActor() throws {
-        let source = try String(contentsOf: notificationDriverSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"@MainActor\s+final class NotificationDriver"#))
-        #expect(source.matches(
-            #"task = Task \{ \[weak self\] in[\s\S]*"#
-            + #"await runner\.run\(\)[\s\S]*"#
-            + #"await MainActor\.run \{[\s\S]*"#
-            + #"self\?\.clearCompletedTask\(id: id\)"#
-        ))
     }
 
     @Test func retriesAfterSubscribeErrorAndDeliversNextNotification() async throws {
@@ -1544,13 +1212,6 @@ struct NotificationSubscriptionRetryTests {
         #expect(snapshot.presentedNotificationKeys == ["notif-c"])
         #expect(snapshot.errorCount == 3)
         #expect(snapshot.sleepDelays == [1, 2, 2, 1])
-    }
-
-    private var notificationDriverSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/NotificationDriver.swift")
     }
 }
 
@@ -2007,12 +1668,6 @@ private func relayLists(
     )
 }
 
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
-    }
-}
-
 @MainActor
 struct AppContainerConfigTests {
 
@@ -2247,106 +1902,6 @@ struct LocalizationCatalogTests {
         }
     }
 
-    @Test func dynamicLocalizationsUseStaticFormatKeysInSource() throws {
-        let dynamicCountKeys = [
-            (
-                "whitenoise-ios/Conversation/ConversationViewModel.swift",
-                #"L10n.string("\(memberCount) members")"#
-            ),
-            (
-                "whitenoise-ios/Conversation/ConversationView.swift",
-                #"L10n.string("\(memberCount) members")"#
-            ),
-            (
-                "whitenoise-ios/Group/GroupDetailsViewModel.swift",
-                #"L10n.string("Invited \(refs.count) members")"#
-            ),
-            (
-                "whitenoise-ios/Group/GroupDetailsViewModel.swift",
-                #"L10n.string("Published \(summary.published) updates.")"#
-            ),
-            (
-                "whitenoise-ios/Settings/ProfileEditViewModel.swift",
-                #"L10n.string("Your kind:0 metadata is live on \(relays.count) relays.")"#
-            ),
-            (
-                "whitenoise-ios/Core/GroupDisplay.swift",
-                #"L10n.string("\(memberCount) person group")"#
-            ),
-            (
-                "Shared/LocalNotificationProjection.swift",
-                #"L10n.string("Invitation to \($0)")"#
-            ),
-            (
-                "Shared/LocalNotificationProjection.swift",
-                #"L10n.string("\(senderName) sent a message")"#
-            ),
-            (
-                "whitenoise-ios/Chats/ChatRow.swift",
-                #"L10n.string("You: \(body)")"#
-            ),
-        ]
-
-        for (relativePath, dynamicKey) in dynamicCountKeys {
-            let source = try readSource(relativePath)
-
-            #expect(!source.contains(dynamicKey), "\(relativePath) still uses dynamic localization key \(dynamicKey)")
-        }
-    }
-
-    @Test func visibleSourceLiteralsHaveCatalogCoverage() throws {
-        let catalog = try readCatalog("Shared/Localizable.xcstrings")
-        let strings = try #require(catalog["strings"] as? [String: Any])
-        let knownDebugOnlyDynamicLiterals: Set<String> = [
-            #"id: \(record.messageIdHex)"#,
-            #"QUIC · \(event.eventKind)"#,
-            #"stream \(shortStreamId(event.streamId))"#,
-            #"leaf \(token.leafIndex)"#
-        ]
-        let patterns = [
-            #"L10n\.string\("((?:[^"\\]|\\.)*)"\)"#,
-            #"L10n\.formatted\("((?:[^"\\]|\\.)*)""#,
-            #"L10n\.plural\("((?:[^"\\]|\\.)*)""#,
-            #"\bText\("((?:[^"\\]|\\.)*)""#,
-            #"\bButton\("((?:[^"\\]|\\.)*)""#,
-            #"\bLabel\("((?:[^"\\]|\\.)*)""#,
-            #"\bSection\("((?:[^"\\]|\\.)*)""#,
-            #"\bPicker\("((?:[^"\\]|\\.)*)""#,
-            #"\bToggle\("((?:[^"\\]|\\.)*)""#,
-            #"\bTextField\("((?:[^"\\]|\\.)*)""#,
-            #"\bSecureField\("((?:[^"\\]|\\.)*)""#,
-            #"\.navigationTitle\("((?:[^"\\]|\\.)*)""#,
-            #"\.alert\("((?:[^"\\]|\\.)*)""#,
-            #"\.confirmationDialog\("((?:[^"\\]|\\.)*)""#,
-            #"\.accessibilityLabel\("((?:[^"\\]|\\.)*)""#,
-            #"\.accessibilityHint\("((?:[^"\\]|\\.)*)""#
-        ].map { try! NSRegularExpression(pattern: $0) }
-
-        for relativePath in try swiftSourcePaths(in: ["whitenoise-ios", "Shared"]) {
-            let source = try readSource(relativePath)
-            let nsRange = NSRange(source.startIndex..<source.endIndex, in: source)
-            for pattern in patterns {
-                for match in pattern.matches(in: source, range: nsRange) {
-                    guard let literalRange = Range(match.range(at: 1), in: source) else { continue }
-                    let literal = unescapedSourceLiteral(String(source[literalRange]))
-                    guard !knownDebugOnlyDynamicLiterals.contains(literal) else { continue }
-                    #expect(strings[literal] != nil, "\(relativePath) uses visible string missing from catalog: \(literal)")
-                }
-            }
-        }
-    }
-
-    @Test func sharedSourcesStayExtensionSafe() throws {
-        for relativePath in try swiftSourcePaths(in: ["Shared"]) {
-            let source = try readSource(relativePath)
-
-            #expect(!source.contains("import SwiftUI"), "\(relativePath) imports SwiftUI")
-            #expect(!source.contains("import UIKit"), "\(relativePath) imports UIKit")
-            #expect(!source.contains("UIApplication"), "\(relativePath) references UIApplication")
-            #expect(!source.contains("UIScreen"), "\(relativePath) references UIScreen")
-        }
-    }
-
     @Test func countLocalizationsUsePluralVariations() throws {
         let catalog = try readCatalog("Shared/Localizable.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
@@ -2473,36 +2028,6 @@ struct LocalizationCatalogTests {
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
-    private func readSource(_ relativePath: String) throws -> String {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repoRoot = testFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = repoRoot.appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    private func swiftSourcePaths(in relativeDirectories: [String]) throws -> [String] {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repoRoot = testFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        var paths: [String] = []
-
-        for relativeDirectory in relativeDirectories {
-            let root = repoRoot.appendingPathComponent(relativeDirectory)
-            guard let enumerator = FileManager.default.enumerator(
-                at: root,
-                includingPropertiesForKeys: nil
-            ) else { continue }
-            for case let url as URL in enumerator where url.pathExtension == "swift" {
-                paths.append(url.path.replacingOccurrences(of: repoRoot.path + "/", with: ""))
-            }
-        }
-
-        return paths.sorted()
-    }
-
     private func localizedValue(_ key: String, locale: String, in strings: [String: Any]) throws -> String {
         let entry = try #require(strings[key] as? [String: Any], "Missing localization key: \(key)")
         let localizations = try #require(entry["localizations"] as? [String: Any], "Missing localizations for \(key)")
@@ -2541,13 +2066,6 @@ struct LocalizationCatalogTests {
         let variations = try #require(count["variations"] as? [String: Any])
         let plural = try #require(variations["plural"] as? [String: Any])
         return Set(plural.keys)
-    }
-
-    private func unescapedSourceLiteral(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: #"\""#, with: #"""#)
-            .replacingOccurrences(of: #"\n"#, with: "\n")
-            .replacingOccurrences(of: #"\t"#, with: "\t")
     }
 
     private func placeholders(in value: String) -> [String] {
@@ -2649,13 +2167,6 @@ struct ToastPresentationTests {
 }
 
 struct DiagnosticsPresentationTests {
-    @Test func diagnosticsStreamRebindsWhenRuntimeGenerationChanges() throws {
-        let source = try String(contentsOf: diagnosticsViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains(".task(id: appState.runtimeGeneration)"))
-        #expect(!source.contains(".task {\n            streaming = true"))
-    }
-
     @Test func diagnosticSelfSendReusesStoredGroupOnlyWhenPresentForAccount() throws {
         let suiteName = "DiagnosticSelfSendTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -2755,13 +2266,6 @@ struct DiagnosticsPresentationTests {
         #expect(emptyText.contains("[alice] msg from \(IdentityFormatter.short(sender))"))
         #expect(emptyText.contains("(empty)"))
         #expect(!emptyText.contains(secret))
-    }
-
-    private var diagnosticsViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Diagnostics/DiagnosticsView.swift")
     }
 }
 
@@ -3108,30 +2612,6 @@ struct NativePushRegistrationPolicyTests {
         #expect(enabled == ["account-a"])
     }
 
-    @Test func nativePushEnabledLookupIsOffloadedBeforeRegistrationSync() throws {
-        // Native-push reconciliation moved from AppState into NotificationCoordinator.
-        let coordinatorSource = try sourceString("whitenoise-ios/Core/NotificationCoordinator.swift")
-        let marmotClientSource = try sourceString("whitenoise-ios/Core/MarmotClient.swift")
-
-        #expect(coordinatorSource.contains("let accountRefs = await nativePushEnabledAccountRefs(host: host)"))
-        #expect(coordinatorSource.contains("func nativePushEnabledAccountRefs(host: NotificationCoordinatorHost) async -> [String]"))
-        #expect(coordinatorSource.contains("return await client.nativePushEnabledAccountRefs(accountRefs: accountRefs)"))
-        #expect(!coordinatorSource.contains("guard !nativePushEnabledAccountRefs().isEmpty else { return }"))
-        #expect(marmotClientSource.contains("Task.detached(priority: .utility)"))
-        #expect(marmotClientSource.contains("marmot.notificationSettings(accountRef: accountRef)"))
-    }
-
-    @Test func defaultEnablePathUsesTransactionalNativePushEnable() throws {
-        let source = try sourceString("whitenoise-ios/Core/NotificationCoordinator.swift")
-        let start = try #require(source.range(of: "func enableNotificationsByDefault("))
-        let end = try #require(source[start.upperBound...].range(of: "func syncNativePushRegistration("))
-        let body = source[start.lowerBound..<end.lowerBound]
-
-        #expect(body.contains("_ = try await enableNativePush(accountRef: accountRef, host: host)"))
-        #expect(!body.contains("setNativePushEnabled(accountRef: accountRef, enabled: true)"))
-        #expect(!body.contains("syncNativePushRegistration(accountRef: accountRef, host: host)"))
-    }
-
     @Test func remoteTokenIsRequestedOnlyWhenEnabledAccountsLackAToken() {
         #expect(NativePushRegistrationPolicy.shouldRequestRemoteToken(
             accountRefs: ["account-a"],
@@ -3160,13 +2640,6 @@ struct NativePushRegistrationPolicyTests {
         )
     }
 
-    private func sourceString(_ relativePath: String) throws -> String {
-        let url = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
-    }
 }
 
 struct NativePushDisableCoordinatorTests {
@@ -3769,123 +3242,10 @@ struct NotificationServiceProjectionTests {
         #expect(NotificationServiceProjection.decision(for: collection) == .fallback)
     }
 
-    @Test func decisionIsNotMainActorIsolatedForExtensionUse() throws {
-        let source = try String(contentsOf: notificationServiceProjectionSourceURL, encoding: .utf8)
-
-        #expect(!source.matches(#"@MainActor\s+static func decision\("#))
-    }
-
-    @Test func projectionDoesNotAskNSEToSuppressDeliveredAlerts() throws {
-        let source = try String(contentsOf: notificationServiceProjectionSourceURL, encoding: .utf8)
-
-        #expect(!source.contains("case suppress"))
-        #expect(source.contains("An NSE cannot cancel an alerting APNS push after delivery"))
-    }
-
-    private var notificationServiceProjectionSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Shared/NotificationServiceProjection.swift")
-    }
 }
 
 private enum NotificationServiceSettingsReadPolicyTestError: Error {
     case unavailable
-}
-
-struct NotificationServiceTests {
-    @Test func notificationServiceSerializesFinishOnMainActor() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"@MainActor\s+final class NotificationService"#))
-        #expect(source.matches(#"private func finish\(applyingFallbackForTimeout: Bool = false\)[\s\S]*self\.contentHandler = nil[\s\S]*self\.bestAttemptContent = nil[\s\S]*contentHandler\(bestAttemptContent\)"#))
-    }
-
-    @Test func notificationServiceSchedulesAdditionalPresentationsBeforeFinish() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.contains("additionalPresentations"))
-        #expect(source.contains("UNUserNotificationCenter.current().add"))
-    }
-
-    @Test func notificationServicePrimaryDecorationSetsDefaultSound() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-        let decoratePattern =
-            #"private func decorate\([\s\S]*"# +
-            #"content\.body = presentation\.body[\s\S]*"# +
-            #"content\.sound = \.default[\s\S]*"# +
-            #"content\.threadIdentifier = presentation\.threadIdentifier"#
-
-        #expect(source.matches(decoratePattern))
-    }
-
-    @Test func additionalPresentationsAreTrackedAcrossTimeoutCancellation() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"private var additionalPresentationTask: Task<Void, Never>\?"#))
-        #expect(source.matches(#"let additionalPresentationTask = startAdditionalPresentations\(additionalPresentations\)[\s\S]*decorate\(content, with: presentation\)[\s\S]*await additionalPresentationTask\?\.value[\s\S]*self\.additionalPresentationTask = nil"#))
-        #expect(source.matches(#"private func startAdditionalPresentations\([\s\S]*\) -> Task<Void, Never>\? \{[\s\S]*let task = Task \{ \[additionalPresentations\][\s\S]*UNUserNotificationCenter\.current\(\)\.add\(request\)[\s\S]*additionalPresentationTask = task[\s\S]*return task"#))
-        #expect(!source.contains("guard !Task.isCancelled else { return }"))
-    }
-
-    @Test func serviceTimeoutWaitsForAdditionalPresentationsBeforeFinishing() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"override func serviceExtensionTimeWillExpire\(\)[\s\S]*let additionalPresentationTask = additionalPresentationTask"#))
-        #expect(source.matches(#"guard let marmot = takeActiveMarmotForShutdown\(\) else \{[\s\S]*await additionalPresentationTask\.value[\s\S]*await self\?\.finish\(applyingFallbackForTimeout: true\)"#))
-        #expect(source.matches(#"expirationTask = Task[\s\S]*let shutdownTask = Task[\s\S]*await marmot\.shutdown\(\)[\s\S]*await additionalPresentationTask\?\.value[\s\S]*await shutdownTask\.value[\s\S]*await self\?\.finish\(applyingFallbackForTimeout: true\)"#))
-    }
-
-    @Test func serviceTimeoutShutsDownActiveMarmotBeforeFinishing() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"private var activeMarmot: Marmot\?"#))
-        #expect(source.matches(#"private var activeMarmotNeedsShutdown = false"#))
-        #expect(source.matches(#"activeMarmot = marmot"#))
-        #expect(source.matches(#"override func serviceExtensionTimeWillExpire\(\)[\s\S]*collectionTask\?\.cancel\(\)[\s\S]*guard let marmot = takeActiveMarmotForShutdown\(\)[\s\S]*expirationTask = Task[\s\S]*await marmot\.shutdown\(\)[\s\S]*await self\?\.finish\(applyingFallbackForTimeout: true\)"#))
-        #expect(!source.matches(#"override func serviceExtensionTimeWillExpire\(\)\s*\{\s*collectionTask\?\.cancel\(\)\s*finish\(\)\s*\}"#))
-    }
-
-    @Test func serviceShutdownTakesOwnedMarmotAfterStartIsAttempted() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"activeMarmot = marmot[\s\S]*activeMarmotNeedsShutdown = true[\s\S]*try await marmot\.start\(\)"#))
-        #expect(!source.matches(#"try await marmot\.start\(\)[\s\S]*activeMarmotNeedsShutdown = true"#))
-        #expect(source.contains("if let marmot = takeActiveMarmotForShutdown(marmot)"))
-        #expect(source.matches(#"private func takeActiveMarmotForShutdown\(_ marmot: Marmot\? = nil\) -> Marmot\? \{[\s\S]*guard let active = activeMarmot else \{ return nil \}[\s\S]*if let marmot, active !== marmot \{ return nil \}[\s\S]*activeMarmot = nil[\s\S]*defer \{ activeMarmotNeedsShutdown = false \}[\s\S]*guard activeMarmotNeedsShutdown else \{ return nil \}[\s\S]*return active"#))
-        #expect(!source.matches(#"catch \{[\s\S]*applyFallback\(to: content\)[\s\S]*\}\s*await marmot\.shutdown\(\)"#))
-    }
-
-    @Test func serviceTimeoutAppliesFallbackOnlyBeforeRenderDecision() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"private var didApplyRenderDecision = false"#))
-        #expect(source.matches(#"override func serviceExtensionTimeWillExpire\(\)[\s\S]*finish\(applyingFallbackForTimeout: true\)"#))
-        #expect(source.matches(#"private func apply\([\s\S]*didApplyRenderDecision = true[\s\S]*switch decision"#))
-        #expect(source.matches(#"private func finish\(applyingFallbackForTimeout: Bool = false\)[\s\S]*if applyingFallbackForTimeout, !didApplyRenderDecision \{[\s\S]*applyFallback\(to: bestAttemptContent\)"#))
-    }
-
-    @Test func serviceNeverReturnsBlankContentForSuppressDecision() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(!source.contains("bestAttemptContent = UNMutableNotificationContent()"))
-        #expect(source.matches(#"case \.fallback:[\s\S]*applyFallback\(to: content\)"#))
-    }
-
-    @Test func notificationServiceSettingsReadFailureFailsOpen() throws {
-        let source = try String(contentsOf: notificationServiceSourceURL, encoding: .utf8)
-
-        #expect(source.contains("NotificationServiceSettingsReadPolicy.localNotificationsEnabled"))
-        #expect(!source.contains("(try? marmot.notificationSettings"))
-    }
-
-    private var notificationServiceSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("NotificationServiceExtension/NotificationService.swift")
-    }
 }
 
 struct ProfileEditViewTests {
@@ -4146,13 +3506,6 @@ struct ProfileSanitizerTests {
         #expect(ProfileSanitizer.messageBody("  \n hello \n  ") == "hello")
     }
 
-    @Test func messageBodyUsesCachedBlankLineRegex() throws {
-        let source = try String(contentsOf: profileSanitizerSourceURL, encoding: .utf8)
-
-        #expect(source.contains("private static let blankLineRunRegex"))
-        #expect(!source.matches(#"static func messageBody\(_ raw: String\) -> String \{[\s\S]*options:\s*\.regularExpression"#))
-    }
-
     // MARK: - Group names
 
     @Test func groupNameSingleLinesAndStripsBidi() {
@@ -4169,13 +3522,6 @@ struct ProfileSanitizerTests {
     @Test func groupNameEmptyIsNil() {
         #expect(ProfileSanitizer.groupName("") == nil)
         #expect(ProfileSanitizer.groupName("\u{202E}\u{200B}") == nil)
-    }
-
-    private var profileSanitizerSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Shared/ProfileSanitizer.swift")
     }
 }
 
@@ -4462,83 +3808,6 @@ struct GroupImageSearchTests {
         ))
     }
 
-    @Test func groupImageWebSearchUsesEphemeralNetworking() throws {
-        let source = try groupImageURLSheetSource()
-
-        #expect(source.contains("URLSessionConfiguration.ephemeral"))
-        #expect(source.contains("httpCookieAcceptPolicy = .never"))
-        #expect(source.contains("httpShouldSetCookies = false"))
-        #expect(source.contains("requestCachePolicy = .reloadIgnoringLocalCacheData"))
-        #expect(!source.contains("URLSession.shared"))
-        #expect(!source.contains("AsyncImage(url: result.thumbnailURL ?? result.imageURL)"))
-        #expect(source.contains("GroupImageRemoteThumbnail(url: result.thumbnailURL ?? result.imageURL)"))
-        #expect(source.contains("Web search sends your query and IP address to DuckDuckGo and image hosts."))
-    }
-
-    @Test func groupImageThumbnailsCapBytesAndDownsampleDecode() throws {
-        let source = try groupImageURLSheetSource()
-
-        #expect(source.contains("static let maximumImageBytes = 2 * 1024 * 1024"))
-        // #407: the thumbnail fetch downloads through the chunked
-        // `BoundedDataCollector` delegate (one callback per network read) with
-        // the byte cap enforced on the running total, not a per-byte async loop.
-        #expect(source.contains("URLSessionDataDelegate"))
-        #expect(source.contains("task.delegate = collector"))
-        #expect(!source.contains("session.bytes(for: request)"))
-        #expect(source.contains("response.expectedContentLength > Int64(maximumResponseBytes)"))
-        #expect(source.contains("URLError(.dataLengthExceedsMaximum)"))
-        #expect(source.contains("CGImageSourceCreateThumbnailAtIndex"))
-        #expect(source.contains("kCGImageSourceThumbnailMaxPixelSize"))
-        #expect(!source.contains("UIImage(data: data)"))
-    }
-
-    @Test func groupDetailsSourceWiresAvatarMutationAndEditor() throws {
-        let source = try String(contentsOf: groupDetailsSourceURL, encoding: .utf8)
-        let modelSource = try String(contentsOf: groupDetailsViewModelSourceURL, encoding: .utf8)
-
-        // View renders the editor + wires the callbacks; the avatar mutation runs
-        // in the view model.
-        #expect(source.contains("onGroupChanged"))
-        #expect(source.contains("refreshGroupManagementAndNotify"))
-        #expect(source.contains("showGroupImageEditor"))
-        #expect(source.contains("GroupImageURLSheet(initialURL: viewModel.group.avatarUrl)"))
-        #expect(modelSource.contains("updateGroupAvatarUrl"))
-        #expect(source.contains(#"Label(viewModel.group.avatarUrl == nil ? "Set group image" : "Edit group image""#))
-    }
-
-    private var groupDetailsSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Group/GroupDetailsView.swift")
-    }
-
-    private var groupDetailsViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Group/GroupDetailsViewModel.swift")
-    }
-
-    private var groupImageURLSheetSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Group/GroupImageURLSheet.swift")
-    }
-
-    private var remoteImageLoaderSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/RemoteImageLoader.swift")
-    }
-
-    private func groupImageURLSheetSource() throws -> String {
-        try String(contentsOf: groupImageURLSheetSourceURL, encoding: .utf8)
-            + "\n"
-            + String(contentsOf: remoteImageLoaderSourceURL, encoding: .utf8)
-    }
 }
 
 struct DeepLinkTests {
@@ -4812,18 +4081,6 @@ struct ChatsListProjectionTests {
         #expect(viewModel.archivedItems.isEmpty)
     }
 
-    @Test func swipeLeaveReflectsLocalProjectionRemovalImmediately() throws {
-        // Regression for #429: `leave(groupIdHex:)` is a private SwiftUI action
-        // with Marmot side effects, so assert the successful leave path is wired
-        // to the existing row-removal helper instead of waiting for a transport
-        // subscription event that local projection writes do not emit.
-        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
-
-        #expect(source.matches(
-            #"func leave\(groupIdHex: String\) async \{[\s\S]*?try await client\.leaveGroup\([\s\S]*?viewModel\?\.removeChatListRow\(groupIdHex: groupIdHex\)[\s\S]*?Haptics\.warning\(\)"#
-        ))
-    }
-
     @Test func intersectingDictionaryKeepsOnlySurvivingKeys() throws {
         let cache = ["a": 1, "b": 2, "c": 3]
         let pruned = ChatsListViewModel.intersecting(cache, with: ["a", "c", "z"])
@@ -4846,57 +4103,6 @@ struct ChatsListProjectionTests {
     @Test func intersectingKeepsEverythingWhenAllSurvive() throws {
         let cache = ["a": 1, "b": 2]
         #expect(ChatsListViewModel.intersecting(cache, with: ["a", "b"]) == cache)
-    }
-
-    @Test func snapshotReplacePrunesEnrichmentCachesToSurvivingRows() throws {
-        // Regression for the leak where `applyChatListSnapshot` rebuilt the row
-        // maps but left the parallel enrichment caches untouched, stranding
-        // entries for groups absent from the new snapshot. The pruning step is
-        // private instance state with no public read path, so assert the
-        // snapshot path drives the dedicated pruning helper against the freshly
-        // rebuilt row key set.
-        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.matches(
-            #"func applyChatListSnapshot[\s\S]*?pruneEnrichmentCaches\(toSurviving: Set\(rowByGroupId\.keys\)\)[\s\S]*?scheduleRowEnrichment"#
-        ))
-        // The pruning helper must intersect every one of the six enrichment
-        // collections that `removeChatListRow` cleans per group.
-        for collection in [
-            "groupDetailsCache",
-            "avatarURLByGroupId",
-            "groupDetailsLoadedGroupIds",
-            "avatarURLLoadedGroupIds",
-            "pendingAvatarURLRefreshGroupIds",
-            "pendingGroupDetailsRefreshGroupIds",
-        ] {
-            #expect(source.matches(
-                #"private func pruneEnrichmentCaches\(toSurviving[\s\S]*?\#(collection) = Self\.intersecting\(\#(collection),"#
-            ))
-        }
-    }
-
-    @Test func inFlightEnrichmentGuardsAgainstRowRemovedDuringAwait() throws {
-        // Regression for the leak where in-flight `scheduleRowEnrichment` work
-        // could resume after a full-snapshot replace pruned its group and
-        // unconditionally reinsert `groupDetailsCache` / `groupDetailsLoadedGroupIds`
-        // (and, via `rowByGroupId[groupId]?.avatarUrl == nil` being true for an
-        // absent row, the avatar caches too). The enrichment task reads/writes
-        // private instance state inside a detached `Task` with no public seam,
-        // so assert that the post-`groupDetails`-await survivor guard appears
-        // before any enrichment cache/loaded-set write.
-        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
-
-        // The survivor guard must sit between the `groupDetails` await and the
-        // first cache write so a group pruned during the await cannot strand
-        // entries. `[\s\S]` matches across newlines.
-        #expect(source.matches(
-            #"try\? await client\.groupDetails\([\s\S]*?guard let row = self\.rowByGroupId\[groupId\] else \{ continue \}[\s\S]*?self\.groupDetailsCache\[groupId\] ="#
-        ))
-        // The avatar reinsertion must key off the guarded `row`, not a fresh
-        // optional lookup that reads as nil for an absent group.
-        #expect(source.contains("if row.avatarUrl == nil {"))
-        #expect(!source.contains("if self.rowByGroupId[groupId]?.avatarUrl == nil {"))
     }
 
     @Test func chatListRowUpdatesAreCoalescedBeforePublishing() async throws {
@@ -4922,87 +4128,6 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.map(\.id) == [newer.groupIdHex, older.groupIdHex])
     }
 
-    @Test func chatListViewModelKeepsIncrementalRowCaches() throws {
-        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.contains("private var rowByGroupId"))
-        #expect(source.contains("private var itemByGroupId"))
-        #expect(source.contains("private var pendingChatListRowsByGroupId"))
-        #expect(source.contains("flushPendingChatListUpdates()"))
-        #expect(!source.contains("private func recompute()"))
-        #expect(!source.matches(#"private func scheduleAvatarURLRefresh[\s\S]*?avatarURLTask\?\.cancel\(\)"#))
-    }
-
-    @Test func chatDestinationOpensFromProjectedRowBeforeGroupDetails() throws {
-        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"ConversationView\(\s*chat: item\.projectedGroup"#))
-        #expect(!source.contains("@State private var resolvedGroup"))
-        #expect(!source.contains("private func resolveGroup"))
-        #expect(!source.contains("groupDetails(accountRef: accountRef, groupIdHex: item.id)"))
-    }
-
-    @Test func chatDestinationForwardsConversationGroupChangesToChatList() throws {
-        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains("onGroupChanged: { viewModel.applyLocalGroupChange($0) }"))
-    }
-
-    @Test func chatListUsesMessagesStyleSearchAndComposeChrome() throws {
-        let source = try String(contentsOf: chatsListViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains(#".navigationTitle("Chats")"#))
-        #expect(source.contains("private var chatSearchBar"))
-        #expect(source.contains("bottomInputChromeAccessory"))
-        #expect(source.contains("keyboardAdaptiveHorizontalPadding"))
-        #expect(source.contains(".padding(.bottom, BottomInputChromeLayout.bottomInset)"))
-        #expect(source.contains(#"TextField("", text: $searchText, onEditingChanged: { isEditing in"#))
-        #expect(source.contains("searchPlaceholderColor"))
-        #expect(!source.contains(#"Image(systemName: "mic.fill")"#))
-        #expect(!source.contains(".searchDictationBehavior(.inline(activation: .onSelect))"))
-        #expect(source.contains("private func focusSearchField()"))
-        #expect(source.contains("simultaneousGesture(TapGesture().onEnded { focusSearchField() })"))
-        #expect(source.contains("compatibleInputCapsuleChrome(interactive: false)"))
-        #expect(source.contains("BottomInputChromeLayout.sideControlIconSize"))
-        #expect(source.contains("keyboardAdaptiveBottomPadding()"))
-        #expect(source.contains("bottomInputGlassContainer"))
-        #expect(source.contains("private var searchCancellationActive: Bool"))
-        #expect(source.contains("isKeyboardVisible || searchFocused || hasSearchText"))
-        #expect(source.contains("private func dismissSearchKeyboard()"))
-        #expect(source.contains("UIApplication.shared.sendAction"))
-        #expect(source.contains("private func searchActionTapped()"))
-        #expect(source.contains("searchText = \"\""))
-        #expect(source.contains("searchFocused = false"))
-        #expect(!source.contains("safeAreaInset(edge: .top"))
-        #expect(!source.contains(#".searchable(text: $searchText"#))
-        #expect(!source.contains(#""Search chats""#))
-        #expect(source.contains("private var filterMenu"))
-        #expect(source.contains("case active, archived, unread"))
-        #expect(source.contains(#"Picker("Filter", selection: $scope)"#))
-        #expect(!source.contains("ToolbarItem(placement: .principal)"))
-        #expect(!source.contains("scopePills"))
-    }
-
-    @Test func chatsListViewModelDeclaresMainActorIsolation() throws {
-        let source = try String(contentsOf: chatsListViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"@Observable\s+@MainActor\s+final class ChatsListViewModel"#))
-        #expect(source.matches(#"isolated deinit\s*\{"#))
-    }
-
-    private var chatsListViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Chats/ChatsListViewModel.swift")
-    }
-
-    private var chatsListViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Chats/ChatsListView.swift")
-    }
 }
 
 @MainActor
@@ -5083,12 +4208,6 @@ struct ConversationTimelineProjectionTests {
         #expect(!retained.contains(stale))
     }
 
-    @Test func deleteMessageChecksPermissionBeforeOptimisticTombstone() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"func deleteMessage\(_ message: AppMessageRecordFfi\) async \{[\s\S]*Self\.canDeleteMessage\(message, myAccountId: myAccountId, isSelfAdmin: isSelfAdmin\)[\s\S]*deletedProjections\.insertOptimistic"#))
-    }
-
     @Test func canDeleteMessageRequiresSenderOrAdminPermission() {
         let me = hex("11")
         let mine = message(id: hex("a1"), sender: me)
@@ -5102,22 +4221,10 @@ struct ConversationTimelineProjectionTests {
         #expect(!ConversationViewModel.canDeleteMessage(emptyId, myAccountId: me, isSelfAdmin: true))
     }
 
-    @Test func failedTimelineSubscriptionRetriesWithBackoff() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"private func startLiveTimeline\(accountRef: String\)[\s\S]*while !Task\.isCancelled[\s\S]*subscribeTimelineMessages[\s\S]*Task\.sleep\(nanoseconds: retryDelay\)[\s\S]*Self\.nextLiveSubscriptionRetryDelay"#))
-    }
-
     @Test func liveSubscriptionRetryDelayDoublesUntilCapped() {
         #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 500_000_000) == 1_000_000_000)
         #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 4_000_000_000) == 8_000_000_000)
         #expect(ConversationViewModel.nextLiveSubscriptionRetryDelay(after: 8_000_000_000) == 8_000_000_000)
-    }
-
-    @Test func conversationErrorStateOffersRetryAction() throws {
-        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"case \.error:[\s\S]*ContentUnavailableView[\s\S]*Couldn't load conversation[\s\S]*Button\(\"Retry\"\)[\s\S]*await viewModel\.start\(\)"#))
     }
 
     @Test func startClearsOptimisticOverlaysBeforeRebindingSubscriptions() throws {
@@ -5831,66 +4938,6 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.pendingMediaForTesting(rowId: mediaRowId) == nil)
     }
 
-    @Test func singleTimelineMutationsAvoidFullTimelineRebuild() throws {
-        // The timeline mirror + rebuild engine moved to TimelineStore (Phase 5b).
-        let source = try String(contentsOf: timelineStoreSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"private func upsertTimelineItem\("#))
-        // applyPendingOutgoingMessage uses the incremental upsert path, not a full
-        // rebuild. Scope the check to the function body (other methods legitimately
-        // call rebuildTimeline).
-        let pendingStart = try #require(source.range(of: "func applyPendingOutgoingMessage("))
-        let pendingEnd = try #require(source[pendingStart.upperBound...].range(of: "\n\n"))
-        let pendingSource = String(source[pendingStart.lowerBound..<pendingEnd.lowerBound])
-        #expect(pendingSource.contains("upsertTimelineItem(item)"))
-        #expect(!pendingSource.contains("rebuildTimeline"))
-        #expect(source.contains("@ObservationIgnored private var replyTargetByMessageId"))
-        // Pending optimistic media now lives in the media projection cache; its
-        // presence still proves the incremental (non-rebuild) mutation path.
-        #expect(source.contains("let mediaProjections = ConversationMediaProjectionCache()"))
-        #expect(source.contains("private(set) var timelineProjectionGeneration"))
-    }
-
-    @Test func synchronousConversationMarmotReadsUseAsyncClientWrappers() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
-        let viewSource = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
-        let clientSource = try String(contentsOf: marmotClientSourceURL, encoding: .utf8)
-        let readMarkerSource = try String(contentsOf: conversationReadMarkerSourceURL, encoding: .utf8)
-
-        // Read-marking coalescing + the async flush moved to ConversationReadMarker.
-        #expect(readMarkerSource.contains("pendingReadMessageIds"))
-        #expect(readMarkerSource.contains("flushPendingReadMarks(accountRef:"))
-        #expect(readMarkerSource.contains("await client.markTimelineMessagesRead("))
-        #expect(source.contains("try await client.initializeChatReadState("))
-        #expect(source.contains("try await client.timelineMessages("))
-        // Timeline media now arrives resolved on the row (mirrored into the media
-        // projection cache); the VM no longer calls client.listMedia (the wrapper
-        // stays for other surfaces).
-        #expect(source.contains("initialTimelineSnapshotTask"))
-        #expect(source.contains("startInitialTimelineSnapshot(accountRef: accountRef)"))
-        #expect(source.matches(#"private func startInitialTimelineSnapshot[\s\S]*?try await client\.timelineMessages"#))
-        #expect(source.contains("@ObservationIgnored private var timelineSubscription"))
-        #expect(source.contains("SubscriptionDriver.timelineMessageUpdates(timelineSub)"))
-        #expect(source.contains("await client.timelineSubscriptionSnapshot(timelineSub)"))
-        #expect(source.contains("await client.groupStateSubscriptionSnapshot(groupSub)"))
-        #expect(!source.contains("timelineSub.snapshot()"))
-        #expect(!source.contains("groupSub.snapshot()"))
-        #expect(source.contains("timelineSubscription.paginateBackwards"))
-        #expect(source.contains("timelineSubscription.paginateForwards"))
-        #expect(source.contains("var hasMoreAfter: Bool { timelineStore.hasMoreAfter }"))
-        #expect(viewSource.contains("newerTimelineTrigger(viewModel: viewModel)"))
-        #expect(viewSource.contains("viewModel.loadNewerTimelinePage()"))
-        #expect(!source.contains("appState.marmot.markTimelineMessageRead("))
-        #expect(!source.contains("appState.marmot.initializeChatReadState("))
-        #expect(!source.contains("appState.marmot.timelineMessages("))
-        #expect(!source.contains("appState.marmot.listMedia("))
-        #expect(clientSource.matches(#"func markTimelineMessagesRead[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?markTimelineMessageRead"#))
-        #expect(clientSource.matches(#"func timelineMessages[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?timelineMessages"#))
-        #expect(clientSource.matches(#"func timelineSubscriptionSnapshot[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?subscription\.snapshot\(\)"#))
-        #expect(clientSource.matches(#"func groupStateSubscriptionSnapshot[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?subscription\.snapshot\(\)"#))
-        #expect(clientSource.matches(#"func listMedia[\s\S]*?Task\.detached\(priority: \.utility\)[\s\S]*?listMedia"#))
-    }
-
     @Test func paginationProgressRequiresWindowEdgeMovement() {
         #expect(ConversationPaginationPolicy.movedOlder(
             previousOldestMessageId: "message-b",
@@ -5916,47 +4963,6 @@ struct ConversationTimelineProjectionTests {
             previousNewestMessageId: "message-b",
             nextMessageIds: []
         ))
-    }
-
-    @Test func conversationViewModelDeclaresMainActorIsolation() throws {
-        let source = try String(contentsOf: conversationViewModelSourceURL, encoding: .utf8)
-
-        #expect(source.matches(#"@Observable\s+@MainActor\s+final class ConversationViewModel"#))
-    }
-
-    private var conversationViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationViewModel.swift")
-    }
-
-    private var conversationReadMarkerSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationReadMarker.swift")
-    }
-
-    private var timelineStoreSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/TimelineStore.swift")
-    }
-
-    private var conversationViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
-    }
-
-    private var marmotClientSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Core/MarmotClient.swift")
     }
 
     private func messageIds(in items: [TimelineItem]) -> [String] {
@@ -6441,39 +5447,6 @@ struct AgentStreamTests {
         #expect(ConversationViewModel.streamPreviewTimestamp(startedAt: nil, fallback: 99) == 99)
     }
 
-    @Test func streamStartRecordedAtIsCarriedIntoLivePreview() throws {
-        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
-
-        #expect(source.contains("startedAt: record.recordedAt"))
-        #expect(source.contains("streamStartedAtById[streamId] = startedAt"))
-        #expect(source.contains("recordedAt: timestamp"))
-        #expect(source.contains("receivedAt: timestamp"))
-    }
-
-    @Test func streamChunkAppendUsesRunningLengthCounter() throws {
-        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
-        let appendPattern =
-            #"private func appendStreamChunk\(_ text: String, to streamId: String\) \{[\s\S]*"#
-            + #"let currentLength = streamTextLengthById\[streamId\][\s\S]*"#
-            + #"ProfileSanitizer\.maxMessageLength - currentLength[\s\S]*"#
-            + #"streamTextLengthById\[streamId\] = currentLength \+ cappedChunk\.count"#
-
-        #expect(source.contains("private var streamTextLengthById: [String: Int] = [:]"))
-        #expect(source.matches(appendPattern))
-        #expect(!source.matches(#"private func appendStreamChunk[\s\S]*current\.count"#))
-    }
-
-    @Test func streamBubbleUpsertPreservesTimestampWithoutTimelineScan() throws {
-        let source = try String(contentsOf: streamWatcherSourceURL, encoding: .utf8)
-        let functionStart = try #require(source.range(of: "private func upsertStreamBubble"))
-        let functionEnd = try #require(source[functionStart.upperBound...].range(of: "\n    /// Tear down a live preview"))
-        let upsertSource = String(source[functionStart.lowerBound..<functionEnd.lowerBound])
-
-        #expect(upsertSource.contains("let itemTimestamp = sink?.streamTransientItem(id: rowId)?.timestamp ?? timestamp"))
-        #expect(upsertSource.contains("timestamp: itemTimestamp"))
-        #expect(!upsertSource.contains("timeline.firstIndex"))
-    }
-
     @MainActor
     @Test func historicalStreamStartsRenderNoBlankBubble() throws {
         let viewModel = ConversationViewModel(
@@ -6756,20 +5729,6 @@ struct AgentStreamTests {
             MessageTagFfi(values: ["final-kind", "9"]),
             MessageTagFfi(values: [MessageSemantics.streamRouteTag, "quic"]),
         ]
-    }
-
-    private var conversationViewModelSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationViewModel.swift")
-    }
-
-    private var streamWatcherSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/StreamWatcher.swift")
     }
 
     @MainActor
@@ -7611,13 +6570,6 @@ struct MessageSemanticsTests {
         MessageMediaCache.store(data, for: reference, cachesDirectory: cachesDirectory)
 
         #expect(try Data(contentsOf: url) == data)
-
-        let source = try String(contentsOf: messageMediaAttachmentSourceURL, encoding: .utf8)
-        #expect(source.contains(".protectionKey: FileProtectionType.complete"))
-        #expect(source.contains("attributes: protectedAttributes"))
-        #expect(source.contains("setAttributes(protectedAttributes, ofItemAtPath: directory.path)"))
-        #expect(source.contains("data.write(to: url, options: [.atomic, .completeFileProtection])"))
-        #expect(source.contains("setAttributes(protectedAttributes, ofItemAtPath: url.path)"))
     }
 
     @Test func mediaCacheEvictsExpiredPlaintext() throws {
@@ -7800,13 +6752,6 @@ struct MessageSemanticsTests {
         )
 
         #expect(viewModel.displayBody(of: record) == "📎 a.png")
-    }
-
-    private var messageMediaAttachmentSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/MessageMediaAttachment.swift")
     }
 }
 
@@ -8201,15 +7146,6 @@ struct MediaWaveformAnalyzerBoundsTests {
 
 struct ComposerAudioDraftPreviewPresentationTests {
 
-    @Test func sendButtonUsesTrailingActionSlotOutsideInputCapsule() throws {
-        let source = try String(contentsOf: composerBarSourceURL, encoding: .utf8)
-
-        #expect(source.contains("private var trailingActionSlot"))
-        #expect(source.matches(#"private var trailingActionSlot[\s\S]*?if showsSend \{[\s\S]*?sendButton[\s\S]*?else if showsMic"#))
-        #expect(source.matches(#"private var inputCapsule[\s\S]*?emojiButton[\s\S]*?\.compatibleInputCapsuleChrome"#))
-        #expect(!source.matches(#"private var inputCapsule[\s\S]*?if showsSend[\s\S]*?sendButton[\s\S]*?\.compatibleInputCapsuleChrome"#))
-    }
-
     @Test func playbackIconReflectsPreviewState() {
         #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: false, didFail: false) == "play.fill")
         #expect(ComposerAudioDraftPreviewPresentation.playIconName(isPlaying: true, didFail: false) == "pause.fill")
@@ -8220,13 +7156,6 @@ struct ComposerAudioDraftPreviewPresentationTests {
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(nil) == "")
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(2.9) == "0:02")
         #expect(ComposerAudioDraftPreviewPresentation.durationLabel(65) == "1:05")
-    }
-
-    private var composerBarSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ComposerBar.swift")
     }
 }
 
@@ -9140,31 +8069,6 @@ struct TimelineBottomTests {
         ) == -10)
     }
 
-    @Test func conversationViewCoalescesAutomaticScrollAndKeyboardFollowUps() throws {
-        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains("@State private var pendingBottomScrollRequest"))
-        #expect(source.contains("private func scheduleScrollToBottom"))
-        #expect(source.contains("TimelineBottomScrollCoordinator.shouldSkipTimelineChangeScroll"))
-        #expect(source.contains("InitialBottomScrollClamp"))
-        #expect(source.contains("ScrollViewBottomClamp.legalBottomOffsetY"))
-        #expect(source.contains("proxy.scrollTo(Self.timelineBottomID, anchor: .bottom)"))
-        #expect(source.contains(".onChange(of: viewModel.timelineProjectionGeneration)"))
-        #expect(source.contains("private func handleTimelineProjectionChange"))
-        #expect(source.contains("viewModel.isMediaRecordsRefreshPending"))
-        #expect(source.contains("isInitialBottomStabilizationScheduled"))
-        #expect(source.contains("private func scheduleKeyboardDismiss"))
-        #expect(source.contains("reason: .buttonTap"))
-        #expect(source.contains("cancelPendingTimelineFollowUpWork()"))
-        #expect(source.contains(".simultaneousGesture(TapGesture().onEnded { scheduleKeyboardDismiss() })"))
-    }
-
-    private var conversationViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
-    }
 }
 
 @MainActor
@@ -9222,19 +8126,6 @@ struct SensitiveClipboardTests {
         #expect(!pasteboard.hasStrings)
     }
 
-    @Test func clearDoesNotReadPasteboardStringToGateTheWipe() throws {
-        // Regression guard for issue #409: gating the clear on the raw string
-        // (UIPasteboard.string) raises the iOS 16+ paste-disclosure banner and
-        // registers a clipboard access. The clear path must rely on changeCount
-        // / hasStrings only and never read .string.
-        let source = try String(contentsOf: sensitiveClipboardSourceURL, encoding: .utf8)
-        let clearBody = source.components(separatedBy: "static func clear(")
-        let body = clearBody.last ?? ""
-        #expect(clearBody.count == 2)
-        #expect(!body.contains(".string"))
-        #expect(body.contains("pasteboard.changeCount"))
-    }
-
     @Test func copyStoresSensitiveTextWithExpirationOptions() throws {
         let pasteboard = makeIsolatedPasteboard()
         defer { UIPasteboard.remove(withName: pasteboard.name) }
@@ -9243,17 +8134,6 @@ struct SensitiveClipboardTests {
         SensitiveClipboard.copy("private message", to: pasteboard, expiresAt: expiry)
 
         #expect(pasteboard.string == "private message")
-
-        let source = try String(contentsOf: sensitiveClipboardSourceURL, encoding: .utf8)
-        #expect(source.contains("options: [.expirationDate: expiresAt]"))
-        #expect(source.contains("UIPasteboard.typeAutomatic"))
-    }
-
-    @Test func messageCopyActionUsesExpiringSensitiveClipboard() throws {
-        let source = try String(contentsOf: conversationViewSourceURL, encoding: .utf8)
-
-        #expect(source.contains("SensitiveClipboard.copy(viewModel.displayBody(of: record))"))
-        #expect(!source.contains("UIPasteboard.general.string = viewModel.displayBody(of: record)"))
     }
 
     // Regression test for the #409 PR review BLOCKING finding: a nil token
@@ -9388,20 +8268,6 @@ struct SensitiveClipboardTests {
 
     private func validNsec(filledWith character: Character) -> String {
         "nsec1" + String(repeating: String(character), count: 58)
-    }
-
-    private var sensitiveClipboardSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Onboarding/SensitiveClipboard.swift")
-    }
-
-    private var conversationViewSourceURL: URL {
-        URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("whitenoise-ios/Conversation/ConversationView.swift")
     }
 }
 

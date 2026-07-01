@@ -265,7 +265,7 @@ final class AppState {
             // Don't interpolate the error: its description can carry internal
             // Keychain/storage details into crash logs (#21). The type alone is
             // enough to triage which failure mode trapped.
-            fatalError("Failed to initialize durable Marmot storage (\(type(of: error)))")
+            fatalError(AppState.redactedStorageInitFailureMessage(for: error))
         }
     }
 
@@ -290,8 +290,19 @@ final class AppState {
         } catch {
             // See init(): keep internal Keychain/storage error details out of
             // crash logs (#21); the error type is enough to triage.
-            fatalError("Failed to rebuild Keychain-backed Marmot runtime (\(type(of: error)))")
+            fatalError(AppState.redactedRuntimeRebuildFailureMessage(for: error))
         }
+    }
+
+    // Redacted crash messages for the unrecoverable Keychain/storage init and
+    // rebuild traps. Surface only the error type, never its description, so
+    // internal Keychain/storage details can't leak into crash logs (#21).
+    static func redactedStorageInitFailureMessage(for error: Error) -> String {
+        "Failed to initialize durable Marmot storage (\(type(of: error)))"
+    }
+
+    static func redactedRuntimeRebuildFailureMessage(for error: Error) -> String {
+        "Failed to rebuild Keychain-backed Marmot runtime (\(type(of: error)))"
     }
 
     func currentMarmotClient() throws -> MarmotClient {
