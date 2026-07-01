@@ -142,6 +142,10 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .task(id: appState.activeAccount?.accountIdHex) {
+            guard let id = appState.activeAccount?.accountIdHex else { return }
+            await appState.reloadProfileProjection(forAccountIdHex: id)
+        }
         .navigationDestination(isPresented: $showProfileEdit) {
             ProfileEditView()
         }
