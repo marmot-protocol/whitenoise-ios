@@ -1560,7 +1560,7 @@ final class ConversationViewModel {
             timelineStore.reactionProjections.setRecord(synthetic, forKey: key)
             addedKey = key
         }
-        if timelineStore.recomputeReactions() {
+        if timelineStore.recomputeReactions(for: [message.messageIdHex]) {
             timelineStore.noteProjectionChanged()
         }
         Haptics.tap()
@@ -1587,7 +1587,7 @@ final class ConversationViewModel {
             if let removal { timelineStore.reactionProjections.removeRemoval(removal) }
             if let clearedRemoval { timelineStore.reactionProjections.insertRemoval(clearedRemoval) }
             timelineStore.reactionProjections.restoreRecords(removedRecords)
-            if timelineStore.recomputeReactions() {
+            if timelineStore.recomputeReactions(for: [message.messageIdHex]) {
                 timelineStore.noteProjectionChanged()
             }
             Haptics.error()
