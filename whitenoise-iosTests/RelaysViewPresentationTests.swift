@@ -68,6 +68,31 @@ struct RelaysViewPresentationTests {
         #expect(rows == ["wss://relay spaced.example"])
     }
 
+
+    @Test func editableRelayDisplayStripsBidiAndZeroWidth() {
+        let rlo = RelaySettings.editableRelayDisplay("wss://relay\u{202E}evil.example")
+        let zwsp = RelaySettings.editableRelayDisplay("wss://a\u{200B}b.example")
+
+        #expect(rlo == "wss://relayevil.example")
+        #expect(zwsp == "wss://ab.example")
+        #expect(!rlo.unicodeScalars.contains { $0.value == 0x202E })
+        #expect(!zwsp.unicodeScalars.contains { $0.value == 0x200B })
+    }
+
+    @Test func editableRelayDisplayStripsResidualInvisibleFormat() {
+        let spoofed = "wss://re\u{200C}lay\u{200D}evil\u{2060}.example"
+        #expect(RelaySettings.editableRelayDisplay(spoofed) == "wss://relayevil.example")
+    }
+
+    @Test func editableRelayDisplayKeepsCleanUrlUnchanged() {
+        #expect(RelaySettings.editableRelayDisplay("wss://relay.example") == "wss://relay.example")
+    }
+
+    @Test func editableRelayDisplayFallsBackForFullyStrippedEntry() {
+        #expect(RelaySettings.editableRelayDisplay("\u{200B}") == RelaySettings.invalidRelayMessage)
+        #expect(RelaySettings.editableRelayDisplay("\u{FEFF}\u{202E}") == RelaySettings.invalidRelayMessage)
+    }
+
     // MARK: - Missing footer labels
 
     @Test func missingLabelsRenderStableEnumNames() {

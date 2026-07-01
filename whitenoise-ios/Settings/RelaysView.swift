@@ -41,8 +41,9 @@ struct RelaysView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(model.currentRelays, id: \.self) { url in
-                    Text(url).font(.system(.body, design: .monospaced))
+                ForEach(Array(model.currentRelays.enumerated()), id: \.offset) { _, url in
+                    Text(RelaySettings.editableRelayDisplay(url))
+                        .font(.system(.body, design: .monospaced))
                 }
                 .onDelete { model.deleteRelays(at: $0, using: appState) }
 

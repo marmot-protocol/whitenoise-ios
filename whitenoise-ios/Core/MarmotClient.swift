@@ -580,8 +580,22 @@ enum RelaySettings {
     /// characters) — never a blank disclosure row.
     static let notPublishedMessage = L10n.string("Not published")
 
+    /// Shown in place of an editable relay whose display sanitized entirely
+    /// away, so a control/bidi-only entry stays visible and individually
+    /// deletable rather than collapsing into a blank row.
+    static let invalidRelayMessage = L10n.string("Invalid relay")
+
     static func editableRelays(from lists: AccountRelayListsFfi) -> [String] {
         normalizedRelayURLs(lists.defaultRelays.isEmpty ? lists.nip65.relays : lists.defaultRelays)
+    }
+
+    /// Display string for one editable account-relay row. Same sanitizer as
+    /// `publishedRelayRows` (#298 / #306 / #467), but strictly 1:1 with the
+    /// input — never drops or collapses entries — so `RelaysView`'s
+    /// delete-by-index stays aligned with `currentRelays`. Falls back to
+    /// `invalidRelayMessage` when nothing renderable remains.
+    static func editableRelayDisplay(_ raw: String) -> String {
+        ProfileSanitizer.relayDisplayLine(raw, maxLength: 120) ?? invalidRelayMessage
     }
 
     /// Published-list relay URLs (NIP-65 / kind:10050 inbox) come from
