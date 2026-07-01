@@ -8,10 +8,6 @@
 #   curl -fsSL https://raw.githubusercontent.com/airbnb/swift/master/Sources/AirbnbSwiftFormatTool/swiftlint.yml \
 #       -o .swiftlint.airbnb.yml
 # Then diff against this file's "BEGIN AIRBNB BASE" .. "END AIRBNB BASE" block.
-# The only intentional drift is the `excluded:` block: it lives in the
-# WHITENOISE-IOS LOCAL OVERLAY at the top of this file (merged with our paths)
-# instead of inside the Airbnb base. Everything else under "BEGIN AIRBNB BASE"
-# is byte-identical to upstream.
 
 # ──────────────────────────────────────────────────────────────────────
 # WHITENOISE-IOS LOCAL OVERLAY (top — single source for included/excluded)
@@ -101,3 +97,13 @@ custom_rules:
 # ──────────────────────────────────────────────────────────────────────
 # END AIRBNB BASE
 # ──────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────
+# WHITENOISE-IOS LOCAL CUSTOM RULES
+# ──────────────────────────────────────────────────────────────────────
+  no_source_scrape_test:
+    name: "Source-scrape test"
+    regex: 'String\(\s*contentsOf:'
+    included: '.*whitenoise-iosTests/.*\.swift'
+    message: "Tests must assert on behavior, not source text. Don't read a .swift file with String(contentsOf:) to check how code is spelled."
+    severity: error
