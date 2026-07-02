@@ -11,12 +11,14 @@ on:
       - "Config/**"
       - "whitenoise-ios.xcodeproj/**"
       - "scripts/test.sh"
+      - "scripts/check-coverage.sh"
       - ".github/workflows/tests.yml"
   push:
     branches: [master]
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: tests-${{ github.ref }}
@@ -48,3 +50,73 @@ jobs:
           name: TestResults
           path: build/TestResults.xcresult
           if-no-files-found: warn
+
+      - name: Extract coverage
+        id: coverage
+        run: |
+          mkdir -p coverage
+          PCT=$(./scripts/check-coverage.sh --warnings-file coverage/uncovered-files.txt)
+          echo "percentage=$PCT" >> "$GITHUB_OUTPUT"
+          echo "Coverage: $PCT%"
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage
+          path: coverage/
+          if-no-files-found: warn
+
+      - name: Save coverage baseline
+        if: github.ref == 'refs/heads/master'
+        run: echo "${{ steps.coverage.outputs.percentage }}" > coverage-baseline.txt
+
+      - name: Upload coverage baseline
+        if: github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-baseline
+          path: coverage-baseline.txt
+          if-no-files-found: warn
+
+      - name: Get master coverage baseline
+        if: github.event_name == 'pull_request'
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASELINE=0
+          RUN_ID=$(gh run list --branch master --workflow tests.yml \
+            --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+          if [ -n "$RUN_ID" ] && gh run download "$RUN_ID" --name coverage-baseline --dir master-baseline 2>/dev/null; then
+            if [ -f master-baseline/coverage-baseline.txt ]; then
+              BASELINE=$(cat master-baseline/coverage-baseline.txt)
+            fi
+          fi
+          echo "baseline=$BASELINE" >> "$GITHUB_OUTPUT"
+          echo "Master baseline: $BASELINE%"
+
+      - name: Coverage summary and regression gate
+        if: github.event_name == 'pull_request'
+        run: |
+          CURRENT="${{ steps.coverage.outputs.percentage }}"
+          BASELINE="${{ steps.baseline.outputs.baseline }}"
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$BASELINE" = "0" ]; then
+            echo "No master baseline found. PR coverage: **${CURRENT}%**" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          DIFF=$(awk "BEGIN{printf \"%.2f\", $CURRENT - $BASELINE}")
+          SIGN=""
+          awk "BEGIN{exit !($CURRENT >= $BASELINE)}" && SIGN="+"
+          {
+            echo "| Baseline (master) | PR | Delta |"
+            echo "| --- | --- | --- |"
+            echo "| ${BASELINE}% | ${CURRENT}% | ${SIGN}${DIFF}% |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Allow a small epsilon so float noise alone never fails the gate.
+          if awk "BEGIN{exit !($CURRENT < $BASELINE - 0.005)}"; then
+            echo "::error::Coverage decreased from ${BASELINE}% to ${CURRENT}% (${DIFF}%)"
+            exit 1
+          fi
