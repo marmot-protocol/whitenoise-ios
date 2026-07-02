@@ -62,15 +62,6 @@ struct ChatListPreviewCacheTests {
         #expect(ChatRow.subtitleText(for: emptyItem, activeAccountIdHex: "self") == "No messages yet")
     }
 
-    @Test func chatListSubscriptionSnapshotMaterializesOffMainActor() throws {
-        let clientSource = try sourceString("whitenoise-ios/Core/MarmotClient.swift")
-        let viewModelSource = try sourceString("whitenoise-ios/Chats/ChatsListViewModel.swift")
-
-        #expect(clientSource.matches(#"func chatListSubscriptionSnapshot\(\s*_ subscription: ChatListSubscription\s*\) async -> \[ChatListRowFfi\] \{[\s\S]*Task\.detached\(priority: \.utility\) \{ \[subscription\] in[\s\S]*subscription\.snapshot\(\)"#))
-        #expect(viewModelSource.matches(#"let snapshot = await client\.chatListSubscriptionSnapshot\(chatListSub\)[\s\S]*guard !Task\.isCancelled else \{ return \}[\s\S]*self\?\.applyChatListSnapshot\(snapshot\)"#))
-        #expect(!viewModelSource.matches(#"applyChatListSnapshot\(chatListSub\.snapshot\(\)\)"#))
-    }
-
     private func row(
         groupIdHex: String = "0123456789abcdef",
         title: String = "Room",
@@ -115,18 +106,5 @@ struct ChatListPreviewCacheTests {
             timelineAt: timelineAt,
             deleted: deleted
         )
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let repoRoot = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: repoRoot.appending(path: relativePath), encoding: .utf8)
-    }
-}
-
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
     }
 }

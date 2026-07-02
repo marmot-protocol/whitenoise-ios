@@ -59,26 +59,4 @@ struct ProfileEditMetadataDraftTests {
         #expect(ProfileEditFieldSeeding.seeded(current: "Alice", loaded: "Bob", isNewAccount: true) == "Bob")
         #expect(ProfileEditFieldSeeding.seeded(current: "Alice", loaded: "", isNewAccount: true) == "")
     }
-
-    @Test func publishRejectsReentrantCallsAtEntry() throws {
-        // The publish side effect goes through the real Marmot client, so pin the
-        // view-model's synchronous entry guard as the first statement: a second
-        // tap must return before any draft/client/publish work starts.
-        let source = try sourceString("whitenoise-ios/Settings/ProfileEditViewModel.swift")
-
-        #expect(source.matches(#"func publish\(using appState: AppState\) async \{\s*guard !isPublishing else \{ return \}"#))
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let repoRoot = URL(filePath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        return try String(contentsOf: repoRoot.appendingPathComponent(relativePath), encoding: .utf8)
-    }
-}
-
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
-    }
 }

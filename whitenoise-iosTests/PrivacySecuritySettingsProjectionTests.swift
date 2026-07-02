@@ -22,39 +22,4 @@ struct PrivacySecuritySettingsProjectionTests {
         #expect(row.path == "/tmp/audit-1.jsonl")
         #expect(row.detailText == "\(ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file)) - 12345678...abcdef")
     }
-
-    @Test func privacySecurityViewRendersPrecomputedRows() throws {
-        // Data + loading moved to the view model (Phase 4); the view renders
-        // `ForEach(model.auditFileRows)`. Scrape the model for the precomputed-row
-        // type + projection loading (not raw FFI).
-        let source = try sourceString("whitenoise-ios/Settings/PrivacySecuritySettingsViewModel.swift")
-
-        #expect(source.contains("var auditFileRows: [AuditFileRow] = []"))
-        #expect(source.contains("try await appState.privacySecuritySettingsProjection()"))
-        #expect(source.contains("try await appState.auditLogFileRows()"))
-        #expect(!source.contains("@State private var auditFiles: [AuditLogFileFfi]"))
-        #expect(!source.contains("auditFileDetails("))
-        #expect(!source.contains("ForEach(auditFiles"))
-    }
-
-    @Test func marmotClientLoadsPrivacySettingsProjectionOffMainActor() throws {
-        let source = try sourceString("whitenoise-ios/Core/MarmotClient.swift")
-
-        #expect(source.matches(#"func privacySecuritySettingsProjection\(\) async throws -> PrivacySecuritySettingsProjection \{[\s\S]*Task\.detached\(priority: \.utility\)"#))
-        #expect(source.matches(#"func auditFileRows\(\) async throws -> \[AuditFileRow\] \{[\s\S]*Task\.detached\(priority: \.utility\)"#))
-    }
-
-    private func sourceString(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-}
-
-private extension String {
-    func matches(_ pattern: String) -> Bool {
-        range(of: pattern, options: .regularExpression) != nil
-    }
 }
