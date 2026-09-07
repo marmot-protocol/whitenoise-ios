@@ -209,8 +209,13 @@ before every release tag.
 
 ## Settings & profile
 
-- [ ] Settings → account row: filling in display name + about + picture URL
-      and tapping **Publish to Relays** shows a success toast.
+- [ ] Settings → account row → **Edit**: filling in display name + about and
+      tapping **Done** shows a success toast. There is no **More** section and
+      no picture/banner URL fields; an existing banner survives the republish.
+- [ ] In that editor, **Add Photo**/**Change Photo** opens the same menu as Sign
+      Up (Photos, Files, Find Image on Web, and Remove Photo once one is set).
+      Photos and Files show the public-avatar alert first, then the crop editor;
+      the avatar updates after the upload and **Done** publishes it.
 - [ ] After publish, the profile name appears in conversation sender
       labels for that account on a fresh device.
 - [ ] Settings → Relays: adding `wss://…` or `ws://…` accepts, publishes
