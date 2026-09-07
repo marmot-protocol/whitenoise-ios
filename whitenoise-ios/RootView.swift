@@ -36,6 +36,9 @@ struct RootView: View {
         rootContent(presentation)
         .animation(.smooth(duration: 0.25), value: presentation)
         .toastHost()
+        .task(id: appState.runtimeEventsGeneration) {
+            await appState.observeRuntimeEvents()
+        }
         .sheet(isPresented: Binding(
             get: { appState.erasureState.shouldPresentRecovery(
                 activeAccountRef: appState.activeAccountRef,

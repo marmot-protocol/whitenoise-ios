@@ -238,15 +238,36 @@ before every release tag.
 
 ## Privacy, audit, and telemetry
 
+- [ ] After Sign In, Sign Up, or Add Profile, the diagnostics prompt appears
+      only once Chats is visible and account-entry sheets have closed. Closing
+      it with both choices off is valid; later sign-ins preserve the choices.
 - [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share Anonymous
       Analytics** persists without restarting or stranding the running app.
 - [ ] **Share Diagnostic Logs** creates local files after activity. Turning it off
       retains files; **Clear Diagnostic Logs** clears them independently.
+- [ ] Switch profiles and background/relaunch: both diagnostics choices remain
+      device-wide. Enable/disable each independently without restarting the runtime.
+- [ ] With configured credentials and logging enabled, verify sealed log segments
+      reach Goggles after MDK's batching window. Toggle off and verify subsequent
+      automatic upload passes stop; local preference tests do not prove ingestion.
+- [ ] Verify production and staging analytics reach their intended tenants at the
+      shared collector using flavor tokens, while audit uploads use the shared audit
+      token. Do not display or copy token values into test reports.
 - [ ] Settings → Developer Tools: Developer mode reveals Streaming debug and
       **Open Diagnostics**. Disabling it leaves both diagnostics preferences intact.
 - [ ] With Developer mode on, Group Details → Export Conversation
       Transcript opens the share sheet for a JSON file; dismissing the
       share sheet removes the temporary export file.
+
+## Concurrent group changes
+
+- [ ] With MarmotKit 0.9.19, exercise concurrent group updates from two members.
+      A superseded change that MDK reissues needs no banner. Other outcomes show
+      **Review group changes** without requiring Developer Tools to be open.
+      Check invitation/removal guidance and the current chat membership before retrying.
+- [ ] Background and foreground during recovery: the event observer follows the
+      current runtime. Signed-out profiles and events from a released runtime
+      must not show notices. Diagnostics includes the change kind and recovery outcome.
 
 ## App lock
 

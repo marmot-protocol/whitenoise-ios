@@ -398,6 +398,30 @@ final class AppState {
     var runtimeSuspendedForBackground: Bool { runtimeLifecycle.runtimeSuspendedForBackground }
     var isRuntimeWarmingUp: Bool { runtimeLifecycle.isRuntimeWarmingUp }
     var runtimeGeneration: Int { runtimeLifecycle.runtimeGeneration }
+
+    var runtimeEventsGeneration: Int? {
+        guard phaseOwnsLiveRuntime, !runtimeSuspendedForBackground, !isRuntimeSuspending,
+              client != nil else { return nil }
+        return runtimeGeneration
+    }
+
+    func observeRuntimeEvents() async {
+        guard let generation = runtimeEventsGeneration, let client else { return }
+        let subscription = client.subscribeEvents()
+        for await event in SubscriptionDriver.events(subscription) {
+            guard !Task.isCancelled, runtimeEventsGeneration == generation else { return }
+            handleRuntimeEvent(event, generation: generation)
+        }
+    }
+
+    func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
+        guard runtimeEventsGeneration == generation,
+              case .groupChangeSuperseded(let accountID, _, _, _, _, _, _) = event,
+              accounts.contains(where: { $0.accountIdHex == accountID && !$0.signedOut }),
+              let notice = GroupChangeNotice.toast(for: event) else { return }
+        present(notice)
+    }
+
     /// Whether the runtime is mid-suspension. AppState-internal only: the
     /// notification-presentation and settings-read gates that stay on AppState
     /// read it bare.

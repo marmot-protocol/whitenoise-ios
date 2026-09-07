@@ -24080,6 +24080,18 @@ public enum MarmotEventFfi {
      */
     case epochStallEscalated(accountIdHex: String, accountLabel: String, groupIdHex: String, stalledEpoch: UInt64, arms: UInt32
     )
+    /**
+     * A group change this device committed lost a same-epoch race and was
+     * withdrawn by branch selection. `kind` names the change
+     * (`group_profile`, `app_components`, `remove_members`, `invite`),
+     * `outcome` says what the runtime did about it (`reissued`, `conflict`,
+     * `already_satisfied`, `reinvite_required`, `abandoned`, `not_member`),
+     * and `reason` is a stable low-cardinality explanation. Only `reissued`
+     * needs no user action; every other outcome means the change did not
+     * land and the host should tell the user (mdk#1734).
+     */
+    case groupChangeSuperseded(accountIdHex: String, accountLabel: String, groupIdHex: String, commitIdHex: String, kind: String, outcome: String, reason: String
+    )
 }
 
 
@@ -24122,6 +24134,9 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
         )
 
         case 9: return .epochStallEscalated(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), stalledEpoch: try FfiConverterUInt64.read(from: &buf), arms: try FfiConverterUInt32.read(from: &buf)
+        )
+
+        case 10: return .groupChangeSuperseded(accountIdHex: try FfiConverterString.read(from: &buf), accountLabel: try FfiConverterString.read(from: &buf), groupIdHex: try FfiConverterString.read(from: &buf), commitIdHex: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), outcome: try FfiConverterString.read(from: &buf), reason: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -24193,6 +24208,17 @@ public struct FfiConverterTypeMarmotEventFfi: FfiConverterRustBuffer {
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterUInt64.write(stalledEpoch, into: &buf)
             FfiConverterUInt32.write(arms, into: &buf)
+
+
+        case let .groupChangeSuperseded(accountIdHex,accountLabel,groupIdHex,commitIdHex,kind,outcome,reason):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(accountIdHex, into: &buf)
+            FfiConverterString.write(accountLabel, into: &buf)
+            FfiConverterString.write(groupIdHex, into: &buf)
+            FfiConverterString.write(commitIdHex, into: &buf)
+            FfiConverterString.write(kind, into: &buf)
+            FfiConverterString.write(outcome, into: &buf)
+            FfiConverterString.write(reason, into: &buf)
 
         }
     }

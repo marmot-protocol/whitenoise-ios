@@ -433,9 +433,16 @@ struct AppStateBootstrapTests {
         await appState.bootstrap()
         _ = try await appState.createIdentity()
 
+        let generation = appState.runtimeGeneration
+        let previous = try #require(try await appState.relayTelemetrySettings())
+        let auditBefore = try await appState.auditLogSettings()
+
         let saved = try await appState.setRelayTelemetryExportEnabled(false)
 
         #expect(!saved.exportEnabled)
+        #expect(saved.exportIntervalSeconds == previous.exportIntervalSeconds)
+        #expect(try await appState.auditLogSettings() == auditBefore)
+        #expect(appState.runtimeGeneration == generation)
         let maybeReloaded = try await appState.relayTelemetrySettings()
         let reloaded = try #require(maybeReloaded)
         #expect(!reloaded.exportEnabled)
@@ -1927,11 +1934,42 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func groupRecoveryNoticesRespectAccountAndRuntimeOwnership() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = try #require(appState.activeAccount)
+        let generation = try #require(appState.runtimeEventsGeneration)
+        let event = MarmotEventFfi.groupChangeSuperseded(
+            accountIdHex: account.accountIdHex, accountLabel: account.label,
+            groupIdHex: "group", commitIdHex: "commit", kind: "invite",
+            outcome: "reinvite_required", reason: "concurrent_change"
+        )
+        appState.dismissToast()
+        appState.handleRuntimeEvent(event, generation: generation - 1)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(.groupChangeSuperseded(
+            accountIdHex: "unavailable-account", accountLabel: "private",
+            groupIdHex: "group", commitIdHex: "commit", kind: "invite",
+            outcome: "conflict", reason: "concurrent_change"
+        ), generation: generation)
+        #expect(appState.activeToast == nil)
+        appState.handleRuntimeEvent(event, generation: generation)
+        #expect(appState.activeToast?.style == .warning)
+        appState.dismissToast()
+
+        await appState.startRuntimeSuspension().value
+        #expect(appState.runtimeEventsGeneration == nil)
+        appState.handleRuntimeEvent(event, generation: generation)
+        #expect(appState.activeToast == nil)
+        await stopReadyRuntime(appState)
+    }
+
     @Test func auditLogSettingChangeHotSwapsWithoutRestartingRuntime() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
 
         let generation = appState.runtimeGeneration
+        let telemetryBefore = try await appState.relayTelemetrySettings()
         let settings = try await appState.setAuditLogEnabled(true)
 
         #expect(settings.enabled)
@@ -1942,6 +1980,16 @@ struct AppStateBootstrapTests {
         #expect(appState.phase == .ready)
         #expect(appState.client != nil)
         #expect(appState.client?.marmot.isStopping() == false)
+
+        let recordingFiles = try #require(try await appState.auditLogFiles())
+        #expect(!recordingFiles.isEmpty)
+        let disabled = try await appState.setAuditLogEnabled(false)
+        #expect(!disabled.enabled)
+        #expect(try await appState.auditLogSettings()?.enabled == false)
+        let retainedFiles = try #require(try await appState.auditLogFiles())
+        #expect(!retainedFiles.isEmpty)
+        #expect(try await appState.relayTelemetrySettings() == telemetryBefore)
+        #expect(appState.runtimeGeneration == generation)
 
         await stopReadyRuntime(appState)
     }
