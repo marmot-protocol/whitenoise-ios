@@ -80,6 +80,91 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test(arguments: [false, true])
+    func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
+        let appState = AppState(
+            client: try MarmotClient.testClient(), notifications: deniedNotifications(),
+            accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
+            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
+        )
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+        let generation = appState.runtimeGeneration
+        var attempts = 0
+        var retainedClient: MarmotClient?
+        appState.beforeAccountRefreshForTesting = {
+            attempts += 1
+            retainedClient = appState.client
+            if exhaustRetries || attempts == 1 { throw MarmotKitError.StorageBusy(details: "test contention") }
+        }
+        await appState.startForegroundActivation().value
+        #expect(attempts == 2)
+        if exhaustRetries {
+            #expect(appState.client == nil)
+            if case .failed = appState.phase {} else { Issue.record("Expected a recoverable startup failure") }
+            appState.beforeAccountRefreshForTesting = nil
+            // Keep the failed handle alive: Retry must still be able to reopen its root.
+            #expect(retainedClient != nil)
+            await appState.bootstrap()
+        }
+        #expect(appState.phase == .onboarding)
+        #expect(!appState.runtimeSuspendedForBackground)
+        #expect(appState.runtimeGeneration > generation)
+        #expect(appState.client != nil)
+        appState.beforeAccountRefreshForTesting = nil
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func failedAccountRefreshPreservesKnownAccountsWithoutSynthesizingSetup() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let originalIDs = appState.accounts.map(\.accountIdHex)
+        appState.beforeOnboardingSnapshotReadForTesting = { throw MarmotKitError.Runtime(details: "test read failure") }
+        await #expect(throws: MarmotKitError.self) {
+            try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        }
+        #expect(appState.accounts.map(\.accountIdHex) == originalIDs)
+        #expect(appState.pendingAccountSetup == nil)
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func everyUnfinishedIdentityCanBeSelectedAndRemovedSetupIsCleared() async throws {
+        let appState = try testAppState()
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let first = try await appState.importIdentity(
+            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
+        )
+        let second = try await appState.importIdentity(
+            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
+        )
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(Set(appState.accountSetupSnapshots.map(\.accountIdHex)) == [first.accountIdHex, second.accountIdHex])
+        #expect(appState.accounts.isEmpty)
+        await appState.selectAccountSetup(accountID: first.accountIdHex)
+        #expect(appState.pendingAccountSetup?.accountID == first.accountIdHex)
+        appState.isAccountSetupPresented = false
+        await appState.selectAccountSetup(accountID: second.accountIdHex)
+        #expect(appState.pendingAccountSetup?.accountID == second.accountIdHex)
+        #expect(appState.isAccountSetupPresented)
+        let client = try #require(appState.client)
+        try await client.marmot.removeAccount(accountRef: second.accountIdHex)
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(appState.pendingAccountSetup?.accountID == first.accountIdHex)
+        #expect(appState.accountSetupSnapshots.map(\.accountIdHex) == [first.accountIdHex])
+        try await client.marmot.removeAccount(accountRef: first.accountIdHex)
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.accountSetupSnapshots.isEmpty)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test func bootstrapWithoutAccountsClearsPersistedActiveAccountRef() async throws {
         accountDefaults.set("legacy-darkmatter-account", forKey: AccountStore.activeAccountKey)
         let appState = AppState(

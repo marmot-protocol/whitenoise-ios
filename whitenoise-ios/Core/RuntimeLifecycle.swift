@@ -821,8 +821,22 @@ final class RuntimeLifecycle {
                 client = restored
                 // An import may have persisted its identity just before suspension.
                 // Recover its checkpoint before restarting account maintenance.
-                try await appState?.refreshAccounts(refreshUnreadSummaries: false)
-                guard ownsForegroundActivation(id: activationID) else { return }
+                do {
+                    if let appState {
+                        try await refreshAccountsForBootstrap(appState, stillOwnsWork: {
+                            self.ownsForegroundActivation(id: activationID)
+                        })
+                    }
+                    guard ownsForegroundActivation(id: activationID) else { throw CancellationError() }
+                } catch {
+                    // Close this activation's handle even if ownership changed during refresh.
+                    if client === restored { client = nil }
+                    try? await restored.marmot.shutdownAndClose()
+                    if ownsForegroundActivation(id: activationID), !(error is CancellationError) {
+                        appState?.setPhase(.failed(error.localizedDescription))
+                    }
+                    return
+                }
                 noteRuntimeForegroundReadyAfterSuspension()
                 // `startRuntime()` returns after local hydration and account
                 // command-readiness. Marmot's initial relay sync continues

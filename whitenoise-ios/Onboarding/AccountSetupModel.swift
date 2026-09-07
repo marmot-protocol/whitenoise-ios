@@ -10,7 +10,34 @@ nonisolated enum AccountSetupCommand: Sendable {
 
 nonisolated struct AccountSetupSubscription: Sendable {
     let snapshot: OnboardingSnapshotFfi
-    let next: @Sendable () async -> OnboardingSnapshotFfi?
+    let next: @Sendable () async throws -> OnboardingSnapshotFfi?
+}
+
+// UniFFI 0.29 cannot cancel the Rust subscription's indefinite next() wait.
+// Poll finite local reads until the bindings expose a cancellable subscription.
+actor AccountSetupSnapshotPoller {
+    private var revision: UInt64
+    private var ready: Bool
+    private let read: @Sendable () async throws -> OnboardingSnapshotFfi?
+
+    init(snapshot: OnboardingSnapshotFfi, read: @escaping @Sendable () async throws -> OnboardingSnapshotFfi?) {
+        revision = snapshot.revision
+        ready = snapshot.ready && !snapshot.cancellationPending
+        self.read = read
+    }
+
+    func next() async throws -> OnboardingSnapshotFfi? {
+        while !ready {
+            try await Task.sleep(for: .milliseconds(250))
+            guard let snapshot = try await read() else { return nil }
+            try Task.checkCancellation()
+            guard snapshot.revision > revision else { continue }
+            revision = snapshot.revision
+            ready = snapshot.ready && !snapshot.cancellationPending
+            return snapshot
+        }
+        return nil
+    }
 }
 
 nonisolated protocol AccountSetupClient: Sendable {
@@ -23,10 +50,13 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
     let accountID: String
 
     func subscribe() async throws -> AccountSetupSubscription {
-        let subscription = try await Task.detached { [client, accountID] in
-            try client.marmot.subscribeOnboarding(accountRef: accountID)
-        }.value
-        return AccountSetupSubscription(snapshot: subscription.snapshot(), next: { await subscription.next() })
+        guard let snapshot = try await client.onboardingSnapshot(accountID: accountID) else {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }
+        let poller = AccountSetupSnapshotPoller(snapshot: snapshot) { [client, accountID] in
+            try await client.onboardingSnapshot(accountID: accountID)
+        }
+        return AccountSetupSubscription(snapshot: snapshot, next: { try await poller.next() })
     }
 
     func perform(_ command: AccountSetupCommand) async throws -> OnboardingSnapshotFfi? {
@@ -86,12 +116,13 @@ final class AccountSetupModel {
     @ObservationIgnored private var observer: Task<Void, Never>?
     @ObservationIgnored private var operation: Task<Void, Never>?
     @ObservationIgnored private var session = UUID()
+    @ObservationIgnored private var lastAutomaticRevision: UInt64?
 
     init(snapshot: OnboardingSnapshotFfi) { self.snapshot = snapshot }
 
     var accountID: String { snapshot.accountIdHex }
     var canFinish: Bool {
-        !isBusy && (cancelled || (snapshot.ready && isConnected && errorMessage == nil))
+        !isBusy && (cancelled || (snapshot.ready && !snapshot.cancellationPending && isConnected && errorMessage == nil))
     }
     var offeredActions: Set<OnboardingActionFfi> { Set(snapshot.steps.flatMap(\.actions)) }
     var currentStep: OnboardingStepStateFfi? {
@@ -114,6 +145,7 @@ final class AccountSetupModel {
         await drain()
         guard session == id, !Task.isCancelled else { return }
         self.client = client
+        lastAutomaticRevision = nil
         observer = Task { [weak self] in
             do {
                 let subscription = try await client.subscribe()
@@ -122,12 +154,13 @@ final class AccountSetupModel {
                 self.isConnected = true
                 self.errorMessage = nil
                 self.send(self.snapshot.cancellationPending ? .cancel : .run)
-                while let update = await subscription.next() {
+                while let update = try await subscription.next() {
                     guard self.session == id, !Task.isCancelled else { return }
                     self.apply(update)
                     self.advanceOptionalSteps()
                 }
-                guard self.session == id, !Task.isCancelled, !self.cancelled else { return }
+                guard self.session == id, !Task.isCancelled, !self.cancelled,
+                      !self.snapshot.ready || self.snapshot.cancellationPending else { return }
                 self.isConnected = false
                 self.errorMessage = L10n.string("Setup updates stopped. Reconnect to continue.")
             } catch {
@@ -175,6 +208,11 @@ final class AccountSetupModel {
     private func advanceOptionalSteps() {
         guard !isBusy, isConnected, errorMessage == nil,
               let command = AccountSetupPolicy.automaticAction(snapshot) else { return }
+        guard lastAutomaticRevision != snapshot.revision else {
+            errorMessage = L10n.string("Setup couldn’t finish this action. Your progress is saved. Try again.")
+            return
+        }
+        lastAutomaticRevision = snapshot.revision
         send(command)
     }
 
@@ -200,14 +238,26 @@ final class AccountSetupModel {
 }
 
 nonisolated enum AccountSetupInput {
-    static func relays(_ text: String, allowEmpty: Bool = false) -> [String]? {
+    static func relays(_ text: String) -> [String]? {
         guard text.utf8.count <= 16_384 else { return nil }
-        let lines = text.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard lines.count <= 16, allowEmpty || !lines.isEmpty else { return nil }
+        let tokens = text.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard tokens.count <= 16, !tokens.isEmpty else { return nil }
         var result: [String] = []
-        for line in lines {
-            guard let relay = RelayURL.normalized(line) else { return nil }
+        for token in tokens {
+            guard let relay = RelayURL.normalized(token) else { return nil }
             if !result.contains(relay) { result.append(relay) }
+        }
+        return result
+    }
+
+    static func proposalRelays(_ relays: [String]) -> [String]? {
+        guard relays.count <= 16 else { return nil }
+        var result: [String] = []
+        for raw in relays {
+            guard !raw.unicodeScalars.contains(where: { $0.properties.generalCategory == .format
+                || $0.properties.generalCategory == .control }),
+                  let normalized = RelayURL.normalized(raw) else { return nil }
+            if !result.contains(normalized) { result.append(normalized) }
         }
         return result
     }

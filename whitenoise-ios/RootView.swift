@@ -1,4 +1,5 @@
 import SwiftUI
+import MarmotKit
 
 nonisolated enum RootPresentation: Equatable {
     case bootstrap
@@ -37,17 +38,12 @@ struct RootView: View {
             rootContent(presentation)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented {
-                Button {
-                    appState.isAccountSetupPresented = true
-                } label: {
-                    Text("Finish account setup")
-                        .font(.subheadline)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .contentShape(.rect)
-                }
+            if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented,
+               appState.phaseOwnsLiveRuntime {
+                resumeAccountSetupAction
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
+                .disabled(appState.isFinishingAccountSetup)
                 .padding(.horizontal)
                 .padding(.bottom, 8)
                 .background(.background)
@@ -69,6 +65,28 @@ struct RootView: View {
                 .appAppearance()
             }
         }
+    }
+
+    @ViewBuilder
+    private var resumeAccountSetupAction: some View {
+        if appState.accountSetupSnapshots.count > 1 {
+            Menu {
+                ForEach(appState.accountSetupSnapshots, id: \.accountIdHex) { snapshot in
+                    Button(appState.shortNpub(forAccountIdHex: snapshot.accountIdHex)) {
+                        Task { await appState.selectAccountSetup(accountID: snapshot.accountIdHex) }
+                    }
+                }
+            } label: { resumeLabel }
+        } else {
+            Button { appState.isAccountSetupPresented = true } label: { resumeLabel }
+        }
+    }
+
+    private var resumeLabel: some View {
+        Text("Finish account setup")
+            .font(.subheadline)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(.rect)
     }
 
     @ViewBuilder

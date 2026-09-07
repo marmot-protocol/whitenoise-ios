@@ -67,6 +67,13 @@ before every release tag.
       remain. Interrupted cancellation finishes on resume.
 - [ ] Add a second account: the existing account remains selected until setup
       completes. Later returns to it; Finish account setup resumes the checklist.
+- [ ] With multiple unfinished identities, Finish account setup offers each one.
+      Switch between them; cancel/remove one and verify it disappears from the
+      setup choices while the others remain accessible.
+- [ ] Finish setup or reconnect while the runtime is quiet: neither action waits
+      indefinitely for another network event. Background/resume still drains work.
+- [ ] A restored proposal with any unsafe relay address blocks publication of the
+      whole proposal and offers Back; it never silently omits the unsafe entry.
 - [ ] Verify Dynamic Type, VoiceOver, and Reduce Motion on the checklist and
       repair forms, including long relay lists.
 

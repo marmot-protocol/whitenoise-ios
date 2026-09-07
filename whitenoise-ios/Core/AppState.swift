@@ -154,8 +154,28 @@ final class AppState {
     var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
     var pendingAccountSetup: AccountSetupModel?
+    private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
     var isAccountSetupPresented = true
     private(set) var isFinishingAccountSetup = false
+#if DEBUG
+    @ObservationIgnored var beforeAccountRefreshForTesting: (() async throws -> Void)?
+    @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: (() async throws -> Void)?
+#endif
+
+    func selectAccountSetup(accountID: String) async {
+        guard !isFinishingAccountSetup,
+              let snapshot = accountSetupSnapshots.first(where: { $0.accountIdHex == accountID }),
+              let lease = try? runtimeLifecycle.beginForegroundRuntimeMutation() else { return }
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        isFinishingAccountSetup = true
+        defer { isFinishingAccountSetup = false }
+        if pendingAccountSetup?.accountID != accountID {
+            pendingAccountSetup?.suspend()
+            await pendingAccountSetup?.drain()
+            pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        }
+        isAccountSetupPresented = true
+    }
 
     func connectAccountSetup() async {
         guard !isFinishingAccountSetup, let model = pendingAccountSetup, canUseRuntimeForLocalForegroundWork,
@@ -177,9 +197,10 @@ final class AppState {
         pendingAccountSetup = nil
         do {
             try await refreshAccounts(refreshUnreadSummaries: false)
+            // Let the user return to Chats before choosing another unfinished identity.
+            if pendingAccountSetup != nil { isAccountSetupPresented = false }
             if completed, let summary = accounts.first(where: { $0.accountIdHex == id }) {
                 await activateNewIdentity(summary)
-                if pendingAccountSetup != nil { isAccountSetupPresented = false }
             } else if model.cancelled, !accounts.isEmpty {
                 phase = .ready
             }
@@ -1154,40 +1175,52 @@ final class AppState {
     /// lifecycle).
     @MainActor
     func refreshAccounts(refreshUnreadSummaries: Bool = true) async throws {
+#if DEBUG
+        try await beforeAccountRefreshForTesting?()
+#endif
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
+        var unfinished: [OnboardingSnapshotFfi] = []
         for account in localAccounts {
-            let snapshot: OnboardingSnapshotFfi?
-            do {
-                snapshot = try await client.onboardingSnapshot(accountID: account.accountIdHex)
-            } catch let error as MarmotKitError {
-                switch error {
-                case .OnboardingActionUnavailable, .Runtime:
-                    // A corrupt/newer checkpoint gates its own account, not other identities.
-                    snapshot = OnboardingSnapshotFfi(
-                        accountIdHex: account.accountIdHex, revision: 0, ready: false,
-                        steps: [], proposal: nil, singleDeviceNotice: nil, cancellationPending: false
-                    )
-                default:
-                    throw error
-                }
-            }
+            let snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
             if let snapshot, !snapshot.ready || snapshot.cancellationPending {
-                if pendingAccountSetup == nil {
-                    pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
-                    isAccountSetupPresented = true
-                }
+                unfinished.append(snapshot)
             } else {
                 readyAccounts.append(account)
             }
         }
+        // Publish only after every read succeeds; a read error is not an onboarding state.
         accountStore.accounts = readyAccounts
+        accountSetupSnapshots = unfinished
+        if let current = pendingAccountSetup,
+           !unfinished.contains(where: { $0.accountIdHex == current.accountID }) {
+            current.suspend()
+            await current.drain()
+            if pendingAccountSetup === current { pendingAccountSetup = nil }
+        }
+        if let current = pendingAccountSetup,
+           let snapshot = unfinished.first(where: { $0.accountIdHex == current.accountID }) {
+            current.apply(snapshot)
+        } else if pendingAccountSetup == nil, let snapshot = unfinished.first {
+            pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+            isAccountSetupPresented = true
+        }
+        if pendingAccountSetup == nil, !accounts.isEmpty, phase == .onboarding, !isFinishingAccountSetup {
+            phase = .ready
+        }
         if refreshUnreadSummaries {
             await refreshAccountUnreadSummaries()
         }
         updateProfileProjectionLocalAccountLabels()
         warmLocalAccountProfileProjections()
+    }
+
+    private func readOnboardingSnapshot(client: MarmotClient, accountID: String) async throws -> OnboardingSnapshotFfi? {
+#if DEBUG
+        try await beforeOnboardingSnapshotReadForTesting?()
+#endif
+        return try await client.onboardingSnapshot(accountID: accountID)
     }
 
     @ObservationIgnored private var unreadSummaryRefreshGeneration = 0
@@ -1364,14 +1397,19 @@ final class AppState {
                 identity: identity, defaultRelays: relays, bootstrapRelays: relays
             )
             await activateNewIdentity(summary)
+            HostActionPerformance.record("identity_import_to_ready", since: performance)
             return summary
         }
-        pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
-        isAccountSetupPresented = true
         let localAccounts = try await lease.client.listAccounts()
         guard let summary = localAccounts.first(where: { $0.accountIdHex == snapshot.accountIdHex }) else {
             throw MarmotKitError.OnboardingRequired
         }
+        pendingAccountSetup?.suspend()
+        await pendingAccountSetup?.drain()
+        pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        accountSetupSnapshots.removeAll { $0.accountIdHex == snapshot.accountIdHex }
+        accountSetupSnapshots.append(snapshot)
+        isAccountSetupPresented = true
         HostActionPerformance.record("identity_import_to_setup", since: performance)
         return summary
     }

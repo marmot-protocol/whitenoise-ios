@@ -102,22 +102,30 @@ struct AccountSetupActions: View {
     }
 
     private func relayProposal(_ proposal: OnboardingRepairProposalFfi) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let readRelays = AccountSetupInput.proposalRelays(proposal.readRelays)
+        let writeRelays = AccountSetupInput.proposalRelays(proposal.writeRelays)
+        let valid = readRelays != nil && writeRelays != nil
+            && !(readRelays?.isEmpty == true && writeRelays?.isEmpty == true)
+            && (proposal.step != .inboxRelays || writeRelays?.isEmpty == true)
+        return VStack(alignment: .leading, spacing: 16) {
             Label("Use these relays?", systemImage: "network")
                 .font(.headline)
             Text(proposal.step == .inboxRelays
                  ? L10n.string("Publish these relays as your inbox so people know where to send invitations.")
                  : L10n.string("This publishes your public relay list. Other apps using this account may use it too."))
                 .font(.subheadline).foregroundStyle(.secondary)
-            if proposal.step == .inboxRelays || proposal.readRelays == proposal.writeRelays {
-                relayAddresses(proposal.readRelays)
+            if !valid {
+                Text(AccountSetupPresentation.issue(.invalidRelay)).foregroundStyle(.red)
+            } else if proposal.step == .inboxRelays || readRelays == writeRelays {
+                relayAddresses(readRelays ?? [])
             } else {
                 Text("Read relays").font(.subheadline.bold())
-                relayAddresses(proposal.readRelays)
+                relayAddresses(readRelays ?? [])
                 Text("Write relays").font(.subheadline.bold())
-                relayAddresses(proposal.writeRelays)
+                relayAddresses(writeRelays ?? [])
             }
-            WNButton(title: "Use these relays") { model.send(.approve(model.snapshot.revision)) }
+            WNButton(title: "Use these relays") { model.send(.approve(proposal.revision)) }
+                .disabled(!valid)
             WNButton(title: "Back", emphasis: .secondary) { model.send(.cancelRepair) }
         }
         .setupCard()
@@ -126,7 +134,7 @@ struct AccountSetupActions: View {
     private func relayAddresses(_ relays: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(relays, id: \.self) { relay in
-                Label(String(relay.prefix(2048)), systemImage: "server.rack")
+                Label(relay, systemImage: "server.rack")
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -147,7 +155,8 @@ struct AccountSetupActions: View {
     }
 
     private func deviceNotice(_ step: OnboardingStepStateFfi) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let revision = model.snapshot.revision
+        return VStack(alignment: .leading, spacing: 14) {
             if step.status == .needsInput {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Use White Noise on one device", systemImage: "iphone")
@@ -166,7 +175,7 @@ struct AccountSetupActions: View {
             }
             if step.actions.contains(.continueAnyway) {
                 WNButton(title: LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery))) {
-                    model.send(.acknowledge(model.snapshot.revision))
+                    model.send(.acknowledge(revision))
                 }
             } else if step.actions.contains(.retry) {
                 WNButton(title: "Try again") { model.send(.retry(step.step)) }

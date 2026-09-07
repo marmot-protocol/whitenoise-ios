@@ -70,6 +70,14 @@ replace settings after an inconclusive lookup. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
 restore their persisted snapshots after launch. Never reset an interactive
 checkpoint through the legacy incomplete-setup recovery path.
+Account refresh must stage all reads before changing account/setup routing; a
+read error must not synthesize an unfinished account. Keep every unfinished
+identity selectable, and remove stale setup models when their checkpoints vanish.
+UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
+a close/cancellation API, observe onboarding with cancellable 250 ms polling of
+finite off-main snapshot reads; never drain an indefinite Rust subscription wait.
+Bind repair/device approvals to the displayed revision. Reject an entire relay
+proposal if any address is unsafe; never hide an invalid entry and approve the rest.
 
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
 

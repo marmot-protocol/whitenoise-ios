@@ -16,14 +16,13 @@ Spanish, French, Italian, Portuguese, Russian, Turkish, Simplified Chinese, and
 Traditional Chinese. The catalog tests also check translated values and format
 placeholders across the shared catalog.
 
-Validation: 1,694 tests in 212 suites passed on the Production scheme
-with the iPhone 17 Pro simulator before the resume-button layout refinement.
-That follow-up passed the 15 SignOutAndWipeTests and simulator captures in
-light mode, dark mode, and accessibility text size 3. SwiftLint 0.63.2 passed in strict mode with
-zero violations across 357 files. The final plain-text resume action was also
-rendered in light/dark mode, accessibility text size 3, and with no pending setup.
-Signed-device/live-relay and accessibility
-manual checks remain pending.
+Validation: 1,702 tests in 212 suites passed on the Production scheme,
+including runtime refresh failures, cancellation against quiet real MDK state,
+and multiple unfinished identities. SwiftLint 0.63.2 passed in strict mode with
+zero violations across 357 files. The plain-text resume action was rendered in
+light/dark mode, accessibility text size 3, and with no pending setup. The unsafe
+relay proposal capture verifies that publication is disabled and no unsafe address
+is rendered. Signed-device/live-relay and accessibility manual checks remain pending.
 
 ## Progress and completion
 
@@ -56,6 +55,8 @@ manual checks remain pending.
 - [Discovery inconclusive](device-unknown.png) — Uncertainty is explained and the button says Continue anyway.
 
 ## Saved repairs and recovery
+
+- [Invalid relay proposal](invalid-relay-proposal.png) — Any unsafe address blocks the whole publication; Back lets the user discard the proposal.
 
 - [Restored relay proposal](relay-proposal-restored.png) — An unapproved saved proposal shows its exact destinations and requires an explicit action.
 - [Restored inbox proposal](inbox-proposal-restored.png) — An unapproved inbox proposal is never automatically approved on restart.
