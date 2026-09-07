@@ -271,6 +271,16 @@ private struct PasteAwareSecureField: UIViewRepresentable {
         return field
     }
 
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: PasteInterceptingSecureTextField,
+        context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width, width.isFinite else { return nil }
+        // Long keys scroll inside the field instead of widening the form.
+        return CGSize(width: width, height: uiView.intrinsicContentSize.height)
+    }
+
     func updateUIView(_ field: PasteInterceptingSecureTextField, context: Context) {
         field.onPaste = onPaste
         if field.text != text {
