@@ -51,6 +51,7 @@ final class ImportIdentityViewModel {
         do {
             do {
                 try await appState.importIdentity(trimmed)
+                if appState.pendingAccountSetup != nil { return }
             } catch {
                 guard Self.requiresIncompleteSetupRecovery(error) else { throw error }
                 Haptics.error()

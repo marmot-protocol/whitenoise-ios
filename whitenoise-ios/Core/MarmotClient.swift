@@ -92,6 +92,12 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    func onboardingSnapshot(accountID: String) async throws -> OnboardingSnapshotFfi? {
+        try await Task.detached { [marmot] in
+            try marmot.onboardingSnapshot(accountRef: accountID)
+        }.value
+    }
+
     /// Reads the active account's locally cached kind-3 follow list without
     /// blocking SwiftUI on the generated synchronous FFI call.
     func accountFollows(accountRef: String) async throws -> Set<String> {

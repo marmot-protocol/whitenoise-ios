@@ -1,10 +1,18 @@
 import PhotosUI
+import MarmotKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Creates the real Marmot identity while presenting the designer-approved
-/// Sign Up hierarchy from the onboarding prototype.
 struct CreateIdentityView: View {
+    var showsCloseButton = false
+
+    var body: some View {
+        IdentityProfileSetupView(showsCloseButton: showsCloseButton)
+    }
+}
+
+/// Shared profile form for sign-up and an optional imported-account update.
+struct IdentityProfileSetupView: View {
     private enum PendingPhotoSource {
         case photos
         case files
@@ -25,9 +33,19 @@ struct CreateIdentityView: View {
     @FocusState private var aboutFocused: Bool
 
     let showsCloseButton: Bool
+    let accountSetup: AccountSetupModel?
+    @State private var setupSaveError: String?
+    @State private var hasSubmittedProfile = false
 
-    init(showsCloseButton: Bool = false) {
+    init(showsCloseButton: Bool = false, accountSetup: AccountSetupModel? = nil) {
         self.showsCloseButton = showsCloseButton
+        self.accountSetup = accountSetup
+    }
+
+    private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
+    private var isBusy: Bool { model.isBusy || (accountSetup?.isBusy ?? false) }
+    private var allowsBackNavigation: Bool {
+        accountSetup == nil ? model.allowsBackNavigation : !isSaving
     }
 
     var body: some View {
@@ -70,7 +88,7 @@ struct CreateIdentityView: View {
                 Text("About").wnSectionHeader()
             }
 
-            if let failureMessage = model.failureMessage {
+            if let failureMessage = setupSaveError ?? model.failureMessage {
                 Section {
                     Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -78,16 +96,16 @@ struct CreateIdentityView: View {
                 }
             }
         }
-        .disabled(model.isSavingProfile)
+        .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
-        .navigationTitle("Sign Up")
+        .navigationTitle(accountSetup == nil ? "Sign Up" : "Update profile")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(!model.allowsBackNavigation)
+        .navigationBarBackButtonHidden(!allowsBackNavigation)
         .toolbar {
-            if showsCloseButton && model.allowsBackNavigation {
+            if showsCloseButton && allowsBackNavigation {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
                         dismiss()
@@ -98,30 +116,39 @@ struct CreateIdentityView: View {
                 }
             }
         }
-        .interactiveDismissDisabled(!model.allowsBackNavigation)
+        .interactiveDismissDisabled(!allowsBackNavigation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isKeyboardVisible {
                 VStack(spacing: 8) {
                     WNButton(
                         title: LocalizedStringKey(primaryActionTitle),
-                        isLoading: model.isSubmitting
+                        isLoading: isSaving || model.isSubmitting
                     ) {
                         nameFocused = false
                         aboutFocused = false
                         Task {
-                            if model.phase == .creationFailed {
+                            if let accountSetup {
+                                await saveImportedProfile(using: accountSetup)
+                            } else if model.phase == .creationFailed {
                                 await model.prepare(using: appState)
                             } else {
                                 await model.submit(using: appState, dismiss: { dismiss() })
                             }
                         }
                     }
-                    .disabled(model.isBusy || !hasValidName)
+                    .disabled(isBusy || !hasValidName || (accountSetup != nil && accountSetup?.isConnected != true))
                     .accessibilityLabel(primaryActionTitle)
-                    .accessibilityIdentifier("sign-up.create")
-                    .accessibilityValue(model.isSubmitting ? "In progress" : "")
+                    .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
+                    .accessibilityValue(isSaving || model.isSubmitting ? "In progress" : "")
 
-                    if model.phase == .profileSaveFailed {
+                    if accountSetup != nil {
+                        Text("Saving publishes these details to your public profile.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+
+                    if accountSetup == nil && model.phase == .profileSaveFailed {
                         Button("Continue") {
                             Task {
                                 await model.continueWithoutSaving(
@@ -141,8 +168,18 @@ struct CreateIdentityView: View {
             }
         }
         .trackKeyboardVisibility($isKeyboardVisible)
+        .onChange(of: accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status) {
+            if hasSubmittedProfile, accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status == .passed {
+                dismiss()
+            }
+        }
         .task {
-            await model.prepare(using: appState)
+            if let profile = accountSetup?.snapshot.proposal?.profile {
+                model.displayName = profile.displayName ?? profile.name ?? ""
+                model.about = profile.about ?? ""
+            } else if accountSetup == nil {
+                await model.prepare(using: appState)
+            }
         }
         .alert("Your avatar is public", isPresented: $showAvatarDisclosure) {
             Button("Continue") {
@@ -215,7 +252,8 @@ struct CreateIdentityView: View {
         VStack(spacing: 0) {
             WNAvatarPreview(
                 name: model.displayName,
-                image: model.avatarDraft?.thumbnail
+                image: model.avatarDraft?.thumbnail,
+                pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
             )
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
 
@@ -267,7 +305,28 @@ struct CreateIdentityView: View {
         }
     }
 
+    private func saveImportedProfile(using setup: AccountSetupModel) async {
+        setupSaveError = nil
+        let draft = OnboardingProfileMetadataDraft(
+            displayName: model.displayName, about: model.about, uploadedPictureURL: nil
+        )
+        guard let profile = draft.merging(with: setup.snapshot.proposal?.profile) else { return }
+        let avatar = model.avatarDraft.map { AccountSetupAvatar(data: $0.data, mediaType: $0.mediaType) }
+        hasSubmittedProfile = true
+        if await setup.saveProfile(profile, avatar: avatar) {
+            Haptics.success()
+            dismiss()
+        } else {
+            setupSaveError = setup.errorMessage ?? L10n.string("Couldn’t save your profile. Try again.")
+            Haptics.error()
+        }
+    }
+
     private var primaryActionTitle: String {
+        if let accountSetup {
+            if isSaving { return L10n.string("Saving…") }
+            return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save profile")
+        }
         if model.isSubmitting { return L10n.string("Signing Up…") }
         if model.phase == .creationFailed || model.phase == .profileSaveFailed {
             return L10n.string("Retry")

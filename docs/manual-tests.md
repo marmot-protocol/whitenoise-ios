@@ -29,6 +29,58 @@ before every release tag.
 - [ ] Force-quit + relaunch after onboarding lands directly on Chats; the
       Welcome screen does not reappear.
 
+## Imported-account setup
+
+- [ ] Import a valid nsec: the setup checklist opens before network preflight,
+      and the key field and matching clipboard contents are cleared.
+- [ ] A healthy account progresses to the one-device notice. Continue
+      publishes the first local KeyPackage without a second approval; Open Chats
+      becomes available only after MDK reports ready.
+- [ ] Test all device-discovery outcomes: none found, possible other installation,
+      and inconclusive. None found uses Continue; the other two use Continue
+      anyway. Every outcome requires the notice; no physical device or last-active
+      time is inferred from public package records.
+- [ ] Missing or unreadable follows are skipped automatically without publishing
+      a list. Empty follows are valid. Skipped rows show a neutral dash.
+- [ ] A missing profile offers Update profile or Not now. Update opens the same
+      avatar/name/about form as sign-up, without creating another identity. Save
+      publishes the entered profile and dismisses only after success; a failed
+      save keeps the form and draft visible. Not now publishes nothing.
+- [ ] A failed relay lookup offers retry/discovery-source changes without
+      treating the failure as missing settings. A missing relay/inbox list offers
+      Look on another relay or Use default relays. The latter explains publication
+      and shows relay.eu.whitenoise.chat and relay.us.whitenoise.chat before saving.
+- [ ] Enter another discovery relay: lookup does not publish any settings. A failed
+      or inconclusive lookup does not enable default-relay publication.
+- [ ] For both relay-list and inbox-list recovery, search a reachable relay that
+      returns no declaration. After any earlier checks finish, Use default relays
+      remains available alongside Look on another relay. Defaults publish only
+      after the user chooses them; a timeout is not an empty result.
+- [ ] Change a record while its form/card is open: MDK rejects stale publication
+      instead of silently overwriting the changed record.
+- [ ] Interrupt an approved repair or KeyPackage publication, then retry. The
+      saved publication resumes without another nsec prompt or duplicate approval.
+- [ ] Background during checks and during the notice; relaunch during setup.
+      Progress returns, no normal account work starts early, and storage closes
+      correctly on background.
+- [ ] Cancel setup: the identity remains saved and signed out. Completed repairs
+      remain. Interrupted cancellation finishes on resume.
+- [ ] Add a second account: the existing account remains selected until setup
+      completes. Later returns to it; Finish account setup resumes the checklist.
+- [ ] With multiple unfinished identities, Finish account setup offers each one.
+      Switch between them; cancel/remove one and verify it disappears from the
+      setup choices while the others remain accessible.
+- [ ] With an unreadable checkpoint on one identity, launch/resume, sign in to a
+      healthy identity, and finish another setup. Healthy identities stay usable;
+      the unreadable identity is not activated or given a fabricated checklist.
+      After its checkpoint becomes readable, refresh restores its saved progress.
+- [ ] Finish setup or reconnect while the runtime is quiet: neither action waits
+      indefinitely for another network event. Background/resume still drains work.
+- [ ] A restored proposal with any unsafe relay address blocks publication of the
+      whole proposal and offers Back; it never silently omits the unsafe entry.
+- [ ] Verify Dynamic Type, VoiceOver, and Reduce Motion on the checklist and
+      repair forms, including long relay lists.
+
 ## Multi-account
 
 - [ ] Settings → Accounts → Add launches the Welcome flow inside a sheet.

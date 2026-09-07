@@ -819,6 +819,24 @@ final class RuntimeLifecycle {
                     return
                 }
                 client = restored
+                // An import may have persisted its identity just before suspension.
+                // Recover its checkpoint before restarting account maintenance.
+                do {
+                    if let appState {
+                        try await refreshAccountsForBootstrap(appState, stillOwnsWork: {
+                            self.ownsForegroundActivation(id: activationID)
+                        })
+                    }
+                    guard ownsForegroundActivation(id: activationID) else { throw CancellationError() }
+                } catch {
+                    // Close this activation's handle even if ownership changed during refresh.
+                    if client === restored { client = nil }
+                    try? await restored.marmot.shutdownAndClose()
+                    if ownsForegroundActivation(id: activationID), !(error is CancellationError) {
+                        appState?.setPhase(.failed(error.localizedDescription))
+                    }
+                    return
+                }
                 noteRuntimeForegroundReadyAfterSuspension()
                 // `startRuntime()` returns after local hydration and account
                 // command-readiness. Marmot's initial relay sync continues
@@ -1185,6 +1203,7 @@ final class RuntimeLifecycle {
         await appState?.cancelNativePushRegistrationTask()
         await appState?.cancelRetentionSweeps()
         await appState?.drainUnreadSummaryRefresh()
+        await appState?.pendingAccountSetup?.drain()
         await cancellation.maintenance?.profileRefresh?.value
         if let mutationFollowups = cancellation.maintenance?.mutationFollowups {
             for task in mutationFollowups {

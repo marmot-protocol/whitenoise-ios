@@ -46,15 +46,15 @@ struct WelcomeView: View {
             Spacer()
 
             VStack {
-                WNButton(title: "Sign In", emphasis: .secondary) {
-                    open(.signIn)
-                }
-                .accessibilityIdentifier("welcome.sign-in")
-
                 WNButton(title: "Sign Up") {
                     open(.signUp)
                 }
                 .accessibilityIdentifier("welcome.sign-up")
+
+                WNButton(title: "Sign In", emphasis: .secondary) {
+                    open(.signIn)
+                }
+                .accessibilityIdentifier("welcome.sign-in")
             }
         }
         .safeAreaPadding(.horizontal)
