@@ -14,9 +14,9 @@ final class ProfileEditViewModel {
     var displayName = ""
     var about = ""
     var picture = ""
-    var banner = ""
     var nip05 = ""
-    // Not user-editable here; preserved so a kind:0 republish keeps it.
+    // Not user-editable here; preserved so a kind:0 republish keeps them.
+    var existingBanner: String?
     var existingLud16: String?
 
     var isPublishing = false
@@ -40,22 +40,19 @@ final class ProfileEditViewModel {
             displayName: displayName,
             about: about,
             picture: picture,
-            banner: banner,
             nip05: nip05,
+            preservedBanner: existingBanner,
             preservedLud16: existingLud16
         )
     }
 
     var invalidPictureMessage: String? { validationMessage(for: .picture) }
-    var invalidBannerMessage: String? { validationMessage(for: .banner) }
     var invalidNip05Message: String? { validationMessage(for: .nip05) }
 
     func validationMessage(for field: ProfileEditMetadataField) -> String? {
         guard currentDraft.validationError == field else { return nil }
         switch field {
         case .picture:
-            return L10n.string("Only public HTTPS image URLs are allowed.")
-        case .banner:
             return L10n.string("Only public HTTPS image URLs are allowed.")
         case .nip05:
             return L10n.string("Enter a valid NIP-05 address like name@example.com.")
@@ -111,11 +108,11 @@ final class ProfileEditViewModel {
         )
         lastAttemptedAccountIdHex = id
         if isDifferentAccount {
+            existingBanner = nil
             existingLud16 = nil
             displayName = ""
             about = ""
             picture = ""
-            banner = ""
             nip05 = ""
             error = nil
         }
@@ -137,6 +134,7 @@ final class ProfileEditViewModel {
             loadedAccountIdHex = nil
             error = L10n.string("Couldn't load your profile. Close and reopen this screen to retry.")
         case .enableFirstPublish:
+            existingBanner = nil
             existingLud16 = nil
             // A same-account retry after a failed read keeps the form (no
             // account change), so the stale failure message must clear here —
@@ -147,6 +145,7 @@ final class ProfileEditViewModel {
             guard let profile else { return }
             error = nil
             let formFields = ProfileEditFormFields(profile: profile)
+            existingBanner = formFields.banner.isEmpty ? nil : formFields.banner
             existingLud16 = formFields.lud16.isEmpty ? nil : formFields.lud16
             // Cross-account resets already happened when the window opened,
             // so seeding only has the same-account case left: typed input
@@ -159,9 +158,6 @@ final class ProfileEditViewModel {
             )
             picture = ProfileEditFieldSeeding.seeded(
                 current: picture, loaded: formFields.picture, isNewAccount: false
-            )
-            banner = ProfileEditFieldSeeding.seeded(
-                current: banner, loaded: formFields.banner, isNewAccount: false
             )
             nip05 = ProfileEditFieldSeeding.seeded(
                 current: nip05, loaded: formFields.nip05, isNewAccount: false

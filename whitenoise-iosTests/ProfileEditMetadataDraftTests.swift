@@ -165,19 +165,32 @@ struct ProfileEditMetadataDraftTests {
         #expect(metadata.picture == "https://cdn.example.com/avatar.png")
     }
 
-    @Test func normalizesValidHttpsBannerURL() throws {
+    @Test func carriesForwardExistingBannerVerbatim() throws {
         let draft = ProfileEditMetadataDraft(
             displayName: "Alice",
             about: "",
             picture: "",
-            banner: " https://cdn.example.com/banner.png ",
             nip05: "",
+            preservedBanner: "https://cdn.example.com/banner.png",
             preservedLud16: nil
         )
 
         let metadata = try #require(draft.normalizedMetadata)
         #expect(metadata.banner == "https://cdn.example.com/banner.png")
         #expect(metadata.ffi.banner == "https://cdn.example.com/banner.png")
+    }
+
+    @Test func absentBannerPublishesNothingRatherThanBlanking() throws {
+        let draft = ProfileEditMetadataDraft(
+            displayName: "Alice",
+            about: "",
+            picture: "",
+            nip05: "",
+            preservedLud16: nil
+        )
+
+        let metadata = try #require(draft.normalizedMetadata)
+        #expect(metadata.banner == nil)
     }
 
     @Test func rejectsInvalidPictureURLBeforePublish() {
@@ -206,18 +219,21 @@ struct ProfileEditMetadataDraftTests {
         #expect(metadata.picture == nil)
     }
 
-    @Test func rejectsInvalidBannerURLBeforePublish() {
+    /// The form has no banner field, so a banner the sanitizer would reject must
+    /// not gate Save — it is echoed back exactly as it was loaded.
+    @Test func unsanitizableExistingBannerNeitherBlocksSaveNorIsRewritten() throws {
         let draft = ProfileEditMetadataDraft(
             displayName: "Alice",
             about: "",
             picture: "",
-            banner: "http://legacy.example/banner.png",
             nip05: "",
+            preservedBanner: "http://legacy.example/banner.png",
             preservedLud16: nil
         )
 
-        #expect(draft.validationError == .banner)
-        #expect(draft.normalizedMetadata == nil)
+        #expect(draft.validationError == nil)
+        let metadata = try #require(draft.normalizedMetadata)
+        #expect(metadata.banner == "http://legacy.example/banner.png")
     }
 
     @Test func seedsEmptyFieldOnSameAccountReloadWithoutClobberingEdits() {
