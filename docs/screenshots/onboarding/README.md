@@ -5,8 +5,8 @@ on an iPhone 17 Pro simulator. The sheets use their real presentation containers
 Screens are scrolled where needed to keep the active decision visible.
 No real account data or live relay publication was used for these captures.
 
-The UI source is the onboarding checkpoint `6007d98` plus the progress-card
-correction in this PR. Temporary fixture injection and capture code are excluded
+The UI source is the onboarding checkpoint `6007d98` plus the presentation
+refinements in this PR. Temporary fixture injection and capture code are excluded
 from the app and this PR. The profile values are
 examples. These images document presentation, not end-to-end network validation.
 
@@ -16,8 +16,10 @@ Spanish, French, Italian, Portuguese, Russian, Turkish, Simplified Chinese, and
 Traditional Chinese. The catalog tests also check translated values and format
 placeholders across the shared catalog.
 
-Final validation: 1,694 tests in 212 suites passed on the Production scheme
-with the iPhone 17 Pro simulator. SwiftLint 0.63.2 passed in strict mode with
+Validation: 1,694 tests in 212 suites passed on the Production scheme
+with the iPhone 17 Pro simulator before the resume-button layout refinement.
+That follow-up passed the 15 SignOutAndWipeTests and simulator captures in
+light mode, dark mode, and accessibility text size 3. SwiftLint 0.63.2 passed in strict mode with
 zero violations across 357 files. Signed-device/live-relay and accessibility
 manual checks remain pending.
 
@@ -27,7 +29,7 @@ manual checks remain pending.
 - [Optional follows skipped](follows-skipped.png) — Missing or unreadable follows are skipped without publishing a replacement list.
 - [KeyPackage publication](keypackage-publishing.png) — Initial publication runs after the single-device acknowledgment.
 - [Ready to open Chats](ready.png) — MDK reports ready; optional skipped steps remain visibly distinct from passed checks.
-- [Setup deferred](later.png) — Later returns to the existing app route with a Finish account setup action.
+- [Setup deferred](later.png) — Later returns to the existing app route with a full-width Finish account setup button in its own row below the screen content.
 
 ## Optional profile setup
 

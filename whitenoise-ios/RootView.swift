@@ -32,44 +32,16 @@ struct RootView: View {
             phase: appState.phase,
             activeAccountRef: appState.activeAccountRef
         )
-        Group {
-            if let setup = appState.pendingAccountSetup,
-               appState.isAccountSetupPresented,
-               appState.phaseOwnsLiveRuntime {
-                NavigationStack {
-                    AccountSetupView(model: setup)
-                }
-                .id(setup.accountID)
-                .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
-                    if appState.canUseRuntimeForLocalForegroundWork {
-                        await appState.connectAccountSetup()
-                    } else {
-                        setup.suspend()
-                    }
-                }
-                .onDisappear { setup.suspend() }
-            } else {
-                switch presentation {
-                case .bootstrap:
-                    BootstrapSplash()
-                case .onboarding:
-                    NavigationStack {
-                        WelcomeView()
-                    }
-                case .profileSelection:
-                    SignedOutProfilesView()
-                case .main:
-                    MainView()
-                case .failed(let message):
-                    BootstrapFailureView(message: message)
-                }
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
+        // Reserve layout space so navigation content cannot overlap the resume button.
+        VStack(spacing: 0) {
+            rootContent(presentation)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
             if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented {
-                Button("Finish account setup") { appState.isAccountSetupPresented = true }
-                    .buttonStyle(.borderedProminent)
-                    .padding()
+                WNButton(title: "Finish account setup") { appState.isAccountSetupPresented = true }
+                    .padding(.horizontal)
+                    .padding(.vertical, 12)
+                    .background(.background)
             }
         }
         .animation(.smooth(duration: 0.25), value: presentation)
@@ -86,6 +58,41 @@ struct RootView: View {
                     appState.pendingWipeReport = nil
                 }
                 .appAppearance()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rootContent(_ presentation: RootPresentation) -> some View {
+        if let setup = appState.pendingAccountSetup,
+           appState.isAccountSetupPresented,
+           appState.phaseOwnsLiveRuntime {
+            NavigationStack {
+                AccountSetupView(model: setup)
+            }
+            .id(setup.accountID)
+            .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
+                if appState.canUseRuntimeForLocalForegroundWork {
+                    await appState.connectAccountSetup()
+                } else {
+                    setup.suspend()
+                }
+            }
+            .onDisappear { setup.suspend() }
+        } else {
+            switch presentation {
+            case .bootstrap:
+                BootstrapSplash()
+            case .onboarding:
+                NavigationStack {
+                    WelcomeView()
+                }
+            case .profileSelection:
+                SignedOutProfilesView()
+            case .main:
+                MainView()
+            case .failed(let message):
+                BootstrapFailureView(message: message)
             }
         }
     }
