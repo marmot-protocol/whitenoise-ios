@@ -15,7 +15,7 @@ struct AccountSetupActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let step {
+            if let step, step.status != .pending, step.status != .checking {
                 if model.snapshot.proposal != nil,
                    !step.actions.contains(.approveRepair), !step.actions.contains(.cancelRepair) {
                     unfinishedRepair(step)
@@ -39,8 +39,8 @@ struct AccountSetupActions: View {
                         }
                     }
                 }
-                if model.isBusy { ProgressView("Saving progress…") }
             }
+            if model.isBusy { ProgressView("Saving progress…") }
         }
         .disabled(model.isBusy || !model.isConnected)
     }
