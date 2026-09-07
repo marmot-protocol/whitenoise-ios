@@ -109,28 +109,55 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     private let clearButton = UIButton(type: .system)
 
     func configureAccessory() {
+        rebuildPasteControl()
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitUserInterfaceLevel.self]) {
+            (field: PasteInterceptingSecureTextField, _: UITraitCollection) in
+            field.rebuildPasteControl()
+        }
+        clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        clearButton.tintColor = .label
+        clearButton.accessibilityLabel = L10n.string("Clear")
+        clearButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        clearButton.addTarget(self, action: #selector(clearInput), for: .touchUpInside)
+        updateAccessory(visible: true)
+    }
+
+    private func rebuildPasteControl() {
         let configuration = UIPasteControl.Configuration()
         configuration.displayMode = .iconOnly
-        configuration.baseBackgroundColor = .secondarySystemBackground
+        configuration.baseBackgroundColor = opaqueInputFill
         configuration.cornerStyle = .capsule
-        configuration.baseForegroundColor = .label
+        configuration.baseForegroundColor = UIColor.label.resolvedColor(with: traitCollection)
         let control = UIPasteControl(configuration: configuration)
         control.target = self
         control.accessibilityLabel = L10n.string("Paste")
         control.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         pasteControl = control
-        clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        clearButton.tintColor = .label
-        clearButton.accessibilityLabel = L10n.string("Clear")
-        clearButton.frame = control.frame
-        clearButton.addTarget(self, action: #selector(clearInput), for: .touchUpInside)
-        updateAccessory(visible: true)
+        updateAccessory(visible: rightViewMode != .never)
+    }
+
+    private var opaqueInputFill: UIColor {
+        // Native paste controls need opaque colors, resolved for their current appearance.
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        var baseRed: CGFloat = 0, baseGreen: CGFloat = 0, baseBlue: CGFloat = 0, baseAlpha: CGFloat = 0
+        UIColor.secondarySystemFill.resolvedColor(with: traitCollection)
+            .getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        UIColor.systemBackground.resolvedColor(with: traitCollection)
+            .getRed(&baseRed, green: &baseGreen, blue: &baseBlue, alpha: &baseAlpha)
+        return UIColor(red: red * alpha + baseRed * (1 - alpha),
+                       green: green * alpha + baseGreen * (1 - alpha),
+                       blue: blue * alpha + baseBlue * (1 - alpha), alpha: 1)
     }
 
     func updateAccessory(visible: Bool) {
-        rightView = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let accessory = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? pasteControl : clearButton
+        if rightView !== accessory { rightView = accessory }
         rightViewMode = visible ? .always : .never
+    }
+
+    override func rightViewRect(forBounds bounds: CGRect) -> CGRect {
+        CGRect(x: bounds.maxX - 44, y: bounds.midY - 22, width: 44, height: 44)
     }
 
     @objc private func clearInput() {
