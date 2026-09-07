@@ -4,6 +4,8 @@ import SwiftUI
 struct PrivacySecuritySettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
+    @State private var diagnostics = PrivacySecuritySettingsViewModel()
+    @State private var showEraseData = false
     @State private var appLockCapability = AppLockCapability(available: false, biometryType: .none)
 
     var body: some View {
@@ -41,10 +43,26 @@ struct PrivacySecuritySettingsView: View {
             } footer: {
                 Text(appLockFooter)
             }
+            Section {
+                NavigationLink {
+                    DiagnosticsAndImprovementsView()
+                } label: {
+                    LabeledContent("Diagnostics & Improvements", value: diagnostics.diagnosticsSummary)
+                }
+            } header: { Text("Diagnostics") }
+            Section {
+                Button("Erase App Data", role: .destructive) { showEraseData = true }
+            } header: { Text("Device Data") } footer: {
+                Text("Signs out every profile and permanently removes all White Noise data from this iPhone.")
+            }
         }
         .localizedNavigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
-        .task { appLockCapability = AppLockCapability.current() }
+        .task {
+            appLockCapability = AppLockCapability.current()
+            await diagnostics.reload(using: appState)
+        }
+        .sheet(isPresented: $showEraseData) { EraseAppDataView().appAppearance() }
     }
 
     private var appSecurityToggleTint: Color {

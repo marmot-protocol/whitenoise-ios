@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OSLog
 import MarmotKit
+import UserNotifications
 
 nonisolated enum ForegroundRuntimeWorkGate {
     static func canUseLocalForegroundWork(
@@ -154,9 +155,15 @@ final class AppState {
     @ObservationIgnored let accountStore: AccountStore
     var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
+    private(set) var isErasingAppData = false
+    var appDataErasureGeneration = 0
+    var openSettingsAfterProfileSelection = false
+    let erasureState: AppDataErasureState
+    let signInAttempts: SignInAttemptStore
+    let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
     private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
-    var isAccountSetupPresented = true
+    var isAccountSetupPresented = false
     private(set) var isFinishingAccountSetup = false
     private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
 #if DEBUG
@@ -164,19 +171,38 @@ final class AppState {
     @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: ((String) async throws -> Void)?
 #endif
 
-    func selectAccountSetup(accountID: String) async {
-        guard !isFinishingAccountSetup,
-              let snapshot = accountSetupSnapshots.first(where: { $0.accountIdHex == accountID }),
-              let lease = try? runtimeLifecycle.beginForegroundRuntimeMutation() else { return }
-        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+    func cancelAccountSetup() async -> Bool {
+        guard !isFinishingAccountSetup, let model = pendingAccountSetup,
+              let lease = try? runtimeLifecycle.beginForegroundRuntimeMutation() else { return false }
         isFinishingAccountSetup = true
-        defer { isFinishingAccountSetup = false }
-        if pendingAccountSetup?.accountID != accountID {
-            pendingAccountSetup?.suspend()
-            await pendingAccountSetup?.drain()
-            pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        defer {
+            isFinishingAccountSetup = false
+            runtimeLifecycle.endForegroundRuntimeMutation(lease)
         }
-        isAccountSetupPresented = true
+        model.suspend()
+        await model.drain()
+        do {
+            do {
+                try await lease.client.marmot.cancelOnboarding(accountRef: model.accountID)
+            } catch MarmotKitError.OnboardingActionUnavailable {
+                // MDK #1741: retain uncertain publications, but end this host attempt.
+                let outcome = try await lease.client.signOut(accountRef: model.accountID)
+                guard outcome.localCleanup.completed else {
+                    throw MarmotKitError.OnboardingActionUnavailable
+                }
+            }
+            signInAttempts.finish(model.accountID)
+            pendingAccountSetup = nil
+            isAccountSetupPresented = false
+            do { try await refreshAccounts(refreshUnreadSummaries: false) } catch {
+                present(.error(L10n.string("Couldn’t refresh your accounts. Try again.")))
+            }
+            if activeAccountRef == nil { phase = accounts.contains { !$0.signedOut } ? .ready : .onboarding }
+            return true
+        } catch {
+            model.errorMessage = L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+            return false
+        }
     }
 
     func connectAccountSetup() async {
@@ -194,20 +220,22 @@ final class AppState {
         defer { isFinishingAccountSetup = false }
         let completed = model.snapshot.ready && !model.cancelled
         let id = model.accountID
+        signInAttempts.finish(id)
         model.suspend()
         await model.drain()
         pendingAccountSetup = nil
+        isAccountSetupPresented = false
         do {
             try await refreshAccounts(refreshUnreadSummaries: false)
-            // Let the user return to Chats before choosing another unfinished identity.
-            if pendingAccountSetup != nil { isAccountSetupPresented = false }
             if completed, let summary = accounts.first(where: { $0.accountIdHex == id }) {
                 await activateNewIdentity(summary)
             } else if model.cancelled, !accounts.isEmpty {
                 phase = .ready
             }
         } catch {
+            signInAttempts.begin(id)
             pendingAccountSetup = model
+            isAccountSetupPresented = true
             model.errorMessage = L10n.string("Couldn’t refresh your accounts. Try again.")
         }
     }
@@ -413,6 +441,7 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
+        erasureDefaults: UserDefaults = AppDataErasureState.persistentDefaults,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -431,6 +460,9 @@ final class AppState {
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
+        self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
+        self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
+        self.diagnosticsConsent = DeviceDiagnosticsConsent(defaults: accountDefaults)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.blockScreenshots = UserDefaults.standard.bool(forKey: Self.blockScreenshotsKey)
@@ -653,6 +685,7 @@ final class AppState {
 
         guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else { return }
         activeAccountRef = accountRef
+        if account.signedOut { diagnosticsConsent.scheduleAfterSignIn() }
         restartReadyForegroundMaintenanceIfStopped()
         scheduleNativePushRegistrationIfEnabled()
     }
@@ -664,8 +697,7 @@ final class AppState {
     var pendingWipeReport: WipeReport?
 
     /// Non-destructively signs out of the active account: clears its native
-    /// push registration, deactivates it in Marmot, and switches to the next
-    /// signed-in local account. The account row, keys, encrypted store, media,
+    /// push registration, deactivates it in Marmot, and opens profile selection. The account row, keys, encrypted store, media,
     /// and drafts stay on device so the Profiles screen can sign it back in.
     ///
     /// Push cleanup is best-effort — a transient marmot error here must not
@@ -808,10 +840,8 @@ final class AppState {
             }
         }
 
-        activeAccountRef = accounts.first { account in
-            account.label != removedRef && !account.signedOut
-        }?.label
-        if accounts.isEmpty {
+        accountStore.requestProfileSelection()
+        if !accounts.contains(where: { !$0.signedOut }) {
             // Last account signed out: tear the profile-projection state back
             // down to empty so cached peer data (#366), the per-account version
             // map (#353), and their sibling queues do not survive a full sign-out
@@ -827,17 +857,14 @@ final class AppState {
             stopNotificationSubscription()
             retentionSweeper.cancelWithoutAwaiting()
             phase = .onboarding
-        } else if activeAccountRef != nil {
+        } else {
             if destructive, let removedAccountIdHex {
                 profileStore.clearForAccountRemoval(accountIdHex: removedAccountIdHex)
             }
-        } else {
-            // Every retained account is signed out. Keep the main shell alive
-            // so Settings → Profiles can reactivate one; stop account-bound
-            // foreground maintenance until that happens.
+            // Remaining signed-in profiles require an explicit selection.
             stopNotificationSubscription()
             retentionSweeper.cancelWithoutAwaiting()
-            phase = .ready
+            phase = accounts.contains(where: { !$0.signedOut }) ? .ready : .onboarding
         }
 
         // The account mutation is now complete. Release a pending background
@@ -941,6 +968,98 @@ final class AppState {
             pendingWipeReport = report
         }
         return true
+    }
+
+    func eraseAppData() async throws {
+        guard !isErasingAppData, !isSigningOut, phaseOwnsLiveRuntime,
+              canUseRuntimeForLocalForegroundWork, let erasingClient = client else {
+            throw ForegroundRuntimeMutationError.runtimeUnavailable
+        }
+        erasureState.begin()
+        isErasingAppData = true
+        isSigningOut = true
+        AvatarCacheErasure.begin()
+        defer {
+            AvatarCacheErasure.end()
+            isErasingAppData = false
+            finishAccountExit()
+        }
+        do {
+            pendingAccountSetup?.suspend()
+            await pendingAccountSetup?.drain()
+            await runtimeLifecycle.prepareForAppErasure()
+            let stored = try await erasingClient.listAccounts()
+            for account in stored {
+                _ = try? await erasingClient.marmot.clearPushRegistration(accountRef: account.label)
+                conversationDraftStore.removeDrafts(accountRef: account.label)
+            }
+            await conversationDraftStore.flush(using: erasingClient)
+            for account in stored {
+                // Local removal also handles retained signed-out and unfinished profiles.
+                try await erasingClient.marmot.removeAccount(accountRef: account.label)
+                ChatMuteStore.clearAll(accountIdHex: account.accountIdHex)
+                MessageHideStore.clearAll(accountRef: account.label)
+                profileStore.clearContactNicknames(ownerAccountIdHex: account.accountIdHex)
+            }
+            guard try await erasingClient.listAccounts().isEmpty else {
+                throw ForegroundRuntimeMutationError.runtimeUnavailable
+            }
+            try await runtimeLifecycle.closeForAppErasure()
+            await RemoteAvatarImageLoader.clearCachesAndDrain()
+            await GroupAvatarImageLoader.clearCachesAndDrain()
+            let root = URL(fileURLWithPath: erasingClient.rootPath, isDirectory: true)
+            try await Task.detached(priority: .userInitiated) {
+                try AppDataErasure.eraseClosedRuntime(at: root)
+                try AppDataErasure.clearContainerFiles()
+            }.value
+            guard await NotificationCommunicationDecorator.deleteAllDonatedInteractions() else {
+                throw ForegroundRuntimeMutationError.runtimeUnavailable
+            }
+            UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+            URLCache.shared.removeAllCachedResponses()
+            RemoteAvatarImageLoader.clearCaches()
+            GroupAvatarImageLoader.clearCaches()
+            profileStore.clearForSignOut()
+            accountStore.accounts = []
+            accountStore.resetSelection()
+            accountSetupSnapshots = []
+            pendingAccountSetup = nil
+            isAccountSetupPresented = false
+            pendingWipeReport = nil
+            navigation.clearPendingProfile()
+            navigation.clearPendingChat()
+            accountUnreadStore.pruneToCurrentAccounts([])
+            scheduleApplicationBadgeSynchronization()
+            developerMode = false
+            streamingDebugMode = false
+            blockScreenshots = false
+            resetQuickReactions()
+            await appLock.setEnabled(false)
+            appLock.gracePeriod = .immediate
+            MediaAutoDownloadStore.shared.resetToDefaults()
+            MediaQualityStore.setQuality(.standard)
+            RemoteGIFLoadingStore.shared.setAutomaticallyLoads(false)
+            if let bundleID = Bundle.main.bundleIdentifier {
+                UserDefaults.standard.removePersistentDomain(forName: bundleID)
+            }
+            UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier)?
+                .removePersistentDomain(forName: AppContainerConfig.appGroupIdentifier)
+            signInAttempts.reset()
+            diagnosticsConsent.reset()
+            erasureState.complete()
+            appDataErasureGeneration += 1
+            isErasingAppData = false
+            finishAccountExit()
+            await bootstrap()
+        } catch {
+            isErasingAppData = false
+            finishAccountExit()
+            await bootstrap()
+            erasureState.failed()
+            present(.error(L10n.string("Erasure didn’t finish. Some data may remain. Try again.")))
+            throw error
+        }
     }
 
     @MainActor
@@ -1078,6 +1197,14 @@ final class AppState {
         return try await client.auditFileRows()
     }
 
+    func diagnosticLogExport() async throws -> String {
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        let files = try await lease.client.auditLogFiles()
+        let paths = files.filter { $0.sizeBytes > 0 }.map(\.path)
+        return try await Task.detached(priority: .userInitiated) { try DiagnosticLogExport.report(paths: paths) }.value
+    }
+
     @MainActor
     func deleteAllAuditLogFiles() async throws {
         // Fail loudly when the runtime isn't ready (e.g. a suspend window). A
@@ -1185,6 +1312,7 @@ final class AppState {
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
+        var currentSetupSnapshot: OnboardingSnapshotFfi?
         for account in localAccounts {
             try Task.checkCancellation()
             let snapshot: OnboardingSnapshotFfi?
@@ -1199,7 +1327,8 @@ final class AppState {
                 Self.accountRefreshLog.error("onboarding_snapshot_read_failed")
                 continue
             }
-            if let snapshot, !snapshot.ready || snapshot.cancellationPending {
+            if snapshot?.accountIdHex == pendingAccountSetup?.accountID { currentSetupSnapshot = snapshot }
+            if let snapshot, !snapshot.ready || snapshot.cancellationPending || signInAttempts.accountIDs.contains(account.accountIdHex) {
                 unfinished.append(snapshot)
             } else {
                 readyAccounts.append(account)
@@ -1212,20 +1341,16 @@ final class AppState {
             self.activeAccountRef = nil
         }
         accountSetupSnapshots = unfinished
-        if let current = pendingAccountSetup,
-           !unfinished.contains(where: { $0.accountIdHex == current.accountID }) {
-            current.suspend()
-            await current.drain()
-            if pendingAccountSetup === current { pendingAccountSetup = nil }
+        if let current = pendingAccountSetup {
+            if let currentSetupSnapshot {
+                current.apply(currentSetupSnapshot)
+            } else {
+                current.suspend()
+                await current.drain()
+                if pendingAccountSetup === current { pendingAccountSetup = nil }
+            }
         }
-        if let current = pendingAccountSetup,
-           let snapshot = unfinished.first(where: { $0.accountIdHex == current.accountID }) {
-            current.apply(snapshot)
-        } else if pendingAccountSetup == nil, let snapshot = unfinished.first {
-            pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
-            isAccountSetupPresented = true
-        }
-        if pendingAccountSetup == nil, !accounts.isEmpty, phase == .onboarding, !isFinishingAccountSetup {
+        if pendingAccountSetup == nil, accounts.contains(where: { !$0.signedOut }), phase == .onboarding, !isFinishingAccountSetup {
             phase = .ready
         }
         if refreshUnreadSummaries {
@@ -1403,12 +1528,25 @@ final class AppState {
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = MarmotClient.seedRelays
-        let snapshot: OnboardingSnapshotFfi
+        var snapshot: OnboardingSnapshotFfi
         do {
+            let existing = try await lease.client.listAccounts()
             snapshot = try await lease.client.marmot.beginOnboarding(
                 nsec: identity,
                 options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
             )
+            if !snapshot.ready, existing.contains(where: { $0.accountIdHex == snapshot.accountIdHex }) {
+                snapshot = try await AccountSetupRecovery.restartIfPossible(
+                    snapshot: snapshot,
+                    cancel: { try await lease.client.marmot.cancelOnboarding(accountRef: snapshot.accountIdHex) },
+                    begin: {
+                        try await lease.client.marmot.beginOnboarding(
+                            nsec: identity,
+                            options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
+                        )
+                    }
+                )
+            }
         } catch MarmotKitError.OnboardingActionUnavailable {
             // Legacy active/pending accounts keep their existing recovery path.
             // MDK's login gate refuses an unfinished interactive checkpoint.
@@ -1425,6 +1563,7 @@ final class AppState {
         }
         pendingAccountSetup?.suspend()
         await pendingAccountSetup?.drain()
+        signInAttempts.begin(snapshot.accountIdHex)
         pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
         accountSetupSnapshots.removeAll { $0.accountIdHex == snapshot.accountIdHex }
         accountSetupSnapshots.append(snapshot)
@@ -1473,6 +1612,7 @@ final class AppState {
 
     @MainActor
     private func activateNewIdentity(_ summary: AccountSummaryFfi) async {
+        diagnosticsConsent.scheduleAfterSignIn()
         cacheActivatedAccountSummaryIfNeeded(summary)
         activeAccountRef = summary.label
         updateProfileProjectionLocalAccountLabels()

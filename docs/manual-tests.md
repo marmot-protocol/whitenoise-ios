@@ -58,28 +58,51 @@ before every release tag.
       after the user chooses them; a timeout is not an empty result.
 - [ ] Change a record while its form/card is open: MDK rejects stale publication
       instead of silently overwriting the changed record.
-- [ ] Interrupt an approved repair or KeyPackage publication, then retry. The
-      saved publication resumes without another nsec prompt or duplicate approval.
-- [ ] Background during checks and during the notice; relaunch during setup.
-      Progress returns, no normal account work starts early, and storage closes
-      correctly on background.
-- [ ] Cancel setup: the identity remains saved and signed out. Completed repairs
-      remain. Interrupted cancellation finishes on resume.
-- [ ] Add a second account: the existing account remains selected until setup
-      completes. Later returns to it; Finish account setup resumes the checklist.
-- [ ] With multiple unfinished identities, Finish account setup offers each one.
-      Switch between them; cancel/remove one and verify it disappears from the
-      setup choices while the others remain accessible.
-- [ ] With an unreadable checkpoint on one identity, launch/resume, sign in to a
-      healthy identity, and finish another setup. Healthy identities stay usable;
-      the unreadable identity is not activated or given a fabricated checklist.
-      After its checkpoint becomes readable, refresh restores its saved progress.
-- [ ] Finish setup or reconnect while the runtime is quiet: neither action waits
-      indefinitely for another network event. Background/resume still drains work.
-- [ ] A restored proposal with any unsafe relay address blocks publication of the
-      whole proposal and offers Back; it never silently omits the unsafe entry.
-- [ ] Verify Dynamic Type, VoiceOver, and Reduce Motion on the checklist and
-      repair forms, including long relay lists.
+- [ ] Attention rows open native decision sheets; the underlying checklist keeps
+      all rows and scroll position. No decisions expand between rows.
+- [ ] Keep Save visible above the profile editor keyboard. A failed save retains
+      entered text and image; successful saving dismisses the editor.
+- [ ] Background/resume during the active attempt preserves its in-memory state.
+      Force-quit/relaunch returns to Welcome, without restoring a setup screen or
+      automatically opening Chats, including readiness reached before Open Chats.
+- [ ] Close setup and explicitly sign in again: fresh checks run, and previously
+      published profile/relay changes remain. There is no Later or Finish Setup.
+- [ ] MDK #1741 remains a runtime limitation: an approved unfinished publication
+      cannot yet be discarded. Verify safe sign-out/close where supported, and
+      actionable recovery if the runtime refuses it; never wipe to escape setup.
+- [ ] Ready removes the checking subtitle/spinner, retains Skipped results, and
+      enables the full-width Open Chats action. Required failures still gate entry.
+- [ ] Verify large text, VoiceOver, Reduce Motion, Light and Dark appearances,
+      long relay addresses, optional skipping, and failed discovery lookups.
+
+## Device diagnostics and data removal
+
+- [ ] Complete Sign Up, Sign In and Add Profile: Chats is visible before the
+      Help Improve White Noise sheet. Both controls are directly available.
+      A pending notification/deep-link chat must open before the prompt is eligible.
+- [ ] Fresh runtime choices start off. Existing device-wide choices are preserved.
+      Changes apply immediately; Close/swipe-down records the prompt as seen.
+      Relaunch or sign in to another profile: the prompt does not repeat.
+- [ ] Privacy & Security → Diagnostics & Improvements controls the same runtime
+      settings for every profile. Developer Tools never owns/gates either choice.
+- [ ] Logging off retains local logs; Clear Diagnostic Logs clears every profile's
+      logs without changing the preference. The runtime rotates active files.
+- [ ] Developer Tools shows retained nonempty files even with logging off. Export
+      Diagnostic Logs opens the native Files picker and exports only activity
+      timestamps/types, excluding identifiers, source labels, filenames and payloads.
+- [ ] Sign Out defaults Wipe Data From This Device on. Exact profile-name entry
+      enables Sign Out in the same sheet; mismatched case/name stays disabled.
+      Turning wiping off requires no typed confirmation and preserves local data.
+- [ ] Sign-out failures retain the sheet. With surviving signed-in profiles, show
+      their chooser; choosing one opens its Settings. Otherwise show Welcome.
+      Relaunch at the chooser and select a profile: open Chats without reopening Settings.
+- [ ] Erase App Data requires the displayed three-word phrase. Test with signed-in,
+      signed-out and unfinished profiles; verify keys, chats, media, drafts,
+      settings and diagnostics choices are removed, and the app returns to Welcome.
+- [ ] Interrupt erasure or force an NSE root-lock collision: no concurrent root
+      deletion occurs, incomplete erasure is reported, and Retry remains available.
+      Retry keeps its progress/error sheet visible. Termination after normal preferences
+      are cleared still offers recovery. Avatar loads cannot recreate caches during erasure.
 
 ## Multi-account
 
@@ -198,10 +221,9 @@ before every release tag.
 - [ ] Settings → QR button opens **My Code**; tapping the npub copies it,
       the share button shares a `whitenoise://profile/<npub>` link, and
       Scan QR Code routes a valid profile QR to the profile sheet.
-- [ ] Settings → Identity → Sign out removes the active account and its
-      local key material from the device; with multiple accounts, the app
-      switches to the next account, and with one account it returns to
-      onboarding.
+- [ ] Settings → Sign Out uses the single confirmation sheet. Wiping removes
+      the profile and local keys; retaining data keeps them available for sign-in.
+      Remaining signed-in profiles go to the chooser; otherwise show Welcome.
 - [ ] Group Details → Set/Edit group image rejects non-HTTPS, localhost,
       private-address, and invalid URLs; a public HTTPS image URL previews
       and saves.
@@ -211,15 +233,12 @@ before every release tag.
 
 ## Privacy, audit, and telemetry
 
-- [ ] Settings → Privacy & Security: toggling **Anonymous Telemetry**
-      persists and does not restart or strand the running app.
-- [ ] Settings → Privacy & Security: enabling **Audit Logging**, sending a
-      message, and returning to the screen lists a local audit JSONL file.
-- [ ] Settings → Privacy & Security: **Delete All Audit Logs** clears the
-      listed files; if audit logging remains enabled, new activity rotates
-      into a fresh file.
-- [ ] Settings → Privacy & Security: **Developer mode** reveals Streaming
-      debug and **Open Diagnostics**; disabling it hides those controls.
+- [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share Anonymous
+      Analytics** persists without restarting or stranding the running app.
+- [ ] **Share Diagnostic Logs** creates local files after activity. Turning it off
+      retains files; **Clear Diagnostic Logs** clears them independently.
+- [ ] Settings → Developer Tools: Developer mode reveals Streaming debug and
+      **Open Diagnostics**. Disabling it leaves both diagnostics preferences intact.
 - [ ] With Developer mode on, Group Details → Export Conversation
       Transcript opens the share sheet for a JSON file; dismissing the
       share sheet removes the temporary export file.

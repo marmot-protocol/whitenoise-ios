@@ -2,6 +2,20 @@ import SwiftUI
 import MarmotKit
 
 struct ChatsListView: View {
+    @State private var showDiagnosticsPrompt = false
+    @State private var chatsVisible = false
+    @State private var secondarySheetVisible = false
+
+    private var canPresentDiagnostics: Bool {
+        appState.diagnosticsConsent.canPresent(
+            chatsVisible: chatsVisible && path.isEmpty,
+            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible,
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork && appState.activeAccountRef != nil,
+            chatNavigationPending: appState.pendingChatId != nil
+        )
+    }
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppState.self) private var appState
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
@@ -187,13 +201,39 @@ struct ChatsListView: View {
                     )
                 }
             }
-            .sheet(isPresented: $showNewChat) {
-                NewChatFlowView()
+            .onAppear {
+                chatsVisible = true
+                if appState.openSettingsAfterProfileSelection {
+                    appState.openSettingsAfterProfileSelection = false
+                    showSettings = true
+                }
+                if canPresentDiagnostics { showDiagnosticsPrompt = true }
+            }
+            .onDisappear { chatsVisible = false }
+            .onChange(of: appState.openSettingsAfterProfileSelection) {
+                if appState.openSettingsAfterProfileSelection {
+                    appState.openSettingsAfterProfileSelection = false
+                    showSettings = true
+                }
+            }
+            .onChange(of: canPresentDiagnostics) {
+                if canPresentDiagnostics { showDiagnosticsPrompt = true }
+            }
+            .sheet(isPresented: $showDiagnosticsPrompt, onDismiss: { appState.diagnosticsConsent.complete() }) {
+                NavigationStack { DiagnosticsAndImprovementsView(isPrompt: true) }
+                    .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
+                    .presentationDragIndicator(.visible)
                     .appAppearance()
             }
-            .sheet(isPresented: $showSettings) {
+            .sheet(isPresented: $showNewChat, onDismiss: { secondarySheetVisible = false }) {
+                NewChatFlowView()
+                    .onAppear { secondarySheetVisible = true }
+                    .appAppearance()
+            }
+            .sheet(isPresented: $showSettings, onDismiss: { secondarySheetVisible = false }) {
                 NavigationStack {
                     SettingsView()
+                        .onAppear { secondarySheetVisible = true }
                         .toolbar {
                             ToolbarItem(placement: .confirmationAction) {
                                 Button("Done") { showSettings = false }

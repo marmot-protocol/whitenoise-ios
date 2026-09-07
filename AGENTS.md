@@ -68,16 +68,22 @@ Save/default-relay actions may propose and approve as one explicit user action,
 using the returned proposal revision. Never auto-approve restored proposals or
 replace settings after an inconclusive lookup. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
-restore their persisted snapshots after launch. Never reset an interactive
+retain checkpoints as an internal readiness gate after launch, without reopening
+setup or offering a deferred-setup selector. A new explicit Sign In restarts
+unapproved checks. MDK #1741 tracks cancellation of approved unfinished
+publications; preserve those journals until the runtime can safely reconcile them.
+Persist only the host gate requiring an explicit Open Chats action, not UI progress.
+Never reset an interactive
 checkpoint through the legacy incomplete-setup recovery path.
 Account refresh must stage reads before changing account/setup routing. Propagate
 cancellation and transient startup-readiness errors so lifecycle retry still works.
 Other checkpoint read failures exclude only that identity from both ready accounts
 and setup snapshots; never fail the whole refresh, guess readiness, or synthesize
 an unfinished account. Clear an excluded active selection, and retry its durable
-checkpoint on subsequent refreshes without deleting or resetting it. Keep every
-readable unfinished identity selectable, and remove stale setup models when their
-checkpoints vanish.
+checkpoint on subsequent refreshes without deleting or resetting it. Keep readable
+unfinished identities excluded from normal activation. Refresh only
+the active attempt model; never select another unfinished identity automatically.
+Remove stale setup models when their checkpoints vanish.
 UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
 a close/cancellation API, observe onboarding with cancellable 250 ms polling of
 finite off-main snapshot reads; never drain an indefinite Rust subscription wait.
@@ -167,8 +173,14 @@ Do not add a second storage path for data Marmot already owns.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
+- Analytics export and diagnostic logging are device-wide runtime choices. The one-time prompt appears after successful Sign In/Sign Up/Add Profile, once Chats is visible and account-entry sheets have dismissed. Preserve existing choices; closing with both off is valid. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
+- Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.
+- Sign Out confirms a wipe by matching the displayed profile name exactly in the same sheet. Remaining signed-in profiles go to the profile chooser; with none remaining, return to Welcome.
 - Audit-log uploads and OTLP metrics use separate bearer-token settings. Do not reuse the OTLP token for Goggles audit-log uploads.
+- Erasure recovery lives in a dedicated preferences suite outside the erased domains; clear its marker only after completion. Keep a recovery retry presented through runtime restart and failure handling.
+- Block new avatar loads and writes during cache drains and throughout app-data erasure. Concurrent drains must await the same work before reopening the caches.
+- After sign-out, clear profile projections when no signed-in profile remains and return to Welcome. Only surviving signed-in profiles enter the chooser; opening Settings after selection is an in-session hand-off, not a persisted navigation request.
 - The audit-log endpoint and audit-log token are shared by every flavor. The OTLP endpoint is also shared. Production and staging OTLP tokens differ because the token itself encodes the tenant; do not pass a separate tenant name to distinguish them. Native-push pubkeys are flavor-specific; the push relay hint is currently shared. See `Config/AGENTS.md`.
 - Privacy/audit settings screens should load Marmot settings and audit-file details through off-main projection helpers, then render precomputed row strings from SwiftUI body.
 - Normalize optional group metadata before handing it to Marmot. Group names and descriptions go through `ContentSanitizer`; blank descriptions pass `nil`, unnamed group creates use MarmotKit's empty-string sentinel, and blank renames are rejected.

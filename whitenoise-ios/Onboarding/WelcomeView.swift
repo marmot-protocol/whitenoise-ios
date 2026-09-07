@@ -18,13 +18,16 @@ struct WelcomeView: View {
     @State private var showSignUp = false
     @State private var selectedSheetDetent = PresentationDetent.large
 
+    let isAddingProfile: Bool
     let onSheetContentChange: (OnboardingSheetContent) -> Void
     let onSignInExpansionChange: (Bool) -> Void
 
     init(
+        isAddingProfile: Bool = false,
         onSheetContentChange: @escaping (OnboardingSheetContent) -> Void = { _ in },
         onSignInExpansionChange: @escaping (Bool) -> Void = { _ in }
     ) {
+        self.isAddingProfile = isAddingProfile
         self.onSheetContentChange = onSheetContentChange
         self.onSignInExpansionChange = onSignInExpansionChange
     }
@@ -72,7 +75,7 @@ struct WelcomeView: View {
         .navigationDestination(isPresented: $showSignUp) {
             CreateIdentityView()
         }
-        .sheet(item: $sheetRoute) { route in
+        .sheet(item: $sheetRoute, onDismiss: { appState.diagnosticsConsent.onboardingVisible = false }) { route in
             NavigationStack {
                 switch route {
                 case .signIn:
@@ -85,6 +88,8 @@ struct WelcomeView: View {
                 }
             }
             .tint(accentColor)
+            .onAppear { appState.diagnosticsConsent.onboardingVisible = true }
+            .onDisappear { appState.diagnosticsConsent.onboardingVisible = false }
             .appAppearance()
             .presentationDetents(
                 route == .signIn ? [.medium, .large] : [.large],
@@ -108,7 +113,7 @@ struct WelcomeView: View {
 
     private func open(_ route: SheetRoute) {
         selectedSheetDetent = route == .signIn ? .medium : .large
-        if appState.accounts.isEmpty {
+        if !isAddingProfile {
             sheetRoute = route
         } else {
             switch route {

@@ -16,7 +16,6 @@ struct ImportIdentityView: View {
 
     @State private var model = ImportIdentityViewModel()
     @State private var isKeyFocused = false
-    @State private var pasteRequest = 0
     @State private var showScanner = false
 
     let showsCloseButton: Bool
@@ -61,6 +60,18 @@ struct ImportIdentityView: View {
     }
 
     var body: some View {
+        Group {
+            if let setup = appState.pendingAccountSetup, appState.isAccountSetupPresented {
+                AccountSetupView(model: setup, onClose: { dismiss() })
+                    .onAppear { onPreferredSheetExpansionChange(true) }
+            } else {
+                signInForm
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var signInForm: some View {
         @Bindable var model = model
 
         ScrollView {
@@ -173,7 +184,8 @@ struct ImportIdentityView: View {
             PasteAwareSecureField(
                 text: identity,
                 isFocused: $isKeyFocused,
-                pasteRequest: pasteRequest,
+                showsAccessory: !model.isImporting,
+                onClear: { model.clearPastedClipboardToken() },
                 onPaste: { token, resultingIdentity in
                     model.recordPastedClipboardToken(
                         token,
@@ -188,25 +200,6 @@ struct ImportIdentityView: View {
                 }
             )
             .privacySensitive()
-
-            if !model.isImporting {
-                Button {
-                    if normalizedIdentity.isEmpty {
-                        pasteRequest &+= 1
-                    } else {
-                        model.identity = ""
-                        model.clearPastedClipboardToken()
-                    }
-                } label: {
-                    Image(systemName: normalizedIdentity.isEmpty
-                        ? "doc.on.clipboard"
-                        : "xmark.circle.fill")
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(.plain)
-                .frame(width: 44, height: 44)
-                .accessibilityLabel(normalizedIdentity.isEmpty ? "Paste" : "Clear")
-            }
         }
         .padding(.leading)
         .frame(height: 50)
@@ -217,116 +210,6 @@ struct ImportIdentityView: View {
             guard !model.isImporting else { return }
             isKeyFocused = true
         }
-    }
-}
-
-private struct PasteAwareSecureField: UIViewRepresentable {
-    @Binding var text: String
-    @Binding var isFocused: Bool
-    let pasteRequest: Int
-    let onPaste: (SensitiveClipboard.Token?, String) -> Void
-    let onSubmit: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(
-            text: $text,
-            isFocused: $isFocused,
-            initialPasteRequest: pasteRequest,
-            onSubmit: onSubmit
-        )
-    }
-
-    func makeUIView(context: Context) -> PasteInterceptingSecureTextField {
-        let field = PasteInterceptingSecureTextField()
-        field.delegate = context.coordinator
-        field.onPaste = onPaste
-        field.isSecureTextEntry = true
-        field.placeholder = L10n.string("Enter private key")
-        field.autocapitalizationType = .none
-        field.autocorrectionType = .no
-        field.spellCheckingType = .no
-        field.smartInsertDeleteType = .no
-        field.textContentType = nil
-        field.returnKeyType = .go
-        field.adjustsFontForContentSizeCategory = true
-        field.font = UIFont.preferredFont(forTextStyle: .body)
-        field.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.textChanged(_:)),
-            for: .editingChanged
-        )
-        field.text = text
-        return field
-    }
-
-    func updateUIView(_ field: PasteInterceptingSecureTextField, context: Context) {
-        field.onPaste = onPaste
-        if field.text != text {
-            field.text = text
-        }
-        if isFocused, !field.isFirstResponder {
-            field.becomeFirstResponder()
-        } else if !isFocused, field.isFirstResponder {
-            field.resignFirstResponder()
-        }
-        if context.coordinator.lastPasteRequest != pasteRequest {
-            context.coordinator.lastPasteRequest = pasteRequest
-            field.paste(nil)
-        }
-    }
-
-    final class Coordinator: NSObject, UITextFieldDelegate {
-        @Binding private var text: String
-        @Binding private var isFocused: Bool
-        let onSubmit: () -> Void
-        var lastPasteRequest = 0
-
-        init(
-            text: Binding<String>,
-            isFocused: Binding<Bool>,
-            initialPasteRequest: Int,
-            onSubmit: @escaping () -> Void
-        ) {
-            _text = text
-            _isFocused = isFocused
-            lastPasteRequest = initialPasteRequest
-            self.onSubmit = onSubmit
-        }
-
-        @objc func textChanged(_ field: UITextField) {
-            text = field.text ?? ""
-        }
-
-        func textFieldDidBeginEditing(_ textField: UITextField) {
-            isFocused = true
-        }
-
-        func textFieldDidEndEditing(_ textField: UITextField) {
-            isFocused = false
-        }
-
-        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            onSubmit()
-            return true
-        }
-    }
-}
-
-private final class PasteInterceptingSecureTextField: UITextField {
-    var onPaste: ((SensitiveClipboard.Token?, String) -> Void)?
-
-    override func paste(_ sender: Any?) {
-        let priorText = text ?? ""
-        let priorLength = (priorText as NSString).length
-        let fieldWasEmpty = priorText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let replacesWholeField = selectedTextRange.map {
-            offset(from: beginningOfDocument, to: $0.start) == 0
-                && offset(from: $0.start, to: $0.end) == priorLength
-        } ?? false
-        let token = SensitiveClipboard.capture()
-        super.paste(sender)
-        sendActions(for: .editingChanged)
-        onPaste?(fieldWasEmpty || replacesWholeField ? token : nil, text ?? "")
     }
 }
 

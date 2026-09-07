@@ -11,6 +11,9 @@ import MarmotKit
 @Observable
 final class AccountStore {
     static let activeAccountKey = "marmot.activeAccountRef"
+    private static let profileSelectionKey = "marmot.chooseProfileAfterSignOut"
+    private(set) var prefersProfileSelection: Bool
+    private(set) var returnsToSettingsAfterSelection = false
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -18,11 +21,14 @@ final class AccountStore {
     var accounts: [AccountSummaryFfi] = []
 
     /// The account whose chats / messages are currently displayed.
-    /// `nil` only between bootstrap and onboarding completion. Restored from and
+    /// `nil` during onboarding or while choosing a profile. Restored from and
     /// persisted to UserDefaults so the selection survives relaunch.
     var activeAccountRef: String? {
         didSet {
             if let ref = activeAccountRef {
+                returnsToSettingsAfterSelection = false
+                prefersProfileSelection = false
+                defaults.removeObject(forKey: Self.profileSelectionKey)
                 defaults.set(ref, forKey: Self.activeAccountKey)
             } else {
                 // Clearing the ref (e.g. signing out of the only account) must
@@ -35,7 +41,22 @@ final class AccountStore {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        self.prefersProfileSelection = defaults.bool(forKey: Self.profileSelectionKey)
         self.activeAccountRef = defaults.string(forKey: Self.activeAccountKey)
+    }
+
+    func requestProfileSelection() {
+        returnsToSettingsAfterSelection = true
+        prefersProfileSelection = true
+        defaults.set(true, forKey: Self.profileSelectionKey)
+        activeAccountRef = nil
+    }
+
+    func resetSelection() {
+        returnsToSettingsAfterSelection = false
+        activeAccountRef = nil
+        prefersProfileSelection = false
+        defaults.removeObject(forKey: Self.profileSelectionKey)
     }
 
     /// The active account summary resolved from the list, or nil.

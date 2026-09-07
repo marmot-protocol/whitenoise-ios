@@ -33,24 +33,16 @@ struct RootView: View {
             phase: appState.phase,
             activeAccountRef: appState.activeAccountRef
         )
-        // Reserve layout space so navigation content cannot overlap the resume action.
-        VStack(spacing: 0) {
-            rootContent(presentation)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented,
-               appState.phaseOwnsLiveRuntime {
-                resumeAccountSetupAction
-                .buttonStyle(.plain)
-                .foregroundStyle(.primary)
-                .disabled(appState.isFinishingAccountSetup)
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-                .background(.background)
-            }
-        }
+        rootContent(presentation)
         .animation(.smooth(duration: 0.25), value: presentation)
         .toastHost()
+        .sheet(isPresented: Binding(
+            get: { appState.erasureState.shouldPresentRecovery(
+                activeAccountRef: appState.activeAccountRef,
+                runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+            ) },
+            set: { if !$0 { appState.erasureState.needsRecovery = false } }
+        )) { EraseAppDataView(isRecovery: true).appAppearance() }
         // Hosted at the root so a partial-failure wipe report survives the
         // account teardown (routing to onboarding / switching accounts pops the
         // Settings screen that started the wipe).
@@ -68,59 +60,20 @@ struct RootView: View {
     }
 
     @ViewBuilder
-    private var resumeAccountSetupAction: some View {
-        if appState.accountSetupSnapshots.count > 1 {
-            Menu {
-                ForEach(appState.accountSetupSnapshots, id: \.accountIdHex) { snapshot in
-                    Button(appState.shortNpub(forAccountIdHex: snapshot.accountIdHex)) {
-                        Task { await appState.selectAccountSetup(accountID: snapshot.accountIdHex) }
-                    }
-                }
-            } label: { resumeLabel }
-        } else {
-            Button { appState.isAccountSetupPresented = true } label: { resumeLabel }
-        }
-    }
-
-    private var resumeLabel: some View {
-        Text("Finish account setup")
-            .font(.subheadline)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(.rect)
-    }
-
-    @ViewBuilder
     private func rootContent(_ presentation: RootPresentation) -> some View {
-        if let setup = appState.pendingAccountSetup,
-           appState.isAccountSetupPresented,
-           appState.phaseOwnsLiveRuntime {
+        switch presentation {
+        case .bootstrap:
+            BootstrapSplash()
+        case .onboarding:
             NavigationStack {
-                AccountSetupView(model: setup)
+                WelcomeView()
             }
-            .id(setup.accountID)
-            .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
-                if appState.canUseRuntimeForLocalForegroundWork {
-                    await appState.connectAccountSetup()
-                } else {
-                    setup.suspend()
-                }
-            }
-            .onDisappear { setup.suspend() }
-        } else {
-            switch presentation {
-            case .bootstrap:
-                BootstrapSplash()
-            case .onboarding:
-                NavigationStack {
-                    WelcomeView()
-                }
-            case .profileSelection:
-                SignedOutProfilesView()
-            case .main:
-                MainView()
-            case .failed(let message):
-                BootstrapFailureView(message: message)
-            }
+        case .profileSelection:
+            SignedOutProfilesView()
+        case .main:
+            MainView()
+        case .failed(let message):
+            BootstrapFailureView(message: message)
         }
     }
 }

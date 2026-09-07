@@ -111,6 +111,10 @@ struct whitenoise_iosApp: App {
                 .environment(appState.toastState)
                 .environment(appState.navigation)
                 .environment(appearance)
+                .onChange(of: appState.appDataErasureGeneration) {
+                    appearance.setTheme(.system)
+                    AppLanguage.setCurrentRawValue(AppLanguage.system.rawValue)
+                }
                 .appAppearance(appearance)
                 .task {
                     // The path monitor lives in this lazy singleton; touch it

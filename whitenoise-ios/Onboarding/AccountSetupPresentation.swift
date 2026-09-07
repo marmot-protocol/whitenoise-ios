@@ -2,6 +2,22 @@ import Foundation
 import MarmotKit
 
 nonisolated enum AccountSetupPresentation {
+    static func findingMessages(_ findings: [OnboardingFindingFfi]) -> [String] {
+        var seen: Set<String> = []
+        return findings.compactMap { finding in
+            var message = issue(finding.issue)
+            if let endpoint = finding.endpoint {
+                let scalars = endpoint.unicodeScalars.prefix(200).filter {
+                    $0.properties.generalCategory != .control && $0.properties.generalCategory != .format
+                }
+                let address = String(String.UnicodeScalarView(scalars))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !address.isEmpty { message += "\n" + address + (endpoint.unicodeScalars.count > 200 ? "…" : "") }
+            }
+            return seen.insert(message).inserted ? message : nil
+        }
+    }
+
     static func title(_ step: OnboardingStepFfi) -> String {
         switch step {
         case .profile: L10n.string("Your profile")
@@ -20,7 +36,7 @@ nonisolated enum AccountSetupPresentation {
         case .passed: L10n.string("Done")
         case .needsInput: L10n.string("Needs your attention")
         case .retryableFailure: L10n.string("Couldn’t finish this check")
-        case .waitingForSigner: L10n.string("Waiting for your signer")
+        case .waitingForSigner: L10n.string("Couldn’t access your private key")
         case .skipped: L10n.string("Skipped")
         }
     }
@@ -44,7 +60,7 @@ nonisolated enum AccountSetupPresentation {
         case .otherInstallationPossible:
             L10n.string("We found signs of another installation. This can also happen after reinstalling. Invitations may reach only one installation, and chats will not appear on both.")
         case .noneFound:
-            L10n.string("No other installation was found on the sources we checked. This does not guarantee that the account is unused elsewhere.")
+            L10n.string("No other installation was found on the sources we checked. This does not guarantee that the profile is unused elsewhere.")
         case .unknown:
             L10n.string("We couldn’t determine whether another installation exists. Invitations may reach only one installation, and chats will not appear on both.")
         }

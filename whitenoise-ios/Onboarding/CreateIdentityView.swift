@@ -118,7 +118,7 @@ struct IdentityProfileSetupView: View {
         }
         .interactiveDismissDisabled(!allowsBackNavigation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !isKeyboardVisible {
+            if accountSetup != nil || !isKeyboardVisible {
                 VStack(spacing: 8) {
                     WNButton(
                         title: LocalizedStringKey(primaryActionTitle),
@@ -325,7 +325,7 @@ struct IdentityProfileSetupView: View {
     private var primaryActionTitle: String {
         if let accountSetup {
             if isSaving { return L10n.string("Saving…") }
-            return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save profile")
+            return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save")
         }
         if model.isSubmitting { return L10n.string("Signing Up…") }
         if model.phase == .creationFailed || model.phase == .profileSaveFailed {
