@@ -10,7 +10,7 @@ refinements in this PR. Temporary fixture injection and capture code are exclude
 from the app and this PR. The profile values are
 examples. These images document presentation, not end-to-end network validation.
 
-Localization coverage was audited against 140 nonempty compiler-extracted keys from the
+Localization coverage was audited against 142 nonempty compiler-extracted keys from the
 changed app files: English source strings plus complete translations for German,
 Spanish, French, Italian, Portuguese, Russian, Turkish, Simplified Chinese, and
 Traditional Chinese. The catalog tests also check translated values and format
@@ -20,7 +20,9 @@ Validation: 1,694 tests in 212 suites passed on the Production scheme
 with the iPhone 17 Pro simulator before the resume-button layout refinement.
 That follow-up passed the 15 SignOutAndWipeTests and simulator captures in
 light mode, dark mode, and accessibility text size 3. SwiftLint 0.63.2 passed in strict mode with
-zero violations across 357 files. Signed-device/live-relay and accessibility
+zero violations across 357 files. The final plain-text resume action was also
+rendered in light/dark mode, accessibility text size 3, and with no pending setup.
+Signed-device/live-relay and accessibility
 manual checks remain pending.
 
 ## Progress and completion
@@ -29,7 +31,7 @@ manual checks remain pending.
 - [Optional follows skipped](follows-skipped.png) — Missing or unreadable follows are skipped without publishing a replacement list.
 - [KeyPackage publication](keypackage-publishing.png) — Initial publication runs after the single-device acknowledgment.
 - [Ready to open Chats](ready.png) — MDK reports ready; optional skipped steps remain visibly distinct from passed checks.
-- [Setup deferred](later.png) — Later returns to the existing app route with a full-width Finish account setup button in its own row below the screen content.
+- [Setup deferred](later.png) — Later returns to the existing app route with Sign Up above secondary Sign In and a plain-text Finish account setup action underneath, visible only when setup is pending.
 
 ## Optional profile setup
 

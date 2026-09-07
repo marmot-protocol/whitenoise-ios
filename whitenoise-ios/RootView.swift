@@ -32,16 +32,25 @@ struct RootView: View {
             phase: appState.phase,
             activeAccountRef: appState.activeAccountRef
         )
-        // Reserve layout space so navigation content cannot overlap the resume button.
+        // Reserve layout space so navigation content cannot overlap the resume action.
         VStack(spacing: 0) {
             rootContent(presentation)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented {
-                WNButton(title: "Finish account setup") { appState.isAccountSetupPresented = true }
-                    .padding(.horizontal)
-                    .padding(.vertical, 12)
-                    .background(.background)
+                Button {
+                    appState.isAccountSetupPresented = true
+                } label: {
+                    Text("Finish account setup")
+                        .font(.subheadline)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+                .background(.background)
             }
         }
         .animation(.smooth(duration: 0.25), value: presentation)
