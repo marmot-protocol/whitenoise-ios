@@ -54,6 +54,23 @@ Keep keyboard notification adapters and other SwiftUI/UIKit-only helpers in the 
 
 ## Rust Bindings
 
+Imported nsec identities use MDK's durable interactive onboarding. Keep unfinished
+accounts out of normal account activation and maintenance until `snapshot.ready`.
+Render offered actions from the current snapshot; the single-device acknowledgment
+automatically continues initial KeyPackage publication without another approval.
+Use “Continue” for `noneFound` and “Continue anyway” for possible or unknown
+installations. Never publish a follow list during setup; skip that optional step
+when MDK offers it. Profile editing is optional and reuses the sign-up form in a
+sheet. Save publishes the entered profile and dismisses only after success.
+Relay recovery offers another discovery relay or the app's two seed relays,
+with the exact destinations and publication explained before the action.
+Save/default-relay actions may propose and approve as one explicit user action,
+using the returned proposal revision. Never auto-approve restored proposals or
+replace settings after an inconclusive lookup. Cancel and
+drain onboarding subscriptions and operations when suspending the runtime, and
+restore their persisted snapshots after launch. Never reset an interactive
+checkpoint through the legacy incomplete-setup recovery path.
+
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
 
 Install a published snapshot using its full `master` commit SHA:

@@ -153,6 +153,42 @@ final class AppState {
     @ObservationIgnored let accountStore: AccountStore
     var accounts: [AccountSummaryFfi] { accountStore.accounts }
 
+    var pendingAccountSetup: AccountSetupModel?
+    var isAccountSetupPresented = true
+    private(set) var isFinishingAccountSetup = false
+
+    func connectAccountSetup() async {
+        guard !isFinishingAccountSetup, let model = pendingAccountSetup, canUseRuntimeForLocalForegroundWork,
+              let client = try? runtimeClient() else { return }
+        await model.connect(MarmotAccountSetupClient(client: client, accountID: model.accountID))
+    }
+
+    func finishAccountSetup() async {
+        guard !isFinishingAccountSetup,
+              let model = pendingAccountSetup, model.canFinish,
+              let lease = try? runtimeLifecycle.beginForegroundRuntimeMutation() else { return }
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        isFinishingAccountSetup = true
+        defer { isFinishingAccountSetup = false }
+        let completed = model.snapshot.ready && !model.cancelled
+        let id = model.accountID
+        model.suspend()
+        await model.drain()
+        pendingAccountSetup = nil
+        do {
+            try await refreshAccounts(refreshUnreadSummaries: false)
+            if completed, let summary = accounts.first(where: { $0.accountIdHex == id }) {
+                await activateNewIdentity(summary)
+                if pendingAccountSetup != nil { isAccountSetupPresented = false }
+            } else if model.cancelled, !accounts.isEmpty {
+                phase = .ready
+            }
+        } catch {
+            pendingAccountSetup = model
+            model.errorMessage = L10n.string("Couldn’t refresh your accounts. Try again.")
+        }
+    }
+
     /// Per-account unread totals (account-switcher badges). Owned by
     /// `AccountUnreadStore`; this read-only forwarder keeps the
     /// `appState.accountUnreadSummariesByAccountId` call sites and SwiftUI
@@ -1088,6 +1124,7 @@ final class AppState {
     /// task stays owned by `NotificationCoordinator` (master #401).
     @MainActor
     func beginForegroundMaintenanceCancellation() -> ForegroundMaintenanceTasks {
+        pendingAccountSetup?.suspend()
         let notificationSubscription = stopNotificationSubscription()
         let connectivityCatchUp = notificationCoordinator.cancelConnectivityCatchUpWithoutAwaiting()
         notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
@@ -1117,7 +1154,35 @@ final class AppState {
     /// lifecycle).
     @MainActor
     func refreshAccounts(refreshUnreadSummaries: Bool = true) async throws {
-        accountStore.accounts = try await runtimeClient().listAccounts()
+        let client = try runtimeClient()
+        let localAccounts = try await client.listAccounts()
+        var readyAccounts: [AccountSummaryFfi] = []
+        for account in localAccounts {
+            let snapshot: OnboardingSnapshotFfi?
+            do {
+                snapshot = try await client.onboardingSnapshot(accountID: account.accountIdHex)
+            } catch let error as MarmotKitError {
+                switch error {
+                case .OnboardingActionUnavailable, .Runtime:
+                    // A corrupt/newer checkpoint gates its own account, not other identities.
+                    snapshot = OnboardingSnapshotFfi(
+                        accountIdHex: account.accountIdHex, revision: 0, ready: false,
+                        steps: [], proposal: nil, singleDeviceNotice: nil, cancellationPending: false
+                    )
+                default:
+                    throw error
+                }
+            }
+            if let snapshot, !snapshot.ready || snapshot.cancellationPending {
+                if pendingAccountSetup == nil {
+                    pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+                    isAccountSetupPresented = true
+                }
+            } else {
+                readyAccounts.append(account)
+            }
+        }
+        accountStore.accounts = readyAccounts
         if refreshUnreadSummaries {
             await refreshAccountUnreadSummaries()
         }
@@ -1286,13 +1351,28 @@ final class AppState {
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = MarmotClient.seedRelays
-        let summary = try await lease.client.marmot.login(
-            identity: identity,
-            defaultRelays: relays,
-            bootstrapRelays: relays
-        )
-        await activateNewIdentity(summary)
-        HostActionPerformance.record("identity_import_to_ready", since: performance)
+        let snapshot: OnboardingSnapshotFfi
+        do {
+            snapshot = try await lease.client.marmot.beginOnboarding(
+                nsec: identity,
+                options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
+            )
+        } catch MarmotKitError.OnboardingActionUnavailable {
+            // Legacy active/pending accounts keep their existing recovery path.
+            // MDK's login gate refuses an unfinished interactive checkpoint.
+            let summary = try await lease.client.marmot.login(
+                identity: identity, defaultRelays: relays, bootstrapRelays: relays
+            )
+            await activateNewIdentity(summary)
+            return summary
+        }
+        pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        isAccountSetupPresented = true
+        let localAccounts = try await lease.client.listAccounts()
+        guard let summary = localAccounts.first(where: { $0.accountIdHex == snapshot.accountIdHex }) else {
+            throw MarmotKitError.OnboardingRequired
+        }
+        HostActionPerformance.record("identity_import_to_setup", since: performance)
         return summary
     }
 

@@ -1824,6 +1824,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func acknowledgeDisbandFailure(accountRef: String, groupIdHex: String) async throws  -> Bool
 
     /**
+     * Record Continue anyway for the displayed notice, then resume setup.
+     */
+    func acknowledgeOnboardingSingleDevice(accountRef: String, revision: UInt64) async throws  -> OnboardingSnapshotFfi
+
+    /**
      * Read the process-wide app-performance snapshot for debug/diagnostics
      * surfaces and on-demand support dumps.
      *
@@ -1832,6 +1837,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * account, group, message, relay, URL, pubkey, payload, or key material.
      */
     func appPerformanceSnapshot()  -> AppPerformanceSnapshotFfi
+
+    func approveOnboardingRepair(accountRef: String, revision: UInt64) async throws  -> OnboardingSnapshotFfi
 
     /**
      * Local JSONL audit logs available for explicit forensic upload.
@@ -1843,6 +1850,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * applies to account sessions opened after the setting is enabled.
      */
     func auditLogSettings() throws  -> AuditLogSettingsFfi
+
+    func beginExternalSignerOnboarding(publicKey: String, signer: ExternalAccountSignerFfi, options: OnboardingOptionsFfi) async throws  -> OnboardingSnapshotFfi
+
+    /**
+     * Persist the identity and return before any network preflight or publication.
+     */
+    func beginOnboarding(nsec: String, options: OnboardingOptionsFfi) async throws  -> OnboardingSnapshotFfi
 
     /**
      * Build one outbound encrypted-media `imeta` tag without publishing it.
@@ -1864,6 +1878,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * identity. Maximum page size is 100 account IDs.
      */
     func cachedIdentityProjections(accountIdHexes: [String]) throws  -> [CachedIdentityProjectionFfi]
+
+    /**
+     * Cancel unfinished onboarding, retaining the signed-out identity and private state.
+     * Approved unfinished repairs must be resumed before cancellation.
+     */
+    func cancelOnboarding(accountRef: String) async throws
+
+    func cancelOnboardingRepair(accountRef: String) async throws  -> OnboardingSnapshotFfi
 
     func catchUpAccounts() async throws
 
@@ -1912,6 +1934,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func clearPushRegistration(accountRef: String) async throws  -> PushRegistrationShareOutcomeFfi
 
     func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationWakeSourceFfi) async throws  -> BackgroundNotificationCollectionFfi
+
+    func continueOnboardingWithout(accountRef: String, step: OnboardingStepFfi) async throws  -> OnboardingSnapshotFfi
 
     /**
      * Create a new MLS group with `name` and the given members. Members are
@@ -2318,6 +2342,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func npub(accountIdHex: String)  -> String?
 
+    func onboardingSnapshot(accountRef: String) throws  -> OnboardingSnapshotFfi?
+
     /**
      * Parse plaintext message content into the same Markdown AST returned on
      * message and timeline records. Useful for draft previews and host-side
@@ -2359,6 +2385,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func promoteAdmin(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> SendSummaryFfi
 
     func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef: String) async throws  -> GroupMutationResultFfi
+
+    func proposeOnboardingFollows(accountRef: String, follows: [String]) async throws  -> OnboardingSnapshotFfi
+
+    func proposeOnboardingProfile(accountRef: String, profile: UserProfileMetadataFfi) async throws  -> OnboardingSnapshotFfi
+
+    func proposeOnboardingRecommendedRelays(accountRef: String, step: OnboardingStepFfi) async throws  -> OnboardingSnapshotFfi
+
+    func proposeOnboardingRelays(accountRef: String, step: OnboardingStepFfi, readRelays: [String], writeRelays: [String]) async throws  -> OnboardingSnapshotFfi
 
     /**
      * Publish a new fresh KeyPackage for `account_ref`.
@@ -2536,6 +2570,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String) async throws  -> Bool
 
+    func retryOnboardingStep(accountRef: String, step: OnboardingStepFfi) async throws  -> OnboardingSnapshotFfi
+
     /**
      * Export the active account's raw private key in canonical `nsec1...`
      * bech32 form for an in-app key-backup display (mdk#543).
@@ -2561,6 +2597,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func rotateKeyPackage(accountRef: String) async throws  -> UInt64
 
     func runDueMaintenance(accountRef: String) async throws  -> MaintenanceRunSummaryFfi
+
+    func runOnboarding(accountRef: String) async throws  -> OnboardingSnapshotFfi
 
     /**
      * Upsert a composer draft into the account's encrypted SQLCipher store.
@@ -2692,6 +2730,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func setLocalNotificationsEnabled(accountRef: String, enabled: Bool) throws  -> NotificationSettingsFfi
 
     func setNativePushEnabled(accountRef: String, enabled: Bool) async throws  -> NotificationSettingsFfi
+
+    func setOnboardingDiscoveryRelays(accountRef: String, discoveryRelays: [String]) async throws  -> OnboardingSnapshotFfi
 
     func setPeriodicMaintenancePolicy(accountRef: String, policy: PeriodicMaintenancePolicyFfi) async throws
 
@@ -2880,6 +2920,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func subscribeMessages(accountRef: String, groupIdHex: String?, limit: UInt32?, kinds: [UInt64]?) async throws  -> MessagesSubscription
 
     func subscribeNotifications() async throws  -> NotificationsSubscription
+
+    func subscribeOnboarding(accountRef: String) throws  -> OnboardingSubscription
 
     /**
      * Live materialized timeline updates for a group or account-wide tail.
@@ -3281,6 +3323,26 @@ open func acknowledgeDisbandFailure(accountRef: String, groupIdHex: String)async
 }
 
     /**
+     * Record Continue anyway for the displayed notice, then resume setup.
+     */
+open func acknowledgeOnboardingSingleDevice(accountRef: String, revision: UInt64)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_acknowledge_onboarding_single_device(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterUInt64.lower(revision)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Read the process-wide app-performance snapshot for debug/diagnostics
      * surfaces and on-demand support dumps.
      *
@@ -3293,6 +3355,23 @@ open func appPerformanceSnapshot() -> AppPerformanceSnapshotFfi  {
     uniffi_marmot_uniffi_fn_method_marmot_app_performance_snapshot(self.uniffiClonePointer(),$0
     )
 })
+}
+
+open func approveOnboardingRepair(accountRef: String, revision: UInt64)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_approve_onboarding_repair(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterUInt64.lower(revision)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -3314,6 +3393,43 @@ open func auditLogSettings()throws  -> AuditLogSettingsFfi  {
     uniffi_marmot_uniffi_fn_method_marmot_audit_log_settings(self.uniffiClonePointer(),$0
     )
 })
+}
+
+open func beginExternalSignerOnboarding(publicKey: String, signer: ExternalAccountSignerFfi, options: OnboardingOptionsFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_begin_external_signer_onboarding(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(publicKey),FfiConverterTypeExternalAccountSignerFfi_lower(signer),FfiConverterTypeOnboardingOptionsFfi_lower(options)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Persist the identity and return before any network preflight or publication.
+     */
+open func beginOnboarding(nsec: String, options: OnboardingOptionsFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_begin_onboarding(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(nsec),FfiConverterTypeOnboardingOptionsFfi_lower(options)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
     /**
@@ -3356,6 +3472,44 @@ open func cachedIdentityProjections(accountIdHexes: [String])throws  -> [CachedI
         FfiConverterSequenceString.lower(accountIdHexes),$0
     )
 })
+}
+
+    /**
+     * Cancel unfinished onboarding, retaining the signed-out identity and private state.
+     * Approved unfinished repairs must be resumed before cancellation.
+     */
+open func cancelOnboarding(accountRef: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_onboarding(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func cancelOnboardingRepair(accountRef: String)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_cancel_onboarding_repair(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
 }
 
 open func catchUpAccounts()async throws   {
@@ -3496,6 +3650,23 @@ open func collectNotificationsAfterWake(maxWaitMs: UInt32, source: NotificationW
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeBackgroundNotificationCollectionFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func continueOnboardingWithout(accountRef: String, step: OnboardingStepFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_continue_onboarding_without(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeOnboardingStepFfi_lower(step)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -4649,6 +4820,14 @@ open func npub(accountIdHex: String) -> String?  {
 })
 }
 
+open func onboardingSnapshot(accountRef: String)throws  -> OnboardingSnapshotFfi?  {
+    return try  FfiConverterOptionTypeOnboardingSnapshotFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_onboarding_snapshot(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
+}
+
     /**
      * Parse plaintext message content into the same Markdown AST returned on
      * message and timeline records. Useful for draft previews and host-side
@@ -4828,6 +5007,74 @@ open func promoteAdminDetailed(accountRef: String, groupIdHex: String, memberRef
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeGroupMutationResultFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func proposeOnboardingFollows(accountRef: String, follows: [String])async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_propose_onboarding_follows(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(follows)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func proposeOnboardingProfile(accountRef: String, profile: UserProfileMetadataFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_propose_onboarding_profile(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeUserProfileMetadataFfi_lower(profile)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func proposeOnboardingRecommendedRelays(accountRef: String, step: OnboardingStepFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_propose_onboarding_recommended_relays(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeOnboardingStepFfi_lower(step)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func proposeOnboardingRelays(accountRef: String, step: OnboardingStepFfi, readRelays: [String], writeRelays: [String])async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_propose_onboarding_relays(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeOnboardingStepFfi_lower(step),FfiConverterSequenceString.lower(readRelays),FfiConverterSequenceString.lower(writeRelays)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -5332,6 +5579,23 @@ open func retryHydrateQuarantinedGroup(accountRef: String, groupIdHex: String)as
         )
 }
 
+open func retryOnboardingStep(accountRef: String, step: OnboardingStepFfi)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_retry_onboarding_step(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterTypeOnboardingStepFfi_lower(step)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
     /**
      * Export the active account's raw private key in canonical `nsec1...`
      * bech32 form for an in-app key-backup display (mdk#543).
@@ -5390,6 +5654,23 @@ open func runDueMaintenance(accountRef: String)async throws  -> MaintenanceRunSu
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeMaintenanceRunSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func runOnboarding(accountRef: String)async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_run_onboarding(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -5778,6 +6059,23 @@ open func setNativePushEnabled(accountRef: String, enabled: Bool)async throws  -
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeNotificationSettingsFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func setOnboardingDiscoveryRelays(accountRef: String, discoveryRelays: [String])async throws  -> OnboardingSnapshotFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_onboarding_discovery_relays(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(discoveryRelays)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeOnboardingSnapshotFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -6226,6 +6524,14 @@ open func subscribeNotifications()async throws  -> NotificationsSubscription  {
             liftFunc: FfiConverterTypeNotificationsSubscription_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
+}
+
+open func subscribeOnboarding(accountRef: String)throws  -> OnboardingSubscription  {
+    return try  FfiConverterTypeOnboardingSubscription_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_subscribe_onboarding(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),$0
+    )
+})
 }
 
     /**
@@ -6916,6 +7222,148 @@ public func FfiConverterTypeNotificationsSubscription_lift(_ pointer: UnsafeMuta
 #endif
 public func FfiConverterTypeNotificationsSubscription_lower(_ value: NotificationsSubscription) -> UnsafeMutableRawPointer {
     return FfiConverterTypeNotificationsSubscription.lower(value)
+}
+
+
+
+
+
+
+public protocol OnboardingSubscriptionProtocol: AnyObject, Sendable {
+
+    func next() async  -> OnboardingSnapshotFfi?
+
+    func snapshot()  -> OnboardingSnapshotFfi
+
+}
+open class OnboardingSubscription: OnboardingSubscriptionProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_marmot_uniffi_fn_clone_onboardingsubscription(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_marmot_uniffi_fn_free_onboardingsubscription(pointer, $0) }
+    }
+
+
+
+
+open func next()async  -> OnboardingSnapshotFfi?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_onboardingsubscription_next(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeOnboardingSnapshotFfi.lift,
+            errorHandler: nil
+
+        )
+}
+
+open func snapshot() -> OnboardingSnapshotFfi  {
+    return try!  FfiConverterTypeOnboardingSnapshotFfi_lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_onboardingsubscription_snapshot(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingSubscription: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = OnboardingSubscription
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> OnboardingSubscription {
+        return OnboardingSubscription(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: OnboardingSubscription) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingSubscription {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: OnboardingSubscription, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSubscription_lift(_ pointer: UnsafeMutableRawPointer) throws -> OnboardingSubscription {
+    return try FfiConverterTypeOnboardingSubscription.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSubscription_lower(_ value: OnboardingSubscription) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeOnboardingSubscription.lower(value)
 }
 
 
@@ -16611,6 +17059,648 @@ public func FfiConverterTypeNotificationUserFfi_lower(_ value: NotificationUserF
 }
 
 
+public struct OnboardingDevicePackageFfi {
+    public var slotId: String
+    public var keyPackageRefHex: String?
+    public var eventIdHex: String
+    public var publishedAt: UInt64
+    public var expiresAt: UInt64?
+    public var usable: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(slotId: String, keyPackageRefHex: String?, eventIdHex: String, publishedAt: UInt64, expiresAt: UInt64?, usable: Bool) {
+        self.slotId = slotId
+        self.keyPackageRefHex = keyPackageRefHex
+        self.eventIdHex = eventIdHex
+        self.publishedAt = publishedAt
+        self.expiresAt = expiresAt
+        self.usable = usable
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingDevicePackageFfi: Sendable {}
+#endif
+
+
+extension OnboardingDevicePackageFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingDevicePackageFfi, rhs: OnboardingDevicePackageFfi) -> Bool {
+        if lhs.slotId != rhs.slotId {
+            return false
+        }
+        if lhs.keyPackageRefHex != rhs.keyPackageRefHex {
+            return false
+        }
+        if lhs.eventIdHex != rhs.eventIdHex {
+            return false
+        }
+        if lhs.publishedAt != rhs.publishedAt {
+            return false
+        }
+        if lhs.expiresAt != rhs.expiresAt {
+            return false
+        }
+        if lhs.usable != rhs.usable {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(slotId)
+        hasher.combine(keyPackageRefHex)
+        hasher.combine(eventIdHex)
+        hasher.combine(publishedAt)
+        hasher.combine(expiresAt)
+        hasher.combine(usable)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingDevicePackageFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingDevicePackageFfi {
+        return
+            try OnboardingDevicePackageFfi(
+                slotId: FfiConverterString.read(from: &buf),
+                keyPackageRefHex: FfiConverterOptionString.read(from: &buf),
+                eventIdHex: FfiConverterString.read(from: &buf),
+                publishedAt: FfiConverterUInt64.read(from: &buf),
+                expiresAt: FfiConverterOptionUInt64.read(from: &buf),
+                usable: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingDevicePackageFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.slotId, into: &buf)
+        FfiConverterOptionString.write(value.keyPackageRefHex, into: &buf)
+        FfiConverterString.write(value.eventIdHex, into: &buf)
+        FfiConverterUInt64.write(value.publishedAt, into: &buf)
+        FfiConverterOptionUInt64.write(value.expiresAt, into: &buf)
+        FfiConverterBool.write(value.usable, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingDevicePackageFfi_lift(_ buf: RustBuffer) throws -> OnboardingDevicePackageFfi {
+    return try FfiConverterTypeOnboardingDevicePackageFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingDevicePackageFfi_lower(_ value: OnboardingDevicePackageFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingDevicePackageFfi.lower(value)
+}
+
+
+public struct OnboardingFindingFfi {
+    public var issue: OnboardingIssueFfi
+    public var endpoint: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(issue: OnboardingIssueFfi, endpoint: String?) {
+        self.issue = issue
+        self.endpoint = endpoint
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingFindingFfi: Sendable {}
+#endif
+
+
+extension OnboardingFindingFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingFindingFfi, rhs: OnboardingFindingFfi) -> Bool {
+        if lhs.issue != rhs.issue {
+            return false
+        }
+        if lhs.endpoint != rhs.endpoint {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(issue)
+        hasher.combine(endpoint)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingFindingFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingFindingFfi {
+        return
+            try OnboardingFindingFfi(
+                issue: FfiConverterTypeOnboardingIssueFfi.read(from: &buf),
+                endpoint: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingFindingFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeOnboardingIssueFfi.write(value.issue, into: &buf)
+        FfiConverterOptionString.write(value.endpoint, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingFindingFfi_lift(_ buf: RustBuffer) throws -> OnboardingFindingFfi {
+    return try FfiConverterTypeOnboardingFindingFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingFindingFfi_lower(_ value: OnboardingFindingFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingFindingFfi.lower(value)
+}
+
+
+public struct OnboardingOptionsFfi {
+    public var defaultRelays: [String]
+    public var discoveryRelays: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(defaultRelays: [String], discoveryRelays: [String]) {
+        self.defaultRelays = defaultRelays
+        self.discoveryRelays = discoveryRelays
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingOptionsFfi: Sendable {}
+#endif
+
+
+extension OnboardingOptionsFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingOptionsFfi, rhs: OnboardingOptionsFfi) -> Bool {
+        if lhs.defaultRelays != rhs.defaultRelays {
+            return false
+        }
+        if lhs.discoveryRelays != rhs.discoveryRelays {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(defaultRelays)
+        hasher.combine(discoveryRelays)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingOptionsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingOptionsFfi {
+        return
+            try OnboardingOptionsFfi(
+                defaultRelays: FfiConverterSequenceString.read(from: &buf),
+                discoveryRelays: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingOptionsFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceString.write(value.defaultRelays, into: &buf)
+        FfiConverterSequenceString.write(value.discoveryRelays, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingOptionsFfi_lift(_ buf: RustBuffer) throws -> OnboardingOptionsFfi {
+    return try FfiConverterTypeOnboardingOptionsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingOptionsFfi_lower(_ value: OnboardingOptionsFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingOptionsFfi.lower(value)
+}
+
+
+public struct OnboardingRepairProposalFfi {
+    public var step: OnboardingStepFfi
+    public var revision: UInt64
+    public var previousEventId: String?
+    public var readRelays: [String]
+    public var writeRelays: [String]
+    public var profile: UserProfileMetadataFfi?
+    public var follows: [String]?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(step: OnboardingStepFfi, revision: UInt64, previousEventId: String?, readRelays: [String], writeRelays: [String], profile: UserProfileMetadataFfi?, follows: [String]?) {
+        self.step = step
+        self.revision = revision
+        self.previousEventId = previousEventId
+        self.readRelays = readRelays
+        self.writeRelays = writeRelays
+        self.profile = profile
+        self.follows = follows
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingRepairProposalFfi: Sendable {}
+#endif
+
+
+extension OnboardingRepairProposalFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingRepairProposalFfi, rhs: OnboardingRepairProposalFfi) -> Bool {
+        if lhs.step != rhs.step {
+            return false
+        }
+        if lhs.revision != rhs.revision {
+            return false
+        }
+        if lhs.previousEventId != rhs.previousEventId {
+            return false
+        }
+        if lhs.readRelays != rhs.readRelays {
+            return false
+        }
+        if lhs.writeRelays != rhs.writeRelays {
+            return false
+        }
+        if lhs.profile != rhs.profile {
+            return false
+        }
+        if lhs.follows != rhs.follows {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(step)
+        hasher.combine(revision)
+        hasher.combine(previousEventId)
+        hasher.combine(readRelays)
+        hasher.combine(writeRelays)
+        hasher.combine(profile)
+        hasher.combine(follows)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingRepairProposalFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingRepairProposalFfi {
+        return
+            try OnboardingRepairProposalFfi(
+                step: FfiConverterTypeOnboardingStepFfi.read(from: &buf),
+                revision: FfiConverterUInt64.read(from: &buf),
+                previousEventId: FfiConverterOptionString.read(from: &buf),
+                readRelays: FfiConverterSequenceString.read(from: &buf),
+                writeRelays: FfiConverterSequenceString.read(from: &buf),
+                profile: FfiConverterOptionTypeUserProfileMetadataFfi.read(from: &buf),
+                follows: FfiConverterOptionSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingRepairProposalFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeOnboardingStepFfi.write(value.step, into: &buf)
+        FfiConverterUInt64.write(value.revision, into: &buf)
+        FfiConverterOptionString.write(value.previousEventId, into: &buf)
+        FfiConverterSequenceString.write(value.readRelays, into: &buf)
+        FfiConverterSequenceString.write(value.writeRelays, into: &buf)
+        FfiConverterOptionTypeUserProfileMetadataFfi.write(value.profile, into: &buf)
+        FfiConverterOptionSequenceString.write(value.follows, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingRepairProposalFfi_lift(_ buf: RustBuffer) throws -> OnboardingRepairProposalFfi {
+    return try FfiConverterTypeOnboardingRepairProposalFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingRepairProposalFfi_lower(_ value: OnboardingRepairProposalFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingRepairProposalFfi.lower(value)
+}
+
+
+public struct OnboardingSingleDeviceNoticeFfi {
+    public var discovery: OnboardingDeviceDiscoveryFfi
+    public var otherPackages: [OnboardingDevicePackageFfi]
+    public var discoveryComplete: Bool
+    public var acknowledgedAt: UInt64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(discovery: OnboardingDeviceDiscoveryFfi, otherPackages: [OnboardingDevicePackageFfi], discoveryComplete: Bool, acknowledgedAt: UInt64?) {
+        self.discovery = discovery
+        self.otherPackages = otherPackages
+        self.discoveryComplete = discoveryComplete
+        self.acknowledgedAt = acknowledgedAt
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingSingleDeviceNoticeFfi: Sendable {}
+#endif
+
+
+extension OnboardingSingleDeviceNoticeFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingSingleDeviceNoticeFfi, rhs: OnboardingSingleDeviceNoticeFfi) -> Bool {
+        if lhs.discovery != rhs.discovery {
+            return false
+        }
+        if lhs.otherPackages != rhs.otherPackages {
+            return false
+        }
+        if lhs.discoveryComplete != rhs.discoveryComplete {
+            return false
+        }
+        if lhs.acknowledgedAt != rhs.acknowledgedAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(discovery)
+        hasher.combine(otherPackages)
+        hasher.combine(discoveryComplete)
+        hasher.combine(acknowledgedAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingSingleDeviceNoticeFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingSingleDeviceNoticeFfi {
+        return
+            try OnboardingSingleDeviceNoticeFfi(
+                discovery: FfiConverterTypeOnboardingDeviceDiscoveryFfi.read(from: &buf),
+                otherPackages: FfiConverterSequenceTypeOnboardingDevicePackageFfi.read(from: &buf),
+                discoveryComplete: FfiConverterBool.read(from: &buf),
+                acknowledgedAt: FfiConverterOptionUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingSingleDeviceNoticeFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeOnboardingDeviceDiscoveryFfi.write(value.discovery, into: &buf)
+        FfiConverterSequenceTypeOnboardingDevicePackageFfi.write(value.otherPackages, into: &buf)
+        FfiConverterBool.write(value.discoveryComplete, into: &buf)
+        FfiConverterOptionUInt64.write(value.acknowledgedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSingleDeviceNoticeFfi_lift(_ buf: RustBuffer) throws -> OnboardingSingleDeviceNoticeFfi {
+    return try FfiConverterTypeOnboardingSingleDeviceNoticeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSingleDeviceNoticeFfi_lower(_ value: OnboardingSingleDeviceNoticeFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingSingleDeviceNoticeFfi.lower(value)
+}
+
+
+public struct OnboardingSnapshotFfi {
+    public var accountIdHex: String
+    public var revision: UInt64
+    public var ready: Bool
+    public var steps: [OnboardingStepStateFfi]
+    public var proposal: OnboardingRepairProposalFfi?
+    public var singleDeviceNotice: OnboardingSingleDeviceNoticeFfi?
+    public var cancellationPending: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountIdHex: String, revision: UInt64, ready: Bool, steps: [OnboardingStepStateFfi], proposal: OnboardingRepairProposalFfi?, singleDeviceNotice: OnboardingSingleDeviceNoticeFfi?, cancellationPending: Bool) {
+        self.accountIdHex = accountIdHex
+        self.revision = revision
+        self.ready = ready
+        self.steps = steps
+        self.proposal = proposal
+        self.singleDeviceNotice = singleDeviceNotice
+        self.cancellationPending = cancellationPending
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingSnapshotFfi: Sendable {}
+#endif
+
+
+extension OnboardingSnapshotFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingSnapshotFfi, rhs: OnboardingSnapshotFfi) -> Bool {
+        if lhs.accountIdHex != rhs.accountIdHex {
+            return false
+        }
+        if lhs.revision != rhs.revision {
+            return false
+        }
+        if lhs.ready != rhs.ready {
+            return false
+        }
+        if lhs.steps != rhs.steps {
+            return false
+        }
+        if lhs.proposal != rhs.proposal {
+            return false
+        }
+        if lhs.singleDeviceNotice != rhs.singleDeviceNotice {
+            return false
+        }
+        if lhs.cancellationPending != rhs.cancellationPending {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(accountIdHex)
+        hasher.combine(revision)
+        hasher.combine(ready)
+        hasher.combine(steps)
+        hasher.combine(proposal)
+        hasher.combine(singleDeviceNotice)
+        hasher.combine(cancellationPending)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingSnapshotFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingSnapshotFfi {
+        return
+            try OnboardingSnapshotFfi(
+                accountIdHex: FfiConverterString.read(from: &buf),
+                revision: FfiConverterUInt64.read(from: &buf),
+                ready: FfiConverterBool.read(from: &buf),
+                steps: FfiConverterSequenceTypeOnboardingStepStateFfi.read(from: &buf),
+                proposal: FfiConverterOptionTypeOnboardingRepairProposalFfi.read(from: &buf),
+                singleDeviceNotice: FfiConverterOptionTypeOnboardingSingleDeviceNoticeFfi.read(from: &buf),
+                cancellationPending: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingSnapshotFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountIdHex, into: &buf)
+        FfiConverterUInt64.write(value.revision, into: &buf)
+        FfiConverterBool.write(value.ready, into: &buf)
+        FfiConverterSequenceTypeOnboardingStepStateFfi.write(value.steps, into: &buf)
+        FfiConverterOptionTypeOnboardingRepairProposalFfi.write(value.proposal, into: &buf)
+        FfiConverterOptionTypeOnboardingSingleDeviceNoticeFfi.write(value.singleDeviceNotice, into: &buf)
+        FfiConverterBool.write(value.cancellationPending, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSnapshotFfi_lift(_ buf: RustBuffer) throws -> OnboardingSnapshotFfi {
+    return try FfiConverterTypeOnboardingSnapshotFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingSnapshotFfi_lower(_ value: OnboardingSnapshotFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingSnapshotFfi.lower(value)
+}
+
+
+public struct OnboardingStepStateFfi {
+    public var step: OnboardingStepFfi
+    public var status: OnboardingStatusFfi
+    public var findings: [OnboardingFindingFfi]
+    public var actions: [OnboardingActionFfi]
+    public var checkedAt: UInt64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(step: OnboardingStepFfi, status: OnboardingStatusFfi, findings: [OnboardingFindingFfi], actions: [OnboardingActionFfi], checkedAt: UInt64?) {
+        self.step = step
+        self.status = status
+        self.findings = findings
+        self.actions = actions
+        self.checkedAt = checkedAt
+    }
+}
+
+#if compiler(>=6)
+extension OnboardingStepStateFfi: Sendable {}
+#endif
+
+
+extension OnboardingStepStateFfi: Equatable, Hashable {
+    public static func ==(lhs: OnboardingStepStateFfi, rhs: OnboardingStepStateFfi) -> Bool {
+        if lhs.step != rhs.step {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.findings != rhs.findings {
+            return false
+        }
+        if lhs.actions != rhs.actions {
+            return false
+        }
+        if lhs.checkedAt != rhs.checkedAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(step)
+        hasher.combine(status)
+        hasher.combine(findings)
+        hasher.combine(actions)
+        hasher.combine(checkedAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingStepStateFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingStepStateFfi {
+        return
+            try OnboardingStepStateFfi(
+                step: FfiConverterTypeOnboardingStepFfi.read(from: &buf),
+                status: FfiConverterTypeOnboardingStatusFfi.read(from: &buf),
+                findings: FfiConverterSequenceTypeOnboardingFindingFfi.read(from: &buf),
+                actions: FfiConverterSequenceTypeOnboardingActionFfi.read(from: &buf),
+                checkedAt: FfiConverterOptionUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OnboardingStepStateFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeOnboardingStepFfi.write(value.step, into: &buf)
+        FfiConverterTypeOnboardingStatusFfi.write(value.status, into: &buf)
+        FfiConverterSequenceTypeOnboardingFindingFfi.write(value.findings, into: &buf)
+        FfiConverterSequenceTypeOnboardingActionFfi.write(value.actions, into: &buf)
+        FfiConverterOptionUInt64.write(value.checkedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStepStateFfi_lift(_ buf: RustBuffer) throws -> OnboardingStepStateFfi {
+    return try FfiConverterTypeOnboardingStepStateFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStepStateFfi_lower(_ value: OnboardingStepStateFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingStepStateFfi.lower(value)
+}
+
+
 public struct PreparedGroupImageUploadFfi {
     public var uploadId: String
     public var state: PreparedGroupImageUploadStateFfi
@@ -23233,6 +24323,8 @@ public enum MarmotKitError: Swift.Error {
      */
     case AccountSetupRecoveryRequired
     case AccountSetupRetryRequired
+    case OnboardingActionUnavailable
+    case OnboardingRequired
     case AccountSetupResetNotApplicable
     case AccountSetupKeyPackageRecoveryAvailable
     case RuntimeStopping
@@ -23264,6 +24356,13 @@ public enum MarmotKitError: Swift.Error {
     case DisbandingNotEnabled(groupIdHex: String
     )
     case GroupDisbanding(groupIdHex: String
+    )
+    /**
+     * This device was removed from the group; it goes on without us. Kept
+     * distinct from `GroupDisbanding` so a host does not tell the user a live
+     * group was disbanded.
+     */
+    case GroupRemoved(groupIdHex: String
     )
     case MemberNotInGroup(groupIdHex: String, memberIdHex: String
     )
@@ -23461,81 +24560,86 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
         case 22: return .AccountSessionBusy
         case 23: return .AccountSetupRecoveryRequired
         case 24: return .AccountSetupRetryRequired
-        case 25: return .AccountSetupResetNotApplicable
-        case 26: return .AccountSetupKeyPackageRecoveryAvailable
-        case 27: return .RuntimeStopping
-        case 28: return .AccountCatchUp(
+        case 25: return .OnboardingActionUnavailable
+        case 26: return .OnboardingRequired
+        case 27: return .AccountSetupResetNotApplicable
+        case 28: return .AccountSetupKeyPackageRecoveryAvailable
+        case 29: return .RuntimeStopping
+        case 30: return .AccountCatchUp(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 29: return .NotGroupAdmin(
+        case 31: return .NotGroupAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 30: return .AdminCannotSelfRemove(
+        case 32: return .AdminCannotSelfRemove(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 31: return .LeaveAlreadyRequested(
+        case 33: return .LeaveAlreadyRequested(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 32: return .WouldRemoveLastAdmin(
+        case 34: return .WouldRemoveLastAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 33: return .DisbandingUnsupportedMembers(
+        case 35: return .DisbandingUnsupportedMembers(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdsHex: try FfiConverterSequenceString.read(from: &buf)
             )
-        case 34: return .DisbandingNotEnabled(
+        case 36: return .DisbandingNotEnabled(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 35: return .GroupDisbanding(
+        case 37: return .GroupDisbanding(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 36: return .MemberNotInGroup(
+        case 38: return .GroupRemoved(
+            groupIdHex: try FfiConverterString.read(from: &buf)
+            )
+        case 39: return .MemberNotInGroup(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 37: return .AlreadyAdmin(
+        case 40: return .AlreadyAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 38: return .NotAdmin(
+        case 41: return .NotAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 39: return .StorageBusy(
+        case 42: return .StorageBusy(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 40: return .StorageClosed(
+        case 43: return .StorageClosed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 41: return .SecretNotFound(
+        case 44: return .SecretNotFound(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 42: return .KeystoreUnavailable(
+        case 45: return .KeystoreUnavailable(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 43: return .EmptyPassphrase
-        case 44: return .EncryptionFailed(
+        case 46: return .EmptyPassphrase
+        case 47: return .EncryptionFailed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 45: return .Io(
+        case 48: return .Io(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 46: return .ExternalSignerUnavailable(
+        case 49: return .ExternalSignerUnavailable(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 47: return .ExternalSignerMismatch
-        case 48: return .ExternalSignerRejected
-        case 49: return .GroupSendQueueFull(
+        case 50: return .ExternalSignerMismatch
+        case 51: return .ExternalSignerRejected
+        case 52: return .GroupSendQueueFull(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 50: return .GroupUnrecoverableRepairRequired(
+        case 53: return .GroupUnrecoverableRepairRequired(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 51: return .Runtime(
+        case 54: return .Runtime(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 52: return .AccountWorkerBusy
-        case 53: return .AccountWorkerResponseTimedOut
+        case 55: return .AccountWorkerBusy
+        case 56: return .AccountWorkerResponseTimedOut
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -23660,145 +24764,158 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(24))
 
 
-        case .AccountSetupResetNotApplicable:
+        case .OnboardingActionUnavailable:
             writeInt(&buf, Int32(25))
 
 
-        case .AccountSetupKeyPackageRecoveryAvailable:
+        case .OnboardingRequired:
             writeInt(&buf, Int32(26))
 
 
-        case .RuntimeStopping:
+        case .AccountSetupResetNotApplicable:
             writeInt(&buf, Int32(27))
 
 
-        case let .AccountCatchUp(details):
+        case .AccountSetupKeyPackageRecoveryAvailable:
             writeInt(&buf, Int32(28))
+
+
+        case .RuntimeStopping:
+            writeInt(&buf, Int32(29))
+
+
+        case let .AccountCatchUp(details):
+            writeInt(&buf, Int32(30))
             FfiConverterString.write(details, into: &buf)
 
 
         case let .NotGroupAdmin(groupIdHex):
-            writeInt(&buf, Int32(29))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .AdminCannotSelfRemove(groupIdHex):
-            writeInt(&buf, Int32(30))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .LeaveAlreadyRequested(groupIdHex):
             writeInt(&buf, Int32(31))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .WouldRemoveLastAdmin(groupIdHex):
+        case let .AdminCannotSelfRemove(groupIdHex):
             writeInt(&buf, Int32(32))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+        case let .LeaveAlreadyRequested(groupIdHex):
             writeInt(&buf, Int32(33))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .WouldRemoveLastAdmin(groupIdHex):
+            writeInt(&buf, Int32(34))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+            writeInt(&buf, Int32(35))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterSequenceString.write(memberIdsHex, into: &buf)
 
 
         case let .DisbandingNotEnabled(groupIdHex):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(36))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupDisbanding(groupIdHex):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(37))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .GroupRemoved(groupIdHex):
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .MemberNotInGroup(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(39))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .AlreadyAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(37))
+            writeInt(&buf, Int32(40))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .NotAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(38))
+            writeInt(&buf, Int32(41))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .StorageBusy(details):
-            writeInt(&buf, Int32(39))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .StorageClosed(details):
-            writeInt(&buf, Int32(40))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .SecretNotFound(details):
-            writeInt(&buf, Int32(41))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .KeystoreUnavailable(details):
             writeInt(&buf, Int32(42))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .EmptyPassphrase:
+        case let .StorageClosed(details):
             writeInt(&buf, Int32(43))
+            FfiConverterString.write(details, into: &buf)
 
 
-        case let .EncryptionFailed(details):
+        case let .SecretNotFound(details):
             writeInt(&buf, Int32(44))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .Io(details):
+        case let .KeystoreUnavailable(details):
             writeInt(&buf, Int32(45))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .ExternalSignerUnavailable(account):
+        case .EmptyPassphrase:
             writeInt(&buf, Int32(46))
+
+
+        case let .EncryptionFailed(details):
+            writeInt(&buf, Int32(47))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Io(details):
+            writeInt(&buf, Int32(48))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .ExternalSignerUnavailable(account):
+            writeInt(&buf, Int32(49))
             FfiConverterString.write(account, into: &buf)
 
 
         case .ExternalSignerMismatch:
-            writeInt(&buf, Int32(47))
+            writeInt(&buf, Int32(50))
 
 
         case .ExternalSignerRejected:
-            writeInt(&buf, Int32(48))
+            writeInt(&buf, Int32(51))
 
 
         case let .GroupSendQueueFull(groupIdHex):
-            writeInt(&buf, Int32(49))
+            writeInt(&buf, Int32(52))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupUnrecoverableRepairRequired(groupIdHex):
-            writeInt(&buf, Int32(50))
+            writeInt(&buf, Int32(53))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .Runtime(details):
-            writeInt(&buf, Int32(51))
+            writeInt(&buf, Int32(54))
             FfiConverterString.write(details, into: &buf)
 
 
         case .AccountWorkerBusy:
-            writeInt(&buf, Int32(52))
+            writeInt(&buf, Int32(55))
 
 
         case .AccountWorkerResponseTimedOut:
-            writeInt(&buf, Int32(53))
+            writeInt(&buf, Int32(56))
 
         }
     }
@@ -24502,6 +25619,629 @@ public func FfiConverterTypeNotificationWakeSourceFfi_lower(_ value: Notificatio
 
 
 extension NotificationWakeSourceFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingActionFfi {
+
+    case retry
+    case continueWithout
+    case useRecommendedRelays
+    case editRelays
+    case editProfile
+    case editFollows
+    case approveRepair
+    case cancelRepair
+    case reconnectSigner
+    case editDiscoveryRelays
+    case continueAnyway
+    case cancelOnboarding
+}
+
+
+#if compiler(>=6)
+extension OnboardingActionFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingActionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingActionFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingActionFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .retry
+
+        case 2: return .continueWithout
+
+        case 3: return .useRecommendedRelays
+
+        case 4: return .editRelays
+
+        case 5: return .editProfile
+
+        case 6: return .editFollows
+
+        case 7: return .approveRepair
+
+        case 8: return .cancelRepair
+
+        case 9: return .reconnectSigner
+
+        case 10: return .editDiscoveryRelays
+
+        case 11: return .continueAnyway
+
+        case 12: return .cancelOnboarding
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingActionFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .retry:
+            writeInt(&buf, Int32(1))
+
+
+        case .continueWithout:
+            writeInt(&buf, Int32(2))
+
+
+        case .useRecommendedRelays:
+            writeInt(&buf, Int32(3))
+
+
+        case .editRelays:
+            writeInt(&buf, Int32(4))
+
+
+        case .editProfile:
+            writeInt(&buf, Int32(5))
+
+
+        case .editFollows:
+            writeInt(&buf, Int32(6))
+
+
+        case .approveRepair:
+            writeInt(&buf, Int32(7))
+
+
+        case .cancelRepair:
+            writeInt(&buf, Int32(8))
+
+
+        case .reconnectSigner:
+            writeInt(&buf, Int32(9))
+
+
+        case .editDiscoveryRelays:
+            writeInt(&buf, Int32(10))
+
+
+        case .continueAnyway:
+            writeInt(&buf, Int32(11))
+
+
+        case .cancelOnboarding:
+            writeInt(&buf, Int32(12))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingActionFfi_lift(_ buf: RustBuffer) throws -> OnboardingActionFfi {
+    return try FfiConverterTypeOnboardingActionFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingActionFfi_lower(_ value: OnboardingActionFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingActionFfi.lower(value)
+}
+
+
+extension OnboardingActionFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingDeviceDiscoveryFfi {
+
+    case noneFound
+    case otherInstallationPossible
+    case unknown
+}
+
+
+#if compiler(>=6)
+extension OnboardingDeviceDiscoveryFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingDeviceDiscoveryFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingDeviceDiscoveryFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingDeviceDiscoveryFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .noneFound
+
+        case 2: return .otherInstallationPossible
+
+        case 3: return .unknown
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingDeviceDiscoveryFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .noneFound:
+            writeInt(&buf, Int32(1))
+
+
+        case .otherInstallationPossible:
+            writeInt(&buf, Int32(2))
+
+
+        case .unknown:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingDeviceDiscoveryFfi_lift(_ buf: RustBuffer) throws -> OnboardingDeviceDiscoveryFfi {
+    return try FfiConverterTypeOnboardingDeviceDiscoveryFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingDeviceDiscoveryFfi_lower(_ value: OnboardingDeviceDiscoveryFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingDeviceDiscoveryFfi.lower(value)
+}
+
+
+extension OnboardingDeviceDiscoveryFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingIssueFfi {
+
+    case missing
+    case malformed
+    case futureDated
+    case invalidRelay
+    case retiredRelay
+    case unsafeRelay
+    case unreachable
+    case timedOut
+    case authenticationRequired
+    case paymentRequired
+    case accessRestricted
+    case noUsableRoute
+    case publicationFailed
+    case signerUnavailable
+    case signerRejected
+    case recordChanged
+    case interrupted
+    case tooManyRelays
+    case multiDeviceUnsupported
+    case otherInstallationPossible
+    case discoveryIncomplete
+}
+
+
+#if compiler(>=6)
+extension OnboardingIssueFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingIssueFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingIssueFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingIssueFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .missing
+
+        case 2: return .malformed
+
+        case 3: return .futureDated
+
+        case 4: return .invalidRelay
+
+        case 5: return .retiredRelay
+
+        case 6: return .unsafeRelay
+
+        case 7: return .unreachable
+
+        case 8: return .timedOut
+
+        case 9: return .authenticationRequired
+
+        case 10: return .paymentRequired
+
+        case 11: return .accessRestricted
+
+        case 12: return .noUsableRoute
+
+        case 13: return .publicationFailed
+
+        case 14: return .signerUnavailable
+
+        case 15: return .signerRejected
+
+        case 16: return .recordChanged
+
+        case 17: return .interrupted
+
+        case 18: return .tooManyRelays
+
+        case 19: return .multiDeviceUnsupported
+
+        case 20: return .otherInstallationPossible
+
+        case 21: return .discoveryIncomplete
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingIssueFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .missing:
+            writeInt(&buf, Int32(1))
+
+
+        case .malformed:
+            writeInt(&buf, Int32(2))
+
+
+        case .futureDated:
+            writeInt(&buf, Int32(3))
+
+
+        case .invalidRelay:
+            writeInt(&buf, Int32(4))
+
+
+        case .retiredRelay:
+            writeInt(&buf, Int32(5))
+
+
+        case .unsafeRelay:
+            writeInt(&buf, Int32(6))
+
+
+        case .unreachable:
+            writeInt(&buf, Int32(7))
+
+
+        case .timedOut:
+            writeInt(&buf, Int32(8))
+
+
+        case .authenticationRequired:
+            writeInt(&buf, Int32(9))
+
+
+        case .paymentRequired:
+            writeInt(&buf, Int32(10))
+
+
+        case .accessRestricted:
+            writeInt(&buf, Int32(11))
+
+
+        case .noUsableRoute:
+            writeInt(&buf, Int32(12))
+
+
+        case .publicationFailed:
+            writeInt(&buf, Int32(13))
+
+
+        case .signerUnavailable:
+            writeInt(&buf, Int32(14))
+
+
+        case .signerRejected:
+            writeInt(&buf, Int32(15))
+
+
+        case .recordChanged:
+            writeInt(&buf, Int32(16))
+
+
+        case .interrupted:
+            writeInt(&buf, Int32(17))
+
+
+        case .tooManyRelays:
+            writeInt(&buf, Int32(18))
+
+
+        case .multiDeviceUnsupported:
+            writeInt(&buf, Int32(19))
+
+
+        case .otherInstallationPossible:
+            writeInt(&buf, Int32(20))
+
+
+        case .discoveryIncomplete:
+            writeInt(&buf, Int32(21))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingIssueFfi_lift(_ buf: RustBuffer) throws -> OnboardingIssueFfi {
+    return try FfiConverterTypeOnboardingIssueFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingIssueFfi_lower(_ value: OnboardingIssueFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingIssueFfi.lower(value)
+}
+
+
+extension OnboardingIssueFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingStatusFfi {
+
+    case pending
+    case checking
+    case passed
+    case needsInput
+    case retryableFailure
+    case waitingForSigner
+    case skipped
+}
+
+
+#if compiler(>=6)
+extension OnboardingStatusFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingStatusFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingStatusFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingStatusFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .pending
+
+        case 2: return .checking
+
+        case 3: return .passed
+
+        case 4: return .needsInput
+
+        case 5: return .retryableFailure
+
+        case 6: return .waitingForSigner
+
+        case 7: return .skipped
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingStatusFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .pending:
+            writeInt(&buf, Int32(1))
+
+
+        case .checking:
+            writeInt(&buf, Int32(2))
+
+
+        case .passed:
+            writeInt(&buf, Int32(3))
+
+
+        case .needsInput:
+            writeInt(&buf, Int32(4))
+
+
+        case .retryableFailure:
+            writeInt(&buf, Int32(5))
+
+
+        case .waitingForSigner:
+            writeInt(&buf, Int32(6))
+
+
+        case .skipped:
+            writeInt(&buf, Int32(7))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStatusFfi_lift(_ buf: RustBuffer) throws -> OnboardingStatusFfi {
+    return try FfiConverterTypeOnboardingStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStatusFfi_lower(_ value: OnboardingStatusFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingStatusFfi.lower(value)
+}
+
+
+extension OnboardingStatusFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum OnboardingStepFfi {
+
+    case profile
+    case follows
+    case relays
+    case inboxRelays
+    case singleDevice
+    case keyPackage
+}
+
+
+#if compiler(>=6)
+extension OnboardingStepFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOnboardingStepFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingStepFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OnboardingStepFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .profile
+
+        case 2: return .follows
+
+        case 3: return .relays
+
+        case 4: return .inboxRelays
+
+        case 5: return .singleDevice
+
+        case 6: return .keyPackage
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OnboardingStepFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .profile:
+            writeInt(&buf, Int32(1))
+
+
+        case .follows:
+            writeInt(&buf, Int32(2))
+
+
+        case .relays:
+            writeInt(&buf, Int32(3))
+
+
+        case .inboxRelays:
+            writeInt(&buf, Int32(4))
+
+
+        case .singleDevice:
+            writeInt(&buf, Int32(5))
+
+
+        case .keyPackage:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStepFfi_lift(_ buf: RustBuffer) throws -> OnboardingStepFfi {
+    return try FfiConverterTypeOnboardingStepFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOnboardingStepFfi_lower(_ value: OnboardingStepFfi) -> RustBuffer {
+    return FfiConverterTypeOnboardingStepFfi.lower(value)
+}
+
+
+extension OnboardingStepFfi: Equatable, Hashable {}
 
 
 
@@ -26195,6 +27935,78 @@ fileprivate struct FfiConverterOptionTypeNotificationUpdateFfi: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeOnboardingRepairProposalFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingRepairProposalFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOnboardingRepairProposalFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOnboardingRepairProposalFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeOnboardingSingleDeviceNoticeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingSingleDeviceNoticeFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOnboardingSingleDeviceNoticeFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOnboardingSingleDeviceNoticeFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeOnboardingSnapshotFfi: FfiConverterRustBuffer {
+    typealias SwiftType = OnboardingSnapshotFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOnboardingSnapshotFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOnboardingSnapshotFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypePushRegistrationFfi: FfiConverterRustBuffer {
     typealias SwiftType = PushRegistrationFfi?
 
@@ -26571,6 +28383,30 @@ fileprivate struct FfiConverterOptionSequenceUInt64: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterSequenceUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceString.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -27479,6 +29315,81 @@ fileprivate struct FfiConverterSequenceTypeNotificationUpdateFfi: FfiConverterRu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOnboardingDevicePackageFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [OnboardingDevicePackageFfi]
+
+    public static func write(_ value: [OnboardingDevicePackageFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOnboardingDevicePackageFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OnboardingDevicePackageFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OnboardingDevicePackageFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOnboardingDevicePackageFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOnboardingFindingFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [OnboardingFindingFfi]
+
+    public static func write(_ value: [OnboardingFindingFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOnboardingFindingFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OnboardingFindingFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OnboardingFindingFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOnboardingFindingFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeOnboardingStepStateFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [OnboardingStepStateFfi]
+
+    public static func write(_ value: [OnboardingStepStateFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOnboardingStepStateFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OnboardingStepStateFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OnboardingStepStateFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOnboardingStepStateFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePreparedGroupImageUploadFfi: FfiConverterRustBuffer {
     typealias SwiftType = [PreparedGroupImageUploadFfi]
 
@@ -27804,6 +29715,31 @@ fileprivate struct FfiConverterSequenceTypeMissingRelayListKindFfi: FfiConverter
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOnboardingActionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [OnboardingActionFfi]
+
+    public static func write(_ value: [OnboardingActionFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOnboardingActionFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OnboardingActionFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OnboardingActionFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOnboardingActionFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTimelineMessageChangeFfi: FfiConverterRustBuffer {
     typealias SwiftType = [TimelineMessageChangeFfi]
 
@@ -28033,7 +29969,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_acknowledge_disband_failure() != 63327) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_acknowledge_onboarding_single_device() != 7833) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_app_performance_snapshot() != 52055) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_approve_onboarding_repair() != 56312) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_files() != 25846) {
@@ -28042,10 +29984,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_audit_log_settings() != 34729) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_begin_external_signer_onboarding() != 43082) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_begin_onboarding() != 30241) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_build_media_imeta_tag() != 41363) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_cached_identity_projections() != 57035) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_onboarding() != 41756) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_cancel_onboarding_repair() != 10396) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_catch_up_accounts() != 28824) {
@@ -28073,6 +30027,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_collect_notifications_after_wake() != 273) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_continue_onboarding_without() != 36967) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_group() != 6321) {
@@ -28249,6 +30206,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_npub() != 20744) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_onboarding_snapshot() != 30406) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_parse_markdown() != 44161) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -28277,6 +30237,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_promote_admin_detailed() != 54201) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_propose_onboarding_follows() != 62879) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_propose_onboarding_profile() != 37191) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_propose_onboarding_recommended_relays() != 40382) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_propose_onboarding_relays() != 8305) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_new_key_package() != 11266) {
@@ -28351,6 +30323,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_retry_hydrate_quarantined_group() != 14413) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_retry_onboarding_step() != 1352) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reveal_nsec() != 58041) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -28358,6 +30333,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_run_due_maintenance() != 9284) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_run_onboarding() != 16337) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_save_message_draft() != 6018) {
@@ -28420,6 +30398,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_native_push_enabled() != 28116) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_onboarding_discovery_relays() != 681) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_periodic_maintenance_policy() != 1720) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -28475,6 +30456,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_notifications() != 41715) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_onboarding() != 14617) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_subscribe_timeline_messages() != 20678) {
@@ -28538,6 +30522,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_notificationssubscription_next() != 46153) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_onboardingsubscription_next() != 35489) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_onboardingsubscription_snapshot() != 38539) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_secretstore_has_secret_for_label() != 23335) {

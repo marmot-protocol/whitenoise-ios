@@ -81,6 +81,12 @@ struct UserFacingError: Equatable {
             return L10n.string("This chat is still catching up. Wait for it to finish, then resend your message.")
         case .GroupUnrecoverableRepairRequired:
             return L10n.string("This conversation needs to be rejoined before you can send messages.")
+        case .GroupRemoved:
+            return L10n.string("You were removed from this group and can no longer send messages here.")
+        case .OnboardingRequired:
+            return L10n.string("Finish account setup before using this account.")
+        case .OnboardingActionUnavailable:
+            return L10n.string("Setup changed. Review the latest options and try again.")
         case .AccountWorkerBusy:
             return L10n.string("This account is still catching up. Try again in a moment.")
         case .AccountWorkerResponseTimedOut:

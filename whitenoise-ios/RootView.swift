@@ -33,19 +33,43 @@ struct RootView: View {
             activeAccountRef: appState.activeAccountRef
         )
         Group {
-            switch presentation {
-            case .bootstrap:
-                BootstrapSplash()
-            case .onboarding:
+            if let setup = appState.pendingAccountSetup,
+               appState.isAccountSetupPresented,
+               appState.phaseOwnsLiveRuntime {
                 NavigationStack {
-                    WelcomeView()
+                    AccountSetupView(model: setup)
                 }
-            case .profileSelection:
-                SignedOutProfilesView()
-            case .main:
-                MainView()
-            case .failed(let message):
-                BootstrapFailureView(message: message)
+                .id(setup.accountID)
+                .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
+                    if appState.canUseRuntimeForLocalForegroundWork {
+                        await appState.connectAccountSetup()
+                    } else {
+                        setup.suspend()
+                    }
+                }
+                .onDisappear { setup.suspend() }
+            } else {
+                switch presentation {
+                case .bootstrap:
+                    BootstrapSplash()
+                case .onboarding:
+                    NavigationStack {
+                        WelcomeView()
+                    }
+                case .profileSelection:
+                    SignedOutProfilesView()
+                case .main:
+                    MainView()
+                case .failed(let message):
+                    BootstrapFailureView(message: message)
+                }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if appState.pendingAccountSetup != nil, !appState.isAccountSetupPresented {
+                Button("Finish account setup") { appState.isAccountSetupPresented = true }
+                    .buttonStyle(.borderedProminent)
+                    .padding()
             }
         }
         .animation(.smooth(duration: 0.25), value: presentation)

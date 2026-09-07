@@ -4,9 +4,9 @@ import PackageDescription
 // Keep the release identifier, immutable tag, checksum, and generated Swift
 // source synchronized. `scripts/sync-bindings.sh` updates them together from a
 // published MarmotKit release.
-let marmotKitReleaseID = "0.9.18"
-let marmotKitReleaseTag = "marmotkit-v0.9.18"
-let marmotKitChecksum = "47e7f8b6b8bf5975e06b91bed27066608b48e2f0937ddd7e201c71edcfac1c3e"
+let marmotKitReleaseID = "snapshot-5f8db5a546ae556f59622656866e21ac1e378be8"
+let marmotKitReleaseTag = "marmotkit-snapshot-5f8db5a546ae556f59622656866e21ac1e378be8"
+let marmotKitChecksum = "b46071beb1b399af041f1d82f21b6d8612fff7645cfc604adf18f2d73b5004a8"
 let marmotKitBinaryURL = "https://github.com/marmot-protocol/mdk/releases/download/\(marmotKitReleaseTag)/MarmotKitFFI-\(marmotKitReleaseID).xcframework.zip"
 let package = Package(
     name: "MarmotKit",

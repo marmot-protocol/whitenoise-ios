@@ -29,6 +29,43 @@ before every release tag.
 - [ ] Force-quit + relaunch after onboarding lands directly on Chats; the
       Welcome screen does not reappear.
 
+## Imported-account setup
+
+- [ ] Import a valid nsec: the setup checklist opens before network preflight,
+      and the key field and matching clipboard contents are cleared.
+- [ ] A healthy account progresses to the one-device notice. Continue
+      publishes the first local KeyPackage without a second approval; Open Chats
+      becomes available only after MDK reports ready.
+- [ ] Test all device-discovery outcomes: none found, possible other installation,
+      and inconclusive. None found uses Continue; the other two use Continue
+      anyway. Every outcome requires the notice; no physical device or last-active
+      time is inferred from public package records.
+- [ ] Missing or unreadable follows are skipped automatically without publishing
+      a list. Empty follows are valid. Skipped rows show a neutral dash.
+- [ ] A missing profile offers Update profile or Not now. Update opens the same
+      avatar/name/about form as sign-up, without creating another identity. Save
+      publishes the entered profile and dismisses only after success; a failed
+      save keeps the form and draft visible. Not now publishes nothing.
+- [ ] A failed relay lookup offers retry/discovery-source changes without
+      treating the failure as missing settings. A missing relay/inbox list offers
+      Look on another relay or Use default relays. The latter explains publication
+      and shows relay.eu.whitenoise.chat and relay.us.whitenoise.chat before saving.
+- [ ] Enter another discovery relay: lookup does not publish any settings. A failed
+      or inconclusive lookup does not enable default-relay publication.
+- [ ] Change a record while its form/card is open: MDK rejects stale publication
+      instead of silently overwriting the changed record.
+- [ ] Interrupt an approved repair or KeyPackage publication, then retry. The
+      saved publication resumes without another nsec prompt or duplicate approval.
+- [ ] Background during checks and during the notice; relaunch during setup.
+      Progress returns, no normal account work starts early, and storage closes
+      correctly on background.
+- [ ] Cancel setup: the identity remains saved and signed out. Completed repairs
+      remain. Interrupted cancellation finishes on resume.
+- [ ] Add a second account: the existing account remains selected until setup
+      completes. Later returns to it; Finish account setup resumes the checklist.
+- [ ] Verify Dynamic Type, VoiceOver, and Reduce Motion on the checklist and
+      repair forms, including long relay lists.
+
 ## Multi-account
 
 - [ ] Settings → Accounts → Add launches the Welcome flow inside a sheet.

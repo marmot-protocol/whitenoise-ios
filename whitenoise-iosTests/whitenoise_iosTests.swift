@@ -36,6 +36,50 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
+    @Test func interactiveImportStaysGatedAndRestoresAfterRuntimeRestart() async throws {
+        let appState = try testAppState()
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        let summary = try await appState.importIdentity(
+            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
+        )
+        let setup = try #require(appState.pendingAccountSetup)
+        #expect(setup.accountID == summary.accountIdHex)
+        #expect(!setup.snapshot.ready)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.accounts.isEmpty)
+        #expect(!appState.notificationSubscriptionActive)
+
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+        #expect(appState.client == nil)
+        appState.pendingAccountSetup = nil
+        appState.setAppSceneActive(true)
+        await appState.startForegroundActivation().value
+        let resumed = try #require(appState.pendingAccountSetup)
+        #expect(resumed.accountID == summary.accountIdHex)
+        #expect(!resumed.snapshot.ready)
+        #expect(appState.accounts.isEmpty)
+        #expect(!appState.notificationSubscriptionActive)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func pendingSecondImportDoesNotActivateOverExistingAccount() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let active = appState.activeAccountRef
+        _ = try await appState.importIdentity(
+            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
+        )
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(appState.pendingAccountSetup != nil)
+        #expect(appState.activeAccountRef == active)
+        #expect(appState.accounts.count == 1)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test func bootstrapWithoutAccountsClearsPersistedActiveAccountRef() async throws {
         accountDefaults.set("legacy-darkmatter-account", forKey: AccountStore.activeAccountKey)
         let appState = AppState(
