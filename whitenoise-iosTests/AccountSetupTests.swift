@@ -88,6 +88,47 @@ struct AccountSetupTests {
         #expect(AccountSetupPolicy.automaticAction(value) == nil)
     }
 
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays], [false, true])
+    func anotherRelayLookupPreservesTheReturnedRecoveryChoices(
+        step: OnboardingStepFfi, lookupFailed: Bool
+    ) async {
+        var initial = snapshot()
+        initial.steps[0].step = step
+        initial.steps[0].actions = [.editDiscoveryRelays, .useRecommendedRelays]
+        var result = initial
+        result.revision += 1
+        result.steps[0].status = lookupFailed ? .retryableFailure : .needsInput
+        result.steps[0].findings = [OnboardingFindingFfi(
+            issue: lookupFailed ? .unreachable : .missing, endpoint: nil
+        )]
+        result.steps[0].actions = [.retry, .editDiscoveryRelays]
+        if !lookupFailed { result.steps[0].actions.append(.useRecommendedRelays) }
+        let client = SetupTestClient(initial: initial, discoveryResult: result)
+        let model = AccountSetupModel(snapshot: initial)
+        await model.connect(client)
+        await settle { model.isConnected && !model.isBusy }
+
+        let lookup = model.send(.discovery(["wss://another.example"]))
+        #expect(lookup != nil)
+        await lookup?.value
+
+        #expect(model.currentStep?.step == step)
+        #expect(model.currentStep?.status == result.steps[0].status)
+        #expect(model.offeredActions.contains(.useRecommendedRelays) == !lookupFailed)
+        #expect(model.offeredActions.contains(.editDiscoveryRelays))
+        #expect(!model.isBusy)
+        #expect(await client.defaultPublicationCount == 0)
+        if !lookupFailed {
+            let publication = model.send(.useDefaults(step))
+            #expect(publication != nil)
+            await publication?.value
+            #expect(await client.defaultPublicationCount == 1)
+            #expect(model.snapshot.steps[0].status == .passed)
+        }
+        model.suspend()
+        await model.drain()
+    }
+
     @Test func obsoleteUnapprovedFollowProposalIsDiscardedButApprovedWorkIsKept() {
         var value = proposalSnapshot(step: .follows)
         value.steps[0].actions = [.approveRepair, .cancelRepair]
@@ -278,13 +319,19 @@ private actor SetupTestClient: AccountSetupClient {
     var cancelCount = 0
     var approvalCount = 0
     var skipCount = 0
+    var defaultPublicationCount = 0
     let profileSaveFails: Bool
+    let discoveryResult: OnboardingSnapshotFfi?
     var acknowledgments: [UInt64] = []
     let runGate: SetupOperationGate?
 
-    init(initial: OnboardingSnapshotFfi, runGate: SetupOperationGate? = nil, profileSaveFails: Bool = false) {
+    init(
+        initial: OnboardingSnapshotFfi, runGate: SetupOperationGate? = nil,
+        profileSaveFails: Bool = false, discoveryResult: OnboardingSnapshotFfi? = nil
+    ) {
         self.initial = initial
         self.profileSaveFails = profileSaveFails
+        self.discoveryResult = discoveryResult
         self.runGate = runGate
         (stream, continuation) = AsyncStream.makeStream(of: OnboardingSnapshotFfi.self)
     }
@@ -303,6 +350,13 @@ private actor SetupTestClient: AccountSetupClient {
         case .run:
             runCount += 1
             await runGate?.wait()
+        case .discovery: return discoveryResult ?? initial
+        case .useDefaults:
+            defaultPublicationCount += 1
+            var value = discoveryResult ?? initial
+            value.revision += 1
+            value.steps[0].status = .passed
+            return value
         case .skip(let step):
             skipCount += 1
             var value = initial

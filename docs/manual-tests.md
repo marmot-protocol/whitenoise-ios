@@ -52,6 +52,10 @@ before every release tag.
       and shows relay.eu.whitenoise.chat and relay.us.whitenoise.chat before saving.
 - [ ] Enter another discovery relay: lookup does not publish any settings. A failed
       or inconclusive lookup does not enable default-relay publication.
+- [ ] For both relay-list and inbox-list recovery, search a reachable relay that
+      returns no declaration. After any earlier checks finish, Use default relays
+      remains available alongside Look on another relay. Defaults publish only
+      after the user chooses them; a timeout is not an empty result.
 - [ ] Change a record while its form/card is open: MDK rejects stale publication
       instead of silently overwriting the changed record.
 - [ ] Interrupt an approved repair or KeyPackage publication, then retry. The
