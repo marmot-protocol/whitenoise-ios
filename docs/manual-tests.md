@@ -70,6 +70,10 @@ before every release tag.
 - [ ] With multiple unfinished identities, Finish account setup offers each one.
       Switch between them; cancel/remove one and verify it disappears from the
       setup choices while the others remain accessible.
+- [ ] With an unreadable checkpoint on one identity, launch/resume, sign in to a
+      healthy identity, and finish another setup. Healthy identities stay usable;
+      the unreadable identity is not activated or given a fabricated checklist.
+      After its checkpoint becomes readable, refresh restores its saved progress.
 - [ ] Finish setup or reconnect while the runtime is quiet: neither action waits
       indefinitely for another network event. Background/resume still drains work.
 - [ ] A restored proposal with any unsafe relay address blocks publication of the

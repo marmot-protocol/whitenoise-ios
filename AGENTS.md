@@ -70,9 +70,14 @@ replace settings after an inconclusive lookup. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
 restore their persisted snapshots after launch. Never reset an interactive
 checkpoint through the legacy incomplete-setup recovery path.
-Account refresh must stage all reads before changing account/setup routing; a
-read error must not synthesize an unfinished account. Keep every unfinished
-identity selectable, and remove stale setup models when their checkpoints vanish.
+Account refresh must stage reads before changing account/setup routing. Propagate
+cancellation and transient startup-readiness errors so lifecycle retry still works.
+Other checkpoint read failures exclude only that identity from both ready accounts
+and setup snapshots; never fail the whole refresh, guess readiness, or synthesize
+an unfinished account. Clear an excluded active selection, and retry its durable
+checkpoint on subsequent refreshes without deleting or resetting it. Keep every
+readable unfinished identity selectable, and remove stale setup models when their
+checkpoints vanish.
 UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
 a close/cancellation API, observe onboarding with cancellable 250 ms polling of
 finite off-main snapshot reads; never drain an indefinite Rust subscription wait.

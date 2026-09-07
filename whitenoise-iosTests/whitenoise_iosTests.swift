@@ -118,17 +118,190 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test func failedAccountRefreshPreservesKnownAccountsWithoutSynthesizingSetup() async throws {
+    @Test(arguments: [
+        MarmotKitError.Runtime(details: "test checkpoint"),
+        .Io(details: "test checkpoint"), .StorageClosed(details: "test checkpoint"),
+        .SecretNotFound(details: "test checkpoint"), .OnboardingActionUnavailable,
+        .AccountSetupRecoveryRequired,
+    ])
+    func unreadableCheckpointOnlyGatesItsOwnIdentity(error: MarmotKitError) async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let healthy = seeded.accounts[0]
+        let broken = try await appState.importIdentity(
+            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
+        )
+        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+            if accountID == broken.accountIdHex { throw error }
+        }
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
+        #expect(appState.activeAccountRef == healthy.label)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.accountSetupSnapshots.isEmpty)
+        await appState.activateAccount(broken.label)
+        #expect(appState.activeAccountRef == healthy.label)
+        let durable = try await appState.client?.listAccounts()
+        #expect(durable?.count == 2)
+
+        // The failed read must not delete or reset the durable checkpoint.
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(appState.pendingAccountSetup?.accountID == broken.accountIdHex)
+        #expect(appState.pendingAccountSetup?.snapshot.ready == false)
+        #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test(arguments: [false, true])
+    func unreadableCheckpointDoesNotBlockLaunchResumeSignInOrSetupCompletion(healthyAvailable: Bool) async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let original = seeded.appState
+        let healthy = seeded.accounts[0]
+        let broken = try await original.importIdentity(
+            "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn"
+        )
+        let root = try #require(original.client?.rootPath)
+        let relays = try #require(original.client?.relayUrls)
+        original.setAppSceneActive(false)
+        await original.startRuntimeSuspension().value
+        accountDefaults.set(broken.label, forKey: AccountStore.activeAccountKey)
+        let appState = AppState(
+            client: try MarmotClient(rootPath: root, relayUrls: relays),
+            notifications: deniedNotifications(), accountDefaults: accountDefaults
+        )
+        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+            if !healthyAvailable || accountID == broken.accountIdHex {
+                throw MarmotKitError.OnboardingActionUnavailable
+            }
+        }
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(appState.phase == (healthyAvailable ? .ready : .onboarding))
+        #expect(appState.activeAccountRef == (healthyAvailable ? healthy.label : nil))
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.client != nil)
+
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+        appState.setAppSceneActive(true)
+        await appState.startForegroundActivation().value
+        #expect(appState.phase == (healthyAvailable ? .ready : .onboarding))
+        #expect(appState.activeAccountRef == (healthyAvailable ? healthy.label : nil))
+        #expect(appState.canUseRuntimeForLocalForegroundWork)
+        if !healthyAvailable {
+            #expect(appState.accounts.isEmpty)
+            #expect(appState.accountSetupSnapshots.isEmpty)
+            appState.beforeOnboardingSnapshotReadForTesting = nil
+            try await appState.refreshAccounts(refreshUnreadSummaries: false)
+            #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
+            #expect(appState.pendingAccountSetup?.accountID == broken.accountIdHex)
+            appState.setAppSceneActive(false)
+            await appState.startRuntimeSuspension().value
+            return
+        }
+        #expect(await appState.signOut())
+        #expect(appState.accounts.first?.signedOut == true)
+        await appState.activateAccount(healthy.label)
+        #expect(appState.activeAccountRef == healthy.label)
+        #expect(appState.accounts.first?.signedOut == false)
+
+        // Model the completed checklist for a real, ready local identity.
+        let completed = OnboardingSnapshotFfi(
+            accountIdHex: healthy.accountIdHex, revision: 1, ready: true, steps: [],
+            proposal: nil, singleDeviceNotice: nil, cancellationPending: false
+        )
+        let model = AccountSetupModel(snapshot: completed)
+        await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
+        for _ in 0..<1_000 where !model.canFinish { await Task.yield() }
+        #expect(model.canFinish)
+        appState.activeAccountRef = nil
+        appState.setPhase(.onboarding)
+        appState.pendingAccountSetup = model
+        await appState.finishAccountSetup()
+        #expect(appState.phase == .ready)
+        #expect(appState.activeAccountRef == healthy.label)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(model.errorMessage == nil)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test(arguments: [false, true])
+    func unreadableIdentityCannotStaySelectedOrBeActivatedAfterSignIn(signIn: Bool) async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        if signIn { #expect(await appState.signOut()) }
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+            throw MarmotKitError.Runtime(details: "test checkpoint")
+        }
+        if signIn {
+            await appState.activateAccount(account.label)
+        } else {
+            try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        }
+        #expect(appState.accounts.isEmpty)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.client != nil)
+        #expect(RootPresentation.resolve(phase: appState.phase, activeAccountRef: nil) == .profileSelection)
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        try await appState.refreshAccounts(refreshUnreadSummaries: false)
+        await appState.activateAccount(account.label)
+        #expect(appState.activeAccountRef == account.label)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test(arguments: [
+        MarmotKitError.RuntimeBusy,
+        .StorageBusy(details: "test contention"), .KeystoreUnavailable(details: "test contention"),
+    ])
+    func transientCheckpointFailureStillRetriesAtLaunchAndResume(error: MarmotKitError) async throws {
+        let appState = AppState(
+            client: try MarmotClient.testClient(), notifications: deniedNotifications(),
+            accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
+            runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
+        )
+        let client = try #require(appState.client)
+        try await client.startRuntime()
+        _ = try await client.marmot.createIdentityWithProfile(defaultRelays: client.relayUrls, bootstrapRelays: client.relayUrls)
+        var attempts = 0
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+            attempts += 1
+            if attempts == 1 { throw error }
+        }
+        appState.setAppSceneActive(true)
+        await appState.bootstrap()
+        #expect(attempts == 2)
+        #expect(appState.phase == .ready)
+        #expect(appState.accounts.count == 1)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+        attempts = 0
+        appState.setAppSceneActive(true)
+        await appState.startForegroundActivation().value
+        #expect(attempts == 2)
+        #expect(appState.phase == .ready)
+        #expect(appState.accounts.count == 1)
+        #expect(appState.canUseRuntimeForLocalForegroundWork)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func cancelledCheckpointRefreshKeepsTheLastCompleteProjection() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let originalIDs = appState.accounts.map(\.accountIdHex)
-        appState.beforeOnboardingSnapshotReadForTesting = { throw MarmotKitError.Runtime(details: "test read failure") }
-        await #expect(throws: MarmotKitError.self) {
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in throw CancellationError() }
+        await #expect(throws: CancellationError.self) {
             try await appState.refreshAccounts(refreshUnreadSummaries: false)
         }
         #expect(appState.accounts.map(\.accountIdHex) == originalIDs)
+        #expect(appState.activeAccountRef == seeded.accounts[0].label)
         #expect(appState.pendingAccountSetup == nil)
-        appState.beforeOnboardingSnapshotReadForTesting = nil
         appState.setAppSceneActive(false)
         await appState.startRuntimeSuspension().value
     }
@@ -14483,4 +14656,14 @@ extension MarmotClient {
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
         return try MarmotClient(rootPath: tmp.path, relayUrls: ["wss://relay.invalid.test"])
     }
+}
+
+private struct CompletedAccountSetupTestClient: AccountSetupClient {
+    let snapshot: OnboardingSnapshotFfi
+
+    func subscribe() async throws -> AccountSetupSubscription {
+        AccountSetupSubscription(snapshot: snapshot, next: { nil })
+    }
+
+    func perform(_ command: AccountSetupCommand) async throws -> OnboardingSnapshotFfi? { snapshot }
 }

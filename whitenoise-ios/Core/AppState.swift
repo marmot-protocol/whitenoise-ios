@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import MarmotKit
 
 nonisolated enum ForegroundRuntimeWorkGate {
@@ -157,9 +158,10 @@ final class AppState {
     private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
     var isAccountSetupPresented = true
     private(set) var isFinishingAccountSetup = false
+    private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
 #if DEBUG
     @ObservationIgnored var beforeAccountRefreshForTesting: (() async throws -> Void)?
-    @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: (() async throws -> Void)?
+    @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: ((String) async throws -> Void)?
 #endif
 
     func selectAccountSetup(accountID: String) async {
@@ -649,6 +651,7 @@ final class AppState {
             }
         }
 
+        guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else { return }
         activeAccountRef = accountRef
         restartReadyForegroundMaintenanceIfStopped()
         scheduleNativePushRegistrationIfEnabled()
@@ -1183,15 +1186,31 @@ final class AppState {
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
         for account in localAccounts {
-            let snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
+            try Task.checkCancellation()
+            let snapshot: OnboardingSnapshotFfi?
+            do {
+                snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
+                throw error
+            } catch {
+                // An unreadable checkpoint gates its identity, not other local accounts.
+                Self.accountRefreshLog.error("onboarding_snapshot_read_failed")
+                continue
+            }
             if let snapshot, !snapshot.ready || snapshot.cancellationPending {
                 unfinished.append(snapshot)
             } else {
                 readyAccounts.append(account)
             }
         }
-        // Publish only after every read succeeds; a read error is not an onboarding state.
+        try Task.checkCancellation()
+        // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
         accountStore.accounts = readyAccounts
+        if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {
+            self.activeAccountRef = nil
+        }
         accountSetupSnapshots = unfinished
         if let current = pendingAccountSetup,
            !unfinished.contains(where: { $0.accountIdHex == current.accountID }) {
@@ -1218,7 +1237,7 @@ final class AppState {
 
     private func readOnboardingSnapshot(client: MarmotClient, accountID: String) async throws -> OnboardingSnapshotFfi? {
 #if DEBUG
-        try await beforeOnboardingSnapshotReadForTesting?()
+        try await beforeOnboardingSnapshotReadForTesting?(accountID)
 #endif
         return try await client.onboardingSnapshot(accountID: accountID)
     }
