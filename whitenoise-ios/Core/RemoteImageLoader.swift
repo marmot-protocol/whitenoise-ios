@@ -462,6 +462,7 @@ enum RemoteAvatarImageLoader {
         defer { inFlightImageTasks[imageTaskKey] = nil }
         do {
             let image = try await task.value
+            guard !task.isCancelled else { throw CancellationError() }
 
             failureCache.removeObject(forKey: failureKey)
             cache.setObject(
@@ -488,6 +489,7 @@ enum RemoteAvatarImageLoader {
 
         let startedAt = ContinuousClock.now
         let data = try await imageData(for: url, keyString: keyString, fetch: fetch)
+        try Task.checkCancellation()
         await RemoteAvatarDiskCache.shared.store(data, for: url)
         cacheLog.debug(
             "network_fetch bytes=\(data.count, privacy: .public) duration_ms=\(elapsedMilliseconds(since: startedAt), format: .fixed(precision: 0), privacy: .public)"
@@ -554,14 +556,26 @@ enum RemoteAvatarImageLoader {
             + Double(elapsed.attoseconds) / 1_000_000_000_000_000
     }
 
-    #if DEBUG
-    static func resetCachesForTesting() {
+    static func clearCachesAndDrain() async {
+        let dataTasks = Array(inFlightTasks.values)
+        let imageTasks = Array(inFlightImageTasks.values)
+        clearCaches()
+        for task in dataTasks { _ = await task.result }
+        for task in imageTasks { _ = await task.result }
+        clearCaches()
+    }
+
+    static func clearCaches() {
         cache.removeAllObjects()
         failureCache.removeAllObjects()
+        inFlightTasks.values.forEach { $0.cancel() }
         inFlightTasks.removeAll()
         inFlightImageTasks.values.forEach { $0.cancel() }
         inFlightImageTasks.removeAll()
     }
+
+    #if DEBUG
+    static func resetCachesForTesting() { clearCaches() }
 
     static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
         cacheFailure(error, for: failureCacheKey(for: url), now: now)

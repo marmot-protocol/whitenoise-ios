@@ -29,7 +29,10 @@ extension PrivacySecuritySettingsViewModelDataSource {
 final class PrivacySecuritySettingsViewModel {
     var telemetrySettings: PrivacyTelemetrySettingsProjection?
     var auditSettings: PrivacyAuditSettingsProjection?
-    var auditFileRows: [AuditFileRow] = []
+    var auditFileRows: [AuditFileRow] = [] {
+        didSet { storedLogSize = formatStoredLogSize() }
+    }
+    private(set) var storedLogSize = L10n.string("None")
     var telemetrySaving = false
     var auditSaving = false
     var auditDeleting = false
@@ -39,6 +42,24 @@ final class PrivacySecuritySettingsViewModel {
     var auditErrorMessage: String?
     var errorMessage: String?
     var savedAt: Date?
+
+    private func formatStoredLogSize() -> String {
+        let bytes = auditFileRows.reduce(UInt64(0)) { partial, row in
+            let sum = partial.addingReportingOverflow(row.sizeBytes)
+            return sum.overflow ? UInt64.max : sum.partialValue
+        }
+        return bytes == 0 ? L10n.string("None") : ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
+
+    var diagnosticsSummary: String {
+        switch (telemetrySettings?.exportEnabled, auditSettings?.enabled) {
+        case (true, true): L10n.string("On")
+        case (true, false): L10n.string("Analytics")
+        case (false, true): L10n.string("Logs")
+        case (false, false): L10n.string("Off")
+        default: L10n.string("Unavailable")
+        }
+    }
 
     private var actionGate = AsyncActionGate()
     private var fullReloadRequestedAfterAction = false
@@ -238,6 +259,7 @@ final class PrivacySecuritySettingsViewModel {
                 dataSource.present(.success(L10n.string("Done")))
             } catch {
                 telemetrySettings = current
+                telemetryErrorMessage = L10n.string("Couldn’t save analytics settings. Try again.")
                 Haptics.error()
                 dataSource.present(UserFacingError.toast(
                     title: L10n.string("Save failed"),
@@ -292,6 +314,7 @@ final class PrivacySecuritySettingsViewModel {
                 await reloadAuditFiles(using: dataSource)
             } catch {
                 auditSettings = current
+                auditErrorMessage = L10n.string("Couldn’t save diagnostic logging settings. Try again.")
                 Haptics.error()
                 dataSource.present(UserFacingError.toast(
                     title: L10n.string("Save failed"),

@@ -235,7 +235,8 @@ final class RuntimeLifecycle {
     }
 
     var canUseRuntimeForLocalForegroundWork: Bool {
-        ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+        guard appState?.isErasingAppData != true else { return false }
+        return ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
             isAppSceneActive: isAppSceneActive,
             runtimeSuspendedForBackground: runtimeSuspendedForBackground,
             isRuntimeSuspending: runtimeWorkIsSuspending,
@@ -433,11 +434,11 @@ final class RuntimeLifecycle {
                 // background request landed while bootstrap was awaiting above.
                 reconcileBackgroundSuspensionAfterBootstrap()
             } else {
-                if appState.activeAccountRef == nil
-                    || !appState.accounts.contains(where: { $0.label == appState.activeAccountRef }) {
-                    appState.activeAccountRef = appState.accounts.first?.label
+                if !appState.accounts.contains(where: { $0.label == appState.activeAccountRef && !$0.signedOut }) {
+                    appState.activeAccountRef = appState.accountStore.prefersProfileSelection
+                        ? nil : appState.accounts.first(where: { !$0.signedOut })?.label
                 }
-                appState.setPhase(.ready)
+                appState.setPhase(appState.accounts.contains(where: { !$0.signedOut }) ? .ready : .onboarding)
                 if appState.sceneHasReportedPhase, appState.isAppSceneActive, let client {
                     recordHostPerformance(
                         using: client,
@@ -569,6 +570,19 @@ final class RuntimeLifecycle {
         await shutdownAndReleaseCurrentClient()
     }
 
+    func prepareForAppErasure() async {
+        let cancellation = beginForegroundMaintenanceCancellation()
+        await drainForegroundMaintenance(cancellation, waitForAccountExit: false)
+    }
+
+    func closeForAppErasure() async throws {
+        if let client {
+            try await client.marmot.shutdownAndClose()
+            self.client = nil
+        }
+        runtimeSuspendedForBackground = true
+    }
+
     private func shutdownAndReleaseCurrentClient() async {
         let clientToRelease = client
         client = nil
@@ -617,6 +631,7 @@ final class RuntimeLifecycle {
     func startForegroundActivation() -> Task<Void, Never> {
         appState?.isAppSceneActive = true
         appState?.sceneHasReportedPhase = true
+        guard appState?.isErasingAppData != true else { return Task {} }
         resumeBootstrapRegistrationWaiters()
         if appState?.phase == .bootstrapping {
             return Task { [weak self] in
@@ -1195,7 +1210,8 @@ final class RuntimeLifecycle {
     }
 
     private func drainForegroundMaintenance(
-        _ cancellation: ForegroundMaintenanceCancellation
+        _ cancellation: ForegroundMaintenanceCancellation,
+        waitForAccountExit: Bool = true
     ) async {
         await cancellation.foregroundActivation?.value
         await cancellation.maintenance?.notificationSubscription?.value
@@ -1213,7 +1229,7 @@ final class RuntimeLifecycle {
         // Sign-out/wipe and explicit foreground mutations may still own spent
         // handles. Terminal close makes their eventual completion safe to await
         // without risking a shared-container lock at process suspension.
-        await appState?.waitForAccountExitToFinish()
+        if waitForAccountExit { await appState?.waitForAccountExitToFinish() }
         await waitForForegroundRuntimeMutations()
     }
 

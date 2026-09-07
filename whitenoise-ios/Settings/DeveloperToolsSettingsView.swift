@@ -1,9 +1,14 @@
 import SwiftUI
 import MarmotKit
+import UniformTypeIdentifiers
 
 struct DeveloperToolsSettingsView: View {
     @Environment(AppState.self) private var appState
     @State private var model = PrivacySecuritySettingsViewModel()
+    @State private var exportDocument = DiagnosticLogDocument(text: "")
+    @State private var showExport = false
+    @State private var exporting = false
+    @State private var exportError: String?
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
 
     var body: some View {
@@ -42,7 +47,7 @@ struct DeveloperToolsSettingsView: View {
                     NavigationLink {
                         DiagnosticsView()
                     } label: {
-                        Label("Diagnostics", systemImage: "stethoscope")
+                        Label("Debug Events", systemImage: "stethoscope")
                     }
                 } header: {
                     Text("Debugging")
@@ -79,54 +84,16 @@ struct DeveloperToolsSettingsView: View {
                 }
 
                 Section {
-                    Toggle(isOn: Binding(
-                        get: { model.telemetrySettings?.exportEnabled ?? false },
-                        set: { enabled in Task { await model.setTelemetryEnabled(enabled, using: appState) } }
-                    )) {
-                        HStack {
-                            Text("Anonymous Telemetry")
-                            Spacer()
-                            if model.telemetrySaving { ProgressView().controlSize(.small) }
-                        }
+                    LabeledContent("Diagnostic Logging", value: model.auditSettings?.enabled == true ? L10n.string("On") : L10n.string("Off"))
+                    if model.auditFileRows.contains(where: { $0.sizeBytes > 0 }) {
+                        ForEach(model.auditFileRows.filter { $0.sizeBytes > 0 }) { row in auditFileRow(row) }
+                        Button("Export Diagnostic Logs", systemImage: "square.and.arrow.up") { exportLogs() }
+                            .disabled(exporting)
+                    } else {
+                        Text("There are no logs.").foregroundStyle(.secondary)
                     }
-                    .disabled(model.telemetryToggleDisabled)
-                } header: {
-                    Text("Telemetry")
-                } footer: {
-                    Text("Shares anonymous reliability and performance data. It doesn’t include messages or profile keys.")
-                }
-
-                Section {
-                    Toggle(isOn: Binding(
-                        get: { model.auditSettings?.enabled ?? false },
-                        set: { enabled in Task { await model.setAuditEnabled(enabled, using: appState) } }
-                    )) {
-                        HStack {
-                            Text("Audit Logging")
-                            Spacer()
-                            if model.auditSaving { ProgressView().controlSize(.small) }
-                        }
-                    }
-                    .disabled(model.auditToggleDisabled)
-
-                    if model.auditSettings?.enabled == true {
-                        if model.filesLoading && model.auditFileRows.isEmpty {
-                            ProgressView("Loading audit logs")
-                        } else {
-                            ForEach(model.auditFileRows) { row in
-                                auditFileRow(row)
-                            }
-                        }
-
-                        Button("Clear Audit Logs", role: .destructive) {
-                            model.showDeleteAuditLogsConfirmation = true
-                        }
-                        .disabled(model.auditDeleteDisabled || model.auditFileRows.isEmpty)
-                    }
-                } header: {
-                    Text("Audit Logging")
-                } footer: {
-                    Text("Stores technical activity locally for troubleshooting.")
+                } header: { Text("Diagnostic Logs") } footer: {
+                    Text("Configure or clear logs in Privacy & Security → Diagnostics & Improvements. Export saves a sanitized activity summary without event payloads.")
                 }
             }
 
@@ -170,13 +137,28 @@ struct DeveloperToolsSettingsView: View {
                 await quarantinedGroupsModel.reload(using: appState)
             }
         }
-        .alert("Clear all audit logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {
-            Button("Clear Logs", role: .destructive) {
-                Task { await model.deleteAllAuditLogs(using: appState) }
+        .fileExporter(isPresented: $showExport, document: exportDocument, contentType: .plainText,
+                      defaultFilename: "White Noise Diagnostic Logs") { result in
+            if case .failure = result { exportError = L10n.string("Couldn’t save diagnostic logs. Try again.") }
+            exportDocument = DiagnosticLogDocument(text: "")
+        }
+        .alert("Couldn’t Export Diagnostic Logs", isPresented: Binding(
+            get: { exportError != nil }, set: { if !$0 { exportError = nil } }
+        )) { Button("OK", role: .cancel) {} } message: { Text(exportError ?? "") }
+    }
+
+    private func exportLogs() {
+        guard !exporting else { return }
+        exporting = true
+        Task {
+            defer { exporting = false }
+            do {
+                let text = try await appState.diagnosticLogExport()
+                exportDocument = DiagnosticLogDocument(text: text)
+                showExport = true
+            } catch {
+                exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This permanently removes every local audit JSONL file on this device.")
         }
     }
 

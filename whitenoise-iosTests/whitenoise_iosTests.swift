@@ -36,7 +36,26 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
-    @Test func interactiveImportStaysGatedAndRestoresAfterRuntimeRestart() async throws {
+    @Test(.timeLimit(.minutes(1))) func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let client = try #require(appState.client)
+        let root = URL(fileURLWithPath: client.rootPath, isDirectory: true)
+        await appState.runtimeLifecycle.prepareForAppErasure()
+        #expect(!appState.notificationSubscriptionActive)
+        #expect(!appState.retentionSweeperIsActiveForTesting)
+        for account in try await client.listAccounts() {
+            try await client.marmot.removeAccount(accountRef: account.label)
+        }
+        #expect(try await client.listAccounts().isEmpty)
+        try await appState.runtimeLifecycle.closeForAppErasure()
+        #expect(appState.client == nil)
+        try AppDataErasure.eraseClosedRuntime(at: root)
+        let remaining = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        #expect(remaining == [AppDataErasure.runtimeLockName])
+    }
+
+    @Test func interruptedImportStaysGatedWithoutRestoringSetup() async throws {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
         await appState.bootstrap()
@@ -56,9 +75,9 @@ struct AppStateBootstrapTests {
         appState.pendingAccountSetup = nil
         appState.setAppSceneActive(true)
         await appState.startForegroundActivation().value
-        let resumed = try #require(appState.pendingAccountSetup)
-        #expect(resumed.accountID == summary.accountIdHex)
-        #expect(!resumed.snapshot.ready)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.accountSetupSnapshots.contains { $0.accountIdHex == summary.accountIdHex })
         #expect(appState.accounts.isEmpty)
         #expect(!appState.notificationSubscriptionActive)
         appState.setAppSceneActive(false)
@@ -147,8 +166,8 @@ struct AppStateBootstrapTests {
         // The failed read must not delete or reset the durable checkpoint.
         appState.beforeOnboardingSnapshotReadForTesting = nil
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
-        #expect(appState.pendingAccountSetup?.accountID == broken.accountIdHex)
-        #expect(appState.pendingAccountSetup?.snapshot.ready == false)
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(appState.accountSetupSnapshots.contains { $0.accountIdHex == broken.accountIdHex && !$0.ready })
         #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
         appState.setAppSceneActive(false)
         await appState.startRuntimeSuspension().value
@@ -196,7 +215,7 @@ struct AppStateBootstrapTests {
             appState.beforeOnboardingSnapshotReadForTesting = nil
             try await appState.refreshAccounts(refreshUnreadSummaries: false)
             #expect(appState.accounts.map(\.accountIdHex) == [healthy.accountIdHex])
-            #expect(appState.pendingAccountSetup?.accountID == broken.accountIdHex)
+            #expect(appState.pendingAccountSetup == nil)
             appState.setAppSceneActive(false)
             await appState.startRuntimeSuspension().value
             return
@@ -246,7 +265,7 @@ struct AppStateBootstrapTests {
         #expect(appState.activeAccountRef == nil)
         #expect(appState.pendingAccountSetup == nil)
         #expect(appState.client != nil)
-        #expect(RootPresentation.resolve(phase: appState.phase, activeAccountRef: nil) == .profileSelection)
+        #expect(RootPresentation.resolve(phase: appState.phase, activeAccountRef: nil) == (signIn ? .onboarding : .profileSelection))
         appState.beforeOnboardingSnapshotReadForTesting = nil
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
         await appState.activateAccount(account.label)
@@ -306,7 +325,7 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
-    @Test func everyUnfinishedIdentityCanBeSelectedAndRemovedSetupIsCleared() async throws {
+    @Test func refreshDoesNotSelectAnotherUnfinishedIdentity() async throws {
         let appState = try testAppState()
         appState.setAppSceneActive(true)
         await appState.bootstrap()
@@ -316,24 +335,11 @@ struct AppStateBootstrapTests {
         let second = try await appState.importIdentity(
             "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
         )
-        try await appState.refreshAccounts(refreshUnreadSummaries: false)
-        #expect(Set(appState.accountSetupSnapshots.map(\.accountIdHex)) == [first.accountIdHex, second.accountIdHex])
-        #expect(appState.accounts.isEmpty)
-        await appState.selectAccountSetup(accountID: first.accountIdHex)
-        #expect(appState.pendingAccountSetup?.accountID == first.accountIdHex)
-        appState.isAccountSetupPresented = false
-        await appState.selectAccountSetup(accountID: second.accountIdHex)
-        #expect(appState.pendingAccountSetup?.accountID == second.accountIdHex)
-        #expect(appState.isAccountSetupPresented)
         let client = try #require(appState.client)
         try await client.marmot.removeAccount(accountRef: second.accountIdHex)
         try await appState.refreshAccounts(refreshUnreadSummaries: false)
-        #expect(appState.pendingAccountSetup?.accountID == first.accountIdHex)
-        #expect(appState.accountSetupSnapshots.map(\.accountIdHex) == [first.accountIdHex])
-        try await client.marmot.removeAccount(accountRef: first.accountIdHex)
-        try await appState.refreshAccounts(refreshUnreadSummaries: false)
         #expect(appState.pendingAccountSetup == nil)
-        #expect(appState.accountSetupSnapshots.isEmpty)
+        #expect(appState.accountSetupSnapshots.map(\.accountIdHex) == [first.accountIdHex])
         appState.setAppSceneActive(false)
         await appState.startRuntimeSuspension().value
     }
@@ -2243,7 +2249,8 @@ struct AppStateBootstrapTests {
 
         await appState.signOut()
 
-        #expect(appState.activeAccountRef == accountB.label)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
         #expect(appState.phase == .ready)
         // A non-destructive sign-out keeps the retained accounts' projection
         // entries — `refreshAccounts()` re-warms the local accounts from fresh
@@ -2280,7 +2287,8 @@ struct AppStateBootstrapTests {
         await appState.signOut()
 
         let signedOutSettings = await appState.notificationSettings(for: accountA.label)
-        #expect(appState.activeAccountRef == accountB.label)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
         // Both accounts remain; their order comes from `listAccounts()`, which
         // makes no ordering guarantee, so compare membership, not sequence.
         #expect(Set(appState.accounts.map(\.label)) == Set([accountA.label, accountB.label]))
@@ -2393,7 +2401,8 @@ struct AppStateBootstrapTests {
 
         // Guard down on return, surviving account active and intact.
         #expect(!appState.isSigningOutForTesting)
-        #expect(appState.activeAccountRef == accountB.label)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
         // A reschedule for the surviving account is now permitted (the guard no
         // longer suppresses it); calling it must not trap or re-raise the flag.
         appState.scheduleNativePushRegistrationIfEnabled()
@@ -2418,7 +2427,7 @@ struct AppStateBootstrapTests {
         #expect(signedOutSettings?.nativePushEnabled == false)
         // Keep the main shell available so Settings → Profiles can sign the
         // retained local account back in without importing its keys again.
-        #expect(appState.phase == .ready)
+        #expect(appState.phase == .onboarding)
         // Account-bound maintenance is stopped while every account is signed out.
         #expect(!appState.notificationSubscriptionActive)
         #expect(!appState.retentionSweeperIsActiveForTesting)
@@ -2441,13 +2450,11 @@ struct AppStateBootstrapTests {
 
         await appState.signOut()
 
-        #expect(appState.phase == .ready)
+        #expect(appState.phase == .onboarding)
         #expect(!appState.notificationSubscriptionActive)
         #expect(!appState.retentionSweeperIsActiveForTesting)
 
-        // Creating a fresh identity from the fully-signed-out shell skips the
-        // onboarding completion (phase is already .ready), so it must restart
-        // the stopped maintenance loops itself.
+        // Creating a fresh identity must restart the stopped maintenance loops.
         let fresh = try await appState.createIdentity()
 
         #expect(appState.activeAccountRef == fresh.label)

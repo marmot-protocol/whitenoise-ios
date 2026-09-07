@@ -153,6 +153,33 @@ struct RemoteImageLoaderTests {
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 56) != nil)
     }
 
+    @Test func erasureDrainsFetchesWithoutRepopulatingAvatarCaches() async throws {
+        let url = try #require(URL(string: "https://example.com/\(UUID().uuidString).png"))
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8))
+        let data = try #require(renderer.image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }.pngData())
+        let probe = RemoteImageFetchProbe(data: data)
+        let request = Task {
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1,
+                                                    fetch: { _ in await probe.fetch() })
+        }
+        await probe.waitUntilStarted()
+        var drained = false
+        let cleanup = Task {
+            await RemoteAvatarImageLoader.clearCachesAndDrain()
+            drained = true
+        }
+        for _ in 0..<10 { await Task.yield() }
+        #expect(!drained)
+        await probe.release()
+        await cleanup.value
+        await #expect(throws: CancellationError.self) { _ = try await request.value }
+        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
+    }
+
     @Test func avatarDiskCacheSurvivesMemoryCacheResetAndExpiresOldEntries() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("RemoteAvatarDiskCacheTests-\(UUID().uuidString)", isDirectory: true)

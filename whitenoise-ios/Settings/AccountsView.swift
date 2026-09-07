@@ -158,7 +158,7 @@ struct SignedOutProfilesView: View {
                             .accessibilityHidden(true)
                         Text("Choose a profile")
                             .font(.title2.weight(.bold))
-                        Text("Sign in to a profile stored on this device, or add a new one.")
+                        Text("Choose a signed-in profile, or add a new one.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -169,9 +169,12 @@ struct SignedOutProfilesView: View {
                 }
 
                 Section("Profiles") {
-                    ForEach(appState.accounts, id: \.label) { account in
+                    ForEach(appState.accounts.filter { !$0.signedOut }, id: \.label) { account in
                         Button {
-                            Task { await appState.activateAccount(account.label) }
+                            Task {
+                                await appState.activateAccount(account.label)
+                                if appState.activeAccountRef == account.label { appState.openSettingsAfterProfileSelection = true }
+                            }
                         } label: {
                             AccountSummaryRow(account: account)
                         }
@@ -207,12 +210,14 @@ struct SignedOutProfilesView: View {
 }
 
 struct AddProfileSheet: View {
+    @Environment(AppState.self) private var appState
     @State private var content = OnboardingSheetContent.welcome
     @State private var selectedDetent = PresentationDetent.large
 
     var body: some View {
         NavigationStack {
             WelcomeView(
+                isAddingProfile: true,
                 onSheetContentChange: { content in
                     self.content = content
                     selectedDetent = content.prefersCompactHeight ? .medium : .large
@@ -226,7 +231,9 @@ struct AddProfileSheet: View {
         .presentationDetents(supportedDetents, selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
+        .onAppear { appState.diagnosticsConsent.onboardingVisible = true }
         .onDisappear {
+            appState.diagnosticsConsent.onboardingVisible = false
             content = .welcome
             selectedDetent = .large
         }

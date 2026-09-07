@@ -122,7 +122,7 @@ final class AccountSetupModel {
 
     var accountID: String { snapshot.accountIdHex }
     var canFinish: Bool {
-        !isBusy && (cancelled || (snapshot.ready && !snapshot.cancellationPending && isConnected && errorMessage == nil))
+        !isBusy && !cancelled && snapshot.ready && !snapshot.cancellationPending && isConnected && errorMessage == nil
     }
     var offeredActions: Set<OnboardingActionFfi> { Set(snapshot.steps.flatMap(\.actions)) }
     var currentStep: OnboardingStepStateFfi? {
@@ -166,7 +166,7 @@ final class AccountSetupModel {
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 self.isConnected = false
-                self.errorMessage = L10n.string("Couldn’t load account setup. Reconnect to try again.")
+                self.errorMessage = L10n.string("Couldn’t load sign-in checks. Reconnect to try again.")
             }
         }
     }
@@ -187,7 +187,7 @@ final class AccountSetupModel {
                 if let error = error as? MarmotKitError, case .OnboardingActionUnavailable = error {
                     self.errorMessage = L10n.string("Setup changed. Reconnect and review the latest options.")
                 } else {
-                    self.errorMessage = L10n.string("Setup couldn’t finish this action. Your progress is saved. Try again.")
+                    self.errorMessage = L10n.string("Couldn’t finish this step. Try again.")
                 }
             }
             guard let self, self.session == id else { return }
@@ -209,7 +209,7 @@ final class AccountSetupModel {
         guard !isBusy, isConnected, errorMessage == nil,
               let command = AccountSetupPolicy.automaticAction(snapshot) else { return }
         guard lastAutomaticRevision != snapshot.revision else {
-            errorMessage = L10n.string("Setup couldn’t finish this action. Your progress is saved. Try again.")
+            errorMessage = L10n.string("Couldn’t finish this step. Try again.")
             return
         }
         lastAutomaticRevision = snapshot.revision

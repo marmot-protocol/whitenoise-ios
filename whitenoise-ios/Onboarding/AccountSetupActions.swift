@@ -2,195 +2,205 @@ import SwiftUI
 import MarmotKit
 
 struct AccountSetupActions: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var model: AccountSetupModel
-    let editProfile: () -> Void
-    let chooseDiscovery: () -> Void
+    let selectedStep: OnboardingStepFfi
+    @State private var editor: SetupEditor?
 
     private var step: OnboardingStepStateFfi? {
-        if let proposal = model.snapshot.proposal {
-            return model.snapshot.steps.first { $0.step == proposal.step }
-        }
-        return model.currentStep
+        model.snapshot.steps.first { $0.step == selectedStep }
+    }
+
+    private var proposal: OnboardingRepairProposalFfi? {
+        model.snapshot.proposal.flatMap { $0.step == selectedStep ? $0 : nil }
+    }
+
+    private var relays: [String]? {
+        guard let proposal else { return MarmotClient.seedRelays }
+        guard let reads = AccountSetupInput.proposalRelays(proposal.readRelays),
+              let writes = AccountSetupInput.proposalRelays(proposal.writeRelays),
+              !reads.isEmpty || !writes.isEmpty,
+              selectedStep != .inboxRelays || writes.isEmpty else { return nil }
+        return Array(Set(reads + writes)).sorted()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            if let step, step.status != .pending, step.status != .checking {
-                if model.snapshot.proposal != nil,
-                   !step.actions.contains(.approveRepair), !step.actions.contains(.cancelRepair) {
-                    unfinishedRepair(step)
-                } else if let proposal = model.snapshot.proposal,
-                          proposal.step == .relays || proposal.step == .inboxRelays {
-                    relayProposal(proposal)
-                } else {
-                    switch step.step {
-                    case .profile: profilePrompt(step)
-                    case .follows:
-                        if model.errorMessage == nil {
-                            ProgressView("Continuing setup…")
-                        } else if step.actions.contains(.continueWithout) {
-                            WNButton(title: "Continue") { model.send(.skip(.follows)) }
-                        }
-                    case .relays, .inboxRelays: relayChoices(step)
-                    case .singleDevice: deviceNotice(step)
-                    case .keyPackage:
-                        if step.actions.contains(.retry) {
-                            WNButton(title: "Try again") { model.send(.retry(step.step)) }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    explanation
+                    if let step {
+                        ForEach(Array(step.findings.enumerated()), id: \.offset) { _, finding in
+                            if selectedStep != .singleDevice {
+                                Text(AccountSetupPresentation.issue(finding.issue))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    if let error = model.errorMessage { Text(error).foregroundStyle(.orange) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .safeAreaPadding()
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Close")
                 }
             }
-            if model.isBusy { ProgressView("Saving progress…") }
-        }
-        .disabled(model.isBusy || !model.isConnected)
-    }
-
-    private func profilePrompt(_ step: OnboardingStepStateFfi) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("Update your profile?", systemImage: "person.crop.circle")
-                .font(.headline)
-            if step.actions.contains(.editProfile) || step.actions.contains(.approveRepair) {
-                Text("A name and photo help people recognize you. You can also do this later.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                WNButton(title: "Update profile", action: editProfile)
-            } else {
-                Text("We couldn’t load your profile. You can try again or continue without changing it.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                if step.actions.contains(.retry) {
-                    WNButton(title: "Try again") { model.send(.retry(.profile)) }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 8) { actions }
+                    .disabled(model.isBusy || !model.isConnected)
+                    .safeAreaPadding(.horizontal)
+                    .safeAreaPadding(.bottom)
+                    .background(.background)
+            }
+            .sheet(item: $editor) { editor in
+                NavigationStack {
+                    switch editor {
+                    case .profile:
+                        IdentityProfileSetupView(showsCloseButton: true, accountSetup: model)
+                    case .discovery:
+                        AccountSetupDiscoverySheet(model: model, step: selectedStep)
+                    }
                 }
+                .appAppearance()
             }
-            if step.actions.contains(.continueWithout) {
-                WNButton(title: "Not now", emphasis: .secondary) { model.send(.skip(.profile)) }
-            } else if step.actions.contains(.cancelRepair) {
-                WNButton(title: "Back", emphasis: .secondary) { model.send(.cancelRepair) }
-            }
-        }
-        .setupCard()
-    }
-
-    private func relayChoices(_ step: OnboardingStepStateFfi) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(step.step == .inboxRelays ? L10n.string("Find your inbox relays") : L10n.string("Find your relays"))
-                    .font(.headline)
-                Text(step.actions.contains(.useRecommendedRelays)
-                     ? L10n.string("We couldn’t find a usable list. Look on a relay you’ve used before, or publish our defaults.")
-                     : L10n.string("We couldn’t complete the lookup. Try another relay or check again before replacing any settings."))
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }
-            if step.actions.contains(.editDiscoveryRelays) {
-                WNButton(title: "Look on another relay", systemImage: "magnifyingglass",
-                         emphasis: .secondary, action: chooseDiscovery)
-            }
-            if step.actions.contains(.useRecommendedRelays) {
-                Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("White Noise defaults").font(.subheadline.bold())
-                    Text(step.step == .inboxRelays
-                         ? L10n.string("Publish these two relays as your inbox so people know where to send invitations.")
-                         : L10n.string("Publish these two relays as the places where your account reads and shares updates."))
-                        .font(.subheadline).foregroundStyle(.secondary)
-                    relayAddresses(MarmotClient.seedRelays)
-                }
-                WNButton(title: "Use default relays") { model.send(.useDefaults(step.step)) }
-            } else if step.actions.contains(.retry) {
-                WNButton(title: "Try again") { model.send(.retry(step.step)) }
-            }
-        }
-        .setupCard()
-    }
-
-    private func relayProposal(_ proposal: OnboardingRepairProposalFfi) -> some View {
-        let readRelays = AccountSetupInput.proposalRelays(proposal.readRelays)
-        let writeRelays = AccountSetupInput.proposalRelays(proposal.writeRelays)
-        let valid = readRelays != nil && writeRelays != nil
-            && !(readRelays?.isEmpty == true && writeRelays?.isEmpty == true)
-            && (proposal.step != .inboxRelays || writeRelays?.isEmpty == true)
-        return VStack(alignment: .leading, spacing: 16) {
-            Label("Use these relays?", systemImage: "network")
-                .font(.headline)
-            Text(proposal.step == .inboxRelays
-                 ? L10n.string("Publish these relays as your inbox so people know where to send invitations.")
-                 : L10n.string("This publishes your public relay list. Other apps using this account may use it too."))
-                .font(.subheadline).foregroundStyle(.secondary)
-            if !valid {
-                Text(AccountSetupPresentation.issue(.invalidRelay)).foregroundStyle(.red)
-            } else if proposal.step == .inboxRelays || readRelays == writeRelays {
-                relayAddresses(readRelays ?? [])
-            } else {
-                Text("Read relays").font(.subheadline.bold())
-                relayAddresses(readRelays ?? [])
-                Text("Write relays").font(.subheadline.bold())
-                relayAddresses(writeRelays ?? [])
-            }
-            WNButton(title: "Use these relays") { model.send(.approve(proposal.revision)) }
-                .disabled(!valid)
-            WNButton(title: "Back", emphasis: .secondary) { model.send(.cancelRepair) }
-        }
-        .setupCard()
-    }
-
-    private func relayAddresses(_ relays: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(relays, id: \.self) { relay in
-                Label(relay, systemImage: "server.rack")
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+            .onChange(of: model.snapshot.revision) {
+                if let step, step.status == .passed || step.status == .skipped { dismiss() }
             }
         }
     }
 
-    private func unfinishedRepair(_ step: OnboardingStepStateFfi) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Finish your saved update").font(.headline)
-            Text("You already approved this change. Retry to finish saving it before continuing setup.")
-                .font(.subheadline).foregroundStyle(.secondary)
-            if step.actions.contains(.retry) {
-                WNButton(title: "Try again") { model.send(.retry(step.step)) }
-            }
+    private var title: String {
+        if selectedStep == .profile {
+            return step?.status == .retryableFailure
+                ? L10n.string("Couldn’t load your profile") : L10n.string("Your profile")
         }
-        .setupCard()
+        return AccountSetupPresentation.title(selectedStep)
     }
 
-    private func deviceNotice(_ step: OnboardingStepStateFfi) -> some View {
-        let revision = model.snapshot.revision
-        return VStack(alignment: .leading, spacing: 14) {
-            if step.status == .needsInput {
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Use White Noise on one device", systemImage: "iphone")
-                        .font(.headline)
-                    Text("White Noise does not yet sync conversations across devices. We recommend using this account on one device.")
-                    if let notice = model.snapshot.singleDeviceNotice {
-                        Text(AccountSetupPresentation.deviceNotice(notice.discovery))
+    @ViewBuilder private var explanation: some View {
+        if proposal != nil, step?.actions.contains(.approveRepair) != true,
+           step?.actions.contains(.cancelRepair) != true {
+            Text("Your previous update hasn’t finished. Try again to finish publishing it.")
+        } else {
+            switch selectedStep {
+            case .profile:
+                Text(step?.status == .retryableFailure
+                     ? "Try again to load your profile, or continue without changing it."
+                     : "A name and photo help people recognize you. You can also do this later.")
+            case .relays, .inboxRelays:
+                if step?.actions.contains(.useRecommendedRelays) == true || proposal != nil {
+                    Text("Relays let your profile publish information, receive chat invitations, and deliver messages.")
+                    if let relays {
+                        ForEach(relays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
+                        Text("Continuing publishes these addresses to your public profile.")
                             .foregroundStyle(.secondary)
-                        if !notice.discoveryComplete && notice.discovery == .otherInstallationPossible {
-                            Text("Some discovery sources could not be checked.").foregroundStyle(.secondary)
-                        }
+                    } else {
+                        Text("A relay address is invalid. Go back and check the settings.").foregroundStyle(.orange)
                     }
+                } else {
+                    Text("We couldn’t complete the lookup. Try another relay or check again before replacing any settings.")
                 }
-                .font(.subheadline)
-                .setupCard()
-            }
-            if step.actions.contains(.continueAnyway) {
-                WNButton(title: LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery))) {
-                    model.send(.acknowledge(revision))
+            case .singleDevice:
+                Text("White Noise does not yet sync conversations across devices. We recommend using this profile on one device.")
+                if let notice = model.snapshot.singleDeviceNotice {
+                    Text(AccountSetupPresentation.deviceNotice(notice.discovery)).foregroundStyle(.secondary)
                 }
-            } else if step.actions.contains(.retry) {
-                WNButton(title: "Try again") { model.send(.retry(step.step)) }
+            case .keyPackage:
+                Text("Secure messaging must be ready before you can open Chats. Try this check again.")
+            case .follows:
+                Text("You can continue without changing the people you follow.")
             }
         }
+    }
+
+    @ViewBuilder private var actions: some View {
+        if let step {
+            if proposal != nil, !step.actions.contains(.approveRepair), !step.actions.contains(.cancelRepair) {
+                if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+            } else if selectedStep == .profile {
+                if step.actions.contains(.editProfile) || step.actions.contains(.approveRepair) {
+                    WNButton(title: "Edit Profile") { editor = .profile }
+                } else if step.actions.contains(.retry) { action("Try again", .retry(.profile)) }
+                if step.actions.contains(.continueWithout) { action("Not Now", .skip(.profile), secondary: true) }
+            } else if selectedStep == .relays || selectedStep == .inboxRelays {
+                if let proposal, step.actions.contains(.approveRepair) {
+                    action("Use These Relays", .approve(proposal.revision)).disabled(relays == nil)
+                } else if step.actions.contains(.useRecommendedRelays) {
+                    action("Use Default Relays", .useDefaults(selectedStep))
+                } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+                if step.actions.contains(.editDiscoveryRelays) {
+                    WNButton(title: "Look on Another Relay", emphasis: .secondary) { editor = .discovery }
+                }
+            } else if step.actions.contains(.continueAnyway) {
+                action(LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery)),
+                       .acknowledge(model.snapshot.revision))
+            } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+            if step.actions.contains(.cancelRepair) { action("Back", .cancelRepair, secondary: true) }
+            if selectedStep == .follows, step.actions.contains(.continueWithout) { action("Continue", .skip(.follows)) }
+        }
+    }
+
+    private func action(_ title: LocalizedStringKey, _ command: AccountSetupCommand, secondary: Bool = false) -> some View {
+        WNButton(title: title, emphasis: secondary ? .secondary : .primary) { model.send(command) }
     }
 }
 
-private extension View {
-    func setupCard() -> some View {
-        self.frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-            .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 20))
-            .overlay {
-                RoundedRectangle(cornerRadius: 20).strokeBorder(.primary.opacity(0.06))
+private enum SetupEditor: String, Identifiable {
+    case profile, discovery
+    var id: String { rawValue }
+}
+
+private struct AccountSetupDiscoverySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let model: AccountSetupModel
+    let step: OnboardingStepFfi
+    @State private var relay = ""
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("wss://relay.example.com", text: $relay)
+                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityLabel("Relay URL")
+            } footer: {
+                Text("Choose a relay you’ve used with this profile. We’ll look there for your existing settings without publishing anything.")
             }
+            if let error { Text(error).foregroundStyle(.orange) }
+        }
+        .navigationTitle("Find Your Settings")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            WNButton(title: "Look for My Settings", isLoading: model.isBusy) {
+                guard let values = AccountSetupInput.relays(relay), values.count == 1 else {
+                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
+                    return
+                }
+                guard let operation = model.send(.discovery(values)) else { return }
+                error = nil
+                Task {
+                    await operation.value
+                    if model.errorMessage == nil,
+                       model.snapshot.steps.first(where: { $0.step == step })?.status != .retryableFailure {
+                        dismiss()
+                    } else {
+                        error = model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay.")
+                    }
+                }
+            }
+            .disabled(model.isBusy || !model.isConnected)
+            .safeAreaPadding()
+            .background(.background)
+        }
     }
 }

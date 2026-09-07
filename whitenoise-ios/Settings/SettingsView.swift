@@ -50,8 +50,6 @@ struct SettingsView: View {
     @State private var showAccounts = false
     @State private var showAddProfile = false
     @State private var showAccountActions = false
-    @State private var presentWipeAfterActionsDismiss = false
-    @State private var wipeModel = SignOutAndWipeModel()
 
     var body: some View {
         Form {
@@ -102,35 +100,8 @@ struct SettingsView: View {
         .sheet(isPresented: $showAddProfile) {
             AddProfileSheet()
         }
-        .sheet(isPresented: $showAccountActions, onDismiss: {
-            guard presentWipeAfterActionsDismiss else { return }
-            presentWipeAfterActionsDismiss = false
-            wipeModel.present()
-        }) {
-            AccountActionsSheet(
-                isBusy: appState.isAccountExitInProgress,
-                onSignOut: {
-                    Task { @MainActor in
-                        if await appState.signOut() {
-                            showAccountActions = false
-                            dismiss()
-                        }
-                    }
-                },
-                onWipe: {
-                    presentWipeAfterActionsDismiss = true
-                    showAccountActions = false
-                }
-            )
-            .appAppearance()
-        }
-        .fullScreenCover(isPresented: $wipeModel.isPresented) {
-            SignOutAndWipeCover(
-                model: wipeModel,
-                onConfirm: { wipeModel.confirmWipe(using: appState) },
-                onCancel: { wipeModel.cancel() }
-            )
-            .appAppearance()
+        .sheet(isPresented: $showAccountActions) {
+            AccountActionsSheet().appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue {
@@ -337,56 +308,82 @@ nonisolated enum MarmotKitBuildLabel {
 }
 
 private struct AccountActionsSheet: View {
-    let isBusy: Bool
-    let onSignOut: () -> Void
-    let onWipe: () -> Void
+    @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var shouldWipeData = true
+    @State private var confirmation = ""
+    @State private var isBusy = false
+    @State private var profileRef: String?
+    @State private var profileName = ""
+    @State private var error: String?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    Text(profileName).font(.headline)
                     Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
                 } footer: {
-                    Text(
-                        shouldWipeData
-                            ? "This profile and all local data will be permanently removed. Previous chats won’t return."
-                            : "This profile and its local data will stay on this device."
-                    )
+                    Text(shouldWipeData
+                         ? "This profile and all local data will be permanently removed. Previous chats won’t return."
+                         : "This profile and its local data will stay on this device.")
                 }
-
+                if shouldWipeData {
+                    Section {
+                        TextField("Profile name", text: $confirmation)
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    } footer: {
+                        Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
+                    }
+                }
+                if let error { Text(error).foregroundStyle(.orange) }
                 Section {
-                    Button(role: .destructive) {
-                        shouldWipeData ? onWipe() : onSignOut()
-                    } label: {
-                        HStack(spacing: 10) {
-                            if isBusy {
-                                ProgressView().tint(.white)
-                            }
-                            Text("Sign Out")
+                    Button(role: .destructive) { signOut() } label: {
+                        HStack {
+                            if isBusy { ProgressView() }
+                            Text(isBusy ? (shouldWipeData ? "Signing out and wiping data…" : "Signing out…") : "Sign Out")
                                 .frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .tint(.red)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
-                    .disabled(isBusy)
+                    .buttonStyle(.borderedProminent).controlSize(.large).tint(.red)
+                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                    .disabled(!ProfileExitConfirmation.canSignOut(
+                        wiping: shouldWipeData, input: confirmation, profileName: profileName,
+                        busy: isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef
+                    ))
                 }
             }
-            .localizedNavigationTitle("Sign Out")
+            .disabled(isBusy)
+            .navigationTitle("Sign Out")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isBusy)
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("Close").disabled(isBusy)
                 }
             }
         }
         .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(isBusy)
+        .onAppear {
+            profileRef = appState.activeAccountRef
+            if let account = appState.activeAccount {
+                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
+            }
+        }
+    }
+
+    private func signOut() {
+        guard profileRef == appState.activeAccountRef,
+              ProfileExitConfirmation.canSignOut(wiping: shouldWipeData, input: confirmation,
+                                                profileName: profileName, busy: isBusy || appState.isAccountExitInProgress) else { return }
+        isBusy = true
+        error = nil
+        let wiping = shouldWipeData
+        Task {
+            let success = wiping ? await appState.signOutAndWipeActiveAccount() : await appState.signOut()
+            isBusy = false
+            if success { dismiss() } else { error = L10n.string("Couldn’t sign out. Try again.") }
+        }
     }
 }

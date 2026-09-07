@@ -61,6 +61,18 @@ struct ImportIdentityView: View {
     }
 
     var body: some View {
+        Group {
+            if let setup = appState.pendingAccountSetup, appState.isAccountSetupPresented {
+                AccountSetupView(model: setup, onClose: { dismiss() })
+                    .onAppear { onPreferredSheetExpansionChange(true) }
+            } else {
+                signInForm
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var signInForm: some View {
         @Bindable var model = model
 
         ScrollView {

@@ -3,175 +3,110 @@ import MarmotKit
 
 struct AccountSetupView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: AccountSetupModel
-    @State private var editor: SetupEditor?
+    let onClose: () -> Void
+    @State private var decision: SetupDecision?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.snapshot.ready ? L10n.string("You’re ready") : L10n.string("Getting you ready"))
-                        .font(.largeTitle.bold())
-                    Text("Checking your account before you start chatting.")
-                        .foregroundStyle(.secondary)
-                }
-                VStack(spacing: 20) {
-                    ForEach(model.snapshot.steps, id: \.step) { step in
-                        stepRow(step)
-                        if step.step == (model.snapshot.proposal?.step ?? model.currentStep?.step) {
-                            AccountSetupActions(model: model,
-                                                editProfile: { editor = .profile },
-                                                chooseDiscovery: { editor = .discovery })
+        List {
+            Section {
+                ForEach(model.snapshot.steps, id: \.step) { step in
+                    if Self.needsAttention(step.status) {
+                        Button {
+                            decision = SetupDecision(step: step.step)
+                        } label: {
+                            stepRow(step)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Show options for this check")
+                    } else {
+                        stepRow(step)
                     }
                 }
-                if let error = model.errorMessage {
-                    Text(error).foregroundStyle(.red).accessibilityAddTraits(.updatesFrequently)
+            } header: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(model.snapshot.ready ? "You’re ready" : "Getting you ready")
+                        .font(.title.bold()).foregroundStyle(Color.primary)
+                    if !model.snapshot.ready {
+                        Text("Checking your profile before you start chatting.")
+                            .font(.body)
+                    }
+                }
+                .textCase(nil)
+                .padding(.bottom)
+            }
+            if let error = model.errorMessage {
+                Section {
+                    Text(error).foregroundStyle(.orange)
                     Button("Reconnect") { Task { await appState.connectAccountSetup() } }
                         .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy)
-                } else if !model.isConnected && !model.snapshot.ready {
-                    ProgressView("Connecting to account setup…")
-                }
-                if model.snapshot.cancellationPending {
-                    Text("Finishing cancellation. Your saved identity and completed changes will be kept.")
-                        .foregroundStyle(.secondary)
-                }
-                if model.snapshot.ready || model.cancelled {
-                    WNButton(title: model.cancelled ? "Done" : "Open Chats") {
-                        Task { await appState.finishAccountSetup() }
-                    }
-                    .disabled(
-                        !model.canFinish || appState.isFinishingAccountSetup
-                            || !appState.canUseRuntimeForLocalForegroundWork
-                    )
                 }
             }
-            .padding(24)
         }
-        .background(.background)
-        .navigationTitle("Account setup")
+        .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                if model.offeredActions.contains(.cancelOnboarding), !model.cancelled {
-                    Button("Cancel") { model.send(.cancel) }
-                        .disabled(model.isBusy || !model.isConnected)
-                }
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button("Later") {
-                    model.suspend()
-                    appState.isAccountSetupPresented = false
-                }
-                .disabled(model.isBusy || model.snapshot.cancellationPending)
+                Button {
+                    Task { if await appState.cancelAccountSetup() { onClose() } }
+                } label: { Image(systemName: "xmark") }
+                .accessibilityLabel("Close")
+                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }
-        .onChange(of: model.cancelled) {
-            if model.cancelled { Task { await appState.finishAccountSetup() } }
-        }
-        .sheet(item: $editor) { editor in
-            NavigationStack {
-                switch editor {
-                case .profile:
-                    IdentityProfileSetupView(showsCloseButton: true, accountSetup: model)
-                case .discovery:
-                    AccountSetupDiscoverySheet(model: model)
-                }
+        .safeAreaInset(edge: .bottom) {
+            WNButton(title: "Open Chats") {
+                Task { await appState.finishAccountSetup() }
             }
-            .appAppearance()
+            .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+            .safeAreaPadding(.horizontal)
+            .safeAreaPadding(.bottom)
+            .background(.background)
         }
+        .interactiveDismissDisabled()
+        .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
+            if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
+        }
+        .onDisappear { model.suspend() }
+        .sheet(item: $decision) { decision in
+            AccountSetupActions(model: model, selectedStep: decision.step)
+                .appAppearance()
+        }
+    }
+
+    static func needsAttention(_ status: OnboardingStatusFfi) -> Bool {
+        status == .needsInput || status == .retryableFailure || status == .waitingForSigner
     }
 
     private func stepRow(_ step: OnboardingStepStateFfi) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(spacing: 12) {
             Group {
-                if step.status == .checking {
+                if step.step == model.snapshot.steps.first(where: { $0.status == .checking })?.step && !model.snapshot.ready {
                     ProgressView()
                 } else {
                     Image(systemName: AccountSetupPresentation.symbol(step.status))
-                        .foregroundStyle(statusColor(step.status))
-                        .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                        .foregroundStyle(step.status == .passed ? .green : Self.needsAttention(step.status) ? .orange : .secondary)
                 }
             }
-            .font(.title3)
-            .frame(width: 28, height: 28)
             .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(AccountSetupPresentation.title(step.step)).font(.headline)
-                Text(AccountSetupPresentation.status(step.status)).foregroundStyle(.secondary)
-                if !step.findings.isEmpty && step.step != .singleDevice {
-                    ForEach(Array(step.findings.enumerated()), id: \.offset) { _, finding in
-                        Text(AccountSetupPresentation.issue(finding.issue))
-                            .font(.footnote).foregroundStyle(.secondary)
-                        if let endpoint = finding.endpoint,
-                           let normalized = RelayURL.normalized(endpoint) {
-                            Text(normalized).font(.caption.monospaced()).foregroundStyle(.secondary)
-                        }
-                    }
-                }
+                Text(AccountSetupPresentation.title(step.step)).foregroundStyle(Color.primary)
+                Text(AccountSetupPresentation.status(step.status)).font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
+            if Self.needsAttention(step.status) {
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(reduceMotion ? nil : .spring(duration: 0.25), value: step.status)
+        .padding(.vertical, 4)
+        .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }
-
-    private func statusColor(_ status: OnboardingStatusFfi) -> Color {
-        switch status {
-        case .passed: .green
-        case .needsInput, .retryableFailure: .orange
-        default: .secondary
-        }
-    }
-
 }
 
-private enum SetupEditor: String, Identifiable {
-    case profile, discovery
-    var id: String { rawValue }
-}
-
-private struct AccountSetupDiscoverySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let model: AccountSetupModel
-    @State private var relay = ""
-    @State private var error: String?
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("wss://relay.example.com", text: $relay)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel("Relay URL")
-            } header: {
-                Text("Relay URL")
-            } footer: {
-                Text("Choose a relay you’ve used with this account. We’ll look there for your existing settings without publishing anything.")
-            }
-            if let error { Text(error).foregroundStyle(.red) }
-        }
-        .navigationTitle("Find your settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Look for my settings") {
-                guard let values = AccountSetupInput.relays(relay), values.count == 1 else {
-                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
-                    return
-                }
-                guard model.send(.discovery(values)) != nil else { return }
-                dismiss()
-            }
-            .disabled(model.isBusy || !model.isConnected)
-            .padding()
-            .background(.background)
-        }
-    }
+private struct SetupDecision: Identifiable {
+    let step: OnboardingStepFfi
+    var id: OnboardingStepFfi { step }
 }

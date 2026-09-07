@@ -98,6 +98,7 @@ enum GroupAvatarImageLoader {
         return cache
     }()
 
+    private static var diskWrites: [UUID: Task<Void, Never>] = [:]
     private static var seeds: [String: Seed] = [:]
     private static var inFlight: [String: Task<DataLoad, Error>] = [:]
     private static var inFlightImages: [String: Task<ImageLoad, Error>] = [:]
@@ -166,6 +167,7 @@ enum GroupAvatarImageLoader {
 
         do {
             let load = try await task.value
+            guard !task.isCancelled else { throw CancellationError() }
             cache.setObject(
                 CachedImage(load.image),
                 forKey: cacheKey,
@@ -229,6 +231,7 @@ enum GroupAvatarImageLoader {
             queueWaitMilliseconds: dataLoad.queueWaitMilliseconds,
             fetchMilliseconds: dataLoad.fetchMilliseconds
         )
+        try Task.checkCancellation()
         persistThumbnail(load.image, for: request)
         return load
     }
@@ -333,6 +336,8 @@ enum GroupAvatarImageLoader {
         inFlight[dataKey] = task
         defer { inFlight[dataKey] = nil }
         let load = try await task.value
+        try Task.checkCancellation()
+        guard !task.isCancelled else { throw CancellationError() }
         dataCache.setObject(load.data as NSData, forKey: dataKey as NSString, cost: load.data.count)
         await RemoteAvatarDiskCache.groupShared.store(load.data, forKey: dataKey)
         return load
@@ -373,7 +378,10 @@ enum GroupAvatarImageLoader {
             accountRef: request.accountRef,
             imageHashHex: request.imageHashHex
         )
-        Task {
+        let id = UUID()
+        diskWrites[id] = Task {
+            defer { diskWrites[id] = nil }
+            guard !Task.isCancelled else { return }
             await RemoteAvatarDiskCache.groupShared.store(data, forKey: key)
         }
     }
@@ -384,11 +392,13 @@ enum GroupAvatarImageLoader {
             imageHashHex: request.imageHashHex,
             maxPixelSize: request.maxPixelSize
         )
-        Task {
+        let id = UUID()
+        diskWrites[id] = Task {
+            defer { diskWrites[id] = nil }
             let data = await Task.detached(priority: .utility) {
                 image.pngData()
             }.value
-            guard let data else { return }
+            guard let data, !Task.isCancelled else { return }
             await RemoteAvatarDiskCache.groupThumbnailShared.store(data, forKey: key)
         }
     }
@@ -413,8 +423,23 @@ enum GroupAvatarImageLoader {
             + Double(elapsed.attoseconds) / 1_000_000_000_000_000
     }
 
-    #if DEBUG
-    static func resetForTesting() {
+    static func clearCachesAndDrain() async {
+        let dataTasks = Array(inFlight.values)
+        let imageTasks = Array(inFlightImages.values)
+        let writes = Array(diskWrites.values)
+        clearCaches()
+        for task in dataTasks { _ = await task.result }
+        for task in imageTasks { _ = await task.result }
+        for task in writes { await task.value }
+        let remainingWrites = Array(diskWrites.values)
+        remainingWrites.forEach { $0.cancel() }
+        for task in remainingWrites { await task.value }
+        clearCaches()
+    }
+
+    static func clearCaches() {
+        diskWrites.values.forEach { $0.cancel() }
+        diskWrites.removeAll()
         cache.removeAllObjects()
         dataCache.removeAllObjects()
         seeds.removeAll()
@@ -423,6 +448,9 @@ enum GroupAvatarImageLoader {
         inFlightImages.values.forEach { $0.cancel() }
         inFlightImages.removeAll()
     }
+
+    #if DEBUG
+    static func resetForTesting() { clearCaches() }
 
     static func hasSeedForTesting(accountRef: String, groupIdHex: String) -> Bool {
         pruneSeeds()
