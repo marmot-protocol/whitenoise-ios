@@ -142,10 +142,11 @@ struct RuntimeOwnershipTests {
                 accountRef: account.label,
                 groupIdsHex: [groupIdHex]
             )
-            let row = try await client.chatListRow(
+            let storedRow = try await client.chatListRow(
                 accountRef: account.label,
                 groupIdHex: groupIdHex
             )
+            let row = try #require(storedRow)
             let snapshot = try await client.groupConversationSnapshot(
                 accountRef: account.label,
                 groupIdHex: groupIdHex
@@ -157,9 +158,12 @@ struct RuntimeOwnershipTests {
             #expect(roster.members.count == 1)
             #expect(page.map(\.groupIdHex) == [groupIdHex])
             #expect(page.first?.memberIdsHex == roster.members.map(\.memberIdHex))
-            #expect(row?.groupIdHex == groupIdHex)
-            #expect(row?.groupName == "Local readiness")
-            #expect(created.chatListRow == row)
+            #expect(row.groupIdHex == groupIdHex)
+            #expect(row.groupName == "Local readiness")
+            var createdRow = created.chatListRow
+            // Projection refreshes may advance updatedAt between these separate reads.
+            createdRow.updatedAt = row.updatedAt
+            #expect(createdRow == row)
             #expect(snapshot.details.group.groupIdHex == groupIdHex)
             #expect(snapshot.details.group.disappearingMessageSecs == 3_600)
             #expect(snapshot.managementState.myAccountIdHex == account.accountIdHex)
