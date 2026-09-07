@@ -1,4 +1,22 @@
 import Foundation
+import MarmotKit
+
+@MainActor
+enum AccountSetupRecovery {
+    static func restartIfPossible(
+        snapshot: OnboardingSnapshotFfi,
+        cancel: () async throws -> Void,
+        begin: () async throws -> OnboardingSnapshotFfi
+    ) async throws -> OnboardingSnapshotFfi {
+        do {
+            try await cancel()
+        } catch MarmotKitError.OnboardingActionUnavailable {
+            // MDK #1741 retains approved publications for safe reconciliation.
+            return snapshot
+        }
+        return try await begin()
+    }
+}
 
 @MainActor
 final class SignInAttemptStore {

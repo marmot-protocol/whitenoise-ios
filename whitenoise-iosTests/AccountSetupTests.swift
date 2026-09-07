@@ -5,6 +5,33 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func failedRestartCannotReuseACancelledCheckpoint() async {
+        let original = snapshot()
+        await #expect(throws: MarmotKitError.OnboardingActionUnavailable) {
+            try await AccountSetupRecovery.restartIfPossible(snapshot: original, cancel: {}, begin: {
+                throw MarmotKitError.OnboardingActionUnavailable
+            })
+        }
+    }
+
+    @Test func approvedCheckpointIsPreservedWhenCancellationIsUnavailable() async throws {
+        let original = snapshot()
+        var restarted = false
+        let result = try await AccountSetupRecovery.restartIfPossible(snapshot: original, cancel: {
+            throw MarmotKitError.OnboardingActionUnavailable
+        }, begin: { restarted = true; return original })
+        #expect(result == original)
+        #expect(!restarted)
+    }
+
+    @Test func cancellationDuringCheckpointRecoveryPropagates() async {
+        await #expect(throws: CancellationError.self) {
+            try await AccountSetupRecovery.restartIfPossible(snapshot: snapshot(), cancel: {
+                throw CancellationError()
+            }, begin: { snapshot(ready: true) })
+        }
+    }
+
     @Test func relayFindingsNameTheAffectedAddressWithoutDuplicates() {
         let retired = OnboardingFindingFfi(issue: .retiredRelay, endpoint: "wss://relay.damus.io")
         let unreachable = OnboardingFindingFfi(issue: .unreachable, endpoint: "wss://example.com")

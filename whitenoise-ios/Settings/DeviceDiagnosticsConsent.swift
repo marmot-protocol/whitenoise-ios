@@ -22,8 +22,9 @@ final class DeviceDiagnosticsConsent {
         }
     }
 
-    func canPresent(chatsVisible: Bool, anotherSheetVisible: Bool, runtimeReady: Bool) -> Bool {
-        pending && !hasSeenPrompt && chatsVisible && !onboardingVisible && !anotherSheetVisible && runtimeReady
+    func canPresent(chatsVisible: Bool, anotherSheetVisible: Bool, runtimeReady: Bool, chatNavigationPending: Bool = false) -> Bool {
+        pending && !hasSeenPrompt && chatsVisible && !chatNavigationPending
+            && !onboardingVisible && !anotherSheetVisible && runtimeReady
     }
 
     func complete() {

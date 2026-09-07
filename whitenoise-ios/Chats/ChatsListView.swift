@@ -10,7 +10,8 @@ struct ChatsListView: View {
         appState.diagnosticsConsent.canPresent(
             chatsVisible: chatsVisible && path.isEmpty,
             anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible,
-            runtimeReady: appState.canUseRuntimeForLocalForegroundWork && appState.activeAccountRef != nil
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork && appState.activeAccountRef != nil,
+            chatNavigationPending: appState.pendingChatId != nil
         )
     }
 

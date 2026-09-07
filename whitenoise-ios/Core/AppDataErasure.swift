@@ -1,6 +1,14 @@
 import Darwin
 import Foundation
 
+@MainActor
+enum AvatarCacheErasure {
+    private static var activeErasures = 0
+    static var isInProgress: Bool { activeErasures > 0 }
+    static func begin() { activeErasures += 1 }
+    static func end() { activeErasures -= 1 }
+}
+
 nonisolated enum AppDataErasure {
     static let runtimeLockName = ".marmot-runtime.lock"
 

@@ -79,6 +79,7 @@ before every release tag.
 
 - [ ] Complete Sign Up, Sign In and Add Profile: Chats is visible before the
       Help Improve White Noise sheet. Both controls are directly available.
+      A pending notification/deep-link chat must open before the prompt is eligible.
 - [ ] Fresh runtime choices start off. Existing device-wide choices are preserved.
       Changes apply immediately; Close/swipe-down records the prompt as seen.
       Relaunch or sign in to another profile: the prompt does not repeat.
@@ -94,11 +95,14 @@ before every release tag.
       Turning wiping off requires no typed confirmation and preserves local data.
 - [ ] Sign-out failures retain the sheet. With surviving signed-in profiles, show
       their chooser; choosing one opens its Settings. Otherwise show Welcome.
+      Relaunch at the chooser and select a profile: open Chats without reopening Settings.
 - [ ] Erase App Data requires the displayed three-word phrase. Test with signed-in,
       signed-out and unfinished profiles; verify keys, chats, media, drafts,
       settings and diagnostics choices are removed, and the app returns to Welcome.
 - [ ] Interrupt erasure or force an NSE root-lock collision: no concurrent root
       deletion occurs, incomplete erasure is reported, and Retry remains available.
+      Retry keeps its progress/error sheet visible. Termination after normal preferences
+      are cleared still offers recovery. Avatar loads cannot recreate caches during erasure.
 
 ## Multi-account
 

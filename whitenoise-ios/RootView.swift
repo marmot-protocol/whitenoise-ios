@@ -37,8 +37,10 @@ struct RootView: View {
         .animation(.smooth(duration: 0.25), value: presentation)
         .toastHost()
         .sheet(isPresented: Binding(
-            get: { appState.erasureState.needsRecovery && appState.activeAccountRef == nil
-                && appState.canUseRuntimeForLocalForegroundWork },
+            get: { appState.erasureState.shouldPresentRecovery(
+                activeAccountRef: appState.activeAccountRef,
+                runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+            ) },
             set: { if !$0 { appState.erasureState.needsRecovery = false } }
         )) { EraseAppDataView(isRecovery: true).appAppearance() }
         // Hosted at the root so a partial-failure wipe report survives the

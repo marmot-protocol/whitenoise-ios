@@ -13,6 +13,7 @@ final class AccountStore {
     static let activeAccountKey = "marmot.activeAccountRef"
     private static let profileSelectionKey = "marmot.chooseProfileAfterSignOut"
     private(set) var prefersProfileSelection: Bool
+    private(set) var returnsToSettingsAfterSelection = false
 
     @ObservationIgnored private let defaults: UserDefaults
 
@@ -25,6 +26,7 @@ final class AccountStore {
     var activeAccountRef: String? {
         didSet {
             if let ref = activeAccountRef {
+                returnsToSettingsAfterSelection = false
                 prefersProfileSelection = false
                 defaults.removeObject(forKey: Self.profileSelectionKey)
                 defaults.set(ref, forKey: Self.activeAccountKey)
@@ -44,12 +46,14 @@ final class AccountStore {
     }
 
     func requestProfileSelection() {
+        returnsToSettingsAfterSelection = true
         prefersProfileSelection = true
         defaults.set(true, forKey: Self.profileSelectionKey)
         activeAccountRef = nil
     }
 
     func resetSelection() {
+        returnsToSettingsAfterSelection = false
         activeAccountRef = nil
         prefersProfileSelection = false
         defaults.removeObject(forKey: Self.profileSelectionKey)

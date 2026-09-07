@@ -2417,6 +2417,10 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
         let only = seeded.accounts[0]
         appState.activeAccountRef = only.label
+        appState.profileStore.profileProjectionCache = [
+            hex("aa"): ProfileDisplayProjection(profile: nil, projectedName: "Previous peer", localAccountLabel: nil)
+        ]
+        appState.profileStore.profileProjectionLoadVersions = [hex("aa"): 9]
 
         await appState.signOut()
 
@@ -2425,9 +2429,10 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.first?.signedOut == true)
         #expect(appState.activeAccountRef == nil)
         #expect(signedOutSettings?.nativePushEnabled == false)
-        // Keep the main shell available so Settings → Profiles can sign the
-        // retained local account back in without importing its keys again.
+        // The prototype returns to Welcome when no signed-in profile remains.
         #expect(appState.phase == .onboarding)
+        #expect(appState.profileStore.profileProjectionCache.isEmpty)
+        #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
         // Account-bound maintenance is stopped while every account is signed out.
         #expect(!appState.notificationSubscriptionActive)
         #expect(!appState.retentionSweeperIsActiveForTesting)

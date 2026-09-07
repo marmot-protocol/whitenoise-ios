@@ -19,6 +19,8 @@ struct DeviceSettingsFlowTests {
         #expect(!consent.canPresent(chatsVisible: false, anotherSheetVisible: false, runtimeReady: true))
         #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: true, runtimeReady: true))
         #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: false))
+        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true,
+                                   chatNavigationPending: true))
         #expect(consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
         consent.complete()
         let relaunched = DeviceDiagnosticsConsent(defaults: defaults)
@@ -37,11 +39,15 @@ struct DeviceSettingsFlowTests {
         #expect(!accounts.prefersProfileSelection)
         accounts.activeAccountRef = "alice"
         accounts.requestProfileSelection()
+        #expect(accounts.returnsToSettingsAfterSelection)
         let restored = AccountStore(defaults: defaults)
+        #expect(!restored.returnsToSettingsAfterSelection)
         #expect(restored.activeAccountRef == nil)
         #expect(restored.prefersProfileSelection)
         restored.activeAccountRef = "bob"
         #expect(!AccountStore(defaults: defaults).prefersProfileSelection)
+        accounts.activeAccountRef = "bob"
+        #expect(!accounts.returnsToSettingsAfterSelection)
     }
 
     @Test func unfinishedErasureCanBeRetriedAfterRelaunch() throws {
@@ -55,6 +61,44 @@ struct DeviceSettingsFlowTests {
         #expect(state.needsRecovery)
         state.complete()
         #expect(!AppDataErasureState(defaults: defaults).needsRecovery)
+    }
+
+    @Test func erasureJournalSurvivesRemovalOfAccountPreferences() async throws {
+        let accountSuite = "ErasureAccounts.\(UUID())"
+        let journalSuite = "ErasureJournal.\(UUID())"
+        let accounts = try #require(UserDefaults(suiteName: accountSuite))
+        let journal = try #require(UserDefaults(suiteName: journalSuite))
+        defer {
+            accounts.removePersistentDomain(forName: accountSuite)
+            journal.removePersistentDomain(forName: journalSuite)
+        }
+        let appState = AppState(client: try MarmotClient.testClient(), notifications: .shared,
+                                accountDefaults: accounts, erasureDefaults: journal)
+        appState.erasureState.begin()
+        accounts.removePersistentDomain(forName: accountSuite)
+        let restored = AppDataErasureState(defaults: journal, legacyDefaults: accounts)
+        #expect(restored.needsRecovery)
+        restored.complete()
+        #expect(!AppDataErasureState(defaults: journal, legacyDefaults: accounts).needsRecovery)
+    }
+
+    @Test func recoverySheetRemainsVisibleThroughoutRetryButNotOrdinaryErasure() throws {
+        let suite = "ErasurePresentation.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let state = AppDataErasureState(defaults: defaults)
+        state.begin()
+        #expect(!state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: false))
+        state.failed()
+        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
+        state.begin()
+        #expect(!state.needsRecovery)
+        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: false))
+        #expect(state.shouldPresentRecovery(activeAccountRef: "restored-during-bootstrap", runtimeReady: false))
+        state.failed()
+        #expect(state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
+        state.complete()
+        #expect(!state.shouldPresentRecovery(activeAccountRef: nil, runtimeReady: true))
     }
 
     @Test func interruptedSignInRequiresExplicitCompletionAcrossLaunches() throws {

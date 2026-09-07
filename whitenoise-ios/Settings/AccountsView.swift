@@ -172,8 +172,11 @@ struct SignedOutProfilesView: View {
                     ForEach(appState.accounts.filter { !$0.signedOut }, id: \.label) { account in
                         Button {
                             Task {
+                                let returnsToSettings = appState.accountStore.returnsToSettingsAfterSelection
                                 await appState.activateAccount(account.label)
-                                if appState.activeAccountRef == account.label { appState.openSettingsAfterProfileSelection = true }
+                                if appState.activeAccountRef == account.label, returnsToSettings {
+                                    appState.openSettingsAfterProfileSelection = true
+                                }
                             }
                         } label: {
                             AccountSummaryRow(account: account)

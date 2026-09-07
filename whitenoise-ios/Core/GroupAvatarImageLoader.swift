@@ -102,6 +102,11 @@ enum GroupAvatarImageLoader {
     private static var seeds: [String: Seed] = [:]
     private static var inFlight: [String: Task<DataLoad, Error>] = [:]
     private static var inFlightImages: [String: Task<ImageLoad, Error>] = [:]
+    private static var cacheDrainTask: Task<Void, Never>?
+    private static var cacheGeneration: UInt64 = 0
+    #if DEBUG
+    static var beforeDecodeForTesting: (@Sendable () async -> Void)?
+    #endif
 
     static func seed(
         data: Data,
@@ -109,7 +114,7 @@ enum GroupAvatarImageLoader {
         groupIdHex: String,
         replacingImageHashHex: String?
     ) {
-        guard !data.isEmpty else { return }
+        guard !data.isEmpty, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         pruneSeeds()
         if seeds.count >= maximumSeedCount,
            let oldest = seeds.min(by: { $0.value.insertedAt < $1.value.insertedAt })?.key {
@@ -132,6 +137,8 @@ enum GroupAvatarImageLoader {
         priority: GroupAvatarLoadPriority,
         client: MarmotClient
     ) async throws -> UIImage {
+        try checkCacheWorkAllowed()
+        let generation = cacheGeneration
         let startedAt = ContinuousClock.now
         let cacheKey = imageCacheKey(for: request)
         if let cached = cache.object(forKey: cacheKey)?.image {
@@ -163,10 +170,11 @@ enum GroupAvatarImageLoader {
             )
         }
         inFlightImages[imageTaskKey] = task
-        defer { inFlightImages[imageTaskKey] = nil }
+        defer { if generation == cacheGeneration { inFlightImages[imageTaskKey] = nil } }
 
         do {
             let load = try await task.value
+            try checkCacheWorkAllowed()
             guard !task.isCancelled else { throw CancellationError() }
             cache.setObject(
                 CachedImage(load.image),
@@ -198,6 +206,7 @@ enum GroupAvatarImageLoader {
                 request: request,
                 scale: scale
             )
+            try checkCacheWorkAllowed()
             cacheRawData(seed.data, for: request)
             persistRawData(seed.data, for: request)
             persistThumbnail(load.image, for: request)
@@ -231,7 +240,7 @@ enum GroupAvatarImageLoader {
             queueWaitMilliseconds: dataLoad.queueWaitMilliseconds,
             fetchMilliseconds: dataLoad.fetchMilliseconds
         )
-        try Task.checkCancellation()
+        try checkCacheWorkAllowed()
         persistThumbnail(load.image, for: request)
         return load
     }
@@ -244,6 +253,10 @@ enum GroupAvatarImageLoader {
         queueWaitMilliseconds: Double = 0,
         fetchMilliseconds: Double = 0
     ) async throws -> ImageLoad {
+        #if DEBUG
+        await beforeDecodeForTesting?()
+        #endif
+        try checkCacheWorkAllowed()
         let decodeStartedAt = ContinuousClock.now
         guard let image = await RemoteImageDecoder.downsampledImage(
             from: data,
@@ -267,6 +280,8 @@ enum GroupAvatarImageLoader {
         priority: GroupAvatarLoadPriority,
         client: MarmotClient
     ) async throws -> DataLoad {
+        try checkCacheWorkAllowed()
+        let generation = cacheGeneration
         let dataKey = GroupAvatarCacheKey.rawData(
             accountRef: request.accountRef,
             imageHashHex: request.imageHashHex
@@ -280,6 +295,7 @@ enum GroupAvatarImageLoader {
             )
         }
         if let cached = await RemoteAvatarDiskCache.groupShared.data(forKey: dataKey) {
+            try checkCacheWorkAllowed()
             dataCache.setObject(cached as NSData, forKey: dataKey as NSString, cost: cached.count)
             return DataLoad(
                 data: cached,
@@ -294,6 +310,7 @@ enum GroupAvatarImageLoader {
             imageHashHex: request.imageHashHex
         )
         if let cached = await RemoteAvatarDiskCache.groupShared.data(forKey: legacyDataKey) {
+            try checkCacheWorkAllowed()
             dataCache.setObject(cached as NSData, forKey: dataKey as NSString, cost: cached.count)
             await RemoteAvatarDiskCache.groupShared.store(cached, forKey: dataKey)
             return DataLoad(
@@ -334,9 +351,9 @@ enum GroupAvatarImageLoader {
             }
         }
         inFlight[dataKey] = task
-        defer { inFlight[dataKey] = nil }
+        defer { if generation == cacheGeneration { inFlight[dataKey] = nil } }
         let load = try await task.value
-        try Task.checkCancellation()
+        try checkCacheWorkAllowed()
         guard !task.isCancelled else { throw CancellationError() }
         dataCache.setObject(load.data as NSData, forKey: dataKey as NSString, cost: load.data.count)
         await RemoteAvatarDiskCache.groupShared.store(load.data, forKey: dataKey)
@@ -366,6 +383,7 @@ enum GroupAvatarImageLoader {
     }
 
     private static func cacheRawData(_ data: Data, for request: GroupAvatarImageRequest) {
+        guard !Task.isCancelled, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         let key = GroupAvatarCacheKey.rawData(
             accountRef: request.accountRef,
             imageHashHex: request.imageHashHex
@@ -374,6 +392,7 @@ enum GroupAvatarImageLoader {
     }
 
     private static func persistRawData(_ data: Data, for request: GroupAvatarImageRequest) {
+        guard !Task.isCancelled, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         let key = GroupAvatarCacheKey.rawData(
             accountRef: request.accountRef,
             imageHashHex: request.imageHashHex
@@ -381,12 +400,13 @@ enum GroupAvatarImageLoader {
         let id = UUID()
         diskWrites[id] = Task {
             defer { diskWrites[id] = nil }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
             await RemoteAvatarDiskCache.groupShared.store(data, forKey: key)
         }
     }
 
     private static func persistThumbnail(_ image: UIImage, for request: GroupAvatarImageRequest) {
+        guard !Task.isCancelled, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         let key = GroupAvatarCacheKey.thumbnail(
             accountRef: request.accountRef,
             imageHashHex: request.imageHashHex,
@@ -398,7 +418,7 @@ enum GroupAvatarImageLoader {
             let data = await Task.detached(priority: .utility) {
                 image.pngData()
             }.value
-            guard let data, !Task.isCancelled else { return }
+            guard let data, !Task.isCancelled, cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
             await RemoteAvatarDiskCache.groupThumbnailShared.store(data, forKey: key)
         }
     }
@@ -424,20 +444,29 @@ enum GroupAvatarImageLoader {
     }
 
     static func clearCachesAndDrain() async {
+        if let cacheDrainTask { await cacheDrainTask.value; return }
         let dataTasks = Array(inFlight.values)
         let imageTasks = Array(inFlightImages.values)
         let writes = Array(diskWrites.values)
         clearCaches()
-        for task in dataTasks { _ = await task.result }
-        for task in imageTasks { _ = await task.result }
-        for task in writes { await task.value }
-        let remainingWrites = Array(diskWrites.values)
-        remainingWrites.forEach { $0.cancel() }
-        for task in remainingWrites { await task.value }
-        clearCaches()
+        let drain = Task { @MainActor in
+            for task in dataTasks { _ = await task.result }
+            for task in imageTasks { _ = await task.result }
+            for task in writes { await task.value }
+            clearCaches()
+            cacheDrainTask = nil
+        }
+        cacheDrainTask = drain
+        await drain.value
+    }
+
+    private static func checkCacheWorkAllowed() throws {
+        try Task.checkCancellation()
+        guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { throw CancellationError() }
     }
 
     static func clearCaches() {
+        cacheGeneration &+= 1
         diskWrites.values.forEach { $0.cancel() }
         diskWrites.removeAll()
         cache.removeAllObjects()
@@ -450,6 +479,7 @@ enum GroupAvatarImageLoader {
     }
 
     #if DEBUG
+    static var isDrainingForTesting: Bool { cacheDrainTask != nil }
     static func resetForTesting() { clearCaches() }
 
     static func hasSeedForTesting(accountRef: String, groupIdHex: String) -> Bool {

@@ -441,6 +441,7 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
+        erasureDefaults: UserDefaults = AppDataErasureState.persistentDefaults,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -459,7 +460,7 @@ final class AppState {
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
-        self.erasureState = AppDataErasureState(defaults: accountDefaults)
+        self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent(defaults: accountDefaults)
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
@@ -840,7 +841,7 @@ final class AppState {
         }
 
         accountStore.requestProfileSelection()
-        if accounts.isEmpty {
+        if !accounts.contains(where: { !$0.signedOut }) {
             // Last account signed out: tear the profile-projection state back
             // down to empty so cached peer data (#366), the per-account version
             // map (#353), and their sibling queues do not survive a full sign-out
@@ -977,7 +978,9 @@ final class AppState {
         erasureState.begin()
         isErasingAppData = true
         isSigningOut = true
+        AvatarCacheErasure.begin()
         defer {
+            AvatarCacheErasure.end()
             isErasingAppData = false
             finishAccountExit()
         }
@@ -1533,15 +1536,16 @@ final class AppState {
                 options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
             )
             if !snapshot.ready, existing.contains(where: { $0.accountIdHex == snapshot.accountIdHex }) {
-                do {
-                    try await lease.client.marmot.cancelOnboarding(accountRef: snapshot.accountIdHex)
-                    snapshot = try await lease.client.marmot.beginOnboarding(
-                        nsec: identity,
-                        options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
-                    )
-                } catch MarmotKitError.OnboardingActionUnavailable {
-                    // MDK #1741 retains an approved publication for safe reconciliation.
-                }
+                snapshot = try await AccountSetupRecovery.restartIfPossible(
+                    snapshot: snapshot,
+                    cancel: { try await lease.client.marmot.cancelOnboarding(accountRef: snapshot.accountIdHex) },
+                    begin: {
+                        try await lease.client.marmot.beginOnboarding(
+                            nsec: identity,
+                            options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
+                        )
+                    }
+                )
             }
         } catch MarmotKitError.OnboardingActionUnavailable {
             // Legacy active/pending accounts keep their existing recovery path.

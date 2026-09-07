@@ -421,6 +421,8 @@ enum RemoteAvatarImageLoader {
 
     private static var inFlightTasks: [String: Task<Data, Error>] = [:]
     private static var inFlightImageTasks: [String: Task<UIImage, Error>] = [:]
+    private static var cacheDrainTask: Task<Void, Never>?
+    private static var cacheGeneration: UInt64 = 0
     private static let cacheLog = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios",
         category: "avatar-cache"
@@ -432,6 +434,8 @@ enum RemoteAvatarImageLoader {
         scale: CGFloat,
         fetch: @escaping @Sendable (URL) async throws -> Data = RemoteImageFetch.imageData
     ) async throws -> UIImage {
+        try checkCacheWorkAllowed()
+        let generation = cacheGeneration
         let targetPixelSize = max(maxPixelSize, 1)
         let key = cacheKey(for: url, maxPixelSize: targetPixelSize)
         let failureKey = failureCacheKey(for: url)
@@ -459,9 +463,10 @@ enum RemoteAvatarImageLoader {
             return image
         }
         inFlightImageTasks[imageTaskKey] = task
-        defer { inFlightImageTasks[imageTaskKey] = nil }
+        defer { if generation == cacheGeneration { inFlightImageTasks[imageTaskKey] = nil } }
         do {
             let image = try await task.value
+            try checkCacheWorkAllowed()
             guard !task.isCancelled else { throw CancellationError() }
 
             failureCache.removeObject(forKey: failureKey)
@@ -472,7 +477,7 @@ enum RemoteAvatarImageLoader {
             )
             return image
         } catch {
-            cacheFailure(error, for: failureKey)
+            if !task.isCancelled { cacheFailure(error, for: failureKey) }
             throw error
         }
     }
@@ -482,14 +487,16 @@ enum RemoteAvatarImageLoader {
         keyString: String,
         fetch: @escaping @Sendable (URL) async throws -> Data
     ) async throws -> Data {
+        try checkCacheWorkAllowed()
         if let cached = await RemoteAvatarDiskCache.shared.data(for: url) {
+            try checkCacheWorkAllowed()
             cacheLog.debug("disk_hit bytes=\(cached.count, privacy: .public)")
             return cached
         }
 
         let startedAt = ContinuousClock.now
         let data = try await imageData(for: url, keyString: keyString, fetch: fetch)
-        try Task.checkCancellation()
+        try checkCacheWorkAllowed()
         await RemoteAvatarDiskCache.shared.store(data, for: url)
         cacheLog.debug(
             "network_fetch bytes=\(data.count, privacy: .public) duration_ms=\(elapsedMilliseconds(since: startedAt), format: .fixed(precision: 0), privacy: .public)"
@@ -502,6 +509,8 @@ enum RemoteAvatarImageLoader {
         keyString: String,
         fetch: @escaping @Sendable (URL) async throws -> Data
     ) async throws -> Data {
+        try checkCacheWorkAllowed()
+        let generation = cacheGeneration
         if let inFlightTask = inFlightTasks[keyString] {
             // A just-completed task may still be present until its owner resumes
             // and clears the slot; reusing that result is safe and still avoids
@@ -513,7 +522,7 @@ enum RemoteAvatarImageLoader {
             try await fetch(url)
         }
         inFlightTasks[keyString] = task
-        defer { inFlightTasks[keyString] = nil }
+        defer { if generation == cacheGeneration { inFlightTasks[keyString] = nil } }
         return try await task.value
     }
 
@@ -527,6 +536,7 @@ enum RemoteAvatarImageLoader {
     }
 
     private static func cacheFailure(_ error: Error, for key: NSString, now: Date = Date()) {
+        guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { return }
         guard shouldCacheFailure(error) else { return }
         failureCache.setObject(
             CachedFailure(error: error, expiresAt: now.addingTimeInterval(failureCacheTTL)),
@@ -557,15 +567,27 @@ enum RemoteAvatarImageLoader {
     }
 
     static func clearCachesAndDrain() async {
+        if let cacheDrainTask { await cacheDrainTask.value; return }
         let dataTasks = Array(inFlightTasks.values)
         let imageTasks = Array(inFlightImageTasks.values)
         clearCaches()
-        for task in dataTasks { _ = await task.result }
-        for task in imageTasks { _ = await task.result }
-        clearCaches()
+        let drain = Task { @MainActor in
+            for task in dataTasks { _ = await task.result }
+            for task in imageTasks { _ = await task.result }
+            clearCaches()
+            cacheDrainTask = nil
+        }
+        cacheDrainTask = drain
+        await drain.value
+    }
+
+    private static func checkCacheWorkAllowed() throws {
+        try Task.checkCancellation()
+        guard cacheDrainTask == nil, !AvatarCacheErasure.isInProgress else { throw CancellationError() }
     }
 
     static func clearCaches() {
+        cacheGeneration &+= 1
         cache.removeAllObjects()
         failureCache.removeAllObjects()
         inFlightTasks.values.forEach { $0.cancel() }
@@ -575,6 +597,7 @@ enum RemoteAvatarImageLoader {
     }
 
     #if DEBUG
+    static var isDrainingForTesting: Bool { cacheDrainTask != nil }
     static func resetCachesForTesting() { clearCaches() }
 
     static func cacheFailureForTesting(_ error: Error, for url: URL, now: Date = Date()) {
