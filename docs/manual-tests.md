@@ -138,6 +138,44 @@ before every release tag.
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
 
+## Chat-list search
+
+Chats is the root of its navigation stack, so a search surface without a
+visible exit cannot be escaped except by force-quitting.
+
+- [ ] In each scope (Chats, Unread, Archived, Left), tap **Search**: the
+      navigation bar stays visible, the field appears with the keyboard, and
+      the magnifier in the trailing toolbar has become an **✕** close button.
+      Repeat with an empty list and with a query that matches nothing.
+- [ ] Placement matches the OS: on iOS 26 the field is integrated into the
+      bottom toolbar within thumb reach; on iOS 18 it is pinned in the
+      navigation-bar drawer and does not hide when the list scrolls.
+- [ ] On iOS 26 in the Unread scope with unread chats, the search field and
+      **Read All** share the bottom toolbar without either being clipped.
+- [ ] Tap the **✕**: the keyboard drops, the query clears, the search field
+      goes away, and the Profile / Filter / Search / New Message toolbar is
+      back with the scope unfiltered. The system's own search dismissal does
+      exactly the same thing.
+- [ ] Swipe the keyboard away without exiting: the **✕** stays visible and
+      still works. Scroll the list, then exit.
+- [ ] The **✕** matches the app's other icon buttons — glass on iOS 26, the
+      filled 44pt circle on iOS 18 — and is not drawn inside a second capsule.
+- [ ] Search, tap a result: the conversation opens; on **Back**, search is
+      closed and the ordinary toolbar is showing.
+- [ ] Search, then change scope from the Filter menu: the field stays usable
+      and **Cancel** still exits to the newly selected scope.
+- [ ] Search, background the app, foreground it: the surface is unchanged and
+      **Cancel** still exits. Force-quit and relaunch: search is closed and
+      the ordinary toolbar is showing.
+- [ ] Search, then switch profiles from Settings: the new profile's list is
+      unfiltered with search closed.
+- [ ] Tap **Search** repeatedly while it is already open: the typed query and
+      the keyboard survive.
+- [ ] With VoiceOver on and Dynamic Type at an accessibility size, the exit
+      action is reachable and reads out.
+- [ ] Repeat the activate / keyboard-dismiss / cancel checks on iOS 18 and on
+      iOS 26.
+
 ## GIF search and remote playback
 
 - [ ] With a local `GIPHY_API_KEY_WHITENOISE_IOS` configured, open the
