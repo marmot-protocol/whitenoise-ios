@@ -10,11 +10,16 @@ correction in this PR. Temporary fixture injection and capture code are excluded
 from the app and this PR. The profile values are
 examples. These images document presentation, not end-to-end network validation.
 
-Localization coverage was audited against 141 compiler-extracted keys from the
+Localization coverage was audited against 140 nonempty compiler-extracted keys from the
 changed app files: English source strings plus complete translations for German,
 Spanish, French, Italian, Portuguese, Russian, Turkish, Simplified Chinese, and
 Traditional Chinese. The catalog tests also check translated values and format
 placeholders across the shared catalog.
+
+Final validation: 1,694 tests in 212 suites passed on the Production scheme
+with the iPhone 17 Pro simulator. SwiftLint 0.63.2 passed in strict mode with
+zero violations across 357 files. Signed-device/live-relay and accessibility
+manual checks remain pending.
 
 ## Progress and completion
 
