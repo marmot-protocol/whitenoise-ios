@@ -7519,18 +7519,6 @@ struct ConversationTimelineProjectionTests {
         )
     }
 
-    @Test func readMarkersApplyOnlyToVisibleKindNineMessagesOnce() throws {
-        let chatRecord = message(id: hex("11"), kind: MessageSemantics.kindChat)
-        let reactionRecord = message(id: hex("22"), kind: MessageSemantics.kindReaction)
-        let emptyId = message(id: "", kind: MessageSemantics.kindChat)
-
-        #expect(ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: true, alreadyMarked: false))
-        #expect(!ConversationReadMarker.shouldMarkRead(chatRecord, isDeleted: false, alreadyMarked: true))
-        #expect(!ConversationReadMarker.shouldMarkRead(reactionRecord, isDeleted: false, alreadyMarked: false))
-        #expect(!ConversationReadMarker.shouldMarkRead(emptyId, isDeleted: false, alreadyMarked: false))
-    }
-
     @Test func pendingReadMarksRetryWhenRuntimeReturnsWithoutAnotherViewportUpdate() {
         #expect(
             ConversationReadMarker.pendingFlushDecision(
@@ -7555,139 +7543,99 @@ struct ConversationTimelineProjectionTests {
         )
     }
 
-    @Test func markedReadDedupDropsMessagesOutsideCurrentTimelineWindow() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "")
-        )
-        let kept = timelineRecord(messageIdHex: hex("11"), timelineAt: 1)
-        let evicted = timelineRecord(messageIdHex: hex("22"), timelineAt: 2)
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [kept, evicted], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-        viewModel.insertMarkedReadMessageIdsForTesting([kept.messageIdHex, evicted.messageIdHex])
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [kept], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-
-        #expect(viewModel.markedReadMessageIdsForTesting == Set([kept.messageIdHex]))
+    @Test func readWatermarkAdvancesOnlyForStrictlyNewerCandidates() {
+        // Marmot's read marker is one moving pointer, so the guard has to be
+        // monotonic: scrolling back up must not regress it.
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 12,
+            pendingIndex: nil,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == 12)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 12,
+            pendingIndex: nil,
+            flushedIndex: 12,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == nil)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 4,
+            pendingIndex: nil,
+            flushedIndex: 12,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == nil)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 13,
+            pendingIndex: 12,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == 13)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 11,
+            pendingIndex: 12,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == nil)
     }
 
-    @Test func markedReadDedupKeepsEvictedPendingFlushIds() throws {
-        let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
-            group: group(name: "")
-        )
-        let kept = timelineRecord(messageIdHex: hex("11"), timelineAt: 1)
-        let pending = timelineRecord(messageIdHex: hex("22"), timelineAt: 2)
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [kept, pending], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-        viewModel.insertPendingReadMessageIdsForTesting([pending.messageIdHex])
-        viewModel.insertMarkedReadMessageIdsForTesting([kept.messageIdHex, pending.messageIdHex])
-
-        viewModel.applyTimelinePage(
-            TimelinePageFfi(messages: [kept], hasMoreBefore: false, hasMoreAfter: false),
-            placement: .window
-        )
-
-        #expect(viewModel.markedReadMessageIdsForTesting.contains(pending.messageIdHex))
+    @Test func readWatermarkRejectsIneligibleCandidates() {
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 3,
+            pendingIndex: nil,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindReaction,
+            isDeleted: false
+        ) == nil)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 3,
+            pendingIndex: nil,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindChat,
+            isDeleted: true
+        ) == nil)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: nil,
+            pendingIndex: nil,
+            flushedIndex: nil,
+            kind: MessageSemantics.kindChat,
+            isDeleted: false
+        ) == nil)
     }
 
-    @Test func markedReadDedupKeepsPendingFlushIdsWhenApplyingLimit() {
-        let loaded = [hex("11"), hex("22"), hex("33")]
-        let pending = Set([hex("aa")])
-        let stale = hex("ff")
+    @Test func newestVisibleWatermarkCandidateIgnoresVisibilityOrder() {
+        let older = message(id: hex("11"), kind: MessageSemantics.kindChat)
+        let newest = message(id: hex("22"), kind: MessageSemantics.kindChat)
+        let reactionTail = message(id: hex("33"), kind: MessageSemantics.kindReaction)
+        let deletedTail = message(id: hex("44"), kind: MessageSemantics.kindChat)
+        let indexes = [hex("11"): 7, hex("22"): 8, hex("33"): 9, hex("44"): 10]
 
-        let retained = ConversationReadMarker.retainedMarkedReadMessageIds(
-            Set(loaded).union(pending).union([stale]),
-            loadedMessageIdsInTimelineOrder: loaded,
-            pendingMessageIds: pending,
-            limit: 2
+        // Row keys arrive in viewport order, not timeline order, and the tail
+        // of the window can be a reaction or a deleted row.
+        let candidate = ConversationReadMarker.newestWatermarkCandidate(
+            in: [reactionTail, deletedTail, newest, older],
+            isDeleted: { $0 == hex("44") },
+            timelineIndex: { indexes[$0] }
         )
 
-        #expect(retained.count == 2)
-        #expect(retained.isSubset(of: Set(loaded).union(pending)))
-        #expect(retained.isSuperset(of: pending))
-        #expect(!retained.contains(stale))
+        #expect(candidate?.messageIdHex == newest.messageIdHex)
     }
 
-    @Test @MainActor func stopDrainKeepsPendingArrayAndSetInLockstep() async {
-        let marker = ConversationReadMarker(
-            groupIdHex: hex("aa"),
-            maxMarkedReadMessageIds: 10,
-            appState: nil,
-            loadedMessageIds: { [] },
-            onChatListRowUpdated: nil
-        )
-        marker.insertPendingReadMessageIdsForTesting([hex("11")])
+    @Test func newestVisibleWatermarkCandidateIsNilWithoutAnEligibleRow() {
+        let reaction = message(id: hex("11"), kind: MessageSemantics.kindReaction)
+        let outsideWindow = message(id: hex("22"), kind: MessageSemantics.kindChat)
 
-        // A nil app state never matches the captured account, so the flush
-        // takes the .stop drain — which must empty the array with the set, or
-        // the emptied set lets the same id re-append and re-mark later.
-        let keepAlive = await marker.flushPendingReadMarksForTesting(accountRef: "acct")
-
-        #expect(!keepAlive)
-        #expect(marker.pendingReadMessageIdsForTesting.isEmpty)
-        #expect(marker.pendingReadMessageIdSetForTesting.isEmpty)
-
-        // Re-enqueueing after the drain yields exactly one queued copy.
-        marker.insertPendingReadMessageIdsForTesting([hex("11"), hex("11")])
-        #expect(marker.pendingReadMessageIdsForTesting == [hex("11")])
-    }
-
-    @Test func markedReadDedupRetainsNewestLoadedIds() {
-        // Timeline order is oldest → newest; trimming keeps the newest ids so
-        // rows still on screen aren't re-marked after the cap is applied.
-        let loaded = [hex("44"), hex("11"), hex("33"), hex("22")]
-
-        let retained = ConversationReadMarker.retainedMarkedReadMessageIds(
-            Set(loaded),
-            loadedMessageIdsInTimelineOrder: loaded,
-            pendingMessageIds: [],
-            limit: 2
+        let candidate = ConversationReadMarker.newestWatermarkCandidate(
+            in: [reaction, outsideWindow],
+            isDeleted: { _ in false },
+            timelineIndex: { $0 == hex("11") ? 1 : nil }
         )
 
-        #expect(retained == Set([hex("33"), hex("22")]))
-    }
-
-    @Test func markedReadPruningUsesHysteresisAndAccountsForPendingFlushes() {
-        #expect(!ConversationReadMarker.shouldPruneMarkedReadMessageIds(
-            currentCount: 201,
-            pendingCount: 0,
-            limit: 200,
-            force: false
-        ))
-        #expect(!ConversationReadMarker.shouldPruneMarkedReadMessageIds(
-            currentCount: 250,
-            pendingCount: 0,
-            limit: 200,
-            force: false
-        ))
-        #expect(ConversationReadMarker.shouldPruneMarkedReadMessageIds(
-            currentCount: 251,
-            pendingCount: 0,
-            limit: 200,
-            force: false
-        ))
-        #expect(!ConversationReadMarker.shouldPruneMarkedReadMessageIds(
-            currentCount: 260,
-            pendingCount: 260,
-            limit: 200,
-            force: false
-        ))
-        #expect(ConversationReadMarker.shouldPruneMarkedReadMessageIds(
-            currentCount: 1,
-            pendingCount: 1,
-            limit: 200,
-            force: true
-        ))
+        #expect(candidate?.messageIdHex == nil)
     }
 
     @Test func liveSubscriptionRetryDelayDoublesUntilCapped() {
@@ -13488,6 +13436,43 @@ struct TimelineBottomTests {
             hasMoreBefore: false,
             canLoadOlder: false
         ) == .fallbackToBottom)
+    }
+
+    @Test func initialTargetHuntFallsBackToBottomOnceItsPageBudgetIsSpent() {
+        #expect(TimelineInitialTargetPolicy.resolve(
+            targetMessageIdHex: "target",
+            targetItemId: nil,
+            hasMoreBefore: true,
+            canLoadOlder: true,
+            loadedHistoryPages: TimelineInitialTargetPolicy.maximumHistoryPages - 1
+        ) == .loadOlder)
+        #expect(TimelineInitialTargetPolicy.resolve(
+            targetMessageIdHex: "target",
+            targetItemId: nil,
+            hasMoreBefore: true,
+            canLoadOlder: true,
+            loadedHistoryPages: TimelineInitialTargetPolicy.maximumHistoryPages
+        ) == .fallbackToBottom)
+        #expect(TimelineInitialTargetPolicy.resolve(
+            targetMessageIdHex: "target",
+            targetItemId: nil,
+            hasMoreBefore: true,
+            canLoadOlder: false,
+            loadedHistoryPages: TimelineInitialTargetPolicy.maximumHistoryPages
+        ) == .fallbackToBottom)
+    }
+
+    @Test func scrollToBottomDrainsForwardPagesUpToItsCap() {
+        #expect(TimelineBottom.shouldDrainNewerPage(hasMoreAfter: true, drainedPages: 0))
+        #expect(TimelineBottom.shouldDrainNewerPage(
+            hasMoreAfter: true,
+            drainedPages: TimelineBottom.maximumScrollToBottomPageDrains - 1
+        ))
+        #expect(!TimelineBottom.shouldDrainNewerPage(
+            hasMoreAfter: true,
+            drainedPages: TimelineBottom.maximumScrollToBottomPageDrains
+        ))
+        #expect(!TimelineBottom.shouldDrainNewerPage(hasMoreAfter: false, drainedPages: 0))
     }
 
     @Test func semanticTargetPositioningRejectsAutomaticBottomScrolls() {

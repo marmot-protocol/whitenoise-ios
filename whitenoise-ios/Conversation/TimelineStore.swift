@@ -67,6 +67,9 @@ final class TimelineStore {
     /// Renderable timeline messages we've loaded by id.
     @ObservationIgnored private var messageById: [String: AppMessageRecordFfi] = [:]
     @ObservationIgnored private var messageByRowFrameKey: [String: AppMessageRecordFfi] = [:]
+    /// Position of a message id in `timeline`, oldest → newest. Backs the read
+    /// watermark's monotonic guard, which has to be O(1) on every visible row.
+    @ObservationIgnored private var timelineIndexByMessageId: [String: Int] = [:]
     @ObservationIgnored private var messageStatusById: [String: MessageStatus] = [:]
     @ObservationIgnored private var durableRowProjectionRevisionById: [String: UInt64] = [:]
     @ObservationIgnored private var nextDurableRowProjectionRevision: UInt64 = 0
@@ -126,7 +129,6 @@ final class TimelineStore {
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let groupIdHex: String
     @ObservationIgnored weak var streamWatcher: StreamWatcher?
-    @ObservationIgnored weak var readMarker: ConversationReadMarker?
     /// Resolves a mention entity to a display name (off the profile cache); set by
     /// the view model so this store holds no profile state.
     @ObservationIgnored var mentionResolver: MarkdownMentionResolver = { _ in nil }
@@ -281,16 +283,8 @@ final class TimelineStore {
 
     // MARK: - Loaded-window queries
 
-    /// Message ids in timeline order (oldest → newest). The read-marker's
-    /// retention policy trims oldest-first so the ids most likely to still be
-    /// on screen survive the cap.
-    var loadedMessageIdsInTimelineOrder: [String] {
-        timeline.compactMap { item in
-            guard case .message(let record, _) = item.kind, !record.messageIdHex.isEmpty else {
-                return nil
-            }
-            return record.messageIdHex
-        }
+    func timelineIndex(forMessageIdHex messageIdHex: String) -> Int? {
+        timelineIndexByMessageId[messageIdHex]
     }
 
     // MARK: - Projection accessors
@@ -558,7 +552,6 @@ final class TimelineStore {
         if shouldEvictAbsentRecords {
             streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         }
-        readMarker?.pruneMarkedReadMessageIds(force: true)
         hasMoreBefore = page.hasMoreBefore
         hasMoreAfter = page.hasMoreAfter
         rebuildProjectedState(
@@ -611,7 +604,6 @@ final class TimelineStore {
                 ) || projectionChanged
             }
         }
-        readMarker?.pruneMarkedReadMessageIds(force: true)
         streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
         rebuildProjectedState(
             rebuildTimeline: consolidateTimelineRebuild,
@@ -640,7 +632,6 @@ final class TimelineStore {
             projectionChanged = applyTimelineRecord(record, updateTimeline: true) || projectionChanged
         }
         streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
-        readMarker?.pruneMarkedReadMessageIds(force: true)
         if !hasMoreAfter {
             // A tail refresh only re-reads the newest rows, so its page always
             // reports more history exists; never widen a backward edge the user
@@ -775,7 +766,6 @@ final class TimelineStore {
         mediaProjections.removeReferences(forMessageId: messageIdHex)
         reactionProjections.removeSummary(forMessageId: messageIdHex)
         deletedProjections.removeProjected(forMessageId: messageIdHex)
-        readMarker?.forgetMarkIfNotPending(messageIdHex)
         streamWatcher?.forgetScannedFinalized(messageIdHex)
         var timelineChanged = updateTimeline
             ? removeTimelineItem(id: "msg:\(messageIdHex)")
@@ -953,6 +943,7 @@ final class TimelineStore {
 
         let nextSignature = next.map(TimelineItemSignature.init)
         messageByRowFrameKey = Self.messageRowsByFrameKey(next)
+        timelineIndexByMessageId = Self.timelineIndexesByMessageId(next)
         guard timelineSignature != nextSignature else { return false }
         timeline = next
         timelineSignature = nextSignature
@@ -965,9 +956,16 @@ final class TimelineStore {
         if index < timelineSignature.count, timelineSignature[index] == signature {
             return false
         }
+        if case .message(let replaced, _) = timeline[index].kind,
+           timelineIndexByMessageId[replaced.messageIdHex] == index {
+            timelineIndexByMessageId[replaced.messageIdHex] = nil
+        }
         timeline[index] = item
         if case .message(let record, _) = item.kind {
             messageByRowFrameKey[item.rowFrameKey] = record
+            if !record.messageIdHex.isEmpty {
+                timelineIndexByMessageId[record.messageIdHex] = index
+            }
         } else {
             messageByRowFrameKey[item.rowFrameKey] = nil
         }
@@ -978,6 +976,20 @@ final class TimelineStore {
         }
         messageClusterPresentations = MessageClusterProjection.presentations(for: timeline)
         return true
+    }
+
+    private static func timelineIndexesByMessageId(
+        _ timeline: [TimelineItem]
+    ) -> [String: Int] {
+        var indexes: [String: Int] = [:]
+        indexes.reserveCapacity(timeline.count)
+        for (index, item) in timeline.enumerated() {
+            guard case .message(let record, _) = item.kind, !record.messageIdHex.isEmpty else {
+                continue
+            }
+            indexes[record.messageIdHex] = index
+        }
+        return indexes
     }
 
     private static func messageRowsByFrameKey(

@@ -267,14 +267,13 @@ final class ConversationViewModel {
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
-    // Lazy so its `[weak self]` loaded-window closure can capture a fully
-    // initialized self; first touched on the post-start apply/mark paths.
+    // Lazy so its timeline-index closure can capture a fully initialized
+    // store; first touched on the post-start apply/mark paths.
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
         groupIdHex: group.groupIdHex,
-        maxMarkedReadMessageIds: Int(Self.timelinePageLimit) * 4,
         appState: appState,
-        loadedMessageIds: { [weak timelineStore] in
-            timelineStore?.loadedMessageIdsInTimelineOrder ?? []
+        timelineIndex: { [weak timelineStore] messageIdHex in
+            timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
         },
         onChatListRowUpdated: onChatListRowUpdated
     )
@@ -297,19 +296,10 @@ final class ConversationViewModel {
     var streamTextLengthEntryCountForTesting: Int { streamWatcher.streamTextLengthEntryCountForTesting }
     var scannedFinalizedMessageIdCountForTesting: Int { streamWatcher.scannedFinalizedMessageIdCountForTesting }
     var finalizedStreamIdCountForTesting: Int { streamWatcher.finalizedStreamIdCountForTesting }
-    var markedReadMessageIdsForTesting: Set<String> { readMarker.markedReadMessageIdsForTesting }
     var mediaItemProjectionBuildCountForTesting: Int { timelineStore.mediaProjections.buildCountForTesting }
     @ObservationIgnored var acceptGroupInviteForTesting: (@MainActor (String, String) async throws -> AppGroupRecordFfi)?
     @ObservationIgnored var refreshInviteStateForTesting: (@MainActor () async -> Bool)?
     @ObservationIgnored var declineGroupInviteForTesting: (@MainActor (String, String) async throws -> GroupInviteDeclineResultFfi)?
-
-    func insertMarkedReadMessageIdsForTesting(_ messageIds: Set<String>) {
-        readMarker.insertMarkedReadMessageIdsForTesting(messageIds)
-    }
-
-    func insertPendingReadMessageIdsForTesting(_ messageIds: [String]) {
-        readMarker.insertPendingReadMessageIdsForTesting(messageIds)
-    }
 #endif
 
     /// First-open load timings. Visible under category "conversation-load" in
@@ -750,7 +740,6 @@ final class ConversationViewModel {
         timelineStore.mentionResolver = { [weak appState] entity in
             appState?.mentionDisplayName(for: entity)
         }
-        timelineStore.readMarker = readMarker
         composer.canSendMessages = { [weak self] in self?.canSendMessages ?? false }
         composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
         composer.onError = { [weak self] message in self?.error = message }
@@ -867,17 +856,40 @@ final class ConversationViewModel {
         }
     }
 
+    /// Marmot's read marker is a watermark, so only the newest visible row is
+    /// worth a round-trip — marking it clears every earlier unread message.
     func markVisibleMessagesRead(_ records: [AppMessageRecordFfi]) {
-        for record in records {
-            readMarker.markReadIfVisible(
-                record,
-                isDeleted: isDeleted(record.messageIdHex)
-            )
-        }
+        guard let newest = ConversationReadMarker.newestWatermarkCandidate(
+            in: records,
+            isDeleted: { [weak self] messageIdHex in self?.isDeleted(messageIdHex) ?? true },
+            timelineIndex: { [weak timelineStore] messageIdHex in
+                timelineStore?.timelineIndex(forMessageIdHex: messageIdHex)
+            }
+        ) else { return }
+        readMarker.advanceWatermark(to: newest, isDeleted: false)
     }
 
-    private func pruneMarkedReadMessageIds(force: Bool = false) {
-        readMarker.pruneMarkedReadMessageIds(force: force)
+    /// Advances the watermark to the newest eligible row in the loaded window.
+    /// When the window reaches the conversation tail that marks the whole
+    /// conversation read, with no dependency on a row visibility edge.
+    func markConversationReadThroughTail() {
+        guard let record = newestTailWatermarkCandidate() else { return }
+        readMarker.advanceWatermark(to: record, isDeleted: false)
+    }
+
+    private func newestTailWatermarkCandidate() -> AppMessageRecordFfi? {
+        for item in timelineStore.timeline.reversed() {
+            guard case .message(let record, _) = item.kind else { continue }
+            let accepted = ConversationReadMarker.nextWatermarkIndex(
+                candidateIndex: timelineStore.timelineIndex(forMessageIdHex: record.messageIdHex),
+                pendingIndex: nil,
+                flushedIndex: nil,
+                kind: record.kind,
+                isDeleted: isDeleted(record.messageIdHex)
+            )
+            if accepted != nil { return record }
+        }
+        return nil
     }
 
     func deleteCapability(for message: AppMessageRecordFfi) -> MessageDeleteCapability {
@@ -1063,6 +1075,7 @@ final class ConversationViewModel {
                 groupIdHex: group.groupIdHex
             ) {
                 guard !Task.isCancelled else { return }
+                readMarker.seedFlushedWatermark(messageIdHex: row.lastReadMessageIdHex)
                 onChatListRowUpdated?(row)
             }
         } catch {
@@ -1083,7 +1096,6 @@ final class ConversationViewModel {
         readStateTask?.cancel()
         readStateTask = nil
         readMarker.cancelPendingReadMarks()
-        readMarker.clearMarks()
         cancelTimelineTailRefresh()
         streamWatcher.cancelAll()
     }
