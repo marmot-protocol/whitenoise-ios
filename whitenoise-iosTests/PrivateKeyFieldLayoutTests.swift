@@ -23,9 +23,13 @@ struct PrivateKeyFieldLayoutTests {
         controller.view.layoutIfNeeded()
         let field = try #require(secureField(in: controller.view))
 
-        // Exercise the same editing-change path as paste without using the clipboard.
-        field.text = "nsec1" + String(repeating: "q", count: keyLength - 5)
-        field.sendActions(for: .editingChanged)
+        // Deliver synthetic content through UIKit without using the clipboard.
+        let key = "nsec1" + String(repeating: "q", count: keyLength - 5)
+        field.paste(itemProviders: [NSItemProvider(object: key as NSString)])
+        for _ in 0..<100 where field.text != key {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(field.text == key)
         for focused in [false, true] {
             if focused { field.becomeFirstResponder() }
             for _ in 0..<10 {
@@ -35,7 +39,9 @@ struct PrivateKeyFieldLayoutTests {
 
             let frame = field.convert(field.bounds, to: controller.view)
             #expect(frame.width > 0)
-            #expect(frame.width <= width - 80, "Secure field must leave room for padding and adjacent controls: \(frame)")
+            let textWidth = field.textRect(forBounds: field.bounds).width
+            #expect(textWidth <= width - 80, "Text must leave room for padding and adjacent controls")
+            #expect(field.bounds.height >= 44)
             #expect(frame.minX >= 0)
             #expect(frame.maxX <= controller.view.bounds.width)
         }

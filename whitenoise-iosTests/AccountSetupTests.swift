@@ -5,6 +5,26 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func relayFindingsNameTheAffectedAddressWithoutDuplicates() {
+        let retired = OnboardingFindingFfi(issue: .retiredRelay, endpoint: "wss://relay.damus.io")
+        let unreachable = OnboardingFindingFfi(issue: .unreachable, endpoint: "wss://example.com")
+        #expect(AccountSetupPresentation.findingMessages([retired, retired, unreachable]) == [
+            AccountSetupPresentation.issue(.retiredRelay) + "\nwss://relay.damus.io",
+            AccountSetupPresentation.issue(.unreachable) + "\nwss://example.com"
+        ])
+    }
+
+    @Test func relayFindingAddressesAreBoundedAndStripInvisibleFormatting() {
+        let findings = [OnboardingFindingFfi(issue: .invalidRelay,
+                                           endpoint: "\u{202e}wss://example.com\n" + String(repeating: "a", count: 1_000))]
+        let messages = AccountSetupPresentation.findingMessages(findings)
+        #expect(messages.count == 1)
+        #expect(!messages[0].contains("\u{202e}"))
+        #expect(messages[0].filter { $0 == "\n" }.count == 1)
+        #expect(messages[0].count <= AccountSetupPresentation.issue(.invalidRelay).count + 202)
+        #expect(messages[0].hasSuffix("…"))
+    }
+
     private func snapshot(
         revision: UInt64 = 1,
         status: OnboardingStatusFfi = .needsInput,

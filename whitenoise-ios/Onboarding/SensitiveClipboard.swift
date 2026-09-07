@@ -42,7 +42,7 @@ enum SensitiveClipboard {
     /// the user pasted. Capturing at import tap is wrong: by then the user may
     /// have typed/autofilled the field or copied unrelated content, and the
     /// gate would clobber clipboard data the secret no longer owns (#409).
-    struct Token {
+    struct Token: Equatable {
         fileprivate let changeCount: Int
         fileprivate init(changeCount: Int) { self.changeCount = changeCount }
     }

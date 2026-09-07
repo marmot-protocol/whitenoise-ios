@@ -29,12 +29,11 @@ struct AccountSetupActions: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     explanation
-                    if let step {
-                        ForEach(Array(step.findings.enumerated()), id: \.offset) { _, finding in
-                            if selectedStep != .singleDevice {
-                                Text(AccountSetupPresentation.issue(finding.issue))
-                                    .foregroundStyle(.secondary)
-                            }
+                    if let step, selectedStep != .singleDevice {
+                        ForEach(AccountSetupPresentation.findingMessages(step.findings), id: \.self) { message in
+                            Text(verbatim: message)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     if let error = model.errorMessage { Text(error).foregroundStyle(.orange) }

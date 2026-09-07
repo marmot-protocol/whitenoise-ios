@@ -2,6 +2,22 @@ import Foundation
 import MarmotKit
 
 nonisolated enum AccountSetupPresentation {
+    static func findingMessages(_ findings: [OnboardingFindingFfi]) -> [String] {
+        var seen: Set<String> = []
+        return findings.compactMap { finding in
+            var message = issue(finding.issue)
+            if let endpoint = finding.endpoint {
+                let scalars = endpoint.unicodeScalars.prefix(200).filter {
+                    $0.properties.generalCategory != .control && $0.properties.generalCategory != .format
+                }
+                let address = String(String.UnicodeScalarView(scalars))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !address.isEmpty { message += "\n" + address + (endpoint.unicodeScalars.count > 200 ? "…" : "") }
+            }
+            return seen.insert(message).inserted ? message : nil
+        }
+    }
+
     static func title(_ step: OnboardingStepFfi) -> String {
         switch step {
         case .profile: L10n.string("Your profile")
