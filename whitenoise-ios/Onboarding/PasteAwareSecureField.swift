@@ -111,7 +111,8 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     func configureAccessory() {
         let configuration = UIPasteControl.Configuration()
         configuration.displayMode = .iconOnly
-        configuration.baseBackgroundColor = .clear
+        configuration.baseBackgroundColor = .secondarySystemBackground
+        configuration.cornerStyle = .capsule
         configuration.baseForegroundColor = .label
         let control = UIPasteControl(configuration: configuration)
         control.target = self
