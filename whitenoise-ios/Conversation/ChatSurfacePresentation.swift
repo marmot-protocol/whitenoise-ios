@@ -72,6 +72,27 @@ enum MessageBubblePalette {
     static let sentForeground = Color(uiColor: .systemBackground)
     static let receivedBackground = Color(uiColor: .systemGray5)
     static let receivedForeground = Color(uiColor: .label)
+
+    // De-emphasized text drawn on a bubble. `Color.secondary` cannot express
+    // this: it resolves against the label color, which is also the sent
+    // bubble's background, so on-bubble secondary text has to be a tint of the
+    // bubble's own foreground.
+    static let sentSecondaryForeground = sentForeground.opacity(secondaryForegroundOpacity)
+    static let receivedSecondaryForeground = receivedForeground.opacity(secondaryForegroundOpacity)
+
+    static func background(isFromMe: Bool) -> Color {
+        isFromMe ? sentBackground : receivedBackground
+    }
+
+    static func foreground(isFromMe: Bool) -> Color {
+        isFromMe ? sentForeground : receivedForeground
+    }
+
+    static func secondaryForeground(isFromMe: Bool) -> Color {
+        isFromMe ? sentSecondaryForeground : receivedSecondaryForeground
+    }
+
+    private static let secondaryForegroundOpacity = 0.75
 }
 
 nonisolated enum MessageMetadataRowArrangement {

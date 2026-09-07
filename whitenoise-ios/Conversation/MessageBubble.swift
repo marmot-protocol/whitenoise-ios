@@ -339,7 +339,7 @@ struct MessageBubble: View {
             )
         }
         .font(.subheadline)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
         .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
         .padding(.vertical, ChatBubbleMetrics.verticalInset)
         .background { bubbleBackground }
@@ -606,13 +606,10 @@ struct MessageBubble: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(preview.name)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
+                    .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
                 Text(preview.text)
                     .font(.caption)
-                    .foregroundStyle(
-                        (isFromMe ? MessageBubblePalette.sentForeground : MessageBubblePalette.receivedForeground)
-                            .opacity(0.75)
-                    )
+                    .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
