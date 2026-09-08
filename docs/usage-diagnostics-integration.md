@@ -91,7 +91,7 @@ shutdown itself seals partial observations and drains after storage closes.
 
 ## Validation evidence
 
-The formal 0.9.20 release passed the 1,806-test simulator suite (228 suites), the
+The formal 0.9.20 release passed the 1,807-test simulator suite (228 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
 exercise account-free consent, failed persistence, scope reconfirmation,
 independent logging, identity rotation, frozen-runtime silence, stale tickets,

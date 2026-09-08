@@ -124,6 +124,44 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test func olderRefreshCannotDiscardSetupRestoredAfterFinishFailure() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        let maintenance = appState.beginForegroundMaintenanceCancellation()
+        for task in maintenance.mutationFollowups { await task.value }
+        let completed = OnboardingSnapshotFfi(
+            accountIdHex: account.accountIdHex, recoveryEpoch: nil, revision: 1, ready: true, steps: [],
+            proposal: nil, singleDeviceNotice: nil, cancellationPending: false
+        )
+        let model = AccountSetupModel(snapshot: completed)
+        await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
+        for _ in 0..<1_000 where !model.canFinish { await Task.yield() }
+        try #require(model.canFinish)
+        appState.signInAttempts.begin(account.accountIdHex)
+        appState.pendingAccountSetup = model
+        let checkpoint = AsyncTestCheckpoint()
+        defer { Task { await checkpoint.release() } }
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+            await checkpoint.pause()
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
+        await checkpoint.waitUntilPaused()
+        appState.beforeAccountRefreshForTesting = { throw CocoaError(.fileReadCorruptFile) }
+        await appState.finishAccountSetup()
+        try #require(appState.pendingAccountSetup === model)
+        appState.beforeAccountRefreshForTesting = nil
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        await checkpoint.release()
+        try await refresh.value
+        #expect(appState.pendingAccountSetup === model)
+        #expect(appState.activeAccountRef == account.label)
+        #expect(appState.signInAttempts.accountIDs.contains(account.accountIdHex))
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test(arguments: [false, true])
     func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
         let appState = AppState(

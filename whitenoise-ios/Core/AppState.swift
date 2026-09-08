@@ -1345,6 +1345,7 @@ final class AppState {
         try await beforeAccountRefreshForTesting?()
 #endif
         let setupAtReadStart = pendingAccountSetup
+        let attemptRevision = signInAttempts.revision
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
@@ -1379,7 +1380,7 @@ final class AppState {
         try Task.checkCancellation()
         guard self.client === client else { throw CancellationError() }
         // An older account read must not discard a sign-in begun while it awaited storage.
-        guard pendingAccountSetup === setupAtReadStart else { return }
+        guard pendingAccountSetup === setupAtReadStart, signInAttempts.revision == attemptRevision else { return }
         // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
         accountStore.accounts = readyAccounts
         if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {
