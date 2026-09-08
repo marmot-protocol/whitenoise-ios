@@ -8,7 +8,11 @@ private struct WNBackButtonModifier: ViewModifier {
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(title: "Back", systemImage: "chevron.backward") {
+                    WNIconButton(
+                        title: "Back",
+                        systemImage: "chevron.backward",
+                        chrome: .container
+                    ) {
                         dismiss()
                     }
                 }

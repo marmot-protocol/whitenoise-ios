@@ -65,6 +65,61 @@ struct WNButtonTests {
         #expect(!WNButton.Metrics.stretches(.compact))
     }
 
+    @Test func onlyTheCompactSecondaryButtonLeansOnItsContainerForASurface() {
+        #expect(
+            !WNButton.Metrics.drawsOwnSurface(emphasis: .secondary, size: .compact)
+        )
+        #expect(
+            WNButton.Metrics.drawsOwnSurface(emphasis: .secondary, size: .large)
+        )
+        #expect(
+            WNButton.Metrics.drawsOwnSurface(emphasis: .primary, size: .compact)
+        )
+        #expect(
+            WNButton.Metrics.drawsOwnSurface(emphasis: .primary, size: .large)
+        )
+    }
+
+    @Test func onlyASecondaryIconButtonCanInheritItsContainersSurface() {
+        #expect(
+            WNIconButton.inheritsContainerSurface(
+                emphasis: .secondary,
+                chrome: .container
+            )
+        )
+        #expect(
+            !WNIconButton.inheritsContainerSurface(
+                emphasis: .secondary,
+                chrome: .own
+            )
+        )
+        #expect(
+            !WNIconButton.inheritsContainerSurface(
+                emphasis: .primary,
+                chrome: .container
+            )
+        )
+    }
+
+    /// A new call site must keep its own circle until it opts out, so a toolbar
+    /// item that hides the shared background cannot silently lose all chrome.
+    @Test @MainActor func anIconButtonDrawsItsOwnSurfaceUnlessToldOtherwise() {
+        let button = WNIconButton(
+            title: "Close search",
+            systemImage: "xmark",
+            action: {}
+        )
+
+        #expect(button.emphasis == .secondary)
+        #expect(button.chrome == .own)
+        #expect(
+            !WNIconButton.inheritsContainerSurface(
+                emphasis: button.emphasis,
+                chrome: button.chrome
+            )
+        )
+    }
+
     @Test func compactDropsBelowTheCallToActionControlSize() {
         #expect(WNButton.Metrics.controlSize(for: .large) == .extraLarge)
         #expect(WNButton.Metrics.controlSize(for: .compact) < .extraLarge)

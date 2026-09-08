@@ -134,7 +134,11 @@ struct ProfileEditView: View {
                     )
                     .disabled(model.isPublishing || model.isUploadingPicture)
                 } else {
-                    WNIconButton(title: "Back", systemImage: "chevron.backward") {
+                    WNIconButton(
+                        title: "Back",
+                        systemImage: "chevron.backward",
+                        chrome: .container
+                    ) {
                         dismiss()
                     }
                 }
