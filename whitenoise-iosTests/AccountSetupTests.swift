@@ -88,6 +88,20 @@ struct AccountSetupTests {
         #expect(AccountSetupPresentation.status(.skipped) != AccountSetupPresentation.status(.passed))
     }
 
+    @Test func analyticsReadinessWaitsForCancellationToClear() {
+        let model = AccountSetupModel(snapshot: snapshot())
+        var observations = 0
+        model.onProductReady = { observations += 1 }
+        model.apply(snapshot(revision: 2, ready: true, cancellationPending: true))
+        #expect(!model.isDurablyReady)
+        #expect(observations == 0)
+        model.apply(snapshot(revision: 3, ready: true))
+        #expect(model.isDurablyReady)
+        #expect(observations == 1)
+        model.apply(snapshot(revision: 4, ready: true))
+        #expect(observations == 1)
+    }
+
     @Test func deviceButtonDistinguishesCleanAndUncertainDiscovery() {
         #expect(AccountSetupPresentation.deviceAction(.noneFound) == L10n.string("Continue"))
         #expect(AccountSetupPresentation.deviceAction(.unknown) == L10n.string("Continue anyway"))

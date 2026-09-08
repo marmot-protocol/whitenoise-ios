@@ -1618,7 +1618,7 @@ final class AppState {
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
             productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)
         }
-        if snapshot.ready { pendingAccountSetup?.onProductReady?() }
+        if pendingAccountSetup?.isDurablyReady == true { pendingAccountSetup?.onProductReady?() }
         accountSetupSnapshots.removeAll { $0.accountIdHex == snapshot.accountIdHex }
         accountSetupSnapshots.append(snapshot)
         isAccountSetupPresented = true

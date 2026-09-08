@@ -59,11 +59,13 @@ struct WelcomeView: View {
                     open(.signUp)
                 }
                 .accessibilityIdentifier("welcome.sign-up")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
 
                 WNButton(title: "Sign In", emphasis: .secondary) {
                     open(.signIn)
                 }
                 .accessibilityIdentifier("welcome.sign-in")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
             }
         }
         .safeAreaPadding(.horizontal)

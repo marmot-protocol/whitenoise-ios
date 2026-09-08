@@ -1,31 +1,39 @@
 # iOS usage and diagnostics integration
 
-This development integration targets MDK master
+This integration pins MDK master
 `5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154` (analytics PR #1745).
 It includes shared-store migration 2 and account-storage migration 65.
 Use disposable test roots; reverting the binary is not a storage rollback.
 
-## Local bindings
+## Published bindings
 
-Run `./scripts/sync-local-bindings.sh /path/to/clean/mdk <full-master-sha>`.
-The checkout must be clean and match that SHA. The script enables both exporters,
-builds Swift plus arm64 device/simulator artifacts, validates deployment target
-18.0, packages checksums, and installs the ignored local XCFramework.
-`Packages/MarmotKit/LOCAL_BUILD.json` records provenance. The local binary pin
-intentionally fails if its matching artifact is absent; it never falls back to
-an older binary. A fresh checkout must run this local setup while the PR remains in development.
-CI checks out the pinned MDK source, builds both exporters, and verifies the
-generated Swift matches the checked-in binding before testing.
+The package uses immutable snapshot
+`marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154`, built with
+`otlp-export` and `product-analytics-export` for arm64 iOS and simulator, with
+an iOS 18.0 deployment target. Install it with:
 
-Before merge publish the same source as an immutable MarmotKit snapshot, run
-`./scripts/sync-bindings.sh <full-master-sha>`, and validate the resulting remote
-package. Do not commit the XCFramework or label local artifacts as published.
+```sh
+./scripts/sync-bindings.sh 5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154
+```
+
+The installer verifies the source SHA and generated Swift/binary checksums and
+updates the remote package declaration and `MARMOT_VERSION` together. The
+published generated API is unchanged from the development build. The immutable release
+[manifest](https://github.com/marmot-protocol/mdk/releases/download/marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154/marmotkit-ios-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154.manifest.json)
+records source/builder SHAs, toolchain, features, and artifact checksums.
+CI downloads the published package; it no longer builds Rust as part of app tests.
+
+For local reproduction only, run
+`./scripts/sync-local-bindings.sh /path/to/clean/mdk <full-master-sha>`.
+This installs ignored local artifacts and records `LOCAL_BUILD.json`; restore
+the published package with `sync-bindings.sh` before committing. Do not commit
+the XCFramework or label local artifacts as published.
 
 ## Consent and counting
 
 Welcome presents the optional consent sheet after bootstrap and before account
 entry. Usage/diagnostics and forensic logging are separate, default-off decisions.
-Closing without a usage grant saves a decline. No receipt is stored in UserDefaults;
+The top-right checkmark saves a decline when usage has not been granted. No receipt is stored in UserDefaults;
 MDK's combined effective receipt controls first launch and migration prompts.
 There is no replay of activity before consent, including initial bootstrap timing.
 New-user onboarding measurements describe opted-in users, never all installations.
@@ -49,10 +57,14 @@ Background activity is best-effort alongside terminal shutdown. The latter close
 storage before its bounded drain; analytics never owns the suspension deadline.
 Frozen notification runtimes stay silent. Runtime shutdown may lose memory-only
 observations; no Swift disk queue or session identity is added.
+The pinned MDK background setter flushes before returning and has no separate
+non-flushing activity API. Awaiting it before terminal close would delay storage
+release, so background activity cannot be guaranteed at suspension. Terminal
+shutdown itself seals partial observations and drains after storage closes.
 
 ## Validation evidence
 
-The local integration passed the 1,769-test simulator suite (221 suites), the
+The published snapshot passed the 1,772-test simulator suite (221 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
 exercise account-free consent, failed persistence, scope reconfirmation,
 independent logging, identity rotation, frozen-runtime silence, stale tickets,
@@ -64,11 +76,26 @@ through the current account schema and shared consent migration preserving
 legacy opt-in history, export intervals, and independent audit preferences.
 These checks do not establish a safe downgrade of an upgraded device database.
 
-Production and staging unsigned Release device builds passed. A disposable
-simulator visually confirmed the initial compact sheet over Welcome with both
-switches off. Signed-device interaction checks and persisted staging ingestion
-remain outstanding. The configuration preflight currently rejects both flavors
-because the ingestion endpoint, Aptabase keys, and verified retention are absent.
+Production and staging unsigned Release device builds passed. Both built-plist
+configuration preflights passed with distinct application keys. The preflight's
+Python tests cover valid HTTPS routes and malformed ports/URLs without printing
+configuration values.
+
+Three disposable-simulator UI checks passed interrupted first launch,
+background/resume with consent open, decline/relaunch, grant, and account-entry
+cancellation. The sheet's default-off choices and revised layout were visually
+checked. Real-storage tests additionally cover both grant and decline surviving
+runtime replacement, independent log consent, and erasure restoring eligibility.
+These checks use disposable roots and do not erase existing simulator profiles.
+
+The local xcconfig now resolves separate production/staging keys and the full
+`https://aptabase.ipf.dev/api/v0/events` endpoint. A staging HTTP smoke export
+was accepted, and the operator confirmed persisted staging events in Aptabase
+and reported the country-mapping issue resolved. The operator-specified retention
+is 180 days; the disclosure remains “Usage analytics are scheduled
+for automatic deletion after 180 days.” Keys and local config stay ignored.
+These operator confirmations are distinct from automated checks of the deployed
+ClickHouse policy or access logs. Signed-device interaction checks remain pending.
 
 ## Rollout gates
 
@@ -83,6 +110,6 @@ because the ingestion endpoint, Aptabase keys, and verified retention are absent
    not verify deployment privacy or ingestion.
 4. Run the first-launch/upgrade/manual checks, and inspect persisted synthetic
    staging events as well as local status. HTTP success alone is insufficient.
-5. Replace local bindings with the immutable snapshot, pass CI, then ship through
+5. Keep the immutable snapshot pin, pass CI, then ship through
    the normal separately authorized release process. No app version bump or
    deployment change belongs to this integration checkpoint.

@@ -121,8 +121,9 @@ final class AccountSetupModel {
     init(snapshot: OnboardingSnapshotFfi) { self.snapshot = snapshot }
 
     var accountID: String { snapshot.accountIdHex }
+    var isDurablyReady: Bool { snapshot.ready && !snapshot.cancellationPending }
     var canFinish: Bool {
-        !isBusy && !cancelled && snapshot.ready && !snapshot.cancellationPending && isConnected && errorMessage == nil
+        !isBusy && !cancelled && isDurablyReady && isConnected && errorMessage == nil
     }
     var offeredActions: Set<OnboardingActionFfi> { Set(snapshot.steps.flatMap(\.actions)) }
     var currentStep: OnboardingStepStateFfi? {
@@ -138,7 +139,7 @@ final class AccountSetupModel {
 
     func apply(_ next: OnboardingSnapshotFfi) {
         guard next.accountIdHex == accountID, next.revision >= snapshot.revision else { return }
-        let becameReady = !snapshot.ready && next.ready && !next.cancellationPending
+        let becameReady = !isDurablyReady && next.ready && !next.cancellationPending
         snapshot = next
         if becameReady { onProductReady?() }
     }

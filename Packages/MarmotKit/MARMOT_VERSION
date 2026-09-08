@@ -1,6 +1,15 @@
 mdk-sha: 5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154
 mdk-branch: master
-mdk-tag: local-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154
-built-at: 2026-09-08T10:55:03.772561+00:00
+mdk-tag: marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154
+published-at: 2026-09-08T15:16:33Z
+uniffi-version: 0.29.4
 features: otlp-export,product-analytics-export
-See LOCAL_BUILD.json for exact artifact checksums and toolchain.
+ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
+ios-deployment-target: 18.0
+rust-release-opt-level: 3
+rust-release-codegen-units: 16
+swiftpm-checksum: 338fad4754d803db2e1bbcc527e092bc9196b538d1edab5012187368b40c5c10
+
+Notes:
+- Refresh from a published immutable artifact with:
+  whitenoise-ios/scripts/sync-bindings.sh <version-or-full-master-sha>

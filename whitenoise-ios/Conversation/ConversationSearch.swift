@@ -200,6 +200,7 @@ final class ConversationSearchModel {
         guard isActive, hasQuery else { return }
         let anchorId = currentMatch?.itemId
         matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.reanchoredIndex(of: anchorId, in: matches)
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
     }

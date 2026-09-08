@@ -80,10 +80,10 @@ before every release tag.
 - [ ] Fresh app root: Welcome presents Help Improve White Noise before Sign In
       or Sign Up. Both sharing choices start off, work without a profile, and
       remain independent. The consent and account-entry sheets never overlap.
-- [ ] Continue without a usage grant saves a decline. A successful grant survives
-      Continue. Failed saves remain visibly unsaved with Retry; swipe dismissal
-      cannot bypass persistence. Relaunch before signing in and verify no repeat
-      after a saved decision. Add Profile preserves it.
+- [ ] The top-right checkmark (Done) without a usage grant saves a decline.
+      A successful grant survives Done. Failed saves remain visibly unsaved with
+      Retry; swipe dismissal cannot bypass persistence. Relaunch before signing
+      in and verify no repeat after a saved decision. Add Profile preserves it.
 - [ ] Upgrade an old analytics opt-in: sharing stays off until expanded consent
       is accepted after Chats/navigation are visible. Verify the explanation.
 - [ ] Opt in before Sign Up/Sign In and inspect onboarding observations. Decline

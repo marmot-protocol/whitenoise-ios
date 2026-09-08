@@ -12,6 +12,8 @@ on:
       - "whitenoise-ios.xcodeproj/**"
       - "Packages/**"
       - "scripts/sync-local-bindings.sh"
+      - "scripts/check-analytics-release-config.py"
+      - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
       - ".github/workflows/tests.yml"
@@ -28,8 +30,7 @@ concurrency:
 jobs:
   test:
     runs-on: macos-15
-    # The draft also compiles pinned Rust bindings for host, device, and simulator.
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     env:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
@@ -47,36 +48,8 @@ jobs:
         with:
           xcode-version: "26"
 
-      - name: Read local MDK pin
-        id: local-mdk
-        if: hashFiles('Packages/MarmotKit/LOCAL_BUILD.json') != ''
-        run: |
-          python3 - <<'PYTHON'
-          import json, os, re
-          with open('Packages/MarmotKit/LOCAL_BUILD.json') as source:
-              sha = json.load(source)['source_sha']
-          assert re.fullmatch('[0-9a-f]{40}', sha)
-          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write('sha=' + sha + '\n')
-          PYTHON
-
-      - name: Check out pinned MDK for development bindings
-        if: steps.local-mdk.outputs.sha != ''
-        uses: actions/checkout@v4
-        with:
-          repository: marmot-protocol/mdk
-          ref: ${{ steps.local-mdk.outputs.sha }}
-          path: build/local-mdk
-          persist-credentials: false
-
-      - name: Build matching local bindings
-        if: steps.local-mdk.outputs.sha != ''
-        env:
-          LOCAL_MDK_SHA: ${{ steps.local-mdk.outputs.sha }}
-        run: |
-          cp Packages/MarmotKit/Sources/MarmotKit/MarmotKit.swift build/expected-MarmotKit.swift
-          ./scripts/sync-local-bindings.sh build/local-mdk "$LOCAL_MDK_SHA"
-          cmp build/expected-MarmotKit.swift Packages/MarmotKit/Sources/MarmotKit/MarmotKit.swift
+      - name: Test analytics configuration preflight
+        run: python3 -m unittest discover -s scripts/tests
 
       # The MarmotKit binary target is a 74 MB download that unpacks to 254 MB.
       # It only changes when the pinned release does, so key it on the manifest.

@@ -209,6 +209,30 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
+    @Test(arguments: [false, true]) @MainActor
+    func receiptSurvivesRuntimeReplacementAndErasureRestoresEligibility(granted: Bool) async throws {
+        let original = try MarmotClient.testClient()
+        let root = URL(fileURLWithPath: original.rootPath)
+        let expected: UsageDiagnosticsDecisionFfi = granted ? .granted : .declined
+        _ = try await original.setUsageDiagnosticsConsent(granted)
+        try await original.marmot.setAuditLogSettings(settings: .init(enabled: true))
+        try await original.marmot.shutdownAndClose()
+
+        let reopened = try MarmotClient(rootPath: root.path, relayUrls: [])
+        let stored = try await reopened.deviceDiagnosticsSnapshot()
+        #expect(stored.settings.decision == expected)
+        #expect(stored.auditEnabled)
+        #expect(try await reopened.listAccounts().isEmpty)
+        try await reopened.marmot.shutdownAndClose()
+
+        try AppDataErasure.eraseClosedRuntime(at: root)
+        let erased = try MarmotClient(rootPath: root.path, relayUrls: [])
+        let reset = try await erased.deviceDiagnosticsSnapshot()
+        #expect(reset.settings.decision == .acceptanceRequired)
+        #expect(!reset.auditEnabled)
+        try await erased.marmot.shutdownAndClose()
+    }
+
     @Test func durationBucketsUseInclusiveBoundaries() {
         #expect(ProductEvent.durationBucket(10) == "le_10ms")
         #expect(ProductEvent.durationBucket(11) == "le_25ms")
@@ -236,6 +260,27 @@ struct ProductAnalyticsTests {
         #expect(recorded.first?.properties == [.init(name: "outcome", value: "success")])
     }
 
+    @Test @MainActor func searchCountsMatchesArrivingDuringRefreshOnce() async {
+        let events = Mutex<[ProductEventFfi]>([])
+        let recorder = ProductAnalyticsRecorder()
+        recorder.replaceSink { event in events.withLock { $0.append(event.ffi) } }
+        let search = ConversationSearchModel()
+        search.analytics = recorder
+        var entries: [ConversationSearchEntry] = []
+        search.entriesProvider = { entries }
+        search.activate()
+        search.query = "match"
+        #expect(search.matches.isEmpty)
+        entries = [.init(itemId: "late-row", messageIdHex: "late-message", text: "match")]
+        search.refreshAfterTimelineChange()
+        search.refreshAfterTimelineChange()
+        #expect(search.matches.count == 1)
+        #expect(events.withLock { $0.isEmpty })
+        await search.end()?.value
+        #expect(search.end() == nil)
+        #expect(events.withLock { $0.map(\.properties) } == [[.init(name: "outcome", value: "success")]])
+    }
+
     @Test @MainActor func realCollectorAcceptsHostVocabularyAndRevokesBothPipelines() async throws {
         let client = try MarmotClient.testClient()
         let config = ProductAnalyticsBuildConfig(
@@ -256,16 +301,22 @@ struct ProductAnalyticsTests {
             .attachment(.save, .success), .settings(.privacy), .permission(.granted)
         ]
         for event in events { #expect(try client.marmot.recordProductEvent(event: event.ffi) == .recorded) }
-        let vocabulary: [ProductEvent] = ProductScreen.allCases.map(ProductEvent.screen)
-            + ProductSettingsSection.allCases.map(ProductEvent.settings)
-            + ProductSearchOutcome.allCases.map(ProductEvent.search)
-            + ProductPermissionOutcome.allCases.map(ProductEvent.permission)
-            + ProductAttachmentAction.allCases.flatMap { action in
-                [ProductOutcome.success, .failure, .cancelled].map { .attachment(action, $0) }
+        var vocabulary = ProductScreen.allCases.map(ProductEvent.screen)
+        vocabulary.append(contentsOf: ProductSettingsSection.allCases.map(ProductEvent.settings))
+        vocabulary.append(contentsOf: ProductSearchOutcome.allCases.map(ProductEvent.search))
+        vocabulary.append(contentsOf: ProductPermissionOutcome.allCases.map(ProductEvent.permission))
+        for action in ProductAttachmentAction.allCases {
+            for outcome in [ProductOutcome.success, .failure, .cancelled] {
+                vocabulary.append(.attachment(action, outcome))
             }
-            + ProductOnboardingStep.allCases.flatMap { step in
-                ProductOnboardingPath.allCases.flatMap { path in ProductOutcome.allCases.map { .onboarding(step, path, $0) } }
+        }
+        for step in ProductOnboardingStep.allCases {
+            for path in ProductOnboardingPath.allCases {
+                for outcome in ProductOutcome.allCases {
+                    vocabulary.append(.onboarding(step, path, outcome))
+                }
             }
+        }
         for event in vocabulary {
             let result = try client.marmot.recordProductEvent(event: event.ffi)
             #expect(result == .recorded || result == .ignoredDuplicate)

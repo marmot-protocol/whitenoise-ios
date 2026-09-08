@@ -69046,67 +69046,67 @@
         }
       }
     },
-    "Shares sanitized technical activity from all profiles on this device with White Noise. Message content is excluded and identifiers are obscured. Turning this off stops new logging and automatic sharing, and keeps existing local logs." : {
+    "Diagnostic logs share sanitized technical activity from all profiles on this device." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Teilt bereinigte technische Aktivitäten aller Profile auf diesem Gerät mit White Noise. Nachrichteninhalte sind ausgeschlossen und Kennungen werden verschleiert. Das Deaktivieren beendet neue Aufzeichnungen und das automatische Teilen; vorhandene lokale Protokolle bleiben erhalten."
+            "value" : "Diagnoseprotokolle teilen bereinigte technische Aktivitäten aller Profile auf diesem Gerät."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Shares sanitized technical activity from all profiles on this device with White Noise. Message content is excluded and identifiers are obscured. Turning this off stops new logging and automatic sharing, and keeps existing local logs."
+            "value" : "Diagnostic logs share sanitized technical activity from all profiles on this device."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Comparte con White Noise actividad técnica depurada de todos los perfiles de este dispositivo. Se excluye el contenido de los mensajes y se ocultan los identificadores. Al desactivarlo, se detienen los nuevos registros y el envío automático, y se conservan los registros locales existentes."
+            "value" : "Los registros de diagnóstico comparten actividad técnica depurada de todos los perfiles de este dispositivo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Partage avec White Noise l’activité technique expurgée de tous les profils de cet appareil. Le contenu des messages est exclu et les identifiants sont masqués. La désactivation arrête les nouveaux enregistrements et le partage automatique, tout en conservant les journaux locaux existants."
+            "value" : "Les journaux de diagnostic partagent les activités techniques expurgées de tous les profils de cet appareil."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Condivide con White Noise attività tecniche depurate di tutti i profili su questo dispositivo. Il contenuto dei messaggi è escluso e gli identificatori sono oscurati. Disattivando questa opzione si interrompono le nuove registrazioni e la condivisione automatica, conservando i log locali esistenti."
+            "value" : "I log diagnostici condividono attività tecniche ripulite dai dati sensibili di tutti i profili su questo dispositivo."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compartilha com o White Noise atividades técnicas higienizadas de todos os perfis neste dispositivo. O conteúdo das mensagens é excluído e os identificadores são ocultados. Desativar interrompe novos registros e o compartilhamento automático, mantendo os registros locais existentes."
+            "value" : "Os registros de diagnóstico compartilham atividades técnicas com dados sensíveis removidos de todos os perfis neste dispositivo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Передаёт White Noise очищенные данные о технической активности всех профилей на этом устройстве. Содержимое сообщений исключено, а идентификаторы скрыты. Отключение прекращает новые записи и автоматическую передачу, сохраняя существующие локальные журналы."
+            "value" : "Диагностические журналы передают технические данные об активности всех профилей на этом устройстве, очищенные от конфиденциальной информации."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu cihazdaki tüm profillerin arındırılmış teknik etkinliklerini White Noise ile paylaşır. Mesaj içeriği dahil edilmez ve tanımlayıcılar gizlenir. Bu seçeneği kapatmak yeni kayıtları ve otomatik paylaşımı durdurur, mevcut yerel günlükleri korur."
+            "value" : "Tanılama günlükleri, bu cihazdaki tüm profillerin hassas bilgilerden arındırılmış teknik etkinliklerini paylaşır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 White Noise 共享此设备上所有个人资料经过脱敏的技术活动。不包含消息内容，且标识符会被隐藏。关闭此选项会停止新记录和自动共享，并保留现有本地日志。"
+            "value" : "诊断日志共享此设备上所有个人资料经过脱敏处理的技术活动。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 White Noise 分享此裝置上所有個人檔案經過去識別化的技術活動。不包含訊息內容，且識別碼會被隱藏。關閉此選項會停止新增記錄和自動分享，並保留現有本機記錄。"
+            "value" : "診斷日誌分享此裝置上所有個人檔案經過去識別化處理的技術活動。"
           }
         }
       }
@@ -89728,67 +89728,67 @@
         }
       }
     },
-    "Help us understand how White Noise is used and make messaging more reliable. Sharing is optional." : {
+    "Help us understand how White Noise is used and make messaging more reliable." : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Help us understand how White Noise is used and make messaging more reliable. Sharing is optional."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hilf uns zu verstehen, wie White Noise genutzt wird, und Nachrichten zuverlässiger zu machen. Das Teilen ist freiwillig."
+            "value" : "Hilf uns zu verstehen, wie White Noise genutzt wird, und Nachrichten zuverlässiger zu machen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help us understand how White Noise is used and make messaging more reliable."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ayúdanos a comprender cómo se usa White Noise y a mejorar la fiabilidad de los mensajes. Compartir es opcional."
+            "value" : "Ayúdanos a entender cómo se usa White Noise y a mejorar la fiabilidad de los mensajes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aidez-nous à comprendre l’utilisation de White Noise et à rendre la messagerie plus fiable. Le partage est facultatif."
+            "value" : "Aidez-nous à comprendre comment White Noise est utilisé et à rendre la messagerie plus fiable."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aiutaci a capire come viene usato White Noise e a rendere i messaggi più affidabili. La condivisione è facoltativa."
+            "value" : "Aiutaci a capire come viene usato White Noise e a rendere i messaggi più affidabili."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ajude-nos a entender como o White Noise é usado e a tornar as mensagens mais confiáveis. O compartilhamento é opcional."
+            "value" : "Ajude-nos a entender como o White Noise é usado e a tornar as mensagens mais confiáveis."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Помогите нам понять, как используется White Noise, и повысить надёжность обмена сообщениями. Отправка данных необязательна."
+            "value" : "Помогите нам понять, как используется White Noise, и сделать обмен сообщениями надёжнее."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise’un nasıl kullanıldığını anlamamıza ve mesajlaşmayı daha güvenilir hâle getirmemize yardımcı olun. Paylaşım isteğe bağlıdır."
+            "value" : "White Noise’un nasıl kullanıldığını anlamamıza ve mesajlaşmayı daha güvenilir hâle getirmemize yardımcı olun."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "帮助我们了解 White Noise 的使用情况，并提高消息传递的可靠性。共享完全自愿。"
+            "value" : "帮助我们了解 White Noise 的使用情况，让消息传递更可靠。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "協助我們了解 White Noise 的使用情況，並提高訊息傳遞的可靠性。分享完全自願。"
+            "value" : "協助我們了解 White Noise 的使用情況，讓訊息傳遞更可靠。"
           }
         }
       }
@@ -90378,67 +90378,67 @@
         }
       }
     },
-    "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. The Aptabase server receives your IP address, uses IP and user-agent information for daily activity grouping, and adds approximate country and region. Diagnostics includes a random installation identifier that changes after you turn sharing off. Turning this off stops both pipelines; already transmitted data cannot be recalled. Diagnostic logging is separate." : {
+    "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. Diagnostics includes a random installation identifier that changes after you turn sharing off." : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. The Aptabase server receives your IP address, uses IP and user-agent information for daily activity grouping, and adds approximate country and region. Diagnostics includes a random installation identifier that changes after you turn sharing off. Turning this off stops both pipelines; already transmitted data cannot be recalled. Diagnostic logging is separate."
-          }
-        },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Die Nutzungsdaten enthalten freigegebene, in Größenklassen zusammengefasste Aktivitäten und temporäre Sitzungs-IDs, aber keine Nachrichteninhalte oder Konto- und Gruppenkennungen. Der Aptabase-Server erhält deine IP-Adresse, verwendet IP- und User-Agent-Informationen zur täglichen Gruppierung von Aktivitäten und ergänzt ungefähre Länder- und Regionsangaben. Diagnosedaten enthalten eine zufällige Installationskennung, die sich ändert, nachdem du das Teilen ausschaltest. Das Ausschalten stoppt beide Datenübertragungen; bereits übertragene Daten können nicht zurückgerufen werden. Diagnoseprotokolle werden separat gesteuert."
+            "value" : "Nutzungsdaten umfassen freigegebene, in Kategorien zusammengefasste Aktivitäten und temporäre Sitzungs-IDs, ohne Nachrichteninhalte oder Konto- und Gruppenkennungen. Diagnosedaten enthalten eine zufällige Installationskennung, die sich ändert, nachdem du die Freigabe deaktivierst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. Diagnostics includes a random installation identifier that changes after you turn sharing off."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los datos de uso incluyen actividad aprobada agrupada por intervalos e identificadores de sesión temporales, sin contenido de mensajes ni identificadores de cuentas o grupos. El servidor de Aptabase recibe tu dirección IP, utiliza la IP y el agente de usuario para agrupar la actividad diaria y añade el país y la región aproximados. Los datos de diagnóstico incluyen un identificador de instalación aleatorio que cambia después de desactivar el uso compartido. Al desactivarlo se detienen ambos canales; los datos ya enviados no se pueden recuperar. Los registros de diagnóstico se controlan por separado."
+            "value" : "Los datos de uso incluyen actividad aprobada agrupada por categorías e identificadores de sesión temporales, sin contenido de mensajes ni identificadores de cuentas o grupos. Los diagnósticos incluyen un identificador de instalación aleatorio que cambia después de desactivar el envío."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les données d’utilisation comprennent des activités approuvées regroupées par tranches et des identifiants de session temporaires, sans contenu des messages ni identifiants de comptes ou de groupes. Le serveur Aptabase reçoit votre adresse IP, utilise les informations IP et d’agent utilisateur pour regrouper les activités quotidiennes et ajoute une estimation du pays et de la région. Les diagnostics comprennent un identifiant d’installation aléatoire qui change après la désactivation du partage. La désactivation arrête les deux canaux ; les données déjà transmises ne peuvent pas être rappelées. Les journaux de diagnostic sont gérés séparément."
+            "value" : "Les données d’utilisation comprennent des activités approuvées regroupées par catégories et des identifiants de session temporaires, sans contenu des messages ni identifiants de comptes ou de groupes. Les diagnostics comprennent un identifiant d’installation aléatoire qui change après la désactivation du partage."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "I dati di utilizzo includono attività approvate raggruppate per fasce e identificativi di sessione temporanei, senza contenuti dei messaggi né identificativi di account o gruppi. Il server Aptabase riceve il tuo indirizzo IP, usa le informazioni IP e user agent per raggruppare le attività giornaliere e aggiunge paese e regione approssimativi. La diagnostica include un identificativo di installazione casuale che cambia dopo aver disattivato la condivisione. La disattivazione interrompe entrambi i canali; i dati già trasmessi non possono essere richiamati. I log diagnostici sono gestiti separatamente."
+            "value" : "I dati di utilizzo includono attività approvate raggruppate per categorie e ID di sessione temporanei, senza contenuti dei messaggi né identificativi di account o gruppi. La diagnostica include un identificativo di installazione casuale che cambia dopo aver disattivato la condivisione."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Os dados de uso incluem atividades aprovadas agrupadas por faixas e IDs de sessão temporários, sem conteúdo de mensagens nem identificadores de contas ou grupos. O servidor Aptabase recebe seu endereço IP, usa informações de IP e agente de usuário para agrupar atividades diárias e acrescenta país e região aproximados. O diagnóstico inclui um identificador de instalação aleatório que muda após desativar o compartilhamento. A desativação interrompe os dois canais; os dados já transmitidos não podem ser recuperados. Os registros de diagnóstico são controlados separadamente."
+            "value" : "Os dados de uso incluem atividades aprovadas agrupadas por categorias e IDs de sessão temporários, sem conteúdo de mensagens nem identificadores de contas ou grupos. Os diagnósticos incluem um identificador de instalação aleatório que muda depois que você desativa o compartilhamento."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Данные об использовании содержат одобренные показатели активности, сгруппированные по диапазонам, и временные идентификаторы сеансов, без содержимого сообщений и идентификаторов аккаунтов или групп. Сервер Aptabase получает ваш IP-адрес, использует IP и сведения о пользовательском агенте для ежедневной группировки активности и добавляет приблизительные данные о стране и регионе. Диагностика содержит случайный идентификатор установки, который меняется после отключения отправки данных. Отключение останавливает оба канала; уже переданные данные невозможно отозвать. Диагностические журналы управляются отдельно."
+            "value" : "Данные об использовании включают одобренные действия, сгруппированные по категориям, и временные идентификаторы сеансов, без содержимого сообщений и идентификаторов аккаунтов или групп. Диагностика включает случайный идентификатор установки, который меняется после отключения передачи данных."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Kullanım verileri, mesaj içerikleri veya hesap ve grup tanımlayıcıları olmadan, onaylı ve aralıklara ayrılmış etkinlikler ile geçici oturum kimlikleri içerir. Aptabase sunucusu IP adresinizi alır, günlük etkinlikleri gruplamak için IP ve kullanıcı aracısı bilgilerini kullanır, yaklaşık ülke ve bölge bilgisi ekler. Tanılama, paylaşımı kapattıktan sonra değişen rastgele bir kurulum tanımlayıcısı içerir. Paylaşımı kapatmak her iki kanalı da durdurur; önceden iletilmiş veriler geri alınamaz. Tanılama günlükleri ayrı olarak yönetilir."
+            "value" : "Kullanım verileri, mesaj içerikleri veya hesap ve grup tanımlayıcıları olmadan onaylanmış, kategorilere ayrılmış etkinlikleri ve geçici oturum kimliklerini içerir. Tanılama verileri, paylaşımı kapattıktan sonra değişen rastgele bir kurulum tanımlayıcısı içerir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用数据包含经过批准、按区间归类的活动和临时会话标识，不包含消息内容、账户或群组标识。Aptabase 服务器会接收你的 IP 地址，使用 IP 和用户代理信息按天对活动进行分组，并添加大致的国家和地区信息。诊断数据包含一个随机安装标识，该标识在关闭共享后会更换。关闭共享将停止这两条数据通道；已经传输的数据无法撤回。诊断日志单独控制。"
+            "value" : "使用数据包括经批准、按类别汇总的活动和临时会话 ID，不含消息内容或账号和群组标识符。诊断数据包含一个随机安装标识符，关闭共享后该标识符会更改。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用資料包含經過核准、按區間分類的活動及暫時性工作階段識別碼，不包含訊息內容、帳號或群組識別碼。Aptabase 伺服器會接收你的 IP 位址，使用 IP 與使用者代理程式資訊按天對活動進行分組，並加入大致的國家和地區資訊。診斷資料包含一個隨機安裝識別碼，該識別碼在關閉分享後會更換。關閉分享將停止這兩條資料管道；已經傳輸的資料無法撤回。診斷記錄分開控制。"
+            "value" : "使用資料包括經核准、按類別彙整的活動和暫時工作階段 ID，不含訊息內容或帳號和群組識別碼。診斷資料包含一個隨機安裝識別碼，關閉分享後該識別碼會變更。"
           }
         }
       }
@@ -90690,7 +90690,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此设备上所有资料的技术日志，单独共享。"
+            "value" : "此设备上所有个人资料的技术日志，单独共享。"
           }
         },
         "zh-Hant" : {
