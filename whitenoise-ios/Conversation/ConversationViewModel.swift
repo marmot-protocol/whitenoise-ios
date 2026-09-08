@@ -1270,7 +1270,6 @@ final class ConversationViewModel {
                         else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         await self?.applyGroupUpdate(record)
-                        await self?.recovery.refresh(using: appState, groupID: groupIdHex)
                     }
                 } catch is CancellationError {
                     return

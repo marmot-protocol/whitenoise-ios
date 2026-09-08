@@ -52,9 +52,6 @@ nonisolated struct PrivacyTelemetrySettingsProjection: Equatable, Sendable {
         self.exportIntervalSeconds = exportIntervalSeconds
     }
 
-    func updatingExportEnabled(_ enabled: Bool) -> Self {
-        Self(exportEnabled: enabled, exportIntervalSeconds: exportIntervalSeconds)
-    }
 }
 
 nonisolated struct PrivacyAuditSettingsProjection: Equatable, Sendable {

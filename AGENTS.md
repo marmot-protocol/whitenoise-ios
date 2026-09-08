@@ -128,6 +128,9 @@ from profiles or rosters. Take the attached snapshot once, then consume complete
 updates in generation/sequence order. Presentation revision alone cannot suppress
 unread/pin updates. Reopen when the account-store epoch changes. Cancel native
 `next` waits when replacing the handle. Keep pending-invite avatar egress suppressed.
+Resolve just-created destinations from the creation cache immediately, then overlay
+the keyed presented row. Unrelated live updates must not discard that keyed read;
+preserve a newer target row and reject account/runtime/handle replacements.
 
 Read group recovery on conversation entry and raw `groupStateUpdated` events;
 the ordinary group-record subscription can deduplicate recovery-only updates.
@@ -209,6 +212,7 @@ Do not add a second storage path for data Marmot already owns.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
 - Analytics export and diagnostic logging are device-wide runtime choices. The initial consent sheet appears over Welcome after runtime bootstrap, before Sign In or Sign Up. MDK owns the sole consent receipt; never use the legacy prompt-seen flag to suppress acceptance. Existing installations needing expanded consent are prompted once Chats is visible and other sheets have dismissed. Preserve existing choices; closing without a usage grant durably declines combined usage/diagnostics consent. Diagnostic-log consent stays independent. Never dismiss a failed save as confirmed. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
+- A missing consent snapshot must show a retryable load state. Reload when foreground runtime readiness changes, even if the runtime generation is unchanged, so Welcome cannot strand both account-entry buttons.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.
 - Sign Out confirms a wipe by matching the displayed profile name exactly in the same sheet. Remaining signed-in profiles go to the profile chooser; with none remaining, return to Welcome.

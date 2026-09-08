@@ -1198,15 +1198,6 @@ final class AppState {
         return await client.parseMarkdown(text: text)
     }
 
-    @MainActor
-    @discardableResult
-    func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
-        guard phase == .ready else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        _ = try await saveUsageDiagnosticsConsent(enabled)
-        guard let client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        return try await client.relayTelemetrySettings()
-    }
-
     func auditLogSettings() async throws -> AuditLogSettingsFfi? {
         guard let client = foregroundSettingsReadClient() else { return nil }
         return try await client.auditLogSettings()

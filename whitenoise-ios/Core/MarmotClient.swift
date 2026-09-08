@@ -209,14 +209,6 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
-    /// Reads the telemetry install id off the main actor before runtime startup
-    /// config is applied.
-    func telemetryInstallId() async throws -> String {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.telemetryInstallId()
-        }.value
-    }
-
     /// Reads published account relay-list projections off the main actor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
     /// MainActor-bound settings screens should await this wrapper.
@@ -471,17 +463,6 @@ nonisolated final class MarmotClient: Sendable {
     ) async throws -> TimelinePageFfi {
         try await Task.detached(priority: .utility) { [marmot, accountRef, query] in
             try marmot.timelineMessages(accountRef: accountRef, query: query)
-        }.value
-    }
-
-    /// Materializes a live chat-list subscription snapshot off the main actor.
-    /// `ChatListSubscription.snapshot()` is a synchronous UniFFI call that can
-    /// touch local Marmot storage while building the initial projected rows.
-    func chatListSubscriptionSnapshot(
-        _ subscription: ChatListSubscription
-    ) async -> [ChatListRowFfi] {
-        await Task.detached(priority: .utility) { [subscription] in
-            subscription.snapshot()
         }.value
     }
 
@@ -965,10 +946,6 @@ nonisolated final class MarmotClient: Sendable {
         marmot.subscribeEvents()
     }
 
-    func subscribeChatList(accountRef: String, includeArchived: Bool) async throws -> ChatListSubscription {
-        try await marmot.subscribeChatList(accountRef: accountRef, includeArchived: includeArchived)
-    }
-
     func subscribeChats(accountRef: String, includeArchived: Bool) async throws -> ChatsSubscription {
         try await marmot.subscribeChats(accountRef: accountRef, includeArchived: includeArchived)
     }
@@ -1024,6 +1001,7 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func configureTelemetryRuntime() async throws {
+        // MDK replaces this placeholder with its consent-scoped diagnostic ID.
         try await marmot.setRelayTelemetryRuntimeConfig(
             config: telemetryConfig.runtimeConfig(installId: "")
         )

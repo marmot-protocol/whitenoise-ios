@@ -91,11 +91,13 @@ shutdown itself seals partial observations and drains after storage closes.
 
 ## Validation evidence
 
-The formal 0.9.20 release passed the 1,807-test simulator suite (228 suites), the
+The formal 0.9.20 release passed the 1,809-test simulator suite (228 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
 exercise account-free consent, failed persistence, scope reconfirmation,
 independent logging, identity rotation, frozen-runtime silence, stale tickets,
-and every typed event value against MDK's actual collector.
+and every typed event value against MDK's actual collector. Review regressions
+cover missing-runtime consent reads, created-chat handoff without a presented row,
+unrelated row updates, and preservation of newer target rows.
 
 MDK's pinned storage migration checks passed 74 tests (three operational
 benchmarks ignored), using temporary/in-memory databases. They cover upgrades

@@ -17,30 +17,6 @@ enum SubscriptionDriver {
         }
     }
 
-    static func chatList(_ sub: ChatListSubscription) -> AsyncStream<ChatListRowFfi> {
-        AsyncStream(bufferingPolicy: .bufferingNewest(512)) { continuation in
-            let task = Task {
-                while !Task.isCancelled, let next = await sub.next() {
-                    continuation.yield(next)
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
-    static func chatListUpdates(_ sub: ChatListSubscription) -> AsyncStream<ChatListSubscriptionUpdateFfi> {
-        AsyncStream(bufferingPolicy: .bufferingNewest(128)) { continuation in
-            let task = Task {
-                while !Task.isCancelled, let next = await sub.nextUpdate() {
-                    continuation.yield(next)
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     static func timelineMessageUpdates(_ sub: TimelineMessagesSubscription) -> AsyncStream<TimelineSubscriptionUpdateFfi> {
         AsyncStream(bufferingPolicy: .bufferingNewest(128)) { continuation in
             let task = Task {

@@ -12,8 +12,9 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var writes: [Bool] = []
     var previouslyEnabled = false
     var policy = ""
+    var runtimeAvailable = true
 
-    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { snapshot }
+    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { runtimeAvailable ? snapshot : nil }
     var snapshot: DeviceDiagnosticsSnapshot {
         DeviceDiagnosticsSnapshot(
             settings: UsageDiagnosticsSettingsFfi(decision: decision, policyRevision: policy, registryRevision: "registry", updatedAtMs: 0, previouslyEnabled: previouslyEnabled),
@@ -36,6 +37,23 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
 
 @MainActor
 struct DeviceDiagnosticsConsentTests {
+    @Test func unavailableRuntimeReadOffersRetryAndReloadsWhenReady() async {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        source.runtimeAvailable = false
+        await model.reload(using: source)
+        #expect(model.errorMessage != nil)
+        #expect(!model.initialDecisionResolved)
+        #expect(!model.loading)
+        source.runtimeAvailable = true
+        await model.reload(using: source)
+        #expect(model.errorMessage == nil)
+        #expect(model.pending)
+        #expect(await model.finishPrompt(using: source))
+        #expect(model.initialDecisionResolved)
+        #expect(source.writes == [false])
+    }
+
     @Test func firstLaunchDefaultsOffAndDeclinePersistsWithoutAnAccount() async {
         let source = DiagnosticsTestSource()
         let model = DeviceDiagnosticsConsent()

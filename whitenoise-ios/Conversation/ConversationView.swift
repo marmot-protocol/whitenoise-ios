@@ -2490,9 +2490,9 @@ struct ConversationView: View {
     }
 
     private func openFileImporter() {
-        fileProductTicket = appState.productAnalytics.ticket()
         guard editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
+        fileProductTicket = appState.productAnalytics.ticket()
         showFileImporter = true
     }
 

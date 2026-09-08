@@ -110,6 +110,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 guard state.generation == ticket.generation else { return }
                 // The Rust recorder is memory-only. Hold the gate through this
                 // call so revocation cannot overtake an admitted observation.
+                // MainActor ticket reads share this lock; sinks must never do I/O.
                 deliver(state)
             }
         }

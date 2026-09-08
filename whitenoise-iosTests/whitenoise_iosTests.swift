@@ -491,7 +491,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(relaunched)
     }
 
-    @Test func telemetryExportSettingPersistsThroughAppState() async throws {
+    @Test func combinedUsageConsentPersistsWithoutChangingAuditOrRuntime() async throws {
         let appState = try testAppState()
         await appState.bootstrap()
         _ = try await appState.createIdentity()
@@ -500,15 +500,15 @@ struct AppStateBootstrapTests {
         let previous = try #require(try await appState.relayTelemetrySettings())
         let auditBefore = try await appState.auditLogSettings()
 
-        let saved = try await appState.setRelayTelemetryExportEnabled(false)
+        let saved = try await appState.saveUsageDiagnosticsConsent(false)
 
-        #expect(!saved.exportEnabled)
-        #expect(saved.exportIntervalSeconds == previous.exportIntervalSeconds)
+        #expect(saved.settings.decision == .declined)
         #expect(try await appState.auditLogSettings() == auditBefore)
         #expect(appState.runtimeGeneration == generation)
         let maybeReloaded = try await appState.relayTelemetrySettings()
         let reloaded = try #require(maybeReloaded)
         #expect(!reloaded.exportEnabled)
+        #expect(reloaded.exportIntervalSeconds == previous.exportIntervalSeconds)
 
         await stopReadyRuntime(appState)
     }
@@ -1962,7 +1962,7 @@ struct AppStateBootstrapTests {
             _ = try await appState.setAuditLogEnabled(true)
         }
         await #expect(throws: ForegroundRuntimeMutationError.self) {
-            _ = try await appState.setRelayTelemetryExportEnabled(false)
+            _ = try await appState.saveUsageDiagnosticsConsent(false)
         }
 
         #expect(appState.client == nil)
@@ -14793,6 +14793,54 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        appState.setPhase(.ready)
+        appState.setAppSceneActive(true)
+        let model = ChatsListViewModel(appState: appState)
+        await model.bind(accountRef: "account")
+        let row = chatListRow(groupIdHex: "created", title: "Created chat")
+        appState.noteCreatedChatListRow(accountRef: "account", row: row)
+        model.presentedRowForTesting = { account, group in
+            #expect(account == "account" && group == "created")
+            #expect(model.item(groupIdHex: group)?.title == "Created chat")
+            return nil
+        }
+        appState.presentChat(groupIdHex: row.groupIdHex)
+        await model.refreshRow(groupIdHex: row.groupIdHex)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Created chat")
+        model.presentedRowForTesting = nil
+        await model.bind(accountRef: nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test(arguments: [false, true])
+    func targetedReadSurvivesUnrelatedRowsButPreservesNewerTarget(targetChanges: Bool) async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        appState.setPhase(.ready)
+        appState.setAppSceneActive(true)
+        let model = ChatsListViewModel(appState: appState)
+        await model.bind(accountRef: "account")
+        let selected = ConversationPresentationFfi(
+            title: .literal(text: "Selected title"), avatar: .placeholder(stableSeed: "stable", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+        )
+        let row = chatListRow(groupIdHex: "target", title: "Old title")
+        model.presentedRowForTesting = { _, _ in
+            model.applyChatListRow(chatListRow(groupIdHex: "unrelated", title: "Other chat"))
+            if targetChanges { model.applyChatListRow(chatListRow(groupIdHex: "target", title: "Newer title")) }
+            return PresentedChatRowFfi(row: row, presentation: selected)
+        }
+        await model.refreshRow(groupIdHex: row.groupIdHex)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == (targetChanges ? "Newer title" : "Selected title"))
+        #expect(model.item(groupIdHex: "unrelated") != nil)
+        model.presentedRowForTesting = nil
+        await model.bind(accountRef: nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
     @Test func selectedPresentationWinsOverLegacyFieldsAndPreservesUnreadChanges() throws {
         var row = chatListRow(groupIdHex: "presented", title: "Legacy title", avatarUrl: "https://legacy.example/avatar")
         let selected = ConversationPresentationFfi(

@@ -57,9 +57,6 @@ private final class MockPrivacyDataSource: PrivacySecuritySettingsViewModelDataS
         auditGate?.resume()
         auditGate = nil
     }
-    func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
-        throw CancellationError()
-    }
     func deleteAllAuditLogFiles() async throws { throw CancellationError() }
     func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi {
         let settings = AuditLogSettingsFfi(enabled: enabled)

@@ -265,6 +265,7 @@ final class ChatsListViewModel {
 
     #if DEBUG
     @ObservationIgnored var mentionDisplayNameForTesting: MarkdownMentionResolver?
+    @ObservationIgnored var presentedRowForTesting: ((String, String) async throws -> PresentedChatRowFfi?)?
     @ObservationIgnored private(set) var publishedItemsMutationCountForTesting = 0
     #endif
 
@@ -437,13 +438,20 @@ final class ChatsListViewModel {
         guard
               appState.canUseRuntimeForLocalForegroundWork
         else { return }
+        if rowByGroupId[groupIdHex] == nil,
+           let created = appState.createdChatListRow(accountRef: accountRef, groupIdHex: groupIdHex) {
+            applyChatListRow(created)
+        }
         do {
-            let cursor = presentedCursor
+            let previousRow = rowByGroupId[groupIdHex]
+            let previousPresentation = selectedPresentationByGroupId[groupIdHex]
+            let taskID = chatListTaskID
             let generation = appState.runtimeGeneration
-            guard let row = try await appState.currentMarmotClient().presentedChatListRow(
+            guard let row = try await readPresentedRow(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex
-            ), !Task.isCancelled, currentAccount == accountRef, presentedCursor == cursor,
+            ), !Task.isCancelled, currentAccount == accountRef, chatListTaskID == taskID,
+               rowByGroupId[groupIdHex] == previousRow, selectedPresentationByGroupId[groupIdHex] == previousPresentation,
                appState.runtimeGeneration == generation, appState.canUseRuntimeForLocalForegroundWork
             else { return }
             selectedPresentationByGroupId[groupIdHex] = row.presentation
@@ -453,6 +461,14 @@ final class ChatsListViewModel {
         } catch {
             // The subscription remains authoritative and may still deliver it.
         }
+    }
+
+    private func readPresentedRow(accountRef: String, groupIdHex: String) async throws -> PresentedChatRowFfi? {
+        #if DEBUG
+        if let presentedRowForTesting { return try await presentedRowForTesting(accountRef, groupIdHex) }
+        #endif
+        guard let appState else { return nil }
+        return try await appState.currentMarmotClient().presentedChatListRow(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     /// O(1) lookup for a chat-list item by its group id, backed by the

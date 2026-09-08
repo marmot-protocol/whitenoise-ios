@@ -5,11 +5,11 @@ import Testing
 
 @MainActor
 struct AsyncReloadGateTests {
-    @Test func privacyReloadStartedBeforeTelemetrySaveDoesNotOverwriteSavedToggle() async {
+    @Test func privacyReloadStartedBeforeAuditSaveDoesNotOverwriteSavedToggle() async {
         let model = PrivacySecuritySettingsViewModel()
         let dataSource = PrivacySecuritySettingsDataSourceStub()
-        let staleProjection = privacyProjection(telemetryEnabled: false)
-        let currentProjection = privacyProjection(telemetryEnabled: true)
+        let staleProjection = privacyProjection(auditEnabled: false)
+        let currentProjection = privacyProjection(auditEnabled: true)
         dataSource.projectionResponses = [.suspended, .immediate(currentProjection)]
         model.telemetrySettings = PrivacyTelemetrySettingsProjection(exportEnabled: false, exportIntervalSeconds: 60)
         model.auditSettings = PrivacyAuditSettingsProjection(enabled: false)
@@ -19,14 +19,14 @@ struct AsyncReloadGateTests {
         }
         await dataSource.waitUntilProjectionCallCount(1)
 
-        await model.setTelemetryEnabled(true, using: dataSource)
-        #expect(model.telemetrySettings?.exportEnabled == true)
+        await model.setAuditEnabled(true, using: dataSource)
+        #expect(model.auditSettings?.enabled == true)
 
         dataSource.completeNextProjection(with: staleProjection)
         await reloadTask.value
 
         #expect(dataSource.projectionCallCount == 2)
-        #expect(model.telemetrySettings?.exportEnabled == true)
+        #expect(model.auditSettings?.enabled == true)
     }
 
     @Test func relayReloadStartedBeforeSaveDoesNotRevertSavedList() async {
@@ -255,10 +255,6 @@ private final class PrivacySecuritySettingsDataSourceStub: PrivacySecuritySettin
         []
     }
 
-    func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
-        RelayTelemetrySettingsFfi(exportEnabled: enabled, exportIntervalSeconds: 60)
-    }
-
     func deleteAllAuditLogFiles() async throws {}
 
     func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi {
@@ -416,13 +412,13 @@ private enum SuspendingResponse<Value> {
     case suspended
 }
 
-private func privacyProjection(telemetryEnabled: Bool) -> PrivacySecuritySettingsProjection {
+private func privacyProjection(auditEnabled: Bool) -> PrivacySecuritySettingsProjection {
     PrivacySecuritySettingsProjection(
         telemetrySettings: PrivacyTelemetrySettingsProjection(
-            exportEnabled: telemetryEnabled,
+            exportEnabled: false,
             exportIntervalSeconds: 60
         ),
-        auditSettings: PrivacyAuditSettingsProjection(enabled: false),
+        auditSettings: PrivacyAuditSettingsProjection(enabled: auditEnabled),
         auditFileRows: []
     )
 }
