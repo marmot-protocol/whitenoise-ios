@@ -21,7 +21,7 @@ struct ChatsListView: View {
     @State private var showNewChat = false
     @State private var showSettings = false
     @State private var path: [ChatNavigationTarget] = []
-    @State private var searchText = ""
+    @State private var search = ChatListSearchPresentation()
     @State private var scope: ChatScope = .active
     @State private var selectedChatIds = Set<String>()
     @State private var chatListEditMode: EditMode = .inactive
@@ -34,9 +34,6 @@ struct ChatsListView: View {
     @State private var isUpdatingPinnedOrder = false
     @State private var isPinMutationInProgress = false
     @State private var isMarkingAllRead = false
-    @State private var isSearchHeaderHidden = false
-    @State private var searchMounted = false
-    @State private var searchPresented = false
     @FocusState private var searchFocused: Bool
 
     private struct LocalDeleteTarget: Equatable {
@@ -95,7 +92,7 @@ struct ChatsListView: View {
         let visibleRowIds = Set(visibleRows.map(\.id))
         let visibleRowsKey = VisibleRowsKey(
             scope: scope,
-            searchText: searchText,
+            searchText: search.query,
             revision: viewModel?.visibleRowsRevision ?? 0
         )
         NavigationStack(path: $path) {
@@ -131,13 +128,9 @@ struct ChatsListView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-            .toolbarVisibility(isSearchHeaderHidden ? .hidden : .visible, for: .navigationBar)
             .modifier(
                 OnDemandChatSearch(
-                    searchText: $searchText,
-                    isHeaderHidden: $isSearchHeaderHidden,
-                    isMounted: $searchMounted,
-                    isPresented: $searchPresented,
+                    search: search,
                     isFocused: $searchFocused
                 )
             )
@@ -152,13 +145,28 @@ struct ChatsListView: View {
                         settingsButton
                     }
                 }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    filterMenu
-                        .tint(.primary)
-                    searchButton
-                        .tint(.primary)
-                    newChatButton
-                        .tint(.primary)
+                if search.isActive {
+                    // Its own item, not a member of the shared group, so the
+                    // widget's chrome is the only one drawn around the glyph.
+                    if #available(iOS 26.0, *) {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            closeSearchButton
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            closeSearchButton
+                        }
+                    }
+                } else {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        filterMenu
+                            .tint(.primary)
+                        searchButton
+                            .tint(.primary)
+                        newChatButton
+                            .tint(.primary)
+                    }
                 }
             }
             .compatibleTopSafeAreaBar(spacing: 0) {
@@ -259,9 +267,14 @@ struct ChatsListView: View {
             .onChange(of: appState.profileRefreshGeneration) { _, _ in
                 viewModel?.refreshDisplayProjections()
             }
+            // A query typed against the previous profile's chats must not
+            // survive into the next one's list.
+            .onChange(of: appState.activeAccountRef) { _, _ in
+                exitSearch()
+            }
             .onChange(of: path.count) { oldCount, count in
                 if count > 0 || (oldCount > 0 && count == 0) {
-                    dismissSearchKeyboard()
+                    exitSearch()
                 }
                 if oldCount > 0 && count == 0 {
                     viewModel?.refreshDisplayProjections()
@@ -319,7 +332,7 @@ struct ChatsListView: View {
         guard let newId = appState.pendingChatId else { return }
         showNewChat = false
         showSettings = false
-        dismissSearchKeyboard()
+        exitSearch()
         scope = .active
         path = []
         Task { @MainActor in
@@ -348,15 +361,14 @@ struct ChatsListView: View {
         }
     }
 
-    private func dismissSearchKeyboard() {
+    /// Every exit funnels here so focus, the keyboard, the query and the
+    /// on-demand mount can never disagree.
+    private func exitSearch() {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             searchFocused = false
-            searchPresented = false
-            searchMounted = false
-            isSearchHeaderHidden = false
-            searchText = ""
+            search.exit()
         }
     }
 
@@ -378,22 +390,18 @@ struct ChatsListView: View {
 
     private var searchButton: some View {
         Button {
-            withAnimation(
-                .easeOut(duration: 0.16),
-                completionCriteria: .logicallyComplete,
-                {
-                    isSearchHeaderHidden = true
-                },
-                completion: {
-                    guard isSearchHeaderHidden, !searchMounted else { return }
-                    searchMounted = true
-                }
-            )
+            search.activate()
         } label: {
             Label("Search Chats", systemImage: "magnifyingglass")
                 .labelStyle(.iconOnly)
                 .foregroundStyle(.primary)
         }
+    }
+
+    /// Takes the search button's slot while searching, so the toolbar always
+    /// offers exactly one search affordance and it is never the dead end.
+    private var closeSearchButton: some View {
+        WNIconButton(title: "Close search", systemImage: "xmark", action: exitSearch)
     }
 
     private var newChatButton: some View {
@@ -459,7 +467,7 @@ struct ChatsListView: View {
         } else {
             let canReorderPinnedRows = selectionMode
                 && scope == .active
-                && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !search.isFiltering
             let pinnedRows = canReorderPinnedRows ? rows.filter(\.isPinned) : []
             let otherRows = canReorderPinnedRows ? rows.filter { !$0.isPinned } : []
 
@@ -558,7 +566,7 @@ struct ChatsListView: View {
 
     @ViewBuilder
     private var emptyState: some View {
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if search.isFiltering {
             ContentUnavailableView {
                 Label("No Results", systemImage: "magnifyingglass")
             } description: {
@@ -735,7 +743,7 @@ struct ChatsListView: View {
             base = viewModel.items.filter { !$0.isActiveMember }
         }
         return base.filter {
-            ChatListSearch.matches(query: searchText, in: $0.searchHaystack)
+            ChatListSearch.matches(query: search.query, in: $0.searchHaystack)
         }
     }
 
@@ -778,7 +786,7 @@ struct ChatsListView: View {
     }
 
     private func navigate(to item: ChatsListViewModel.Item) {
-        dismissSearchKeyboard()
+        exitSearch()
         path.append(
             ChatNavigationTarget(
                 groupIdHex: item.id,
@@ -1413,39 +1421,48 @@ private struct ChatListReadAllBottomBar: ViewModifier {
     }
 }
 
+/// Installs the system search field only while search is active, keeping the
+/// surrounding bars — and with them the system's Cancel button — visible the
+/// whole time. Chats has no route to pop, so a hidden bar means no way out.
 private struct OnDemandChatSearch: ViewModifier {
-    @Binding var searchText: String
-    @Binding var isHeaderHidden: Bool
-    @Binding var isMounted: Bool
-    @Binding var isPresented: Bool
+    @Bindable var search: ChatListSearchPresentation
     let isFocused: FocusState<Bool>.Binding
+
+    /// iOS 26 integrates the field into the bottom toolbar on iPhone, within
+    /// thumb reach. Before 26 the only pinned option is the navigation-bar
+    /// drawer; `.automatic` there hides the field on scroll, which an
+    /// on-demand mount cannot afford.
+    private var placement: SearchFieldPlacement {
+        if #available(iOS 26.0, *) {
+            .automatic
+        } else {
+            .navigationBarDrawer(displayMode: .always)
+        }
+    }
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if isMounted {
+        if search.isMounted {
             content
                 .searchable(
-                    text: $searchText,
-                    isPresented: $isPresented,
-                    prompt: Text("Search chats")
+                    text: $search.query,
+                    isPresented: $search.isPresented,
+                    placement: placement,
+                    prompt: Text("Search Chats")
                 )
                 .searchFocused(isFocused)
                 .task {
                     await Task.yield()
                     guard !Task.isCancelled else { return }
-                    isPresented = true
+                    search.present()
                     await Task.yield()
-                    guard !Task.isCancelled, isPresented else { return }
+                    guard !Task.isCancelled, search.isPresented else { return }
                     isFocused.wrappedValue = true
                 }
-                .onChange(of: isPresented) { _, presented in
+                .onChange(of: search.isPresented) { _, presented in
                     guard !presented else { return }
                     isFocused.wrappedValue = false
-                    searchText = ""
-                    isMounted = false
-                    withAnimation(.easeOut(duration: 0.16)) {
-                        isHeaderHidden = false
-                    }
+                    search.reconcileNativePresentation()
                 }
         } else {
             content
