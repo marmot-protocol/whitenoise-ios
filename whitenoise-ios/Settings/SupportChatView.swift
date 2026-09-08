@@ -9,12 +9,7 @@ struct SupportChatView: View {
         Form {
             Section {
                 HStack(spacing: 12) {
-                    AvatarBubble(
-                        seed: WhiteNoiseSupportContact.recipient?.accountIdHex ?? WhiteNoiseSupportContact.npub,
-                        title: "White Noise Support",
-                        pictureURL: nil
-                    )
-                    .frame(width: 56, height: 56)
+                    WhiteNoiseSupportAvatar(size: 56)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("White Noise Support")
@@ -30,24 +25,15 @@ struct SupportChatView: View {
             }
 
             Section {
-                Button {
+                WNButton(
+                    title: "Start Chat",
+                    systemImage: "plus.bubble",
+                    isLoading: model.phase == .loading || model.phase == .routing
+                ) {
                     requestID = UUID()
-                } label: {
-                    Text("Start Chat")
-                        .hidden()
-                        .frame(maxWidth: .infinity)
-                        .overlay {
-                            OnboardingPrimaryActionLabel(
-                                title: "Start Chat",
-                                isLoading: model.phase == .loading || model.phase == .routing
-                            )
-                        }
                 }
-                .wnPrimaryButtonStyle()
-                .controlSize(.large)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
-                .disabled(model.phase == .loading || model.phase == .routing)
             }
         }
         .localizedNavigationTitle("Chat with support")
@@ -72,6 +58,19 @@ struct SupportChatView: View {
             get: { model.phase == .failed },
             set: { if !$0 { model.dismissFailure() } }
         )
+    }
+}
+
+struct WhiteNoiseSupportAvatar: View {
+    let size: CGFloat
+
+    var body: some View {
+        Image(systemName: "questionmark.bubble")
+            .font(.system(size: size * 0.42, weight: .medium))
+            .foregroundStyle(.primary)
+            .frame(width: size, height: size)
+            .background(Color(uiColor: .secondarySystemFill), in: Circle())
+            .accessibilityHidden(true)
     }
 }
 
