@@ -91,28 +91,31 @@ shutdown itself seals partial observations and drains after storage closes.
 
 ## Validation evidence
 
-The original snapshot checkpoint had the following baseline evidence; 0.9.20
-validation is recorded separately below once the release checks complete.
-
-
-The published snapshot passed the 1,772-test simulator suite (221 suites), the
+The formal 0.9.20 release passed the 1,805-test simulator suite (228 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
 exercise account-free consent, failed persistence, scope reconfirmation,
 independent logging, identity rotation, frozen-runtime silence, stale tickets,
 and every typed event value against MDK's actual collector.
 
-MDK's pinned storage migration checks passed 72 tests (three operational
+MDK's pinned storage migration checks passed 74 tests (three operational
 benchmarks ignored), using temporary/in-memory databases. They cover upgrades
 through the current account schema and shared consent migration preserving
 legacy opt-in history, export intervals, and independent audit preferences.
 These checks do not establish a safe downgrade of an upgraded device database.
+
+The release's 33 native analytics tests passed, including storage closure before
+export drain and custom host timing validation. Two native onboarding tests passed
+approved/ready cancellation and recovery-epoch approval. The simulator additionally
+exercises repeated cancellation of the released presented-list future, subsequent
+updates on the same handle, storage closure, stale tokens/epochs, selected titles,
+unchanged presentation revisions with unread changes, and bounded visibility timing.
 
 Production and staging unsigned Release device builds passed. Both built-plist
 configuration preflights passed with distinct application keys. The preflight's
 Python tests cover valid HTTPS routes and malformed ports/URLs without printing
 configuration values.
 
-Three disposable-simulator UI checks passed interrupted first launch,
+At the earlier analytics checkpoint, three disposable-simulator UI checks passed interrupted first launch,
 background/resume with consent open, decline/relaunch, grant, and account-entry
 cancellation. The sheet's default-off choices and revised layout were visually
 checked. Real-storage tests additionally cover both grant and decline surviving

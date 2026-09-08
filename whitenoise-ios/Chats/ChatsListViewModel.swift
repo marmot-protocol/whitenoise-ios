@@ -369,7 +369,7 @@ final class ChatsListViewModel {
                     self?.applyPresentedSnapshot(snapshot.snapshot)
                     self?.isLoading = false
 
-                    for try await update in SubscriptionDriver.presentedChatListUpdates(chatListSub) {
+                    while let update = try await chatListSub.nextCancellable() {
                         guard !Task.isCancelled,
                               appState.canUseRuntimeForForegroundWork,
                               self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true

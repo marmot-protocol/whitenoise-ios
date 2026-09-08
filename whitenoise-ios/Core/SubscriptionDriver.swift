@@ -5,22 +5,6 @@ import MarmotKit
 /// `AsyncStream`s the SwiftUI view models can consume in `.task` modifiers.
 enum SubscriptionDriver {
 
-    static func presentedChatListUpdates(_ sub: PresentedChatListSubscription) -> AsyncThrowingStream<PresentedChatListUpdateFfi, Error> {
-        AsyncThrowingStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            let task = Task {
-                do {
-                    while !Task.isCancelled, let next = try await sub.nextCancellable() {
-                        continuation.yield(next)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     static func chats(_ sub: ChatsSubscription) -> AsyncStream<AppGroupRecordFfi> {
         AsyncStream(bufferingPolicy: .bufferingNewest(128)) { continuation in
             let task = Task {

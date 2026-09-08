@@ -14727,3 +14727,44 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
     func perform(_ command: AccountSetupCommand) async throws -> OnboardingSnapshotFfi? { snapshot }
 }
+
+@MainActor
+struct PresentedChatListTests {
+    @Test func selectedPresentationWinsOverLegacyFieldsAndPreservesUnreadChanges() throws {
+        var row = chatListRow(groupIdHex: "presented", title: "Legacy title", avatarUrl: "https://legacy.example/avatar")
+        let selected = ConversationPresentationFfi(
+            title: .literal(text: "Selected title"),
+            avatar: .placeholder(stableSeed: "stable", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+        )
+        let appState = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: appState)
+        let version = PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
+            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+        ))
+        #expect(model.items.first?.title == "Selected title")
+        #expect(model.items.first?.avatarURL == nil)
+        #expect(model.items.first?.avatarSeed == "stable")
+        row.unreadCount = 4
+        row.hasUnread = true
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
+            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+        ))
+        #expect(model.items.first?.unreadCount == 4)
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(rows: [], presentationVersion: version))
+        #expect(model.items.isEmpty)
+    }
+
+    @Test func selectedAvatarRejectsPrivateURLsAndUsesLocalizableFallbacks() {
+        let row = chatListRow(groupIdHex: "presented", title: "Legacy title")
+        let selected = ConversationPresentationFfi(
+            title: .unavailableConversation, avatar: .remoteImage(url: "https://127.0.0.1/private", cacheKey: "selected"),
+            titleSource: .unknownFallback, avatarSource: .peerProfile, peerId: "peer", resolution: .fallback
+        )
+        let display = SelectedChatPresentation.display(selected, row: row)
+        #expect(display.avatarURL == nil)
+        #expect(display.title == L10n.string("Conversation unavailable"))
+        #expect(display.avatarSeed == "selected")
+    }
+}

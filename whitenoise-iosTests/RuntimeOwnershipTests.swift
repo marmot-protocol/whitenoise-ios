@@ -180,9 +180,10 @@ struct RuntimeOwnershipTests {
         let client = try MarmotClient.testClient()
         do {
             try await client.startRuntime()
-            let account = try await client.marmot.createIdentity(
+            let creation = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
             )
+            let account = creation.account
             let subscription = try await client.openPresentedChatList(accountRef: account.label, includeArchived: true)
             let initial = await client.presentedChatListSubscriptionSnapshot(subscription)
             #expect(initial?.sequence == 0)
@@ -205,7 +206,12 @@ struct RuntimeOwnershipTests {
                 }
             }
             // Cancelling one next call leaves the handle usable for a later read.
-            let reader = Task.detached { try await subscription.nextCancellable() }
+            let reader = Task<PresentedChatListUpdateFfi?, Error>.detached {
+                while let update = try await subscription.nextCancellable() {
+                    if !update.snapshot.rows.isEmpty { return update }
+                }
+                return nil as PresentedChatListUpdateFfi?
+            }
             let created = try await client.createGroupWithOptionsDetailed(
                 accountRef: account.label, name: "Selected presentation", memberRefs: [],
                 options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
