@@ -10,16 +10,19 @@ struct SendDispatchAndCancellationTests {
     @Test func sendPreparationKeepsDraftWhenViewModelIsMissing() {
         var draft = "hello"
         var attachments: [MediaDraftAttachment] = []
+        var giphyDraft: RemoteGiphyMedia? = GiphyDraftFixture.media
 
         let payload = ConversationSendPreparation.prepare(
             draft: &draft,
             mediaDrafts: &attachments,
+            giphyDraft: &giphyDraft,
             viewModel: nil
         )
 
         #expect(payload == nil)
         #expect(draft == "hello")
         #expect(attachments.isEmpty)
+        #expect(giphyDraft == GiphyDraftFixture.media)
     }
 
     /// #76 — push registration must treat CancellationError as a non-failure and

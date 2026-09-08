@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import MarmotKit
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -347,5 +348,179 @@ struct GiphyIntegrationTests {
         budget.release(second)
         budget.release(third)
         #expect(budget.activePlaybackCount == 0)
+    }
+}
+
+nonisolated enum GiphyDraftFixture {
+    static let media = RemoteGiphyMedia(
+        url: URL(string: "https://media.giphy.com/media/abc/giphy.gif")!,
+        width: 480,
+        height: 270,
+        attribution: "Marmot Studio"
+    )
+}
+
+struct GiphyDraftDispatchTests {
+    @Test func emptyComposerWithNoGIFDraftSendsNothing() {
+        #expect(ConversationSendPreparation.dispatch(
+            text: "",
+            giphyDraft: nil,
+            mediaDrafts: []
+        ) == nil)
+    }
+
+    @Test func stagedGIFAloneSendsOnlyItsEnvelope() throws {
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: "",
+            giphyDraft: GiphyDraftFixture.media,
+            mediaDrafts: []
+        ))
+
+        #expect(dispatch.giphyWireText == GiphyDraftFixture.media.wireText)
+        #expect(dispatch.sendsGiphyMessage)
+        #expect(!dispatch.sendsComposerMessage)
+        #expect(RemoteGiphyMedia.parse(wireText: try #require(dispatch.giphyWireText)) != nil)
+    }
+
+    @Test func stagedGIFKeepsTypedTextInItsOwnMessage() throws {
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: "look at this",
+            giphyDraft: GiphyDraftFixture.media,
+            mediaDrafts: []
+        ))
+
+        #expect(dispatch.giphyWireText == GiphyDraftFixture.media.wireText)
+        #expect(dispatch.text == "look at this")
+        #expect(dispatch.sendsComposerMessage)
+        #expect(RemoteGiphyMedia.parse(wireText: try #require(dispatch.giphyWireText)) != nil)
+    }
+
+    @Test func composerWithoutGIFDraftIsUnchanged() throws {
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: "plain",
+            giphyDraft: nil,
+            mediaDrafts: []
+        ))
+
+        #expect(dispatch.giphyWireText == nil)
+        #expect(!dispatch.sendsGiphyMessage)
+        #expect(dispatch.text == "plain")
+    }
+
+    @Test func stagedGIFTileWidthTracksItsAspectRatio() {
+        let landscape = ComposerMediaDraftLayout.previewWidth(
+            aspectRatio: GiphyDraftFixture.media.aspectRatio
+        )
+        let square = ComposerMediaDraftLayout.previewWidth(aspectRatio: 1)
+
+        #expect(landscape > square)
+        #expect(landscape <= ComposerMediaDraftLayout.maximumPreviewWidth)
+        #expect(ComposerMediaDraftLayout.previewWidth(aspectRatio: 0)
+            == ComposerMediaDraftLayout.previewWidth(aspectRatio: 1))
+        #expect(ComposerMediaDraftLayout.previewWidth(aspectRatio: .nan)
+            == ComposerMediaDraftLayout.previewWidth(aspectRatio: 1))
+    }
+}
+
+struct GiphyDraftPersistenceTests {
+    private func snapshot(
+        text: String = "",
+        media: [MediaDraftAttachment] = [],
+        giphy: RemoteGiphyMedia? = GiphyDraftFixture.media
+    ) -> ConversationDraftSnapshot {
+        ConversationDraftSnapshot(
+            canonicalText: text,
+            replyToMessageIdHex: nil,
+            mediaAttachments: media,
+            giphyMedia: giphy
+        )
+    }
+
+    @Test func stagedGIFPersistsAsAURLReferenceRatherThanBytes() throws {
+        let record = try #require(snapshot().persistedAttachments.first)
+
+        #expect(ConversationGiphyDraftRecord.isRecord(mediaType: record.mediaType))
+        #expect(record.plaintext == Data(GiphyDraftFixture.media.wireText.utf8))
+        #expect(record.dim == "480x270")
+        #expect(String(data: record.plaintext, encoding: .utf8)?
+            .contains("media.giphy.com") == true)
+    }
+
+    @Test func restoredReferenceKeepsURLAttributionAndGeometry() throws {
+        let record = try #require(snapshot().persistedAttachments.first)
+
+        let restored = try #require(ConversationGiphyDraftRecord.media(from: record))
+
+        #expect(restored == GiphyDraftFixture.media)
+        #expect(restored.width == 480)
+        #expect(restored.height == 270)
+        #expect(restored.attribution == "Marmot Studio")
+    }
+
+    @Test func partitionKeepsTheReferenceOutOfTheUploadableAttachments() throws {
+        let uploadable = MessageDraftAttachmentFfi(
+            id: UUID().uuidString,
+            fileName: "photo.jpg",
+            mediaType: "image/jpeg",
+            plaintext: Data([0xFF, 0xD8, 0xFF]),
+            dim: "10x10",
+            thumbhash: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
+        let stored = snapshot(media: []).persistedAttachments + [uploadable]
+
+        let partitioned = ConversationGiphyDraftRecord.partition(stored)
+
+        #expect(partitioned.giphyMedia == GiphyDraftFixture.media)
+        #expect(partitioned.media == [uploadable])
+        #expect(!partitioned.media.contains {
+            ConversationGiphyDraftRecord.isRecord(mediaType: $0.mediaType)
+        })
+    }
+
+    @Test func hostileOrCorruptReferencesDecodeToNoGIFDraft() {
+        func record(plaintext: Data, dim: String? = "480x270") -> MessageDraftAttachmentFfi {
+            MessageDraftAttachmentFfi(
+                id: ConversationGiphyDraftRecord.recordID,
+                fileName: ConversationGiphyDraftRecord.fileName,
+                mediaType: ConversationGiphyDraftRecord.mediaType,
+                plaintext: plaintext,
+                dim: dim,
+                thumbhash: nil,
+                durationSeconds: nil,
+                waveformSamples: []
+            )
+        }
+
+        #expect(ConversationGiphyDraftRecord.media(from: record(plaintext: Data())) == nil)
+        #expect(ConversationGiphyDraftRecord.media(
+            from: record(plaintext: Data("https://evil.example/x.gif\nvia GIPHY".utf8))
+        ) == nil)
+        #expect(ConversationGiphyDraftRecord.media(
+            from: record(plaintext: Data("http://media.giphy.com/a.gif\nvia GIPHY".utf8))
+        ) == nil)
+        #expect(ConversationGiphyDraftRecord.media(
+            from: record(plaintext: Data([0xFF, 0xFE, 0xFD]))
+        ) == nil)
+    }
+
+    @Test func brokenGeometryFallsBackInsteadOfDroppingTheDraft() throws {
+        var record = try #require(snapshot().persistedAttachments.first)
+        record.dim = "0x0"
+
+        let restored = try #require(ConversationGiphyDraftRecord.media(from: record))
+
+        #expect(restored.url == GiphyDraftFixture.media.url)
+        #expect(restored.aspectRatio > 0)
+    }
+
+    @Test func aStagedGIFAloneIsAPersistableDraft() throws {
+        let stored = snapshot().persistedAttachments
+
+        #expect(stored.count == 1)
+        #expect(snapshot(giphy: nil).persistedAttachments.isEmpty)
+        #expect(snapshot().persistedAttachmentSummaries.first?.mediaType
+            == ConversationGiphyDraftRecord.mediaType)
     }
 }

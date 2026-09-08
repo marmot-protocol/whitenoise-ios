@@ -38,6 +38,11 @@ nonisolated enum ComposerMediaDraftLayout {
             }
             return size.width / size.height
         } ?? 1
+        return previewWidth(aspectRatio: ratio)
+    }
+
+    static func previewWidth(aspectRatio: CGFloat) -> CGFloat {
+        let ratio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1
         return min(maximumPreviewWidth, max(minimumPreviewWidth, previewHeight * ratio))
             .rounded(.toNearestOrAwayFromZero)
     }
@@ -96,16 +101,30 @@ struct VideoPreviewPlayOverlay: View {
 
 struct MediaDraftStrip: View {
     let attachments: [MediaDraftAttachment]
+    var giphyDraft: RemoteGiphyMedia?
     let onRemove: (MediaDraftAttachment.ID) -> Void
+    var onRemoveGiphyDraft: () -> Void = {}
     let onPreviewVisual: (MediaDraftAttachment.ID) -> Void
 
     private var containsVisualMedia: Bool {
-        attachments.contains { $0.kind == .image || $0.kind == .video }
+        giphyDraft != nil || attachments.contains { $0.kind == .image || $0.kind == .video }
     }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             LazyHStack(spacing: ComposerMediaDraftLayout.itemSpacing) {
+                if let giphyDraft {
+                    ZStack(alignment: .topTrailing) {
+                        ComposerGiphyDraftTile(media: giphyDraft)
+
+                        ComposerAttachmentRemoveButton(
+                            accessibilityLabel: L10n.formatted("Remove %@", L10n.string("GIF")),
+                            overlaysMedia: true,
+                            action: onRemoveGiphyDraft
+                        )
+                    }
+                }
+
                 ForEach(attachments) { attachment in
                     ZStack(alignment: .topTrailing) {
                         preview(for: attachment)
@@ -226,6 +245,34 @@ struct MediaDraftStrip: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+struct ComposerGiphyDraftTile: View {
+    let media: RemoteGiphyMedia
+
+    var body: some View {
+        GiphySearchPreviewView(media: media)
+            .frame(
+                width: ComposerMediaDraftLayout.previewWidth(aspectRatio: media.aspectRatio),
+                height: ComposerMediaDraftLayout.previewHeight
+            )
+            .overlay(alignment: .bottomLeading) {
+                Text(L10n.string("GIF"))
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(.black.opacity(0.68), in: .capsule)
+                    .padding(6)
+            }
+            .clipShape(.rect(cornerRadius: ComposerMediaDraftLayout.cornerRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: ComposerMediaDraftLayout.cornerRadius)
+                    .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L10n.string("GIF via GIPHY"))
     }
 }
 

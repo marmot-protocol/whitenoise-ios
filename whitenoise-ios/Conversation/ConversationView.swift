@@ -192,25 +192,55 @@ private struct ConversationDraftLoadToken: Equatable {
 
 struct ConversationSendPayload {
     let viewModel: ConversationViewModel
+    let dispatch: ConversationSendDispatch
+
+    var giphyWireText: String? { dispatch.giphyWireText }
+    var text: String { dispatch.text }
+    var attachments: [MediaDraftAttachment] { dispatch.attachments }
+}
+
+nonisolated struct ConversationSendDispatch: Equatable {
+    let giphyWireText: String?
     let text: String
     let attachments: [MediaDraftAttachment]
+
+    var sendsGiphyMessage: Bool { giphyWireText != nil }
+
+    var sendsComposerMessage: Bool { !text.isEmpty || !attachments.isEmpty }
 }
 
 enum ConversationSendPreparation {
+    static func dispatch(
+        text: String,
+        giphyDraft: RemoteGiphyMedia?,
+        mediaDrafts: [MediaDraftAttachment]
+    ) -> ConversationSendDispatch? {
+        let dispatch = ConversationSendDispatch(
+            giphyWireText: giphyDraft?.wireText,
+            text: text,
+            attachments: mediaDrafts
+        )
+        guard dispatch.sendsGiphyMessage || dispatch.sendsComposerMessage else { return nil }
+        return dispatch
+    }
+
     static func prepare(
         draft: inout String,
         mediaDrafts: inout [MediaDraftAttachment],
+        giphyDraft: inout RemoteGiphyMedia?,
         viewModel: ConversationViewModel?
     ) -> ConversationSendPayload? {
         guard let viewModel else { return nil }
         let text = viewModel.consumeComposerText(draft) ?? ""
-        let attachments = mediaDrafts
-        guard !attachments.isEmpty || !text.isEmpty else {
-            return nil
-        }
+        guard let dispatch = dispatch(
+            text: text,
+            giphyDraft: giphyDraft,
+            mediaDrafts: mediaDrafts
+        ) else { return nil }
         draft = ""
         mediaDrafts = []
-        return ConversationSendPayload(viewModel: viewModel, text: text, attachments: attachments)
+        giphyDraft = nil
+        return ConversationSendPayload(viewModel: viewModel, dispatch: dispatch)
     }
 }
 
@@ -487,6 +517,7 @@ struct ConversationView: View {
     @State private var showLocationPicker = false
     @State private var showContactPicker = false
     @State private var showGiphySearch = false
+    @State private var giphyDraft: RemoteGiphyMedia?
     @State private var showDetails = false
     @State private var openAddMembersOnDetails = false
     @State private var actionsTarget: ActionsTarget?
@@ -620,6 +651,7 @@ struct ConversationView: View {
         let message: AppMessageRecordFfi
         let preservedDraft: String
         let preservedMediaDrafts: [MediaDraftAttachment]
+        let preservedGiphyDraft: RemoteGiphyMedia?
         let preservedMentionState: ComposerMentionDraftState
         let preservedReplyTargetMessageIdHex: String?
     }
@@ -912,7 +944,7 @@ struct ConversationView: View {
                 if let apiKey = GiphyBuildConfig.current().apiKey {
                     GiphySearchView(
                         client: GiphySearchClient(apiKey: apiKey),
-                        onSelect: sendGiphyResult
+                        onSelect: stageGiphyResult
                     )
                     .appAppearance()
                 }
@@ -977,6 +1009,11 @@ struct ConversationView: View {
                     persistCurrentDraft()
                 }
             }
+            .onChange(of: giphyDraft) { _, _ in
+                if editSession == nil {
+                    persistCurrentDraft()
+                }
+            }
             .onChange(of: viewModel?.replyTargetMessageIdHex) { _, _ in
                 if editSession == nil {
                     persistCurrentDraft()
@@ -997,6 +1034,7 @@ struct ConversationView: View {
                     persistDraft(
                         editSession.preservedMentionState,
                         mediaAttachments: editSession.preservedMediaDrafts,
+                        giphyMedia: editSession.preservedGiphyDraft,
                         replyToMessageIdHex: editSession.preservedReplyTargetMessageIdHex
                     )
                 } else {
@@ -1032,6 +1070,7 @@ struct ConversationView: View {
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
+                    giphyDraft: giphyDraft,
                     replyPreview: editSession == nil
                         ? viewModel.flatMap(composerReplyPreview(viewModel:))
                         : nil,
@@ -1058,6 +1097,7 @@ struct ConversationView: View {
                     onPasteImage: pasteImage,
                     onRemoveAudioDraft: removeMediaDraft,
                     onRemovePreparedAttachment: removeMediaDraft,
+                    onRemoveGiphyDraft: { giphyDraft = nil },
                     onPreviewPreparedMedia: previewPreparedMedia,
                     onCancelReply: { viewModel?.restoreReplyTarget(messageIdHex: nil) },
                     onCancelVoiceRecording: cancelVoiceRecording,
@@ -2295,17 +2335,20 @@ struct ConversationView: View {
         ) else { return }
         let preservedDraft = editSession?.preservedDraft ?? draft
         let preservedMediaDrafts = editSession?.preservedMediaDrafts ?? mediaDrafts
+        let preservedGiphyDraft = editSession?.preservedGiphyDraft ?? giphyDraft
         let preservedMentionState = editSession?.preservedMentionState
             ?? viewModel.composerMentionDraftState(for: preservedDraft)
         let preservedReplyTargetMessageIdHex = editSession?.preservedReplyTargetMessageIdHex
             ?? viewModel.replyTargetMessageIdHex
         viewModel.replyingTo = nil
         mediaDrafts.removeAll()
+        giphyDraft = nil
         cancelVoiceRecording()
         editSession = ComposerEditSession(
             message: message,
             preservedDraft: preservedDraft,
             preservedMediaDrafts: preservedMediaDrafts,
+            preservedGiphyDraft: preservedGiphyDraft,
             preservedMentionState: preservedMentionState,
             preservedReplyTargetMessageIdHex: preservedReplyTargetMessageIdHex
         )
@@ -2331,6 +2374,7 @@ struct ConversationView: View {
         viewModel?.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
         draft = editSession.preservedDraft
         mediaDrafts = editSession.preservedMediaDrafts
+        giphyDraft = editSession.preservedGiphyDraft
     }
 
     private func acceptInvite(viewModel: ConversationViewModel) {
@@ -2362,15 +2406,21 @@ struct ConversationView: View {
                 viewModel.restoreReplyTarget(messageIdHex: editSession.preservedReplyTargetMessageIdHex)
                 draft = editSession.preservedDraft
                 mediaDrafts = editSession.preservedMediaDrafts
+                giphyDraft = editSession.preservedGiphyDraft
             }
             return
         }
         guard let payload = ConversationSendPreparation.prepare(
             draft: &draft,
             mediaDrafts: &mediaDrafts,
+            giphyDraft: &giphyDraft,
             viewModel: viewModel
         ) else { return }
         Task {
+            if let giphyWireText = payload.giphyWireText {
+                await payload.viewModel.sendPreparedComposerText(giphyWireText)
+            }
+            guard payload.dispatch.sendsComposerMessage else { return }
             if payload.attachments.isEmpty {
                 await payload.viewModel.sendPreparedComposerText(payload.text)
             } else {
@@ -2392,6 +2442,7 @@ struct ConversationView: View {
         showLocationPicker = false
         showContactPicker = false
         showGiphySearch = false
+        giphyDraft = nil
         dismissKeyboard()
     }
 
@@ -2399,6 +2450,7 @@ struct ConversationView: View {
         guard let draftAccountRef, let viewModel else { return }
         let draftBeforeLoad = draft
         let mediaIDsBeforeLoad = mediaDrafts.map(\.id)
+        let giphyBeforeLoad = giphyDraft
         let replyBeforeLoad = viewModel.replyTargetMessageIdHex
         guard let snapshot = await appState.conversationDraftStore.snapshot(
             accountRef: draftAccountRef,
@@ -2407,16 +2459,19 @@ struct ConversationView: View {
             guard !Task.isCancelled,
                   draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
+                  giphyDraft == giphyBeforeLoad,
                   viewModel.replyTargetMessageIdHex == replyBeforeLoad
             else { return }
             draft = ""
             mediaDrafts.removeAll()
+            giphyDraft = nil
             viewModel.restoreReplyTarget(messageIdHex: nil)
             return
         }
         guard !Task.isCancelled,
               draft == draftBeforeLoad,
               mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
+              giphyDraft == giphyBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
         else { return }
         let mentionState = ComposerMentionDraftState(
@@ -2426,6 +2481,7 @@ struct ConversationView: View {
         viewModel.restoreComposerMentionDraftState(mentionState)
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
         mediaDrafts = snapshot.mediaAttachments
+        giphyDraft = snapshot.giphyMedia
         draft = mentionState.draft
     }
 
@@ -2436,6 +2492,7 @@ struct ConversationView: View {
         persistDraft(
             mentionState,
             mediaAttachments: mediaDrafts,
+            giphyMedia: giphyDraft,
             replyToMessageIdHex: viewModel?.replyTargetMessageIdHex
         )
     }
@@ -2443,6 +2500,7 @@ struct ConversationView: View {
     private func persistDraft(
         _ mentionState: ComposerMentionDraftState,
         mediaAttachments: [MediaDraftAttachment],
+        giphyMedia: RemoteGiphyMedia?,
         replyToMessageIdHex: String?
     ) {
         guard let draftAccountRef else { return }
@@ -2450,7 +2508,8 @@ struct ConversationView: View {
             ConversationDraftSnapshot(
                 canonicalText: mentionState.canonicalText,
                 replyToMessageIdHex: replyToMessageIdHex,
-                mediaAttachments: mediaAttachments
+                mediaAttachments: mediaAttachments,
+                giphyMedia: giphyMedia
             ),
             accountRef: draftAccountRef,
             groupIdHex: chat.groupIdHex
@@ -2501,9 +2560,10 @@ struct ConversationView: View {
         showGiphySearch = true
     }
 
-    private func sendGiphyResult(_ result: GiphySearchResult) {
-        guard let viewModel, viewModel.canSendMessages else { return }
-        Task { await viewModel.sendPreparedComposerText(result.media.wireText) }
+    private func stageGiphyResult(_ result: GiphySearchResult) {
+        guard editSession == nil else { return }
+        guard viewModel?.canSendMessages == true else { return }
+        giphyDraft = result.media
     }
 
     private func pasteImage(_ image: UIImage) {
