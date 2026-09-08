@@ -468,3 +468,26 @@ the test device.
 - Relay echoes of the current key material must not create additional rows, even when the publication event differs. A newer relay timestamp must not change which package is shown as current.
 - Publish New Key Package refreshes the current row after success. An error remains actionable; a missing lifecycle or failed read must not promote an arbitrary relay package to current.
 - Swipe-delete remains available for additional relay packages. Refresh and switch profiles; neither action should show another profile's packages.
+
+
+## MDK 0.9.20 recovery and presentation
+
+- On disposable upgraded profiles, verify cached DM names/avatars remain stable
+  offline; profile/title changes update, while unread, pin, and archive changes
+  appear even with the same presentation revision. Switch profiles during a
+  pending list subscription and rapidly background/resume; no old rows return.
+- Simulate a recovered group branch. Review the authenticated inviter before
+  confirming rejoin; saved history remains. Decline removes only the selected
+  offer. Change local group state while confirmation is open: the stale approval
+  fails and requires a newly reviewed offer. Advisory sync failure must not
+  disable sending or change membership. Pending re-invites retry without host
+  publication; exhausted ones direct the user to invite again.
+- Use disposable corrupt/exhausted onboarding checkpoints. Sign In exposes an
+  explicit recovery action, explains latest-only evidence/sign-out, and requires
+  entering the private key again. Verify an old revision/epoch cannot approve a
+  fresh attempt. Cancel while approved publication is pending and begin again.
+- Under consent, send text/media and receive a new message in a visible chat.
+  Diagnostics should show host message-visible timings only after layout. Loading
+  history, duplicate visibility callbacks, and work started before consent must
+  not add samples. Revoke sharing or switch profiles before layout; late samples
+  must be dropped. Confirm backend transport timings are not duplicated by iOS.

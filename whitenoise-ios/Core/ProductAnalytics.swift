@@ -66,16 +66,20 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     private struct State: Sendable {
         var generation = UUID()
         var sink: (@Sendable (ProductEvent) -> Void)?
+        var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)?
         var pending = 0
     }
     private let state = Mutex(State())
 
     func replaceSink(_ sink: (@Sendable (ProductEvent) -> Void)?) {
-        state.withLock { $0.generation = UUID(); $0.sink = sink }
+        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil }
     }
 
-    func activateSink(_ sink: @escaping @Sendable (ProductEvent) -> Void) {
-        state.withLock { $0.sink = sink }
+    func activateSink(
+        performance: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)? = nil,
+        _ sink: @escaping @Sendable (ProductEvent) -> Void
+    ) {
+        state.withLock { $0.sink = sink; $0.performanceSink = performance }
     }
 
     func ticket() -> Ticket? {
@@ -84,6 +88,15 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
 
     @discardableResult
     func record(_ event: ProductEvent, ticket: Ticket?) -> Task<Void, Never>? {
+        enqueue(ticket: ticket) { $0.sink?(event) }
+    }
+
+    @discardableResult
+    func recordPerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64, ticket: Ticket?) -> Task<Void, Never>? {
+        enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds) }
+    }
+
+    private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) -> Void) -> Task<Void, Never>? {
         guard let ticket else { return nil }
         let admitted = state.withLock { state in
             guard state.generation == ticket.generation, state.sink != nil, state.pending < 64 else { return false }
@@ -97,7 +110,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 guard state.generation == ticket.generation else { return }
                 // The Rust recorder is memory-only. Hold the gate through this
                 // call so revocation cannot overtake an admitted observation.
-                state.sink?(event)
+                deliver(state)
             }
         }
     }

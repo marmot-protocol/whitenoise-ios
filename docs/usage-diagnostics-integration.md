@@ -1,25 +1,26 @@
 # iOS usage and diagnostics integration
 
-This integration pins MDK master
-`5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154` (analytics PR #1745).
-It includes shared-store migration 2 and account-storage migration 65.
+This integration pins formal MarmotKit **0.9.20**, source
+`2f44f6b65a19f8818644ccd7027618ba91450c33`.
+It includes account-storage migrations through 67 and shared-store migration 3.
 Use disposable test roots; reverting the binary is not a storage rollback.
 
 ## Published bindings
 
-The package uses immutable snapshot
-`marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154`, built with
-`otlp-export` and `product-analytics-export` for arm64 iOS and simulator, with
-an iOS 18.0 deployment target. Install it with:
+The immutable `marmotkit-v0.9.20` release contains `otlp-export` and
+`product-analytics-export` for arm64 iOS and simulator (iOS 18.0 minimum).
+It was built with Rust/Cargo 1.97.1. The XCFramework ZIP checksum is
+`fc2e2a2046130ac78198ad067276c64b9102d0ba6757455f4b0f595cf81f7244`.
+Install it with:
 
 ```sh
-./scripts/sync-bindings.sh 5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154
+./scripts/sync-bindings.sh 0.9.20
 ```
 
 The installer verifies the source SHA and generated Swift/binary checksums and
 updates the remote package declaration and `MARMOT_VERSION` together. The
-published generated API is unchanged from the development build. The immutable release
-[manifest](https://github.com/marmot-protocol/mdk/releases/download/marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154/marmotkit-ios-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154.manifest.json)
+published generated API and binary come from the same formal release. Its immutable
+[manifest](https://github.com/marmot-protocol/mdk/releases/download/marmotkit-v0.9.20/marmotkit-ios-0.9.20.manifest.json)
 records source/builder SHAs, toolchain, features, and artifact checksums.
 CI downloads the published package; it no longer builds Rust as part of app tests.
 Before app tests, `python3 scripts/check-marmotkit-bindings.py` compares
@@ -45,7 +46,12 @@ New-user onboarding measurements describe opted-in users, never all installation
 Typed observations cover screen visits, create/import steps, foreground readiness,
 new-chat compose open/cancel, message search, attachments, settings, and system
 notification permission results. MDK already registers their schemas; the host's
-additional registry stays empty. Swift tickets prevent work begun before consent,
+additional registry stays empty. The new arbitrary `recordHostTiming` API is
+intentionally unused because it requires explicitly registered custom schemas.
+Message-visible timings use MDK's approved host-performance enum instead: Send
+through visible local bubble, and a new inbound projection through visible frame.
+History reads and passive re-projections do not start these measurements. MDK's
+new transport/queue/projection timings remain automatic and are not duplicated. Swift tickets prevent work begun before consent,
 revocation, account changes, or runtime replacement from being attributed later.
 
 Search reports one activation-to-dismissal interaction (success if the user saw a
@@ -66,7 +72,28 @@ non-flushing activity API. Awaiting it before terminal close would delay storage
 release, so background activity cannot be guaranteed at suspension. Terminal
 shutdown itself seals partial observations and drains after storage closes.
 
+## Other 0.9.20 host contracts
+
+- Attached presented-chat-list snapshots select title/avatar independently of
+  legacy row fields. Complete updates use handle generation and sequence; title
+  revision is not an unread/pin version. Store-epoch changes reopen the handle.
+  A handwritten adapter forwards Swift task cancellation to the released native
+  future so account switches do not retain an idle `next()` call.
+- Rejoin offers are refreshed on entry and raw group-state events, including when
+  ordinary group records did not change. The UI shows the authenticated inviter
+  and explains replacement of local group state while retaining saved history.
+  Confirmation passes the displayed Welcome ID/token; decline affects one offer.
+  Automatic recovery failure does not change membership or block sending.
+- Recovered onboarding approvals carry the displayed revision and recovery epoch.
+  Cancellation runs before draining outstanding host calls, including approved
+  attempts. Unreadable/exhausted checkpoints have a separate explicit recovery
+  action that explains latest-only evidence and requires a new sign-in.
+
 ## Validation evidence
+
+The original snapshot checkpoint had the following baseline evidence; 0.9.20
+validation is recorded separately below once the release checks complete.
+
 
 The published snapshot passed the 1,772-test simulator suite (221 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
@@ -114,6 +141,6 @@ ClickHouse policy or access logs. Signed-device interaction checks remain pendin
    not verify deployment privacy or ingestion.
 4. Run the first-launch/upgrade/manual checks, and inspect persisted synthetic
    staging events as well as local status. HTTP success alone is insufficient.
-5. Keep the immutable snapshot pin, pass CI, then ship through
+5. Keep the immutable formal release pin, pass CI, then ship through
    the normal separately authorized release process. No app version bump or
    deployment change belongs to this integration checkpoint.

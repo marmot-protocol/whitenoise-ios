@@ -8,12 +8,7 @@ enum AccountSetupRecovery {
         cancel: () async throws -> Void,
         begin: () async throws -> OnboardingSnapshotFfi
     ) async throws -> OnboardingSnapshotFfi {
-        do {
-            try await cancel()
-        } catch MarmotKitError.OnboardingActionUnavailable {
-            // MDK #1741 retains approved publications for safe reconciliation.
-            return snapshot
-        }
+        try await cancel()
         return try await begin()
     }
 }

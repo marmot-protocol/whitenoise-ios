@@ -923,6 +923,14 @@ struct ConversationView: View {
 
     var body: some View {
         conversationAttachmentSheets
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let viewModel {
+                    GroupRecoveryView(model: viewModel.recovery, groupID: chat.groupIdHex) {
+                        _ = await viewModel.refreshGroupManagement()
+                        await viewModel.refreshTimelineWindowAfterLocalPrune()
+                    }
+                }
+            }
             .task(id: ConversationRuntimeStartToken(
                 runtimeGeneration: appState.runtimeGeneration,
                 isRuntimeWarmingUp: appState.isRuntimeWarmingUp
@@ -946,6 +954,11 @@ struct ConversationView: View {
                 isViewModelReady: viewModel != nil
             )) {
                 await restorePersistedDraft()
+            }
+            .task(id: appState.groupRecoveryUpdate) {
+                guard let update = appState.groupRecoveryUpdate, update.groupID == chat.groupIdHex,
+                      update.accountID == appState.activeAccount?.accountIdHex else { return }
+                await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
@@ -2257,6 +2270,7 @@ struct ConversationView: View {
         guard isInitialTimelinePositionSettled else { return }
         let visibleRowKeys = timelineVisibility.visibleRowKeys
         guard !visibleRowKeys.isEmpty else { return }
+        viewModel.timelineStore.recordVisibleRows(visibleRowKeys)
         viewModel.markVisibleMessagesRead(
             viewModel.records(forRowFrameKeys: visibleRowKeys)
         )

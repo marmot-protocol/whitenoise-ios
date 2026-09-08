@@ -222,6 +222,8 @@ final class ConversationViewModel {
         hasMoreBefore && !isLoadingOlder && timelineSubscription != nil
     }
 
+    let recovery = GroupRecoveryModel()
+
     private(set) var group: AppGroupRecordFfi
     private(set) var leaveRequestPending: Bool
     private(set) var members: [AppGroupMemberRecordFfi] = []
@@ -1072,6 +1074,8 @@ final class ConversationViewModel {
     }
 
     private func stopLiveSubscriptions() {
+        timelineStore.visibilityPerformance.reset()
+        recovery.invalidate()
         timelineTask?.cancel()
         timelineTask = nil
         initialTimelineSnapshotTask?.cancel()
@@ -1259,12 +1263,14 @@ final class ConversationViewModel {
                         else { return }
                         self?.applyGroupRecord(initial)
                     }
+                    await self?.recovery.refresh(using: appState, groupID: groupIdHex)
                     for await record in SubscriptionDriver.groupState(groupSub) {
                         guard !Task.isCancelled,
                               appState.canUseRuntimeForForegroundWork
                         else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
                         await self?.applyGroupUpdate(record)
+                        await self?.recovery.refresh(using: appState, groupID: groupIdHex)
                     }
                 } catch is CancellationError {
                     return

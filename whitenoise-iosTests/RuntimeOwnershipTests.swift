@@ -176,6 +176,55 @@ struct RuntimeOwnershipTests {
         }
     }
 
+    @Test func publishedPresentationSubscriptionCancelsWithoutAnotherEvent() async throws {
+        let client = try MarmotClient.testClient()
+        do {
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentity(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+            )
+            let subscription = try await client.openPresentedChatList(accountRef: account.label, includeArchived: true)
+            let initial = await client.presentedChatListSubscriptionSnapshot(subscription)
+            #expect(initial?.sequence == 0)
+            #expect(await client.presentedChatListSubscriptionSnapshot(subscription) == nil)
+            let watchdog = Task {
+                try await Task.sleep(for: .seconds(10))
+                Issue.record("Cancellation required a runtime shutdown to unblock")
+                try await client.marmot.shutdownAndClose()
+            }
+            defer { watchdog.cancel() }
+            for _ in 0..<16 {
+                let reader = Task.detached { try await subscription.nextCancellable() }
+                await Task.yield()
+                reader.cancel()
+                do {
+                    _ = try await reader.value
+                    Issue.record("Expected task cancellation to reach the native future")
+                } catch is CancellationError {
+                    // This completes before any new chat-list event or shutdown.
+                }
+            }
+            // Cancelling one next call leaves the handle usable for a later read.
+            let reader = Task.detached { try await subscription.nextCancellable() }
+            let created = try await client.createGroupWithOptionsDetailed(
+                accountRef: account.label, name: "Selected presentation", memberRefs: [],
+                options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
+            )
+            let update = try #require(try await reader.value)
+            #expect(update.subscriptionGeneration == initial?.subscriptionGeneration)
+            #expect(update.sequence > 0)
+            #expect(update.snapshot.rows.contains { $0.row.groupIdHex == created.groupIdHex })
+            let recovery = try await client.groupRecoveryStatus(accountRef: account.label, groupIdHex: created.groupIdHex)
+            #expect(!recovery.automaticRecoveryFailed && recovery.rejoinInvitations.isEmpty)
+            #expect(try await !client.onboardingRecoveryRequired(accountRef: account.label))
+            try await client.marmot.shutdownAndClose()
+            #expect(client.marmot.storageIsClosed())
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+    }
+
     @Test func inactiveLaunchBootstrapsWithoutTreatingInactiveAsCancellation() async {
         let factory = ScriptedRuntimeFactory(busyFailures: 0)
         let appState = AppState(

@@ -14,13 +14,14 @@ struct AccountSetupTests {
         }
     }
 
-    @Test func approvedCheckpointIsPreservedWhenCancellationIsUnavailable() async throws {
+    @Test func failedCancellationCannotRestartOrApproveAnOldCheckpoint() async throws {
         let original = snapshot()
         var restarted = false
-        let result = try await AccountSetupRecovery.restartIfPossible(snapshot: original, cancel: {
-            throw MarmotKitError.OnboardingActionUnavailable
-        }, begin: { restarted = true; return original })
-        #expect(result == original)
+        await #expect(throws: MarmotKitError.OnboardingActionUnavailable) {
+            try await AccountSetupRecovery.restartIfPossible(snapshot: original, cancel: {
+                throw MarmotKitError.OnboardingActionUnavailable
+            }, begin: { restarted = true; return original })
+        }
         #expect(!restarted)
     }
 
@@ -59,7 +60,7 @@ struct AccountSetupTests {
         cancellationPending: Bool = false
     ) -> OnboardingSnapshotFfi {
         OnboardingSnapshotFfi(
-            accountIdHex: String(repeating: "a", count: 64), revision: revision, ready: ready,
+            accountIdHex: String(repeating: "a", count: 64), recoveryEpoch: nil, revision: revision, ready: ready,
             steps: [OnboardingStepStateFfi(
                 step: .singleDevice, status: status, findings: [],
                 actions: [.continueAnyway, .cancelOnboarding], checkedAt: nil
@@ -258,11 +259,29 @@ struct AccountSetupTests {
     @Test func explicitSaveApprovesOnlyTheReturnedProposalRevision() async throws {
         let proposed = proposalSnapshot(step: .profile)
         var approvedRevision: UInt64?
-        _ = try await AccountSetupPublication.publish(step: .profile, propose: { proposed }, approve: { revision in
+        _ = try await AccountSetupPublication.publish(step: .profile, propose: { proposed }, approve: { revision, _ in
             approvedRevision = revision
             return proposed
         })
         #expect(approvedRevision == proposed.revision)
+    }
+
+    @Test func recoveredPublicationUsesTheEpochOfTheDisplayedProposal() async throws {
+        var proposed = proposalSnapshot(step: .profile)
+        proposed.recoveryEpoch = "recovered-epoch"
+        var approved: (UInt64, String?)?
+        _ = try await AccountSetupPublication.publish(step: .profile, propose: { proposed }, approve: { revision, epoch in
+            approved = (revision, epoch)
+            return proposed
+        })
+        #expect(approved?.0 == proposed.revision)
+        #expect(approved?.1 == proposed.recoveryEpoch)
+        let model = AccountSetupModel(snapshot: proposed)
+        var stale = proposed
+        stale.recoveryEpoch = "older-epoch"
+        stale.revision += 100
+        model.apply(stale)
+        #expect(model.snapshot == proposed)
     }
 
     @Test func approvedProfileRetryFreezesThePreviouslySavedDraft() {
@@ -278,7 +297,7 @@ struct AccountSetupTests {
         let proposed = proposalSnapshot(step: .relays)
         var approved = false
         await #expect(throws: MarmotKitError.self) {
-            _ = try await AccountSetupPublication.publish(step: .profile, propose: { proposed }, approve: { _ in
+            _ = try await AccountSetupPublication.publish(step: .profile, propose: { proposed }, approve: { _, _ in
                 approved = true
                 return proposed
             })
@@ -293,7 +312,7 @@ struct AccountSetupTests {
             try await AccountSetupPublication.publish(step: .profile, propose: {
                 withUnsafeCurrentTask { $0?.cancel() }
                 return proposed
-            }, approve: { _ in
+            }, approve: { _, _ in
                 approved = true
                 return proposed
             })
@@ -494,7 +513,7 @@ private actor SetupTestClient: AccountSetupClient {
         case .approve:
             approvalCount += 1
             throw MarmotKitError.OnboardingActionUnavailable
-        case .acknowledge(let revision):
+        case .acknowledge(let revision, _):
             acknowledgments.append(revision)
             var ready = initial
             ready.revision += 1

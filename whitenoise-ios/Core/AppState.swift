@@ -169,6 +169,7 @@ final class AppState {
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
     private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
+    private(set) var onboardingRecoveryAccounts: [AccountSummaryFfi] = []
     var isAccountSetupPresented = false
     private(set) var isFinishingAccountSetup = false
     private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
@@ -186,17 +187,10 @@ final class AppState {
             runtimeLifecycle.endForegroundRuntimeMutation(lease)
         }
         model.suspend()
-        await model.drain()
         do {
-            do {
-                try await lease.client.marmot.cancelOnboarding(accountRef: model.accountID)
-            } catch MarmotKitError.OnboardingActionUnavailable {
-                // MDK #1741: retain uncertain publications, but end this host attempt.
-                let outcome = try await lease.client.signOut(accountRef: model.accountID)
-                guard outcome.localCleanup.completed else {
-                    throw MarmotKitError.OnboardingActionUnavailable
-                }
-            }
+            // Cancel in MDK before draining a host operation that may be awaiting publication.
+            try await lease.client.marmot.cancelOnboarding(accountRef: model.accountID)
+            await model.drain()
             productAnalytics.record(.onboarding(.complete, .import, .cancelled), ticket: productOnboardingTicket)
             productOnboardingTicket = nil
             productOnboardingPath = nil
@@ -430,7 +424,21 @@ final class AppState {
         }
     }
 
+    var groupRecoveryUpdate: GroupRecoveryUpdate?
+
+    struct GroupRecoveryUpdate: Equatable {
+        let accountID: String
+        let groupID: String
+        let id = UUID()
+    }
+
     func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
+        guard runtimeEventsGeneration == generation else { return }
+        if case .groupStateUpdated(let accountID, _, let groupID) = event,
+           activeAccount?.accountIdHex == accountID,
+           visibleChat?.groupIdHex == groupID {
+            groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
+        }
         guard runtimeEventsGeneration == generation,
               case .groupChangeSuperseded(let accountID, _, _, _, _, _, _) = event,
               accounts.contains(where: { $0.accountIdHex == accountID && !$0.signedOut }),
@@ -1064,6 +1072,7 @@ final class AppState {
             accountStore.accounts = []
             accountStore.resetSelection()
             accountSetupSnapshots = []
+            onboardingRecoveryAccounts = []
             pendingAccountSetup = nil
             isAccountSetupPresented = false
             pendingWipeReport = nil
@@ -1339,11 +1348,16 @@ final class AppState {
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
+        var recoveryAccounts: [AccountSummaryFfi] = []
         var currentSetupSnapshot: OnboardingSnapshotFfi?
         for account in localAccounts {
             try Task.checkCancellation()
             let snapshot: OnboardingSnapshotFfi?
             do {
+                if try await client.onboardingRecoveryRequired(accountRef: account.accountIdHex) {
+                    recoveryAccounts.append(account)
+                    continue
+                }
                 snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
             } catch is CancellationError {
                 throw CancellationError()
@@ -1368,6 +1382,7 @@ final class AppState {
             self.activeAccountRef = nil
         }
         accountSetupSnapshots = unfinished
+        onboardingRecoveryAccounts = recoveryAccounts
         if let current = pendingAccountSetup {
             if let currentSetupSnapshot {
                 current.apply(currentSetupSnapshot)

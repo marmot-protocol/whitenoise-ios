@@ -70,8 +70,10 @@ replace settings after an inconclusive lookup. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
 retain checkpoints as an internal readiness gate after launch, without reopening
 setup or offering a deferred-setup selector. A new explicit Sign In restarts
-unapproved checks. MDK #1741 tracks cancellation of approved unfinished
-publications; preserve those journals until the runtime can safely reconcile them.
+unapproved checks. With MDK 0.9.20, invalidate host callbacks, cancel the MDK
+attempt before draining in-flight host operations, and await cancellation before
+starting again. Approved and ready attempts can also be cancelled. Do not fall
+back to sign-out or reuse an old checkpoint after a failed cancellation.
 Persist only the host gate requiring an explicit Open Chats action, not UI progress.
 Never reset an interactive
 checkpoint through the legacy incomplete-setup recovery path.
@@ -87,7 +89,12 @@ Remove stale setup models when their checkpoints vanish.
 UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
 a close/cancellation API, observe onboarding with cancellable 250 ms polling of
 finite off-main snapshot reads; never drain an indefinite Rust subscription wait.
-Bind repair/device approvals to the displayed revision. Reject an entire relay
+Unreadable or exhausted checkpoints stay excluded from normal activation.
+Offer explicit `recoverOnboarding` only after `onboardingRecoveryRequired`; explain
+sign-out, latest-only evidence, and unchanged relay publications. Recovery never
+begins setup or approves publication. The user explicitly signs in again.
+Bind repair/device approvals to the displayed revision and recovery epoch; use
+the epoch-aware APIs whenever the same displayed snapshot has a recovery epoch. Reject an entire relay
 proposal if any address is unsafe; never hide an invalid entry and approve the rest.
 
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
@@ -104,7 +111,32 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.11
 ```
 
-For the analytics development PR, `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds and installs matching local artifacts with both exporters; keep the XCFramework ignored and replace the local pin with an immutable published snapshot before merge. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+The app now pins the formal MarmotKit 0.9.20 release. For local reproduction only,
+`scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
+matching artifacts with both exporters; restore the published pin before committing.
+Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
+adapter using the released UniFFI native future cancellation API; preserve it on
+binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+
+## Chat presentation and invitation recovery
+
+Render titles/avatars from MDK's presented chat-list snapshots; do not reselect
+from profiles or rosters. Take the attached snapshot once, then consume complete
+updates in generation/sequence order. Presentation revision alone cannot suppress
+unread/pin updates. Reopen when the account-store epoch changes. Cancel native
+`next` waits when replacing the handle. Keep pending-invite avatar egress suppressed.
+
+Read group recovery on conversation entry and raw `groupStateUpdated` events;
+the ordinary group-record subscription can deduplicate recovery-only updates.
+Recovery failure is advisory, never membership evidence or a composer gate.
+Show the authenticated inviter and require explicit rejoin confirmation using the
+exact displayed Welcome ID and local-state token. A failed/stale approval refreshes
+the offer and requires new consent. Decline only removes that offer.
+
+Host message-visible timings begin at Send or a new inbound projection and finish
+at the first visible layout callback. Never time SDK completion, history loading,
+SwiftUI body evaluation, or sender timestamps. Keep pending observations bounded
+and invalidate them with consent, runtime, account, and conversation changes.
 
 ## Notifications
 

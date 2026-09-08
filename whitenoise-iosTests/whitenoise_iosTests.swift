@@ -228,7 +228,7 @@ struct AppStateBootstrapTests {
 
         // Model the completed checklist for a real, ready local identity.
         let completed = OnboardingSnapshotFfi(
-            accountIdHex: healthy.accountIdHex, revision: 1, ready: true, steps: [],
+            accountIdHex: healthy.accountIdHex, recoveryEpoch: nil, revision: 1, ready: true, steps: [],
             proposal: nil, singleDeviceNotice: nil, cancellationPending: false
         )
         let model = AccountSetupModel(snapshot: completed)
