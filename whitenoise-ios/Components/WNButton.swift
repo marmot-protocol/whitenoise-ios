@@ -75,12 +75,16 @@ struct WNButton: View {
                         .transition(.opacity)
                 }
             }
-            .foregroundStyle(contentColor)
+            .wnButtonContentColor(
+                emphasis,
+                colorScheme: colorScheme,
+                isEnabled: isEnabled
+            )
             .animation(.default, value: isLoading)
             .wnButtonLabelSizing(size)
         }
         .wnButtonStyle(emphasis)
-        .wnButtonChrome()
+        .wnButtonChrome(emphasis: emphasis)
         .controlSize(Metrics.controlSize(for: size))
         .wnButtonSizing(size)
         .allowsHitTesting(!isLoading)
@@ -104,22 +108,61 @@ private struct WNButtonChrome: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     let borderShape: ButtonBorderShape
+    let emphasis: WNButton.Emphasis
 
     func body(content: Content) -> some View {
         content
             .buttonBorderShape(borderShape)
-            .tint(WNButton.Metrics.accent(for: colorScheme))
+            .wnButtonTint(emphasis, colorScheme: colorScheme)
     }
 }
 
 extension View {
-    func wnButtonChrome(_ borderShape: ButtonBorderShape = .capsule) -> some View {
-        modifier(WNButtonChrome(borderShape: borderShape))
+    func wnButtonChrome(
+        _ borderShape: ButtonBorderShape = .capsule,
+        emphasis: WNButton.Emphasis = .primary
+    ) -> some View {
+        modifier(WNButtonChrome(borderShape: borderShape, emphasis: emphasis))
     }
 
     func wnAvatarActionButtonStyle() -> some View {
         wnSecondaryButtonStyle()
-            .wnButtonChrome()
+            .wnButtonChrome(emphasis: .secondary)
+    }
+
+    /// iOS 26 glass supplies its own material and vibrant label. A monochrome
+    /// tint or an explicit foreground flattens it into a solid disc, so both are
+    /// left to the system there and kept only for the hand-painted fallback and
+    /// for the prominent fill, whose black/white is deliberate.
+    @ViewBuilder
+    func wnButtonTint(
+        _ emphasis: WNButton.Emphasis,
+        colorScheme: ColorScheme
+    ) -> some View {
+        if #available(iOS 26.0, *), emphasis == .secondary {
+            self
+        } else {
+            tint(WNButton.Metrics.accent(for: colorScheme))
+        }
+    }
+
+    @ViewBuilder
+    func wnButtonContentColor(
+        _ emphasis: WNButton.Emphasis,
+        colorScheme: ColorScheme,
+        isEnabled: Bool
+    ) -> some View {
+        if #available(iOS 26.0, *), emphasis == .secondary {
+            self
+        } else {
+            foregroundStyle(
+                WNButton.Metrics.contentColor(
+                    emphasis: emphasis,
+                    colorScheme: colorScheme,
+                    isEnabled: isEnabled
+                )
+            )
+        }
     }
 
     @ViewBuilder

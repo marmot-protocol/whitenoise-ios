@@ -79,6 +79,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
                 .disabled(appState.activeAccount == nil)
             } footer: {
                 Text("White Noise · \(appVersion)")
@@ -115,6 +116,7 @@ struct SettingsView: View {
         if let active = appState.activeAccount {
             NavigationLink {
                 ShareAndConnectView(accountIdHex: active.accountIdHex)
+                    .wnBackButton()
             } label: {
                 HStack(spacing: 12) {
                     AccountIdentitySummary(account: active, avatarSize: 56)
@@ -200,15 +202,15 @@ struct SettingsView: View {
     private func destinationView(_ destination: SettingsDestination) -> some View {
         switch destination {
         case .profile: ProfileEditView()
-        case .profileKeys: IdentityView()
-        case .notifications: NotificationSettingsView()
-        case .appearance: AppearanceSettingsView()
-        case .privacyAndSecurity: PrivacySecuritySettingsView()
-        case .dataUsage: DataAndStorageView()
-        case .relays: RelaysView()
-        case .support: SupportChatView()
-        case .donate: DonateView()
-        case .developerTools: DeveloperToolsSettingsView()
+        case .profileKeys: IdentityView().wnBackButton()
+        case .notifications: NotificationSettingsView().wnBackButton()
+        case .appearance: AppearanceSettingsView().wnBackButton()
+        case .privacyAndSecurity: PrivacySecuritySettingsView().wnBackButton()
+        case .dataUsage: DataAndStorageView().wnBackButton()
+        case .relays: RelaysView().wnBackButton()
+        case .support: SupportChatView().wnBackButton()
+        case .donate: DonateView().wnBackButton()
+        case .developerTools: DeveloperToolsSettingsView().wnBackButton()
         }
     }
 

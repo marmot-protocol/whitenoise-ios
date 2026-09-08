@@ -14,19 +14,28 @@ struct WNIconButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.iconOnly)
-                .foregroundStyle(
-                    WNButton.Metrics.contentColor(
-                        emphasis: emphasis,
+        // A toolbar already supplies liquid glass on iOS 26, so an explicit
+        // glass style draws a second disc inside it. Stay plain there and match
+        // the sibling toolbar buttons; the pre-26 fallback still needs chrome.
+        if #available(iOS 26.0, *), emphasis == .secondary {
+            Button(action: action) {
+                Label(title, systemImage: systemImage)
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+            }
+        } else {
+            Button(action: action) {
+                Label(title, systemImage: systemImage)
+                    .labelStyle(.iconOnly)
+                    .wnButtonContentColor(
+                        emphasis,
                         colorScheme: colorScheme,
                         isEnabled: isEnabled
                     )
-                )
+            }
+            .wnIconButtonStyle(emphasis)
+            .wnButtonChrome(.circle, emphasis: emphasis)
         }
-        .wnIconButtonStyle(emphasis)
-        .wnButtonChrome(.circle)
     }
 }
 

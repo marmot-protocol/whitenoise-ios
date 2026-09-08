@@ -229,11 +229,7 @@ struct ChatsListView: View {
                 NavigationStack {
                     SettingsView()
                         .onAppear { secondarySheetVisible = true }
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("Done") { showSettings = false }
-                            }
-                        }
+                        .wnBackButton()
                 }
                 .appAppearance()
             }

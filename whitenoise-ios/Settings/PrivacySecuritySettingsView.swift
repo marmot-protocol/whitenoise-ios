@@ -46,6 +46,7 @@ struct PrivacySecuritySettingsView: View {
             Section {
                 NavigationLink {
                     DiagnosticsAndImprovementsView()
+                        .wnBackButton()
                 } label: {
                     LabeledContent("Diagnostics & Improvements", value: diagnostics.diagnosticsSummary)
                 }

@@ -14,6 +14,7 @@ struct DataAndStorageView: View {
                 ForEach(MediaAutoDownloadType.allCases, id: \.self) { type in
                     NavigationLink {
                         AutoDownloadLevelView(type: type, title: typeTitle(type), store: store)
+                            .wnBackButton()
                     } label: {
                         HStack {
                             Text(typeTitle(type))
@@ -52,6 +53,7 @@ struct DataAndStorageView: View {
             Section {
                 NavigationLink {
                     SentMediaQualityView(quality: $quality)
+                        .wnBackButton()
                 } label: {
                     LabeledContent("Sent Media Quality", value: qualityTitle(quality))
                 }
