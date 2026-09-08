@@ -34,7 +34,6 @@ struct ChatsListView: View {
     @State private var isUpdatingPinnedOrder = false
     @State private var isPinMutationInProgress = false
     @State private var isMarkingAllRead = false
-    @FocusState private var searchFocused: Bool
 
     private struct LocalDeleteTarget: Equatable {
         let id: String
@@ -108,9 +107,16 @@ struct ChatsListView: View {
             }
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
+            .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 if selectionMode, viewModel != nil {
                     chatSelectionBar(visibleRows: visibleRows)
+                } else if search.isActive {
+                    WNSearchBar(
+                        query: $search.query,
+                        prompt: "Search Chats",
+                        onClose: exitSearch
+                    )
                 }
             }
             .modifier(
@@ -128,12 +134,6 @@ struct ChatsListView: View {
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
-            .modifier(
-                OnDemandChatSearch(
-                    search: search,
-                    isFocused: $searchFocused
-                )
-            )
             .toolbar {
                 if #available(iOS 26.0, *) {
                     ToolbarItem(placement: .topBarLeading) {
@@ -145,28 +145,15 @@ struct ChatsListView: View {
                         settingsButton
                     }
                 }
-                if search.isActive {
-                    // Its own item, not a member of the shared group, so the
-                    // widget's chrome is the only one drawn around the glyph.
-                    if #available(iOS 26.0, *) {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            closeSearchButton
-                        }
-                        .sharedBackgroundVisibility(.hidden)
-                    } else {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            closeSearchButton
-                        }
-                    }
-                } else {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        filterMenu
-                            .tint(.primary)
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    filterMenu
+                        .tint(.primary)
+                    if !search.isActive {
                         searchButton
                             .tint(.primary)
-                        newChatButton
-                            .tint(.primary)
                     }
+                    newChatButton
+                        .tint(.primary)
                 }
             }
             .compatibleTopSafeAreaBar(spacing: 0) {
@@ -361,15 +348,9 @@ struct ChatsListView: View {
         }
     }
 
-    /// Every exit funnels here so focus, the keyboard, the query and the
-    /// on-demand mount can never disagree.
+    /// Every exit funnels here; removing the bar takes the keyboard with it.
     private func exitSearch() {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            searchFocused = false
-            search.exit()
-        }
+        search.exit()
     }
 
     private var subscriptionScope: SubscriptionScope {
@@ -396,12 +377,6 @@ struct ChatsListView: View {
                 .labelStyle(.iconOnly)
                 .foregroundStyle(.primary)
         }
-    }
-
-    /// Takes the search button's slot while searching, so the toolbar always
-    /// offers exactly one search affordance and it is never the dead end.
-    private var closeSearchButton: some View {
-        WNIconButton(title: "Close search", systemImage: "xmark", action: exitSearch)
     }
 
     private var newChatButton: some View {
@@ -1418,55 +1393,6 @@ private struct ChatListReadAllBottomBar: ViewModifier {
             }
         }
         .disabled(isLoading)
-    }
-}
-
-/// Installs the system search field only while search is active, keeping the
-/// surrounding bars — and with them the system's Cancel button — visible the
-/// whole time. Chats has no route to pop, so a hidden bar means no way out.
-private struct OnDemandChatSearch: ViewModifier {
-    @Bindable var search: ChatListSearchPresentation
-    let isFocused: FocusState<Bool>.Binding
-
-    /// iOS 26 integrates the field into the bottom toolbar on iPhone, within
-    /// thumb reach. Before 26 the only pinned option is the navigation-bar
-    /// drawer; `.automatic` there hides the field on scroll, which an
-    /// on-demand mount cannot afford.
-    private var placement: SearchFieldPlacement {
-        if #available(iOS 26.0, *) {
-            .automatic
-        } else {
-            .navigationBarDrawer(displayMode: .always)
-        }
-    }
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if search.isMounted {
-            content
-                .searchable(
-                    text: $search.query,
-                    isPresented: $search.isPresented,
-                    placement: placement,
-                    prompt: Text("Search Chats")
-                )
-                .searchFocused(isFocused)
-                .task {
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
-                    search.present()
-                    await Task.yield()
-                    guard !Task.isCancelled, search.isPresented else { return }
-                    isFocused.wrappedValue = true
-                }
-                .onChange(of: search.isPresented) { _, presented in
-                    guard !presented else { return }
-                    isFocused.wrappedValue = false
-                    search.reconcileNativePresentation()
-                }
-        } else {
-            content
-        }
     }
 }
 
