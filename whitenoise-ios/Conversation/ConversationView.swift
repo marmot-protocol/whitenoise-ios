@@ -2534,10 +2534,14 @@ struct ConversationView: View {
     }
 
     private func addCameraImage(_ image: UIImage) {
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.failure
+            defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment = try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)
                 try appendMediaDraft(attachment)
+                outcome = .success
             } catch is CancellationError {
                 return
             } catch {
@@ -2547,7 +2551,10 @@ struct ConversationView: View {
     }
 
     private func addCameraCapture(_ capture: CameraCapture) {
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.failure
+            defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment: MediaDraftAttachment
                 switch capture.content {
@@ -2562,6 +2569,7 @@ struct ConversationView: View {
                     attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                 }
                 try appendMediaDraft(attachment)
+                outcome = .success
             } catch is CancellationError {
                 return
             } catch {
@@ -2585,7 +2593,10 @@ struct ConversationView: View {
             presentMaxAttachmentWarning()
         }
 
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.success
+            defer { appState.productAnalytics.recordTiming(.libraryPrepare, since: timing, outcome: outcome) }
             var prepared: [MediaDraftAttachment] = []
             for selection in selected {
                 do {
@@ -2596,8 +2607,10 @@ struct ConversationView: View {
                     )
                     prepared.append(attachment)
                 } catch is CancellationError {
+                    outcome = .failure
                     return
                 } catch {
+                    outcome = .failure
                     appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
                 }
             }

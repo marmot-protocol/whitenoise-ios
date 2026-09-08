@@ -55,7 +55,14 @@ extension AppState: DeviceDiagnosticsDataSource {
         guard productContextRevision == revision, client === activeClient, canUseRuntimeForLocalForegroundWork else { return }
         if snapshot.settings.decision == .granted {
             productAnalytics.activateSink { [activeClient] event in
-                _ = try? activeClient.marmot.recordProductEvent(event: event.ffi)
+                switch event {
+                case .timing(let stage, let milliseconds, let outcome):
+                    _ = try activeClient.marmot.recordHostTiming(
+                        name: stage.rawValue, durationMs: milliseconds, outcome: outcome
+                    )
+                default:
+                    _ = try activeClient.marmot.recordProductEvent(event: event.ffi)
+                }
             }
         } else {
             productAnalytics.replaceSink(nil)

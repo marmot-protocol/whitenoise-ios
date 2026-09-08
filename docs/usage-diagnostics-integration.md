@@ -32,8 +32,9 @@ New-user onboarding measurements describe opted-in users, never all installation
 
 Typed observations cover screen visits, create/import steps, foreground readiness,
 new-chat compose open/cancel, message search, attachments, settings, and system
-notification permission results. MDK already registers their schemas; the host's
-additional registry stays empty. Swift tickets prevent work begun before consent,
+notification permission results. MDK registers those schemas; the host also
+registers the aggregate stages in [host timings](host-timings.md).
+Swift tickets prevent work begun before consent,
 revocation, account changes, or runtime replacement from being attributed later.
 
 Search reports one activation-to-dismissal interaction (success if the user saw a

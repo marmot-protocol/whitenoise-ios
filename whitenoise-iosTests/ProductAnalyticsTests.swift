@@ -166,7 +166,7 @@ struct ProductAnalyticsTests {
         #expect(staging.appKey == nil)
         #expect(staging.endpoint == nil)
         #expect(staging.environment == "staging")
-        #expect(production.runtimeConfig.registry.isEmpty)
+        #expect(production.runtimeConfig.registry.map(\.name) == ProductTimingStage.allCases.map(\.rawValue))
         #expect(!production.runtimeConfig.allowLoopback)
     }
 
@@ -206,6 +206,68 @@ struct ProductAnalyticsTests {
         #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
         #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func timingConsentAndDuration() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let events = Mutex<[ProductEventFfi]>([])
+        let start = ContinuousClock.now
+        let beforeConsent = recorder.beginTiming(at: start)
+        recorder.activateSink { event in events.withLock { $0.append(event.ffi) } }
+        #expect(recorder.recordTiming(.inboxBatch, since: beforeConsent) == nil)
+        let timing = try #require(recorder.beginTiming(at: start))
+        await recorder.recordTiming(.inboxBatch, since: timing, at: start.advanced(by: .milliseconds(250)))?.value
+        await recorder.recordTiming(
+            .libraryPrepare, since: timing, outcome: .failure, at: start.advanced(by: .milliseconds(251))
+        )?.value
+        let recorded = events.withLock { $0 }
+        #expect(recorded.map(\.name) == ["app_inbox_batch", "app_library_prepare"])
+        #expect(recorded[0].properties == [
+            .init(name: "elapsed", value: "le_250ms"), .init(name: "outcome", value: "success")
+        ])
+        #expect(recorded[1].properties == [
+            .init(name: "elapsed", value: "le_500ms"), .init(name: "outcome", value: "failure")
+        ])
+        recorder.replaceSink(nil)
+        recorder.activateSink { event in events.withLock { $0.append(event.ffi) } }
+        #expect(recorder.recordTiming(.inboxBatch, since: timing) == nil)
+        #expect(events.withLock { $0.count } == 2)
+    }
+
+    @Test func rejectedSinkStopsRecording() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        recorder.activateSink { _ in throw CancellationError() }
+        let timing = try #require(recorder.beginTiming())
+        await recorder.recordTiming(.timelineWindow, since: timing)?.value
+        #expect(recorder.ticket() == nil)
+        recorder.activateSink { _ in }
+        #expect(recorder.recordTiming(.timelineWindow, since: timing) == nil)
+    }
+
+    @Test @MainActor func hostTimingRegistryAccepted() async throws {
+        let client = try MarmotClient.testClient()
+        let config = ProductAnalyticsBuildConfig(
+            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
+            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
+            deviceClass: "phone", environment: "staging", isDebug: true
+        )
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config.runtimeConfig)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
+        try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
+        for stage in ProductTimingStage.allCases {
+            for outcome in [HostPerformanceOutcomeFfi.success, .failure] {
+                #expect(try client.marmot.recordHostTiming(name: stage.rawValue, durationMs: 251, outcome: outcome) == .recorded)
+            }
+        }
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
+        #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
         try await client.marmot.shutdownAndClose()
     }
 

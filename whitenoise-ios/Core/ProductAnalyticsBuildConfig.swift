@@ -46,7 +46,7 @@ nonisolated struct ProductAnalyticsBuildConfig: Equatable, Sendable {
             metadata: ProductAnalyticsMetadataFfi(
                 appVersion: appVersion, osFamily: "ios", osMajorVersion: osMajorVersion,
                 deviceClass: deviceClass, hostSurface: "native", environment: environment, isDebug: isDebug
-            ), registry: [], allowLoopback: false, operator: operatorLabel
+            ), registry: ProductTimingStage.registry, allowLoopback: false, operator: operatorLabel
         )
     }
 }

@@ -15,8 +15,37 @@ nonisolated enum ProductAttachmentAction: String, CaseIterable, Sendable { case 
 nonisolated enum ProductSearchOutcome: String, CaseIterable, Sendable { case success, empty, failure, cancelled }
 nonisolated enum ProductSettingsSection: String, CaseIterable, Sendable { case appearance, notifications, privacy, account, storage, diagnostics }
 nonisolated enum ProductPermissionOutcome: String, CaseIterable, Sendable { case granted, denied, restricted, provisional }
+nonisolated enum ProductTimingStage: String, CaseIterable, Sendable {
+    case timelineWindow = "app_timeline_window"
+    case timelineTail = "app_timeline_tail"
+    case timelineDelta = "app_timeline_delta"
+    case timelineRebuild = "app_timeline_rebuild"
+    case timelineProfiles = "app_timeline_profiles"
+    case outgoingProjection = "app_outgoing_projection"
+    case outgoingConfirmation = "app_outgoing_confirmation"
+    case markdownRebuild = "app_markdown_rebuild"
+    case mediaRebuild = "app_media_rebuild"
+    case inboxSnapshot = "app_inbox_snapshot"
+    case inboxBatch = "app_inbox_batch"
+    case inboxRefresh = "app_inbox_refresh"
+    case inboxPublish = "app_inbox_publish"
+    case composerMarkdown = "app_composer_markdown"
+    case cameraPrepare = "app_camera_prepare"
+    case libraryPrepare = "app_library_prepare"
+
+    static var registry: [ProductEventSchemaFfi] {
+        allCases.map { stage in
+            ProductEventSchemaFfi(name: stage.rawValue, mode: .aggregate, properties: [
+                ProductPropertySchemaFfi(name: "elapsed", kind: .durationBucket, choices: []),
+                ProductPropertySchemaFfi(name: "outcome", kind: .enum, choices: ["success", "failure"])
+            ])
+        }
+    }
+}
+
 nonisolated enum ProductEvent: Sendable {
     case screen(ProductScreen)
+    case timing(ProductTimingStage, milliseconds: UInt64, outcome: HostPerformanceOutcomeFfi)
     case onboarding(ProductOnboardingStep, ProductOnboardingPath, ProductOutcome)
     case ready(success: Bool, milliseconds: UInt64)
     case compose(cancelled: Bool)
@@ -29,6 +58,9 @@ nonisolated enum ProductEvent: Sendable {
         let name: String
         let properties: [String: String]
         switch self {
+        case .timing(let stage, let milliseconds, let outcome):
+            name = stage.rawValue
+            properties = ["elapsed": Self.durationBucket(milliseconds), "outcome": outcome == .success ? "success" : "failure"]
         case .screen(let screen):
             name = "app_screen_viewed"; properties = ["screen": screen.rawValue]
         case .onboarding(let step, let path, let outcome):
@@ -63,18 +95,22 @@ nonisolated enum ProductEvent: Sendable {
 /// Tickets admit only work begun under this runtime/context's existing consent.
 nonisolated final class ProductAnalyticsRecorder: Sendable {
     struct Ticket: Equatable, Sendable { fileprivate let generation: UUID }
+    struct Timing: Sendable {
+        fileprivate let ticket: Ticket
+        fileprivate let startedAt: ContinuousClock.Instant
+    }
     private struct State: Sendable {
         var generation = UUID()
-        var sink: (@Sendable (ProductEvent) -> Void)?
+        var sink: (@Sendable (ProductEvent) throws -> Void)?
         var pending = 0
     }
     private let state = Mutex(State())
 
-    func replaceSink(_ sink: (@Sendable (ProductEvent) -> Void)?) {
+    func replaceSink(_ sink: (@Sendable (ProductEvent) throws -> Void)?) {
         state.withLock { $0.generation = UUID(); $0.sink = sink }
     }
 
-    func activateSink(_ sink: @escaping @Sendable (ProductEvent) -> Void) {
+    func activateSink(_ sink: @escaping @Sendable (ProductEvent) throws -> Void) {
         state.withLock { $0.sink = sink }
     }
 
@@ -97,9 +133,34 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 guard state.generation == ticket.generation else { return }
                 // The Rust recorder is memory-only. Hold the gate through this
                 // call so revocation cannot overtake an admitted observation.
-                state.sink?(event)
+                do {
+                    try state.sink?(event)
+                } catch {
+                    // Stop a rejected sink and invalidate queued observations.
+                    state.sink = nil
+                    state.generation = UUID()
+                }
             }
         }
+    }
+
+    func beginTiming(at now: ContinuousClock.Instant = .now) -> Timing? {
+        guard let ticket = ticket() else { return nil }
+        return Timing(ticket: ticket, startedAt: now)
+    }
+
+    @discardableResult
+    func recordTiming(
+        _ stage: ProductTimingStage,
+        since timing: Timing?,
+        outcome: HostPerformanceOutcomeFfi = .success,
+        at now: ContinuousClock.Instant = .now
+    ) -> Task<Void, Never>? {
+        guard let timing else { return nil }
+        let elapsed = timing.startedAt.duration(to: max(timing.startedAt, now)).components
+        let milliseconds = UInt64(elapsed.seconds) * 1_000
+            + UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
+        return record(.timing(stage, milliseconds: milliseconds, outcome: outcome), ticket: timing.ticket)
     }
 
     func record(_ event: ProductEvent) {
