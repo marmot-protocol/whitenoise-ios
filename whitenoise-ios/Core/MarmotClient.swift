@@ -28,6 +28,7 @@ nonisolated final class MarmotClient: Sendable {
     let relayUrls: [String]
     /// Durable transport-cursor policy this runtime was constructed with.
     let cursorPersistence: CursorPersistenceFfi
+    let productConfig: ProductAnalyticsBuildConfig
     let telemetryConfig: TelemetryBuildConfig
 
     convenience init() throws {
@@ -64,6 +65,7 @@ nonisolated final class MarmotClient: Sendable {
         self.relayUrls = relayUrls
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
+        self.productConfig = .current()
         self.marmot = try Marmot.newWithCursorPersistence(
             rootPath: rootPath,
             relayUrls: relayUrls,
@@ -376,9 +378,9 @@ nonisolated final class MarmotClient: Sendable {
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
         try await Task.detached(priority: .utility) { [marmot] in
             try PrivacySecuritySettingsProjection(
-                telemetrySettings: marmot.relayTelemetrySettings(),
-                auditSettings: marmot.auditLogSettings(),
-                auditFiles: marmot.auditLogFiles()
+                telemetrySettings: PrivacyTelemetrySettingsProjection(settings: marmot.usageDiagnosticsSettings()),
+                auditSettings: PrivacyAuditSettingsProjection(settings: marmot.auditLogSettings()),
+                auditFileRows: AuditFileRowProjection.rows(from: marmot.auditLogFiles())
             )
         }.value
     }
@@ -995,7 +997,9 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func startRuntime() async throws {
-        try await configureTelemetryRuntime()
+        // Optional exporters cannot turn missing consent/configuration into a startup failure.
+        try? await configureTelemetryRuntime()
+        try? await configureProductAnalytics()
         try await marmot.start()
     }
 
@@ -1020,10 +1024,31 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func configureTelemetryRuntime() async throws {
-        let installId = try await telemetryInstallId()
         try await marmot.setRelayTelemetryRuntimeConfig(
-            config: telemetryConfig.runtimeConfig(installId: installId)
+            config: telemetryConfig.runtimeConfig(installId: "")
         )
+    }
+
+    func configureProductAnalytics() async throws {
+        try await Task.detached(priority: .utility) { [marmot, productConfig] in
+            try marmot.setProductAnalyticsRuntimeConfig(config: productConfig.runtimeConfig)
+        }.value
+    }
+
+    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try DeviceDiagnosticsSnapshot(
+                settings: marmot.usageDiagnosticsSettings(),
+                status: marmot.usageDiagnosticsStatus(),
+                auditEnabled: marmot.auditLogSettings().enabled
+            )
+        }.value
+    }
+
+    func setUsageDiagnosticsConsent(_ enabled: Bool) async throws -> UsageDiagnosticsSettingsFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.setUsageDiagnosticsConsent(enabled: enabled)
+        }.value
     }
 
     private static func elapsedMilliseconds(since start: ContinuousClock.Instant) -> Double {

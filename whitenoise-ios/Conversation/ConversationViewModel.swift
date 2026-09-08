@@ -742,6 +742,7 @@ final class ConversationViewModel {
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore)
         self.search = ConversationSearchModel()
+        self.search.analytics = appState.productAnalytics
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }
         search.hasMoreBefore = { [weak self] in self?.hasMoreBefore ?? false }
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
@@ -1483,6 +1484,7 @@ final class ConversationViewModel {
                 timelineStore.setHasMoreBefore(false)
             }
         } catch {
+            search.notePagingFailure()
             self.error = error.localizedDescription
         }
     }

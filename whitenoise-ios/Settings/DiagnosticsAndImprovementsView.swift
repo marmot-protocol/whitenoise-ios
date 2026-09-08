@@ -8,25 +8,26 @@ struct DiagnosticsAndImprovementsView: View {
 
     var body: some View {
         Form {
-            if isPrompt {
-                Section {
-                    preferences
-                } header: {
-                    Text("Help us make messaging without a central point of control more reliable. Analytics and diagnostic logs are optional and can be changed in Settings.")
-                        .font(.body).foregroundStyle(Color.primary).textCase(nil).padding(.bottom)
-                } footer: {
-                    Text("These choices apply to all profiles on this device. Analytics exclude messages, media, contacts, profile details, and keys. Diagnostic logs obscure identifiers and are sent to White Noise for troubleshooting.")
+            Section {
+                analyticsToggle
+                loggingToggle
+            } header: {
+                if isPrompt {
+                    Text("Help us understand how White Noise is used and make messaging more reliable. Sharing is optional.")
+                        .font(.body).foregroundStyle(Color.primary).textCase(nil)
                 }
-            } else {
-                Section {
-                    analyticsToggle
-                } footer: {
-                    Text("Shares anonymous reliability and performance data from this device. Messages, media, contacts, profile details, and keys are excluded. Turning this off stops sharing analytics.")
-                }
-                Section {
-                    loggingToggle
-                } footer: {
+            } footer: {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let explanation = appState.diagnosticsConsent.explanation { Text(explanation) }
+                    Text("Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. The Aptabase server receives your IP address, uses IP and user-agent information for daily activity grouping, and adds approximate country and region. Diagnostics includes a random installation identifier that changes after you turn sharing off. Turning this off stops both pipelines; already transmitted data cannot be recalled. Diagnostic logging is separate.")
                     Text("Shares sanitized technical activity from all profiles on this device with White Noise. Message content is excluded and identifiers are obscured. Turning this off stops new logging and automatic sharing, and keeps existing local logs.")
+                    Text(L10n.formatted("Operator: %@", appState.client?.productConfig.operatorDisplayName ?? "White Noise"))
+                    Text(appState.client?.productConfig.retentionDisclosure ?? L10n.string("Retention policy has not yet been verified for this development build."))
+                }
+            }
+            if !isPrompt {
+                if let snapshot = appState.diagnosticsConsent.snapshot {
+                    Section { Text(snapshot.exporterSummary).foregroundStyle(.secondary) }
                 }
                 Section {
                     LabeledContent("On This iPhone", value: model.storedLogSize)
@@ -36,10 +37,10 @@ struct DiagnosticsAndImprovementsView: View {
                     .disabled(model.auditDeleteDisabled || model.auditFileRows.isEmpty)
                 } header: { Text("Stored Diagnostic Logs") }
             }
-            if let error = model.errorMessage ?? model.auditErrorMessage ?? model.telemetryErrorMessage {
+            if let error = appState.diagnosticsConsent.errorMessage ?? model.errorMessage ?? model.auditErrorMessage {
                 Section {
                     Text(error).foregroundStyle(.orange)
-                    Button("Retry") { Task { await model.reload(using: appState) } }
+                    Button("Retry") { Task { await reload() } }
                 }
             }
         }
@@ -48,11 +49,18 @@ struct DiagnosticsAndImprovementsView: View {
         .toolbar {
             if isPrompt {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
+                    Button("Continue") {
+                        Task {
+                            if await appState.diagnosticsConsent.finishPrompt(using: appState) { dismiss() }
+                        }
+                    }
+                    .disabled(!appState.diagnosticsConsent.available || appState.diagnosticsConsent.errorMessage != nil)
                 }
             }
         }
-        .task(id: appState.runtimeGeneration) { await model.reload(using: appState) }
+        .interactiveDismissDisabled(isPrompt)
+        .task(id: appState.runtimeGeneration) { await reload() }
+        .productScreen(.diagnostics, section: .diagnostics)
         .alert("Clear diagnostic logs?", isPresented: $model.showDeleteAuditLogsConfirmation) {
             Button("Clear Logs", role: .destructive) { Task { await model.deleteAllAuditLogs(using: appState) } }
             Button("Cancel", role: .cancel) {}
@@ -61,23 +69,36 @@ struct DiagnosticsAndImprovementsView: View {
         }
     }
 
-    private var preferences: some View {
-        Group { analyticsToggle; loggingToggle }
+    private func reload() async {
+        await appState.diagnosticsConsent.reload(using: appState)
+        if !isPrompt { await model.reload(using: appState) }
     }
 
     private var analyticsToggle: some View {
-        Toggle("Share Anonymous Analytics", isOn: Binding(
-            get: { model.telemetrySettings?.exportEnabled ?? false },
-            set: { enabled in Task { await model.setTelemetryEnabled(enabled, using: appState) } }
-        ))
-        .disabled(model.telemetryToggleDisabled)
+        Toggle(isOn: Binding(
+            get: { appState.diagnosticsConsent.usageEnabled },
+            set: { enabled in Task { await appState.diagnosticsConsent.setUsage(enabled, using: appState) } }
+        )) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Share usage and diagnostics")
+                Text("Feature activity and reliability metrics, with temporary sessions and a resettable diagnostic identifier.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .disabled(!appState.diagnosticsConsent.available)
     }
 
     private var loggingToggle: some View {
-        Toggle("Share Diagnostic Logs", isOn: Binding(
-            get: { model.auditSettings?.enabled ?? false },
-            set: { enabled in Task { await model.setAuditEnabled(enabled, using: appState) } }
-        ))
-        .disabled(model.auditToggleDisabled)
+        Toggle(isOn: Binding(
+            get: { appState.diagnosticsConsent.auditEnabled },
+            set: { enabled in Task { await appState.diagnosticsConsent.setAudit(enabled, using: appState) } }
+        )) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Share Diagnostic Logs")
+                Text("Technical logs from every profile on this device, shared separately.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .disabled(!appState.diagnosticsConsent.available)
     }
 }

@@ -104,7 +104,7 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.11
 ```
 
-Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+For the analytics development PR, `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds and installs matching local artifacts with both exporters; keep the XCFramework ignored and replace the local pin with an immutable published snapshot before merge. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
 
 ## Notifications
 
@@ -173,7 +173,7 @@ Do not add a second storage path for data Marmot already owns.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
-- Analytics export and diagnostic logging are device-wide runtime choices. The one-time prompt appears after successful Sign In/Sign Up/Add Profile, once Chats is visible and account-entry sheets have dismissed. Preserve existing choices; closing with both off is valid. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
+- Analytics export and diagnostic logging are device-wide runtime choices. The initial consent sheet appears over Welcome after runtime bootstrap, before Sign In or Sign Up. MDK owns the sole consent receipt; never use the legacy prompt-seen flag to suppress acceptance. Existing installations needing expanded consent are prompted once Chats is visible and other sheets have dismissed. Preserve existing choices; closing without a usage grant durably declines combined usage/diagnostics consent. Diagnostic-log consent stays independent. Never dismiss a failed save as confirmed. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.
 - Sign Out confirms a wipe by matching the displayed profile name exactly in the same sheet. Remaining signed-in profiles go to the profile chooser; with none remaining, return to Welcome.

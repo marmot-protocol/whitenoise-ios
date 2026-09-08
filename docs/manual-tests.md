@@ -77,12 +77,18 @@ before every release tag.
 
 ## Device diagnostics and data removal
 
-- [ ] Complete Sign Up, Sign In and Add Profile: Chats is visible before the
-      Help Improve White Noise sheet. Both controls are directly available.
-      A pending notification/deep-link chat must open before the prompt is eligible.
-- [ ] Fresh runtime choices start off. Existing device-wide choices are preserved.
-      Changes apply immediately; Close/swipe-down records the prompt as seen.
-      Relaunch or sign in to another profile: the prompt does not repeat.
+- [ ] Fresh app root: Welcome presents Help Improve White Noise before Sign In
+      or Sign Up. Both sharing choices start off, work without a profile, and
+      remain independent. The consent and account-entry sheets never overlap.
+- [ ] Continue without a usage grant saves a decline. A successful grant survives
+      Continue. Failed saves remain visibly unsaved with Retry; swipe dismissal
+      cannot bypass persistence. Relaunch before signing in and verify no repeat
+      after a saved decision. Add Profile preserves it.
+- [ ] Upgrade an old analytics opt-in: sharing stays off until expanded consent
+      is accepted after Chats/navigation are visible. Verify the explanation.
+- [ ] Opt in before Sign Up/Sign In and inspect onboarding observations. Decline
+      and verify no collection or later replay. Suspend while the sheet is open,
+      resume, and verify it remains actionable without losing the saved choice.
 - [ ] Privacy & Security → Diagnostics & Improvements controls the same runtime
       settings for every profile. Developer Tools never owns/gates either choice.
 - [ ] Logging off retains local logs; Clear Diagnostic Logs clears every profile's
@@ -276,11 +282,11 @@ visible exit cannot be escaped except by force-quitting.
 
 ## Privacy, audit, and telemetry
 
-- [ ] After Sign In, Sign Up, or Add Profile, the diagnostics prompt appears
-      only once Chats is visible and account-entry sheets have closed. Closing
-      it with both choices off is valid; later sign-ins preserve the choices.
-- [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share Anonymous
-      Analytics** persists without restarting or stranding the running app.
+- [ ] First-launch consent follows the checks above. Existing saved choices
+      survive profile switches; scope changes require fresh explicit acceptance.
+- [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share usage
+      and diagnostics** persists without restarting the runtime. Saved consent
+      is separate from each exporter's current readiness.
 - [ ] **Share Diagnostic Logs** creates local files after activity. Turning it off
       retains files; **Clear Diagnostic Logs** clears them independently.
 - [ ] Switch profiles and background/relaunch: both diagnostics choices remain
@@ -288,9 +294,16 @@ visible exit cannot be escaped except by force-quitting.
 - [ ] With configured credentials and logging enabled, verify sealed log segments
       reach Goggles after MDK's batching window. Toggle off and verify subsequent
       automatic upload passes stop; local preference tests do not prove ingestion.
-- [ ] Verify production and staging analytics reach their intended tenants at the
-      shared collector using flavor tokens, while audit uploads use the shared audit
-      token. Do not display or copy token values into test reports.
+- [ ] Verify production/staging OTLP tenant routing and separate Aptabase
+      applications. Audit uploads retain their separate shared token. Inspect
+      persisted synthetic staging events, not just HTTP success; never copy keys.
+- [ ] Verify operator/retention disclosure against the deployment and run
+      `scripts/check-analytics-release-config.py <built-app/Info.plist>` for each
+      flavor. The development fallback text is not a distribution-ready policy.
+- [ ] Rapid background/foreground with a stalled collector still releases storage.
+      Frozen notification runtimes emit no analytics. Revocation clears queued
+      observations; re-enabling rotates diagnostic identity. See
+      `docs/usage-diagnostics-integration.md` for rollout gates.
 - [ ] Settings → Developer Tools: Developer mode reveals Streaming debug and
       **Open Diagnostics**. Disabling it leaves both diagnostics preferences intact.
 - [ ] With Developer mode on, Group Details → Export Conversation

@@ -8,3 +8,6 @@ Config/TelemetrySecrets.xcconfig
 trees/
 
 experiments/
+
+# Reproducible local MarmotKit build output
+Packages/MarmotKit/Artifacts/

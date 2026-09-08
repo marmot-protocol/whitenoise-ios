@@ -43,6 +43,7 @@ struct AccountsView: View {
             .padding()
             .background(.bar)
         }
+        .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Switch Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -38,6 +38,16 @@ struct DeveloperToolsSettingsView: View {
             }
 
             if appState.developerMode {
+                if let snapshot = appState.diagnosticsConsent.snapshot {
+                    Section("Usage and diagnostics") {
+                        Text(snapshot.exporterSummary)
+                        LabeledContent("Queued events", value: snapshot.status.queuedEvents, format: .number)
+                        LabeledContent("Dropped events", value: snapshot.status.droppedEvents, format: .number)
+                        LabeledContent("Accepted batches", value: snapshot.status.acceptedBatches, format: .number)
+                        LabeledContent("Failed batches", value: snapshot.status.failedBatches, format: .number)
+                        Button("Refresh") { Task { await appState.diagnosticsConsent.reload(using: appState) } }
+                    }
+                }
                 Section {
                     Toggle("Debug Mode", isOn: Binding(
                         get: { appState.streamingDebugMode },
@@ -123,7 +133,10 @@ struct DeveloperToolsSettingsView: View {
         }
         .localizedNavigationTitle("Developer Tools")
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
+        .task(id: appState.activeAccountRef) {
+            await model.reload(using: appState)
+            await appState.diagnosticsConsent.reload(using: appState)
+        }
         .task(id: appState.developerMode ? appState.activeAccountRef : nil) {
             if appState.developerMode {
                 await quarantinedGroupsModel.reload(using: appState)

@@ -8,6 +8,11 @@ let marmotKitReleaseID = "0.9.19"
 let marmotKitReleaseTag = "marmotkit-v0.9.19"
 let marmotKitChecksum = "ad856e793aac88e9a0a1f3d04bb1aaf9af6a19d84c2183e89044204df5056bf4"
 let marmotKitBinaryURL = "https://github.com/marmot-protocol/mdk/releases/download/\(marmotKitReleaseTag)/MarmotKitFFI-\(marmotKitReleaseID).xcframework.zip"
+// Explicit local pin: never silently link an older remote binary to new Swift.
+let marmotKitLocalPath: String? = "Artifacts/MarmotKit.xcframework"
+let marmotKitBinaryTarget: Target = marmotKitLocalPath.map {
+    .binaryTarget(name: "MarmotKitFFI", path: $0)
+} ?? .binaryTarget(name: "MarmotKitFFI", url: marmotKitBinaryURL, checksum: marmotKitChecksum)
 let package = Package(
     name: "MarmotKit",
     platforms: [
@@ -17,11 +22,7 @@ let package = Package(
         .library(name: "MarmotKit", targets: ["MarmotKit"])
     ],
     targets: [
-        .binaryTarget(
-            name: "MarmotKitFFI",
-            url: marmotKitBinaryURL,
-            checksum: marmotKitChecksum
-        ),
+        marmotKitBinaryTarget,
         .target(
             name: "MarmotKit",
             dependencies: ["MarmotKitFFI"],

@@ -61,6 +61,7 @@ struct DataAndStorageView: View {
                 Text("Choose the quality for photos and videos you send.")
             }
         }
+        .productScreen(.settings, section: .storage)
         .localizedNavigationTitle("Data Usage")
         .navigationBarTitleDisplayMode(.inline)
     }

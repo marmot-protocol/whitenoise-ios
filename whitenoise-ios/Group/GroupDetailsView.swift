@@ -109,6 +109,7 @@ struct GroupDetailsView: View {
                 }
             }
         }
+        .productScreen(.groupDetails)
         .navigationTitle(isDirectMessage ? Text("Chat Info") : Text("Group Info"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)

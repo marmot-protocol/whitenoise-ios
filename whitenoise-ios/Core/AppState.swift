@@ -160,6 +160,12 @@ final class AppState {
     var openSettingsAfterProfileSelection = false
     let erasureState: AppDataErasureState
     let signInAttempts: SignInAttemptStore
+    var productContextRevision = UUID()
+    var productConsentMutationInProgress = false
+    var productOnboardingPath: ProductOnboardingPath?
+    var productOnboardingTicket: ProductAnalyticsRecorder.Ticket?
+    let productAnalytics = ProductAnalyticsRecorder()
+    var pendingProductActivity: ProductAnalyticsActivityFfi = .foreground
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
     private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
@@ -191,6 +197,9 @@ final class AppState {
                     throw MarmotKitError.OnboardingActionUnavailable
                 }
             }
+            productAnalytics.record(.onboarding(.complete, .import, .cancelled), ticket: productOnboardingTicket)
+            productOnboardingTicket = nil
+            productOnboardingPath = nil
             signInAttempts.finish(model.accountID)
             pendingAccountSetup = nil
             isAccountSetupPresented = false
@@ -228,6 +237,9 @@ final class AppState {
         do {
             try await refreshAccounts(refreshUnreadSummaries: false)
             if completed, let summary = accounts.first(where: { $0.accountIdHex == id }) {
+                await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: productOnboardingTicket)?.value
+                productOnboardingTicket = nil
+                productOnboardingPath = nil
                 await activateNewIdentity(summary)
             } else if model.cancelled, !accounts.isEmpty {
                 phase = .ready
@@ -258,7 +270,11 @@ final class AppState {
     /// `AccountStore` (which persists it to UserDefaults).
     var activeAccountRef: String? {
         get { accountStore.activeAccountRef }
-        set { accountStore.activeAccountRef = newValue }
+        set {
+            let previous = accountStore.activeAccountRef
+            accountStore.activeAccountRef = newValue
+            if previous != newValue { productAccountChanged() }
+        }
     }
 
     /// Developer mode: surfaces extra debugging UI (e.g. MLS group internals
@@ -709,7 +725,7 @@ final class AppState {
 
         guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else { return }
         activeAccountRef = accountRef
-        if account.signedOut { diagnosticsConsent.scheduleAfterSignIn() }
+
         restartReadyForegroundMaintenanceIfStopped()
         scheduleNativePushRegistrationIfEnabled()
     }
@@ -1177,22 +1193,9 @@ final class AppState {
     @discardableResult
     func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
         guard phase == .ready else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        if enabled && !telemetryBuildConfig.telemetryCredentialsAvailable {
-            throw TelemetrySettingsActionError.telemetryNotConfigured
-        }
-        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
-        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let client = lease.client
-        if enabled {
-            try await client.configureTelemetryRuntime()
-        }
-        let current = try await client.relayTelemetrySettings()
-        return try await client.marmot.setRelayTelemetrySettings(
-            settings: RelayTelemetrySettingsFfi(
-                exportEnabled: enabled,
-                exportIntervalSeconds: current.exportIntervalSeconds
-            )
-        )
+        _ = try await saveUsageDiagnosticsConsent(enabled)
+        guard let client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        return try await client.relayTelemetrySettings()
     }
 
     func auditLogSettings() async throws -> AuditLogSettingsFfi? {
@@ -1203,7 +1206,7 @@ final class AppState {
     @MainActor
     @discardableResult
     func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi {
-        guard phase == .ready else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
+        guard phaseOwnsLiveRuntime else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         return try await lease.client.marmot.setAuditLogSettings(
@@ -1514,6 +1517,11 @@ final class AppState {
     /// metadata, then calls `completeIdentityProfileSetup` exactly once.
     @MainActor
     func createIdentityForProfileSetup() async throws -> IdentityCreationResultFfi {
+        let ticket = productAnalytics.ticket()
+        productOnboardingTicket = ticket
+        productAnalytics.record(.onboarding(.identitySelection, .create, .success), ticket: ticket)
+        var created = false
+        defer { if !created { productAnalytics.record(.onboarding(.localReady, .create, .failure), ticket: ticket) } }
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = MarmotClient.seedRelays
@@ -1528,12 +1536,18 @@ final class AppState {
         guard !existingAccountLabels.contains(creation.account.label) else {
             throw MarmotKitError.AccountSetupRetryRequired
         }
+        created = true
+        productAnalytics.record(.onboarding(.localReady, .create, .success), ticket: ticket)
+        productAnalytics.record(.onboarding(.networkReady, .create, creation.readiness == .networkReady ? .success : .pending), ticket: ticket)
         pendingAccountSetupReadiness[creation.account.label] = creation.readiness
         return creation
     }
 
     @MainActor
     func completeIdentityProfileSetup(_ summary: AccountSummaryFfi) async {
+        await productAnalytics.record(.onboarding(.complete, .create, .success), ticket: productOnboardingTicket)?.value
+        productOnboardingTicket = nil
+        productOnboardingPath = nil
         await activateNewIdentity(summary)
         if let readiness = pendingAccountSetupReadiness.removeValue(forKey: summary.label),
            readiness != .networkReady {
@@ -1548,6 +1562,11 @@ final class AppState {
     @MainActor
     @discardableResult
     func importIdentity(_ identity: String) async throws -> AccountSummaryFfi {
+        let ticket = productAnalytics.ticket()
+        productOnboardingTicket = ticket
+        productAnalytics.record(.onboarding(.identitySelection, .import, .success), ticket: ticket)
+        var imported = false
+        defer { if !imported { productAnalytics.record(.onboarding(.localReady, .import, .failure), ticket: ticket) } }
         let performance = HostActionPerformance.begin()
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
@@ -1577,6 +1596,11 @@ final class AppState {
             let summary = try await lease.client.marmot.login(
                 identity: identity, defaultRelays: relays, bootstrapRelays: relays
             )
+            imported = true
+            productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
+            await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: ticket)?.value
+            productOnboardingPath = nil
+            productOnboardingTicket = nil
             await activateNewIdentity(summary)
             HostActionPerformance.record("identity_import_to_ready", since: performance)
             return summary
@@ -1588,7 +1612,13 @@ final class AppState {
         pendingAccountSetup?.suspend()
         await pendingAccountSetup?.drain()
         signInAttempts.begin(snapshot.accountIdHex)
+        imported = true
         pendingAccountSetup = AccountSetupModel(snapshot: snapshot)
+        pendingAccountSetup?.onProductReady = { [productAnalytics] in
+            productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
+            productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)
+        }
+        if snapshot.ready { pendingAccountSetup?.onProductReady?() }
         accountSetupSnapshots.removeAll { $0.accountIdHex == snapshot.accountIdHex }
         accountSetupSnapshots.append(snapshot)
         isAccountSetupPresented = true
@@ -1602,6 +1632,7 @@ final class AppState {
     @MainActor
     @discardableResult
     func recoverIncompleteIdentity(_ identity: String) async throws -> AccountSummaryFfi {
+        let ticket = productOnboardingTicket
         let performance = HostActionPerformance.begin()
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
@@ -1629,6 +1660,10 @@ final class AppState {
                 throw error
             }
         }
+        productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
+        await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: ticket)?.value
+        productOnboardingPath = nil
+        productOnboardingTicket = nil
         await activateNewIdentity(summary)
         HostActionPerformance.record("identity_recovery_to_ready", since: performance)
         return summary
@@ -1636,7 +1671,6 @@ final class AppState {
 
     @MainActor
     private func activateNewIdentity(_ summary: AccountSummaryFfi) async {
-        diagnosticsConsent.scheduleAfterSignIn()
         cacheActivatedAccountSummaryIfNeeded(summary)
         activeAccountRef = summary.label
         updateProfileProjectionLocalAccountLabels()

@@ -134,9 +134,13 @@ final class AccountSetupModel {
         return !actions.contains(.approveRepair) && !actions.contains(.cancelRepair)
     }
 
+    var onProductReady: (() -> Void)?
+
     func apply(_ next: OnboardingSnapshotFfi) {
         guard next.accountIdHex == accountID, next.revision >= snapshot.revision else { return }
+        let becameReady = !snapshot.ready && next.ready && !next.cancellationPending
         snapshot = next
+        if becameReady { onProductReady?() }
     }
 
     func connect(_ client: any AccountSetupClient) async {

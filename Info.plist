@@ -51,5 +51,13 @@
 	<string>$(WHITENOISE_TELEMETRY_ENVIRONMENT)</string>
 	<key>WhiteNoiseTelemetryOTLPEndpoint</key>
 	<string>$(WHITENOISE_OTLP_ENDPOINT)</string>
+	<key>WhiteNoiseProductAnalyticsEndpoint</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_ENDPOINT)</string>
+	<key>WhiteNoiseProductAnalyticsAppKey</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_APP_KEY)</string>
+	<key>WhiteNoiseProductAnalyticsOperator</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_OPERATOR)</string>
+	<key>WhiteNoiseProductAnalyticsRetention</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_RETENTION)</string>
 </dict>
 </plist>

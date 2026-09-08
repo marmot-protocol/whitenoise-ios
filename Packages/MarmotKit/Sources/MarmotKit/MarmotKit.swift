@@ -2145,6 +2145,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func exportEncryptedSecretKey(accountRef: String, passphrase: String) throws  -> String
 
+    func flushProductAnalytics() async throws
+
     /**
      * Follow `user_ref` while preserving every other entry in the account's
      * current kind-3 contact list. Returns the complete updated list.
@@ -2456,6 +2458,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func recordHostPerformance(operation: HostPerformanceOperationFfi, durationMs: UInt64, outcome: HostPerformanceOutcomeFfi)
 
+    func recordProductEvent(event: ProductEventFfi) throws  -> ProductRecordResultFfi
+
     /**
      * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
      * After this resolves, `user_profile` / `display_name` return the
@@ -2741,6 +2745,10 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      */
     func setPinnedChatOrder(accountRef: String, orderedGroupIds: [String]) throws  -> ChatPinStateFfi
 
+    func setProductAnalyticsActivity(activity: ProductAnalyticsActivityFfi) async throws
+
+    func setProductAnalyticsRuntimeConfig(config: ProductAnalyticsRuntimeConfigFfi) throws
+
     /**
      * Supply non-persisted OTLP runtime metadata: optional metrics URL
      * override, bearer token from the host app's build-time secret, and
@@ -2749,10 +2757,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi) async throws
 
     /**
-     * Persist device-wide relay telemetry export settings and return the
-     * normalized settings that were stored.
+     * Deprecated consent control. Use `set_usage_diagnostics_consent` instead.
+     * Enable requires a combined grant; disable revokes both exporters.
+     * This compatibility setter still updates the telemetry interval.
      */
     func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi) async throws  -> RelayTelemetrySettingsFfi
+
+    func setUsageDiagnosticsConsent(enabled: Bool) throws  -> UsageDiagnosticsSettingsFfi
 
     /**
      * Tear the runtime down. Drops all subscriptions; long-lived
@@ -2937,9 +2948,8 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func sweepExpiredRetention(accountRef: String, nowMs: UInt64) async throws  -> RetentionSweepReportFfi
 
     /**
-     * Stable random identifier for this app install, suitable for the OTLP
-     * `service.instance.id` resource attribute. Separate from audit-log device
-     * identity.
+     * Consent-bound random OTLP identifier, stable until revocation. Requires
+     * a current combined grant; never use this value in product events.
      */
     func telemetryInstallId() throws  -> String
 
@@ -3018,6 +3028,10 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func uploadProfileImage(accountRef: String, data: Data, mediaType: String, blossomServer: String?) async throws  -> String
 
     func upsertPushRegistration(accountRef: String, platform: PushPlatformFfi, rawToken: String, serverPubkeyHex: String, relayHint: String?) async throws  -> PushRegistrationSyncResultFfi
+
+    func usageDiagnosticsSettings() throws  -> UsageDiagnosticsSettingsFfi
+
+    func usageDiagnosticsStatus() throws  -> UsageDiagnosticsStatusFfi
 
     /**
      * Full cached Nostr kind:0 profile for an account id (name, display
@@ -4243,6 +4257,23 @@ open func exportEncryptedSecretKey(accountRef: String, passphrase: String)throws
 })
 }
 
+open func flushProductAnalytics()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_flush_product_analytics(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
     /**
      * Follow `user_ref` while preserving every other entry in the account's
      * current kind-3 contact list. Returns the complete updated list.
@@ -5244,6 +5275,14 @@ open func recordHostPerformance(operation: HostPerformanceOperationFfi, duration
 }
 }
 
+open func recordProductEvent(event: ProductEventFfi)throws  -> ProductRecordResultFfi  {
+    return try  FfiConverterTypeProductRecordResultFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_record_product_event(self.uniffiClonePointer(),
+        FfiConverterTypeProductEventFfi_lower(event),$0
+    )
+})
+}
+
     /**
      * Fetch and cache an account's own Nostr kind:0 profile from `relays`.
      * After this resolves, `user_profile` / `display_name` return the
@@ -6110,6 +6149,30 @@ open func setPinnedChatOrder(accountRef: String, orderedGroupIds: [String])throw
 })
 }
 
+open func setProductAnalyticsActivity(activity: ProductAnalyticsActivityFfi)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_set_product_analytics_activity(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypeProductAnalyticsActivityFfi_lower(activity)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func setProductAnalyticsRuntimeConfig(config: ProductAnalyticsRuntimeConfigFfi)throws   {try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_product_analytics_runtime_config(self.uniffiClonePointer(),
+        FfiConverterTypeProductAnalyticsRuntimeConfigFfi_lower(config),$0
+    )
+}
+}
+
     /**
      * Supply non-persisted OTLP runtime metadata: optional metrics URL
      * override, bearer token from the host app's build-time secret, and
@@ -6133,8 +6196,9 @@ open func setRelayTelemetryRuntimeConfig(config: RelayTelemetryRuntimeConfigFfi)
 }
 
     /**
-     * Persist device-wide relay telemetry export settings and return the
-     * normalized settings that were stored.
+     * Deprecated consent control. Use `set_usage_diagnostics_consent` instead.
+     * Enable requires a combined grant; disable revokes both exporters.
+     * This compatibility setter still updates the telemetry interval.
      */
 open func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi)async throws  -> RelayTelemetrySettingsFfi  {
     return
@@ -6151,6 +6215,14 @@ open func setRelayTelemetrySettings(settings: RelayTelemetrySettingsFfi)async th
             liftFunc: FfiConverterTypeRelayTelemetrySettingsFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
+}
+
+open func setUsageDiagnosticsConsent(enabled: Bool)throws  -> UsageDiagnosticsSettingsFfi  {
+    return try  FfiConverterTypeUsageDiagnosticsSettingsFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_set_usage_diagnostics_consent(self.uniffiClonePointer(),
+        FfiConverterBool.lower(enabled),$0
+    )
+})
 }
 
     /**
@@ -6578,9 +6650,8 @@ open func sweepExpiredRetention(accountRef: String, nowMs: UInt64)async throws  
 }
 
     /**
-     * Stable random identifier for this app install, suitable for the OTLP
-     * `service.instance.id` resource attribute. Separate from audit-log device
-     * identity.
+     * Consent-bound random OTLP identifier, stable until revocation. Requires
+     * a current combined grant; never use this value in product events.
      */
 open func telemetryInstallId()throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
@@ -6820,6 +6891,20 @@ open func upsertPushRegistration(accountRef: String, platform: PushPlatformFfi, 
             liftFunc: FfiConverterTypePushRegistrationSyncResultFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
+}
+
+open func usageDiagnosticsSettings()throws  -> UsageDiagnosticsSettingsFfi  {
+    return try  FfiConverterTypeUsageDiagnosticsSettingsFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_usage_diagnostics_settings(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+open func usageDiagnosticsStatus()throws  -> UsageDiagnosticsStatusFfi  {
+    return try  FfiConverterTypeUsageDiagnosticsStatusFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_usage_diagnostics_status(self.uniffiClonePointer(),$0
+    )
+})
 }
 
     /**
@@ -17795,6 +17880,514 @@ public func FfiConverterTypePreparedGroupImageUploadFfi_lower(_ value: PreparedG
 }
 
 
+public struct ProductAnalyticsMetadataFfi {
+    public var appVersion: String
+    public var osFamily: String
+    public var osMajorVersion: String
+    public var deviceClass: String
+    public var hostSurface: String
+    public var environment: String
+    public var isDebug: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(appVersion: String, osFamily: String, osMajorVersion: String, deviceClass: String, hostSurface: String, environment: String, isDebug: Bool) {
+        self.appVersion = appVersion
+        self.osFamily = osFamily
+        self.osMajorVersion = osMajorVersion
+        self.deviceClass = deviceClass
+        self.hostSurface = hostSurface
+        self.environment = environment
+        self.isDebug = isDebug
+    }
+}
+
+#if compiler(>=6)
+extension ProductAnalyticsMetadataFfi: Sendable {}
+#endif
+
+
+extension ProductAnalyticsMetadataFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductAnalyticsMetadataFfi, rhs: ProductAnalyticsMetadataFfi) -> Bool {
+        if lhs.appVersion != rhs.appVersion {
+            return false
+        }
+        if lhs.osFamily != rhs.osFamily {
+            return false
+        }
+        if lhs.osMajorVersion != rhs.osMajorVersion {
+            return false
+        }
+        if lhs.deviceClass != rhs.deviceClass {
+            return false
+        }
+        if lhs.hostSurface != rhs.hostSurface {
+            return false
+        }
+        if lhs.environment != rhs.environment {
+            return false
+        }
+        if lhs.isDebug != rhs.isDebug {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(appVersion)
+        hasher.combine(osFamily)
+        hasher.combine(osMajorVersion)
+        hasher.combine(deviceClass)
+        hasher.combine(hostSurface)
+        hasher.combine(environment)
+        hasher.combine(isDebug)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductAnalyticsMetadataFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductAnalyticsMetadataFfi {
+        return
+            try ProductAnalyticsMetadataFfi(
+                appVersion: FfiConverterString.read(from: &buf),
+                osFamily: FfiConverterString.read(from: &buf),
+                osMajorVersion: FfiConverterString.read(from: &buf),
+                deviceClass: FfiConverterString.read(from: &buf),
+                hostSurface: FfiConverterString.read(from: &buf),
+                environment: FfiConverterString.read(from: &buf),
+                isDebug: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductAnalyticsMetadataFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.appVersion, into: &buf)
+        FfiConverterString.write(value.osFamily, into: &buf)
+        FfiConverterString.write(value.osMajorVersion, into: &buf)
+        FfiConverterString.write(value.deviceClass, into: &buf)
+        FfiConverterString.write(value.hostSurface, into: &buf)
+        FfiConverterString.write(value.environment, into: &buf)
+        FfiConverterBool.write(value.isDebug, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsMetadataFfi_lift(_ buf: RustBuffer) throws -> ProductAnalyticsMetadataFfi {
+    return try FfiConverterTypeProductAnalyticsMetadataFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsMetadataFfi_lower(_ value: ProductAnalyticsMetadataFfi) -> RustBuffer {
+    return FfiConverterTypeProductAnalyticsMetadataFfi.lower(value)
+}
+
+
+public struct ProductAnalyticsRuntimeConfigFfi {
+    public var eventsEndpoint: String?
+    public var appKey: String?
+    public var metadata: ProductAnalyticsMetadataFfi
+    public var registry: [ProductEventSchemaFfi]
+    public var allowLoopback: Bool
+    public var `operator`: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(eventsEndpoint: String?, appKey: String?, metadata: ProductAnalyticsMetadataFfi, registry: [ProductEventSchemaFfi], allowLoopback: Bool, `operator`: String) {
+        self.eventsEndpoint = eventsEndpoint
+        self.appKey = appKey
+        self.metadata = metadata
+        self.registry = registry
+        self.allowLoopback = allowLoopback
+        self.`operator` = `operator`
+    }
+}
+
+#if compiler(>=6)
+extension ProductAnalyticsRuntimeConfigFfi: Sendable {}
+#endif
+
+
+extension ProductAnalyticsRuntimeConfigFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductAnalyticsRuntimeConfigFfi, rhs: ProductAnalyticsRuntimeConfigFfi) -> Bool {
+        if lhs.eventsEndpoint != rhs.eventsEndpoint {
+            return false
+        }
+        if lhs.appKey != rhs.appKey {
+            return false
+        }
+        if lhs.metadata != rhs.metadata {
+            return false
+        }
+        if lhs.registry != rhs.registry {
+            return false
+        }
+        if lhs.allowLoopback != rhs.allowLoopback {
+            return false
+        }
+        if lhs.`operator` != rhs.`operator` {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(eventsEndpoint)
+        hasher.combine(appKey)
+        hasher.combine(metadata)
+        hasher.combine(registry)
+        hasher.combine(allowLoopback)
+        hasher.combine(`operator`)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductAnalyticsRuntimeConfigFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductAnalyticsRuntimeConfigFfi {
+        return
+            try ProductAnalyticsRuntimeConfigFfi(
+                eventsEndpoint: FfiConverterOptionString.read(from: &buf),
+                appKey: FfiConverterOptionString.read(from: &buf),
+                metadata: FfiConverterTypeProductAnalyticsMetadataFfi.read(from: &buf),
+                registry: FfiConverterSequenceTypeProductEventSchemaFfi.read(from: &buf),
+                allowLoopback: FfiConverterBool.read(from: &buf),
+                operator: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductAnalyticsRuntimeConfigFfi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.eventsEndpoint, into: &buf)
+        FfiConverterOptionString.write(value.appKey, into: &buf)
+        FfiConverterTypeProductAnalyticsMetadataFfi.write(value.metadata, into: &buf)
+        FfiConverterSequenceTypeProductEventSchemaFfi.write(value.registry, into: &buf)
+        FfiConverterBool.write(value.allowLoopback, into: &buf)
+        FfiConverterString.write(value.`operator`, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsRuntimeConfigFfi_lift(_ buf: RustBuffer) throws -> ProductAnalyticsRuntimeConfigFfi {
+    return try FfiConverterTypeProductAnalyticsRuntimeConfigFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsRuntimeConfigFfi_lower(_ value: ProductAnalyticsRuntimeConfigFfi) -> RustBuffer {
+    return FfiConverterTypeProductAnalyticsRuntimeConfigFfi.lower(value)
+}
+
+
+public struct ProductEventFfi {
+    public var name: String
+    public var properties: [ProductEventPropertyFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, properties: [ProductEventPropertyFfi]) {
+        self.name = name
+        self.properties = properties
+    }
+}
+
+#if compiler(>=6)
+extension ProductEventFfi: Sendable {}
+#endif
+
+
+extension ProductEventFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductEventFfi, rhs: ProductEventFfi) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.properties != rhs.properties {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(properties)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductEventFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductEventFfi {
+        return
+            try ProductEventFfi(
+                name: FfiConverterString.read(from: &buf),
+                properties: FfiConverterSequenceTypeProductEventPropertyFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductEventFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterSequenceTypeProductEventPropertyFfi.write(value.properties, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventFfi_lift(_ buf: RustBuffer) throws -> ProductEventFfi {
+    return try FfiConverterTypeProductEventFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventFfi_lower(_ value: ProductEventFfi) -> RustBuffer {
+    return FfiConverterTypeProductEventFfi.lower(value)
+}
+
+
+public struct ProductEventPropertyFfi {
+    public var name: String
+    public var value: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+}
+
+#if compiler(>=6)
+extension ProductEventPropertyFfi: Sendable {}
+#endif
+
+
+extension ProductEventPropertyFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductEventPropertyFfi, rhs: ProductEventPropertyFfi) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.value != rhs.value {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(value)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductEventPropertyFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductEventPropertyFfi {
+        return
+            try ProductEventPropertyFfi(
+                name: FfiConverterString.read(from: &buf),
+                value: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductEventPropertyFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventPropertyFfi_lift(_ buf: RustBuffer) throws -> ProductEventPropertyFfi {
+    return try FfiConverterTypeProductEventPropertyFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventPropertyFfi_lower(_ value: ProductEventPropertyFfi) -> RustBuffer {
+    return FfiConverterTypeProductEventPropertyFfi.lower(value)
+}
+
+
+public struct ProductEventSchemaFfi {
+    public var name: String
+    public var mode: ProductEventModeFfi
+    public var properties: [ProductPropertySchemaFfi]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, mode: ProductEventModeFfi, properties: [ProductPropertySchemaFfi]) {
+        self.name = name
+        self.mode = mode
+        self.properties = properties
+    }
+}
+
+#if compiler(>=6)
+extension ProductEventSchemaFfi: Sendable {}
+#endif
+
+
+extension ProductEventSchemaFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductEventSchemaFfi, rhs: ProductEventSchemaFfi) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.mode != rhs.mode {
+            return false
+        }
+        if lhs.properties != rhs.properties {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(mode)
+        hasher.combine(properties)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductEventSchemaFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductEventSchemaFfi {
+        return
+            try ProductEventSchemaFfi(
+                name: FfiConverterString.read(from: &buf),
+                mode: FfiConverterTypeProductEventModeFfi.read(from: &buf),
+                properties: FfiConverterSequenceTypeProductPropertySchemaFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductEventSchemaFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterTypeProductEventModeFfi.write(value.mode, into: &buf)
+        FfiConverterSequenceTypeProductPropertySchemaFfi.write(value.properties, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventSchemaFfi_lift(_ buf: RustBuffer) throws -> ProductEventSchemaFfi {
+    return try FfiConverterTypeProductEventSchemaFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventSchemaFfi_lower(_ value: ProductEventSchemaFfi) -> RustBuffer {
+    return FfiConverterTypeProductEventSchemaFfi.lower(value)
+}
+
+
+public struct ProductPropertySchemaFfi {
+    public var name: String
+    public var kind: ProductPropertyKindFfi
+    public var choices: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, kind: ProductPropertyKindFfi, choices: [String]) {
+        self.name = name
+        self.kind = kind
+        self.choices = choices
+    }
+}
+
+#if compiler(>=6)
+extension ProductPropertySchemaFfi: Sendable {}
+#endif
+
+
+extension ProductPropertySchemaFfi: Equatable, Hashable {
+    public static func ==(lhs: ProductPropertySchemaFfi, rhs: ProductPropertySchemaFfi) -> Bool {
+        if lhs.name != rhs.name {
+            return false
+        }
+        if lhs.kind != rhs.kind {
+            return false
+        }
+        if lhs.choices != rhs.choices {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(name)
+        hasher.combine(kind)
+        hasher.combine(choices)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductPropertySchemaFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductPropertySchemaFfi {
+        return
+            try ProductPropertySchemaFfi(
+                name: FfiConverterString.read(from: &buf),
+                kind: FfiConverterTypeProductPropertyKindFfi.read(from: &buf),
+                choices: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProductPropertySchemaFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterTypeProductPropertyKindFfi.write(value.kind, into: &buf)
+        FfiConverterSequenceString.write(value.choices, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductPropertySchemaFfi_lift(_ buf: RustBuffer) throws -> ProductPropertySchemaFfi {
+    return try FfiConverterTypeProductPropertySchemaFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductPropertySchemaFfi_lower(_ value: ProductPropertySchemaFfi) -> RustBuffer {
+    return FfiConverterTypeProductPropertySchemaFfi.lower(value)
+}
+
+
 public struct PushRegistrationFfi {
     public var accountRef: String
     public var accountIdHex: String
@@ -20716,6 +21309,210 @@ public func FfiConverterTypeTransportFanoutStatusFfi_lower(_ value: TransportFan
 }
 
 
+public struct UsageDiagnosticsSettingsFfi {
+    public var decision: UsageDiagnosticsDecisionFfi
+    public var policyRevision: String
+    public var registryRevision: String
+    public var updatedAtMs: Int64
+    public var previouslyEnabled: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(decision: UsageDiagnosticsDecisionFfi, policyRevision: String, registryRevision: String, updatedAtMs: Int64, previouslyEnabled: Bool) {
+        self.decision = decision
+        self.policyRevision = policyRevision
+        self.registryRevision = registryRevision
+        self.updatedAtMs = updatedAtMs
+        self.previouslyEnabled = previouslyEnabled
+    }
+}
+
+#if compiler(>=6)
+extension UsageDiagnosticsSettingsFfi: Sendable {}
+#endif
+
+
+extension UsageDiagnosticsSettingsFfi: Equatable, Hashable {
+    public static func ==(lhs: UsageDiagnosticsSettingsFfi, rhs: UsageDiagnosticsSettingsFfi) -> Bool {
+        if lhs.decision != rhs.decision {
+            return false
+        }
+        if lhs.policyRevision != rhs.policyRevision {
+            return false
+        }
+        if lhs.registryRevision != rhs.registryRevision {
+            return false
+        }
+        if lhs.updatedAtMs != rhs.updatedAtMs {
+            return false
+        }
+        if lhs.previouslyEnabled != rhs.previouslyEnabled {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(decision)
+        hasher.combine(policyRevision)
+        hasher.combine(registryRevision)
+        hasher.combine(updatedAtMs)
+        hasher.combine(previouslyEnabled)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUsageDiagnosticsSettingsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UsageDiagnosticsSettingsFfi {
+        return
+            try UsageDiagnosticsSettingsFfi(
+                decision: FfiConverterTypeUsageDiagnosticsDecisionFfi.read(from: &buf),
+                policyRevision: FfiConverterString.read(from: &buf),
+                registryRevision: FfiConverterString.read(from: &buf),
+                updatedAtMs: FfiConverterInt64.read(from: &buf),
+                previouslyEnabled: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: UsageDiagnosticsSettingsFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeUsageDiagnosticsDecisionFfi.write(value.decision, into: &buf)
+        FfiConverterString.write(value.policyRevision, into: &buf)
+        FfiConverterString.write(value.registryRevision, into: &buf)
+        FfiConverterInt64.write(value.updatedAtMs, into: &buf)
+        FfiConverterBool.write(value.previouslyEnabled, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsSettingsFfi_lift(_ buf: RustBuffer) throws -> UsageDiagnosticsSettingsFfi {
+    return try FfiConverterTypeUsageDiagnosticsSettingsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsSettingsFfi_lower(_ value: UsageDiagnosticsSettingsFfi) -> RustBuffer {
+    return FfiConverterTypeUsageDiagnosticsSettingsFfi.lower(value)
+}
+
+
+public struct UsageDiagnosticsStatusFfi {
+    public var consent: UsageDiagnosticsDecisionFfi
+    public var telemetry: DiagnosticsExporterStatusFfi
+    public var productAnalytics: DiagnosticsExporterStatusFfi
+    public var queuedEvents: UInt64
+    public var droppedEvents: UInt64
+    public var acceptedBatches: UInt64
+    public var failedBatches: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(consent: UsageDiagnosticsDecisionFfi, telemetry: DiagnosticsExporterStatusFfi, productAnalytics: DiagnosticsExporterStatusFfi, queuedEvents: UInt64, droppedEvents: UInt64, acceptedBatches: UInt64, failedBatches: UInt64) {
+        self.consent = consent
+        self.telemetry = telemetry
+        self.productAnalytics = productAnalytics
+        self.queuedEvents = queuedEvents
+        self.droppedEvents = droppedEvents
+        self.acceptedBatches = acceptedBatches
+        self.failedBatches = failedBatches
+    }
+}
+
+#if compiler(>=6)
+extension UsageDiagnosticsStatusFfi: Sendable {}
+#endif
+
+
+extension UsageDiagnosticsStatusFfi: Equatable, Hashable {
+    public static func ==(lhs: UsageDiagnosticsStatusFfi, rhs: UsageDiagnosticsStatusFfi) -> Bool {
+        if lhs.consent != rhs.consent {
+            return false
+        }
+        if lhs.telemetry != rhs.telemetry {
+            return false
+        }
+        if lhs.productAnalytics != rhs.productAnalytics {
+            return false
+        }
+        if lhs.queuedEvents != rhs.queuedEvents {
+            return false
+        }
+        if lhs.droppedEvents != rhs.droppedEvents {
+            return false
+        }
+        if lhs.acceptedBatches != rhs.acceptedBatches {
+            return false
+        }
+        if lhs.failedBatches != rhs.failedBatches {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(consent)
+        hasher.combine(telemetry)
+        hasher.combine(productAnalytics)
+        hasher.combine(queuedEvents)
+        hasher.combine(droppedEvents)
+        hasher.combine(acceptedBatches)
+        hasher.combine(failedBatches)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUsageDiagnosticsStatusFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UsageDiagnosticsStatusFfi {
+        return
+            try UsageDiagnosticsStatusFfi(
+                consent: FfiConverterTypeUsageDiagnosticsDecisionFfi.read(from: &buf),
+                telemetry: FfiConverterTypeDiagnosticsExporterStatusFfi.read(from: &buf),
+                productAnalytics: FfiConverterTypeDiagnosticsExporterStatusFfi.read(from: &buf),
+                queuedEvents: FfiConverterUInt64.read(from: &buf),
+                droppedEvents: FfiConverterUInt64.read(from: &buf),
+                acceptedBatches: FfiConverterUInt64.read(from: &buf),
+                failedBatches: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: UsageDiagnosticsStatusFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeUsageDiagnosticsDecisionFfi.write(value.consent, into: &buf)
+        FfiConverterTypeDiagnosticsExporterStatusFfi.write(value.telemetry, into: &buf)
+        FfiConverterTypeDiagnosticsExporterStatusFfi.write(value.productAnalytics, into: &buf)
+        FfiConverterUInt64.write(value.queuedEvents, into: &buf)
+        FfiConverterUInt64.write(value.droppedEvents, into: &buf)
+        FfiConverterUInt64.write(value.acceptedBatches, into: &buf)
+        FfiConverterUInt64.write(value.failedBatches, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsStatusFfi_lift(_ buf: RustBuffer) throws -> UsageDiagnosticsStatusFfi {
+    return try FfiConverterTypeUsageDiagnosticsStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsStatusFfi_lower(_ value: UsageDiagnosticsStatusFfi) -> RustBuffer {
+    return FfiConverterTypeUsageDiagnosticsStatusFfi.lower(value)
+}
+
+
 /**
  * One person the search found.
  *
@@ -22160,6 +22957,104 @@ public func FfiConverterTypeCursorPersistenceFfi_lower(_ value: CursorPersistenc
 
 
 extension CursorPersistenceFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum DiagnosticsExporterStatusFfi {
+
+    case disabled
+    case consentRequired
+    case unconfigured
+    case unsupportedBuild
+    case ready
+    case configurationRejected
+}
+
+
+#if compiler(>=6)
+extension DiagnosticsExporterStatusFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDiagnosticsExporterStatusFfi: FfiConverterRustBuffer {
+    typealias SwiftType = DiagnosticsExporterStatusFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DiagnosticsExporterStatusFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .disabled
+
+        case 2: return .consentRequired
+
+        case 3: return .unconfigured
+
+        case 4: return .unsupportedBuild
+
+        case 5: return .ready
+
+        case 6: return .configurationRejected
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DiagnosticsExporterStatusFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .disabled:
+            writeInt(&buf, Int32(1))
+
+
+        case .consentRequired:
+            writeInt(&buf, Int32(2))
+
+
+        case .unconfigured:
+            writeInt(&buf, Int32(3))
+
+
+        case .unsupportedBuild:
+            writeInt(&buf, Int32(4))
+
+
+        case .ready:
+            writeInt(&buf, Int32(5))
+
+
+        case .configurationRejected:
+            writeInt(&buf, Int32(6))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDiagnosticsExporterStatusFfi_lift(_ buf: RustBuffer) throws -> DiagnosticsExporterStatusFfi {
+    return try FfiConverterTypeDiagnosticsExporterStatusFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDiagnosticsExporterStatusFfi_lower(_ value: DiagnosticsExporterStatusFfi) -> RustBuffer {
+    return FfiConverterTypeDiagnosticsExporterStatusFfi.lower(value)
+}
+
+
+extension DiagnosticsExporterStatusFfi: Equatable, Hashable {}
 
 
 
@@ -24252,6 +25147,9 @@ public enum MarmotKitError: Swift.Error {
 
 
 
+    case ConsentRequired
+    case InvalidProductAnalyticsConfiguration
+    case InvalidProductObservation
     case DuplicateIdentity(account: String
     )
     case UnknownAccount(accountRef: String
@@ -24530,142 +25428,145 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
 
 
 
-        case 1: return .DuplicateIdentity(
+        case 1: return .ConsentRequired
+        case 2: return .InvalidProductAnalyticsConfiguration
+        case 3: return .InvalidProductObservation
+        case 4: return .DuplicateIdentity(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 2: return .UnknownAccount(
+        case 5: return .UnknownAccount(
             accountRef: try FfiConverterString.read(from: &buf)
             )
-        case 3: return .UnknownGroup(
+        case 6: return .UnknownGroup(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 4: return .GroupInviteNotPending
-        case 5: return .CreatedGroupProjectionUnavailable(
+        case 7: return .GroupInviteNotPending
+        case 8: return .CreatedGroupProjectionUnavailable(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 6: return .InvalidGroupMembershipPage(
+        case 9: return .InvalidGroupMembershipPage(
             maxGroups: try FfiConverterUInt64.read(from: &buf)
             )
-        case 7: return .InvalidCachedIdentityPage(
+        case 10: return .InvalidCachedIdentityPage(
             maxAccounts: try FfiConverterUInt64.read(from: &buf)
             )
-        case 8: return .GroupHydrationPending(
+        case 11: return .GroupHydrationPending(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 9: return .DirectConversationIndexNotReady
-        case 10: return .InvalidChatPin(
+        case 12: return .DirectConversationIndexNotReady
+        case 13: return .InvalidChatPin(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 11: return .InvalidMessageDraft(
+        case 14: return .InvalidMessageDraft(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 12: return .InvalidMediaReference(
+        case 15: return .InvalidMediaReference(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 13: return .InvalidHex(
+        case 16: return .InvalidHex(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 14: return .InvalidIdentity(
+        case 17: return .InvalidIdentity(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 15: return .InvalidKeyPackageEvent(
+        case 18: return .InvalidKeyPackageEvent(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 16: return .MissingKeyPackage(
+        case 19: return .MissingKeyPackage(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 17: return .MissingMemberInboxRoute(
+        case 20: return .MissingMemberInboxRoute(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 18: return .Publish(
+        case 21: return .Publish(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 19: return .FollowListUnavailable
-        case 20: return .TransportClosed
-        case 21: return .RuntimeBusy
-        case 22: return .AccountSessionBusy
-        case 23: return .AccountSetupRecoveryRequired
-        case 24: return .AccountSetupRetryRequired
-        case 25: return .OnboardingActionUnavailable
-        case 26: return .OnboardingRequired
-        case 27: return .AccountSetupResetNotApplicable
-        case 28: return .AccountSetupKeyPackageRecoveryAvailable
-        case 29: return .RuntimeStopping
-        case 30: return .AccountCatchUp(
+        case 22: return .FollowListUnavailable
+        case 23: return .TransportClosed
+        case 24: return .RuntimeBusy
+        case 25: return .AccountSessionBusy
+        case 26: return .AccountSetupRecoveryRequired
+        case 27: return .AccountSetupRetryRequired
+        case 28: return .OnboardingActionUnavailable
+        case 29: return .OnboardingRequired
+        case 30: return .AccountSetupResetNotApplicable
+        case 31: return .AccountSetupKeyPackageRecoveryAvailable
+        case 32: return .RuntimeStopping
+        case 33: return .AccountCatchUp(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 31: return .NotGroupAdmin(
+        case 34: return .NotGroupAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 32: return .AdminCannotSelfRemove(
+        case 35: return .AdminCannotSelfRemove(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 33: return .LeaveAlreadyRequested(
+        case 36: return .LeaveAlreadyRequested(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 34: return .WouldRemoveLastAdmin(
+        case 37: return .WouldRemoveLastAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 35: return .DisbandingUnsupportedMembers(
+        case 38: return .DisbandingUnsupportedMembers(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdsHex: try FfiConverterSequenceString.read(from: &buf)
             )
-        case 36: return .DisbandingNotEnabled(
+        case 39: return .DisbandingNotEnabled(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 37: return .GroupDisbanding(
+        case 40: return .GroupDisbanding(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 38: return .GroupRemoved(
+        case 41: return .GroupRemoved(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 39: return .MemberNotInGroup(
+        case 42: return .MemberNotInGroup(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 40: return .AlreadyAdmin(
+        case 43: return .AlreadyAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 41: return .NotAdmin(
+        case 44: return .NotAdmin(
             groupIdHex: try FfiConverterString.read(from: &buf),
             memberIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 42: return .StorageBusy(
+        case 45: return .StorageBusy(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 43: return .StorageClosed(
+        case 46: return .StorageClosed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 44: return .SecretNotFound(
+        case 47: return .SecretNotFound(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 45: return .KeystoreUnavailable(
+        case 48: return .KeystoreUnavailable(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 46: return .EmptyPassphrase
-        case 47: return .EncryptionFailed(
+        case 49: return .EmptyPassphrase
+        case 50: return .EncryptionFailed(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 48: return .Io(
+        case 51: return .Io(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 49: return .ExternalSignerUnavailable(
+        case 52: return .ExternalSignerUnavailable(
             account: try FfiConverterString.read(from: &buf)
             )
-        case 50: return .ExternalSignerMismatch
-        case 51: return .ExternalSignerRejected
-        case 52: return .GroupSendQueueFull(
+        case 53: return .ExternalSignerMismatch
+        case 54: return .ExternalSignerRejected
+        case 55: return .GroupSendQueueFull(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 53: return .GroupUnrecoverableRepairRequired(
+        case 56: return .GroupUnrecoverableRepairRequired(
             groupIdHex: try FfiConverterString.read(from: &buf)
             )
-        case 54: return .Runtime(
+        case 57: return .Runtime(
             details: try FfiConverterString.read(from: &buf)
             )
-        case 55: return .AccountWorkerBusy
-        case 56: return .AccountWorkerResponseTimedOut
+        case 58: return .AccountWorkerBusy
+        case 59: return .AccountWorkerResponseTimedOut
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -24678,270 +25579,282 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
 
 
 
-        case let .DuplicateIdentity(account):
+        case .ConsentRequired:
             writeInt(&buf, Int32(1))
+
+
+        case .InvalidProductAnalyticsConfiguration:
+            writeInt(&buf, Int32(2))
+
+
+        case .InvalidProductObservation:
+            writeInt(&buf, Int32(3))
+
+
+        case let .DuplicateIdentity(account):
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(account, into: &buf)
 
 
         case let .UnknownAccount(accountRef):
-            writeInt(&buf, Int32(2))
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(accountRef, into: &buf)
 
 
         case let .UnknownGroup(groupIdHex):
-            writeInt(&buf, Int32(3))
+            writeInt(&buf, Int32(6))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case .GroupInviteNotPending:
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(7))
 
 
         case let .CreatedGroupProjectionUnavailable(groupIdHex):
-            writeInt(&buf, Int32(5))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .InvalidGroupMembershipPage(maxGroups):
-            writeInt(&buf, Int32(6))
-            FfiConverterUInt64.write(maxGroups, into: &buf)
-
-
-        case let .InvalidCachedIdentityPage(maxAccounts):
-            writeInt(&buf, Int32(7))
-            FfiConverterUInt64.write(maxAccounts, into: &buf)
-
-
-        case let .GroupHydrationPending(groupIdHex):
             writeInt(&buf, Int32(8))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case .DirectConversationIndexNotReady:
+        case let .InvalidGroupMembershipPage(maxGroups):
             writeInt(&buf, Int32(9))
+            FfiConverterUInt64.write(maxGroups, into: &buf)
+
+
+        case let .InvalidCachedIdentityPage(maxAccounts):
+            writeInt(&buf, Int32(10))
+            FfiConverterUInt64.write(maxAccounts, into: &buf)
+
+
+        case let .GroupHydrationPending(groupIdHex):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case .DirectConversationIndexNotReady:
+            writeInt(&buf, Int32(12))
 
 
         case let .InvalidChatPin(details):
-            writeInt(&buf, Int32(10))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .InvalidMessageDraft(details):
-            writeInt(&buf, Int32(11))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .InvalidMediaReference(details):
-            writeInt(&buf, Int32(12))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .InvalidHex(details):
             writeInt(&buf, Int32(13))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .InvalidIdentity(details):
+        case let .InvalidMessageDraft(details):
             writeInt(&buf, Int32(14))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .InvalidKeyPackageEvent(details):
+        case let .InvalidMediaReference(details):
             writeInt(&buf, Int32(15))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .MissingKeyPackage(account):
+        case let .InvalidHex(details):
             writeInt(&buf, Int32(16))
-            FfiConverterString.write(account, into: &buf)
+            FfiConverterString.write(details, into: &buf)
 
 
-        case let .MissingMemberInboxRoute(account):
+        case let .InvalidIdentity(details):
             writeInt(&buf, Int32(17))
-            FfiConverterString.write(account, into: &buf)
+            FfiConverterString.write(details, into: &buf)
 
 
-        case let .Publish(details):
+        case let .InvalidKeyPackageEvent(details):
             writeInt(&buf, Int32(18))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .FollowListUnavailable:
+        case let .MissingKeyPackage(account):
             writeInt(&buf, Int32(19))
+            FfiConverterString.write(account, into: &buf)
 
 
-        case .TransportClosed:
+        case let .MissingMemberInboxRoute(account):
             writeInt(&buf, Int32(20))
+            FfiConverterString.write(account, into: &buf)
 
 
-        case .RuntimeBusy:
+        case let .Publish(details):
             writeInt(&buf, Int32(21))
+            FfiConverterString.write(details, into: &buf)
 
 
-        case .AccountSessionBusy:
+        case .FollowListUnavailable:
             writeInt(&buf, Int32(22))
 
 
-        case .AccountSetupRecoveryRequired:
+        case .TransportClosed:
             writeInt(&buf, Int32(23))
 
 
-        case .AccountSetupRetryRequired:
+        case .RuntimeBusy:
             writeInt(&buf, Int32(24))
 
 
-        case .OnboardingActionUnavailable:
+        case .AccountSessionBusy:
             writeInt(&buf, Int32(25))
 
 
-        case .OnboardingRequired:
+        case .AccountSetupRecoveryRequired:
             writeInt(&buf, Int32(26))
 
 
-        case .AccountSetupResetNotApplicable:
+        case .AccountSetupRetryRequired:
             writeInt(&buf, Int32(27))
 
 
-        case .AccountSetupKeyPackageRecoveryAvailable:
+        case .OnboardingActionUnavailable:
             writeInt(&buf, Int32(28))
 
 
-        case .RuntimeStopping:
+        case .OnboardingRequired:
             writeInt(&buf, Int32(29))
 
 
-        case let .AccountCatchUp(details):
+        case .AccountSetupResetNotApplicable:
             writeInt(&buf, Int32(30))
+
+
+        case .AccountSetupKeyPackageRecoveryAvailable:
+            writeInt(&buf, Int32(31))
+
+
+        case .RuntimeStopping:
+            writeInt(&buf, Int32(32))
+
+
+        case let .AccountCatchUp(details):
+            writeInt(&buf, Int32(33))
             FfiConverterString.write(details, into: &buf)
 
 
         case let .NotGroupAdmin(groupIdHex):
-            writeInt(&buf, Int32(31))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .AdminCannotSelfRemove(groupIdHex):
-            writeInt(&buf, Int32(32))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .LeaveAlreadyRequested(groupIdHex):
-            writeInt(&buf, Int32(33))
-            FfiConverterString.write(groupIdHex, into: &buf)
-
-
-        case let .WouldRemoveLastAdmin(groupIdHex):
             writeInt(&buf, Int32(34))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
-        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+        case let .AdminCannotSelfRemove(groupIdHex):
             writeInt(&buf, Int32(35))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .LeaveAlreadyRequested(groupIdHex):
+            writeInt(&buf, Int32(36))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .WouldRemoveLastAdmin(groupIdHex):
+            writeInt(&buf, Int32(37))
+            FfiConverterString.write(groupIdHex, into: &buf)
+
+
+        case let .DisbandingUnsupportedMembers(groupIdHex,memberIdsHex):
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterSequenceString.write(memberIdsHex, into: &buf)
 
 
         case let .DisbandingNotEnabled(groupIdHex):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(39))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupDisbanding(groupIdHex):
-            writeInt(&buf, Int32(37))
+            writeInt(&buf, Int32(40))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupRemoved(groupIdHex):
-            writeInt(&buf, Int32(38))
+            writeInt(&buf, Int32(41))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .MemberNotInGroup(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(39))
+            writeInt(&buf, Int32(42))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .AlreadyAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(40))
+            writeInt(&buf, Int32(43))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .NotAdmin(groupIdHex,memberIdHex):
-            writeInt(&buf, Int32(41))
+            writeInt(&buf, Int32(44))
             FfiConverterString.write(groupIdHex, into: &buf)
             FfiConverterString.write(memberIdHex, into: &buf)
 
 
         case let .StorageBusy(details):
-            writeInt(&buf, Int32(42))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .StorageClosed(details):
-            writeInt(&buf, Int32(43))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .SecretNotFound(details):
-            writeInt(&buf, Int32(44))
-            FfiConverterString.write(details, into: &buf)
-
-
-        case let .KeystoreUnavailable(details):
             writeInt(&buf, Int32(45))
             FfiConverterString.write(details, into: &buf)
 
 
-        case .EmptyPassphrase:
+        case let .StorageClosed(details):
             writeInt(&buf, Int32(46))
+            FfiConverterString.write(details, into: &buf)
 
 
-        case let .EncryptionFailed(details):
+        case let .SecretNotFound(details):
             writeInt(&buf, Int32(47))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .Io(details):
+        case let .KeystoreUnavailable(details):
             writeInt(&buf, Int32(48))
             FfiConverterString.write(details, into: &buf)
 
 
-        case let .ExternalSignerUnavailable(account):
+        case .EmptyPassphrase:
             writeInt(&buf, Int32(49))
+
+
+        case let .EncryptionFailed(details):
+            writeInt(&buf, Int32(50))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .Io(details):
+            writeInt(&buf, Int32(51))
+            FfiConverterString.write(details, into: &buf)
+
+
+        case let .ExternalSignerUnavailable(account):
+            writeInt(&buf, Int32(52))
             FfiConverterString.write(account, into: &buf)
 
 
         case .ExternalSignerMismatch:
-            writeInt(&buf, Int32(50))
+            writeInt(&buf, Int32(53))
 
 
         case .ExternalSignerRejected:
-            writeInt(&buf, Int32(51))
+            writeInt(&buf, Int32(54))
 
 
         case let .GroupSendQueueFull(groupIdHex):
-            writeInt(&buf, Int32(52))
+            writeInt(&buf, Int32(55))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .GroupUnrecoverableRepairRequired(groupIdHex):
-            writeInt(&buf, Int32(53))
+            writeInt(&buf, Int32(56))
             FfiConverterString.write(groupIdHex, into: &buf)
 
 
         case let .Runtime(details):
-            writeInt(&buf, Int32(54))
+            writeInt(&buf, Int32(57))
             FfiConverterString.write(details, into: &buf)
 
 
         case .AccountWorkerBusy:
-            writeInt(&buf, Int32(55))
+            writeInt(&buf, Int32(58))
 
 
         case .AccountWorkerResponseTimedOut:
-            writeInt(&buf, Int32(56))
+            writeInt(&buf, Int32(59))
 
         }
     }
@@ -26438,6 +27351,342 @@ extension PreparedGroupImageUploadStateFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum ProductAnalyticsActivityFfi {
+
+    case foreground
+    case background
+    case accountChanged
+    case foregroundNotification
+    case foregroundDeepLink
+}
+
+
+#if compiler(>=6)
+extension ProductAnalyticsActivityFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductAnalyticsActivityFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ProductAnalyticsActivityFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductAnalyticsActivityFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .foreground
+
+        case 2: return .background
+
+        case 3: return .accountChanged
+
+        case 4: return .foregroundNotification
+
+        case 5: return .foregroundDeepLink
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProductAnalyticsActivityFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .foreground:
+            writeInt(&buf, Int32(1))
+
+
+        case .background:
+            writeInt(&buf, Int32(2))
+
+
+        case .accountChanged:
+            writeInt(&buf, Int32(3))
+
+
+        case .foregroundNotification:
+            writeInt(&buf, Int32(4))
+
+
+        case .foregroundDeepLink:
+            writeInt(&buf, Int32(5))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsActivityFfi_lift(_ buf: RustBuffer) throws -> ProductAnalyticsActivityFfi {
+    return try FfiConverterTypeProductAnalyticsActivityFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductAnalyticsActivityFfi_lower(_ value: ProductAnalyticsActivityFfi) -> RustBuffer {
+    return FfiConverterTypeProductAnalyticsActivityFfi.lower(value)
+}
+
+
+extension ProductAnalyticsActivityFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ProductEventModeFfi {
+
+    case journey
+    case aggregate
+}
+
+
+#if compiler(>=6)
+extension ProductEventModeFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductEventModeFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ProductEventModeFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductEventModeFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .journey
+
+        case 2: return .aggregate
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProductEventModeFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .journey:
+            writeInt(&buf, Int32(1))
+
+
+        case .aggregate:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventModeFfi_lift(_ buf: RustBuffer) throws -> ProductEventModeFfi {
+    return try FfiConverterTypeProductEventModeFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductEventModeFfi_lower(_ value: ProductEventModeFfi) -> RustBuffer {
+    return FfiConverterTypeProductEventModeFfi.lower(value)
+}
+
+
+extension ProductEventModeFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ProductPropertyKindFfi {
+
+    case `enum`
+    case boolean
+    case countBucket
+    case durationBucket
+}
+
+
+#if compiler(>=6)
+extension ProductPropertyKindFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductPropertyKindFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ProductPropertyKindFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductPropertyKindFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .`enum`
+
+        case 2: return .boolean
+
+        case 3: return .countBucket
+
+        case 4: return .durationBucket
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProductPropertyKindFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .`enum`:
+            writeInt(&buf, Int32(1))
+
+
+        case .boolean:
+            writeInt(&buf, Int32(2))
+
+
+        case .countBucket:
+            writeInt(&buf, Int32(3))
+
+
+        case .durationBucket:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductPropertyKindFfi_lift(_ buf: RustBuffer) throws -> ProductPropertyKindFfi {
+    return try FfiConverterTypeProductPropertyKindFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductPropertyKindFfi_lower(_ value: ProductPropertyKindFfi) -> RustBuffer {
+    return FfiConverterTypeProductPropertyKindFfi.lower(value)
+}
+
+
+extension ProductPropertyKindFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum ProductRecordResultFfi {
+
+    case recorded
+    case ignoredDisabled
+    case ignoredUnconfigured
+    case ignoredDuplicate
+    case droppedCapacity
+}
+
+
+#if compiler(>=6)
+extension ProductRecordResultFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProductRecordResultFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ProductRecordResultFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProductRecordResultFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .recorded
+
+        case 2: return .ignoredDisabled
+
+        case 3: return .ignoredUnconfigured
+
+        case 4: return .ignoredDuplicate
+
+        case 5: return .droppedCapacity
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProductRecordResultFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .recorded:
+            writeInt(&buf, Int32(1))
+
+
+        case .ignoredDisabled:
+            writeInt(&buf, Int32(2))
+
+
+        case .ignoredUnconfigured:
+            writeInt(&buf, Int32(3))
+
+
+        case .ignoredDuplicate:
+            writeInt(&buf, Int32(4))
+
+
+        case .droppedCapacity:
+            writeInt(&buf, Int32(5))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductRecordResultFfi_lift(_ buf: RustBuffer) throws -> ProductRecordResultFfi {
+    return try FfiConverterTypeProductRecordResultFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProductRecordResultFfi_lower(_ value: ProductRecordResultFfi) -> RustBuffer {
+    return FfiConverterTypeProductRecordResultFfi.lower(value)
+}
+
+
+extension ProductRecordResultFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum PushPlatformFfi {
 
     case apns
@@ -27544,6 +28793,83 @@ public func FfiConverterTypeTimelineUpdateTriggerFfi_lower(_ value: TimelineUpda
 
 
 extension TimelineUpdateTriggerFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum UsageDiagnosticsDecisionFfi {
+
+    case acceptanceRequired
+    case declined
+    case granted
+}
+
+
+#if compiler(>=6)
+extension UsageDiagnosticsDecisionFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUsageDiagnosticsDecisionFfi: FfiConverterRustBuffer {
+    typealias SwiftType = UsageDiagnosticsDecisionFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UsageDiagnosticsDecisionFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .acceptanceRequired
+
+        case 2: return .declined
+
+        case 3: return .granted
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: UsageDiagnosticsDecisionFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .acceptanceRequired:
+            writeInt(&buf, Int32(1))
+
+
+        case .declined:
+            writeInt(&buf, Int32(2))
+
+
+        case .granted:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsDecisionFfi_lift(_ buf: RustBuffer) throws -> UsageDiagnosticsDecisionFfi {
+    return try FfiConverterTypeUsageDiagnosticsDecisionFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUsageDiagnosticsDecisionFfi_lower(_ value: UsageDiagnosticsDecisionFfi) -> RustBuffer {
+    return FfiConverterTypeUsageDiagnosticsDecisionFfi.lower(value)
+}
+
+
+extension UsageDiagnosticsDecisionFfi: Equatable, Hashable {}
 
 
 
@@ -29441,6 +30767,81 @@ fileprivate struct FfiConverterSequenceTypePreparedGroupImageUploadFfi: FfiConve
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeProductEventPropertyFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [ProductEventPropertyFfi]
+
+    public static func write(_ value: [ProductEventPropertyFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProductEventPropertyFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ProductEventPropertyFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ProductEventPropertyFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProductEventPropertyFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeProductEventSchemaFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [ProductEventSchemaFfi]
+
+    public static func write(_ value: [ProductEventSchemaFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProductEventSchemaFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ProductEventSchemaFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ProductEventSchemaFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProductEventSchemaFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeProductPropertySchemaFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [ProductPropertySchemaFfi]
+
+    public static func write(_ value: [ProductPropertySchemaFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeProductPropertySchemaFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ProductPropertySchemaFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ProductPropertySchemaFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeProductPropertySchemaFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeRelayEndpointClassificationFfi: FfiConverterRustBuffer {
     typealias SwiftType = [RelayEndpointClassificationFfi]
 
@@ -30136,6 +31537,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_export_encrypted_secret_key() != 6808) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_flush_product_analytics() != 63031) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_follow_user() != 26050) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -30301,6 +31705,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_record_host_performance() != 50448) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_record_product_event() != 47919) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_refresh_profile() != 33641) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -30433,10 +31840,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_pinned_chat_order() != 64195) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_product_analytics_activity() != 40986) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_product_analytics_runtime_config() != 33672) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_runtime_config() != 6820) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_settings() != 50897) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_relay_telemetry_settings() != 3204) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_usage_diagnostics_consent() != 34489) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_shutdown() != 50597) {
@@ -30493,7 +31909,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_sweep_expired_retention() != 8624) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_telemetry_install_id() != 40706) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_telemetry_install_id() != 24501) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_timeline_messages() != 49184) {
@@ -30527,6 +31943,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_upsert_push_registration() != 14760) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_usage_diagnostics_settings() != 30393) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_usage_diagnostics_status() != 25454) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_user_profile() != 12217) {

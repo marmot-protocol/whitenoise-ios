@@ -56,6 +56,7 @@ struct PrivacySecuritySettingsView: View {
                 Text("Signs out every profile and permanently removes all White Noise data from this iPhone.")
             }
         }
+        .productScreen(.settings, section: .privacy)
         .localizedNavigationTitle("Privacy & Security")
         .navigationBarTitleDisplayMode(.inline)
         .task {

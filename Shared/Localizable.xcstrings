@@ -89337,6 +89337,1369 @@
           }
         }
       }
+    },
+    "Accepted batches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accepted batches"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Akzeptierte Pakete"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lotes aceptados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lots acceptés"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batch accettati"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lotes aceitos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Принятые пакеты"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kabul edilen gruplar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已接受的批次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已接受的批次"
+          }
+        }
+      }
+    },
+    "Configuration rejected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuration rejected"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfiguration abgelehnt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuración rechazada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuration refusée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurazione rifiutata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuração rejeitada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Конфигурация отклонена"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapılandırma reddedildi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置被拒绝"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定遭拒"
+          }
+        }
+      }
+    },
+    "Couldn’t load sharing settings. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t load sharing settings. Try again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Freigabeeinstellungen konnten nicht geladen werden. Versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron cargar los ajustes de uso compartido. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger les réglages de partage. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare le impostazioni di condivisione. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar as configurações de compartilhamento. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить настройки отправки данных. Попробуйте ещё раз."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paylaşım ayarları yüklenemedi. Tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载共享设置。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法載入分享設定。請再試一次。"
+          }
+        }
+      }
+    },
+    "Couldn’t save sharing settings. Your change was not confirmed. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t save sharing settings. Your change was not confirmed. Try again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Freigabeeinstellungen konnten nicht gespeichert werden. Deine Änderung wurde nicht bestätigt. Versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar los ajustes de uso compartido. Tu cambio no se ha confirmado. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer les réglages de partage. Votre modification n’a pas été confirmée. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare le impostazioni di condivisione. La modifica non è stata confermata. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar as configurações de compartilhamento. A alteração não foi confirmada. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить настройки отправки данных. Изменение не подтверждено. Попробуйте ещё раз."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paylaşım ayarları kaydedilemedi. Değişikliğiniz doğrulanmadı. Tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存共享设置。你的更改尚未确认。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法儲存分享設定。你的變更尚未確認。請再試一次。"
+          }
+        }
+      }
+    },
+    "Dropped events" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dropped events"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verworfene Ereignisse"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos descartados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Événements abandonnés"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventi scartati"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos descartados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отброшенные события"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atılan olaylar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已丢弃的事件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已捨棄的事件"
+          }
+        }
+      }
+    },
+    "Failed batches" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed batches"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlgeschlagene Pakete"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lotes fallidos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lots en échec"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batch non riusciti"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lotes com falha"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Неудачные пакеты"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başarısız gruplar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "失败的批次"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "失敗的批次"
+          }
+        }
+      }
+    },
+    "Help us understand how White Noise is used and make messaging more reliable. Sharing is optional." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help us understand how White Noise is used and make messaging more reliable. Sharing is optional."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hilf uns zu verstehen, wie White Noise genutzt wird, und Nachrichten zuverlässiger zu machen. Das Teilen ist freiwillig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayúdanos a comprender cómo se usa White Noise y a mejorar la fiabilidad de los mensajes. Compartir es opcional."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aidez-nous à comprendre l’utilisation de White Noise et à rendre la messagerie plus fiable. Le partage est facultatif."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aiutaci a capire come viene usato White Noise e a rendere i messaggi più affidabili. La condivisione è facoltativa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajude-nos a entender como o White Noise é usado e a tornar as mensagens mais confiáveis. O compartilhamento é opcional."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Помогите нам понять, как используется White Noise, и повысить надёжность обмена сообщениями. Отправка данных необязательна."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’un nasıl kullanıldığını anlamamıza ve mesajlaşmayı daha güvenilir hâle getirmemize yardımcı olun. Paylaşım isteğe bağlıdır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帮助我们了解 White Noise 的使用情况，并提高消息传递的可靠性。共享完全自愿。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "協助我們了解 White Noise 的使用情況，並提高訊息傳遞的可靠性。分享完全自願。"
+          }
+        }
+      }
+    },
+    "Operator: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operator: %@"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Betreiber: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operador: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opérateur : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestore: %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Operador: %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Оператор: %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İşletmeci: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运营方：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "營運方：%@"
+          }
+        }
+      }
+    },
+    "Permission needed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permission needed"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zustimmung erforderlich"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se necesita permiso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autorisation nécessaire"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consenso necessario"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permissão necessária"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Требуется разрешение"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İzin gerekli"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要许可"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要許可"
+          }
+        }
+      }
+    },
+    "Queued events" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queued events"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ereignisse in der Warteschlange"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos en cola"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Événements en attente"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventi in coda"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eventos na fila"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "События в очереди"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kuyruktaki olaylar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "队列中的事件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "佇列中的事件"
+          }
+        }
+      }
+    },
+    "Ready to share" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to share"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereit zum Teilen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo para compartir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prêt à partager"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronto per la condivisione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronto para compartilhar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Готово к отправке"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paylaşmaya hazır"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已准备好共享"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已準備好分享"
+          }
+        }
+      }
+    },
+    "Retention policy has not yet been verified for this development build." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retention policy has not yet been verified for this development build."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aufbewahrungsrichtlinie wurde für diese Entwicklungsversion noch nicht überprüft."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La política de conservación aún no se ha verificado para esta versión de desarrollo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La politique de conservation n’a pas encore été vérifiée pour cette version de développement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La politica di conservazione non è ancora stata verificata per questa versione di sviluppo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A política de retenção ainda não foi verificada para esta versão de desenvolvimento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Политика хранения для этой версии для разработчиков ещё не проверена."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu geliştirme sürümü için saklama politikası henüz doğrulanmadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此开发版本的保留政策尚未经验证。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此開發版本的保留政策尚未經過驗證。"
+          }
+        }
+      }
+    },
+    "Share usage and diagnostics" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share usage and diagnostics"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzungs- und Diagnosedaten teilen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir uso y diagnóstico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager les données d’utilisation et de diagnostic"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi dati di utilizzo e diagnostica"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar uso e diagnóstico"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлять данные об использовании и диагностике"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım ve tanılama verilerini paylaş"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享使用情况和诊断数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享使用情況與診斷資料"
+          }
+        }
+      }
+    },
+    "The scope of usage and diagnostics has changed. Review the updated information before sharing again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The scope of usage and diagnostics has changed. Review the updated information before sharing again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Umfang der Nutzungs- und Diagnosedaten hat sich geändert. Lies die aktualisierten Informationen, bevor du erneut zustimmst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El alcance de los datos de uso y diagnóstico ha cambiado. Revisa la información actualizada antes de volver a compartir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le périmètre des données d’utilisation et de diagnostic a changé. Consultez les informations mises à jour avant de reprendre le partage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’ambito dei dati di utilizzo e diagnostica è cambiato. Leggi le informazioni aggiornate prima di riattivare la condivisione."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O escopo dos dados de uso e diagnóstico mudou. Revise as informações atualizadas antes de compartilhar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Состав данных об использовании и диагностике изменился. Ознакомьтесь с обновлённой информацией, прежде чем снова включать отправку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım ve tanılama verilerinin kapsamı değişti. Yeniden paylaşmadan önce güncellenen bilgileri inceleyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情况和诊断数据的范围已更改。请先阅读更新后的信息，再重新开启共享。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情況與診斷資料的範圍已變更。請先閱讀更新後的資訊，再重新開啟分享。"
+          }
+        }
+      }
+    },
+    "Unavailable in this build" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unavailable in this build"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In dieser Version nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No disponible en esta versión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indisponible dans cette version"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non disponibile in questa versione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indisponível nesta versão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Недоступно в этой версии"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sürümde kullanılamıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本不支持"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本不支援"
+          }
+        }
+      }
+    },
+    "Usage and diagnostics" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage and diagnostics"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzung und Diagnose"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso y diagnóstico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisation et diagnostic"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilizzo e diagnostica"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso e diagnóstico"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Использование и диагностика"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım ve tanılama"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情况和诊断"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情況與診斷"
+          }
+        }
+      }
+    },
+    "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. The Aptabase server receives your IP address, uses IP and user-agent information for daily activity grouping, and adds approximate country and region. Diagnostics includes a random installation identifier that changes after you turn sharing off. Turning this off stops both pipelines; already transmitted data cannot be recalled. Diagnostic logging is separate." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. The Aptabase server receives your IP address, uses IP and user-agent information for daily activity grouping, and adds approximate country and region. Diagnostics includes a random installation identifier that changes after you turn sharing off. Turning this off stops both pipelines; already transmitted data cannot be recalled. Diagnostic logging is separate."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Nutzungsdaten enthalten freigegebene, in Größenklassen zusammengefasste Aktivitäten und temporäre Sitzungs-IDs, aber keine Nachrichteninhalte oder Konto- und Gruppenkennungen. Der Aptabase-Server erhält deine IP-Adresse, verwendet IP- und User-Agent-Informationen zur täglichen Gruppierung von Aktivitäten und ergänzt ungefähre Länder- und Regionsangaben. Diagnosedaten enthalten eine zufällige Installationskennung, die sich ändert, nachdem du das Teilen ausschaltest. Das Ausschalten stoppt beide Datenübertragungen; bereits übertragene Daten können nicht zurückgerufen werden. Diagnoseprotokolle werden separat gesteuert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de uso incluyen actividad aprobada agrupada por intervalos e identificadores de sesión temporales, sin contenido de mensajes ni identificadores de cuentas o grupos. El servidor de Aptabase recibe tu dirección IP, utiliza la IP y el agente de usuario para agrupar la actividad diaria y añade el país y la región aproximados. Los datos de diagnóstico incluyen un identificador de instalación aleatorio que cambia después de desactivar el uso compartido. Al desactivarlo se detienen ambos canales; los datos ya enviados no se pueden recuperar. Los registros de diagnóstico se controlan por separado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données d’utilisation comprennent des activités approuvées regroupées par tranches et des identifiants de session temporaires, sans contenu des messages ni identifiants de comptes ou de groupes. Le serveur Aptabase reçoit votre adresse IP, utilise les informations IP et d’agent utilisateur pour regrouper les activités quotidiennes et ajoute une estimation du pays et de la région. Les diagnostics comprennent un identifiant d’installation aléatoire qui change après la désactivation du partage. La désactivation arrête les deux canaux ; les données déjà transmises ne peuvent pas être rappelées. Les journaux de diagnostic sont gérés séparément."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati di utilizzo includono attività approvate raggruppate per fasce e identificativi di sessione temporanei, senza contenuti dei messaggi né identificativi di account o gruppi. Il server Aptabase riceve il tuo indirizzo IP, usa le informazioni IP e user agent per raggruppare le attività giornaliere e aggiunge paese e regione approssimativi. La diagnostica include un identificativo di installazione casuale che cambia dopo aver disattivato la condivisione. La disattivazione interrompe entrambi i canali; i dati già trasmessi non possono essere richiamati. I log diagnostici sono gestiti separatamente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados de uso incluem atividades aprovadas agrupadas por faixas e IDs de sessão temporários, sem conteúdo de mensagens nem identificadores de contas ou grupos. O servidor Aptabase recebe seu endereço IP, usa informações de IP e agente de usuário para agrupar atividades diárias e acrescenta país e região aproximados. O diagnóstico inclui um identificador de instalação aleatório que muda após desativar o compartilhamento. A desativação interrompe os dois canais; os dados já transmitidos não podem ser recuperados. Os registros de diagnóstico são controlados separadamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные об использовании содержат одобренные показатели активности, сгруппированные по диапазонам, и временные идентификаторы сеансов, без содержимого сообщений и идентификаторов аккаунтов или групп. Сервер Aptabase получает ваш IP-адрес, использует IP и сведения о пользовательском агенте для ежедневной группировки активности и добавляет приблизительные данные о стране и регионе. Диагностика содержит случайный идентификатор установки, который меняется после отключения отправки данных. Отключение останавливает оба канала; уже переданные данные невозможно отозвать. Диагностические журналы управляются отдельно."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım verileri, mesaj içerikleri veya hesap ve grup tanımlayıcıları olmadan, onaylı ve aralıklara ayrılmış etkinlikler ile geçici oturum kimlikleri içerir. Aptabase sunucusu IP adresinizi alır, günlük etkinlikleri gruplamak için IP ve kullanıcı aracısı bilgilerini kullanır, yaklaşık ülke ve bölge bilgisi ekler. Tanılama, paylaşımı kapattıktan sonra değişen rastgele bir kurulum tanımlayıcısı içerir. Paylaşımı kapatmak her iki kanalı da durdurur; önceden iletilmiş veriler geri alınamaz. Tanılama günlükleri ayrı olarak yönetilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用数据包含经过批准、按区间归类的活动和临时会话标识，不包含消息内容、账户或群组标识。Aptabase 服务器会接收你的 IP 地址，使用 IP 和用户代理信息按天对活动进行分组，并添加大致的国家和地区信息。诊断数据包含一个随机安装标识，该标识在关闭共享后会更换。关闭共享将停止这两条数据通道；已经传输的数据无法撤回。诊断日志单独控制。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用資料包含經過核准、按區間分類的活動及暫時性工作階段識別碼，不包含訊息內容、帳號或群組識別碼。Aptabase 伺服器會接收你的 IP 位址，使用 IP 與使用者代理程式資訊按天對活動進行分組，並加入大致的國家和地區資訊。診斷資料包含一個隨機安裝識別碼，該識別碼在關閉分享後會更換。關閉分享將停止這兩條資料管道；已經傳輸的資料無法撤回。診斷記錄分開控制。"
+          }
+        }
+      }
+    },
+    "Usage: %@. Diagnostics: %@." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usage: %@. Diagnostics: %@."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzung: %@. Diagnose: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso: %@. Diagnóstico: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilisation : %@. Diagnostic : %@."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utilizzo: %@. Diagnostica: %@."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uso: %@. Diagnóstico: %@."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Использование: %@. Диагностика: %@."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım: %@. Tanılama: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情况：%@。诊断：%@。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用情況：%@。診斷：%@。"
+          }
+        }
+      }
+    },
+    "You previously shared reliability metrics. Sharing now also includes feature usage, so we need your permission again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You previously shared reliability metrics. Sharing now also includes feature usage, so we need your permission again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast zuvor Zuverlässigkeitsmetriken geteilt. Da nun auch die Nutzung von Funktionen erfasst wird, benötigen wir erneut deine Zustimmung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Antes compartías métricas de fiabilidad. Ahora también se incluye el uso de funciones, por lo que necesitamos tu permiso de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous partagiez auparavant des mesures de fiabilité. Le partage inclut désormais aussi l’utilisation des fonctionnalités : nous avons donc besoin d’une nouvelle autorisation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In precedenza condividevi metriche di affidabilità. Ora la condivisione include anche l’uso delle funzionalità, quindi serve nuovamente il tuo consenso."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você compartilhava métricas de confiabilidade. O compartilhamento agora também inclui o uso de recursos, então precisamos da sua permissão novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ранее вы отправляли показатели надёжности. Теперь в данные входит и использование функций, поэтому нам снова нужно ваше разрешение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daha önce güvenilirlik ölçümlerini paylaşıyordunuz. Paylaşım artık özellik kullanımını da içerdiği için yeniden izninize ihtiyacımız var."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你之前共享了可靠性指标。现在共享范围还包括功能使用情况，因此我们需要再次征得你的同意。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你之前分享了可靠性指標。現在分享範圍也包含功能使用情況，因此我們需要再次取得你的同意。"
+          }
+        }
+      }
+    },
+    "Feature activity and reliability metrics, with temporary sessions and a resettable diagnostic identifier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feature activity and reliability metrics, with temporary sessions and a resettable diagnostic identifier."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funktionsaktivitäten und Zuverlässigkeitsmetriken mit temporären Sitzungen und einer zurücksetzbaren Diagnosekennung."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actividad de las funciones y métricas de fiabilidad, con sesiones temporales y un identificador de diagnóstico restablecible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activité des fonctionnalités et mesures de fiabilité, avec des sessions temporaires et un identifiant de diagnostic réinitialisable."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attività delle funzionalità e metriche di affidabilità, con sessioni temporanee e un identificativo diagnostico reimpostabile."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atividade dos recursos e métricas de confiabilidade, com sessões temporárias e um identificador de diagnóstico redefinível."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Активность функций и показатели надёжности с временными сеансами и сбрасываемым диагностическим идентификатором."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçici oturumlar ve sıfırlanabilir bir tanılama tanımlayıcısıyla özellik etkinliği ve güvenilirlik ölçümleri."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能活动和可靠性指标，使用临时会话及可重置的诊断标识。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能活動與可靠性指標，使用暫時性工作階段及可重設的診斷識別碼。"
+          }
+        }
+      }
+    },
+    "Technical logs from every profile on this device, shared separately." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technical logs from every profile on this device, shared separately."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Technische Protokolle aller Profile auf diesem Gerät, die separat geteilt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registros técnicos de todos los perfiles de este dispositivo, compartidos por separado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journaux techniques de tous les profils de cet appareil, partagés séparément."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log tecnici di tutti i profili su questo dispositivo, condivisi separatamente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registros técnicos de todos os perfis neste dispositivo, compartilhados separadamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Технические журналы всех профилей на этом устройстве, отправляемые отдельно."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazdaki tüm profillerin ayrı olarak paylaşılan teknik günlükleri."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备上所有资料的技术日志，单独共享。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此裝置上所有個人檔案的技術記錄，分開分享。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

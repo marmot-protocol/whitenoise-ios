@@ -399,6 +399,7 @@ final class RuntimeLifecycle {
             }
 #endif
             noteRuntimeForegroundReadyAfterSuspension()
+            await appState.refreshProductAnalytics()
             let accountLoadStartedAt = ContinuousClock.now
             // Routing needs the durable account list, but unread badges do not
             // gate local conversation display. Refresh them after `.ready`.
@@ -584,6 +585,7 @@ final class RuntimeLifecycle {
     }
 
     private func shutdownAndReleaseCurrentClient() async {
+        appState?.invalidateProductAnalytics()
         let clientToRelease = client
         client = nil
         guard let clientToRelease else { return }
@@ -657,6 +659,7 @@ final class RuntimeLifecycle {
 
     @discardableResult
     func startRuntimeSuspension() -> Task<Void, Never> {
+        appState?.invalidateProductAnalytics()
         appState?.isAppSceneActive = false
         appState?.sceneHasReportedPhase = true
         if appState?.phase == .bootstrapping {
@@ -736,7 +739,14 @@ final class RuntimeLifecycle {
 
         isBackgroundStorageCloseInProgress = true
         defer { finishBackgroundStorageClose() }
+        let backgroundClient = client
+        let backgroundObservation = Task {
+            try? await backgroundClient?.marmot.setProductAnalyticsActivity(activity: .background)
+        }
+        // Terminal shutdown closes storage before draining delivery; never await
+        // the activity setter's network flush before releasing the database lock.
         await shutdownAndReleaseCurrentClient()
+        await backgroundObservation.value
         // `shutdownAndClose()` explicitly closes every SQLite connection and
         // releases the root lease. Dropping only the top-level handle cannot
         // prove that while subscriptions and projections retain internal Arcs;
@@ -853,6 +863,7 @@ final class RuntimeLifecycle {
                     return
                 }
                 noteRuntimeForegroundReadyAfterSuspension()
+                await appState?.refreshProductAnalytics()
                 // `startRuntime()` returns after local hydration and account
                 // command-readiness. Marmot's initial relay sync continues
                 // asynchronously, so local conversations can be shown now.
@@ -925,6 +936,9 @@ final class RuntimeLifecycle {
 #if DEBUG
         hostPerformanceObserverForTesting?(operation, durationMs, outcome)
 #endif
+        if operation == .splashReady || operation == .foregroundLocalReady {
+            appState?.productAnalytics.record(.ready(success: outcome == .success, milliseconds: durationMs))
+        }
         client.recordHostPerformance(
             operation: operation,
             durationMs: durationMs,

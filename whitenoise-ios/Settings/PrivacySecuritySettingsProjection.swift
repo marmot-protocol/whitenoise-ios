@@ -37,6 +37,11 @@ nonisolated struct PrivacyTelemetrySettingsProjection: Equatable, Sendable {
     var exportEnabled: Bool
     var exportIntervalSeconds: UInt64
 
+    init(settings: UsageDiagnosticsSettingsFfi) {
+        self.exportEnabled = settings.decision == .granted
+        self.exportIntervalSeconds = 0
+    }
+
     init(settings: RelayTelemetrySettingsFfi) {
         self.exportEnabled = settings.exportEnabled
         self.exportIntervalSeconds = settings.exportIntervalSeconds

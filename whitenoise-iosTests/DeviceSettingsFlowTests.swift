@@ -5,32 +5,6 @@ import Testing
 
 @MainActor
 struct DeviceSettingsFlowTests {
-    @Test func diagnosticsPromptIsDeviceWideAndWaitsForEntryDismissal() throws {
-        let name = "DiagnosticsConsentTests.\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
-        let consent = DeviceDiagnosticsConsent(defaults: defaults)
-        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
-        consent.scheduleAfterSignIn()
-        #expect(DeviceDiagnosticsConsent(defaults: defaults).pending)
-        consent.onboardingVisible = true
-        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
-        consent.onboardingVisible = false
-        #expect(!consent.canPresent(chatsVisible: false, anotherSheetVisible: false, runtimeReady: true))
-        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: true, runtimeReady: true))
-        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: false))
-        #expect(!consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true,
-                                   chatNavigationPending: true))
-        #expect(consent.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
-        consent.complete()
-        let relaunched = DeviceDiagnosticsConsent(defaults: defaults)
-        relaunched.scheduleAfterSignIn()
-        #expect(!relaunched.pending)
-        relaunched.reset()
-        relaunched.scheduleAfterSignIn()
-        #expect(relaunched.pending)
-    }
-
     @Test func profileChooserSurvivesLaunchUntilAProfileIsSelected() throws {
         let name = "ProfileChooserTests.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: name))

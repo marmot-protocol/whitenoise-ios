@@ -3458,6 +3458,7 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
 }
 
 struct MessageMediaFullscreenGalleryView: View {
+    @Environment(AppState.self) private var appState
     let gallery: MessageMediaGallery
     let onLoadMedia: ConversationMediaLoader
     var forwardingContext: MediaForwardingContext?
@@ -3469,6 +3470,7 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var preparedMedia: FullscreenMediaPrepared?
     @State private var mediaShare: FullscreenMediaShare?
     @State private var exportDocument: DecryptedMediaExportDocument?
+    @State private var saveProductTicket: ProductAnalyticsRecorder.Ticket?
     @State private var isExporting = false
     @State private var actionError: String?
     @State private var forwardMedia: FullscreenMediaPrepared?
@@ -3562,6 +3564,13 @@ struct MessageMediaFullscreenGalleryView: View {
             contentType: preparedMedia?.contentType ?? .data,
             defaultFilename: preparedMedia?.item.fileName ?? "Media"
         ) { result in
+            let outcome: ProductOutcome
+            switch result {
+            case .success: outcome = .success
+            case .failure(let error): outcome = (error as NSError).code == NSUserCancelledError ? .cancelled : .failure
+            }
+            appState.productAnalytics.record(.attachment(.save, outcome), ticket: saveProductTicket)
+            saveProductTicket = nil
             if case .failure = result {
                 actionError = L10n.string("Couldn't save media.")
             }
@@ -3587,6 +3596,7 @@ struct MessageMediaFullscreenGalleryView: View {
         Menu {
             Button("Save", systemImage: "square.and.arrow.down") {
                 guard let preparedMedia else { return }
+                saveProductTicket = appState.productAnalytics.ticket()
                 exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
                 isExporting = true
             }
@@ -3733,6 +3743,7 @@ private struct MessageMediaFullscreenPage: View {
 }
 
 private struct MessageMediaFullscreenVideoPage: View {
+    @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isSelected: Bool
     let onLoadMedia: ConversationMediaLoader
@@ -3821,6 +3832,9 @@ private struct MessageMediaFullscreenVideoPage: View {
             return
         }
 
+        let productTicket = appState.productAnalytics.ticket()
+        var productOutcome: ProductOutcome = .cancelled
+        defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
         isLoading = true
         didFail = false
         defer { isLoading = false }
@@ -3828,11 +3842,13 @@ private struct MessageMediaFullscreenVideoPage: View {
             let url = try await playbackFileURL()
             guard !Task.isCancelled, isSelected else { return }
             let next = AVPlayer(url: url)
+            productOutcome = .success
             player = next
             next.play()
             audioSession.attach(to: next)
         } catch {
             guard !Task.isCancelled, isSelected else { return }
+            productOutcome = .failure
             didFail = true
         }
     }
@@ -3859,6 +3875,7 @@ private struct MessageMediaFullscreenVideoPage: View {
 }
 
 private struct MessageMediaFullscreenImagePage: View {
+    @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let onLoadMedia: ConversationMediaLoader
 
@@ -3928,6 +3945,9 @@ private struct MessageMediaFullscreenImagePage: View {
 
     private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, force: Bool = false) async {
         guard image == nil || force else { return }
+        let productTicket = appState.productAnalytics.ticket()
+        var productOutcome: ProductOutcome = .cancelled
+        defer { appState.productAnalytics.record(.attachment(.open, productOutcome), ticket: productTicket) }
         let maxPixelSize = fullscreenMaxPixelSize(viewSize: viewSize, scale: scale)
 
         // First, try decoding any bytes we already hold (initial data passed in
@@ -3940,6 +3960,7 @@ private struct MessageMediaFullscreenImagePage: View {
                 scale: scale
             ) {
                 guard !Task.isCancelled else { return }
+                productOutcome = .success
                 image = decoded
                 didFail = false
                 return
@@ -3960,16 +3981,19 @@ private struct MessageMediaFullscreenImagePage: View {
                 guard !Task.isCancelled else { return }
                 imageData = nil
                 image = nil
+                productOutcome = .failure
                 didFail = true
                 return
             }
             guard !Task.isCancelled else { return }
+            productOutcome = .success
             imageData = data
             image = decoded
         } catch {
             guard !Task.isCancelled else { return }
             imageData = nil
             image = nil
+            productOutcome = .failure
             didFail = true
         }
     }

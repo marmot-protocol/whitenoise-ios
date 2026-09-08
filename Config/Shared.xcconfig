@@ -16,3 +16,8 @@ WHITENOISE_AUDIT_LOG_BEARER_TOKEN = $(AUDIT_LOG_TOKEN_WHITENOISE_IOS)
 WHITENOISE_GIPHY_API_KEY = $(GIPHY_API_KEY_WHITENOISE_IOS)
 
 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = White Noise uses your location only when you choose to share it in an encrypted chat.
+
+// Provision the full verified ingestion route and retention disclosure before distribution.
+WHITENOISE_PRODUCT_ANALYTICS_ENDPOINT = $(APTABASE_EVENTS_ENDPOINT_WHITENOISE_IOS)
+WHITENOISE_PRODUCT_ANALYTICS_OPERATOR = white_noise
+WHITENOISE_PRODUCT_ANALYTICS_RETENTION = $(APTABASE_RETENTION_WHITENOISE_IOS)

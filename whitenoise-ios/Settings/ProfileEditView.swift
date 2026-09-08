@@ -119,6 +119,7 @@ struct ProfileEditView: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)

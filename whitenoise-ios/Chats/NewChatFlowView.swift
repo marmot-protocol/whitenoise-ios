@@ -18,6 +18,7 @@ struct NewChatFlowView: View {
     @State private var path: [Route] = []
     @State private var scanTarget: ScanTarget?
     @State private var showMyCode = false
+    @State private var productCompose = ProductComposeObservation()
     @State private var didSeedInitialMembers = false
 
     enum Route: Hashable {
@@ -46,6 +47,7 @@ struct NewChatFlowView: View {
                 onShowMyCode: { showMyCode = true },
                 onOpen: open
             )
+            .productScreen(.directory)
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .groupPicker:
@@ -64,7 +66,9 @@ struct NewChatFlowView: View {
             }
         }
         .interactiveDismissDisabled(model.isBusy)
+        .productScreen(.compose)
         .onAppear {
+            productCompose.begin(using: appState.productAnalytics)
             guard !didSeedInitialMembers, !initialGroupMembers.isEmpty else { return }
             didSeedInitialMembers = true
             path = [.groupPicker]
@@ -124,12 +128,14 @@ struct NewChatFlowView: View {
             .appAppearance()
         }
         .onDisappear {
+            productCompose.end(using: appState.productAnalytics, temporarilyCovered: scanTarget != nil)
             model.messageUserSearch.cancel()
             model.cancelGroupMemberPrewarm()
         }
     }
 
     private func open(_ groupIdHex: String) {
+        productCompose.complete()
         DeferredChatPresentation.present(
             groupIdHex: groupIdHex,
             using: appState,

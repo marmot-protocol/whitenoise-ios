@@ -211,6 +211,7 @@ struct ChatsListView: View {
             }
             .onAppear {
                 chatsVisible = true
+                appState.productAnalytics.record(.screen(.inbox))
                 if appState.openSettingsAfterProfileSelection {
                     appState.openSettingsAfterProfileSelection = false
                     showSettings = true
@@ -227,7 +228,7 @@ struct ChatsListView: View {
             .onChange(of: canPresentDiagnostics) {
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
             }
-            .sheet(isPresented: $showDiagnosticsPrompt, onDismiss: { appState.diagnosticsConsent.complete() }) {
+            .sheet(isPresented: $showDiagnosticsPrompt) {
                 NavigationStack { DiagnosticsAndImprovementsView(isPrompt: true) }
                     .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large])
                     .presentationDragIndicator(.visible)
