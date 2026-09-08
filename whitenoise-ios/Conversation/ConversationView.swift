@@ -697,6 +697,12 @@ struct ConversationView: View {
             // button can resign the keyboard before popping so it no longer
             // flashes mid-screen during the transition.
             .toolbar(.hidden, for: .navigationBar)
+            // Hiding the bar also takes the back button's screen-edge pop
+            // gesture with it; this puts the swipe-back to Chats back.
+            .background {
+                InteractivePopGestureEnabler(onBegin: dismissKeyboard)
+                    .accessibilityHidden(true)
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 if viewModel?.search.isActive != true {
                     conversationHeaderBar

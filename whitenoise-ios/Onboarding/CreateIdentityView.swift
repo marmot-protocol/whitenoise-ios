@@ -25,6 +25,7 @@ struct IdentityProfileSetupView: View {
     @State private var pendingPhotoSource: PendingPhotoSource?
     @State private var showAvatarDisclosure = false
     @State private var showPhotoPicker = false
+    @State private var showPhotoMenu = false
     @State private var showFileImporter = false
     @State private var showWebImagePicker = false
     @State private var cropSource: AvatarImageCropSource?
@@ -98,6 +99,18 @@ struct IdentityProfileSetupView: View {
         }
         .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
+        .wnPhotoMenu(isPresented: $showPhotoMenu, hasPhoto: model.avatarDraft != nil) { action in
+            switch action {
+            case .chooseFromPhotos:
+                requestPhotoSource(.photos)
+            case .chooseFromFiles:
+                requestPhotoSource(.files)
+            case .findImageOnWeb:
+                showWebImagePicker = true
+            case .removePhoto:
+                model.setAvatarDraft(nil)
+            }
+        }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
@@ -257,35 +270,7 @@ struct IdentityProfileSetupView: View {
             )
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
 
-            Menu {
-                Button {
-                    requestPhotoSource(.photos)
-                } label: {
-                    Label("Choose from Photos", systemImage: "photo.on.rectangle")
-                }
-
-                Button {
-                    requestPhotoSource(.files)
-                } label: {
-                    Label("Choose from Files", systemImage: "folder")
-                }
-
-                Button {
-                    showWebImagePicker = true
-                } label: {
-                    Label("Find Image on Web", systemImage: "globe")
-                }
-
-                if model.avatarDraft != nil {
-                    Divider()
-                    Button("Remove Photo", systemImage: "trash", role: .destructive) {
-                        model.setAvatarDraft(nil)
-                    }
-                }
-            } label: {
-                Text(model.avatarDraft == nil ? "Add Photo" : "Change Photo")
-            }
-            .wnAvatarActionButtonStyle()
+            WNPhotoMenuButton(hasPhoto: model.avatarDraft != nil, isPresented: $showPhotoMenu)
             .padding(.top)
             .disabled(model.isPreparingAvatar)
 
