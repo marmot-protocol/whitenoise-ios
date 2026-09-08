@@ -85,6 +85,8 @@ an unfinished account. Clear an excluded active selection, and retry its durable
 checkpoint on subsequent refreshes without deleting or resetting it. Keep readable
 unfinished identities excluded from normal activation. Refresh only
 the active attempt model; never select another unfinished identity automatically.
+A refresh started before a new Sign In must not discard or overwrite its new setup
+model when the older read completes. Bind staged reads to their original attempt.
 Remove stale setup models when their checkpoints vanish.
 UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
 a close/cancellation API, observe onboarding with cancellable 250 ms polling of

@@ -1344,6 +1344,7 @@ final class AppState {
 #if DEBUG
         try await beforeAccountRefreshForTesting?()
 #endif
+        let setupAtReadStart = pendingAccountSetup
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
@@ -1368,7 +1369,7 @@ final class AppState {
                 Self.accountRefreshLog.error("onboarding_snapshot_read_failed")
                 continue
             }
-            if snapshot?.accountIdHex == pendingAccountSetup?.accountID { currentSetupSnapshot = snapshot }
+            if snapshot?.accountIdHex == setupAtReadStart?.accountID { currentSetupSnapshot = snapshot }
             if let snapshot, !snapshot.ready || snapshot.cancellationPending || signInAttempts.accountIDs.contains(account.accountIdHex) {
                 unfinished.append(snapshot)
             } else {
@@ -1376,6 +1377,9 @@ final class AppState {
             }
         }
         try Task.checkCancellation()
+        guard self.client === client else { throw CancellationError() }
+        // An older account read must not discard a sign-in begun while it awaited storage.
+        guard pendingAccountSetup === setupAtReadStart else { return }
         // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
         accountStore.accounts = readyAccounts
         if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {

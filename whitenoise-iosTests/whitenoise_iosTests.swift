@@ -99,6 +99,31 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test func accountRefreshStartedBeforeImportCannotDiscardItsNewSetup() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let active = appState.activeAccountRef
+        let maintenance = appState.beginForegroundMaintenanceCancellation()
+        for task in maintenance.mutationFollowups { await task.value }
+        let checkpoint = AsyncTestCheckpoint()
+        defer { Task { await checkpoint.release() } }
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in await checkpoint.pause() }
+        let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
+        await checkpoint.waitUntilPaused()
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        _ = try await appState.importIdentity(
+            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
+        )
+        let imported = try #require(appState.pendingAccountSetup)
+        await checkpoint.release()
+        try await refresh.value
+        #expect(appState.pendingAccountSetup === imported)
+        #expect(appState.activeAccountRef == active)
+        #expect(appState.accounts.count == 1)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test(arguments: [false, true])
     func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
         let appState = AppState(
