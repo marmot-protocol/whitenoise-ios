@@ -460,3 +460,11 @@ the test device.
       flat-white toolbar.
 - [ ] VoiceOver: every primary action has a label (compose, send,
       group details, account switcher).
+
+## Developer Key Packages
+
+- With a single current package, Developer Tools → Key Packages shows its identifier, published time, size, and Publish New Key Package. No relay list or maintenance block appears.
+- When a different package for this profile is found on relays, Other Key Packages on Relays appears below the current-package controls, with publication details and sanitized relay addresses. Include an older package still owned locally; local-only retained packages should remain hidden.
+- Relay echoes of the current key material must not create additional rows, even when the publication event differs. A newer relay timestamp must not change which package is shown as current.
+- Publish New Key Package refreshes the current row after success. An error remains actionable; a missing lifecycle or failed read must not promote an arbitrary relay package to current.
+- Swipe-delete remains available for additional relay packages. Refresh and switch profiles; neither action should show another profile's packages.

@@ -3,7 +3,7 @@ import MarmotKit
 
 /// Screen store for `KeyPackagesView`: owns the key-package list + UI state and
 /// the load/publish/delete actions, so the view is pure rendering. The pure
-/// presentation helpers (section grouping, badge titles, byte/date formatting,
+/// presentation helpers (byte/date formatting,
 /// relay sanitizing) stay on the view. Methods take `AppState` rather than
 /// retaining it.
 @MainActor
@@ -11,14 +11,14 @@ import MarmotKit
 final class KeyPackagesViewModel {
     var packages: [AccountKeyPackageFfi] = []
     var lists: AccountRelayListsFfi?
-    var maintenanceStatus: KeyPackageMaintenanceStatusFfi?
+    var presentation = KeyPackagesPresentation()
+    var hasLoaded = false
     private var loadedRef: String?
     // Overlapping reloads (pull-to-refresh racing the task restart) must not
     // let an older result overwrite a newer one, even for the same account.
     private var reloadTicket = 0
     var isLoading = false
     var isPublishing = false
-    var isRepublishing = false
     var deletingEventIds: Set<String> = []
     var loadError: String?
     var maintenanceLoadError: String?
@@ -29,9 +29,14 @@ final class KeyPackagesViewModel {
 
     func reload(using appState: AppState) async {
         guard let ref = appState.activeAccountRef else {
+            reloadTicket += 1
+            isLoading = false
+            loadedRef = nil
+            loadError = nil
             packages = []
             lists = nil
-            maintenanceStatus = nil
+            presentation = KeyPackagesPresentation()
+            hasLoaded = false
             maintenanceLoadError = nil
             return
         }
@@ -51,7 +56,8 @@ final class KeyPackagesViewModel {
         if loadedRef != ref {
             packages = []
             lists = nil
-            maintenanceStatus = nil
+            presentation = KeyPackagesPresentation()
+            hasLoaded = false
             maintenanceLoadError = nil
         }
 
@@ -84,7 +90,8 @@ final class KeyPackagesViewModel {
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
             lists = loadedLists
             packages = loadedPackages
-            maintenanceStatus = loadedMaintenanceStatus
+            presentation = KeyPackagesPresentation(packages: loadedPackages, status: loadedMaintenanceStatus)
+            hasLoaded = true
             maintenanceLoadError = loadedMaintenanceError
             loadedRef = ref
         } catch {
@@ -94,7 +101,7 @@ final class KeyPackagesViewModel {
     }
 
     func publishNew(using appState: AppState) async {
-        guard !isPublishing, !isRepublishing, let ref = appState.activeAccountRef else { return }
+        guard !isPublishing, deletingEventIds.isEmpty, let ref = appState.activeAccountRef else { return }
         isPublishing = true
         defer { isPublishing = false }
 
@@ -110,25 +117,8 @@ final class KeyPackagesViewModel {
         }
     }
 
-    func republish(using appState: AppState) async {
-        guard !isPublishing, !isRepublishing, let ref = appState.activeAccountRef else { return }
-        isRepublishing = true
-        defer { isRepublishing = false }
-
-        do {
-            let client = try appState.currentMarmotClient()
-            _ = try await client.republishKeyPackage(accountRef: ref)
-            Haptics.success()
-            appState.present(.success(L10n.string("Key package republished")))
-            await reload(using: appState)
-        } catch {
-            Haptics.error()
-            appState.present(UserFacingError.toast(title: L10n.string("Republish failed"), error: error))
-        }
-    }
-
     func delete(_ pkg: AccountKeyPackageFfi, using appState: AppState) async {
-        guard let ref = appState.activeAccountRef else { return }
+        guard !isPublishing, let ref = appState.activeAccountRef else { return }
         let eventId = pkg.eventIdHex
         guard !deletingEventIds.contains(eventId) else { return }
         deletingEventIds.insert(eventId)

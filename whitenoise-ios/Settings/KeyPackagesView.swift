@@ -1,132 +1,70 @@
 import SwiftUI
 import MarmotKit
 
-/// MLS KeyPackage management for the active account.
-///
-/// Lists key packages Marmot knows about — both those published from this
-/// device and any additional copies found on the account's key-package
-/// relays — and lets the user delete individual packages or publish a fresh
-/// one. All work goes through the MarmotKit bindings; relay-sourced fields
-/// are treated as untrusted and clamped at display time.
+/// Current device package and additional packages observed on this profile's relays.
 struct KeyPackagesView: View {
     @Environment(AppState.self) private var appState
-
     @State private var model = KeyPackagesViewModel()
 
     var body: some View {
         Form {
-            let packageSections = Self.packageSections(for: model.packages)
-
-            if model.isLoading && model.packages.isEmpty {
-                Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading key packages")
-                        Spacer()
-                    }
-                    .padding(.vertical, 24)
-                    .listRowBackground(Color.clear)
-                }
-            } else {
-                if !packageSections.local.isEmpty {
-                    Section {
-                        ForEach(packageSections.local, id: \.eventIdHex) { pkg in
-                            keyPackageRow(pkg)
-                        }
-                    } header: {
-                        Text("Published from this device")
-                    } footer: {
-                        Text("Other accounts use these key packages to invite you into MLS groups. \"Synced\" means the package is also visible on your account outbox relays; \"Local only\" means this device has it but the relays didn't return it just now (it may not be replicated, or the relays didn't respond).")
-                            .font(.footnote)
-                    }
-                }
-
-                if !packageSections.relayOnly.isEmpty {
-                    Section {
-                        ForEach(packageSections.relayOnly, id: \.eventIdHex) { pkg in
-                            keyPackageRow(pkg)
-                        }
-                    } header: {
-                        Text("Discovered on relays")
-                    } footer: {
-                        Text("Found on your account outbox relays but not stored on this device — most likely published from another device or an older session. Delete to retire it.")
-                            .font(.footnote)
-                    }
-                }
-
-                if !packageSections.unclassified.isEmpty {
-                    Section {
-                        ForEach(packageSections.unclassified, id: \.eventIdHex) { pkg in
-                            keyPackageRow(pkg)
-                        }
-                    } header: {
-                        Text("Unclassified key packages")
-                    } footer: {
-                        Text("Marmot returned these key packages without a local or relay marker. They may come from an older or future runtime; delete to retire them.")
-                            .font(.footnote)
-                    }
-                }
-
-                if packageSections.isEmpty {
-                    Section {
-                        Text("No key packages found.")
+            Section("Current Key Package") {
+                if model.isLoading && !model.hasLoaded {
+                    ProgressView("Loading key packages")
+                } else if model.loadError != nil || model.maintenanceLoadError != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Couldn't load this screen", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.secondary)
+                        Button("Retry") {
+                            Task { await model.reload(using: appState) }
+                        }
+                    }
+                } else if let current = model.presentation.current {
+                    packageDetails(
+                        identifier: current.identifier,
+                        publishedAt: current.publishedAt,
+                        bytes: current.bytes
+                    )
+                } else {
+                    Text("No current key package found for this device.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button {
+                    Task { await model.publishNew(using: appState) }
+                } label: {
+                    if model.isPublishing {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Publishing…")
+                        }
+                    } else {
+                        Label("Publish New Key Package", systemImage: "shippingbox.and.arrow.backward")
                     }
                 }
+                .disabled(model.isPublishing || !model.deletingEventIds.isEmpty || appState.activeAccountRef == nil)
+            } footer: {
+                Text("Publishes a new key package so this profile can receive group invitations.")
+            }
 
-                maintenanceSection
-
+            if model.loadError == nil && model.maintenanceLoadError == nil && !model.presentation.otherRelayPackages.isEmpty {
                 Section {
-                    Button {
-                        Task { await model.publishNew(using: appState) }
-                    } label: {
-                        if model.isPublishing {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text("Publishing…")
-                            }
-                        } else {
-                            Label("Publish New Key Package", systemImage: "plus.square.on.square")
-                        }
+                    ForEach(model.presentation.otherRelayPackages, id: \.eventIdHex) { package in
+                        otherPackageRow(package)
                     }
-                    .disabled(model.isPublishing || model.isRepublishing || appState.activeAccountRef == nil)
-
-                    Button {
-                        Task { await model.republish(using: appState) }
-                    } label: {
-                        if model.isRepublishing {
-                            HStack(spacing: 8) {
-                                ProgressView().controlSize(.small)
-                                Text("Republishing…")
-                            }
-                        } else {
-                            Label("Republish Current Key Package", systemImage: "arrow.clockwise")
-                        }
-                    }
-                    .disabled(model.isPublishing || model.isRepublishing || appState.activeAccountRef == nil)
+                } header: {
+                    Text("Other Key Packages on Relays")
                 } footer: {
-                    Text("Publish New rotates to fresh key material. Republish sends the latest cached KeyPackage again when possible, and creates a fresh one only when no cached package is available.")
-                        .font(.footnote)
-                }
-
-                if model.loadError != nil {
-                    Section {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label("Couldn't load this screen", systemImage: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.red)
-                                .font(.callout)
-                            Button("Retry") {
-                                Task { await model.reload(using: appState) }
-                            }
-                        }
-                    }
+                    Text("These packages were found on this profile’s relays and differ from this device’s current package.")
                 }
             }
         }
         .localizedNavigationTitle("Key Packages")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if model.isLoading && !model.packages.isEmpty {
+            if model.isLoading && model.hasLoaded {
                 ProgressView().controlSize(.small)
             }
         }
@@ -134,170 +72,51 @@ struct KeyPackagesView: View {
         .refreshable { await model.reload(using: appState) }
     }
 
-    // MARK: - Derived
-
-    @ViewBuilder
-    private var maintenanceSection: some View {
-        Section("Maintenance") {
-            if let status = model.maintenanceStatus {
-                LabeledContent(
-                    "Phase",
-                    value: MaintenanceDiagnosticsPresentation.phaseLabel(status.phase)
-                )
-                LabeledContent("Stable slot", value: shortHex(status.stableSlotId))
-                if let expires = MaintenanceDiagnosticsPresentation.date(status.currentNotAfter) {
-                    LabeledContent("Current package expires") {
-                        Text(expires, style: .relative)
-                    }
-                }
-                if let refresh = MaintenanceDiagnosticsPresentation.date(status.refreshAt) {
-                    LabeledContent("Scheduled refresh") {
-                        Text(refresh, style: .relative)
-                    }
-                }
-                LabeledContent(
-                    "Fanout targets",
-                    value: "\(status.acceptedFanoutTargets) accepted, \(status.unattemptedFanoutTargets) unattempted, \(status.failedFanoutTargets) failed, \(status.policyProhibitedFanoutTargets) prohibited"
-                )
-                .foregroundStyle(
-                    status.failedFanoutTargets > 0 || status.policyProhibitedFanoutTargets > 0
-                        ? Color.orange
-                        : Color.primary
-                )
-                LabeledContent(
-                    "Pending attempts",
-                    value: LocalizedNumberLabel.decimal(UInt64(status.pendingAttemptCount))
-                )
-                if let failure = MaintenanceDiagnosticsPresentation.failureCode(
-                    status.pendingLastFailureCode
-                ) {
-                    LabeledContent("Last failure", value: failure)
-                        .foregroundStyle(.orange)
-                }
-                LabeledContent(
-                    "Retained private material",
-                    value: LocalizedNumberLabel.decimal(UInt64(status.retainedPrivateMaterialCount))
-                )
-            } else if let error = model.maintenanceLoadError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-            } else {
-                Text("No key-package maintenance state is currently recorded.")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    struct PackageSections {
-        let local: [AccountKeyPackageFfi]
-        let relayOnly: [AccountKeyPackageFfi]
-        let unclassified: [AccountKeyPackageFfi]
-
-        var visiblePackageCount: Int {
-            local.count + relayOnly.count + unclassified.count
-        }
-
-        var isEmpty: Bool {
-            visiblePackageCount == 0
-        }
-    }
-
-    static func packageSections(for packages: [AccountKeyPackageFfi]) -> PackageSections {
-        let sorted = packages.sorted { $0.publishedAt > $1.publishedAt }
-        return PackageSections(
-            local: sorted.filter(\.local),
-            relayOnly: sorted.filter { !$0.local && $0.relay },
-            unclassified: sorted.filter { !$0.local && !$0.relay }
-        )
-    }
-
-    // MARK: - Row
-
-    @ViewBuilder
-    private func keyPackageRow(_ pkg: AccountKeyPackageFfi) -> some View {
-        let isDeleting = model.deletingEventIds.contains(pkg.eventIdHex)
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("EVENT ID")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                    Text(shortHex(pkg.eventIdHex))
-                        .font(.system(.callout, design: .monospaced))
-                }
-                Spacer()
-                badge(for: pkg)
-            }
-            HStack(spacing: 10) {
-                if let published = Self.publishedDescription(pkg.publishedAt) {
+    private func packageDetails(identifier: String, publishedAt: UInt64?, bytes: UInt64?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(shortHex(identifier))
+                .font(.body.monospaced())
+            HStack(spacing: 6) {
+                if let publishedAt, let published = Self.publishedDescription(publishedAt) {
                     Text(published)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-                if pkg.keyPackageBytes > 0 {
-                    Text(Self.byteCount(pkg.keyPackageBytes))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                if let bytes, bytes > 0 {
+                    if publishedAt != nil && publishedAt != 0 {
+                        Text("·")
+                    }
+                    Text(Self.byteCount(bytes))
                 }
             }
-            if !pkg.sourceRelays.isEmpty {
-                Text(Self.sanitizedRelays(pkg.sourceRelays))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func otherPackageRow(_ package: AccountKeyPackageFfi) -> some View {
+        let isDeleting = model.deletingEventIds.contains(package.eventIdHex)
+        return VStack(alignment: .leading, spacing: 4) {
+            packageDetails(
+                identifier: package.eventIdHex,
+                publishedAt: package.publishedAt,
+                bytes: package.keyPackageBytes
+            )
+            if !package.sourceRelays.isEmpty {
+                Text(Self.sanitizedRelays(package.sourceRelays))
                     .font(.caption2.monospaced())
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
         .opacity(isDeleting ? 0.5 : 1)
         .swipeActions(edge: .trailing) {
             Button(role: .destructive) {
-                Task { await model.delete(pkg, using: appState) }
+                Task { await model.delete(package, using: appState) }
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .disabled(isDeleting)
+            .disabled(isDeleting || model.isPublishing)
         }
-    }
-
-    @ViewBuilder
-    private func badge(for pkg: AccountKeyPackageFfi) -> some View {
-        badgeLabel(
-            Self.sourceBadgeTitle(for: pkg),
-            tint: Self.sourceBadgeTint(for: pkg)
-        )
-    }
-
-    static func sourceBadgeTitle(for pkg: AccountKeyPackageFfi) -> String {
-        if pkg.local && pkg.relay {
-            return "Synced"
-        } else if pkg.local {
-            return "Local only"
-        } else if pkg.relay {
-            return "Relay only"
-        } else {
-            return "Unclassified"
-        }
-    }
-
-    private static func sourceBadgeTint(for pkg: AccountKeyPackageFfi) -> Color {
-        if pkg.local && pkg.relay {
-            return .green
-        } else if pkg.local {
-            return .orange
-        } else if pkg.relay {
-            return .blue
-        } else {
-            return .gray
-        }
-    }
-
-    private func badgeLabel(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(tint.opacity(0.15), in: Capsule())
-            .foregroundStyle(tint)
     }
 
     // MARK: - Formatting
