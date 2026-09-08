@@ -34,14 +34,12 @@ struct AccountsView: View {
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Button {
+            WNButton(
+                title: "Add Profile",
+                systemImage: "person.crop.circle.badge.plus"
+            ) {
                 showAdd = true
-            } label: {
-                Label("Add Profile", systemImage: "person.crop.circle.badge.plus")
-                    .frame(maxWidth: .infinity)
             }
-            .wnPrimaryButtonStyle()
-            .controlSize(.extraLarge)
             .padding()
             .background(.bar)
         }
@@ -50,11 +48,8 @@ struct AccountsView: View {
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                    WNIconButton(title: "Close", systemImage: "xmark") {
                         dismiss()
-                    } label: {
-                        Label("Close", systemImage: "xmark")
-                            .labelStyle(.iconOnly)
                     }
                 }
             }
@@ -102,6 +97,26 @@ struct AccountsView: View {
 }
 
 struct AccountSummaryRow: View {
+    /// What the row marks at its trailing edge, beyond any unread count. Being
+    /// the active profile outranks the signed-out and read-only markers.
+    nonisolated enum Status: Equatable {
+        case active
+        case signedOut
+        case readOnly
+        case unmarked
+
+        static func resolve(
+            isActive: Bool,
+            signedOut: Bool,
+            localSigning: Bool
+        ) -> Status {
+            if isActive { return .active }
+            if signedOut { return .signedOut }
+            if !localSigning { return .readOnly }
+            return .unmarked
+        }
+    }
+
     @Environment(AppState.self) private var appState
     let account: AccountSummaryFfi
 
@@ -115,27 +130,31 @@ struct AccountSummaryRow: View {
                 ) {
                     UnreadCountBadge(count: unreadCount)
                 }
-                if account.label == appState.activeAccountRef {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                    } else if account.signedOut {
-                        Text(L10n.string("Signed out"))
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.orange.opacity(0.18), in: Capsule())
-                        .foregroundStyle(.secondary)
-                } else if !account.localSigning {
-                    Text("Read-only")
-                        .font(.caption2.weight(.semibold))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.18), in: Capsule())
-                        .foregroundStyle(.secondary)
-                }
+                status
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        switch Status.resolve(
+            isActive: account.label == appState.activeAccountRef,
+            signedOut: account.signedOut,
+            localSigning: account.localSigning
+        ) {
+        case .active:
+            Image(systemName: "checkmark")
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+                .accessibilityLabel(L10n.string("Current profile"))
+        case .signedOut:
+            WNBadge(text: L10n.string("Signed out"), emphasis: .neutral)
+        case .readOnly:
+            WNBadge(text: L10n.string("Read-only"), emphasis: .neutral)
+        case .unmarked:
+            EmptyView()
+        }
     }
 
     static func unreadBadgeCount(for summary: AccountUnreadFfi?) -> UInt64? {
@@ -187,15 +206,12 @@ struct SignedOutProfilesView: View {
                 }
 
                 Section {
-                    Button {
+                    WNButton(
+                        title: "Add Profile",
+                        systemImage: "person.crop.circle.badge.plus"
+                    ) {
                         showAdd = true
-                    } label: {
-                        Label("Add Profile", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
                     .listRowBackground(Color.clear)
                 }
             }

@@ -20,6 +20,8 @@ struct UnreadCountBadge: View {
         case count(String)
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
     let count: UInt64
 
     @ViewBuilder
@@ -27,17 +29,14 @@ struct UnreadCountBadge: View {
         switch Self.presentation(for: count) {
         case .dot:
             Circle()
-                .fill(Color.accentColor)
-                .frame(width: 10, height: 10)
+                .fill(WNBadge.Metrics.accent(for: colorScheme))
+                .frame(
+                    width: WNBadge.Metrics.dotDiameter,
+                    height: WNBadge.Metrics.dotDiameter
+                )
                 .accessibilityLabel(L10n.string("Unread"))
         case .count(let label):
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white)
-                .monospacedDigit()
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Capsule().fill(Color.accentColor))
+            WNBadge(text: label)
                 .accessibilityLabel(L10n.plural("%llu unread messages", count))
         }
     }

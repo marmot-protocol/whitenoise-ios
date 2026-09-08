@@ -52,4 +52,48 @@ struct AccountsViewTests {
         #expect(AccountsView.prefersFullHeight(accountCount: 3))
         #expect(AccountsView.prefersFullHeight(accountCount: 12))
     }
+
+    @Test func activeProfileIsMarkedAheadOfEveryOtherState() {
+        for signedOut in [true, false] {
+            for localSigning in [true, false] {
+                #expect(
+                    AccountSummaryRow.Status.resolve(
+                        isActive: true,
+                        signedOut: signedOut,
+                        localSigning: localSigning
+                    ) == .active
+                )
+            }
+        }
+    }
+
+    @Test func signedOutOutranksReadOnly() {
+        #expect(
+            AccountSummaryRow.Status.resolve(
+                isActive: false,
+                signedOut: true,
+                localSigning: false
+            ) == .signedOut
+        )
+    }
+
+    @Test func missingLocalSigningReadsAsReadOnly() {
+        #expect(
+            AccountSummaryRow.Status.resolve(
+                isActive: false,
+                signedOut: false,
+                localSigning: false
+            ) == .readOnly
+        )
+    }
+
+    @Test func signedInSigningProfileCarriesNoStatusMarker() {
+        #expect(
+            AccountSummaryRow.Status.resolve(
+                isActive: false,
+                signedOut: false,
+                localSigning: true
+            ) == .unmarked
+        )
+    }
 }
