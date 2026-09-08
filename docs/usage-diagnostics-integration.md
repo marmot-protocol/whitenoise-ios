@@ -22,6 +22,10 @@ published generated API is unchanged from the development build. The immutable r
 [manifest](https://github.com/marmot-protocol/mdk/releases/download/marmotkit-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154/marmotkit-ios-snapshot-5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154.manifest.json)
 records source/builder SHAs, toolchain, features, and artifact checksums.
 CI downloads the published package; it no longer builds Rust as part of app tests.
+Before app tests, `python3 scripts/check-marmotkit-bindings.py` compares
+`MARMOT_VERSION` with the evaluated SwiftPM binary target and compiled
+`MarmotKitVersion` constants. It rejects local targets, mismatched snapshot SHAs,
+URLs, checksums, and version metadata without changing package sources.
 
 For local reproduction only, run
 `./scripts/sync-local-bindings.sh /path/to/clean/mdk <full-master-sha>`.

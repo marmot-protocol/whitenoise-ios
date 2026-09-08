@@ -13,6 +13,7 @@ on:
       - "Packages/**"
       - "scripts/sync-local-bindings.sh"
       - "scripts/check-analytics-release-config.py"
+      - "scripts/check-marmotkit-bindings.py"
       - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
@@ -48,7 +49,10 @@ jobs:
         with:
           xcode-version: "26"
 
-      - name: Test analytics configuration preflight
+      - name: Verify published MarmotKit provenance
+        run: python3 scripts/check-marmotkit-bindings.py
+
+      - name: Test release configuration checks
         run: python3 -m unittest discover -s scripts/tests
 
       # The MarmotKit binary target is a 74 MB download that unpacks to 254 MB.
