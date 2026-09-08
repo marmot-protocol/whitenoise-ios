@@ -1,3 +1,5 @@
+import CoreGraphics
+
 /// Static donation methods for the Donate screen. The addresses are the
 /// project's public funding endpoints and must stay byte-identical to the
 /// values the Android client ships, so both apps present the same QR.
@@ -29,4 +31,20 @@ nonisolated enum DonatePresentation {
     )
 
     static let methods = [lightning, bitcoinSilentPayment]
+
+    /// Share of the list width the white QR card spans, so the code scales
+    /// with the device instead of sitting at a fixed point size.
+    static let qrCardWidthFraction: CGFloat = 0.81
+
+    /// Inset that lands the address chip on the QR image's inner edge rather
+    /// than the card's outer edge.
+    static let addressChipInset: CGFloat = 16
+
+    static func qrCardWidth(forContainerWidth width: CGFloat) -> CGFloat {
+        max(0, width * qrCardWidthFraction)
+    }
+
+    static func addressChipWidth(forContainerWidth width: CGFloat) -> CGFloat {
+        max(0, qrCardWidth(forContainerWidth: width) - addressChipInset)
+    }
 }
