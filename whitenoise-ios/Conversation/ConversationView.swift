@@ -1263,53 +1263,39 @@ struct ConversationView: View {
 
     private func inviteResponseArea(viewModel: ConversationViewModel) -> some View {
         VStack(spacing: 12) {
-            Text(invitationText(viewModel: viewModel))
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+            Label {
+                Text(invitationText(viewModel: viewModel))
+            } icon: {
+                Image(systemName: "envelope.badge")
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
 
             HStack(spacing: 12) {
-                Button {
-                    acceptInvite(viewModel: viewModel)
-                } label: {
-                    inviteActionLabel(
-                        title: L10n.string("Accept"),
-                        isLoading: viewModel.inviteActionInFlight == .accepting
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                Button(role: .destructive) {
+                WNButton(
+                    title: "Decline",
+                    emphasis: .secondary,
+                    isLoading: viewModel.inviteActionInFlight == .declining
+                ) {
                     declineInvite(viewModel: viewModel)
-                } label: {
-                    inviteActionLabel(
-                        title: L10n.string("Decline"),
-                        isLoading: viewModel.inviteActionInFlight == .declining
-                    )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .tint(.red)
+                .disabled(viewModel.inviteActionInFlight == .accepting)
+
+                WNButton(
+                    title: "Accept",
+                    isLoading: viewModel.inviteActionInFlight == .accepting
+                ) {
+                    acceptInvite(viewModel: viewModel)
+                }
+                .disabled(viewModel.inviteActionInFlight == .declining)
             }
-            .disabled(viewModel.inviteActionInFlight != nil)
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 12)
-    }
-
-    private func inviteActionLabel(title: String, isLoading: Bool) -> some View {
-        Group {
-            if isLoading {
-                ProgressView()
-            } else {
-                Text(title)
-            }
-        }
-        .font(.headline)
-        .frame(maxWidth: .infinity, minHeight: 32)
     }
 
     private func composerReplyPreview(viewModel: ConversationViewModel) -> ComposerReplyPreview? {
@@ -1373,7 +1359,7 @@ struct ConversationView: View {
     /// is the single way into the details page for
     /// both direct messages and groups.
     private var conversationHeaderBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 16) {
             Button {
                 // Resign the composer before popping so the keyboard animates
                 // down first instead of flashing mid-screen during the pop.
