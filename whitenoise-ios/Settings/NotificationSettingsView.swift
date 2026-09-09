@@ -6,6 +6,7 @@ import UIKit
 struct NotificationSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.openURL) private var openURL
+    @Environment(\.colorScheme) private var colorScheme
     @State private var model = NotificationSettingsViewModel()
 
     var body: some View {
@@ -18,6 +19,7 @@ struct NotificationSettingsView: View {
                     set: { enabled in Task { await model.setLocalNotifications(enabled, using: appState) } }
                 ))
                 .disabled(model.isSaving || model.settings == nil)
+                .wnNeutralToggleTint()
             } footer: {
                 Text("Creates message notifications on this iPhone. Without Native Push, delivery may wait until White Noise is active.")
             }
@@ -28,6 +30,7 @@ struct NotificationSettingsView: View {
                     set: { enabled in Task { await model.setNativePush(enabled, using: appState) } }
                 ))
                 .disabled(model.nativePushToggleDisabled)
+                .wnNeutralToggleTint()
             } footer: {
                 Text("Uses a generic wake-up signal to check for new messages in the background. Message details stay on this iPhone.")
             }
@@ -85,6 +88,7 @@ struct NotificationSettingsView: View {
                 }
             }
         }
+        .tint(WNButton.Metrics.accent(for: colorScheme))
         .localizedNavigationTitle("Notifications")
         .productScreen(.settings, section: .notifications)
         .navigationBarTitleDisplayMode(.inline)
@@ -218,7 +222,7 @@ struct NotificationSettingsView: View {
         }
         return notificationSetupNeedsAttention
             ? "exclamationmark.triangle.fill"
-            : "checkmark.circle.fill"
+            : "checkmark"
     }
 
     private var notificationStatusColor: Color {
@@ -228,7 +232,7 @@ struct NotificationSettingsView: View {
         if !notificationsEnabled {
             return .secondary
         }
-        return notificationSetupNeedsAttention ? .orange : .green
+        return notificationSetupNeedsAttention ? .orange : .primary
     }
 
     private func checkNotificationSetup() async {
