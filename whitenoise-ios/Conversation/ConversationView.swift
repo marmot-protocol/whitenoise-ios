@@ -2561,8 +2561,7 @@ struct ConversationView: View {
             do {
                 let attachment = try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)
                 try Task.checkCancellation()
-                try appendMediaDraft(attachment)
-                outcome = .success
+                if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
             } catch {
@@ -2590,8 +2589,7 @@ struct ConversationView: View {
                     attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                 }
                 try Task.checkCancellation()
-                try appendMediaDraft(attachment)
-                outcome = .success
+                if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
             } catch {
@@ -2772,21 +2770,23 @@ struct ConversationView: View {
         return true
     }
 
-    private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws {
+    @discardableResult
+    private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         if attachment.kind == .audio {
             mediaDrafts.removeAll { $0.kind == .audio }
         }
         guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
-            return
+            return false
         }
         mediaDrafts.append(attachment)
         if attachment.kind == .audio {
             draft = ""
             dismissKeyboard()
-            return
+            return true
         }
         composerFocusRequest += 1
+        return true
     }
 
     private func removeMediaDraft(_ id: MediaDraftAttachment.ID) {
