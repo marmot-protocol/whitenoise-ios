@@ -33,6 +33,29 @@ struct DonatePresentationTests {
         }
     }
 
+    @Test func qrCardSpansMostOfTheListWidth() {
+        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 393) == 393 * 0.81)
+        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 320) == 320 * 0.81)
+    }
+
+    @Test func qrCardIsLargerThanTheFixedSizeItReplaced() {
+        // 204 was the previous fixed card width (180 image + 12 padding a side).
+        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 320) > 204)
+    }
+
+    @Test func addressChipSitsInsideTheQRCardEdge() {
+        let container: CGFloat = 393
+        let card = DonatePresentation.qrCardWidth(forContainerWidth: container)
+        #expect(DonatePresentation.addressChipWidth(forContainerWidth: container) == card - 16)
+    }
+
+    @Test func degenerateContainerWidthsStayNonNegative() {
+        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 0) == 0)
+        #expect(DonatePresentation.qrCardWidth(forContainerWidth: -100) == 0)
+        #expect(DonatePresentation.addressChipWidth(forContainerWidth: 0) == 0)
+        #expect(DonatePresentation.addressChipWidth(forContainerWidth: 10) == 0)
+    }
+
     @Test func donateCatalogKeysCoverAllShippedLocales() throws {
         let testFile = URL(fileURLWithPath: #filePath)
         let repoRoot = testFile
