@@ -9,6 +9,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
     case privacyAndSecurity
     case dataUsage
     case relays
+    case aiAgents
     case support
     case donate
     case developerTools
@@ -22,6 +23,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         case .privacyAndSecurity: "Privacy & Security"
         case .dataUsage: "Data Usage"
         case .relays: "Relays"
+        case .aiAgents: "AI Agents"
         case .support: "Chat with support"
         case .donate: "Donate"
         case .developerTools: "Developer Tools"
@@ -37,6 +39,7 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
         case .privacyAndSecurity: "hand.raised"
         case .dataUsage: "externaldrive"
         case .relays: "antenna.radiowaves.left.and.right"
+        case .aiAgents: "sparkles"
         case .support: "message"
         case .donate: "heart"
         case .developerTools: "wrench.and.screwdriver"
@@ -66,6 +69,7 @@ struct SettingsView: View {
                 .privacyAndSecurity,
                 .dataUsage,
                 .relays,
+                .aiAgents,
             ])
 
             destinationSection([.support, .donate, .developerTools])
@@ -209,6 +213,7 @@ struct SettingsView: View {
         case .privacyAndSecurity: PrivacySecuritySettingsView().wnBackButton()
         case .dataUsage: DataAndStorageView().wnBackButton()
         case .relays: RelaysView().wnBackButton()
+        case .aiAgents: AIAgentsSettingsView().wnBackButton()
         case .support: SupportChatView().wnBackButton()
         case .donate: DonateView().wnBackButton()
         case .developerTools: DeveloperToolsSettingsView().wnBackButton()

@@ -92628,6 +92628,1331 @@
           }
         }
       }
+    },
+    "AI Agents" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "KI-Agenten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agentes de IA"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agents IA"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agenti IA"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agentes de IA"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ИИ-агенты"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapay zeka ajanları"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 代理"
+          }
+        }
+      }
+    },
+    "About AI Agents" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Über KI-Agenten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acerca de los agentes de IA"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "À propos des agents IA"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Informazioni sugli agenti IA"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sobre agentes de IA"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Об ИИ-агентах"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yapay zeka ajanları hakkında"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于 AI 代理"
+          }
+        }
+      }
+    },
+    "After the agent shares its npub, add it as a contact from %@ and start chatting. See the agent connector docs for full details." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachdem der Agent seine npub geteilt hat, füge ihn als Kontakt über %@ hinzu und beginne zu chatten. Einzelheiten findest du in der Dokumentation der Agent-Konnektoren."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando el agente comparta su npub, añádelo como contacto desde %@ y empieza a chatear. Consulta la documentación del conector de agentes para más detalles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une fois que l'agent a partagé sa npub, ajoutez-le comme contact depuis %@ et commencez à discuter. Consultez la documentation du connecteur d'agent pour tous les détails."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dopo che l'agente condivide la sua npub, aggiungilo come contatto da %@ e inizia a chattare. Per tutti i dettagli, consulta la documentazione del connettore per agenti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Depois que o agente compartilhar sua npub, adicione-o como contato em %@ e comece a conversar. Veja a documentação do conector de agentes para detalhes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "После того как агент поделится своей npub, добавьте его в контакты через %@ и начните общение. Подробности см. в документации коннектора агентов."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajan npub'unu paylaştıktan sonra %@ üzerinden kişi olarak ekleyin ve sohbete başlayın. Tüm ayrıntılar için ajan bağlayıcı belgelerine bakın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理分享其 npub 后，从 %@ 将其添加为联系人并开始聊天。完整说明请参阅代理连接器文档。"
+          }
+        }
+      }
+    },
+    "Agent connector documentation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dokumentation der Agent-Konnektoren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentación del conector de agentes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentation du connecteur d'agent"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentazione del connettore per agenti"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Documentação do conector de agentes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Документация коннектора агентов"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajan bağlayıcı belgeleri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理连接器文档"
+          }
+        }
+      }
+    },
+    "Codex" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        }
+      }
+    },
+    "Connectors" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konnektoren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conectores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecteurs"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connettori"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conectores"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Коннекторы"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bağlayıcılar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接器"
+          }
+        }
+      }
+    },
+    "Copy %@ setup prompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Einrichtungsaufforderung kopieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar indicación de configuración de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier l'invite de configuration %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia il prompt di configurazione di %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar prompt de configuração de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скопировать запрос настройки %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kurulum istemini kopyala"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制 %@ 设置提示"
+          }
+        }
+      }
+    },
+    "Hermes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        }
+      }
+    },
+    "Hide %@ setup prompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Einrichtungsaufforderung ausblenden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar indicación de configuración de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer l'invite de configuration %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nascondi il prompt di configurazione di %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar prompt de configuração de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрыть запрос настройки %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kurulum istemini gizle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏 %@ 设置提示"
+          }
+        }
+      }
+    },
+    "Install scripts, health checks, and troubleshooting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installationsskripte, Gesundheitsprüfungen und Fehlerbehebung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scripts de instalación, comprobaciones de estado y solución de problemas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scripts d'installation, vérifications d'état et dépannage"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Script di installazione, controlli di stato e risoluzione dei problemi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scripts de instalação, verificações de saúde e solução de problemas"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скрипты установки, проверки состояния и устранение неполадок"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurulum betikleri, sağlık denetimleri ve sorun giderme"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装脚本、健康检查与故障排除"
+          }
+        }
+      }
+    },
+    "Manual Setup" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuelle Einrichtung"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuración manual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuration manuelle"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurazione manuale"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuração manual"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ручная настройка"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuel kurulum"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手动设置"
+          }
+        }
+      }
+    },
+    "Open-source coding agent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open-Source-Coding-Agent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de programación de código abierto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent de code open source"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente di coding open source"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de código open source"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Агент программирования с открытым исходным кодом"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açık kaynak kodlama ajanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开源编程代理"
+          }
+        }
+      }
+    },
+    "OpenAI Codex CLI coding agent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI Codex CLI-Coding-Agent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de codificación CLI de OpenAI Codex"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent de codage CLI OpenAI Codex"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente di codifica CLI OpenAI Codex"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de codificação CLI do OpenAI Codex"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Агент для кодирования CLI OpenAI Codex"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI Codex CLI kodlama ajanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI Codex CLI 编码代理"
+          }
+        }
+      }
+    },
+    "OpenClaw" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        }
+      }
+    },
+    "OpenCode" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
+        }
+      }
+    },
+    "Prompt copied — paste it into your agent." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingabeaufforderung kopiert — füge sie in deinen Agenten ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indicación copiada — pégala en tu agente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invite copiée — collez-la dans votre agent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prompt copiato — incollalo nel tuo agente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prompt copiado — cole no seu agente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Запрос скопирован — вставьте его в ваш агент."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İstem kopyalandı — ajana yapıştırın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示已复制——请粘贴到你的代理中。"
+          }
+        }
+      }
+    },
+    "Self-hosted personal AI assistant" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selbst gehosteter persönlicher KI-Assistent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asistente de IA personal autoalojado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistant IA personnel auto-hébergé"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistente IA personale self-hosted"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assistente de IA pessoal auto-hospedado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Личный ИИ-ассистент на своём сервере"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kendi sunucunuzda kişisel yapay zeka asistanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自托管个人 AI 助手"
+          }
+        }
+      }
+    },
+    "Show %@ setup prompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Einrichtungsaufforderung anzeigen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar indicación de configuración de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher l'invite de configuration %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostra il prompt di configurazione di %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar prompt de configuração de %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показать запрос настройки %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ kurulum istemini göster"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 %@ 设置提示"
+          }
+        }
+      }
+    },
+    "Terminal agent by Nous Research" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminal-Agent von Nous Research"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de terminal de Nous Research"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent terminal par Nous Research"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente terminale di Nous Research"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de terminal da Nous Research"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Терминальный агент Nous Research"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous Research terminal ajanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous Research 的终端代理"
+          }
+        }
+      }
+    },
+    "These are installation prompts. Choose your agent, copy its prompt, and paste it into that agent to connect it to White Noise. The prompt includes your npub (a public key, not a secret) and asks the agent to explain how the connector works before requesting your approval to install it. Only use an agent you run and trust; your private key is never included." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies sind Installationsanweisungen. Wähle deinen Agenten aus, kopiere seine Anweisung und füge sie in diesen Agenten ein, um ihn mit White Noise zu verbinden. Die Anweisung enthält deine npub (einen öffentlichen Schlüssel, kein Geheimnis) und bittet den Agenten, die Funktionsweise des Konnektors zu erklären, bevor er deine Zustimmung zur Installation einholt. Verwende nur einen Agenten, den du selbst betreibst und dem du vertraust; dein privater Schlüssel ist nie enthalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estas son instrucciones de instalación. Elige tu agente, copia su instrucción y pégala en ese agente para conectarlo a White Noise. La instrucción incluye tu npub (una clave pública, no un secreto) y pide al agente que explique cómo funciona el conector antes de solicitar tu aprobación para instalarlo. Usa solo un agente que ejecutes y en el que confíes; tu clave privada nunca se incluye."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voici des invites d’installation. Choisissez votre agent, copiez son invite et collez-la dans cet agent pour le connecter à White Noise. L’invite comprend votre npub (une clé publique, pas un secret) et demande à l’agent d’expliquer le fonctionnement du connecteur avant de solliciter votre approbation pour l’installer. Utilisez uniquement un agent que vous exécutez et auquel vous faites confiance ; votre clé privée n’est jamais incluse."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questi sono prompt di installazione. Scegli il tuo agente, copia il relativo prompt e incollalo in quell’agente per collegarlo a White Noise. Il prompt include la tua npub (una chiave pubblica, non un segreto) e chiede all’agente di spiegare come funziona il connettore prima di richiedere la tua approvazione per installarlo. Usa solo un agente che gestisci e di cui ti fidi; la tua chiave privata non viene mai inclusa."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estes são prompts de instalação. Escolha seu agente, copie o prompt dele e cole-o nesse agente para conectá-lo ao White Noise. O prompt inclui sua npub (uma chave pública, não um segredo) e pede ao agente que explique como o conector funciona antes de solicitar sua aprovação para instalá-lo. Use apenas um agente que você executa e em que confia; sua chave privada nunca é incluída."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запросы на установку. Выберите своего агента, скопируйте запрос и вставьте его в этого агента, чтобы подключить его к White Noise. Запрос содержит вашу npub (открытый ключ, не секрет) и просит агента объяснить, как работает коннектор, прежде чем запросить ваше одобрение на установку. Используйте только агента, которого вы запускаете и которому доверяете; приватный ключ никогда не включается."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bunlar kurulum istemleridir. Ajanınızı seçin, istemini kopyalayın ve White Noise’a bağlamak için o ajana yapıştırın. İstem, npub’ınızı (gizli olmayan genel anahtarınızı) içerir ve ajanınızdan kurulum için onayınızı istemeden önce bağlayıcının nasıl çalıştığını açıklamasını ister. Yalnızca çalıştırdığınız ve güvendiğiniz bir ajanı kullanın; özel anahtarınız hiçbir zaman eklenmez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些是安装提示。选择你的代理，复制相应提示并将其粘贴到该代理中，即可将其连接到 White Noise。提示包含你的 npub（公钥，并非秘密），并会让代理先解释连接器的工作方式，再请求你的安装批准。请仅使用由你运行且信任的代理；其中绝不会包含你的私钥。"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this Codex setup to White Noise through Marmot. Read the authoritative Codex harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Codex CLI is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-codex-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-codex --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-codex returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese Codex-Einrichtung über Marmot mit White Noise zu verbinden. Lies den maßgeblichen Codex-Harness-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md und den dauerhaften Konnektor-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Bestätige die Voraussetzungen: Die Codex-CLI ist installiert, authentifiziert und auf PATH verfügbar, und dieser Rechner nutzt dasselbe öffentliche Relay-Set wie mein Telefon. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, verwende den checksummenverifizierten install-codex-marmot.sh-Release-Flow, bootstrap wn-agent für diese npub mit dem zugelassenen Welcomer und überprüfe wn-codex --version. Antworte dann mit deiner Agenten-npub und bitte mich, sie in White Noise einzuladen und von dieser zugelassenen npub über die konfigurierten Relays eine Testnachricht zu senden. Melde die Einrichtung erst dann als abgeschlossen, wenn wn-codex über White Noise geantwortet hat; falls dieser Rundlauf nicht automatisch verifiziert werden kann, kennzeichne klar, dass eine Geräteverifizierung erforderlich ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta configuración de Codex a White Noise mediante Marmot. Lee la guía autorizada del harness de Codex en https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md y la guía permanente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Confirma los requisitos previos: la CLI de Codex está instalada, autenticada y disponible en PATH, y esta máquina usa el mismo conjunto de relays públicos que mi teléfono. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, usa el flujo de release install-codex-marmot.sh verificado por checksum, inicializa wn-agent para esa npub con el welcomer permitido y verifica wn-codex --version. A continuación, responde con la npub de tu agente y pídeme que lo invite desde White Noise y envíe un mensaje de prueba desde esta npub permitida mediante los relays configurados. No informes que la configuración está completa hasta que wn-codex responda a través de White Noise; si no se puede verificar automáticamente este recorrido, indica claramente que se requiere verificación en el dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette configuration Codex à White Noise via Marmot. Lisez le guide officiel du harness Codex à l’adresse https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md et le guide permanent du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Confirmez les prérequis : la CLI Codex est installée, authentifiée et disponible dans PATH, et cette machine utilise le même ensemble de relais publics que mon téléphone. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, utilisez le flux de release install-codex-marmot.sh vérifié par somme de contrôle, initialisez wn-agent pour cette npub avec le welcomer autorisé et vérifiez wn-codex --version. Répondez ensuite avec la npub de votre agent et demandez-moi de l’inviter depuis White Noise puis d’envoyer un message de test depuis cette npub autorisée via les relais configurés. Ne déclarez pas la configuration terminée tant que wn-codex n’a pas répondu via White Noise ; si cet aller-retour ne peut pas être vérifié automatiquement, indiquez clairement qu’une vérification sur l’appareil est requise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa configurazione Codex a White Noise tramite Marmot. Leggi la guida autorevole del harness Codex all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md e la guida permanente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Conferma i prerequisiti: la CLI Codex è installata, autenticata e disponibile in PATH, e questa macchina usa lo stesso set di relay pubblici del mio telefono. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, usa il flusso di release install-codex-marmot.sh verificato tramite checksum, avvia wn-agent per quella npub con il welcomer consentito e verifica wn-codex --version. Quindi rispondi con la npub del tuo agente e chiedimi di invitarlo da White Noise e inviare un messaggio di prova da questa npub consentita tramite i relay configurati. Non dichiarare completata la configurazione finché wn-codex non risponde tramite White Noise; se non è possibile verificare automaticamente questo percorso di andata e ritorno, indica chiaramente che è necessaria la verifica sul dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta configuração do Codex ao White Noise pelo Marmot. Leia o guia oficial do harness Codex em https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md e o guia permanente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Confirme os pré-requisitos: a CLI do Codex está instalada, autenticada e disponível no PATH, e esta máquina usa o mesmo conjunto de relays públicos do meu telefone. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, use o fluxo de release install-codex-marmot.sh verificado por checksum, inicialize wn-agent para essa npub com o welcomer permitido e verifique wn-codex --version. Em seguida, responda com a npub do seu agente e peça que eu o convide pelo White Noise e envie uma mensagem de teste desta npub permitida pelos relays configurados. Não informe que a configuração foi concluída até que o wn-codex responda pelo White Noise; se não for possível verificar esse percurso automaticamente, indique claramente que a verificação no dispositivo é necessária."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этой конфигурации Codex к White Noise через Marmot. Прочитайте авторитетное руководство по harness Codex: https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md и постоянное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Подтвердите предварительные требования: CLI Codex установлена, аутентифицирована и доступна в PATH, а эта машина использует тот же набор публичных релеев, что и мой телефон. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения используйте релизный поток install-codex-marmot.sh с проверкой контрольной суммы, выполните bootstrap wn-agent для этой npub с разрешенным welcomer и проверьте wn-codex --version. Затем ответьте npub вашего агента и попросите меня пригласить его из White Noise и отправить тестовое сообщение с этой разрешенной npub через настроенные реле. Не сообщайте о завершении настройки, пока wn-codex не ответит через White Noise; если этот обмен нельзя проверить автоматически, явно укажите, что требуется проверка на устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu Codex kurulumunu Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md adresindeki yetkili Codex harness kılavuzunu ve https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki kalıcı bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Önkoşulları doğrulayın: Codex CLI kurulu, kimliği doğrulanmış ve PATH üzerinde kullanılabilir durumda; bu makine telefonumla aynı genel relay kümesini kullanıyor. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra sağlama toplamıyla doğrulanmış install-codex-marmot.sh sürüm akışını kullanın, izin verilen welcomer ile o npub için wn-agent önyüklemesini yapın ve wn-codex --version komutunu doğrulayın. Ardından ajan npub’ınızla yanıt verin; benden onu White Noise üzerinden davet etmemi ve yapılandırılmış relay’ler aracılığıyla bu izin verilen npub’dan bir test mesajı göndermemi isteyin. wn-codex White Noise üzerinden yanıt verene kadar kurulumun tamamlandığını bildirmeyin; bu gidiş dönüş otomatik olarak doğrulanamıyorsa cihaz doğrulaması gerektiğini açıkça belirtin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 Codex 设置连接到 White Noise。请阅读权威 Codex harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md，以及长期有效的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。确认前提条件：Codex CLI 已安装、已认证并可在 PATH 中使用，且此机器使用与手机相同的公共中继集合。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请使用经过校验和验证的 install-codex-marmot.sh 发布流程，为该 npub 引导 wn-agent 并使用允许的 welcomer，然后验证 wn-codex --version。接下来回复你的代理 npub，请我在 White Noise 中邀请它，并通过已配置的中继从这个允许的 npub 发送测试消息。在 wn-codex 通过 White Noise 回复之前，不要声称设置已完成；如果无法自动验证这一往返流程，请明确标记仍需设备验证。"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this Hermes installation to White Noise through Marmot. Read the latest connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, install and verify the connector, then reply with your agent npub." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese Hermes-Installation über Marmot mit White Noise zu verbinden. Lies die neueste Konnektor-Anleitung unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, installiere und überprüfe den Konnektor und antworte dann mit deiner Agenten-npub."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta instalación de Hermes a White Noise mediante Marmot. Lee la guía más reciente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, instala y verifica el conector y, después, responde con la npub de tu agente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette installation Hermes à White Noise via Marmot. Lisez le dernier guide du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, installez et vérifiez le connecteur, puis répondez avec la npub de votre agent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa installazione Hermes a White Noise tramite Marmot. Leggi la guida più recente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, installa e verifica il connettore, quindi rispondi con la npub del tuo agente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta instalação do Hermes ao White Noise pelo Marmot. Leia o guia mais recente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, instale e verifique o conector e responda com a npub do seu agente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этой установки Hermes к White Noise через Marmot. Прочитайте актуальное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения установите и проверьте коннектор, а затем ответьте npub вашего агента."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu Hermes kurulumunu Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki en güncel bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra bağlayıcıyı kurup doğrulayın ve ardından ajan npub’ınızla yanıt verin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 Hermes 安装连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this OpenClaw instance to White Noise through Marmot. Read the latest connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, install and verify the connector, then reply with your agent npub." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese OpenClaw-Instanz über Marmot mit White Noise zu verbinden. Lies die neueste Konnektor-Anleitung unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, installiere und überprüfe den Konnektor und antworte dann mit deiner Agenten-npub."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta instancia de OpenClaw a White Noise mediante Marmot. Lee la guía más reciente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, instala y verifica el conector y, después, responde con la npub de tu agente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette instance OpenClaw à White Noise via Marmot. Lisez le dernier guide du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, installez et vérifiez le connecteur, puis répondez avec la npub de votre agent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa istanza OpenClaw a White Noise tramite Marmot. Leggi la guida più recente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, installa e verifica il connettore, quindi rispondi con la npub del tuo agente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta instância do OpenClaw ao White Noise pelo Marmot. Leia o guia mais recente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, instale e verifique o conector e responda com a npub do seu agente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этого экземпляра OpenClaw к White Noise через Marmot. Прочитайте актуальное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения установите и проверьте коннектор, а затем ответьте npub вашего агента."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu OpenClaw örneğini Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki en güncel bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra bağlayıcıyı kurup doğrulayın ve ardından ajan npub’ınızla yanıt verin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 OpenClaw 实例连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this OpenCode setup to White Noise through Marmot. Read the latest connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, install and verify the connector, then reply with your agent npub." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese OpenCode-Einrichtung über Marmot mit White Noise zu verbinden. Lies die neueste Konnektor-Anleitung unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, installiere und überprüfe den Konnektor und antworte dann mit deiner Agenten-npub."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta configuración de OpenCode a White Noise mediante Marmot. Lee la guía más reciente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, instala y verifica el conector y, después, responde con la npub de tu agente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette configuration OpenCode à White Noise via Marmot. Lisez le dernier guide du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, installez et vérifiez le connecteur, puis répondez avec la npub de votre agent."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa configurazione OpenCode a White Noise tramite Marmot. Leggi la guida più recente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, installa e verifica il connettore, quindi rispondi con la npub del tuo agente."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta configuração do OpenCode ao White Noise pelo Marmot. Leia o guia mais recente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, instale e verifique o conector e responda com a npub do seu agente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этой конфигурации OpenCode к White Noise через Marmot. Прочитайте актуальное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения установите и проверьте коннектор, а затем ответьте npub вашего агента."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu OpenCode kurulumunu Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki en güncel bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra bağlayıcıyı kurup doğrulayın ve ardından ajan npub’ınızla yanıt verin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 OpenCode 设置连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
+          }
+        }
+      }
+    },
+    "White Noise works with AI agents. Your agent runs on your own machine or server as a separate Marmot account; you chat with it here like any contact, end-to-end encrypted." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise funktioniert mit KI-Agenten. Dein Agent läuft auf deinem eigenen Rechner oder Server als separater Marmot-Account; du chattest hier mit ihm wie mit jedem Kontakt, Ende-zu-Ende verschlüsselt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise funciona con agentes de IA. Tu agente se ejecuta en tu propio ordenador o servidor como una cuenta Marmot independiente; aquí chateas con él como con cualquier contacto, con cifrado de extremo a extremo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise fonctionne avec des agents IA. Votre agent s'exécute sur votre propre machine ou serveur en tant que compte Marmot distinct ; vous discutez avec lui ici comme avec n'importe quel contact, avec chiffrement de bout en bout."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise funziona con agenti IA. Il tuo agente gira sul tuo computer o server come account Marmot separato; qui chatti con lui come con qualsiasi contatto, con crittografia end-to-end."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise funciona com agentes de IA. O seu agente roda no seu próprio computador ou servidor como uma conta Marmot separada; aqui você conversa com ele como com qualquer contato, com criptografia de ponta a ponta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise работает с ИИ-агентами. Ваш агент запускается на вашем компьютере или сервере как отдельный аккаунт Marmot; здесь вы общаетесь с ним как с любым контактом, с сквозным шифрованием."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise yapay zeka ajanlarıyla çalışır. Ajanınız kendi makinenizde veya sunucunuzda ayrı bir Marmot hesabı olarak çalışır; burada onunla herhangi bir kişi gibi uçtan uca şifreli sohbet edersiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 可与 AI 代理配合使用。你的代理在你自己的电脑或服务器上作为独立的 Marmot 账户运行；你可以在这里像与任何联系人一样与它端到端加密聊天。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

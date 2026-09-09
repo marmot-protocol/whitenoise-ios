@@ -258,6 +258,17 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Settings & profile
 
+- [ ] Settings → AI Agents shows the introduction, Hermes, OpenClaw, OpenCode,
+      Codex, and manual setup. Expand/collapse each prompt and copy it; pasted
+      text matches the preview and contains the active profile's public npub.
+      The selected connector's title and subtitle stay fixed while the prompt
+      opens below them. The npub copy control has no pill background.
+- [ ] Switch profiles and reopen AI Agents: prompts and Copy npub use the newly
+      selected profile. The documentation link opens the MDK connector guide.
+- [ ] Check AI Agents in light/dark appearance and large Dynamic Type. Long
+      prompts remain readable and selectable, and VoiceOver identifies each
+      connector's show/hide and copy buttons. Manual setup refers to New Chat.
+
 - [ ] Settings → account row → **Edit**: filling in display name + about and
       tapping **Done** shows a success toast. There is no **More** section and
       no picture/banner URL fields; an existing banner survives the republish.
