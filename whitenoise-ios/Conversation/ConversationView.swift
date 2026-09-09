@@ -28,6 +28,23 @@ enum TimelineBottom {
         true
     }
 
+    /// Sending is an unambiguous intent to be at the tail, so it clears a
+    /// moved-away viewport whatever keyboard growth, a media strip, or an
+    /// earlier scroll left behind. Both the send's follow-up scroll and its
+    /// read-mark are gated on this flag being clear.
+    static func movedAwayFromBottomAfterOwnSend(previous: Bool) -> Bool {
+        false
+    }
+
+    /// The scroll-to-bottom button lands on the conversation tail, not on the
+    /// loaded window's tail, so it drains forward pages — bounded, because a
+    /// page that reports more history without advancing would otherwise spin.
+    static let maximumScrollToBottomPageDrains = 20
+
+    static func shouldDrainNewerPage(hasMoreAfter: Bool, drainedPages: Int) -> Bool {
+        hasMoreAfter && drainedPages < maximumScrollToBottomPageDrains
+    }
+
     static func overscrollPastBottom(
         contentHeight: CGFloat,
         visibleBottomY: CGFloat,
@@ -82,9 +99,13 @@ enum TimelineBottomScrollReason: Equatable {
     case timelineChange
     case layoutChange
     case buttonTap
+    /// The user's own send. User-initiated so it wins coalescing against
+    /// automatic follow-ups and is exempt from initial-position suppression,
+    /// the same way a scroll-to-bottom tap is.
+    case send
 
     var isUserInitiated: Bool {
-        self == .buttonTap
+        self == .buttonTap || self == .send
     }
 
 }
@@ -321,15 +342,22 @@ enum TimelineInitialTargetResolution: Equatable {
 }
 
 enum TimelineInitialTargetPolicy {
+    /// Backward pages the hunt for a deep-link/unread target may fetch before
+    /// giving up. The timeline stays concealed while it hunts, so an aged-out
+    /// target must not walk the whole conversation.
+    static let maximumHistoryPages = 8
+
     static func resolve(
         targetMessageIdHex: String?,
         targetItemId: String?,
         hasMoreBefore: Bool,
-        canLoadOlder: Bool
+        canLoadOlder: Bool,
+        loadedHistoryPages: Int = 0,
+        historyPageBudget: Int = maximumHistoryPages
     ) -> TimelineInitialTargetResolution {
         guard targetMessageIdHex?.isEmpty == false else { return .ready }
         if targetItemId?.isEmpty == false { return .ready }
-        guard hasMoreBefore else { return .fallbackToBottom }
+        guard hasMoreBefore, loadedHistoryPages < historyPageBudget else { return .fallbackToBottom }
         return canLoadOlder ? .loadOlder : .waitForPagination
     }
 }
@@ -543,12 +571,17 @@ struct ConversationView: View {
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
     @State private var composerFocusRequest = 0
     @State private var composerDismissRequest = 0
+    /// Bumped by `send()` to ask the timeline to re-pin. The composer is a
+    /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
+    /// carries the request into the reader's scope.
+    @State private var composerSendBottomScrollRequest = 0
     @State private var isAtTimelineBottom = true
     @State private var isUserScrollingTimeline = false
     @State private var userMovedAwayFromTimelineBottom = false
     @State private var didRequestInitialTimelinePosition = false
     @State private var isInitialTimelinePositionSettled = false
     @State private var pendingInitialPositionTarget: TimelineInitialPositionTarget?
+    @State private var initialTargetHistoryPageLoads = 0
     @State private var timelineTargetVisibility = TimelineTargetVisibilityStore()
     @State private var initialTimelinePositionRequestGeneration = 0
     @State private var pendingBottomScrollRequest: TimelineBottomScrollRequest?
@@ -1634,6 +1667,9 @@ struct ConversationView: View {
                         } action: { _, isPinned in
                             if isAtTimelineBottom != isPinned {
                                 isAtTimelineBottom = isPinned
+                                if isPinned, isInitialTimelinePositionSettled {
+                                    viewModel.markConversationReadThroughTail()
+                                }
                             }
                             let movedAway = TimelineBottom.userMovedAwayState(
                                 previous: userMovedAwayFromTimelineBottom,
@@ -1670,6 +1706,7 @@ struct ConversationView: View {
                             guard !isInitialTimelinePositioning else { return }
                             if !userMovedAwayFromTimelineBottom {
                                 isAtTimelineBottom = true
+                                viewModel.markConversationReadThroughTail()
                                 scheduleScrollToBottom(
                                     proxy: proxy,
                                     animated: true,
@@ -1677,6 +1714,15 @@ struct ConversationView: View {
                                     targetID: newId
                                 )
                             }
+                        }
+                        .onChange(of: composerSendBottomScrollRequest) { _, _ in
+                            cancelPendingBottomScroll()
+                            scheduleScrollToBottom(
+                                proxy: proxy,
+                                animated: false,
+                                reason: .send,
+                                targetID: viewModel.timeline.last?.id
+                            )
                         }
                         .onChange(of: viewModel.timelineProjectionGeneration) { _, _ in
                             viewModel.search.refreshAfterTimelineChange()
@@ -2049,7 +2095,14 @@ struct ConversationView: View {
                 Haptics.tap()
                 if viewModel.hasMoreAfter {
                     Task { @MainActor in
-                        await viewModel.loadNewerTimelinePage()
+                        var drainedPages = 0
+                        while TimelineBottom.shouldDrainNewerPage(
+                            hasMoreAfter: viewModel.hasMoreAfter,
+                            drainedPages: drainedPages
+                        ) {
+                            await viewModel.loadNewerTimelinePage()
+                            drainedPages += 1
+                        }
                         isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
                             currentIsPinned: isAtTimelineBottom
                         )
@@ -2170,6 +2223,7 @@ struct ConversationView: View {
             reason: .buttonTap,
             targetID: viewModel?.timeline.last?.id
         )
+        viewModel?.markConversationReadThroughTail()
     }
 
     private func performInitialScrollIfNeeded(viewModel: ConversationViewModel) -> Bool {
@@ -2179,12 +2233,14 @@ struct ConversationView: View {
             targetMessageIdHex: initialTargetMessageIdHex,
             targetItemId: targetItemId,
             hasMoreBefore: viewModel.hasMoreBefore,
-            canLoadOlder: viewModel.canLoadOlderTimelinePage
+            canLoadOlder: viewModel.canLoadOlderTimelinePage,
+            loadedHistoryPages: initialTargetHistoryPageLoads
         )
         switch targetResolution {
         case .ready:
             break
         case .loadOlder:
+            initialTargetHistoryPageLoads += 1
             Task { await viewModel.loadOlderTimelinePage() }
             return true
         case .waitForPagination:
@@ -2223,6 +2279,13 @@ struct ConversationView: View {
             maintainInitialTimelinePosition(viewModel: viewModel)
             return
         }
+        // The event that says Marmot now has a durable row for the tail. A
+        // just-sent message's mark can be rejected before this lands, and the
+        // `timeline.last?.id` handler can't cover it: the optimistic row keeps
+        // its temp id until Marmot mirrors it, and on `.published` the id
+        // changes before Marmot will accept the mark.
+        guard !userMovedAwayFromTimelineBottom, isInitialTimelinePositionSettled else { return }
+        viewModel.markConversationReadThroughTail()
     }
 
     private func requestInitialTimelinePosition(
@@ -2432,6 +2495,11 @@ struct ConversationView: View {
             giphyDraft: &giphyDraft,
             viewModel: viewModel
         ) else { return }
+        isAtTimelineBottom = true
+        userMovedAwayFromTimelineBottom = TimelineBottom.movedAwayFromBottomAfterOwnSend(
+            previous: userMovedAwayFromTimelineBottom
+        )
+        composerSendBottomScrollRequest &+= 1
         Task {
             if let giphyWireText = payload.giphyWireText {
                 await payload.viewModel.sendPreparedComposerText(giphyWireText)
