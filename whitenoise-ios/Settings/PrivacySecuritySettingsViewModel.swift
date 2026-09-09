@@ -26,7 +26,7 @@ extension PrivacySecuritySettingsViewModelDataSource {
 @MainActor
 @Observable
 final class PrivacySecuritySettingsViewModel {
-    var telemetrySettings: PrivacyTelemetrySettingsProjection?
+    var usageEnabled: Bool?
     var auditSettings: PrivacyAuditSettingsProjection?
     var auditFileRows: [AuditFileRow] = [] {
         didSet { storedLogSize = formatStoredLogSize() }
@@ -49,7 +49,7 @@ final class PrivacySecuritySettingsViewModel {
     }
 
     var diagnosticsSummary: String {
-        switch (telemetrySettings?.exportEnabled, auditSettings?.enabled) {
+        switch (usageEnabled, auditSettings?.enabled) {
         case (true, true): L10n.string("On")
         case (true, false): L10n.string("Analytics")
         case (false, true): L10n.string("Logs")
@@ -158,7 +158,7 @@ final class PrivacySecuritySettingsViewModel {
         // empty, and clearing there would wipe optimistic/seeded state a reload
         // started before a save is expected to preserve.
         if let loadedAccountRef, loadedAccountRef != accountRef {
-            telemetrySettings = nil
+            usageEnabled = nil
             auditSettings = nil
             auditFileRows = []
             savedAt = nil
@@ -177,7 +177,7 @@ final class PrivacySecuritySettingsViewModel {
                 // No active account / suspended runtime: clear so a previous
                 // account's telemetry toggle and audit rows can't linger,
                 // matching the sibling settings screens.
-                telemetrySettings = nil
+                usageEnabled = nil
                 auditSettings = nil
                 auditFileRows = []
                 loadedAccountRef = accountRef
@@ -187,7 +187,7 @@ final class PrivacySecuritySettingsViewModel {
                 await deferOrReload(.full, using: dataSource)
                 return
             }
-            telemetrySettings = projection.telemetrySettings
+            usageEnabled = projection.usageEnabled
             auditSettings = projection.auditSettings
             auditFileRows = projection.auditFileRows
             loadedAccountRef = accountRef

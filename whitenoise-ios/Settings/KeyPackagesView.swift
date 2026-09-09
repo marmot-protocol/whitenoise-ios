@@ -11,7 +11,7 @@ struct KeyPackagesView: View {
             Section("Current Key Package") {
                 if model.isLoading && !model.hasLoaded {
                     ProgressView("Loading key packages")
-                } else if model.loadError != nil || model.maintenanceLoadError != nil {
+                } else if model.loadError != nil {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Couldn't load this screen", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.secondary)
@@ -19,6 +19,9 @@ struct KeyPackagesView: View {
                             Task { await model.reload(using: appState) }
                         }
                     }
+                } else if model.maintenanceLoadError != nil {
+                    Text("Unavailable").foregroundStyle(.secondary)
+                    Button("Retry") { Task { await model.reload(using: appState) } }
                 } else if let current = model.presentation.current {
                     packageDetails(
                         identifier: current.identifier,
@@ -49,15 +52,21 @@ struct KeyPackagesView: View {
                 Text("Publishes a new key package so this profile can receive group invitations.")
             }
 
-            if model.loadError == nil && model.maintenanceLoadError == nil && !model.presentation.otherRelayPackages.isEmpty {
+            if model.loadError == nil && !model.presentation.otherRelayPackages.isEmpty {
                 Section {
                     ForEach(model.presentation.otherRelayPackages, id: \.eventIdHex) { package in
                         otherPackageRow(package)
                     }
                 } header: {
-                    Text("Other Key Packages on Relays")
+                    if model.maintenanceLoadError == nil {
+                        Text("Other Key Packages on Relays")
+                    } else {
+                        Text("Key Packages")
+                    }
                 } footer: {
-                    Text("These packages were found on this profile’s relays and differ from this device’s current package.")
+                    if model.maintenanceLoadError == nil {
+                        Text("These packages were found on this profile’s relays and differ from this device’s current package.")
+                    }
                 }
             }
         }

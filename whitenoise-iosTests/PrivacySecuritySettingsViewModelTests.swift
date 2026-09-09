@@ -110,13 +110,13 @@ struct PrivacySecuritySettingsViewModelTests {
         let source = MockPrivacyDataSource()
         source.activeAccountRef = "account-a"
         source.projection = PrivacySecuritySettingsProjection(
-            telemetrySettings: PrivacyTelemetrySettingsProjection(exportEnabled: true, exportIntervalSeconds: 60),
+            usageEnabled: true,
             auditSettings: PrivacyAuditSettingsProjection(enabled: true),
             auditFileRows: [AuditFileRow(fileName: "a.log", detailText: "1 KB - account-a", path: "/a.log")]
         )
 
         await model.reload(using: source)
-        #expect(model.telemetrySettings != nil)
+        #expect(model.usageEnabled != nil)
         #expect(model.auditSettings != nil)
         #expect(!model.auditFileRows.isEmpty)
         model.savedAt = Date()
@@ -130,7 +130,7 @@ struct PrivacySecuritySettingsViewModelTests {
         await Task.yield()
 
         // The previous account's state is already cleared while the read hangs.
-        #expect(model.telemetrySettings == nil)
+        #expect(model.usageEnabled == nil)
         #expect(model.auditSettings == nil)
         #expect(model.auditFileRows.isEmpty)
         #expect(model.savedAt == nil)
@@ -146,7 +146,7 @@ struct PrivacySecuritySettingsViewModelTests {
         let source = MockPrivacyDataSource()
         source.activeAccountRef = "account-a"
         source.projection = PrivacySecuritySettingsProjection(
-            telemetrySettings: PrivacyTelemetrySettingsProjection(exportEnabled: true, exportIntervalSeconds: 60),
+            usageEnabled: true,
             auditSettings: PrivacyAuditSettingsProjection(enabled: false),
             auditFileRows: [AuditFileRow(fileName: "a.log", detailText: "1 KB - account-a", path: "/a.log")]
         )
@@ -154,7 +154,7 @@ struct PrivacySecuritySettingsViewModelTests {
         await model.reload(using: source)
         await model.reload(using: source)
 
-        #expect(model.telemetrySettings != nil)
+        #expect(model.usageEnabled != nil)
         #expect(!model.auditFileRows.isEmpty)
     }
 }

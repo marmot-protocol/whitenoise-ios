@@ -510,7 +510,7 @@ final class AppState {
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
         self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
-        self.diagnosticsConsent = DeviceDiagnosticsConsent(defaults: accountDefaults)
+        self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.blockScreenshots = UserDefaults.standard.bool(forKey: Self.blockScreenshotsKey)
@@ -1177,11 +1177,6 @@ final class AppState {
     /// `cancelForegroundMaintenance`.
     func cancelNativePushRegistrationTaskSync() {
         notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
-    }
-
-    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi? {
-        guard let client = foregroundSettingsReadClient() else { return nil }
-        return try await client.relayTelemetrySettings()
     }
 
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection? {

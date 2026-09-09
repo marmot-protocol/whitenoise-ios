@@ -343,12 +343,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.signInAccount(accountRef: accountRef)
     }
 
-    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.relayTelemetrySettings()
-        }.value
-    }
-
     func auditLogSettings() async throws -> AuditLogSettingsFfi {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.auditLogSettings()
@@ -370,7 +364,7 @@ nonisolated final class MarmotClient: Sendable {
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
         try await Task.detached(priority: .utility) { [marmot] in
             try PrivacySecuritySettingsProjection(
-                telemetrySettings: PrivacyTelemetrySettingsProjection(settings: marmot.usageDiagnosticsSettings()),
+                usageEnabled: marmot.usageDiagnosticsSettings().decision == .granted,
                 auditSettings: PrivacyAuditSettingsProjection(settings: marmot.auditLogSettings()),
                 auditFileRows: AuditFileRowProjection.rows(from: marmot.auditLogFiles())
             )
@@ -913,10 +907,6 @@ nonisolated final class MarmotClient: Sendable {
 
     func publishNewKeyPackage(accountRef: String) async throws -> UInt64 {
         try await marmot.publishNewKeyPackage(accountRef: accountRef)
-    }
-
-    func republishKeyPackage(accountRef: String) async throws -> UInt64 {
-        try await marmot.republishKeyPackage(accountRef: accountRef)
     }
 
     func keyPackageMaintenanceStatus(

@@ -253,7 +253,6 @@ final class ChatsListViewModel {
     private var directPeerLookupCompletedGroupIds: Set<String> = []
     private var pendingDirectPeerRefreshGroupIds: Set<String> = []
     @ObservationIgnored private var defersPinOrderSnapshots = false
-    @ObservationIgnored private var deferredPinOrderSnapshot: [ChatListRowFfi]?
     @ObservationIgnored private var pinOrderUITransitionID: UUID?
 
     private static let chatListUpdateCoalescingDelayNanoseconds: UInt64 = 16_000_000
@@ -295,7 +294,6 @@ final class ChatsListViewModel {
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
         defersPinOrderSnapshots = false
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = nil
         if currentAccount != accountRef {
             if let currentAccount {
@@ -499,22 +497,13 @@ final class ChatsListViewModel {
         for row in snapshot.rows {
             directPeerAccountIdByGroupId[row.row.groupIdHex] = row.presentation.peerId
         }
-        applyChatListSnapshot(snapshot.rows.map(\.row), mergingPendingRows: false)
+        applyChatListSnapshot(snapshot.rows.map(\.row))
     }
 
-    func applyChatListSnapshot(
-        _ snapshot: [ChatListRowFfi],
-        mergingPendingRows: Bool = true
-    ) {
+    func applyChatListSnapshot(_ snapshot: [ChatListRowFfi]) {
         loadError = nil
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
-        let mergedSnapshot = mergingPendingRows
-            ? Self.mergingSnapshot(
-                snapshot,
-                withPendingRows: Array(pendingChatListRowsByGroupId.values)
-            )
-            : snapshot
         pendingChatListRowsByGroupId = [:]
         let previousRows = rowByGroupId
         let previousItems = itemByGroupId
@@ -522,7 +511,7 @@ final class ChatsListViewModel {
         var nextItems: [String: Item] = [:]
         var changed = false
         let muteLookup = currentMuteLookup()
-        for row in mergedSnapshot {
+        for row in snapshot {
             updateCachedGroupDetails(with: row)
             let item = makeItem(for: row, muteLookup: muteLookup)
             nextRows[row.groupIdHex] = row
@@ -540,7 +529,7 @@ final class ChatsListViewModel {
         if changed {
             publishItems()
         }
-        scheduleRowEnrichment(for: mergedSnapshot)
+        scheduleRowEnrichment(for: snapshot)
     }
 
     /// Applies Marmot's complete authoritative pin order without waiting for
@@ -569,29 +558,6 @@ final class ChatsListViewModel {
         if changed {
             publishItems()
         }
-    }
-
-    static func mergingSnapshot(
-        _ snapshot: [ChatListRowFfi],
-        withPendingRows pendingRows: [ChatListRowFfi]
-    ) -> [ChatListRowFfi] {
-        var rowsByGroupId: [String: ChatListRowFfi] = [:]
-        for row in snapshot {
-            rowsByGroupId[row.groupIdHex] = row
-        }
-        var appendedGroupIds: [String] = []
-        for pending in pendingRows {
-            if let snapshotRow = rowsByGroupId[pending.groupIdHex] {
-                if pending.updatedAt >= snapshotRow.updatedAt {
-                    rowsByGroupId[pending.groupIdHex] = pending
-                }
-            } else {
-                rowsByGroupId[pending.groupIdHex] = pending
-                appendedGroupIds.append(pending.groupIdHex)
-            }
-        }
-        return snapshot.compactMap { rowsByGroupId[$0.groupIdHex] }
-            + appendedGroupIds.compactMap { rowsByGroupId[$0] }
     }
 
     /// Intersect the parallel enrichment caches/sets down to the surviving
@@ -651,25 +617,9 @@ final class ChatsListViewModel {
         enqueueChatListRow(row)
     }
 
-    func applyChatListUpdate(_ update: ChatListSubscriptionUpdateFfi) {
-        switch update {
-        case .row(_, let row):
-            enqueueChatListRow(row)
-        case .removeRow(_, let groupIdHex):
-            removeChatListRow(groupIdHex: groupIdHex)
-        case .snapshot(let trigger, let rows):
-            if trigger == .pinOrderChanged, defersPinOrderSnapshots {
-                deferredPinOrderSnapshot = rows
-            } else {
-                applyChatListSnapshot(rows, mergingPendingRows: false)
-            }
-        }
-    }
-
     func beginPinOrderUITransition() -> UUID {
         let transitionID = UUID()
         defersPinOrderSnapshots = true
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = transitionID
         return transitionID
     }
@@ -683,11 +633,9 @@ final class ChatsListViewModel {
         orderedGroupIds: [String]?
     ) -> Bool {
         guard pinOrderUITransitionID == transitionID else { return false }
-        let snapshot = deferredPinOrderSnapshot
         let presented = deferredPresentedSnapshot
         deferredPresentedSnapshot = nil
         defersPinOrderSnapshots = false
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = nil
 
         if let presented { applyPresentedSnapshot(presented) }
@@ -695,11 +643,7 @@ final class ChatsListViewModel {
             applyPinnedOrder(orderedGroupIds)
             return true
         }
-        if let snapshot {
-            applyChatListSnapshot(snapshot, mergingPendingRows: false)
-            return true
-        }
-        return false
+        return presented != nil
     }
 
     func removeChatListRow(groupIdHex: String) {

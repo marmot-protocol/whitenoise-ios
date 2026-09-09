@@ -97,14 +97,10 @@ struct DeviceDiagnosticsConsentTests {
         #expect(await model.finishPrompt(using: source))
     }
 
-    @Test func migrationIgnoresOldSeenFlagAndDistinguishesScopeChanges() async throws {
-        let name = "DiagnosticsReceiptTests.\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
-        defaults.set(true, forKey: "marmot.deviceDiagnosticsPromptSeen")
+    @Test func migrationExplanationDistinguishesLegacyOptInFromScopeChanges() async {
         let source = DiagnosticsTestSource()
         source.previouslyEnabled = true
-        let model = DeviceDiagnosticsConsent(defaults: defaults)
+        let model = DeviceDiagnosticsConsent()
         await model.reload(using: source)
         #expect(model.pending)
         let legacyExplanation = model.explanation

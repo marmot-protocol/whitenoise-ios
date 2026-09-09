@@ -16,19 +16,25 @@ final class MessageVisibilityPerformance {
     }
     private let now: () -> UInt64
     private let capacity: Int
+    private let maximumAgeNanoseconds: UInt64
     private var pending: [String: Pending] = [:]
 
-    init(capacity: Int = 128, now: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) {
+    init(capacity: Int = 128, maximumAgeNanoseconds: UInt64 = 5_000_000_000,
+         now: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds }) {
         self.capacity = max(1, capacity)
+        self.maximumAgeNanoseconds = maximumAgeNanoseconds
         self.now = now
     }
 
     func begin(rowID: String, operation: HostPerformanceOperationFfi, ticket: ProductAnalyticsRecorder.Ticket?) {
-        guard let ticket, pending[rowID] == nil else { return }
+        guard let ticket else { return }
+        let start = now()
+        pruneExpired(at: start)
+        guard pending[rowID] == nil else { return }
         if pending.count >= capacity, let oldest = pending.min(by: { $0.value.start < $1.value.start })?.key {
             pending.removeValue(forKey: oldest)
         }
-        pending[rowID] = Pending(operation: operation, start: now(), ticket: ticket)
+        pending[rowID] = Pending(operation: operation, start: start, ticket: ticket)
     }
 
     func move(from oldID: String, to newID: String) {
@@ -38,6 +44,7 @@ final class MessageVisibilityPerformance {
 
     func takeVisible(_ rowIDs: Set<String>) -> [Sample] {
         let end = now()
+        pruneExpired(at: end)
         return rowIDs.compactMap { rowID in
             guard let value = pending.removeValue(forKey: rowID), end >= value.start else { return nil }
             return Sample(operation: value.operation, milliseconds: (end - value.start) / 1_000_000, ticket: value.ticket)
@@ -45,4 +52,8 @@ final class MessageVisibilityPerformance {
     }
 
     func reset() { pending.removeAll() }
+
+    private func pruneExpired(at time: UInt64) {
+        pending = pending.filter { time >= $0.value.start && time - $0.value.start <= maximumAgeNanoseconds }
+    }
 }

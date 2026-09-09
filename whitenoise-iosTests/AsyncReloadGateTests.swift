@@ -11,7 +11,7 @@ struct AsyncReloadGateTests {
         let staleProjection = privacyProjection(auditEnabled: false)
         let currentProjection = privacyProjection(auditEnabled: true)
         dataSource.projectionResponses = [.suspended, .immediate(currentProjection)]
-        model.telemetrySettings = PrivacyTelemetrySettingsProjection(exportEnabled: false, exportIntervalSeconds: 60)
+        model.usageEnabled = false
         model.auditSettings = PrivacyAuditSettingsProjection(enabled: false)
 
         let reloadTask = Task { @MainActor in
@@ -414,10 +414,7 @@ private enum SuspendingResponse<Value> {
 
 private func privacyProjection(auditEnabled: Bool) -> PrivacySecuritySettingsProjection {
     PrivacySecuritySettingsProjection(
-        telemetrySettings: PrivacyTelemetrySettingsProjection(
-            exportEnabled: false,
-            exportIntervalSeconds: 60
-        ),
+        usageEnabled: false,
         auditSettings: PrivacyAuditSettingsProjection(enabled: auditEnabled),
         auditFileRows: []
     )

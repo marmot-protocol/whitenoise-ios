@@ -14,8 +14,8 @@ struct PresentedChatListCursor: Equatable {
     }
 
     func requiresReopen(_ update: PresentedChatListUpdateFfi) -> Bool {
-        update.subscriptionGeneration == generation
-            && update.snapshot.presentationVersion.accountStoreEpoch != storeEpoch
+        update.subscriptionGeneration != generation
+            || update.snapshot.presentationVersion.accountStoreEpoch != storeEpoch
     }
 
     mutating func accept(_ update: PresentedChatListUpdateFfi) -> Bool {

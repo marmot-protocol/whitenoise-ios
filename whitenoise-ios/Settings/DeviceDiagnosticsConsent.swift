@@ -44,7 +44,7 @@ final class DeviceDiagnosticsConsent {
     private var generation = UUID()
 
     // Old prompt flags are deliberately ignored. MDK owns the only receipt.
-    init(defaults: UserDefaults = .standard) {}
+    init() {}
 
     var pending: Bool { snapshot?.settings.decision == .acceptanceRequired }
     var usageEnabled: Bool { snapshot?.settings.decision == .granted }

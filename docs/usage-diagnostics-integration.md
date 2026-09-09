@@ -50,7 +50,9 @@ additional registry stays empty. The new arbitrary `recordHostTiming` API is
 intentionally unused because it requires explicitly registered custom schemas.
 Message-visible timings use MDK's approved host-performance enum instead: Send
 through visible local bubble, and a new inbound projection through visible frame.
-History reads and passive re-projections do not start these measurements. MDK's
+History reads and passive re-projections do not start these measurements.
+Pending visibility samples expire after five seconds; longer waits and later
+scrollback are discarded instead of being reported as rendering latency. MDK's
 new transport/queue/projection timings remain automatic and are not duplicated. Swift tickets prevent work begun before consent,
 revocation, account changes, or runtime replacement from being attributed later.
 
@@ -67,7 +69,8 @@ Background activity is best-effort alongside terminal shutdown. The latter close
 storage before its bounded drain; analytics never owns the suspension deadline.
 Frozen notification runtimes stay silent. Runtime shutdown may lose memory-only
 observations; no Swift disk queue or session identity is added.
-The pinned MDK background setter flushes before returning and has no separate
+The pinned MDK background setter bounds its flush with a two-second timeout
+before returning and has no separate
 non-flushing activity API. Awaiting it before terminal close would delay storage
 release, so background activity cannot be guaranteed at suspension. Terminal
 shutdown itself seals partial observations and drains after storage closes.
@@ -76,7 +79,7 @@ shutdown itself seals partial observations and drains after storage closes.
 
 - Attached presented-chat-list snapshots select title/avatar independently of
   legacy row fields. Complete updates use handle generation and sequence; title
-  revision is not an unread/pin version. Store-epoch changes reopen the handle.
+  revision is not an unread/pin version. Store-epoch changes or an unexpected handle generation reopen the handle.
   A handwritten adapter forwards Swift task cancellation to the released native
   future so account switches do not retain an idle `next()` call.
 - Rejoin offers are refreshed on entry and raw group-state events, including when

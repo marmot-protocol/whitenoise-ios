@@ -15,7 +15,8 @@ struct Marmot0920IntegrationTests {
         #expect(accepted2)
         let accepted3 = !cursor.accept(update(generation: "old", sequence: 50))
         #expect(accepted3)
-        #expect(!cursor.requiresReopen(update(generation: "old", sequence: 50, epoch: 2)))
+        #expect(cursor.requiresReopen(update(generation: "old", sequence: 50)))
+        #expect(cursor.requiresReopen(update(generation: "old", sequence: 50, epoch: 2)))
         let replacedStore = update(generation: "one", sequence: 2, epoch: 2)
         #expect(cursor.requiresReopen(replacedStore))
         let accepted4 = !cursor.accept(replacedStore)
@@ -76,6 +77,23 @@ struct Marmot0920IntegrationTests {
         #expect(tracker.takeVisible(["two"]).count == 1)
         tracker.reset()
         #expect(tracker.takeVisible(["three"]).isEmpty)
+    }
+
+    @Test func visibilitySamplesExpireBeforeScrollBackCanRecordThem() {
+        var now: UInt64 = 0
+        let tracker = MessageVisibilityPerformance(now: { now })
+        let recorder = ProductAnalyticsRecorder()
+        recorder.activateSink { _ in }
+        tracker.begin(rowID: "expired", operation: .inboundMessageVisible, ticket: recorder.ticket())
+        now = 5_000_000_001
+        #expect(tracker.takeVisible(["expired"]).isEmpty)
+        tracker.begin(rowID: "visible", operation: .outboundMessageVisible, ticket: recorder.ticket())
+        now += 5_000_000_000
+        #expect(tracker.takeVisible(["visible"]).first?.milliseconds == 5_000)
+        tracker.begin(rowID: "reused", operation: .inboundMessageVisible, ticket: recorder.ticket())
+        now += 5_000_000_001
+        tracker.begin(rowID: "reused", operation: .inboundMessageVisible, ticket: recorder.ticket())
+        #expect(tracker.takeVisible(["reused"]).first?.milliseconds == 0)
     }
 
     private func update(generation: String, sequence: UInt64, epoch: UInt8 = 1) -> PresentedChatListUpdateFfi {
