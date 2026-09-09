@@ -3,7 +3,6 @@ import SwiftUI
 
 struct PrivacySecuritySettingsView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.colorScheme) private var colorScheme
     @State private var diagnostics = PrivacySecuritySettingsViewModel()
     @State private var showEraseData = false
     @State private var appLockCapability = AppLockCapability(available: false, biometryType: .none)
@@ -15,7 +14,7 @@ struct PrivacySecuritySettingsView: View {
                     get: { appState.blockScreenshots },
                     set: { appState.blockScreenshots = $0 }
                 ))
-                .tint(appSecurityToggleTint)
+                .wnNeutralToggleTint()
             } header: {
                 Text("App Security")
             } footer: {
@@ -27,7 +26,7 @@ struct PrivacySecuritySettingsView: View {
                     get: { appState.appLock.isEnabled },
                     set: { enabled in Task { await appState.appLock.setEnabled(enabled) } }
                 ))
-                .tint(appSecurityToggleTint)
+                .wnNeutralToggleTint()
                 .disabled(!appLockCapability.available)
 
                 if appState.appLock.isEnabled && appLockCapability.available {
@@ -64,10 +63,6 @@ struct PrivacySecuritySettingsView: View {
             await diagnostics.reload(using: appState)
         }
         .sheet(isPresented: $showEraseData) { EraseAppDataView().appAppearance() }
-    }
-
-    private var appSecurityToggleTint: Color {
-        colorScheme == .dark ? Color(uiColor: .systemGray) : .black
     }
 
     private var appLockToggleTitle: String {

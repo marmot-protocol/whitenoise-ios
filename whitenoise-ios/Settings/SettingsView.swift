@@ -323,8 +323,9 @@ private struct AccountActionsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text(profileName).font(.headline)
+                    profileSummaryRow
                     Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
+                        .wnNeutralToggleTint()
                 } footer: {
                     Text(shouldWipeData
                          ? "This profile and all local data will be permanently removed. Previous chats won’t return."
@@ -334,6 +335,8 @@ private struct AccountActionsSheet: View {
                     Section {
                         TextField("Profile name", text: $confirmation)
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    } header: {
+                        Text("Enter Profile Name").wnSectionHeader()
                     } footer: {
                         Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
                     }
@@ -372,6 +375,15 @@ private struct AccountActionsSheet: View {
             if let account = appState.activeAccount {
                 profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var profileSummaryRow: some View {
+        if let active = appState.activeAccount, active.label == profileRef {
+            AccountIdentitySummary(account: active, avatarSize: 48)
+        } else {
+            Text(profileName).font(.headline)
         }
     }
 
