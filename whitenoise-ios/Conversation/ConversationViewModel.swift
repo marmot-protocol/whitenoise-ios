@@ -476,6 +476,16 @@ final class ConversationViewModel {
         )
     }
 
+    /// One reading of the departure state, shared with the chat list so a
+    /// settled `left` / `removed` is never reported as a leave still in flight.
+    var departureStatus: ChatDepartureStatus? {
+        ChatDepartureStatus.status(
+            membership: group.selfMembership,
+            leaveRequestPending: leaveRequestPending,
+            pendingConfirmation: group.pendingConfirmation
+        )
+    }
+
     var inactiveGroupMessage: String? {
         guard !canSendMessages else { return nil }
         if isGroupDisbanded {
@@ -484,7 +494,7 @@ final class ConversationViewModel {
         if isGroupDisbanding {
             return GroupManagementPresentation.disbandingComposerMessage
         }
-        if leaveRequestPending {
+        if departureStatus == .leaving {
             return GroupManagementPresentation.leavingGroupComposerMessage
         }
         if isGroupUnrecoverable {

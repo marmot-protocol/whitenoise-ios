@@ -258,8 +258,21 @@ struct ChatListPreviewCacheTests {
         ))
     }
 
-    @Test func durablePendingLeaveHasDistinctPreviewFromResolvedLeave() {
-        let pendingItem = ChatsListViewModel.Item(
+    /// A leave the group has not committed keeps `leaveRequestPending` true
+    /// indefinitely, so only a row whose membership has *not* ended may report
+    /// the leave as still in flight.
+    @Test func onlyAnUnsettledLeavePreviewsAsProgress() {
+        let leavingItem = ChatsListViewModel.Item(
+            row: row(
+                lastMessage: preview(),
+                selfMembership: .member,
+                leaveRequestPending: true
+            ),
+            avatarURL: nil,
+            title: "Room",
+            leaveRequestPending: true
+        )
+        let departedItem = ChatsListViewModel.Item(
             row: row(
                 lastMessage: preview(),
                 selfMembership: .left,
@@ -271,12 +284,17 @@ struct ChatListPreviewCacheTests {
         )
 
         #expect(ChatRow.previewPresentation(
-            for: pendingItem,
+            for: leavingItem,
             activeAccountIdHex: "self",
             senderName: { _ in "Wrong sender" }
         ) == ChatRowPreviewPresentation(prefix: nil, body: L10n.string("Leaving…")))
-        #expect(pendingItem.selfMembership == .left)
-        #expect(!pendingItem.isActiveMember)
+        #expect(ChatRow.previewPresentation(
+            for: departedItem,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Wrong sender" }
+        ) == ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You left this chat.")))
+        #expect(departedItem.departureAction == .deleteLocally)
+        #expect(!departedItem.isActiveMember)
     }
 
     @Test func unansweredInvitePreviewNamesTheInviter() {

@@ -148,6 +148,19 @@ final class ChatsListViewModel {
             !leaveRequestPending
                 && GroupManagementPresentation.isActiveChatListMember(row.selfMembership)
         }
+        var departureStatus: ChatDepartureStatus? {
+            ChatDepartureStatus.status(
+                membership: selfMembership,
+                leaveRequestPending: leaveRequestPending,
+                pendingConfirmation: row.pendingConfirmation
+            )
+        }
+        var departureAction: ChatDepartureAction? {
+            ChatDepartureAction.action(
+                membership: selfMembership,
+                leaveRequestPending: leaveRequestPending
+            )
+        }
         var firstUnreadMessageIdHex: String? { row.firstUnreadMessageIdHex }
         var lastMessage: ChatListMessagePreviewFfi? { row.lastMessage }
         var projectedGroup: AppGroupRecordFfi {
@@ -679,6 +692,12 @@ final class ChatsListViewModel {
         row.leaveRequestPending = true
         row.leaveRequestedAtMs = row.leaveRequestedAtMs
             ?? UInt64(Date().timeIntervalSince1970 * 1_000)
+        // Marmot's own `leaveGroup` records the voluntary departure locally the
+        // moment the SelfRemove publishes, so mirror it here. Recording only the
+        // pending flag left the row claiming an active membership it no longer
+        // has, and the pending flag alone never clears until some remaining
+        // member commits the removal.
+        row.selfMembership = .left
         if storeRow(row) {
             publishItems()
         }

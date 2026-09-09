@@ -633,10 +633,8 @@ struct ChatsListView: View {
         let items = visibleRows.filter { selectedChatIds.contains($0.id) }
         let archiveAction = ChatListSelection.bulkArchiveAction(archivedFlags: items.map(\.isArchived))
         let willMute = ChatListSelection.bulkMuteMutes(mutedFlags: items.map(\.isMuted))
-        let canDeleteLocally = ChatListSelection.canDeleteLocally(
-            activeMemberFlags: items.map(\.isActiveMember),
-            pendingLeaveFlags: items.map(\.leaveRequestPending)
-        )
+        let departureActions = items.map(\.departureAction)
+        let canDeleteLocally = ChatListSelection.canDeleteLocally(departureActions)
 
         return VStack(spacing: 8) {
             HStack {
@@ -670,7 +668,7 @@ struct ChatsListView: View {
                     for id in items.map(\.id) { setMuted(groupIdHex: id, muted: willMute) }
                     endSelectionMode()
                 }
-                .disabled(bulkDeleteInProgress || items.contains(where: \.leaveRequestPending))
+                .disabled(bulkDeleteInProgress || departureActions.contains(nil))
 
                 if bulkDeleteInProgress {
                     VStack(spacing: 3) {

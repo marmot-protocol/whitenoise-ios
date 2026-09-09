@@ -7405,8 +7405,13 @@ struct ChatsListProjectionTests {
 
         #expect(viewModel.items.map(\.id) == [row.groupIdHex])
         #expect(viewModel.items.first?.leaveRequestPending == true)
-        #expect(viewModel.items.first?.selfMembership == .member)
+        // Marmot records the voluntary departure at leave time, so the optimistic
+        // row must too: a row left claiming an active membership can never offer
+        // the local delete that clears an uncommitted leave.
+        #expect(viewModel.items.first?.selfMembership == .left)
         #expect(viewModel.items.first?.isActiveMember == false)
+        #expect(viewModel.items.first?.departureStatus == .membershipEnded(.left))
+        #expect(viewModel.items.first?.departureAction == .deleteLocally)
     }
 
     @Test func durableMemberPendingLeaveSurvivesFreshSnapshot() throws {
@@ -7459,6 +7464,17 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.leaveRequestPending == true)
         #expect(viewModel.items.first?.selfMembership == .left)
         #expect(viewModel.items.first?.isActiveMember == false)
+        // The durable state a quiet group leaves behind forever: it must read as
+        // a settled departure with the local delete available, not as progress.
+        #expect(viewModel.items.first?.departureStatus == .membershipEnded(.left))
+        #expect(viewModel.items.first?.departureAction == .deleteLocally)
+        #expect(
+            ChatRow.previewPresentation(
+                for: try #require(viewModel.items.first),
+                activeAccountIdHex: nil,
+                senderName: { $0 }
+            ).body == "You left this chat."
+        )
     }
 
     @Test func presentedSnapshotDropsAbsentProjectedRow() throws {
@@ -10472,27 +10488,13 @@ struct ChatListSwipeActionsPresentationTests {
     }
 
     @Test func bulkLocalDeleteRequiresEverySelectedMembershipToBeInactive() {
-        #expect(!ChatListSelection.canDeleteLocally(activeMemberFlags: [], pendingLeaveFlags: []))
-        #expect(ChatListSelection.canDeleteLocally(
-            activeMemberFlags: [false],
-            pendingLeaveFlags: [false]
-        ))
-        #expect(ChatListSelection.canDeleteLocally(
-            activeMemberFlags: [false, false],
-            pendingLeaveFlags: [false, false]
-        ))
-        #expect(!ChatListSelection.canDeleteLocally(
-            activeMemberFlags: [true],
-            pendingLeaveFlags: [false]
-        ))
-        #expect(!ChatListSelection.canDeleteLocally(
-            activeMemberFlags: [false, true],
-            pendingLeaveFlags: [false, false]
-        ))
-        #expect(!ChatListSelection.canDeleteLocally(
-            activeMemberFlags: [false],
-            pendingLeaveFlags: [true]
-        ))
+        #expect(!ChatListSelection.canDeleteLocally([]))
+        #expect(ChatListSelection.canDeleteLocally([.deleteLocally]))
+        #expect(ChatListSelection.canDeleteLocally([.deleteLocally, .deleteLocally]))
+        #expect(!ChatListSelection.canDeleteLocally([.leave]))
+        #expect(!ChatListSelection.canDeleteLocally([.deleteLocally, .leave]))
+        #expect(!ChatListSelection.canDeleteLocally([nil]))
+        #expect(!ChatListSelection.canDeleteLocally([.deleteLocally, nil]))
     }
 }
 
@@ -11538,7 +11540,11 @@ struct MediaComposerAvailabilityTests {
 
         #expect(viewModel.leaveRequestPending)
         #expect(!viewModel.canSendMessages)
-        #expect(viewModel.inactiveGroupMessage == GroupManagementPresentation.leavingGroupComposerMessage)
+        // The departure is settled even though the group has not committed the
+        // removal, and that commit may never arrive — reporting it as progress
+        // is what stranded these chats.
+        #expect(viewModel.departureStatus == .membershipEnded(.left))
+        #expect(viewModel.inactiveGroupMessage == GroupManagementPresentation.leftGroupComposerMessage)
     }
 
     @Test func attachmentButtonUsesDisabledAppearanceWhenMediaIsUnavailable() {
