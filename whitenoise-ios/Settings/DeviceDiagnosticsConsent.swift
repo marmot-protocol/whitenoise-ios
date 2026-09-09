@@ -50,7 +50,6 @@ final class DeviceDiagnosticsConsent {
     var usageEnabled: Bool { snapshot?.settings.decision == .granted }
     var auditEnabled: Bool { snapshot?.auditEnabled ?? false }
     var available: Bool { snapshot != nil && !loading && !saving }
-    var initialDecisionResolved: Bool { available && !pending }
 
     var explanation: String? {
         guard let settings = snapshot?.settings, pending else { return nil }

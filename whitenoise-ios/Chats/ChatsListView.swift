@@ -2,6 +2,11 @@ import SwiftUI
 import MarmotKit
 
 struct ChatsListView: View {
+    private struct ConsentRuntimeState: Equatable {
+        let generation: Int
+        let isReady: Bool
+    }
+
     @State private var showDiagnosticsPrompt = false
     @State private var chatsVisible = false
     @State private var secondarySheetVisible = false
@@ -9,7 +14,12 @@ struct ChatsListView: View {
     private var canPresentDiagnostics: Bool {
         appState.diagnosticsConsent.canPresent(
             chatsVisible: chatsVisible && path.isEmpty,
-            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible,
+            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible
+                || appState.erasureState.shouldPresentRecovery(
+                    activeAccountRef: appState.activeAccountRef,
+                    runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+                )
+                || appState.pendingWipeReport != nil,
             runtimeReady: appState.canUseRuntimeForLocalForegroundWork && appState.activeAccountRef != nil,
             chatNavigationPending: appState.pendingChatId != nil
         )
@@ -214,6 +224,15 @@ struct ChatsListView: View {
             }
             .onChange(of: canPresentDiagnostics) {
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
+            }
+            // Chats owns the consent read: bootstrap's own refresh runs while the
+            // phase is still `.bootstrapping`, so it cannot see the runtime.
+            .task(id: ConsentRuntimeState(
+                generation: appState.runtimeGeneration,
+                isReady: appState.canUseRuntimeForLocalForegroundWork
+            )) {
+                guard appState.canUseRuntimeForLocalForegroundWork else { return }
+                await appState.diagnosticsConsent.reload(using: appState)
             }
             .sheet(isPresented: $showDiagnosticsPrompt) {
                 NavigationStack { DiagnosticsAndImprovementsView(isPrompt: true) }
