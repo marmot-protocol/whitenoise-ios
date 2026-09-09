@@ -43,21 +43,21 @@ struct DeviceDiagnosticsConsentTests {
         source.runtimeAvailable = false
         await model.reload(using: source)
         #expect(model.errorMessage != nil)
-        #expect(!model.initialDecisionResolved)
+        #expect(!model.available)
         #expect(!model.loading)
         source.runtimeAvailable = true
         await model.reload(using: source)
         #expect(model.errorMessage == nil)
         #expect(model.pending)
         #expect(await model.finishPrompt(using: source))
-        #expect(model.initialDecisionResolved)
+        #expect(!model.pending)
         #expect(source.writes == [false])
     }
 
     @Test func firstLaunchDefaultsOffAndDeclinePersistsWithoutAnAccount() async {
         let source = DiagnosticsTestSource()
         let model = DeviceDiagnosticsConsent()
-        #expect(!model.initialDecisionResolved)
+        #expect(!model.available)
         await model.reload(using: source)
         #expect(model.pending)
         #expect(!model.usageEnabled && !model.auditEnabled)
@@ -65,7 +65,7 @@ struct DeviceDiagnosticsConsentTests {
         #expect(source.writes == [false])
         let relaunched = DeviceDiagnosticsConsent()
         await relaunched.reload(using: source)
-        #expect(relaunched.initialDecisionResolved && !relaunched.pending)
+        #expect(relaunched.available && !relaunched.pending)
         #expect(!relaunched.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
     }
 
@@ -89,7 +89,7 @@ struct DeviceDiagnosticsConsentTests {
         source.failSave = true
         #expect(!(await model.setUsage(true, using: source)))
         #expect(model.errorMessage != nil)
-        #expect(!model.initialDecisionResolved)
+        #expect(!model.available)
         #expect(!(await model.finishPrompt(using: source)))
         #expect(source.writes.isEmpty)
         source.failSave = false
@@ -112,7 +112,20 @@ struct DeviceDiagnosticsConsentTests {
         #expect(!model.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: false))
         #expect(!model.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true, chatNavigationPending: true))
         model.reset()
-        #expect(!model.initialDecisionResolved)
+        #expect(!model.available)
+    }
+
+    @Test func pendingConsentWaitsForTheChatListAndNeverGatesWelcome() async {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        await model.reload(using: source)
+        #expect(model.pending)
+        // Welcome is the only screen shown before an account exists, and it has
+        // no chat list, so a pending decision cannot present or block sign-in.
+        #expect(!model.canPresent(chatsVisible: false, anotherSheetVisible: false, runtimeReady: true))
+        #expect(model.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
+        model.onboardingVisible = true
+        #expect(!model.canPresent(chatsVisible: true, anotherSheetVisible: false, runtimeReady: true))
     }
 }
 
