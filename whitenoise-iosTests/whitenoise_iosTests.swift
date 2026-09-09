@@ -14809,9 +14809,7 @@ struct PresentedChatListTests {
         let snapshot = presentedChatSnapshot([chatListRow(groupIdHex: "timed", title: "Selected")])
         model.applyPresentedSnapshot(snapshot)
         let stages = Mutex<[ProductTimingStage]>([])
-        appState.productAnalytics.activateSink { event in
-            if case .timing(let stage, _, _) = event { stages.withLock { $0.append(stage) } }
-        }
+        appState.productAnalytics.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { _ in }
         let transition = model.beginPinOrderUITransition()
         model.applyPresentedSnapshot(snapshot)
         #expect(stages.withLock { $0.isEmpty })

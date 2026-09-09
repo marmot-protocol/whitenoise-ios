@@ -45,7 +45,6 @@ nonisolated enum ProductTimingStage: String, CaseIterable, Sendable {
 
 nonisolated enum ProductEvent: Sendable {
     case screen(ProductScreen)
-    case timing(ProductTimingStage, milliseconds: UInt64, outcome: HostPerformanceOutcomeFfi)
     case onboarding(ProductOnboardingStep, ProductOnboardingPath, ProductOutcome)
     case ready(success: Bool, milliseconds: UInt64)
     case compose(cancelled: Bool)
@@ -58,9 +57,6 @@ nonisolated enum ProductEvent: Sendable {
         let name: String
         let properties: [String: String]
         switch self {
-        case .timing(let stage, let milliseconds, let outcome):
-            name = stage.rawValue
-            properties = ["elapsed": Self.durationBucket(milliseconds), "outcome": outcome == .success ? "success" : "failure"]
         case .screen(let screen):
             name = "app_screen_viewed"; properties = ["screen": screen.rawValue]
         case .onboarding(let step, let path, let outcome):
@@ -101,21 +97,23 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     }
     private struct State: Sendable {
         var generation = UUID()
-        var sink: (@Sendable (ProductEvent) throws -> Void)?
+        var sink: (@Sendable (ProductEvent) -> Void)?
         var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)?
+        var timingSink: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)?
         var pending = 0
     }
     private let state = Mutex(State())
 
-    func replaceSink(_ sink: (@Sendable (ProductEvent) throws -> Void)?) {
-        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil }
+    func replaceSink(_ sink: (@Sendable (ProductEvent) -> Void)?) {
+        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil; $0.timingSink = nil }
     }
 
     func activateSink(
         performance: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)? = nil,
-        _ sink: @escaping @Sendable (ProductEvent) throws -> Void
+        timing: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)? = nil,
+        _ sink: @escaping @Sendable (ProductEvent) -> Void
     ) {
-        state.withLock { $0.sink = sink; $0.performanceSink = performance }
+        state.withLock { $0.sink = sink; $0.performanceSink = performance; $0.timingSink = timing }
     }
 
     func ticket() -> Ticket? {
@@ -124,7 +122,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
 
     @discardableResult
     func record(_ event: ProductEvent, ticket: Ticket?) -> Task<Void, Never>? {
-        enqueue(ticket: ticket) { try $0.sink?(event) }
+        enqueue(ticket: ticket) { $0.sink?(event) }
     }
 
     @discardableResult
@@ -152,6 +150,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 } catch {
                     state.sink = nil
                     state.performanceSink = nil
+                    state.timingSink = nil
                     state.generation = UUID()
                 }
             }
@@ -159,8 +158,10 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     }
 
     func beginTiming(at now: ContinuousClock.Instant = .now) -> Timing? {
-        guard let ticket = ticket() else { return nil }
-        return Timing(ticket: ticket, startedAt: now)
+        state.withLock { state in
+            guard state.sink != nil, state.timingSink != nil else { return nil }
+            return Timing(ticket: Ticket(generation: state.generation), startedAt: now)
+        }
     }
 
     @discardableResult
@@ -176,8 +177,9 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
         let fractionalMilliseconds = UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
         let (wholeMilliseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000)
         let (milliseconds, additionOverflow) = wholeMilliseconds.addingReportingOverflow(fractionalMilliseconds)
-        return record(.timing(stage, milliseconds: overflow || additionOverflow ? .max : milliseconds, outcome: outcome),
-                      ticket: timing.ticket)
+        return enqueue(ticket: timing.ticket) {
+            try $0.timingSink?(stage, overflow || additionOverflow ? .max : milliseconds, outcome)
+        }
     }
 
     func record(_ event: ProductEvent) {

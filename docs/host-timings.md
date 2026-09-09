@@ -26,7 +26,7 @@ URLs, exact counts, or error strings are supplied by these host observations.
 | `app_inbox_batch` | Apply a nonempty coalesced inbox batch; excludes the coalescing wait. |
 | `app_inbox_refresh` | Refresh display projections for the nonempty inbox. |
 | `app_inbox_publish` | Sort, compare, and publish visible/archived inbox arrays. |
-| `app_composer_markdown` | Await optimistic composer markdown parsing, including actor scheduling. |
+| `app_composer_markdown` | Await optimistic composer markdown parsing for new sends and message edits, including actor scheduling. |
 | `app_camera_prepare` | Queue camera image/video preparation through draft insertion. |
 | `app_library_prepare` | Queue one selected photo-library batch through prepared-draft insertion. |
 
@@ -38,15 +38,30 @@ measurements include their stated preparation paths, not picker dwell time.
 
 Consent tickets are captured at stage entry. Work begun before consent, or
 completed after consent/profile/runtime invalidation, is discarded. Elapsed time
-is captured before entering the bounded recorder queue. A rejected recorder sink
-is disabled and its queued tickets invalidated; normal activation can retry it.
+is captured before entering the bounded recorder queue. Timing calls use a
+dedicated sink with raw milliseconds; MDK owns their bucketing. A rejected timing
+sink disables recording and invalidates queued tickets; normal activation can
+retry it. Existing product-event errors remain isolated to the individual event.
 Registering these stages changes MDK's registry revision and requires renewed
-consent under the existing #951 flow.
+consent under the existing #951 flow. Until accepted, all usage reporting is
+disabled, including previously registered events. The stage set is installed
+together to avoid repeated prompts while establishing a baseline.
 
 Compare bucket distributions by event, outcome, app version, OS major version,
 and device class. Parent timings include child timings; do not sum them or their
 percentiles. Full cache passes differ from individual cache misses. No per-row
 timings are emitted from bubble bodies. Capacity limits can drop observations.
+
+The stages distinguish total update cost from markdown, media, and inbox
+publication work across deployed device classes. Small operations may remain in
+the lowest bucket; use the existing local signposts when finer resolution is
+needed. Nested stages increase recorder work and can increase admission drops
+during bursts. There is no host overflow signal, so these are best-effort
+distributions of admitted observations, not an unbiased census or a latency SLO.
+Confirm suspected tail regressions with local traces before drawing conclusions.
+MainActor ticket reads share the recorder mutex with native recording. This
+relies on the pinned MDK recorder remaining memory-only and short; investigate
+contention in local traces if instrumentation itself affects frame time.
 
 These stages do not establish a rendered frame, relay acceptance, or recipient
 delivery. In particular, outgoing projection/confirmation must not be relabeled

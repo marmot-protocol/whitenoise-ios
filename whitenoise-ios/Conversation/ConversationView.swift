@@ -2560,7 +2560,6 @@ struct ConversationView: View {
             defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment = try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)
-                try Task.checkCancellation()
                 if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
@@ -2588,7 +2587,6 @@ struct ConversationView: View {
                     defer { try? FileManager.default.removeItem(at: url) }
                     attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                 }
-                try Task.checkCancellation()
                 if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
@@ -2616,7 +2614,7 @@ struct ConversationView: View {
 
         let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
-            var outcome = HostPerformanceOutcomeFfi.success
+            var outcome = HostPerformanceOutcomeFfi.failure
             defer { appState.productAnalytics.recordTiming(.libraryPrepare, since: timing, outcome: outcome) }
             var prepared: [MediaDraftAttachment] = []
             for selection in selected {
@@ -2626,18 +2624,15 @@ struct ConversationView: View {
                         fileName: selection.fileName,
                         typeIdentifier: selection.typeIdentifier
                     )
-                    try Task.checkCancellation()
                     prepared.append(attachment)
                 } catch is CancellationError {
-                    outcome = .failure
                     return
                 } catch {
-                    outcome = .failure
                     appState.present(UserFacingError.toast(title: L10n.string("Couldn't add attachment"), error: error))
                 }
             }
             guard !prepared.isEmpty else { return }
-            if !appendPreparedVisualDrafts(prepared) { outcome = .failure }
+            if appendPreparedVisualDrafts(prepared), prepared.count == selected.count { outcome = .success }
         }
     }
 

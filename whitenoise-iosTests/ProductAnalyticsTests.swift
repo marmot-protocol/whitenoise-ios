@@ -252,10 +252,12 @@ struct ProductAnalyticsTests {
 
     @Test func timingConsentAndDuration() async throws {
         let recorder = ProductAnalyticsRecorder()
-        let events = Mutex<[ProductEventFfi]>([])
+        let events = Mutex<[(ProductTimingStage, UInt64, HostPerformanceOutcomeFfi)]>([])
         let start = ContinuousClock.now
         let beforeConsent = recorder.beginTiming(at: start)
-        recorder.activateSink { event in events.withLock { $0.append(event.ffi) } }
+        recorder.activateSink(timing: { stage, milliseconds, outcome in
+            events.withLock { $0.append((stage, milliseconds, outcome)) }
+        }) { _ in }
         #expect(recorder.recordTiming(.inboxBatch, since: beforeConsent) == nil)
         let timing = try #require(recorder.beginTiming(at: start))
         await recorder.recordTiming(.inboxBatch, since: timing, at: start.advanced(by: .milliseconds(250)))?.value
@@ -263,15 +265,13 @@ struct ProductAnalyticsTests {
             .libraryPrepare, since: timing, outcome: .failure, at: start.advanced(by: .milliseconds(251))
         )?.value
         let recorded = events.withLock { $0 }
-        #expect(recorded.map(\.name) == ["app_inbox_batch", "app_library_prepare"])
-        #expect(recorded[0].properties == [
-            .init(name: "elapsed", value: "le_250ms"), .init(name: "outcome", value: "success")
-        ])
-        #expect(recorded[1].properties == [
-            .init(name: "elapsed", value: "le_500ms"), .init(name: "outcome", value: "failure")
-        ])
+        #expect(recorded.map { $0.0 } == [.inboxBatch, .libraryPrepare])
+        #expect(recorded.map { $0.1 } == [250, 251])
+        #expect(recorded.map { $0.2 } == [.success, .failure])
         recorder.replaceSink(nil)
-        recorder.activateSink { event in events.withLock { $0.append(event.ffi) } }
+        recorder.activateSink(timing: { stage, milliseconds, outcome in
+            events.withLock { $0.append((stage, milliseconds, outcome)) }
+        }) { _ in }
         #expect(recorder.recordTiming(.inboxBatch, since: timing) == nil)
         #expect(events.withLock { $0.count } == 2)
     }
@@ -279,9 +279,7 @@ struct ProductAnalyticsTests {
     @Test func timingClampsEarlierCompletionAndTruncatesSubmillisecondDuration() async throws {
         let recorder = ProductAnalyticsRecorder()
         let durations = Mutex<[UInt64]>([])
-        recorder.activateSink { event in
-            if case .timing(_, let milliseconds, _) = event { durations.withLock { $0.append(milliseconds) } }
-        }
+        recorder.activateSink(timing: { _, milliseconds, _ in durations.withLock { $0.append(milliseconds) } }) { _ in }
         let start = ContinuousClock.now
         let timing = try #require(recorder.beginTiming(at: start))
         await recorder.recordTiming(.timelineWindow, since: timing, at: start.advanced(by: .milliseconds(-1)))?.value
@@ -289,14 +287,30 @@ struct ProductAnalyticsTests {
         #expect(durations.withLock { $0 } == [0, 1])
     }
 
-    @Test func rejectedSinkStopsRecording() async throws {
+    @Test func rejectedTimingSinkStopsRecording() async throws {
         let recorder = ProductAnalyticsRecorder()
-        recorder.activateSink { _ in throw CancellationError() }
+        recorder.activateSink(timing: { _, _, _ in throw CancellationError() }) { _ in }
         let timing = try #require(recorder.beginTiming())
         await recorder.recordTiming(.timelineWindow, since: timing)?.value
         #expect(recorder.ticket() == nil)
-        recorder.activateSink { _ in }
+        recorder.activateSink(timing: { _, _, _ in }) { _ in }
         #expect(recorder.recordTiming(.timelineWindow, since: timing) == nil)
+    }
+
+    @Test func timingRequiresItsOwnSinkAndBypassesProductEvents() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let events = Mutex<[String]>([])
+        let stages = Mutex<[ProductTimingStage]>([])
+        recorder.activateSink { event in events.withLock { $0.append(event.ffi.name) } }
+        #expect(recorder.beginTiming() == nil)
+        recorder.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { event in
+            events.withLock { $0.append(event.ffi.name) }
+        }
+        let timing = try #require(recorder.beginTiming())
+        await recorder.recordTiming(.timelineWindow, since: timing)?.value
+        await recorder.record(.screen(.inbox), ticket: recorder.ticket())?.value
+        #expect(stages.withLock { $0 } == [.timelineWindow])
+        #expect(events.withLock { $0 } == ["app_screen_viewed"])
     }
 
     @Test @MainActor func hostTimingRegistryAccepted() async throws {
