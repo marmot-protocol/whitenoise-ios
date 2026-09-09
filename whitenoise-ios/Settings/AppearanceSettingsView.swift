@@ -39,6 +39,7 @@ struct AppearanceSettingsView: View {
             }
         }
         .localizedNavigationTitle("Appearance")
+        .productScreen(.settings, section: .appearance)
         .onAppear {
             languageRawValue = AppLanguage.currentRawValue
         }

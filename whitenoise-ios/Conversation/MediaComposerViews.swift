@@ -1506,6 +1506,7 @@ private enum PhotoLibraryPickerError: LocalizedError {
 }
 
 struct PhotoLibraryPickerView: UIViewControllerRepresentable {
+    @Environment(AppState.self) private var appState
     let selectionLimit: Int
     var filter: PHPickerFilter = .any(of: [.images, .videos])
     let onSelection: ([PhotoLibrarySelection]) -> Void
@@ -1513,7 +1514,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
     let onDismiss: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onSelection: onSelection, onError: onError, onDismiss: onDismiss)
+        Coordinator(onSelection: onSelection, onError: onError, onDismiss: onDismiss, analytics: appState.productAnalytics)
     }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -1530,6 +1531,9 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: PHPickerViewController, context: Context) {}
 
     final class Coordinator: NSObject, PHPickerViewControllerDelegate {
+        private let analytics: ProductAnalyticsRecorder
+        private let analyticsTicket: ProductAnalyticsRecorder.Ticket?
+        private var didFinish = false
         private let onSelection: ([PhotoLibrarySelection]) -> Void
         private let onError: (Error) -> Void
         private let onDismiss: () -> Void
@@ -1537,16 +1541,24 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         init(
             onSelection: @escaping ([PhotoLibrarySelection]) -> Void,
             onError: @escaping (Error) -> Void,
-            onDismiss: @escaping () -> Void
+            onDismiss: @escaping () -> Void,
+            analytics: ProductAnalyticsRecorder
         ) {
+            self.analytics = analytics
+            self.analyticsTicket = analytics.ticket()
             self.onSelection = onSelection
             self.onError = onError
             self.onDismiss = onDismiss
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+            guard !didFinish else { return }
+            didFinish = true
             onDismiss()
-            guard !results.isEmpty else { return }
+            guard !results.isEmpty else {
+                analytics.record(.attachment(.picker, .cancelled), ticket: analyticsTicket)
+                return
+            }
 
             // Assets load one at a time through a file representation with a
             // size gate, and accepted bytes draw down a session budget — peak
@@ -1578,6 +1590,7 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
                 }
 
                 let selections = PhotoLibrarySelection.compactPreservingPickerOrder(selectionsByPickerIndex)
+                analytics.record(.attachment(.picker, firstError != nil || selections.isEmpty ? .failure : .success), ticket: analyticsTicket)
                 await MainActor.run {
                     // A failure among successes (an oversized video next to a
                     // valid photo) surfaces alongside the delivered selections

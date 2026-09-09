@@ -95,11 +95,16 @@ struct ChatRow: View {
     }
 
     private var encryptedImageHashHex: String? {
-        item.row.pendingConfirmation ? nil : item.row.avatar?.imageHashHex
+        guard !item.row.pendingConfirmation else { return nil }
+        if let selected = item.selectedAvatar {
+            if case .encryptedGroupImage(let image, _) = selected { return image.imageHashHex }
+            return nil
+        }
+        return item.row.avatar?.imageHashHex
     }
 
     private var avatarURLForDisplay: URL? {
-        if encryptedImageHashHex != nil, ContentSanitizer.imageURL(item.row.avatarUrl) == nil {
+        if encryptedImageHashHex != nil, item.selectedAvatar != nil || ContentSanitizer.imageURL(item.row.avatarUrl) == nil {
             return nil
         }
         return Self.automaticAvatarURL(

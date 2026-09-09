@@ -107,6 +107,8 @@ cp "$TEMP_DIR/$SWIFT_ASSET" "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
 perl -pi -e 's/[ \t]+$//' "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
 
 echo "==> Pinning remote binary target"
+sed -i '' -E 's|^let marmotKitLocalPath: String\? = .*|let marmotKitLocalPath: String? = nil|' "$PACKAGE_DIR/Package.swift"
+rm -f "$PACKAGE_DIR/LOCAL_BUILD.json"
 sed -i '' -E \
     "s|^let marmotKitReleaseID = \".*\"|let marmotKitReleaseID = \"$RELEASE_ID\"|" \
     "$PACKAGE_DIR/Package.swift"

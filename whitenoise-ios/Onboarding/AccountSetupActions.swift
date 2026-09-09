@@ -128,7 +128,7 @@ struct AccountSetupActions: View {
                 if step.actions.contains(.continueWithout) { action("Not Now", .skip(.profile), secondary: true) }
             } else if selectedStep == .relays || selectedStep == .inboxRelays {
                 if let proposal, step.actions.contains(.approveRepair) {
-                    action("Use These Relays", .approve(proposal.revision)).disabled(relays == nil)
+                    action("Use These Relays", .approve(proposal.revision, recoveryEpoch: model.snapshot.recoveryEpoch)).disabled(relays == nil)
                 } else if step.actions.contains(.useRecommendedRelays) {
                     action("Use Default Relays", .useDefaults(selectedStep))
                 } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
@@ -137,7 +137,7 @@ struct AccountSetupActions: View {
                 }
             } else if step.actions.contains(.continueAnyway) {
                 action(LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery)),
-                       .acknowledge(model.snapshot.revision))
+                       .acknowledge(model.snapshot.revision, recoveryEpoch: model.snapshot.recoveryEpoch))
             } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
             if step.actions.contains(.cancelRepair) { action("Back", .cancelRepair, secondary: true) }
             if selectedStep == .follows, step.actions.contains(.continueWithout) { action("Continue", .skip(.follows)) }

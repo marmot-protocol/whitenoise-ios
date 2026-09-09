@@ -86,6 +86,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .productScreen(.settings)
         .localizedNavigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccount?.accountIdHex) {

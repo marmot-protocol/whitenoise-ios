@@ -71,6 +71,7 @@ extension AppState {
     /// Route an inbound deep link (from `.onOpenURL`).
     @MainActor
     func handle(url: URL) {
+        productActivation(.foregroundDeepLink)
         switch DeepLink.parse(url) {
         case .profile(let npub):
             presentProfile(npub: npub)

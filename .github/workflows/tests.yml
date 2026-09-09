@@ -11,6 +11,10 @@ on:
       - "Config/**"
       - "whitenoise-ios.xcodeproj/**"
       - "Packages/**"
+      - "scripts/sync-local-bindings.sh"
+      - "scripts/check-analytics-release-config.py"
+      - "scripts/check-marmotkit-bindings.py"
+      - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
       - ".github/workflows/tests.yml"
@@ -44,6 +48,12 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: "26"
+
+      - name: Verify published MarmotKit provenance
+        run: python3 scripts/check-marmotkit-bindings.py
+
+      - name: Test release configuration checks
+        run: python3 -m unittest discover -s scripts/tests
 
       # The MarmotKit binary target is a 74 MB download that unpacks to 254 MB.
       # It only changes when the pinned release does, so key it on the manifest.

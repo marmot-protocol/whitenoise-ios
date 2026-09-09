@@ -86,6 +86,7 @@ struct NotificationSettingsView: View {
             }
         }
         .localizedNavigationTitle("Notifications")
+        .productScreen(.settings, section: .notifications)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if model.isSaving {

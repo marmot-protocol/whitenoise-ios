@@ -131,6 +131,12 @@ final class ConversationSearchModel {
     @ObservationIgnored var hasMoreBefore: () -> Bool = { false }
     @ObservationIgnored var loadOlderPage: () async -> Void = {}
 
+    @ObservationIgnored var analytics: ProductAnalyticsRecorder?
+    @ObservationIgnored private var analyticsTicket: ProductAnalyticsRecorder.Ticket?
+    @ObservationIgnored private var observedQuery = false
+    @ObservationIgnored private var observedMatch = false
+    @ObservationIgnored private var searchFailed = false
+
     @ObservationIgnored private var scrollGeneration = 0
 
     var currentMatch: ConversationSearchMatch? {
@@ -166,15 +172,25 @@ final class ConversationSearchModel {
     func activate() {
         guard !isActive else { return }
         isActive = true
+        analyticsTicket = analytics?.ticket()
+        observedQuery = false
+        observedMatch = false
+        searchFailed = false
     }
 
-    func end() {
+    @discardableResult
+    func end() -> Task<Void, Never>? {
+        guard isActive else { return nil }
+        let outcome: ProductSearchOutcome = searchFailed ? .failure : (observedMatch ? .success : (observedQuery ? .empty : .cancelled))
+        let observation = analytics?.record(.search(outcome), ticket: analyticsTicket)
+        analyticsTicket = nil
         isActive = false
         query = ""
         matches = []
         currentIndex = nil
         scrollRequest = nil
         isPagingOlder = false
+        return observation
     }
 
     /// Recompute matches after any timeline/projection change, keeping the
@@ -184,6 +200,7 @@ final class ConversationSearchModel {
         guard isActive, hasQuery else { return }
         let anchorId = currentMatch?.itemId
         matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.reanchoredIndex(of: anchorId, in: matches)
             ?? ConversationSearchEngine.initialIndex(matchCount: matches.count)
     }
@@ -222,14 +239,19 @@ final class ConversationSearchModel {
         await runOlderPagingStep(wrapIfExhausted: false)
     }
 
+    func notePagingFailure() { if isActive { searchFailed = true } }
+
     private func recomputeForQueryChange() {
+        observedQuery = observedQuery || hasQuery
         matches = ConversationSearchEngine.matches(for: query, in: entriesProvider())
+        observedMatch = observedMatch || !matches.isEmpty
         currentIndex = ConversationSearchEngine.initialIndex(matchCount: matches.count)
         requestScrollToCurrentMatch()
     }
 
     private func requestScrollToCurrentMatch() {
         guard let match = currentMatch else { return }
+        observedMatch = true
         scrollGeneration += 1
         scrollRequest = ScrollRequest(itemId: match.itemId, generation: scrollGeneration)
     }

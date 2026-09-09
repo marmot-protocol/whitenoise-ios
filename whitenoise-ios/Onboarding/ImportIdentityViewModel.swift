@@ -62,6 +62,7 @@ final class ImportIdentityViewModel {
             appState.present(.success(L10n.string("Welcome back"), message: L10n.string("Identity imported.")))
             dismiss()
         } catch {
+            try? await appState.refreshAccounts(refreshUnreadSummaries: false)
             presentImportFailure(error, using: appState)
         }
     }

@@ -222,6 +222,8 @@ final class ConversationViewModel {
         hasMoreBefore && !isLoadingOlder && timelineSubscription != nil
     }
 
+    let recovery = GroupRecoveryModel()
+
     private(set) var group: AppGroupRecordFfi
     private(set) var leaveRequestPending: Bool
     private(set) var members: [AppGroupMemberRecordFfi] = []
@@ -742,6 +744,7 @@ final class ConversationViewModel {
         self.streamWatcher = StreamWatcher(appState: appState, groupIdHex: group.groupIdHex)
         self.composer = ComposerModel(appState: appState, groupIdHex: group.groupIdHex, timelineStore: timelineStore)
         self.search = ConversationSearchModel()
+        self.search.analytics = appState.productAnalytics
         search.entriesProvider = { [weak self] in self?.searchableTimelineEntries() ?? [] }
         search.hasMoreBefore = { [weak self] in self?.hasMoreBefore ?? false }
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
@@ -1071,6 +1074,8 @@ final class ConversationViewModel {
     }
 
     private func stopLiveSubscriptions() {
+        timelineStore.visibilityPerformance.reset()
+        recovery.invalidate()
         timelineTask?.cancel()
         timelineTask = nil
         initialTimelineSnapshotTask?.cancel()
@@ -1258,6 +1263,7 @@ final class ConversationViewModel {
                         else { return }
                         self?.applyGroupRecord(initial)
                     }
+                    await self?.recovery.refresh(using: appState, groupID: groupIdHex)
                     for await record in SubscriptionDriver.groupState(groupSub) {
                         guard !Task.isCancelled,
                               appState.canUseRuntimeForForegroundWork
@@ -1483,6 +1489,7 @@ final class ConversationViewModel {
                 timelineStore.setHasMoreBefore(false)
             }
         } catch {
+            search.notePagingFailure()
             self.error = error.localizedDescription
         }
     }

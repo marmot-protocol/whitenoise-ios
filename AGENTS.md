@@ -70,8 +70,10 @@ replace settings after an inconclusive lookup. Cancel and
 drain onboarding subscriptions and operations when suspending the runtime, and
 retain checkpoints as an internal readiness gate after launch, without reopening
 setup or offering a deferred-setup selector. A new explicit Sign In restarts
-unapproved checks. MDK #1741 tracks cancellation of approved unfinished
-publications; preserve those journals until the runtime can safely reconcile them.
+unapproved checks. With MDK 0.9.20, invalidate host callbacks, cancel the MDK
+attempt before draining in-flight host operations, and await cancellation before
+starting again. Approved and ready attempts can also be cancelled. Do not fall
+back to sign-out or reuse an old checkpoint after a failed cancellation.
 Persist only the host gate requiring an explicit Open Chats action, not UI progress.
 Never reset an interactive
 checkpoint through the legacy incomplete-setup recovery path.
@@ -83,11 +85,19 @@ an unfinished account. Clear an excluded active selection, and retry its durable
 checkpoint on subsequent refreshes without deleting or resetting it. Keep readable
 unfinished identities excluded from normal activation. Refresh only
 the active attempt model; never select another unfinished identity automatically.
+A refresh started before a new Sign In must not discard or overwrite its new setup
+model when the older read completes. Bind staged reads to their original attempt
+revision, including a failed completion that restores the same model.
 Remove stale setup models when their checkpoints vanish.
 UniFFI 0.29's onboarding `next()` cannot be cancelled. Until the bindings expose
 a close/cancellation API, observe onboarding with cancellable 250 ms polling of
 finite off-main snapshot reads; never drain an indefinite Rust subscription wait.
-Bind repair/device approvals to the displayed revision. Reject an entire relay
+Unreadable or exhausted checkpoints stay excluded from normal activation.
+Offer explicit `recoverOnboarding` only after `onboardingRecoveryRequired`; explain
+sign-out, latest-only evidence, and unchanged relay publications. Recovery never
+begins setup or approves publication. The user explicitly signs in again.
+Bind repair/device approvals to the displayed revision and recovery epoch; use
+the epoch-aware APIs whenever the same displayed snapshot has a recovery epoch. Reject an entire relay
 proposal if any address is unsafe; never hide an invalid entry and approve the rest.
 
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
@@ -101,10 +111,38 @@ Install a published snapshot using its full `master` commit SHA:
 Install a formal release using its version:
 
 ```sh
-./scripts/sync-bindings.sh 0.9.11
+./scripts/sync-bindings.sh 0.9.20
 ```
 
-Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+The app now pins the formal MarmotKit 0.9.20 release. For local reproduction only,
+`scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
+matching artifacts with both exporters; restore the published pin before committing.
+Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
+adapter using the released UniFFI native future cancellation API; preserve it on
+binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+
+## Chat presentation and invitation recovery
+
+Render titles/avatars from MDK's presented chat-list snapshots; do not reselect
+from profiles or rosters. Take the attached snapshot once, then consume complete
+updates in generation/sequence order. Presentation revision alone cannot suppress
+unread/pin updates. Reopen when the account-store epoch changes. Cancel native
+`next` waits when replacing the handle. Keep pending-invite avatar egress suppressed.
+Resolve just-created destinations from the creation cache immediately, then overlay
+the keyed presented row. Unrelated live updates must not discard that keyed read;
+preserve a newer target row and reject account/runtime/handle replacements.
+
+Read group recovery on conversation entry and raw `groupStateUpdated` events;
+the ordinary group-record subscription can deduplicate recovery-only updates.
+Recovery failure is advisory, never membership evidence or a composer gate.
+Show the authenticated inviter and require explicit rejoin confirmation using the
+exact displayed Welcome ID and local-state token. A failed/stale approval refreshes
+the offer and requires new consent. Decline only removes that offer.
+
+Host message-visible timings begin at Send or a new inbound projection and finish
+at the first visible layout callback. Never time SDK completion, history loading,
+SwiftUI body evaluation, or sender timestamps. Keep pending observations bounded
+and invalidate them with consent, runtime, account, and conversation changes.
 
 ## Notifications
 
@@ -173,7 +211,8 @@ Do not add a second storage path for data Marmot already owns.
 - Keep pure formatting/projection helpers in `Shared/` only when the extension also needs them.
 - Use `LocalNotificationProjection` for notification title/body/thread/userInfo decisions.
 - Use `LocalNotificationSuppressionPolicy` for foreground suppression decisions.
-- Analytics export and diagnostic logging are device-wide runtime choices. The one-time prompt appears after successful Sign In/Sign Up/Add Profile, once Chats is visible and account-entry sheets have dismissed. Preserve existing choices; closing with both off is valid. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
+- Analytics export and diagnostic logging are device-wide runtime choices. The initial consent sheet appears over Welcome after runtime bootstrap, before Sign In or Sign Up. MDK owns the sole consent receipt; never use the legacy prompt-seen flag to suppress acceptance. Existing installations needing expanded consent are prompted once Chats is visible and other sheets have dismissed. Preserve existing choices; closing without a usage grant durably declines combined usage/diagnostics consent. Diagnostic-log consent stays independent. Never dismiss a failed save as confirmed. Privacy & Security owns the controls and clearing; Developer Tools only inspects/exports logs.
+- A missing consent snapshot must show a retryable load state. Reload when foreground runtime readiness changes, even if the runtime generation is unchanged, so Welcome cannot strand both account-entry buttons.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.
 - Sign Out confirms a wipe by matching the displayed profile name exactly in the same sheet. Remaining signed-in profiles go to the profile chooser; with none remaining, return to Welcome.

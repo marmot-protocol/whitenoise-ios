@@ -99,6 +99,69 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test func accountRefreshStartedBeforeImportCannotDiscardItsNewSetup() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let active = appState.activeAccountRef
+        let maintenance = appState.beginForegroundMaintenanceCancellation()
+        for task in maintenance.mutationFollowups { await task.value }
+        let checkpoint = AsyncTestCheckpoint()
+        defer { Task { await checkpoint.release() } }
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in await checkpoint.pause() }
+        let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
+        await checkpoint.waitUntilPaused()
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        _ = try await appState.importIdentity(
+            "nsec12kcgs78l06p30jz7z7h3n2x2cy99nw2z6zspjdp7qc206887mwvs95lnkx"
+        )
+        let imported = try #require(appState.pendingAccountSetup)
+        await checkpoint.release()
+        try await refresh.value
+        #expect(appState.pendingAccountSetup === imported)
+        #expect(appState.activeAccountRef == active)
+        #expect(appState.accounts.count == 1)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
+    @Test func olderRefreshCannotDiscardSetupRestoredAfterFinishFailure() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        let maintenance = appState.beginForegroundMaintenanceCancellation()
+        for task in maintenance.mutationFollowups { await task.value }
+        let completed = OnboardingSnapshotFfi(
+            accountIdHex: account.accountIdHex, recoveryEpoch: nil, revision: 1, ready: true, steps: [],
+            proposal: nil, singleDeviceNotice: nil, cancellationPending: false
+        )
+        let model = AccountSetupModel(snapshot: completed)
+        await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
+        for _ in 0..<1_000 where !model.canFinish { await Task.yield() }
+        try #require(model.canFinish)
+        appState.signInAttempts.begin(account.accountIdHex)
+        appState.pendingAccountSetup = model
+        let checkpoint = AsyncTestCheckpoint()
+        defer { Task { await checkpoint.release() } }
+        appState.beforeOnboardingSnapshotReadForTesting = { _ in
+            await checkpoint.pause()
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let refresh = Task { try await appState.refreshAccounts(refreshUnreadSummaries: false) }
+        await checkpoint.waitUntilPaused()
+        appState.beforeAccountRefreshForTesting = { throw CocoaError(.fileReadCorruptFile) }
+        await appState.finishAccountSetup()
+        try #require(appState.pendingAccountSetup === model)
+        appState.beforeAccountRefreshForTesting = nil
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        await checkpoint.release()
+        try await refresh.value
+        #expect(appState.pendingAccountSetup === model)
+        #expect(appState.activeAccountRef == account.label)
+        #expect(appState.signInAttempts.accountIDs.contains(account.accountIdHex))
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test(arguments: [false, true])
     func foregroundAccountRefreshRetriesAndReleasesFailedRuntime(exhaustRetries: Bool) async throws {
         let appState = AppState(
@@ -228,7 +291,7 @@ struct AppStateBootstrapTests {
 
         // Model the completed checklist for a real, ready local identity.
         let completed = OnboardingSnapshotFfi(
-            accountIdHex: healthy.accountIdHex, revision: 1, ready: true, steps: [],
+            accountIdHex: healthy.accountIdHex, recoveryEpoch: nil, revision: 1, ready: true, steps: [],
             proposal: nil, singleDeviceNotice: nil, cancellationPending: false
         )
         let model = AccountSetupModel(snapshot: completed)
@@ -428,24 +491,22 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(relaunched)
     }
 
-    @Test func telemetryExportSettingPersistsThroughAppState() async throws {
+    @Test func combinedUsageConsentPersistsWithoutChangingAuditOrRuntime() async throws {
         let appState = try testAppState()
         await appState.bootstrap()
         _ = try await appState.createIdentity()
 
         let generation = appState.runtimeGeneration
-        let previous = try #require(try await appState.relayTelemetrySettings())
         let auditBefore = try await appState.auditLogSettings()
 
-        let saved = try await appState.setRelayTelemetryExportEnabled(false)
+        let saved = try await appState.saveUsageDiagnosticsConsent(false)
 
-        #expect(!saved.exportEnabled)
-        #expect(saved.exportIntervalSeconds == previous.exportIntervalSeconds)
+        #expect(saved.settings.decision == .declined)
         #expect(try await appState.auditLogSettings() == auditBefore)
         #expect(appState.runtimeGeneration == generation)
-        let maybeReloaded = try await appState.relayTelemetrySettings()
+        let maybeReloaded = try await appState.deviceDiagnosticsSnapshot()
         let reloaded = try #require(maybeReloaded)
-        #expect(!reloaded.exportEnabled)
+        #expect(reloaded.settings.decision == .declined)
 
         await stopReadyRuntime(appState)
     }
@@ -946,7 +1007,7 @@ struct AppStateBootstrapTests {
 
         let notificationSettings = await appState.notificationSettings(for: account.label)
         let pushRegistration = await appState.pushRegistration(for: account.label)
-        let telemetrySettings = try await appState.relayTelemetrySettings()
+        let telemetrySettings = try await appState.deviceDiagnosticsSnapshot()
         let auditSettings = try await appState.auditLogSettings()
         let auditFiles = try await appState.auditLogFiles()
         let auditRows = try await appState.auditLogFileRows()
@@ -1899,7 +1960,7 @@ struct AppStateBootstrapTests {
             _ = try await appState.setAuditLogEnabled(true)
         }
         await #expect(throws: ForegroundRuntimeMutationError.self) {
-            _ = try await appState.setRelayTelemetryExportEnabled(false)
+            _ = try await appState.saveUsageDiagnosticsConsent(false)
         }
 
         #expect(appState.client == nil)
@@ -1969,7 +2030,7 @@ struct AppStateBootstrapTests {
         let appState = seeded.appState
 
         let generation = appState.runtimeGeneration
-        let telemetryBefore = try await appState.relayTelemetrySettings()
+        let telemetryBefore = try await appState.deviceDiagnosticsSnapshot()?.settings
         let settings = try await appState.setAuditLogEnabled(true)
 
         #expect(settings.enabled)
@@ -1988,7 +2049,7 @@ struct AppStateBootstrapTests {
         #expect(try await appState.auditLogSettings()?.enabled == false)
         let retainedFiles = try #require(try await appState.auditLogFiles())
         #expect(!retainedFiles.isEmpty)
-        #expect(try await appState.relayTelemetrySettings() == telemetryBefore)
+        #expect(try await appState.deviceDiagnosticsSnapshot()?.settings == telemetryBefore)
         #expect(appState.runtimeGeneration == generation)
 
         await stopReadyRuntime(appState)
@@ -6754,10 +6815,7 @@ struct ChatsListProjectionTests {
         var reorderedSecond = second
         reorderedSecond.pinnedPosition = 0
         let transitionID = viewModel.beginPinOrderUITransition()
-        viewModel.applyChatListUpdate(.snapshot(
-            trigger: .pinOrderChanged,
-            rows: [reorderedSecond, reorderedFirst]
-        ))
+        viewModel.applyPresentedSnapshot(presentedChatSnapshot([reorderedSecond, reorderedFirst]))
 
         #expect(viewModel.items.map(\.id) == [first.groupIdHex, second.groupIdHex])
 
@@ -6810,10 +6868,7 @@ struct ChatsListProjectionTests {
             title: "Second",
             updatedAt: 10
         )
-        viewModel.applyChatListUpdate(.snapshot(
-            trigger: .pinOrderChanged,
-            rows: [reorderedFirst, reorderedSecond]
-        ))
+        viewModel.applyPresentedSnapshot(presentedChatSnapshot([reorderedFirst, reorderedSecond]))
 
         #expect(viewModel.items.map(\.id) == [second.groupIdHex, first.groupIdHex])
         #expect(viewModel.items.last?.title == "First")
@@ -6831,7 +6886,7 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.map(\.id) == [row.groupIdHex])
     }
 
-    @Test func staleSnapshotCannotOverwriteNewerPendingLiveRow() throws {
+    @Test func presentedSnapshotReplacesQueuedRowEvenWithOlderTimestamp() throws {
         let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
         let groupId = hex("a8")
         let stale = chatListRow(
@@ -6848,10 +6903,10 @@ struct ChatsListProjectionTests {
         )
 
         viewModel.enqueueChatListRowUpdate(fresh)
-        viewModel.applyChatListSnapshot([stale])
+        viewModel.applyPresentedSnapshot(presentedChatSnapshot([stale]))
 
-        #expect(viewModel.items.first?.title == "Fresh")
-        #expect(viewModel.items.first?.unreadCount == 4)
+        #expect(viewModel.items.first?.title == "Stale")
+        #expect(viewModel.items.first?.unreadCount == 1)
     }
 
     @Test func visibleRowsRevisionAdvancesOnlyForPublishedCollectionChanges() throws {
@@ -7387,13 +7442,13 @@ struct ChatsListProjectionTests {
         #expect(viewModel.items.first?.isActiveMember == false)
     }
 
-    @Test func chatListRemoveUpdateDropsProjectedRow() throws {
+    @Test func presentedSnapshotDropsAbsentProjectedRow() throws {
         let viewModel = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
         let kept = chatListRow(groupIdHex: hex("d1"), title: "Keep")
         let removed = chatListRow(groupIdHex: hex("d2"), title: "Remove")
         viewModel.applyChatListSnapshot([kept, removed])
 
-        viewModel.applyChatListUpdate(.removeRow(trigger: .removed, groupIdHex: removed.groupIdHex))
+        viewModel.applyPresentedSnapshot(presentedChatSnapshot([kept]))
 
         #expect(viewModel.items.map(\.id) == [kept.groupIdHex])
         #expect(viewModel.archivedItems.isEmpty)
@@ -7460,8 +7515,8 @@ struct ChatsListProjectionTests {
             updatedAt: 20
         )
 
-        viewModel.applyChatListUpdate(.row(trigger: .newLastMessage, row: older))
-        viewModel.applyChatListUpdate(.row(trigger: .newLastMessage, row: newer))
+        viewModel.enqueueChatListRowUpdate(older)
+        viewModel.enqueueChatListRowUpdate(newer)
 
         #expect(viewModel.items.isEmpty)
         try await waitForExpectation { viewModel.items.count == 2 }
@@ -14398,6 +14453,22 @@ private func chatListPreview(
     )
 }
 
+private func presentedChatSnapshot(_ rows: [ChatListRowFfi]) -> PresentedChatListSnapshotFfi {
+    PresentedChatListSnapshotFfi(
+        rows: rows.map { row in
+            PresentedChatRowFfi(
+                row: row,
+                presentation: ConversationPresentationFfi(
+                    title: .literal(text: row.title),
+                    avatar: .placeholder(stableSeed: row.groupIdHex, source: .groupFallback),
+                    titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+                )
+            )
+        },
+        presentationVersion: PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
+    )
+}
+
 private func chatListRow(
     groupIdHex: String,
     pinned: Bool = false,
@@ -14726,4 +14797,93 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
     }
 
     func perform(_ command: AccountSetupCommand) async throws -> OnboardingSnapshotFfi? { snapshot }
+}
+
+@MainActor
+struct PresentedChatListTests {
+    @Test func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        appState.setPhase(.ready)
+        appState.setAppSceneActive(true)
+        let model = ChatsListViewModel(appState: appState)
+        await model.bind(accountRef: "account")
+        let row = chatListRow(groupIdHex: "created", title: "Created chat")
+        appState.noteCreatedChatListRow(accountRef: "account", row: row)
+        model.presentedRowForTesting = { account, group in
+            #expect(account == "account" && group == "created")
+            #expect(model.item(groupIdHex: group)?.title == "Created chat")
+            return nil
+        }
+        appState.presentChat(groupIdHex: row.groupIdHex)
+        await model.refreshRow(groupIdHex: row.groupIdHex)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Created chat")
+        model.presentedRowForTesting = nil
+        await model.bind(accountRef: nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test(arguments: [false, true])
+    func targetedReadSurvivesUnrelatedRowsButPreservesNewerTarget(targetChanges: Bool) async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        appState.setPhase(.ready)
+        appState.setAppSceneActive(true)
+        let model = ChatsListViewModel(appState: appState)
+        await model.bind(accountRef: "account")
+        let selected = ConversationPresentationFfi(
+            title: .literal(text: "Selected title"), avatar: .placeholder(stableSeed: "stable", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+        )
+        let row = chatListRow(groupIdHex: "target", title: "Old title")
+        model.presentedRowForTesting = { _, _ in
+            model.applyChatListRow(chatListRow(groupIdHex: "unrelated", title: "Other chat"))
+            if targetChanges { model.applyChatListRow(chatListRow(groupIdHex: "target", title: "Newer title")) }
+            return PresentedChatRowFfi(row: row, presentation: selected)
+        }
+        await model.refreshRow(groupIdHex: row.groupIdHex)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == (targetChanges ? "Newer title" : "Selected title"))
+        #expect(model.item(groupIdHex: "unrelated") != nil)
+        model.presentedRowForTesting = nil
+        await model.bind(accountRef: nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func selectedPresentationWinsOverLegacyFieldsAndPreservesUnreadChanges() throws {
+        var row = chatListRow(groupIdHex: "presented", title: "Legacy title", avatarUrl: "https://legacy.example/avatar")
+        let selected = ConversationPresentationFfi(
+            title: .literal(text: "Selected title"),
+            avatar: .placeholder(stableSeed: "stable", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
+        )
+        let appState = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: appState)
+        let version = PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
+            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+        ))
+        #expect(model.items.first?.title == "Selected title")
+        #expect(model.items.first?.avatarURL == nil)
+        #expect(model.items.first?.avatarSeed == "stable")
+        row.unreadCount = 4
+        row.hasUnread = true
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
+            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+        ))
+        #expect(model.items.first?.unreadCount == 4)
+        model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(rows: [], presentationVersion: version))
+        #expect(model.items.isEmpty)
+    }
+
+    @Test func selectedAvatarRejectsPrivateURLsAndUsesLocalizableFallbacks() {
+        let row = chatListRow(groupIdHex: "presented", title: "Legacy title")
+        let selected = ConversationPresentationFfi(
+            title: .unavailableConversation, avatar: .remoteImage(url: "https://127.0.0.1/private", cacheKey: "selected"),
+            titleSource: .unknownFallback, avatarSource: .peerProfile, peerId: "peer", resolution: .fallback
+        )
+        let display = SelectedChatPresentation.display(selected, row: row)
+        #expect(display.avatarURL == nil)
+        #expect(display.title == L10n.string("Conversation unavailable"))
+        #expect(display.avatarSeed == "selected")
+    }
 }

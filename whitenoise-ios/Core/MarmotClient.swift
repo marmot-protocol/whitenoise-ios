@@ -28,6 +28,7 @@ nonisolated final class MarmotClient: Sendable {
     let relayUrls: [String]
     /// Durable transport-cursor policy this runtime was constructed with.
     let cursorPersistence: CursorPersistenceFfi
+    let productConfig: ProductAnalyticsBuildConfig
     let telemetryConfig: TelemetryBuildConfig
 
     convenience init() throws {
@@ -64,6 +65,7 @@ nonisolated final class MarmotClient: Sendable {
         self.relayUrls = relayUrls
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
+        self.productConfig = .current()
         self.marmot = try Marmot.newWithCursorPersistence(
             rootPath: rootPath,
             relayUrls: relayUrls,
@@ -207,14 +209,6 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
-    /// Reads the telemetry install id off the main actor before runtime startup
-    /// config is applied.
-    func telemetryInstallId() async throws -> String {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.telemetryInstallId()
-        }.value
-    }
-
     /// Reads published account relay-list projections off the main actor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
     /// MainActor-bound settings screens should await this wrapper.
@@ -349,12 +343,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.signInAccount(accountRef: accountRef)
     }
 
-    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.relayTelemetrySettings()
-        }.value
-    }
-
     func auditLogSettings() async throws -> AuditLogSettingsFfi {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.auditLogSettings()
@@ -376,9 +364,9 @@ nonisolated final class MarmotClient: Sendable {
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
         try await Task.detached(priority: .utility) { [marmot] in
             try PrivacySecuritySettingsProjection(
-                telemetrySettings: marmot.relayTelemetrySettings(),
-                auditSettings: marmot.auditLogSettings(),
-                auditFiles: marmot.auditLogFiles()
+                usageEnabled: marmot.usageDiagnosticsSettings().decision == .granted,
+                auditSettings: PrivacyAuditSettingsProjection(settings: marmot.auditLogSettings()),
+                auditFileRows: AuditFileRowProjection.rows(from: marmot.auditLogFiles())
             )
         }.value
     }
@@ -469,17 +457,6 @@ nonisolated final class MarmotClient: Sendable {
     ) async throws -> TimelinePageFfi {
         try await Task.detached(priority: .utility) { [marmot, accountRef, query] in
             try marmot.timelineMessages(accountRef: accountRef, query: query)
-        }.value
-    }
-
-    /// Materializes a live chat-list subscription snapshot off the main actor.
-    /// `ChatListSubscription.snapshot()` is a synchronous UniFFI call that can
-    /// touch local Marmot storage while building the initial projected rows.
-    func chatListSubscriptionSnapshot(
-        _ subscription: ChatListSubscription
-    ) async -> [ChatListRowFfi] {
-        await Task.detached(priority: .utility) { [subscription] in
-            subscription.snapshot()
         }.value
     }
 
@@ -932,10 +909,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.publishNewKeyPackage(accountRef: accountRef)
     }
 
-    func republishKeyPackage(accountRef: String) async throws -> UInt64 {
-        try await marmot.republishKeyPackage(accountRef: accountRef)
-    }
-
     func keyPackageMaintenanceStatus(
         accountRef: String
     ) async throws -> KeyPackageMaintenanceStatusFfi? {
@@ -961,10 +934,6 @@ nonisolated final class MarmotClient: Sendable {
     /// handles are the live channel.
     func subscribeEvents() -> EventsSubscription {
         marmot.subscribeEvents()
-    }
-
-    func subscribeChatList(accountRef: String, includeArchived: Bool) async throws -> ChatListSubscription {
-        try await marmot.subscribeChatList(accountRef: accountRef, includeArchived: includeArchived)
     }
 
     func subscribeChats(accountRef: String, includeArchived: Bool) async throws -> ChatsSubscription {
@@ -995,7 +964,9 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func startRuntime() async throws {
-        try await configureTelemetryRuntime()
+        // Optional exporters cannot turn missing consent/configuration into a startup failure.
+        try? await configureTelemetryRuntime()
+        try? await configureProductAnalytics()
         try await marmot.start()
     }
 
@@ -1020,10 +991,32 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func configureTelemetryRuntime() async throws {
-        let installId = try await telemetryInstallId()
+        // MDK replaces this placeholder with its consent-scoped diagnostic ID.
         try await marmot.setRelayTelemetryRuntimeConfig(
-            config: telemetryConfig.runtimeConfig(installId: installId)
+            config: telemetryConfig.runtimeConfig(installId: "")
         )
+    }
+
+    func configureProductAnalytics() async throws {
+        try await Task.detached(priority: .utility) { [marmot, productConfig] in
+            try marmot.setProductAnalyticsRuntimeConfig(config: productConfig.runtimeConfig)
+        }.value
+    }
+
+    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try DeviceDiagnosticsSnapshot(
+                settings: marmot.usageDiagnosticsSettings(),
+                status: marmot.usageDiagnosticsStatus(),
+                auditEnabled: marmot.auditLogSettings().enabled
+            )
+        }.value
+    }
+
+    func setUsageDiagnosticsConsent(_ enabled: Bool) async throws -> UsageDiagnosticsSettingsFfi {
+        try await Task.detached(priority: .utility) { [marmot] in
+            try marmot.setUsageDiagnosticsConsent(enabled: enabled)
+        }.value
     }
 
     private static func elapsedMilliseconds(since start: ContinuousClock.Instant) -> Double {

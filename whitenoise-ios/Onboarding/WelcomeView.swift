@@ -3,7 +3,13 @@ import SwiftUI
 /// First-launch and add-profile entry point. First launch presents bounded
 /// sheets; Add Profile pushes into the sheet's existing navigation stack.
 struct WelcomeView: View {
+    private struct ConsentRuntimeState: Equatable {
+        let generation: Int
+        let isReady: Bool
+    }
+
     private enum SheetRoute: Identifiable {
+        case diagnostics
         case signIn
         case signUp
 
@@ -12,6 +18,7 @@ struct WelcomeView: View {
 
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var sheetRoute: SheetRoute?
     @State private var showSignIn = false
@@ -49,15 +56,21 @@ struct WelcomeView: View {
             Spacer()
 
             VStack {
+                if !isAddingProfile, let error = appState.diagnosticsConsent.errorMessage {
+                    Text(error).font(.footnote)
+                    Button("Retry") { Task { await appState.diagnosticsConsent.reload(using: appState); presentConsentIfNeeded() } }
+                }
                 WNButton(title: "Sign Up") {
                     open(.signUp)
                 }
                 .accessibilityIdentifier("welcome.sign-up")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
 
                 WNButton(title: "Sign In", emphasis: .secondary) {
                     open(.signIn)
                 }
                 .accessibilityIdentifier("welcome.sign-in")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
             }
         }
         .safeAreaPadding(.horizontal)
@@ -75,9 +88,14 @@ struct WelcomeView: View {
         .navigationDestination(isPresented: $showSignUp) {
             CreateIdentityView()
         }
-        .sheet(item: $sheetRoute, onDismiss: { appState.diagnosticsConsent.onboardingVisible = false }) { route in
+        .sheet(item: $sheetRoute, onDismiss: {
+            appState.diagnosticsConsent.onboardingVisible = false
+            appState.cancelProductOnboardingIfAbandoned()
+        }) { route in
             NavigationStack {
                 switch route {
+                case .diagnostics:
+                    DiagnosticsAndImprovementsView(isPrompt: true)
                 case .signIn:
                     ImportIdentityView(
                         showsCloseButton: true,
@@ -88,35 +106,60 @@ struct WelcomeView: View {
                 }
             }
             .tint(accentColor)
-            .onAppear { appState.diagnosticsConsent.onboardingVisible = true }
+            .onAppear { appState.diagnosticsConsent.onboardingVisible = route != .diagnostics }
             .onDisappear { appState.diagnosticsConsent.onboardingVisible = false }
             .appAppearance()
             .presentationDetents(
-                route == .signIn ? [.medium, .large] : [.large],
+                route != .signUp && !dynamicTypeSize.isAccessibilitySize ? [.medium, .large] : [.large],
                 selection: $selectedSheetDetent
             )
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.resizes)
         }
+        .task(id: ConsentRuntimeState(generation: appState.runtimeGeneration, isReady: appState.canUseRuntimeForLocalForegroundWork)) {
+            guard !isAddingProfile else { return }
+            await appState.diagnosticsConsent.reload(using: appState)
+            presentConsentIfNeeded()
+        }
+        .onChange(of: appState.diagnosticsConsent.pending) { presentConsentIfNeeded() }
+        .productScreen(.onboarding)
         .onChange(of: showSignIn) {
             if !showSignIn {
+                appState.cancelProductOnboardingIfAbandoned()
                 onSheetContentChange(.welcome)
                 onSignInExpansionChange(false)
             }
         }
         .onChange(of: showSignUp) {
             if !showSignUp {
+                appState.cancelProductOnboardingIfAbandoned()
                 onSheetContentChange(.welcome)
             }
         }
     }
 
+    private func presentConsentIfNeeded() {
+        guard !isAddingProfile, sheetRoute == nil,
+              appState.canUseRuntimeForLocalForegroundWork,
+              appState.diagnosticsConsent.pending,
+              !appState.erasureState.needsRecovery, appState.pendingWipeReport == nil else { return }
+        selectedSheetDetent = .medium
+        sheetRoute = .diagnostics
+    }
+
     private func open(_ route: SheetRoute) {
+        guard isAddingProfile || appState.diagnosticsConsent.initialDecisionResolved else {
+            presentConsentIfNeeded()
+            return
+        }
+        let path: ProductOnboardingPath = route == .signIn ? .import : .create
+        appState.beginProductOnboarding(path)
         selectedSheetDetent = route == .signIn ? .medium : .large
         if !isAddingProfile {
             sheetRoute = route
         } else {
             switch route {
+            case .diagnostics: break
             case .signIn:
                 onSheetContentChange(.signIn)
                 onSignInExpansionChange(false)

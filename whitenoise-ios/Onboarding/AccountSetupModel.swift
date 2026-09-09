@@ -3,7 +3,7 @@ import MarmotKit
 
 nonisolated enum AccountSetupCommand: Sendable {
     case run, cancel, retry(OnboardingStepFfi), skip(OnboardingStepFfi)
-    case acknowledge(UInt64), approve(UInt64), cancelRepair
+    case acknowledge(UInt64, recoveryEpoch: String? = nil), approve(UInt64, recoveryEpoch: String? = nil), cancelRepair
     case useDefaults(OnboardingStepFfi)
     case discovery([String]), saveProfile(UserProfileMetadataFfi, AccountSetupAvatar?)
 }
@@ -68,10 +68,10 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
             return nil
         case .retry(let step): return try await marmot.retryOnboardingStep(accountRef: accountID, step: step)
         case .skip(let step): return try await marmot.continueOnboardingWithout(accountRef: accountID, step: step)
-        case .acknowledge(let revision):
-            return try await marmot.acknowledgeOnboardingSingleDevice(accountRef: accountID, revision: revision)
-        case .approve(let revision):
-            return try await marmot.approveOnboardingRepair(accountRef: accountID, revision: revision)
+        case .acknowledge(let revision, let epoch):
+            return try await client.acknowledgeOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
+        case .approve(let revision, let epoch):
+            return try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
         case .cancelRepair: return try await marmot.cancelOnboardingRepair(accountRef: accountID)
         case .useDefaults(let step):
             return try await AccountSetupPublication.publish(step: step, propose: {
@@ -79,8 +79,8 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
                     accountRef: accountID, step: step, readRelays: MarmotClient.seedRelays,
                     writeRelays: step == .relays ? MarmotClient.seedRelays : []
                 )
-            }, approve: { revision in
-                try await marmot.approveOnboardingRepair(accountRef: accountID, revision: revision)
+            }, approve: { revision, epoch in
+                try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
             })
         case .discovery(let relays):
             return try await marmot.setOnboardingDiscoveryRelays(accountRef: accountID, discoveryRelays: relays)
@@ -98,8 +98,8 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
             let draft = profile
             return try await AccountSetupPublication.publish(step: .profile, propose: {
                 try await marmot.proposeOnboardingProfile(accountRef: accountID, profile: draft)
-            }, approve: { revision in
-                try await marmot.approveOnboardingRepair(accountRef: accountID, revision: revision)
+            }, approve: { revision, epoch in
+                try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
             })
         }
     }
@@ -121,8 +121,9 @@ final class AccountSetupModel {
     init(snapshot: OnboardingSnapshotFfi) { self.snapshot = snapshot }
 
     var accountID: String { snapshot.accountIdHex }
+    var isDurablyReady: Bool { snapshot.ready && !snapshot.cancellationPending }
     var canFinish: Bool {
-        !isBusy && !cancelled && snapshot.ready && !snapshot.cancellationPending && isConnected && errorMessage == nil
+        !isBusy && !cancelled && isDurablyReady && isConnected && errorMessage == nil
     }
     var offeredActions: Set<OnboardingActionFfi> { Set(snapshot.steps.flatMap(\.actions)) }
     var currentStep: OnboardingStepStateFfi? {
@@ -134,9 +135,14 @@ final class AccountSetupModel {
         return !actions.contains(.approveRepair) && !actions.contains(.cancelRepair)
     }
 
+    var onProductReady: (() -> Void)?
+
     func apply(_ next: OnboardingSnapshotFfi) {
-        guard next.accountIdHex == accountID, next.revision >= snapshot.revision else { return }
+        guard next.accountIdHex == accountID, next.recoveryEpoch == snapshot.recoveryEpoch,
+              next.revision >= snapshot.revision else { return }
+        let becameReady = !isDurablyReady && next.ready && !next.cancellationPending
         snapshot = next
+        if becameReady { onProductReady?() }
     }
 
     func connect(_ client: any AccountSetupClient) async {
@@ -273,7 +279,7 @@ nonisolated enum AccountSetupPublication {
     static func publish(
         step: OnboardingStepFfi,
         propose: () async throws -> OnboardingSnapshotFfi,
-        approve: (UInt64) async throws -> OnboardingSnapshotFfi
+        approve: (UInt64, String?) async throws -> OnboardingSnapshotFfi
     ) async throws -> OnboardingSnapshotFfi {
         let proposed = try await propose()
         try Task.checkCancellation()
@@ -281,7 +287,7 @@ nonisolated enum AccountSetupPublication {
               proposal.revision == proposed.revision,
               proposed.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true
         else { throw MarmotKitError.OnboardingActionUnavailable }
-        return try await approve(proposed.revision)
+        return try await approve(proposed.revision, proposed.recoveryEpoch)
     }
 }
 

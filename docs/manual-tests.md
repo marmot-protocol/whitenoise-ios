@@ -77,12 +77,18 @@ before every release tag.
 
 ## Device diagnostics and data removal
 
-- [ ] Complete Sign Up, Sign In and Add Profile: Chats is visible before the
-      Help Improve White Noise sheet. Both controls are directly available.
-      A pending notification/deep-link chat must open before the prompt is eligible.
-- [ ] Fresh runtime choices start off. Existing device-wide choices are preserved.
-      Changes apply immediately; Close/swipe-down records the prompt as seen.
-      Relaunch or sign in to another profile: the prompt does not repeat.
+- [ ] Fresh app root: Welcome presents Help Improve White Noise before Sign In
+      or Sign Up. Both sharing choices start off, work without a profile, and
+      remain independent. The consent and account-entry sheets never overlap.
+- [ ] The top-right checkmark (Done) without a usage grant saves a decline.
+      A successful grant survives Done. Failed saves remain visibly unsaved with
+      Retry; swipe dismissal cannot bypass persistence. Relaunch before signing
+      in and verify no repeat after a saved decision. Add Profile preserves it.
+- [ ] Upgrade an old analytics opt-in: sharing stays off until expanded consent
+      is accepted after Chats/navigation are visible. Verify the explanation.
+- [ ] Opt in before Sign Up/Sign In and inspect onboarding observations. Decline
+      and verify no collection or later replay. Suspend while the sheet is open,
+      resume, and verify it remains actionable without losing the saved choice.
 - [ ] Privacy & Security → Diagnostics & Improvements controls the same runtime
       settings for every profile. Developer Tools never owns/gates either choice.
 - [ ] Logging off retains local logs; Clear Diagnostic Logs clears every profile's
@@ -280,11 +286,11 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Privacy, audit, and telemetry
 
-- [ ] After Sign In, Sign Up, or Add Profile, the diagnostics prompt appears
-      only once Chats is visible and account-entry sheets have closed. Closing
-      it with both choices off is valid; later sign-ins preserve the choices.
-- [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share Anonymous
-      Analytics** persists without restarting or stranding the running app.
+- [ ] First-launch consent follows the checks above. Existing saved choices
+      survive profile switches; scope changes require fresh explicit acceptance.
+- [ ] Settings → Privacy & Security → Diagnostics & Improvements: **Share usage
+      and diagnostics** persists without restarting the runtime. Saved consent
+      is separate from each exporter's current readiness.
 - [ ] **Share Diagnostic Logs** creates local files after activity. Turning it off
       retains files; **Clear Diagnostic Logs** clears them independently.
 - [ ] Switch profiles and background/relaunch: both diagnostics choices remain
@@ -292,9 +298,16 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] With configured credentials and logging enabled, verify sealed log segments
       reach Goggles after MDK's batching window. Toggle off and verify subsequent
       automatic upload passes stop; local preference tests do not prove ingestion.
-- [ ] Verify production and staging analytics reach their intended tenants at the
-      shared collector using flavor tokens, while audit uploads use the shared audit
-      token. Do not display or copy token values into test reports.
+- [ ] Verify production/staging OTLP tenant routing and separate Aptabase
+      applications. Audit uploads retain their separate shared token. Inspect
+      persisted synthetic staging events, not just HTTP success; never copy keys.
+- [ ] Verify operator/retention disclosure against the deployment and run
+      `scripts/check-analytics-release-config.py <built-app/Info.plist>` for each
+      flavor. The development fallback text is not a distribution-ready policy.
+- [ ] Rapid background/foreground with a stalled collector still releases storage.
+      Frozen notification runtimes emit no analytics. Revocation clears queued
+      observations; re-enabling rotates diagnostic identity. See
+      `docs/usage-diagnostics-integration.md` for rollout gates.
 - [ ] Settings → Developer Tools: Developer mode reveals Streaming debug and
       **Open Diagnostics**. Disabling it leaves both diagnostics preferences intact.
 - [ ] With Developer mode on, Group Details → Export Conversation
@@ -451,3 +464,34 @@ the test device.
       flat-white toolbar.
 - [ ] VoiceOver: every primary action has a label (compose, send,
       group details, account switcher).
+
+## Developer Key Packages
+
+- With a single current package, Developer Tools → Key Packages shows its identifier, published time, size, and Publish New Key Package. No relay list or maintenance block appears.
+- When a different package for this profile is found on relays, Other Key Packages on Relays appears below the current-package controls, with publication details and sanitized relay addresses. Include an older package still owned locally; local-only retained packages should remain hidden.
+- Relay echoes of the current key material must not create additional rows, even when the publication event differs. A newer relay timestamp must not change which package is shown as current.
+- Publish New Key Package refreshes the current row after success. An error remains actionable; a missing lifecycle or failed read must not promote an arbitrary relay package to current.
+- Swipe-delete remains available for additional relay packages. Refresh and switch profiles; neither action should show another profile's packages.
+
+
+## MDK 0.9.20 recovery and presentation
+
+- On disposable upgraded profiles, verify cached DM names/avatars remain stable
+  offline; profile/title changes update, while unread, pin, and archive changes
+  appear even with the same presentation revision. Switch profiles during a
+  pending list subscription and rapidly background/resume; no old rows return.
+- Simulate a recovered group branch. Review the authenticated inviter before
+  confirming rejoin; saved history remains. Decline removes only the selected
+  offer. Change local group state while confirmation is open: the stale approval
+  fails and requires a newly reviewed offer. Advisory sync failure must not
+  disable sending or change membership. Pending re-invites retry without host
+  publication; exhausted ones direct the user to invite again.
+- Use disposable corrupt/exhausted onboarding checkpoints. Sign In exposes an
+  explicit recovery action, explains latest-only evidence/sign-out, and requires
+  entering the private key again. Verify an old revision/epoch cannot approve a
+  fresh attempt. Cancel while approved publication is pending and begin again.
+- Under consent, send text/media and receive a new message in a visible chat.
+  Diagnostics should show host message-visible timings only after layout. Loading
+  history, duplicate visibility callbacks, and work started before consent must
+  not add samples. Revoke sharing or switch profiles before layout; late samples
+  must be dropped. Confirm backend transport timings are not duplicated by iOS.

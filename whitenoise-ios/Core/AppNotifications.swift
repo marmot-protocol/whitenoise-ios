@@ -103,10 +103,25 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func requestAuthorization() async throws -> Bool {
+        let recorder = appState?.productAnalytics
+        let ticket = recorder?.ticket()
+        let granted: Bool
         if let requestAuthorizationHandler {
-            return try await requestAuthorizationHandler()
+            granted = try await requestAuthorizationHandler()
+        } else {
+            granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
         }
-        return try await center.requestAuthorization(options: [.alert, .badge, .sound])
+        let status = await authorizationStatus()
+        let outcome: ProductPermissionOutcome?
+        switch status {
+        case .authorized: outcome = .granted
+        case .denied: outcome = .denied
+        case .provisional, .ephemeral: outcome = .provisional
+        case .notDetermined: outcome = nil
+        @unknown default: outcome = nil
+        }
+        if let outcome { recorder?.record(.permission(outcome), ticket: ticket) }
+        return granted
     }
 
     func authorizationStatus() async -> UNAuthorizationStatus {
@@ -331,6 +346,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         ) else { return }
         switch operation {
         case .openChat(let route):
+            appState?.productActivation(.foregroundNotification)
             handle(route: route)
         case .reply, .markRead:
             // Await completion: returning from the async delegate method ends
@@ -363,6 +379,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
 
     private func flushPendingRoutes() {
         guard let appState, !pendingRoutes.isEmpty else { return }
+        appState.productActivation(.foregroundNotification)
         for route in pendingRoutes {
             appState.presentNotification(route: route)
         }
