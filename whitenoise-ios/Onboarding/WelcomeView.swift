@@ -3,6 +3,11 @@ import SwiftUI
 /// First-launch and add-profile entry point. First launch presents bounded
 /// sheets; Add Profile pushes into the sheet's existing navigation stack.
 struct WelcomeView: View {
+    private struct ConsentRuntimeState: Equatable {
+        let generation: Int
+        let isReady: Bool
+    }
+
     private enum SheetRoute: Identifiable {
         case diagnostics
         case signIn
@@ -59,11 +64,13 @@ struct WelcomeView: View {
                     open(.signUp)
                 }
                 .accessibilityIdentifier("welcome.sign-up")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
 
                 WNButton(title: "Sign In", emphasis: .secondary) {
                     open(.signIn)
                 }
                 .accessibilityIdentifier("welcome.sign-in")
+                .disabled(!isAddingProfile && !appState.diagnosticsConsent.initialDecisionResolved)
             }
         }
         .safeAreaPadding(.horizontal)
@@ -109,15 +116,12 @@ struct WelcomeView: View {
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.resizes)
         }
-        .task(id: appState.runtimeGeneration) {
+        .task(id: ConsentRuntimeState(generation: appState.runtimeGeneration, isReady: appState.canUseRuntimeForLocalForegroundWork)) {
             guard !isAddingProfile else { return }
             await appState.diagnosticsConsent.reload(using: appState)
             presentConsentIfNeeded()
         }
         .onChange(of: appState.diagnosticsConsent.pending) { presentConsentIfNeeded() }
-        .onChange(of: appState.canUseRuntimeForLocalForegroundWork) {
-            if appState.canUseRuntimeForLocalForegroundWork { presentConsentIfNeeded() }
-        }
         .productScreen(.onboarding)
         .onChange(of: showSignIn) {
             if !showSignIn {

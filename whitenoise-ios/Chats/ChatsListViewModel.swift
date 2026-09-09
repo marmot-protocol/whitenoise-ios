@@ -78,6 +78,7 @@ final class ChatsListViewModel {
     struct Item: Equatable, Identifiable {
         let row: ChatListRowFfi
         let avatarURL: URL?
+        let selectedAvatar: SelectedAvatarFfi?
         let avatarSeed: String
         let title: String
         let isDirectMessage: Bool?
@@ -94,6 +95,7 @@ final class ChatsListViewModel {
         init(
             row: ChatListRowFfi,
             avatarURL: URL?,
+            selectedAvatar: SelectedAvatarFfi? = nil,
             avatarSeed: String? = nil,
             title: String,
             isDirectMessage: Bool? = nil,
@@ -112,6 +114,7 @@ final class ChatsListViewModel {
             )
             self.row = row
             self.avatarURL = avatarURL
+            self.selectedAvatar = selectedAvatar
             self.avatarSeed = avatarSeed ?? row.groupIdHex
             self.title = title
             self.isDirectMessage = isDirectMessage
@@ -237,6 +240,9 @@ final class ChatsListViewModel {
     private var rowByGroupId: [String: ChatListRowFfi] = [:]
     private var itemByGroupId: [String: Item] = [:]
     private var pendingChatListRowsByGroupId: [String: ChatListRowFfi] = [:]
+    private var selectedPresentationByGroupId: [String: ConversationPresentationFfi] = [:]
+    private var presentedCursor = PresentedChatListCursor()
+    private var deferredPresentedSnapshot: PresentedChatListSnapshotFfi?
     private var avatarURLByGroupId: [String: String] = [:]
     private var directPeerAccountIdByGroupId: [String: String] = [:]
     private var inviterAccountIdByGroupId: [String: String] = [:]
@@ -247,7 +253,6 @@ final class ChatsListViewModel {
     private var directPeerLookupCompletedGroupIds: Set<String> = []
     private var pendingDirectPeerRefreshGroupIds: Set<String> = []
     @ObservationIgnored private var defersPinOrderSnapshots = false
-    @ObservationIgnored private var deferredPinOrderSnapshot: [ChatListRowFfi]?
     @ObservationIgnored private var pinOrderUITransitionID: UUID?
 
     private static let chatListUpdateCoalescingDelayNanoseconds: UInt64 = 16_000_000
@@ -259,6 +264,7 @@ final class ChatsListViewModel {
 
     #if DEBUG
     @ObservationIgnored var mentionDisplayNameForTesting: MarkdownMentionResolver?
+    @ObservationIgnored var presentedRowForTesting: ((String, String) async throws -> PresentedChatRowFfi?)?
     @ObservationIgnored private(set) var publishedItemsMutationCountForTesting = 0
     #endif
 
@@ -280,13 +286,14 @@ final class ChatsListViewModel {
         chatListTask?.cancel()
         chatListTask = nil
         chatListTaskID = nil
+        presentedCursor = PresentedChatListCursor()
+        deferredPresentedSnapshot = nil
         avatarURLTask?.cancel()
         avatarURLTask = nil
         avatarEnrichmentTaskID = nil
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
         defersPinOrderSnapshots = false
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = nil
         if currentAccount != accountRef {
             if let currentAccount {
@@ -297,6 +304,7 @@ final class ChatsListViewModel {
                 )
             }
             let hadPublishedRows = !items.isEmpty || !archivedItems.isEmpty
+            selectedPresentationByGroupId = [:]
             rowByGroupId = [:]
             itemByGroupId = [:]
             items = []
@@ -341,29 +349,35 @@ final class ChatsListViewModel {
                 do {
                     guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
-                    let chatListSub = try await client.subscribeChatList(
+                    let chatListSub = try await client.openPresentedChatList(
                         accountRef: accountRef,
                         includeArchived: true
                     )
                     guard !Task.isCancelled,
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                     else { return }
-                    let snapshot = await client.chatListSubscriptionSnapshot(chatListSub)
+                    guard let snapshot = await client.presentedChatListSubscriptionSnapshot(chatListSub) else {
+                        throw CancellationError()
+                    }
                     guard !Task.isCancelled,
                           appState.canUseRuntimeForForegroundWork,
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                     else { return }
                     self?.loadError = nil
-                    self?.applyChatListSnapshot(snapshot)
+                    self?.presentedCursor = PresentedChatListCursor(initial: snapshot)
+                    self?.applyPresentedSnapshot(snapshot.snapshot)
                     self?.isLoading = false
 
-                    for await update in SubscriptionDriver.chatListUpdates(chatListSub) {
+                    while let update = try await chatListSub.nextCancellable() {
                         guard !Task.isCancelled,
                               appState.canUseRuntimeForForegroundWork,
                               self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                         else { return }
                         retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
-                        self?.applyChatListUpdate(update)
+                        guard let self else { return }
+                        if self.presentedCursor.requiresReopen(update) { break }
+                        guard self.presentedCursor.accept(update) else { continue }
+                        self.applyPresentedSnapshot(update.snapshot)
                     }
                 } catch is CancellationError {
                     return
@@ -400,12 +414,13 @@ final class ChatsListViewModel {
         else { return }
         await draftStore.loadIfNeeded(accountRef: accountRef)
         do {
-            let snapshot = try await appState.currentMarmotClient().chatList(
+            let cursor = presentedCursor
+            let snapshot = try await appState.currentMarmotClient().presentedChatList(
                 accountRef: accountRef,
                 includeArchived: true
             )
-            guard currentAccount == accountRef else { return }
-            applyChatListSnapshot(snapshot)
+            guard !Task.isCancelled, currentAccount == accountRef, presentedCursor == cursor else { return }
+            applyPresentedSnapshot(snapshot)
         } catch is CancellationError {
             return
         } catch {
@@ -418,28 +433,40 @@ final class ChatsListViewModel {
     /// update to happen to deliver it.
     func refreshRow(groupIdHex: String) async {
         guard let accountRef = currentAccount, let appState else { return }
-        if let createdRow = appState.createdChatListRow(
-            accountRef: accountRef,
-            groupIdHex: groupIdHex
-        ) {
-            applyChatListRow(createdRow)
-            return
-        }
         guard
               appState.canUseRuntimeForLocalForegroundWork
         else { return }
+        if rowByGroupId[groupIdHex] == nil,
+           let created = appState.createdChatListRow(accountRef: accountRef, groupIdHex: groupIdHex) {
+            applyChatListRow(created)
+        }
         do {
-            guard let row = try await appState.currentMarmotClient().chatListRow(
+            let previousRow = rowByGroupId[groupIdHex]
+            let previousPresentation = selectedPresentationByGroupId[groupIdHex]
+            let taskID = chatListTaskID
+            let generation = appState.runtimeGeneration
+            guard let row = try await readPresentedRow(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex
-            ), currentAccount == accountRef
+            ), !Task.isCancelled, currentAccount == accountRef, chatListTaskID == taskID,
+               rowByGroupId[groupIdHex] == previousRow, selectedPresentationByGroupId[groupIdHex] == previousPresentation,
+               appState.runtimeGeneration == generation, appState.canUseRuntimeForLocalForegroundWork
             else { return }
-            applyChatListRow(row)
+            selectedPresentationByGroupId[groupIdHex] = row.presentation
+            applyChatListRow(row.row)
         } catch is CancellationError {
             return
         } catch {
             // The subscription remains authoritative and may still deliver it.
         }
+    }
+
+    private func readPresentedRow(accountRef: String, groupIdHex: String) async throws -> PresentedChatRowFfi? {
+        #if DEBUG
+        if let presentedRowForTesting { return try await presentedRowForTesting(accountRef, groupIdHex) }
+        #endif
+        guard let appState else { return nil }
+        return try await appState.currentMarmotClient().presentedChatListRow(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     /// O(1) lookup for a chat-list item by its group id, backed by the
@@ -459,22 +486,27 @@ final class ChatsListViewModel {
         )
     }
 
-    func applyChatListSnapshot(
-        _ snapshot: [ChatListRowFfi],
-        mergingPendingRows: Bool = true
-    ) {
+    func applyPresentedSnapshot(_ snapshot: PresentedChatListSnapshotFfi) {
+        if defersPinOrderSnapshots {
+            deferredPresentedSnapshot = snapshot
+            return
+        }
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.inboxSnapshot, since: timing) }
 
+        selectedPresentationByGroupId = Dictionary(
+            snapshot.rows.map { ($0.row.groupIdHex, $0.presentation) }, uniquingKeysWith: { _, latest in latest }
+        )
+        for row in snapshot.rows {
+            directPeerAccountIdByGroupId[row.row.groupIdHex] = row.presentation.peerId
+        }
+        applyChatListSnapshot(snapshot.rows.map(\.row))
+    }
+
+    func applyChatListSnapshot(_ snapshot: [ChatListRowFfi]) {
         loadError = nil
         pendingChatListUpdateTask?.cancel()
         pendingChatListUpdateTask = nil
-        let mergedSnapshot = mergingPendingRows
-            ? Self.mergingSnapshot(
-                snapshot,
-                withPendingRows: Array(pendingChatListRowsByGroupId.values)
-            )
-            : snapshot
         pendingChatListRowsByGroupId = [:]
         let previousRows = rowByGroupId
         let previousItems = itemByGroupId
@@ -482,7 +514,7 @@ final class ChatsListViewModel {
         var nextItems: [String: Item] = [:]
         var changed = false
         let muteLookup = currentMuteLookup()
-        for row in mergedSnapshot {
+        for row in snapshot {
             updateCachedGroupDetails(with: row)
             let item = makeItem(for: row, muteLookup: muteLookup)
             nextRows[row.groupIdHex] = row
@@ -500,7 +532,7 @@ final class ChatsListViewModel {
         if changed {
             publishItems()
         }
-        scheduleRowEnrichment(for: mergedSnapshot)
+        scheduleRowEnrichment(for: snapshot)
     }
 
     /// Applies Marmot's complete authoritative pin order without waiting for
@@ -529,29 +561,6 @@ final class ChatsListViewModel {
         if changed {
             publishItems()
         }
-    }
-
-    static func mergingSnapshot(
-        _ snapshot: [ChatListRowFfi],
-        withPendingRows pendingRows: [ChatListRowFfi]
-    ) -> [ChatListRowFfi] {
-        var rowsByGroupId: [String: ChatListRowFfi] = [:]
-        for row in snapshot {
-            rowsByGroupId[row.groupIdHex] = row
-        }
-        var appendedGroupIds: [String] = []
-        for pending in pendingRows {
-            if let snapshotRow = rowsByGroupId[pending.groupIdHex] {
-                if pending.updatedAt >= snapshotRow.updatedAt {
-                    rowsByGroupId[pending.groupIdHex] = pending
-                }
-            } else {
-                rowsByGroupId[pending.groupIdHex] = pending
-                appendedGroupIds.append(pending.groupIdHex)
-            }
-        }
-        return snapshot.compactMap { rowsByGroupId[$0.groupIdHex] }
-            + appendedGroupIds.compactMap { rowsByGroupId[$0] }
     }
 
     /// Intersect the parallel enrichment caches/sets down to the surviving
@@ -611,25 +620,9 @@ final class ChatsListViewModel {
         enqueueChatListRow(row)
     }
 
-    func applyChatListUpdate(_ update: ChatListSubscriptionUpdateFfi) {
-        switch update {
-        case .row(_, let row):
-            enqueueChatListRow(row)
-        case .removeRow(_, let groupIdHex):
-            removeChatListRow(groupIdHex: groupIdHex)
-        case .snapshot(let trigger, let rows):
-            if trigger == .pinOrderChanged, defersPinOrderSnapshots {
-                deferredPinOrderSnapshot = rows
-            } else {
-                applyChatListSnapshot(rows, mergingPendingRows: false)
-            }
-        }
-    }
-
     func beginPinOrderUITransition() -> UUID {
         let transitionID = UUID()
         defersPinOrderSnapshots = true
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = transitionID
         return transitionID
     }
@@ -643,24 +636,22 @@ final class ChatsListViewModel {
         orderedGroupIds: [String]?
     ) -> Bool {
         guard pinOrderUITransitionID == transitionID else { return false }
-        let snapshot = deferredPinOrderSnapshot
+        let presented = deferredPresentedSnapshot
+        deferredPresentedSnapshot = nil
         defersPinOrderSnapshots = false
-        deferredPinOrderSnapshot = nil
         pinOrderUITransitionID = nil
 
+        if let presented { applyPresentedSnapshot(presented) }
         if let orderedGroupIds {
             applyPinnedOrder(orderedGroupIds)
             return true
         }
-        if let snapshot {
-            applyChatListSnapshot(snapshot, mergingPendingRows: false)
-            return true
-        }
-        return false
+        return presented != nil
     }
 
     func removeChatListRow(groupIdHex: String) {
         pendingChatListRowsByGroupId[groupIdHex] = nil
+        selectedPresentationByGroupId[groupIdHex] = nil
         let hadPublishedRow = rowByGroupId[groupIdHex] != nil || itemByGroupId[groupIdHex] != nil
         rowByGroupId[groupIdHex] = nil
         itemByGroupId[groupIdHex] = nil
@@ -801,6 +792,7 @@ final class ChatsListViewModel {
         return Item(
             row: row,
             avatarURL: display.avatarURL,
+            selectedAvatar: selectedPresentationByGroupId[row.groupIdHex]?.avatar,
             avatarSeed: display.avatarSeed,
             title: display.title,
             isDirectMessage: display.isDirectMessage,
@@ -879,6 +871,9 @@ final class ChatsListViewModel {
         for row: ChatListRowFfi,
         details: GroupDetailsFfi?
     ) -> Display {
+        if let selected = selectedPresentationByGroupId[row.groupIdHex] {
+            return SelectedChatPresentation.display(selected, row: row)
+        }
         let fallbackAvatarURL = ContentSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
         return Self.display(
             for: row,
@@ -1008,7 +1003,8 @@ final class ChatsListViewModel {
     }
 
     private func rowNeedsDirectPeerEnrichment(_ row: ChatListRowFfi) -> Bool {
-        row.conversationKind != .group
+        selectedPresentationByGroupId[row.groupIdHex] == nil
+            && row.conversationKind != .group
             && Self.rowNeedsDisplayEnrichment(row)
             && directPeerAccountIdByGroupId[row.groupIdHex] == nil
             && !directPeerLookupCompletedGroupIds.contains(row.groupIdHex)

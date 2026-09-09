@@ -47,6 +47,8 @@ nonisolated struct ConversationReplyPreview: Equatable {
 @Observable
 @MainActor
 final class TimelineStore {
+    @ObservationIgnored let visibilityPerformance = MessageVisibilityPerformance()
+
     struct DurableRowRetryState {
         let status: MessageStatus
         fileprivate let projectionRevision: UInt64
@@ -590,6 +592,10 @@ final class TimelineStore {
             switch change {
             case .upsert(let trigger, let record):
                 let appRecord = ConversationViewModel.appMessageRecord(from: record)
+                if trigger == .newMessage, appRecord.direction == "received", appRecord.kind == MessageSemantics.kindChat,
+                   !appRecord.messageIdHex.isEmpty, messageById[appRecord.messageIdHex] == nil {
+                    beginMessageVisibility(rowID: "msg:\(appRecord.messageIdHex)", operation: .inboundMessageVisible)
+                }
                 if !appRecord.messageIdHex.isEmpty {
                     changedReactionTargets.insert(appRecord.messageIdHex)
                 }
@@ -1076,6 +1082,19 @@ final class TimelineStore {
     }
 #endif
 
+    func beginMessageVisibility(rowID: String, operation: HostPerformanceOperationFfi) {
+        guard let appState, appState.canUseRuntimeForForegroundWork,
+              appState.visibleChat == VisibleChatRoute(accountRef: appState.activeAccountRef ?? "", groupIdHex: groupIdHex) else { return }
+        visibilityPerformance.begin(rowID: rowID, operation: operation, ticket: appState.productAnalytics.ticket())
+    }
+
+    func recordVisibleRows(_ rowIDs: Set<String>) {
+        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+        for sample in visibilityPerformance.takeVisible(rowIDs) {
+            appState.productAnalytics.recordPerformance(sample.operation, milliseconds: sample.milliseconds, ticket: sample.ticket)
+        }
+    }
+
     // MARK: - Optimistic send overlay
 
     func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi) {
@@ -1137,6 +1156,7 @@ final class TimelineStore {
             messageStatusById[realId] = .sent
         }
         let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
+        visibilityPerformance.move(from: "msg:\(tempId)", to: rowId)
         projectionChanged = (transientTimelineItems.removeValue(forKey: "msg:\(tempId)") != nil) || projectionChanged
         let removedPendingMedia = mediaProjections.removePending(forRowId: "msg:\(tempId)")
         projectionChanged = (removedPendingMedia != nil) || projectionChanged
@@ -1384,6 +1404,7 @@ final class TimelineStore {
     // MARK: - Optimistic reset
 
     func resetOptimisticState() {
+        visibilityPerformance.reset()
         let backingChanged = deletedProjections.hasOptimistic ||
             reactionProjections.hasOptimistic ||
             editProjections.hasOptimistic ||

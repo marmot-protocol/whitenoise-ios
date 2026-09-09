@@ -67,9 +67,10 @@ before every release tag.
       automatically opening Chats, including readiness reached before Open Chats.
 - [ ] Close setup and explicitly sign in again: fresh checks run, and previously
       published profile/relay changes remain. There is no Later or Finish Setup.
-- [ ] MDK #1741 remains a runtime limitation: an approved unfinished publication
-      cannot yet be discarded. Verify safe sign-out/close where supported, and
-      actionable recovery if the runtime refuses it; never wipe to escape setup.
+- [ ] Cancel an approved unfinished publication with MDK 0.9.20. Host callbacks
+      invalidate before cancellation, and cancellation finishes before another
+      attempt begins. A failed cancellation stays retryable; never sign out,
+      reuse the old checkpoint, or wipe to escape setup.
 - [ ] Ready removes the checking subtitle/spinner, retains Skipped results, and
       enables the full-width Open Chats action. Required failures still gate entry.
 - [ ] Verify large text, VoiceOver, Reduce Motion, Light and Dark appearances,
@@ -80,10 +81,10 @@ before every release tag.
 - [ ] Fresh app root: Welcome presents Help Improve White Noise before Sign In
       or Sign Up. Both sharing choices start off, work without a profile, and
       remain independent. The consent and account-entry sheets never overlap.
-- [ ] Continue without a usage grant saves a decline. A successful grant survives
-      Continue. Failed saves remain visibly unsaved with Retry; swipe dismissal
-      cannot bypass persistence. Relaunch before signing in and verify no repeat
-      after a saved decision. Add Profile preserves it.
+- [ ] The top-right checkmark (Done) without a usage grant saves a decline.
+      A successful grant survives Done. Failed saves remain visibly unsaved with
+      Retry; swipe dismissal cannot bypass persistence. Relaunch before signing
+      in and verify no repeat after a saved decision. Add Profile preserves it.
 - [ ] Upgrade an old analytics opt-in: sharing stays off until expanded consent
       is accepted after Chats/navigation are visible. Verify the explanation.
 - [ ] Opt in before Sign Up/Sign In and inspect onboarding observations. Decline
@@ -147,40 +148,44 @@ before every release tag.
 ## Chat-list search
 
 Chats is the root of its navigation stack, so a search surface without a
-visible exit cannot be escaped except by force-quitting.
+visible exit cannot be escaped except by force-quitting. The bar is app-drawn
+on every version, because `SearchFieldPlacement` has no bottom option before
+iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
-- [ ] In each scope (Chats, Unread, Archived, Left), tap **Search**: the
-      navigation bar stays visible, the field appears with the keyboard, and
-      the magnifier in the trailing toolbar has become an **✕** close button.
-      Repeat with an empty list and with a query that matches nothing.
-- [ ] Placement matches the OS: on iOS 26 the field is integrated into the
-      bottom toolbar within thumb reach; on iOS 18 it is pinned in the
-      navigation-bar drawer and does not hide when the list scrolls.
-- [ ] On iOS 26 in the Unread scope with unread chats, the search field and
-      **Read All** share the bottom toolbar without either being clipped.
-- [ ] Tap the **✕**: the keyboard drops, the query clears, the search field
-      goes away, and the Profile / Filter / Search / New Message toolbar is
-      back with the scope unfiltered. The system's own search dismissal does
-      exactly the same thing.
-- [ ] Swipe the keyboard away without exiting: the **✕** stays visible and
-      still works. Scroll the list, then exit.
-- [ ] The **✕** matches the app's other icon buttons — glass on iOS 26, the
-      filled 44pt circle on iOS 18 — and is not drawn inside a second capsule.
+- [ ] In each scope (Chats, Unread, Archived, Left), tap **Search**: a search
+      bar rises from the **bottom** with the keyboard, carrying the field and
+      an **✕** beside it. The magnifier leaves the trailing toolbar; Profile,
+      Filter and New Message stay put. Repeat with an empty list and with a
+      query that matches nothing.
+- [ ] No navigation-bar drawer and no **Cancel** word on either version.
+- [ ] On iOS 26 the field pill and the ✕ are Liquid Glass: chat rows are
+      visible refracting through them, both react to touch, and they read as
+      one piece of glass rather than two separately sampled ones. On iOS 18
+      they are the material capsule and the filled 44pt circle.
+- [ ] Scroll the list while search is open: content passes under the glass
+      without a hard edge or a second fade appearing.
+- [ ] Tap the **✕**: the keyboard drops, the query clears, the bar goes away,
+      and the magnifier is back with the scope unfiltered.
+- [ ] Type a query, then tap the field's **⊗** clear button: the query empties,
+      the bar stays up, and the field keeps focus.
+- [ ] Swipe the list to dismiss the keyboard: the bar and its ✕ stay visible
+      and still work. Tap the field to bring the keyboard back.
 - [ ] Search, tap a result: the conversation opens; on **Back**, search is
       closed and the ordinary toolbar is showing.
-- [ ] Search, then change scope from the Filter menu: the field stays usable
-      and **Cancel** still exits to the newly selected scope.
-- [ ] Search, background the app, foreground it: the surface is unchanged and
-      **Cancel** still exits. Force-quit and relaunch: search is closed and
-      the ordinary toolbar is showing.
+- [ ] Search, then change scope from the Filter menu: the bar stays up and the
+      query filters the newly selected scope.
+- [ ] Enter selection mode while search is active: the selection bar takes the
+      bottom inset and the search bar does not stack underneath it.
+- [ ] Search, background the app, foreground it: the bar is still up and the ✕
+      still exits. Force-quit and relaunch: search is closed.
 - [ ] Search, then switch profiles from Settings: the new profile's list is
       unfiltered with search closed.
-- [ ] Tap **Search** repeatedly while it is already open: the typed query and
-      the keyboard survive.
-- [ ] With VoiceOver on and Dynamic Type at an accessibility size, the exit
-      action is reachable and reads out.
-- [ ] Repeat the activate / keyboard-dismiss / cancel checks on iOS 18 and on
-      iOS 26.
+- [ ] Tap **Search** again while it is already open: the typed query and the
+      keyboard survive.
+- [ ] With VoiceOver on and Dynamic Type at an accessibility size, the ✕ reads
+      out as **Close search**, is reachable, and keeps a 44pt target.
+- [ ] In the Unread scope with unread chats, **Read All** and the search bar
+      do not overlap or clip each other.
 
 ## GIF search and remote playback
 
@@ -460,3 +465,48 @@ the test device.
       flat-white toolbar.
 - [ ] VoiceOver: every primary action has a label (compose, send,
       group details, account switcher).
+
+## Developer Key Packages
+
+- With a single current package, Developer Tools → Key Packages shows its identifier, published time, size, and Publish New Key Package. No relay list or maintenance block appears.
+- When a different package for this profile is found on relays, Other Key Packages on Relays appears below the current-package controls, with publication details and sanitized relay addresses. Include an older package still owned locally; local-only retained packages should remain hidden.
+- Relay echoes of the current key material must not create additional rows, even when the publication event differs. A newer relay timestamp must not change which package is shown as current.
+- Publish New Key Package refreshes the current row after success. An error remains actionable; a missing lifecycle or failed read must not promote an arbitrary relay package to current.
+- Swipe-delete remains available for additional relay packages. Refresh and switch profiles; neither action should show another profile's packages.
+
+
+## MDK 0.9.20 recovery and presentation
+
+- On disposable upgraded profiles, verify cached DM names/avatars remain stable
+  offline; profile/title changes update, while unread, pin, and archive changes
+  appear even with the same presentation revision. Switch profiles during a
+  pending list subscription and rapidly background/resume; no old rows return.
+- Simulate a recovered group branch. Review the authenticated inviter before
+  confirming rejoin; saved history remains. Decline removes only the selected
+  offer. Change local group state while confirmation is open: the stale approval
+  fails and requires a newly reviewed offer. Advisory sync failure must not
+  disable sending or change membership. Pending re-invites retry without host
+  publication; exhausted ones direct the user to invite again.
+- Use disposable corrupt/exhausted onboarding checkpoints. Sign In exposes an
+  explicit recovery action, explains latest-only evidence/sign-out, and requires
+  entering the private key again. Verify an old revision/epoch cannot approve a
+  fresh attempt. Cancel while approved publication is pending and begin again.
+- Under consent, send text/media and receive a new message in a visible chat.
+  Diagnostics should show host message-visible timings only after layout. Loading
+  history, duplicate visibility callbacks, and work started before consent must
+  not add samples. Revoke sharing or switch profiles before layout; late samples
+  must be dropped. Confirm backend transport timings are not duplicated by iOS.
+
+## Host preparation timings
+
+- [ ] After upgrading from an empty custom registry, existing usage grants require
+      renewed consent. Declining leaves both built-in usage and custom timing
+      observations disabled; diagnostic-log consent stays independent.
+- [ ] Exercise inbox, timeline, composer parsing, and camera/library preparation.
+      Verify staging aggregates use the registered stage names with bucketed
+      elapsed/outcome properties and MDK's aggregation metadata.
+- [ ] Exercise successful, failed, cancelled, and partially accepted media batches.
+      Empty selection creates no preparation observation.
+- [ ] Revoke consent or switch profiles while preparation is running; old work
+      produces no observation. Confirm timings do not replace visible-frame
+      milestones or imply relay acceptance/recipient delivery.

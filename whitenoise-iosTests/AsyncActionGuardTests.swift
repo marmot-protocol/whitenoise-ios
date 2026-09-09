@@ -23,21 +23,6 @@ struct AsyncActionGuardTests {
         #expect(model.exportShareText == nil)
     }
 
-    @Test func privacyTelemetryToggleReturnsWhileSaveIsAlreadyInFlight() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
-        let model = PrivacySecuritySettingsViewModel()
-        let current = PrivacyTelemetrySettingsProjection(exportEnabled: false, exportIntervalSeconds: 30)
-
-        model.telemetrySettings = current
-        model.telemetrySaving = true
-
-        await model.setTelemetryEnabled(true, using: appState)
-
-        #expect(model.telemetrySaving)
-        #expect(model.telemetrySettings == current)
-        #expect(model.telemetryErrorMessage == nil)
-    }
-
     @Test func privacyAuditToggleReturnsWhileSaveIsAlreadyInFlight() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let model = PrivacySecuritySettingsViewModel()

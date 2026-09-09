@@ -53,32 +53,93 @@ struct KeyPackageRelayPreviewTests {
         #expect(KeyPackagesView.publishedDescription(0) == nil)
     }
 
-    @Test func unclassifiedPackagesRemainVisibleAndManageable() {
-        let local = package(eventId: "local", publishedAt: 10, local: true, relay: false)
-        let relay = package(eventId: "relay", publishedAt: 20, local: false, relay: true)
-        let unclassified = package(eventId: "unclassified", publishedAt: 30, local: false, relay: false)
-
-        let sections = KeyPackagesView.packageSections(for: [local, relay, unclassified])
-
-        #expect(sections.local.map(\.eventIdHex) == ["local"])
-        #expect(sections.relayOnly.map(\.eventIdHex) == ["relay"])
-        #expect(sections.unclassified.map(\.eventIdHex) == ["unclassified"])
-        #expect(sections.visiblePackageCount == 3)
-        #expect(!sections.isEmpty)
+    @Test func currentPackageUsesLifecycleReferenceInsteadOfNewestTimestamp() {
+        let current = package(eventId: "current", publishedAt: 10, local: true, relay: true)
+        let other = package(eventId: "other", publishedAt: 100, local: false, relay: true)
+        let presentation = KeyPackagesPresentation(
+            packages: [other, current],
+            currentReference: current.keyPackageRefHex,
+            currentEventID: current.eventIdHex
+        )
+        #expect(presentation.current?.identifier == "current")
+        #expect(presentation.current?.bytes == 32)
+        #expect(presentation.otherRelayPackages.map(\.eventIdHex) == ["other"])
     }
 
-    @Test func emptyStateOnlyShowsWhenPartitionHasNoPackages() {
-        #expect(KeyPackagesView.packageSections(for: []).isEmpty)
-
-        let unclassified = package(eventId: "orphan", local: false, relay: false)
-        #expect(!KeyPackagesView.packageSections(for: [unclassified]).isEmpty)
+    @Test func normalCurrentPackageHasNoAdditionalRelaySection() {
+        let current = package(local: true, relay: true)
+        let presentation = KeyPackagesPresentation(
+            packages: [current],
+            currentReference: current.keyPackageRefHex,
+            currentEventID: current.eventIdHex
+        )
+        #expect(presentation.current != nil)
+        #expect(presentation.otherRelayPackages.isEmpty)
     }
 
-    @Test func badgeTitleMatchesEachFlagCombination() {
-        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: true, relay: true)) == "Synced")
-        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: true, relay: false)) == "Local only")
-        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: false, relay: true)) == "Relay only")
-        #expect(KeyPackagesView.sourceBadgeTitle(for: package(local: false, relay: false)) == "Unclassified")
+    @Test func additionalPackagesRequireRelayEvidenceRegardlessOfLocalOwnership() {
+        let local = package(eventId: "local", local: true, relay: false)
+        let unclassified = package(eventId: "unknown", local: false, relay: false)
+        let retained = package(eventId: "retained", local: true, relay: true)
+        let remote = package(eventId: "remote", publishedAt: 10, local: false, relay: true)
+        let presentation = KeyPackagesPresentation(
+            packages: [local, unclassified, retained, remote, remote],
+            currentReference: "current-ref",
+            currentEventID: "current-event"
+        )
+        #expect(presentation.otherRelayPackages.map(\.eventIdHex) == ["remote", "retained"])
+    }
+
+    @Test func relayCopiesOfCurrentMaterialAreNotOtherPackages() {
+        let current = package(local: true, relay: true)
+        var echo = current
+        echo.eventIdHex = "different-event"
+        echo.local = false
+        let presentation = KeyPackagesPresentation(
+            packages: [current, echo],
+            currentReference: current.keyPackageRefHex,
+            currentEventID: current.eventIdHex
+        )
+        #expect(presentation.otherRelayPackages.isEmpty)
+    }
+
+    @Test func lifecycleCurrentPackageRemainsVisibleWhenInventoryMissesIt() {
+        let presentation = KeyPackagesPresentation(
+            packages: [], currentReference: "reference", currentEventID: "event", publishedAt: 123
+        )
+        #expect(presentation.current?.identifier == "event")
+        #expect(presentation.current?.publishedAt == 123)
+        #expect(presentation.current?.bytes == nil)
+    }
+
+    @Test func missingLifecycleNeverPromotesAnArbitraryLocalOrRelayPackage() {
+        let presentation = KeyPackagesPresentation(
+            packages: [package(local: true, relay: true)],
+            currentReference: nil, currentEventID: nil
+        )
+        #expect(presentation.current == nil)
+        #expect(presentation.otherRelayPackages.count == 1)
+    }
+
+    @Test func absentAuthoredEventCanUseMatchingReference() {
+        let current = package(local: true, relay: false)
+        let presentation = KeyPackagesPresentation(
+            packages: [current], currentReference: current.keyPackageRefHex, currentEventID: nil
+        )
+        #expect(presentation.current?.identifier == current.eventIdHex)
+        #expect(presentation.current?.bytes == 32)
+    }
+
+    @Test func newLifecycleEventDoesNotBorrowOldPublicationDetails() {
+        let old = package(local: true, relay: true)
+        let presentation = KeyPackagesPresentation(
+            packages: [old], currentReference: old.keyPackageRefHex,
+            currentEventID: "new-event", publishedAt: 55
+        )
+        #expect(presentation.current?.identifier == "new-event")
+        #expect(presentation.current?.publishedAt == 55)
+        #expect(presentation.current?.bytes == nil)
+        #expect(presentation.otherRelayPackages.isEmpty)
     }
 
     private func package(

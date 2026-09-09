@@ -519,7 +519,7 @@ struct GroupDetailsView: View {
                 }
 
                 if let npub = contactNpub {
-                    CopyableIdentityChip(
+                    CopyableValueChip(
                         display: IdentityFormatter.short(npub, head: 12, tail: 10),
                         copyValue: npub,
                         copiedToastTitle: L10n.string("npub")

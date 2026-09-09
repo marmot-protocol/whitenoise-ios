@@ -169,6 +169,7 @@ final class AppState {
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
     private(set) var accountSetupSnapshots: [OnboardingSnapshotFfi] = []
+    private(set) var onboardingRecoveryAccounts: [AccountSummaryFfi] = []
     var isAccountSetupPresented = false
     private(set) var isFinishingAccountSetup = false
     private static let accountRefreshLog = Logger(subsystem: "dev.ipf.whitenoise", category: "account-refresh")
@@ -186,17 +187,10 @@ final class AppState {
             runtimeLifecycle.endForegroundRuntimeMutation(lease)
         }
         model.suspend()
-        await model.drain()
         do {
-            do {
-                try await lease.client.marmot.cancelOnboarding(accountRef: model.accountID)
-            } catch MarmotKitError.OnboardingActionUnavailable {
-                // MDK #1741: retain uncertain publications, but end this host attempt.
-                let outcome = try await lease.client.signOut(accountRef: model.accountID)
-                guard outcome.localCleanup.completed else {
-                    throw MarmotKitError.OnboardingActionUnavailable
-                }
-            }
+            // Cancel in MDK before draining a host operation that may be awaiting publication.
+            try await lease.client.marmot.cancelOnboarding(accountRef: model.accountID)
+            await model.drain()
             productAnalytics.record(.onboarding(.complete, .import, .cancelled), ticket: productOnboardingTicket)
             productOnboardingTicket = nil
             productOnboardingPath = nil
@@ -430,7 +424,21 @@ final class AppState {
         }
     }
 
+    var groupRecoveryUpdate: GroupRecoveryUpdate?
+
+    struct GroupRecoveryUpdate: Equatable {
+        let accountID: String
+        let groupID: String
+        let id = UUID()
+    }
+
     func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
+        guard runtimeEventsGeneration == generation else { return }
+        if case .groupStateUpdated(let accountID, _, let groupID) = event,
+           activeAccount?.accountIdHex == accountID,
+           visibleChat?.groupIdHex == groupID {
+            groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
+        }
         guard runtimeEventsGeneration == generation,
               case .groupChangeSuperseded(let accountID, _, _, _, _, _, _) = event,
               accounts.contains(where: { $0.accountIdHex == accountID && !$0.signedOut }),
@@ -502,7 +510,7 @@ final class AppState {
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
         self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
-        self.diagnosticsConsent = DeviceDiagnosticsConsent(defaults: accountDefaults)
+        self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
         self.streamingDebugMode = UserDefaults.standard.bool(forKey: Self.streamingDebugModeKey)
         self.blockScreenshots = UserDefaults.standard.bool(forKey: Self.blockScreenshotsKey)
@@ -1064,6 +1072,7 @@ final class AppState {
             accountStore.accounts = []
             accountStore.resetSelection()
             accountSetupSnapshots = []
+            onboardingRecoveryAccounts = []
             pendingAccountSetup = nil
             isAccountSetupPresented = false
             pendingWipeReport = nil
@@ -1170,11 +1179,6 @@ final class AppState {
         notificationCoordinator.cancelNativePushRegistrationTaskWithoutAwaiting()
     }
 
-    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi? {
-        guard let client = foregroundSettingsReadClient() else { return nil }
-        return try await client.relayTelemetrySettings()
-    }
-
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection? {
         guard let client = foregroundSettingsReadClient() else { return nil }
         return try await client.privacySecuritySettingsProjection()
@@ -1189,15 +1193,6 @@ final class AppState {
         let timing = productAnalytics.beginTiming()
         defer { productAnalytics.recordTiming(.composerMarkdown, since: timing) }
         return await client.parseMarkdown(text: text)
-    }
-
-    @MainActor
-    @discardableResult
-    func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi {
-        guard phase == .ready else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        _ = try await saveUsageDiagnosticsConsent(enabled)
-        guard let client else { throw ForegroundRuntimeMutationError.runtimeUnavailable }
-        return try await client.relayTelemetrySettings()
     }
 
     func auditLogSettings() async throws -> AuditLogSettingsFfi? {
@@ -1337,15 +1332,22 @@ final class AppState {
 #if DEBUG
         try await beforeAccountRefreshForTesting?()
 #endif
+        let setupAtReadStart = pendingAccountSetup
+        let attemptRevision = signInAttempts.revision
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
+        var recoveryAccounts: [AccountSummaryFfi] = []
         var currentSetupSnapshot: OnboardingSnapshotFfi?
         for account in localAccounts {
             try Task.checkCancellation()
             let snapshot: OnboardingSnapshotFfi?
             do {
+                if try await client.onboardingRecoveryRequired(accountRef: account.accountIdHex) {
+                    recoveryAccounts.append(account)
+                    continue
+                }
                 snapshot = try await readOnboardingSnapshot(client: client, accountID: account.accountIdHex)
             } catch is CancellationError {
                 throw CancellationError()
@@ -1356,7 +1358,7 @@ final class AppState {
                 Self.accountRefreshLog.error("onboarding_snapshot_read_failed")
                 continue
             }
-            if snapshot?.accountIdHex == pendingAccountSetup?.accountID { currentSetupSnapshot = snapshot }
+            if snapshot?.accountIdHex == setupAtReadStart?.accountID { currentSetupSnapshot = snapshot }
             if let snapshot, !snapshot.ready || snapshot.cancellationPending || signInAttempts.accountIDs.contains(account.accountIdHex) {
                 unfinished.append(snapshot)
             } else {
@@ -1364,12 +1366,16 @@ final class AppState {
             }
         }
         try Task.checkCancellation()
+        guard self.client === client else { throw CancellationError() }
+        // An older account read must not discard a sign-in begun while it awaited storage.
+        guard pendingAccountSetup === setupAtReadStart, signInAttempts.revision == attemptRevision else { return }
         // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
         accountStore.accounts = readyAccounts
         if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {
             self.activeAccountRef = nil
         }
         accountSetupSnapshots = unfinished
+        onboardingRecoveryAccounts = recoveryAccounts
         if let current = pendingAccountSetup {
             if let currentSetupSnapshot {
                 current.apply(currentSetupSnapshot)
@@ -1620,7 +1626,7 @@ final class AppState {
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
             productAnalytics.record(.onboarding(.networkReady, .import, .success), ticket: ticket)
         }
-        if snapshot.ready { pendingAccountSetup?.onProductReady?() }
+        if pendingAccountSetup?.isDurablyReady == true { pendingAccountSetup?.onProductReady?() }
         accountSetupSnapshots.removeAll { $0.accountIdHex == snapshot.accountIdHex }
         accountSetupSnapshots.append(snapshot)
         isAccountSetupPresented = true

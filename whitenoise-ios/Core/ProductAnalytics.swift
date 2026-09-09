@@ -102,16 +102,20 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     private struct State: Sendable {
         var generation = UUID()
         var sink: (@Sendable (ProductEvent) throws -> Void)?
+        var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)?
         var pending = 0
     }
     private let state = Mutex(State())
 
     func replaceSink(_ sink: (@Sendable (ProductEvent) throws -> Void)?) {
-        state.withLock { $0.generation = UUID(); $0.sink = sink }
+        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil }
     }
 
-    func activateSink(_ sink: @escaping @Sendable (ProductEvent) throws -> Void) {
-        state.withLock { $0.sink = sink }
+    func activateSink(
+        performance: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)? = nil,
+        _ sink: @escaping @Sendable (ProductEvent) throws -> Void
+    ) {
+        state.withLock { $0.sink = sink; $0.performanceSink = performance }
     }
 
     func ticket() -> Ticket? {
@@ -120,6 +124,15 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
 
     @discardableResult
     func record(_ event: ProductEvent, ticket: Ticket?) -> Task<Void, Never>? {
+        enqueue(ticket: ticket) { try $0.sink?(event) }
+    }
+
+    @discardableResult
+    func recordPerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64, ticket: Ticket?) -> Task<Void, Never>? {
+        enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds) }
+    }
+
+    private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) throws -> Void) -> Task<Void, Never>? {
         guard let ticket else { return nil }
         let admitted = state.withLock { state in
             guard state.generation == ticket.generation, state.sink != nil, state.pending < 64 else { return false }
@@ -133,11 +146,12 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 guard state.generation == ticket.generation else { return }
                 // The Rust recorder is memory-only. Hold the gate through this
                 // call so revocation cannot overtake an admitted observation.
+                // MainActor ticket reads share this lock; sinks must never do I/O.
                 do {
-                    try state.sink?(event)
+                    try deliver(state)
                 } catch {
-                    // Stop a rejected sink and invalidate queued observations.
                     state.sink = nil
+                    state.performanceSink = nil
                     state.generation = UUID()
                 }
             }
@@ -158,9 +172,12 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     ) -> Task<Void, Never>? {
         guard let timing else { return nil }
         let elapsed = timing.startedAt.duration(to: max(timing.startedAt, now)).components
-        let milliseconds = UInt64(elapsed.seconds) * 1_000
-            + UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
-        return record(.timing(stage, milliseconds: milliseconds, outcome: outcome), ticket: timing.ticket)
+        let seconds = UInt64(elapsed.seconds)
+        let fractionalMilliseconds = UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
+        let (wholeMilliseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000)
+        let (milliseconds, additionOverflow) = wholeMilliseconds.addingReportingOverflow(fractionalMilliseconds)
+        return record(.timing(stage, milliseconds: overflow || additionOverflow ? .max : milliseconds, outcome: outcome),
+                      ticket: timing.ticket)
     }
 
     func record(_ event: ProductEvent) {

@@ -697,6 +697,12 @@ struct ConversationView: View {
             // button can resign the keyboard before popping so it no longer
             // flashes mid-screen during the transition.
             .toolbar(.hidden, for: .navigationBar)
+            // Hiding the bar also takes the back button's screen-edge pop
+            // gesture with it; this puts the swipe-back to Chats back.
+            .background {
+                InteractivePopGestureEnabler(onBegin: dismissKeyboard)
+                    .accessibilityHidden(true)
+            }
             .safeAreaInset(edge: .top, spacing: 0) {
                 if viewModel?.search.isActive != true {
                     conversationHeaderBar
@@ -923,6 +929,14 @@ struct ConversationView: View {
 
     var body: some View {
         conversationAttachmentSheets
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if let viewModel {
+                    GroupRecoveryView(model: viewModel.recovery, groupID: chat.groupIdHex) {
+                        _ = await viewModel.refreshGroupManagement()
+                        await viewModel.refreshTimelineWindowAfterLocalPrune()
+                    }
+                }
+            }
             .task(id: ConversationRuntimeStartToken(
                 runtimeGeneration: appState.runtimeGeneration,
                 isRuntimeWarmingUp: appState.isRuntimeWarmingUp
@@ -946,6 +960,11 @@ struct ConversationView: View {
                 isViewModelReady: viewModel != nil
             )) {
                 await restorePersistedDraft()
+            }
+            .task(id: appState.groupRecoveryUpdate) {
+                guard let update = appState.groupRecoveryUpdate, update.groupID == chat.groupIdHex,
+                      update.accountID == appState.activeAccount?.accountIdHex else { return }
+                await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
@@ -2257,6 +2276,7 @@ struct ConversationView: View {
         guard isInitialTimelinePositionSettled else { return }
         let visibleRowKeys = timelineVisibility.visibleRowKeys
         guard !visibleRowKeys.isEmpty else { return }
+        viewModel.timelineStore.recordVisibleRows(visibleRowKeys)
         viewModel.markVisibleMessagesRead(
             viewModel.records(forRowFrameKeys: visibleRowKeys)
         )
@@ -2470,9 +2490,9 @@ struct ConversationView: View {
     }
 
     private func openFileImporter() {
-        fileProductTicket = appState.productAnalytics.ticket()
         guard editSession == nil else { return }
         guard canBeginMediaSelection() else { return }
+        fileProductTicket = appState.productAnalytics.ticket()
         showFileImporter = true
     }
 
@@ -2540,6 +2560,7 @@ struct ConversationView: View {
             defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment = try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)
+                try Task.checkCancellation()
                 try appendMediaDraft(attachment)
                 outcome = .success
             } catch is CancellationError {
@@ -2568,6 +2589,7 @@ struct ConversationView: View {
                     defer { try? FileManager.default.removeItem(at: url) }
                     attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                 }
+                try Task.checkCancellation()
                 try appendMediaDraft(attachment)
                 outcome = .success
             } catch is CancellationError {
@@ -2589,6 +2611,7 @@ struct ConversationView: View {
         }
 
         let selected = Array(selections.prefix(remainingMediaDraftSlots))
+        guard !selected.isEmpty else { return }
         if selected.count < selections.count {
             presentMaxAttachmentWarning()
         }
@@ -2605,6 +2628,7 @@ struct ConversationView: View {
                         fileName: selection.fileName,
                         typeIdentifier: selection.typeIdentifier
                     )
+                    try Task.checkCancellation()
                     prepared.append(attachment)
                 } catch is CancellationError {
                     outcome = .failure
@@ -2615,22 +2639,23 @@ struct ConversationView: View {
                 }
             }
             guard !prepared.isEmpty else { return }
-            appendPreparedVisualDrafts(prepared)
+            if !appendPreparedVisualDrafts(prepared) { outcome = .failure }
         }
     }
 
-    private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) {
+    private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let accepted = Array(attachments.prefix(availableSlots))
         guard !accepted.isEmpty else {
             presentMaxAttachmentWarning()
-            return
+            return false
         }
         mediaDrafts.append(contentsOf: accepted)
         if accepted.count < attachments.count {
             presentMaxAttachmentWarning()
         }
         composerFocusRequest += 1
+        return accepted.count == attachments.count
     }
 
     private func addFileImporterResult(_ result: Result<[URL], Error>) {

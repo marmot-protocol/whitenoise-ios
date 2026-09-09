@@ -2,59 +2,15 @@ import Foundation
 import MarmotKit
 
 nonisolated struct PrivacySecuritySettingsProjection: Equatable, Sendable {
-    var telemetrySettings: PrivacyTelemetrySettingsProjection?
+    var usageEnabled: Bool?
     var auditSettings: PrivacyAuditSettingsProjection?
     var auditFileRows: [AuditFileRow]
 
     static let empty = PrivacySecuritySettingsProjection(
-        telemetrySettings: nil,
+        usageEnabled: nil,
         auditSettings: nil,
         auditFileRows: []
     )
-
-    init(
-        telemetrySettings: RelayTelemetrySettingsFfi,
-        auditSettings: AuditLogSettingsFfi,
-        auditFiles: [AuditLogFileFfi]
-    ) {
-        self.telemetrySettings = PrivacyTelemetrySettingsProjection(settings: telemetrySettings)
-        self.auditSettings = PrivacyAuditSettingsProjection(settings: auditSettings)
-        self.auditFileRows = AuditFileRowProjection.rows(from: auditFiles)
-    }
-
-    init(
-        telemetrySettings: PrivacyTelemetrySettingsProjection?,
-        auditSettings: PrivacyAuditSettingsProjection?,
-        auditFileRows: [AuditFileRow]
-    ) {
-        self.telemetrySettings = telemetrySettings
-        self.auditSettings = auditSettings
-        self.auditFileRows = auditFileRows
-    }
-}
-
-nonisolated struct PrivacyTelemetrySettingsProjection: Equatable, Sendable {
-    var exportEnabled: Bool
-    var exportIntervalSeconds: UInt64
-
-    init(settings: UsageDiagnosticsSettingsFfi) {
-        self.exportEnabled = settings.decision == .granted
-        self.exportIntervalSeconds = 0
-    }
-
-    init(settings: RelayTelemetrySettingsFfi) {
-        self.exportEnabled = settings.exportEnabled
-        self.exportIntervalSeconds = settings.exportIntervalSeconds
-    }
-
-    init(exportEnabled: Bool, exportIntervalSeconds: UInt64) {
-        self.exportEnabled = exportEnabled
-        self.exportIntervalSeconds = exportIntervalSeconds
-    }
-
-    func updatingExportEnabled(_ enabled: Bool) -> Self {
-        Self(exportEnabled: enabled, exportIntervalSeconds: exportIntervalSeconds)
-    }
 }
 
 nonisolated struct PrivacyAuditSettingsProjection: Equatable, Sendable {

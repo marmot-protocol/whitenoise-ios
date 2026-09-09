@@ -76,6 +76,7 @@ struct ImportIdentityView: View {
 
         ScrollView {
             VStack(alignment: .leading) {
+                OnboardingRecoverySection()
                 Text("Private Key")
                     .font(.headline)
                     .padding(.leading)

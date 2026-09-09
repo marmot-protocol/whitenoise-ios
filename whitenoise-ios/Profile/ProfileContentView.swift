@@ -581,7 +581,7 @@ struct ProfileContentView: View {
     }
 
     private var identityChip: some View {
-        CopyableIdentityChip(
+        CopyableValueChip(
             display: IdentityFormatter.short(displayReference, head: 12, tail: 10),
             copyValue: displayReference,
             copiedToastTitle: L10n.string("npub")

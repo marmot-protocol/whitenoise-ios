@@ -4,12 +4,12 @@ import PackageDescription
 // Keep the release identifier, immutable tag, checksum, and generated Swift
 // source synchronized. `scripts/sync-bindings.sh` updates them together from a
 // published MarmotKit release.
-let marmotKitReleaseID = "0.9.19"
-let marmotKitReleaseTag = "marmotkit-v0.9.19"
-let marmotKitChecksum = "ad856e793aac88e9a0a1f3d04bb1aaf9af6a19d84c2183e89044204df5056bf4"
+let marmotKitReleaseID = "0.9.20"
+let marmotKitReleaseTag = "marmotkit-v0.9.20"
+let marmotKitChecksum = "fc2e2a2046130ac78198ad067276c64b9102d0ba6757455f4b0f595cf81f7244"
 let marmotKitBinaryURL = "https://github.com/marmot-protocol/mdk/releases/download/\(marmotKitReleaseTag)/MarmotKitFFI-\(marmotKitReleaseID).xcframework.zip"
 // Explicit local pin: never silently link an older remote binary to new Swift.
-let marmotKitLocalPath: String? = "Artifacts/MarmotKit.xcframework"
+let marmotKitLocalPath: String? = nil
 let marmotKitBinaryTarget: Target = marmotKitLocalPath.map {
     .binaryTarget(name: "MarmotKitFFI", path: $0)
 } ?? .binaryTarget(name: "MarmotKitFFI", url: marmotKitBinaryURL, checksum: marmotKitChecksum)

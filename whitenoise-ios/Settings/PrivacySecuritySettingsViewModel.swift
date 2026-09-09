@@ -7,7 +7,6 @@ protocol PrivacySecuritySettingsViewModelDataSource: AnyObject {
 
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection?
     func auditLogFileRows() async throws -> [AuditFileRow]?
-    func setRelayTelemetryExportEnabled(_ enabled: Bool) async throws -> RelayTelemetrySettingsFfi
     func deleteAllAuditLogFiles() async throws
     func setAuditLogEnabled(_ enabled: Bool) async throws -> AuditLogSettingsFfi
     func present(_ toast: Toast)
@@ -27,18 +26,16 @@ extension PrivacySecuritySettingsViewModelDataSource {
 @MainActor
 @Observable
 final class PrivacySecuritySettingsViewModel {
-    var telemetrySettings: PrivacyTelemetrySettingsProjection?
+    var usageEnabled: Bool?
     var auditSettings: PrivacyAuditSettingsProjection?
     var auditFileRows: [AuditFileRow] = [] {
         didSet { storedLogSize = formatStoredLogSize() }
     }
     private(set) var storedLogSize = L10n.string("None")
-    var telemetrySaving = false
     var auditSaving = false
     var auditDeleting = false
     var showDeleteAuditLogsConfirmation = false
     var filesLoading = false
-    var telemetryErrorMessage: String?
     var auditErrorMessage: String?
     var errorMessage: String?
     var savedAt: Date?
@@ -52,7 +49,7 @@ final class PrivacySecuritySettingsViewModel {
     }
 
     var diagnosticsSummary: String {
-        switch (telemetrySettings?.exportEnabled, auditSettings?.enabled) {
+        switch (usageEnabled, auditSettings?.enabled) {
         case (true, true): L10n.string("On")
         case (true, false): L10n.string("Analytics")
         case (false, true): L10n.string("Logs")
@@ -68,10 +65,6 @@ final class PrivacySecuritySettingsViewModel {
     /// Account whose privacy state is currently shown. Used to clear
     /// account-scoped state before awaiting a *different* account's projection.
     private var loadedAccountRef: String?
-
-    var telemetryToggleDisabled: Bool {
-        actionGate.isRunning || telemetrySaving || telemetrySettings == nil
-    }
 
     var auditToggleDisabled: Bool {
         actionGate.isRunning || auditSaving || auditSettings == nil
@@ -165,14 +158,13 @@ final class PrivacySecuritySettingsViewModel {
         // empty, and clearing there would wipe optimistic/seeded state a reload
         // started before a save is expected to preserve.
         if let loadedAccountRef, loadedAccountRef != accountRef {
-            telemetrySettings = nil
+            usageEnabled = nil
             auditSettings = nil
             auditFileRows = []
             savedAt = nil
         }
         let fileLoadID = beginFileLoad()
         errorMessage = nil
-        telemetryErrorMessage = nil
         auditErrorMessage = nil
         defer { endFileLoad(fileLoadID) }
 
@@ -185,7 +177,7 @@ final class PrivacySecuritySettingsViewModel {
                 // No active account / suspended runtime: clear so a previous
                 // account's telemetry toggle and audit rows can't linger,
                 // matching the sibling settings screens.
-                telemetrySettings = nil
+                usageEnabled = nil
                 auditSettings = nil
                 auditFileRows = []
                 loadedAccountRef = accountRef
@@ -195,7 +187,7 @@ final class PrivacySecuritySettingsViewModel {
                 await deferOrReload(.full, using: dataSource)
                 return
             }
-            telemetrySettings = projection.telemetrySettings
+            usageEnabled = projection.usageEnabled
             auditSettings = projection.auditSettings
             auditFileRows = projection.auditFileRows
             loadedAccountRef = accountRef
@@ -238,34 +230,6 @@ final class PrivacySecuritySettingsViewModel {
                 return
             }
             auditErrorMessage = error.localizedDescription
-        }
-    }
-
-    func setTelemetryEnabled(_ enabled: Bool, using dataSource: any PrivacySecuritySettingsViewModelDataSource) async {
-        guard !telemetrySaving else { return }
-        guard let current = telemetrySettings else { return }
-        await runAction(using: dataSource) {
-            telemetrySaving = true
-            telemetryErrorMessage = nil
-            telemetrySettings = current.updatingExportEnabled(enabled)
-            defer { telemetrySaving = false }
-
-            do {
-                telemetrySettings = PrivacyTelemetrySettingsProjection(
-                    settings: try await dataSource.setRelayTelemetryExportEnabled(enabled)
-                )
-                savedAt = Date()
-                Haptics.success()
-                dataSource.present(.success(L10n.string("Done")))
-            } catch {
-                telemetrySettings = current
-                telemetryErrorMessage = L10n.string("Couldn’t save analytics settings. Try again.")
-                Haptics.error()
-                dataSource.present(UserFacingError.toast(
-                    title: L10n.string("Save failed"),
-                    error: error
-                ))
-            }
         }
     }
 

@@ -1,40 +1,61 @@
 # iOS usage and diagnostics integration
 
-This development integration targets MDK master
-`5b7f17f9a0162dcc8c10ba37a41b7f652d4ed154` (analytics PR #1745).
-It includes shared-store migration 2 and account-storage migration 65.
+This integration pins formal MarmotKit **0.9.20**, source
+`2f44f6b65a19f8818644ccd7027618ba91450c33`.
+It includes account-storage migrations through 67 and shared-store migration 3.
 Use disposable test roots; reverting the binary is not a storage rollback.
 
-## Local bindings
+## Published bindings
 
-Run `./scripts/sync-local-bindings.sh /path/to/clean/mdk <full-master-sha>`.
-The checkout must be clean and match that SHA. The script enables both exporters,
-builds Swift plus arm64 device/simulator artifacts, validates deployment target
-18.0, packages checksums, and installs the ignored local XCFramework.
-`Packages/MarmotKit/LOCAL_BUILD.json` records provenance. The local binary pin
-intentionally fails if its matching artifact is absent; it never falls back to
-an older binary. A fresh checkout must run this local setup while the PR remains in development.
-CI checks out the pinned MDK source, builds both exporters, and verifies the
-generated Swift matches the checked-in binding before testing.
+The immutable `marmotkit-v0.9.20` release contains `otlp-export` and
+`product-analytics-export` for arm64 iOS and simulator (iOS 18.0 minimum).
+It was built with Rust/Cargo 1.97.1. The XCFramework ZIP checksum is
+`fc2e2a2046130ac78198ad067276c64b9102d0ba6757455f4b0f595cf81f7244`.
+Install it with:
 
-Before merge publish the same source as an immutable MarmotKit snapshot, run
-`./scripts/sync-bindings.sh <full-master-sha>`, and validate the resulting remote
-package. Do not commit the XCFramework or label local artifacts as published.
+```sh
+./scripts/sync-bindings.sh 0.9.20
+```
+
+The installer verifies the source SHA and generated Swift/binary checksums and
+updates the remote package declaration and `MARMOT_VERSION` together. The
+published generated API and binary come from the same formal release. Its immutable
+[manifest](https://github.com/marmot-protocol/mdk/releases/download/marmotkit-v0.9.20/marmotkit-ios-0.9.20.manifest.json)
+records source/builder SHAs, toolchain, features, and artifact checksums.
+CI downloads the published package; it no longer builds Rust as part of app tests.
+Before app tests, `python3 scripts/check-marmotkit-bindings.py` compares
+`MARMOT_VERSION` with the evaluated SwiftPM binary target and compiled
+`MarmotKitVersion` constants. It rejects local targets, mismatched snapshot SHAs,
+URLs, checksums, and version metadata without changing package sources.
+
+For local reproduction only, run
+`./scripts/sync-local-bindings.sh /path/to/clean/mdk <full-master-sha>`.
+This installs ignored local artifacts and records `LOCAL_BUILD.json`; restore
+the published package with `sync-bindings.sh` before committing. Do not commit
+the XCFramework or label local artifacts as published.
 
 ## Consent and counting
 
 Welcome presents the optional consent sheet after bootstrap and before account
 entry. Usage/diagnostics and forensic logging are separate, default-off decisions.
-Closing without a usage grant saves a decline. No receipt is stored in UserDefaults;
+The top-right checkmark saves a decline when usage has not been granted. No receipt is stored in UserDefaults;
 MDK's combined effective receipt controls first launch and migration prompts.
 There is no replay of activity before consent, including initial bootstrap timing.
 New-user onboarding measurements describe opted-in users, never all installations.
 
 Typed observations cover screen visits, create/import steps, foreground readiness,
 new-chat compose open/cancel, message search, attachments, settings, and system
-notification permission results. MDK registers those schemas; the host also
-registers the aggregate stages in [host timings](host-timings.md).
-Swift tickets prevent work begun before consent,
+notification permission results. MDK already registers their schemas. The host
+registers 16 additional aggregate preparation stages described in
+[host timings](host-timings.md), using the published `recordHostTiming` API.
+MDK owns duration bucketing and aggregation; these custom stages export through
+Aptabase and add no OTLP series. The registry expansion requires renewed consent.
+Message-visible timings use MDK's approved host-performance enum instead: Send
+through visible local bubble, and a new inbound projection through visible frame.
+History reads and passive re-projections do not start these measurements.
+Pending visibility samples expire after five seconds; longer waits and later
+scrollback are discarded instead of being reported as rendering latency. MDK's
+new transport/queue/projection timings remain automatic and are not duplicated. Swift tickets prevent work begun before consent,
 revocation, account changes, or runtime replacement from being attributed later.
 
 Search reports one activation-to-dismissal interaction (success if the user saw a
@@ -50,26 +71,72 @@ Background activity is best-effort alongside terminal shutdown. The latter close
 storage before its bounded drain; analytics never owns the suspension deadline.
 Frozen notification runtimes stay silent. Runtime shutdown may lose memory-only
 observations; no Swift disk queue or session identity is added.
+The pinned MDK background setter bounds its flush with a two-second timeout
+before returning and has no separate
+non-flushing activity API. Awaiting it before terminal close would delay storage
+release, so background activity cannot be guaranteed at suspension. Terminal
+shutdown itself seals partial observations and drains after storage closes.
+
+## Other 0.9.20 host contracts
+
+- Attached presented-chat-list snapshots select title/avatar independently of
+  legacy row fields. Complete updates use handle generation and sequence; title
+  revision is not an unread/pin version. Store-epoch changes or an unexpected handle generation reopen the handle.
+  A handwritten adapter forwards Swift task cancellation to the released native
+  future so account switches do not retain an idle `next()` call.
+- Rejoin offers are refreshed on entry and raw group-state events, including when
+  ordinary group records did not change. The UI shows the authenticated inviter
+  and explains replacement of local group state while retaining saved history.
+  Confirmation passes the displayed Welcome ID/token; decline affects one offer.
+  Automatic recovery failure does not change membership or block sending.
+- Recovered onboarding approvals carry the displayed revision and recovery epoch.
+  Cancellation runs before draining outstanding host calls, including approved
+  attempts. Unreadable/exhausted checkpoints have a separate explicit recovery
+  action that explains latest-only evidence and requires a new sign-in.
 
 ## Validation evidence
 
-The local integration passed the 1,769-test simulator suite (221 suites), the
+The formal 0.9.20 release passed the 1,809-test simulator suite (228 suites), the
 native Swift usage/diagnostics smoke check, and strict SwiftLint. Focused tests
 exercise account-free consent, failed persistence, scope reconfirmation,
 independent logging, identity rotation, frozen-runtime silence, stale tickets,
-and every typed event value against MDK's actual collector.
+and every typed event value against MDK's actual collector. Review regressions
+cover missing-runtime consent reads, created-chat handoff without a presented row,
+unrelated row updates, and preservation of newer target rows.
 
-MDK's pinned storage migration checks passed 72 tests (three operational
+MDK's pinned storage migration checks passed 74 tests (three operational
 benchmarks ignored), using temporary/in-memory databases. They cover upgrades
 through the current account schema and shared consent migration preserving
 legacy opt-in history, export intervals, and independent audit preferences.
 These checks do not establish a safe downgrade of an upgraded device database.
 
-Production and staging unsigned Release device builds passed. A disposable
-simulator visually confirmed the initial compact sheet over Welcome with both
-switches off. Signed-device interaction checks and persisted staging ingestion
-remain outstanding. The configuration preflight currently rejects both flavors
-because the ingestion endpoint, Aptabase keys, and verified retention are absent.
+The release's 33 native analytics tests passed, including storage closure before
+export drain and custom host timing validation. Two native onboarding tests passed
+approved/ready cancellation and recovery-epoch approval. The simulator additionally
+exercises repeated cancellation of the released presented-list future, subsequent
+updates on the same handle, storage closure, stale tokens/epochs, selected titles,
+unchanged presentation revisions with unread changes, and bounded visibility timing.
+
+Production and staging unsigned Release device builds passed. Both built-plist
+configuration preflights passed with distinct application keys. The preflight's
+Python tests cover valid HTTPS routes and malformed ports/URLs without printing
+configuration values.
+
+At the earlier analytics checkpoint, three disposable-simulator UI checks passed interrupted first launch,
+background/resume with consent open, decline/relaunch, grant, and account-entry
+cancellation. The sheet's default-off choices and revised layout were visually
+checked. Real-storage tests additionally cover both grant and decline surviving
+runtime replacement, independent log consent, and erasure restoring eligibility.
+These checks use disposable roots and do not erase existing simulator profiles.
+
+The local xcconfig now resolves separate production/staging keys and the full
+`https://aptabase.ipf.dev/api/v0/events` endpoint. A staging HTTP smoke export
+was accepted, and the operator confirmed persisted staging events in Aptabase
+and reported the country-mapping issue resolved. The operator-specified retention
+is 180 days; the disclosure remains “Usage analytics are scheduled
+for automatic deletion after 180 days.” Keys and local config stay ignored.
+These operator confirmations are distinct from automated checks of the deployed
+ClickHouse policy or access logs. Signed-device interaction checks remain pending.
 
 ## Rollout gates
 
@@ -84,6 +151,6 @@ because the ingestion endpoint, Aptabase keys, and verified retention are absent
    not verify deployment privacy or ingestion.
 4. Run the first-launch/upgrade/manual checks, and inspect persisted synthetic
    staging events as well as local status. HTTP success alone is insufficient.
-5. Replace local bindings with the immutable snapshot, pass CI, then ship through
+5. Keep the immutable formal release pin, pass CI, then ship through
    the normal separately authorized release process. No app version bump or
    deployment change belongs to this integration checkpoint.

@@ -18,6 +18,7 @@ struct ProfileEditView: View {
     @State private var pendingPhotoSource: PendingPhotoSource?
     @State private var showAvatarDisclosure = false
     @State private var showPhotoPicker = false
+    @State private var showPhotoMenu = false
     @State private var showFileImporter = false
     @State private var showWebImagePicker = false
     @State private var cropSource: AvatarImageCropSource?
@@ -134,7 +135,11 @@ struct ProfileEditView: View {
                     )
                     .disabled(model.isPublishing || model.isUploadingPicture)
                 } else {
-                    WNIconButton(title: "Back", systemImage: "chevron.backward") {
+                    WNIconButton(
+                        title: "Back",
+                        systemImage: "chevron.backward",
+                        chrome: .container
+                    ) {
                         dismiss()
                     }
                 }
@@ -161,6 +166,18 @@ struct ProfileEditView: View {
                     WNButton(title: "Edit", emphasis: .secondary, size: .compact, action: beginEditing)
                         .disabled(model.loadedAccountIdHex == nil)
                 }
+            }
+        }
+        .wnPhotoMenu(isPresented: $showPhotoMenu, hasPhoto: !model.picture.isEmpty) { action in
+            switch action {
+            case .chooseFromPhotos:
+                requestPhotoSource(.photos)
+            case .chooseFromFiles:
+                requestPhotoSource(.files)
+            case .findImageOnWeb:
+                showWebImagePicker = true
+            case .removePhoto:
+                applyUpload(nil)
             }
         }
         .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
@@ -268,35 +285,7 @@ struct ProfileEditView: View {
     }
 
     private func avatarMenu(loadedAccountIdHex: String) -> some View {
-        Menu {
-            Button {
-                requestPhotoSource(.photos)
-            } label: {
-                Label("Choose from Photos", systemImage: "photo.on.rectangle")
-            }
-
-            Button {
-                requestPhotoSource(.files)
-            } label: {
-                Label("Choose from Files", systemImage: "folder")
-            }
-
-            Button {
-                showWebImagePicker = true
-            } label: {
-                Label("Find Image on Web", systemImage: "globe")
-            }
-
-            if !model.picture.isEmpty {
-                Divider()
-                Button("Remove Photo", systemImage: "trash", role: .destructive) {
-                    applyUpload(nil)
-                }
-            }
-        } label: {
-            Text(model.picture.isEmpty ? "Add Photo" : "Change Photo")
-        }
-        .wnAvatarActionButtonStyle()
+        WNPhotoMenuButton(hasPhoto: !model.picture.isEmpty, isPresented: $showPhotoMenu)
         .disabled(
             model.isPublishing
                 || model.isUploadingPicture

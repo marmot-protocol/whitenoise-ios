@@ -39,6 +39,14 @@ struct WNButton: View {
             size == .large ? .extraLarge : .regular
         }
 
+        /// A compact secondary button is a toolbar item, and an iOS 26 toolbar
+        /// already draws liquid glass around its items; styling it again stacks
+        /// a second capsule inside the first. Every other combination stands on
+        /// its own and has to paint its own surface.
+        static func drawsOwnSurface(emphasis: Emphasis, size: Size) -> Bool {
+            !(emphasis == .secondary && size == .compact)
+        }
+
         /// Only the large size claims the full width; a compact button in a
         /// toolbar has to stay as wide as its title.
         static func stretches(_ size: Size) -> Bool {
@@ -75,12 +83,17 @@ struct WNButton: View {
                         .transition(.opacity)
                 }
             }
-            .foregroundStyle(contentColor)
+            .wnButtonContentColor(
+                emphasis,
+                size: size,
+                colorScheme: colorScheme,
+                isEnabled: isEnabled
+            )
             .animation(.default, value: isLoading)
             .wnButtonLabelSizing(size)
         }
-        .wnButtonStyle(emphasis)
-        .wnButtonChrome()
+        .wnButtonStyle(emphasis, size: size)
+        .wnButtonChrome(emphasis: emphasis)
         .controlSize(Metrics.controlSize(for: size))
         .wnButtonSizing(size)
         .allowsHitTesting(!isLoading)
@@ -104,31 +117,81 @@ private struct WNButtonChrome: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     let borderShape: ButtonBorderShape
+    let emphasis: WNButton.Emphasis
 
     func body(content: Content) -> some View {
         content
             .buttonBorderShape(borderShape)
-            .tint(WNButton.Metrics.accent(for: colorScheme))
+            .wnButtonTint(emphasis, colorScheme: colorScheme)
     }
 }
 
 extension View {
-    func wnButtonChrome(_ borderShape: ButtonBorderShape = .capsule) -> some View {
-        modifier(WNButtonChrome(borderShape: borderShape))
+    func wnButtonChrome(
+        _ borderShape: ButtonBorderShape = .capsule,
+        emphasis: WNButton.Emphasis = .primary
+    ) -> some View {
+        modifier(WNButtonChrome(borderShape: borderShape, emphasis: emphasis))
     }
 
     func wnAvatarActionButtonStyle() -> some View {
         wnSecondaryButtonStyle()
-            .wnButtonChrome()
+            .wnButtonChrome(emphasis: .secondary)
+    }
+
+    /// iOS 26 glass supplies its own material and vibrant label. A monochrome
+    /// tint or an explicit foreground flattens it into a solid disc, so both are
+    /// left to the system there and kept only for the hand-painted fallback and
+    /// for the prominent fill, whose black/white is deliberate.
+    @ViewBuilder
+    func wnButtonTint(
+        _ emphasis: WNButton.Emphasis,
+        colorScheme: ColorScheme
+    ) -> some View {
+        if #available(iOS 26.0, *), emphasis == .secondary {
+            self
+        } else {
+            tint(WNButton.Metrics.accent(for: colorScheme))
+        }
     }
 
     @ViewBuilder
-    func wnButtonStyle(_ emphasis: WNButton.Emphasis) -> some View {
-        switch emphasis {
-        case .primary:
-            wnPrimaryButtonStyle()
-        case .secondary:
-            wnSecondaryButtonStyle()
+    func wnButtonContentColor(
+        _ emphasis: WNButton.Emphasis,
+        size: WNButton.Size,
+        colorScheme: ColorScheme,
+        isEnabled: Bool
+    ) -> some View {
+        if #available(iOS 26.0, *),
+           emphasis == .secondary,
+           WNButton.Metrics.drawsOwnSurface(emphasis: emphasis, size: size) {
+            self
+        } else {
+            foregroundStyle(
+                WNButton.Metrics.contentColor(
+                    emphasis: emphasis,
+                    colorScheme: colorScheme,
+                    isEnabled: isEnabled
+                )
+            )
+        }
+    }
+
+    @ViewBuilder
+    func wnButtonStyle(
+        _ emphasis: WNButton.Emphasis,
+        size: WNButton.Size
+    ) -> some View {
+        if #available(iOS 26.0, *),
+           !WNButton.Metrics.drawsOwnSurface(emphasis: emphasis, size: size) {
+            self
+        } else {
+            switch emphasis {
+            case .primary:
+                wnPrimaryButtonStyle()
+            case .secondary:
+                wnSecondaryButtonStyle()
+            }
         }
     }
 

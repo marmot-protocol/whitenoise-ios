@@ -14,7 +14,15 @@ missing = [key for key in required if not isinstance(info.get(key), str)
            or not info[key].strip() or info[key].startswith("$(")]
 if missing:
     sys.exit("Analytics rollout blocked: unresolved " + ", ".join(missing))
-url = urlsplit(info[required[0]])
-if url.scheme != "https" or not url.hostname or url.username or url.query or url.fragment:
+try:
+    url = urlsplit(info[required[0]])
+    port = url.port
+    valid_endpoint = (url.scheme == "https" and bool(url.hostname)
+                      and not url.username and not url.password
+                      and not url.query and not url.fragment
+                      and (port is None or port > 0))
+except ValueError:
+    valid_endpoint = False
+if not valid_endpoint:
     sys.exit("Analytics rollout blocked: invalid events endpoint")
 print("Analytics configuration is resolved. Deployment retention, app separation, and persisted staging ingestion still require verification.")

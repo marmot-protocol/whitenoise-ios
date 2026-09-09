@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct DeveloperToolsSettingsView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     @State private var model = PrivacySecuritySettingsViewModel()
     @State private var exportDocument = DiagnosticLogDocument(text: "")
     @State private var showExport = false
@@ -33,6 +34,7 @@ struct DeveloperToolsSettingsView: View {
                     get: { appState.developerMode },
                     set: { appState.developerMode = $0 }
                 ))
+                .wnNeutralToggleTint()
             } footer: {
                 Text("Enable technical tools for this profile.")
             }
@@ -53,9 +55,11 @@ struct DeveloperToolsSettingsView: View {
                         get: { appState.streamingDebugMode },
                         set: { appState.streamingDebugMode = $0 }
                     ))
+                    .wnNeutralToggleTint()
 
                     NavigationLink {
                         DiagnosticsView()
+                            .wnBackButton()
                     } label: {
                         Label("Debug Events", systemImage: "stethoscope")
                     }
@@ -68,12 +72,14 @@ struct DeveloperToolsSettingsView: View {
                 Section {
                     NavigationLink {
                         KeyPackagesView()
+                            .wnBackButton()
                     } label: {
                         Label("Key Packages", systemImage: "shippingbox")
                     }
 
                     NavigationLink {
                         QuarantinedGroupsView(model: quarantinedGroupsModel)
+                            .wnBackButton()
                     } label: {
                         HStack {
                             Label("Quarantined Groups", systemImage: "exclamationmark.shield")
@@ -131,6 +137,7 @@ struct DeveloperToolsSettingsView: View {
                 }
             }
         }
+        .tint(WNButton.Metrics.accent(for: colorScheme))
         .localizedNavigationTitle("Developer Tools")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccountRef) {

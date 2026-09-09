@@ -209,14 +209,6 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
-    /// Reads the telemetry install id off the main actor before runtime startup
-    /// config is applied.
-    func telemetryInstallId() async throws -> String {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.telemetryInstallId()
-        }.value
-    }
-
     /// Reads published account relay-list projections off the main actor.
     /// `Marmot.accountRelayLists` is synchronous FFI backed by local storage, so
     /// MainActor-bound settings screens should await this wrapper.
@@ -351,12 +343,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.signInAccount(accountRef: accountRef)
     }
 
-    func relayTelemetrySettings() async throws -> RelayTelemetrySettingsFfi {
-        try await Task.detached(priority: .utility) { [marmot] in
-            try marmot.relayTelemetrySettings()
-        }.value
-    }
-
     func auditLogSettings() async throws -> AuditLogSettingsFfi {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.auditLogSettings()
@@ -378,7 +364,7 @@ nonisolated final class MarmotClient: Sendable {
     func privacySecuritySettingsProjection() async throws -> PrivacySecuritySettingsProjection {
         try await Task.detached(priority: .utility) { [marmot] in
             try PrivacySecuritySettingsProjection(
-                telemetrySettings: PrivacyTelemetrySettingsProjection(settings: marmot.usageDiagnosticsSettings()),
+                usageEnabled: marmot.usageDiagnosticsSettings().decision == .granted,
                 auditSettings: PrivacyAuditSettingsProjection(settings: marmot.auditLogSettings()),
                 auditFileRows: AuditFileRowProjection.rows(from: marmot.auditLogFiles())
             )
@@ -471,17 +457,6 @@ nonisolated final class MarmotClient: Sendable {
     ) async throws -> TimelinePageFfi {
         try await Task.detached(priority: .utility) { [marmot, accountRef, query] in
             try marmot.timelineMessages(accountRef: accountRef, query: query)
-        }.value
-    }
-
-    /// Materializes a live chat-list subscription snapshot off the main actor.
-    /// `ChatListSubscription.snapshot()` is a synchronous UniFFI call that can
-    /// touch local Marmot storage while building the initial projected rows.
-    func chatListSubscriptionSnapshot(
-        _ subscription: ChatListSubscription
-    ) async -> [ChatListRowFfi] {
-        await Task.detached(priority: .utility) { [subscription] in
-            subscription.snapshot()
         }.value
     }
 
@@ -934,10 +909,6 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.publishNewKeyPackage(accountRef: accountRef)
     }
 
-    func republishKeyPackage(accountRef: String) async throws -> UInt64 {
-        try await marmot.republishKeyPackage(accountRef: accountRef)
-    }
-
     func keyPackageMaintenanceStatus(
         accountRef: String
     ) async throws -> KeyPackageMaintenanceStatusFfi? {
@@ -963,10 +934,6 @@ nonisolated final class MarmotClient: Sendable {
     /// handles are the live channel.
     func subscribeEvents() -> EventsSubscription {
         marmot.subscribeEvents()
-    }
-
-    func subscribeChatList(accountRef: String, includeArchived: Bool) async throws -> ChatListSubscription {
-        try await marmot.subscribeChatList(accountRef: accountRef, includeArchived: includeArchived)
     }
 
     func subscribeChats(accountRef: String, includeArchived: Bool) async throws -> ChatsSubscription {
@@ -1024,6 +991,7 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     func configureTelemetryRuntime() async throws {
+        // MDK replaces this placeholder with its consent-scoped diagnostic ID.
         try await marmot.setRelayTelemetryRuntimeConfig(
             config: telemetryConfig.runtimeConfig(installId: "")
         )

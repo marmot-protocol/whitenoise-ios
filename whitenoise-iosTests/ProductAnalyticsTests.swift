@@ -12,8 +12,9 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
     var writes: [Bool] = []
     var previouslyEnabled = false
     var policy = ""
+    var runtimeAvailable = true
 
-    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { snapshot }
+    func deviceDiagnosticsSnapshot() async throws -> DeviceDiagnosticsSnapshot? { runtimeAvailable ? snapshot : nil }
     var snapshot: DeviceDiagnosticsSnapshot {
         DeviceDiagnosticsSnapshot(
             settings: UsageDiagnosticsSettingsFfi(decision: decision, policyRevision: policy, registryRevision: "registry", updatedAtMs: 0, previouslyEnabled: previouslyEnabled),
@@ -36,6 +37,23 @@ final class DiagnosticsTestSource: DeviceDiagnosticsDataSource {
 
 @MainActor
 struct DeviceDiagnosticsConsentTests {
+    @Test func unavailableRuntimeReadOffersRetryAndReloadsWhenReady() async {
+        let source = DiagnosticsTestSource()
+        let model = DeviceDiagnosticsConsent()
+        source.runtimeAvailable = false
+        await model.reload(using: source)
+        #expect(model.errorMessage != nil)
+        #expect(!model.initialDecisionResolved)
+        #expect(!model.loading)
+        source.runtimeAvailable = true
+        await model.reload(using: source)
+        #expect(model.errorMessage == nil)
+        #expect(model.pending)
+        #expect(await model.finishPrompt(using: source))
+        #expect(model.initialDecisionResolved)
+        #expect(source.writes == [false])
+    }
+
     @Test func firstLaunchDefaultsOffAndDeclinePersistsWithoutAnAccount() async {
         let source = DiagnosticsTestSource()
         let model = DeviceDiagnosticsConsent()
@@ -79,14 +97,10 @@ struct DeviceDiagnosticsConsentTests {
         #expect(await model.finishPrompt(using: source))
     }
 
-    @Test func migrationIgnoresOldSeenFlagAndDistinguishesScopeChanges() async throws {
-        let name = "DiagnosticsReceiptTests.\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
-        defaults.set(true, forKey: "marmot.deviceDiagnosticsPromptSeen")
+    @Test func migrationExplanationDistinguishesLegacyOptInFromScopeChanges() async {
         let source = DiagnosticsTestSource()
         source.previouslyEnabled = true
-        let model = DeviceDiagnosticsConsent(defaults: defaults)
+        let model = DeviceDiagnosticsConsent()
         await model.reload(using: source)
         #expect(model.pending)
         let legacyExplanation = model.explanation
@@ -204,9 +218,36 @@ struct ProductAnalyticsTests {
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
         try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
         #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
         #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
         try await client.marmot.shutdownAndClose()
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func receiptSurvivesRuntimeReplacementAndErasureRestoresEligibility(granted: Bool) async throws {
+        let original = try MarmotClient.testClient()
+        let root = URL(fileURLWithPath: original.rootPath)
+        let expected: UsageDiagnosticsDecisionFfi = granted ? .granted : .declined
+        _ = try await original.setUsageDiagnosticsConsent(granted)
+        try await original.marmot.setAuditLogSettings(settings: .init(enabled: true))
+        try await original.marmot.shutdownAndClose()
+
+        let reopened = try MarmotClient(rootPath: root.path, relayUrls: [])
+        let stored = try await reopened.deviceDiagnosticsSnapshot()
+        #expect(stored.settings.decision == expected)
+        #expect(stored.auditEnabled)
+        #expect(try await reopened.listAccounts().isEmpty)
+        try await reopened.marmot.shutdownAndClose()
+
+        try AppDataErasure.eraseClosedRuntime(at: root)
+        let erased = try MarmotClient(rootPath: root.path, relayUrls: [])
+        let reset = try await erased.deviceDiagnosticsSnapshot()
+        #expect(reset.settings.decision == .acceptanceRequired)
+        #expect(!reset.auditEnabled)
+        try await erased.marmot.shutdownAndClose()
     }
 
     @Test func timingConsentAndDuration() async throws {
@@ -233,6 +274,19 @@ struct ProductAnalyticsTests {
         recorder.activateSink { event in events.withLock { $0.append(event.ffi) } }
         #expect(recorder.recordTiming(.inboxBatch, since: timing) == nil)
         #expect(events.withLock { $0.count } == 2)
+    }
+
+    @Test func timingClampsEarlierCompletionAndTruncatesSubmillisecondDuration() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let durations = Mutex<[UInt64]>([])
+        recorder.activateSink { event in
+            if case .timing(_, let milliseconds, _) = event { durations.withLock { $0.append(milliseconds) } }
+        }
+        let start = ContinuousClock.now
+        let timing = try #require(recorder.beginTiming(at: start))
+        await recorder.recordTiming(.timelineWindow, since: timing, at: start.advanced(by: .milliseconds(-1)))?.value
+        await recorder.recordTiming(.timelineWindow, since: timing, at: start.advanced(by: .microseconds(1_999)))?.value
+        #expect(durations.withLock { $0 } == [0, 1])
     }
 
     @Test func rejectedSinkStopsRecording() async throws {
@@ -271,6 +325,45 @@ struct ProductAnalyticsTests {
         try await client.marmot.shutdownAndClose()
     }
 
+    @Test @MainActor func expandingTimingRegistryRequiresNewConsent() async throws {
+        let client = try MarmotClient.testClient()
+        var config = ProductAnalyticsBuildConfig(
+            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
+            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
+            deviceClass: "phone", environment: "staging", isDebug: true
+        ).runtimeConfig
+        config.registry = []
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        try await client.marmot.start()
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
+        let oldRegistry = try client.marmot.usageDiagnosticsSettings().registryRevision
+        config.registry = ProductTimingStage.registry
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        #expect(try client.marmot.usageDiagnosticsSettings().decision == .acceptanceRequired)
+        let liveResult = try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        )
+        #expect(liveResult == .ignoredDisabled)
+        try await client.marmot.shutdownAndClose()
+
+        let upgraded = try MarmotClient(rootPath: client.rootPath, relayUrls: [])
+        try upgraded.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        try await upgraded.marmot.start()
+        #expect(try upgraded.marmot.usageDiagnosticsSettings().decision == .acceptanceRequired)
+        let upgradedResult = try upgraded.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        )
+        #expect(upgradedResult == .ignoredDisabled)
+        _ = try upgraded.marmot.setUsageDiagnosticsConsent(enabled: true)
+        #expect(try upgraded.marmot.usageDiagnosticsSettings().registryRevision != oldRegistry)
+        try await upgraded.marmot.setProductAnalyticsActivity(activity: .foreground)
+        #expect(try upgraded.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .recorded)
+        _ = try upgraded.marmot.setUsageDiagnosticsConsent(enabled: false)
+        try await upgraded.marmot.shutdownAndClose()
+    }
+
     @Test func durationBucketsUseInclusiveBoundaries() {
         #expect(ProductEvent.durationBucket(10) == "le_10ms")
         #expect(ProductEvent.durationBucket(11) == "le_25ms")
@@ -298,6 +391,27 @@ struct ProductAnalyticsTests {
         #expect(recorded.first?.properties == [.init(name: "outcome", value: "success")])
     }
 
+    @Test @MainActor func searchCountsMatchesArrivingDuringRefreshOnce() async {
+        let events = Mutex<[ProductEventFfi]>([])
+        let recorder = ProductAnalyticsRecorder()
+        recorder.replaceSink { event in events.withLock { $0.append(event.ffi) } }
+        let search = ConversationSearchModel()
+        search.analytics = recorder
+        var entries: [ConversationSearchEntry] = []
+        search.entriesProvider = { entries }
+        search.activate()
+        search.query = "match"
+        #expect(search.matches.isEmpty)
+        entries = [.init(itemId: "late-row", messageIdHex: "late-message", text: "match")]
+        search.refreshAfterTimelineChange()
+        search.refreshAfterTimelineChange()
+        #expect(search.matches.count == 1)
+        #expect(events.withLock { $0.isEmpty })
+        await search.end()?.value
+        #expect(search.end() == nil)
+        #expect(events.withLock { $0.map(\.properties) } == [[.init(name: "outcome", value: "success")]])
+    }
+
     @Test @MainActor func realCollectorAcceptsHostVocabularyAndRevokesBothPipelines() async throws {
         let client = try MarmotClient.testClient()
         let config = ProductAnalyticsBuildConfig(
@@ -307,6 +421,9 @@ struct ProductAnalyticsTests {
         )
         try client.marmot.setProductAnalyticsRuntimeConfig(config: config.runtimeConfig)
         #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
         #expect(throws: MarmotKitError.self) { try client.marmot.telemetryInstallId() }
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
         let firstID = try client.marmot.telemetryInstallId()
@@ -318,16 +435,22 @@ struct ProductAnalyticsTests {
             .attachment(.save, .success), .settings(.privacy), .permission(.granted)
         ]
         for event in events { #expect(try client.marmot.recordProductEvent(event: event.ffi) == .recorded) }
-        let vocabulary: [ProductEvent] = ProductScreen.allCases.map(ProductEvent.screen)
-            + ProductSettingsSection.allCases.map(ProductEvent.settings)
-            + ProductSearchOutcome.allCases.map(ProductEvent.search)
-            + ProductPermissionOutcome.allCases.map(ProductEvent.permission)
-            + ProductAttachmentAction.allCases.flatMap { action in
-                [ProductOutcome.success, .failure, .cancelled].map { .attachment(action, $0) }
+        var vocabulary = ProductScreen.allCases.map(ProductEvent.screen)
+        vocabulary.append(contentsOf: ProductSettingsSection.allCases.map(ProductEvent.settings))
+        vocabulary.append(contentsOf: ProductSearchOutcome.allCases.map(ProductEvent.search))
+        vocabulary.append(contentsOf: ProductPermissionOutcome.allCases.map(ProductEvent.permission))
+        for action in ProductAttachmentAction.allCases {
+            for outcome in [ProductOutcome.success, .failure, .cancelled] {
+                vocabulary.append(.attachment(action, outcome))
             }
-            + ProductOnboardingStep.allCases.flatMap { step in
-                ProductOnboardingPath.allCases.flatMap { path in ProductOutcome.allCases.map { .onboarding(step, path, $0) } }
+        }
+        for step in ProductOnboardingStep.allCases {
+            for path in ProductOnboardingPath.allCases {
+                for outcome in ProductOutcome.allCases {
+                    vocabulary.append(.onboarding(step, path, outcome))
+                }
             }
+        }
         for event in vocabulary {
             let result = try client.marmot.recordProductEvent(event: event.ffi)
             #expect(result == .recorded || result == .ignoredDuplicate)

@@ -49,7 +49,11 @@ struct AccountsView: View {
         .toolbar {
             if showsCloseButton {
                 ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(title: "Close", systemImage: "xmark") {
+                    WNIconButton(
+                        title: "Close",
+                        systemImage: "xmark",
+                        chrome: .container
+                    ) {
                         dismiss()
                     }
                 }

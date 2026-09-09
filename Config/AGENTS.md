@@ -49,8 +49,8 @@ These stay the same for production, staging, Debug, and Release:
 Aptabase uses separate production/staging application keys. Set the full verified
 `APTABASE_EVENTS_ENDPOINT_WHITENOISE_IOS` and verified human-readable
 `APTABASE_RETENTION_WHITENOISE_IOS`; neither an app key nor a backend URL grants consent.
-`WHITENOISE_PRODUCT_ANALYTICS_OPERATOR` is a stable lowercase MDK label shown in
-consent; changing the operator or destination origin requires acceptance again.
+`WHITENOISE_PRODUCT_ANALYTICS_OPERATOR` is a stable lowercase MDK consent-scope
+label; changing the operator or destination origin requires acceptance again.
 Product metadata uses marketing version and iOS major version, with phone/tablet
 class only. Keep it separate from the richer OTLP resource. Do not ship a build
 with unverified retention or unresolved Aptabase settings; use the release preflight.

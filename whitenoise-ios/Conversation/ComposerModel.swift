@@ -160,6 +160,7 @@ final class ComposerModel {
 
         let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
         let tempId = UUID().uuidString
+        timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
         let now = UInt64(Date().timeIntervalSince1970)
         // A reply is a kind-9 with `e` + `q` tags pointing at the parent; a plain
         // message is a bare kind-9.
@@ -252,6 +253,7 @@ final class ComposerModel {
         let outgoingCaption = trimmedCaption.isEmpty ? "" : ConversationViewModel.cappedOutgoingText(trimmedCaption)
         let captionForRust = outgoingCaption.isEmpty ? nil : outgoingCaption
         let tempId = UUID().uuidString
+        timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
         let tempRowId = "msg:\(tempId)"
         let now = UInt64(Date().timeIntervalSince1970)
 

@@ -44,13 +44,13 @@ final class DeviceDiagnosticsConsent {
     private var generation = UUID()
 
     // Old prompt flags are deliberately ignored. MDK owns the only receipt.
-    init(defaults: UserDefaults = .standard) {}
+    init() {}
 
     var pending: Bool { snapshot?.settings.decision == .acceptanceRequired }
     var usageEnabled: Bool { snapshot?.settings.decision == .granted }
     var auditEnabled: Bool { snapshot?.auditEnabled ?? false }
     var available: Bool { snapshot != nil && !loading && !saving }
-    var initialDecisionResolved: Bool { snapshot != nil && !pending }
+    var initialDecisionResolved: Bool { available && !pending }
 
     var explanation: String? {
         guard let settings = snapshot?.settings, pending else { return nil }
@@ -77,7 +77,7 @@ final class DeviceDiagnosticsConsent {
             let result = try await source.deviceDiagnosticsSnapshot()
             guard generation == ticket, !Task.isCancelled else { return }
             snapshot = result
-            errorMessage = nil
+            errorMessage = result == nil ? L10n.string("Couldn’t load sharing settings. Try again.") : nil
         } catch {
             guard generation == ticket else { return }
             snapshot = nil
