@@ -85,61 +85,61 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos für verschlüsselte Chats aufzunehmen."
+            "value" : "White Noise verwendet die Kamera, um Profil-QR-Codes zu scannen und Fotos und Videos für verschlüsselte Chats aufzunehmen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise uses the camera to scan profile QR codes and take photos for encrypted chats."
+            "value" : "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise usa la cámara para escanear códigos QR de perfil y tomar fotos para chats cifrados."
+            "value" : "White Noise usa la cámara para escanear códigos QR de perfiles y tomar fotos y videos para chats cifrados."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise utilise l’appareil photo pour scanner des QR codes de profil et prendre des photos pour les conversations chiffrées."
+            "value" : "White Noise utilise la caméra pour scanner les codes QR des profils et prendre des photos et des vidéos pour les discussions chiffrées."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise usa la fotocamera per scansionare i codici QR del profilo e scattare foto per le chat crittografate."
+            "value" : "White Noise usa la fotocamera per scansionare i codici QR dei profili e scattare foto e registrare video per le chat crittografate."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O White Noise usa a câmera para escanear QR codes de perfil e tirar fotos para conversas criptografadas."
+            "value" : "O White Noise usa a câmera para ler códigos QR de perfis e tirar fotos e gravar vídeos para conversas criptografadas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise использует камеру для сканирования QR-кодов профилей и съемки фотографий для зашифрованных чатов."
+            "value" : "White Noise использует камеру для сканирования QR-кодов профилей, съёмки фото и видео для зашифрованных чатов."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf çekmek amacıyla kamerayı kullanır."
+            "value" : "White Noise, profil QR kodlarını taramak ve şifreli sohbetler için fotoğraf ve video çekmek amacıyla kamerayı kullanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 使用相机扫描个人资料二维码，并为加密聊天拍摄照片。"
+            "value" : "White Noise 使用相机扫描个人资料二维码，并为加密聊天拍摄照片和视频。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 會使用相機掃描個人檔案 QR 碼，並為加密聊天拍攝照片。"
+            "value" : "White Noise 使用相機掃描個人資料 QR 碼，並為加密聊天拍攝照片和影片。"
           }
         }
       }
@@ -211,12 +211,65 @@
     },
     "NSLocationWhenInUseUsageDescription" : {
       "comment" : "Privacy - Location When In Use Usage Description",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise verwendet deinen Standort nur, wenn du ihn in einem verschlüsselten Chat teilen möchtest."
+          }
+        },
         "en" : {
           "stringUnit" : {
-            "state" : "new",
+            "state" : "translated",
             "value" : "White Noise uses your location only when you choose to share it in an encrypted chat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise usa tu ubicación solo cuando decides compartirla en un chat cifrado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise utilise votre position uniquement lorsque vous choisissez de la partager dans une discussion chiffrée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise usa la tua posizione solo quando scegli di condividerla in una chat crittografata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O White Noise usa sua localização somente quando você escolhe compartilhá-la em uma conversa criptografada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise использует ваше местоположение, только когда вы решаете поделиться им в зашифрованном чате."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise, konumunuzu yalnızca şifreli bir sohbette paylaşmayı seçtiğinizde kullanır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 仅在你选择在加密聊天中分享位置时使用你的位置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 只會在你選擇於加密聊天中分享位置時使用你的位置。"
           }
         }
       }
@@ -227,61 +280,126 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise verwendet das Mikrofon, um verschlüsselte Sprachnachrichten aufzunehmen."
+            "value" : "White Noise verwendet das Mikrofon, um verschlüsselte Sprachnachrichten und Videos für Chats aufzunehmen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise uses the microphone to record encrypted voice messages."
+            "value" : "White Noise uses the microphone to record encrypted voice messages and chat videos."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise usa el micrófono para grabar mensajes de voz cifrados."
+            "value" : "White Noise usa el micrófono para grabar mensajes de voz cifrados y videos para chats."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise utilise le microphone pour enregistrer des messages vocaux chiffrés."
+            "value" : "White Noise utilise le microphone pour enregistrer des messages vocaux chiffrés et des vidéos pour les discussions."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise usa il microfono per registrare messaggi vocali crittografati."
+            "value" : "White Noise usa il microfono per registrare messaggi vocali crittografati e video per le chat."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O White Noise usa o microfone para gravar mensagens de voz criptografadas."
+            "value" : "O White Noise usa o microfone para gravar mensagens de voz criptografadas e vídeos para conversas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise использует микрофон для записи зашифрованных голосовых сообщений."
+            "value" : "White Noise использует микрофон для записи зашифрованных голосовых сообщений и видео для чатов."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise, şifreli sesli mesajlar kaydetmek için mikrofonu kullanır."
+            "value" : "White Noise, şifreli sesli mesajlar ve sohbet videoları kaydetmek için mikrofonu kullanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 使用麦克风录制加密语音消息。"
+            "value" : "White Noise 使用麦克风录制加密语音消息和聊天视频。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise 會使用麥克風錄製加密語音訊息。"
+            "value" : "White Noise 使用麥克風錄製加密語音訊息和聊天影片。"
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryAddUsageDescription" : {
+      "comment" : "Privacy - Photo Library Additions Usage Description",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise speichert Fotos und Videos nur in deiner Fotomediathek, wenn du sie über das Teilen-Menü speicherst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise guarda fotos y videos en tu fototeca solo cuando eliges guardarlos desde el menú para compartir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise enregistre des photos et des vidéos dans votre photothèque uniquement lorsque vous choisissez de les enregistrer depuis le menu de partage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise salva foto e video nella tua libreria solo quando scegli di salvarli dal menu di condivisione."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O White Noise salva fotos e vídeos na sua fototeca somente quando você escolhe salvá-los pelo menu de compartilhamento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise сохраняет фото и видео в вашу медиатеку, только когда вы выбираете сохранение в меню «Поделиться»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise, fotoğraf ve videoları yalnızca paylaşım menüsünden kaydetmeyi seçtiğinizde fotoğraf arşivinize kaydeder."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 仅在你选择从分享菜单保存照片和视频时，将它们存入你的照片图库。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 只會在你選擇從分享選單儲存照片和影片時，將它們存入你的照片圖庫。"
           }
         }
       }

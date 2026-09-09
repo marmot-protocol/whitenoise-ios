@@ -510,3 +510,9 @@ the test device.
 - [ ] Revoke consent or switch profiles while preparation is running; old work
       produces no observation. Confirm timings do not replace visible-frame
       milestones or imply relay acceptance/recipient delivery.
+
+## Permission and App Store submission checks
+
+Follow [app-store-permissions.md](app-store-permissions.md) for localized system
+prompts, signed-archive validation, native SDK privacy manifests, export
+classification, and the privacy-policy/disclosure checks before distribution.

@@ -3884,7 +3884,7 @@ struct LocalizationCatalogTests {
 
         let english = try localizedValue("NSCameraUsageDescription", locale: "en", in: strings)
         #expect(english != "NSCameraUsageDescription")
-        #expect(english == "White Noise uses the camera to scan profile QR codes and take photos for encrypted chats.")
+        #expect(english == "White Noise uses the camera to scan profile QR codes and take photos and videos for encrypted chats.")
         #expect(localizations["fr"] != nil)
         #expect(localizations["zh-Hant"] != nil)
     }
@@ -3914,9 +3914,27 @@ struct LocalizationCatalogTests {
             }
         }
 
-        for key in ["CFBundleName", "NSCameraUsageDescription"] {
+        for key in ["CFBundleName", "NSCameraUsageDescription", "NSMicrophoneUsageDescription",
+                    "NSFaceIDUsageDescription", "NSLocationWhenInUseUsageDescription", "NSPhotoLibraryAddUsageDescription"] {
             for locale in ["en"] + expectedLocales {
                 #expect(!(try localizedValue(key, locale: locale, in: strings)).isEmpty)
+            }
+        }
+    }
+
+    @Test func permissionDescriptionsMatchBuiltAppAndCoverEveryLanguage() throws {
+        let catalog = try readCatalog("whitenoise-ios/InfoPlist.xcstrings")
+        let strings = try #require(catalog["strings"] as? [String: Any])
+        let info = try #require(Bundle.main.infoDictionary)
+        let usageKeys = info.keys.filter { $0.hasPrefix("NS") && $0.hasSuffix("UsageDescription") }
+        #expect(usageKeys.contains("NSPhotoLibraryAddUsageDescription"))
+        #expect(usageKeys.contains("NSLocationWhenInUseUsageDescription"))
+        for key in usageKeys {
+            let purpose = try #require(info[key] as? String)
+            #expect(try localizedValue(key, locale: "en", in: strings) == purpose)
+            for locale in expectedLocales {
+                #expect(!(try localizedValue(key, locale: locale, in: strings)).isEmpty)
+                #expect(try localizedState(key, locale: locale, in: strings) == "translated")
             }
         }
     }

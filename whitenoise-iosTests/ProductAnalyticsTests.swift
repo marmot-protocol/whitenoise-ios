@@ -117,6 +117,20 @@ struct DeviceDiagnosticsConsentTests {
 }
 
 struct ProductAnalyticsTests {
+    @Test func retentionDisclosureUsesTheSelectedLanguageWithoutChangingPolicy() {
+        var config = ProductAnalyticsBuildConfig.current(info: [
+            "WhiteNoiseProductAnalyticsRetention": "Usage analytics are scheduled for automatic deletion after 180 days."
+        ])
+        AppLanguage.$testCurrentOverride.withValue(.italian) {
+            #expect(config.localizedRetentionDisclosure == "L’eliminazione automatica dei dati di analisi dell’utilizzo è programmata dopo 180 giorni.")
+            #expect(config.retentionDisclosure == "Usage analytics are scheduled for automatic deletion after 180 days.")
+            config.retentionDisclosure = "A different verified deployment policy."
+            #expect(config.localizedRetentionDisclosure == "A different verified deployment policy.")
+            config.retentionDisclosure = nil
+            #expect(config.localizedRetentionDisclosure == nil)
+        }
+    }
+
     @Test func delayedWorkCannotCrossConsentOrContextBoundaries() async {
         let events = Mutex<[String]>([])
         let recorder = ProductAnalyticsRecorder()

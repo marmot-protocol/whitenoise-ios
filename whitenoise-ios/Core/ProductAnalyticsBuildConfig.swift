@@ -40,6 +40,15 @@ nonisolated struct ProductAnalyticsBuildConfig: Equatable, Sendable {
 
     var operatorDisplayName: String { operatorLabel == "white_noise" ? "White Noise" : operatorLabel }
 
+    var localizedRetentionDisclosure: String? {
+        switch retentionDisclosure {
+        case "Usage analytics are scheduled for automatic deletion after 180 days.":
+            return L10n.string("Usage analytics are scheduled for automatic deletion after 180 days.")
+        default:
+            return retentionDisclosure
+        }
+    }
+
     var runtimeConfig: ProductAnalyticsRuntimeConfigFfi {
         ProductAnalyticsRuntimeConfigFfi(
             eventsEndpoint: endpoint, appKey: appKey,

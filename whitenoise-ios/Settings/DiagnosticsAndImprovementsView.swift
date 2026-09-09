@@ -22,7 +22,7 @@ struct DiagnosticsAndImprovementsView: View {
                     if let explanation = appState.diagnosticsConsent.explanation { Text(explanation) }
                     Text("Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. Diagnostics includes a random installation identifier that changes after you turn sharing off.")
                     Text("Diagnostic logs share sanitized technical activity from all profiles on this device.")
-                    Text(appState.client?.productConfig.retentionDisclosure ?? L10n.string("Retention policy has not yet been verified for this development build."))
+                    Text(appState.client?.productConfig.localizedRetentionDisclosure ?? L10n.string("Retention policy has not yet been verified for this development build."))
                 }
                 .padding(.top, 12)
             }

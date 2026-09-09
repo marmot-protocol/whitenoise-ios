@@ -6,6 +6,7 @@ struct PrivacySecuritySettingsView: View {
     @State private var diagnostics = PrivacySecuritySettingsViewModel()
     @State private var showEraseData = false
     @State private var appLockCapability = AppLockCapability(available: false, biometryType: .none)
+    private let privacyPolicyURL = URL(string: "https://www.whitenoise.chat/privacy")
 
     var body: some View {
         Form {
@@ -54,6 +55,11 @@ struct PrivacySecuritySettingsView: View {
                 Button("Erase App Data", role: .destructive) { showEraseData = true }
             } header: { Text("Device Data") } footer: {
                 Text("Signs out every profile and permanently removes all White Noise data from this iPhone.")
+            }
+            if let privacyPolicyURL {
+                Section {
+                    Link("Privacy Policy", destination: privacyPolicyURL)
+                }
             }
         }
         .productScreen(.settings, section: .privacy)

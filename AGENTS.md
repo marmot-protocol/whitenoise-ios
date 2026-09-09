@@ -287,6 +287,11 @@ git diff --check
 
 For TestFlight-facing changes, also walk the relevant items in `docs/manual-tests.md`.
 
+Keep permission descriptions aligned with the active APIs and translate them in
+`whitenoise-ios/InfoPlist.xcstrings`. Run `scripts/check-privacy-release-config.py`
+against both Release app bundles. See `docs/app-store-permissions.md` for host
+privacy manifests and the separate native SDK/export/App Store Connect checks.
+
 ## Git Hygiene
 
 The worktree may contain user edits. Do not revert changes you did not make. If a generated file changes, confirm whether it came from a published MarmotKit release installed by `scripts/sync-bindings.sh` before touching it.
