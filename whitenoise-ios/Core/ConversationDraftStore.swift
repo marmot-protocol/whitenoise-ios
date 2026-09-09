@@ -12,6 +12,89 @@ nonisolated struct ConversationDraftSnapshot: Equatable {
     let canonicalText: String
     let replyToMessageIdHex: String?
     let mediaAttachments: [MediaDraftAttachment]
+    var giphyMedia: RemoteGiphyMedia?
+
+    var persistedAttachments: [MessageDraftAttachmentFfi] {
+        let media = mediaAttachments.map(\.messageDraftAttachment)
+        guard let giphyMedia else { return media }
+        return [ConversationGiphyDraftRecord.attachment(for: giphyMedia)] + media
+    }
+
+    var persistedAttachmentSummaries: [MessageDraftAttachmentSummaryFfi] {
+        persistedAttachments.map {
+            MessageDraftAttachmentSummaryFfi(
+                id: $0.id,
+                fileName: $0.fileName,
+                mediaType: $0.mediaType,
+                plaintextSize: UInt64($0.plaintext.count)
+            )
+        }
+    }
+}
+
+nonisolated enum ConversationGiphyDraftRecord {
+    static let mediaType = "application/vnd.whitenoise.giphy-reference"
+    static let fileName = "giphy-reference"
+    static let recordID = "giphy-reference"
+
+    static func isRecord(mediaType: String) -> Bool {
+        mediaType.caseInsensitiveCompare(self.mediaType) == .orderedSame
+    }
+
+    static func attachment(for media: RemoteGiphyMedia) -> MessageDraftAttachmentFfi {
+        MessageDraftAttachmentFfi(
+            id: recordID,
+            fileName: fileName,
+            mediaType: mediaType,
+            plaintext: Data(media.wireText.utf8),
+            dim: "\(media.width)x\(media.height)",
+            thumbhash: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
+    }
+
+    static func media(from attachment: MessageDraftAttachmentFfi) -> RemoteGiphyMedia? {
+        guard isRecord(mediaType: attachment.mediaType),
+              attachment.plaintext.count <= RemoteGiphyMedia.maximumWireTextLength * 4,
+              let wireText = String(data: attachment.plaintext, encoding: .utf8),
+              let parsed = RemoteGiphyMedia.parse(wireText: wireText)
+        else { return nil }
+        guard let dimensions = dimensions(from: attachment.dim) else { return parsed }
+        return RemoteGiphyMedia(
+            url: parsed.url,
+            width: dimensions.width,
+            height: dimensions.height,
+            attribution: parsed.attribution
+        )
+    }
+
+    static func partition(
+        _ attachments: [MessageDraftAttachmentFfi]
+    ) -> (giphyMedia: RemoteGiphyMedia?, media: [MessageDraftAttachmentFfi]) {
+        var giphyMedia: RemoteGiphyMedia?
+        var media: [MessageDraftAttachmentFfi] = []
+        for attachment in attachments {
+            guard isRecord(mediaType: attachment.mediaType) else {
+                media.append(attachment)
+                continue
+            }
+            giphyMedia = giphyMedia ?? self.media(from: attachment)
+        }
+        return (giphyMedia, media)
+    }
+
+    private static func dimensions(from dim: String?) -> (width: Int, height: Int)? {
+        guard let dim else { return nil }
+        let parts = dim.lowercased().split(separator: "x", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let width = Int(parts[0]),
+              let height = Int(parts[1]),
+              width > 0,
+              height > 0
+        else { return nil }
+        return (width, height)
+    }
 }
 
 nonisolated enum ConversationDraftPreview {
@@ -29,7 +112,15 @@ nonisolated enum ConversationDraftPreview {
             return text
         }
 
-        let fileNames = summary.mediaAttachments.compactMap {
+        let stagedAttachments = summary.mediaAttachments.filter {
+            !ConversationGiphyDraftRecord.isRecord(mediaType: $0.mediaType)
+        }
+        let hasGiphyDraft = stagedAttachments.count != summary.mediaAttachments.count
+        if hasGiphyDraft, stagedAttachments.isEmpty {
+            return L10n.string("GIF via GIPHY")
+        }
+
+        let fileNames = stagedAttachments.compactMap {
             ContentSanitizer.compactSingleLine(
                 $0.fileName.trimmingCharacters(in: .whitespacesAndNewlines),
                 maxLength: MessageSemantics.maxImetaFileNameBytes
@@ -248,13 +339,15 @@ final class ConversationDraftStore {
                 accountRef: accountRef,
                 groupIdHex: groupIdHex
             ) else { return nil }
+            let partitioned = ConversationGiphyDraftRecord.partition(draft.mediaAttachments)
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
-                from: draft.mediaAttachments
+                from: partitioned.media
             )
             return Self.normalizedSnapshot(ConversationDraftSnapshot(
                 canonicalText: draft.content,
                 replyToMessageIdHex: draft.replyToMessageIdHex,
-                mediaAttachments: attachments
+                mediaAttachments: attachments,
+                giphyMedia: partitioned.giphyMedia
             ))
         } catch is CancellationError {
             return nil
@@ -393,7 +486,7 @@ final class ConversationDraftStore {
                         groupIdHex: key.groupIdHex,
                         content: snapshot.canonicalText,
                         replyToMessageIdHex: snapshot.replyToMessageIdHex,
-                        mediaAttachments: snapshot.mediaAttachments.map(\.messageDraftAttachment)
+                        mediaAttachments: snapshot.persistedAttachments
                     )
                 } else {
                     guard let persistence else { return }
@@ -503,11 +596,13 @@ final class ConversationDraftStore {
         guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 || replyToMessageIdHex != nil
                 || !attachments.isEmpty
+                || snapshot.giphyMedia != nil
         else { return nil }
         return ConversationDraftSnapshot(
             canonicalText: content,
             replyToMessageIdHex: replyToMessageIdHex,
-            mediaAttachments: Array(attachments)
+            mediaAttachments: Array(attachments),
+            giphyMedia: snapshot.giphyMedia
         )
     }
 
@@ -526,14 +621,15 @@ final class ConversationDraftStore {
         guard let summary,
               summary.content == snapshot.canonicalText,
               summary.replyToMessageIdHex == snapshot.replyToMessageIdHex,
-              summary.mediaAttachments.count == snapshot.mediaAttachments.count
+              case let persisted = snapshot.persistedAttachments,
+              summary.mediaAttachments.count == persisted.count
         else { return false }
-        return zip(summary.mediaAttachments, snapshot.mediaAttachments).allSatisfy {
+        return zip(summary.mediaAttachments, persisted).allSatisfy {
             stored, local in
-            stored.id == local.id.uuidString
+            stored.id == local.id
                 && stored.fileName == local.fileName
                 && stored.mediaType == local.mediaType
-                && stored.plaintextSize == UInt64(local.data.count)
+                && stored.plaintextSize == UInt64(local.plaintext.count)
         }
     }
 
@@ -547,14 +643,7 @@ final class ConversationDraftStore {
             groupIdHex: groupIdHex,
             content: snapshot.canonicalText,
             replyToMessageIdHex: snapshot.replyToMessageIdHex,
-            mediaAttachments: snapshot.mediaAttachments.map {
-                MessageDraftAttachmentSummaryFfi(
-                    id: $0.id.uuidString,
-                    fileName: $0.fileName,
-                    mediaType: $0.mediaType,
-                    plaintextSize: UInt64($0.data.count)
-                )
-            },
+            mediaAttachments: snapshot.persistedAttachmentSummaries,
             createdAtMs: existing?.createdAtMs ?? now,
             updatedAtMs: now
         )
@@ -632,7 +721,7 @@ extension AppState: ConversationDraftPersistence {
             groupIdHex: groupIdHex,
             content: snapshot.canonicalText,
             replyToMessageIdHex: snapshot.replyToMessageIdHex,
-            mediaAttachments: snapshot.mediaAttachments.map(\.messageDraftAttachment)
+            mediaAttachments: snapshot.persistedAttachments
         )
     }
 
