@@ -143,6 +143,10 @@ Host message-visible timings begin at Send or a new inbound projection and finis
 at the first visible layout callback. Never time SDK completion, history loading,
 SwiftUI body evaluation, or sender timestamps. Keep pending observations bounded
 and invalidate them with consent, runtime, account, and conversation changes.
+App-defined preparation stages use `ProductTimingStage.registry` and MDK's
+`recordHostTiming`; keep them separate from visible-message milestones. Register
+only finite aggregate elapsed/outcome schemas, require renewed consent when the
+registry expands, and capture elapsed time before the bounded recorder queue.
 
 ## Notifications
 

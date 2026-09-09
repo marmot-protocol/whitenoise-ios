@@ -496,3 +496,17 @@ the test device.
   history, duplicate visibility callbacks, and work started before consent must
   not add samples. Revoke sharing or switch profiles before layout; late samples
   must be dropped. Confirm backend transport timings are not duplicated by iOS.
+
+## Host preparation timings
+
+- [ ] After upgrading from an empty custom registry, existing usage grants require
+      renewed consent. Declining leaves both built-in usage and custom timing
+      observations disabled; diagnostic-log consent stays independent.
+- [ ] Exercise inbox, timeline, composer parsing, and camera/library preparation.
+      Verify staging aggregates use the registered stage names with bucketed
+      elapsed/outcome properties and MDK's aggregation metadata.
+- [ ] Exercise successful, failed, cancelled, and partially accepted media batches.
+      Empty selection creates no preparation observation.
+- [ ] Revoke consent or switch profiles while preparation is running; old work
+      produces no observation. Confirm timings do not replace visible-frame
+      milestones or imply relay acceptance/recipient delivery.

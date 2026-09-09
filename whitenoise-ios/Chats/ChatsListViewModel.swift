@@ -491,6 +491,9 @@ final class ChatsListViewModel {
             deferredPresentedSnapshot = snapshot
             return
         }
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.inboxSnapshot, since: timing) }
+
         selectedPresentationByGroupId = Dictionary(
             snapshot.rows.map { ($0.row.groupIdHex, $0.presentation) }, uniquingKeysWith: { _, latest in latest }
         )
@@ -719,6 +722,9 @@ final class ChatsListViewModel {
         let pendingRows = Array(pendingChatListRowsByGroupId.values)
         pendingChatListRowsByGroupId = [:]
         guard !pendingRows.isEmpty else { return }
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.inboxBatch, since: timing) }
+
         var changed = false
         let muteLookup = currentMuteLookup()
         for row in pendingRows {
@@ -751,6 +757,9 @@ final class ChatsListViewModel {
 
     func refreshDisplayProjections() {
         guard !rowByGroupId.isEmpty else { return }
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.inboxRefresh, since: timing) }
+
         var changed = false
         let muteLookup = currentMuteLookup()
         for (groupId, row) in rowByGroupId {
@@ -1061,6 +1070,9 @@ final class ChatsListViewModel {
 
     @discardableResult
     private func publishItems() -> Bool {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.inboxPublish, since: timing) }
+
         let signpost = Self.performanceSignposter.beginInterval("ChatsListViewModel.publishItems")
         defer { Self.performanceSignposter.endInterval("ChatsListViewModel.publishItems", signpost) }
 

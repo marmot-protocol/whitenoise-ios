@@ -15,6 +15,34 @@ nonisolated enum ProductAttachmentAction: String, CaseIterable, Sendable { case 
 nonisolated enum ProductSearchOutcome: String, CaseIterable, Sendable { case success, empty, failure, cancelled }
 nonisolated enum ProductSettingsSection: String, CaseIterable, Sendable { case appearance, notifications, privacy, account, storage, diagnostics }
 nonisolated enum ProductPermissionOutcome: String, CaseIterable, Sendable { case granted, denied, restricted, provisional }
+nonisolated enum ProductTimingStage: String, CaseIterable, Sendable {
+    case timelineWindow = "app_timeline_window"
+    case timelineTail = "app_timeline_tail"
+    case timelineDelta = "app_timeline_delta"
+    case timelineRebuild = "app_timeline_rebuild"
+    case timelineProfiles = "app_timeline_profiles"
+    case outgoingProjection = "app_outgoing_projection"
+    case outgoingConfirmation = "app_outgoing_confirmation"
+    case markdownRebuild = "app_markdown_rebuild"
+    case mediaRebuild = "app_media_rebuild"
+    case inboxSnapshot = "app_inbox_snapshot"
+    case inboxBatch = "app_inbox_batch"
+    case inboxRefresh = "app_inbox_refresh"
+    case inboxPublish = "app_inbox_publish"
+    case composerMarkdown = "app_composer_markdown"
+    case cameraPrepare = "app_camera_prepare"
+    case libraryPrepare = "app_library_prepare"
+
+    static var registry: [ProductEventSchemaFfi] {
+        allCases.map { stage in
+            ProductEventSchemaFfi(name: stage.rawValue, mode: .aggregate, properties: [
+                ProductPropertySchemaFfi(name: "elapsed", kind: .durationBucket, choices: []),
+                ProductPropertySchemaFfi(name: "outcome", kind: .enum, choices: ["success", "failure"])
+            ])
+        }
+    }
+}
+
 nonisolated enum ProductEvent: Sendable {
     case screen(ProductScreen)
     case onboarding(ProductOnboardingStep, ProductOnboardingPath, ProductOutcome)
@@ -63,23 +91,29 @@ nonisolated enum ProductEvent: Sendable {
 /// Tickets admit only work begun under this runtime/context's existing consent.
 nonisolated final class ProductAnalyticsRecorder: Sendable {
     struct Ticket: Equatable, Sendable { fileprivate let generation: UUID }
+    struct Timing: Sendable {
+        fileprivate let ticket: Ticket
+        fileprivate let startedAt: ContinuousClock.Instant
+    }
     private struct State: Sendable {
         var generation = UUID()
         var sink: (@Sendable (ProductEvent) -> Void)?
         var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)?
+        var timingSink: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)?
         var pending = 0
     }
     private let state = Mutex(State())
 
     func replaceSink(_ sink: (@Sendable (ProductEvent) -> Void)?) {
-        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil }
+        state.withLock { $0.generation = UUID(); $0.sink = sink; $0.performanceSink = nil; $0.timingSink = nil }
     }
 
     func activateSink(
         performance: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)? = nil,
+        timing: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)? = nil,
         _ sink: @escaping @Sendable (ProductEvent) -> Void
     ) {
-        state.withLock { $0.sink = sink; $0.performanceSink = performance }
+        state.withLock { $0.sink = sink; $0.performanceSink = performance; $0.timingSink = timing }
     }
 
     func ticket() -> Ticket? {
@@ -96,7 +130,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
         enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds) }
     }
 
-    private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) -> Void) -> Task<Void, Never>? {
+    private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) throws -> Void) -> Task<Void, Never>? {
         guard let ticket else { return nil }
         let admitted = state.withLock { state in
             guard state.generation == ticket.generation, state.sink != nil, state.pending < 64 else { return false }
@@ -111,8 +145,40 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
                 // The Rust recorder is memory-only. Hold the gate through this
                 // call so revocation cannot overtake an admitted observation.
                 // MainActor ticket reads share this lock; sinks must never do I/O.
-                deliver(state)
+                do {
+                    try deliver(state)
+                } catch {
+                    state.sink = nil
+                    state.performanceSink = nil
+                    state.timingSink = nil
+                    state.generation = UUID()
+                }
             }
+        }
+    }
+
+    func beginTiming(at now: ContinuousClock.Instant = .now) -> Timing? {
+        state.withLock { state in
+            guard state.sink != nil, state.timingSink != nil else { return nil }
+            return Timing(ticket: Ticket(generation: state.generation), startedAt: now)
+        }
+    }
+
+    @discardableResult
+    func recordTiming(
+        _ stage: ProductTimingStage,
+        since timing: Timing?,
+        outcome: HostPerformanceOutcomeFfi = .success,
+        at now: ContinuousClock.Instant = .now
+    ) -> Task<Void, Never>? {
+        guard let timing else { return nil }
+        let elapsed = timing.startedAt.duration(to: max(timing.startedAt, now)).components
+        let seconds = UInt64(elapsed.seconds)
+        let fractionalMilliseconds = UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
+        let (wholeMilliseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000)
+        let (milliseconds, additionOverflow) = wholeMilliseconds.addingReportingOverflow(fractionalMilliseconds)
+        return enqueue(ticket: timing.ticket) {
+            try $0.timingSink?(stage, overflow || additionOverflow ? .max : milliseconds, outcome)
         }
     }
 

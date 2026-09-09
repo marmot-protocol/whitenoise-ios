@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 import AVFoundation
 import Combine
+import Synchronization
 @testable import whitenoise_ios
 @testable import MarmotKit
 
@@ -14801,6 +14802,24 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func snapshotTimingWaitsForDeferredPresentationAndRequiresConsent() async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        let model = ChatsListViewModel(appState: appState)
+        let snapshot = presentedChatSnapshot([chatListRow(groupIdHex: "timed", title: "Selected")])
+        model.applyPresentedSnapshot(snapshot)
+        let stages = Mutex<[ProductTimingStage]>([])
+        appState.productAnalytics.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { _ in }
+        let transition = model.beginPinOrderUITransition()
+        model.applyPresentedSnapshot(snapshot)
+        #expect(stages.withLock { $0.isEmpty })
+        #expect(model.finishPinOrderUITransition(transitionID: transition, orderedGroupIds: nil))
+        try await waitForExpectation { stages.withLock { $0.contains(.inboxSnapshot) } }
+        #expect(stages.withLock { $0.filter { $0 == .inboxSnapshot }.count } == 1)
+        appState.productAnalytics.replaceSink(nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
     @Test func createdChatResolvesBeforeAndAfterMissingPresentedRowRead() async throws {
         let client = try MarmotClient.testClient()
         let appState = AppState(client: client)

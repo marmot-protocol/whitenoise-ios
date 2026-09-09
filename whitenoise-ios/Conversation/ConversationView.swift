@@ -2554,10 +2554,13 @@ struct ConversationView: View {
     }
 
     private func addCameraImage(_ image: UIImage) {
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.failure
+            defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment = try await MediaDraftProcessor.preparedAttachment(from: image, fileName: nil)
-                try appendMediaDraft(attachment)
+                if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
             } catch {
@@ -2567,7 +2570,10 @@ struct ConversationView: View {
     }
 
     private func addCameraCapture(_ capture: CameraCapture) {
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.failure
+            defer { appState.productAnalytics.recordTiming(.cameraPrepare, since: timing, outcome: outcome) }
             do {
                 let attachment: MediaDraftAttachment
                 switch capture.content {
@@ -2581,7 +2587,7 @@ struct ConversationView: View {
                     defer { try? FileManager.default.removeItem(at: url) }
                     attachment = try await MediaDraftProcessor.preparedAttachment(fromFileURL: url)
                 }
-                try appendMediaDraft(attachment)
+                if try appendMediaDraft(attachment) { outcome = .success }
             } catch is CancellationError {
                 return
             } catch {
@@ -2601,11 +2607,15 @@ struct ConversationView: View {
         }
 
         let selected = Array(selections.prefix(remainingMediaDraftSlots))
+        guard !selected.isEmpty else { return }
         if selected.count < selections.count {
             presentMaxAttachmentWarning()
         }
 
+        let timing = appState.productAnalytics.beginTiming()
         Task { @MainActor in
+            var outcome = HostPerformanceOutcomeFfi.failure
+            defer { appState.productAnalytics.recordTiming(.libraryPrepare, since: timing, outcome: outcome) }
             var prepared: [MediaDraftAttachment] = []
             for selection in selected {
                 do {
@@ -2622,22 +2632,23 @@ struct ConversationView: View {
                 }
             }
             guard !prepared.isEmpty else { return }
-            appendPreparedVisualDrafts(prepared)
+            if appendPreparedVisualDrafts(prepared), prepared.count == selected.count { outcome = .success }
         }
     }
 
-    private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) {
+    private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let accepted = Array(attachments.prefix(availableSlots))
         guard !accepted.isEmpty else {
             presentMaxAttachmentWarning()
-            return
+            return false
         }
         mediaDrafts.append(contentsOf: accepted)
         if accepted.count < attachments.count {
             presentMaxAttachmentWarning()
         }
         composerFocusRequest += 1
+        return accepted.count == attachments.count
     }
 
     private func addFileImporterResult(_ result: Result<[URL], Error>) {
@@ -2754,21 +2765,23 @@ struct ConversationView: View {
         return true
     }
 
-    private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws {
+    @discardableResult
+    private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
         if attachment.kind == .audio {
             mediaDrafts.removeAll { $0.kind == .audio }
         }
         guard mediaDrafts.count < MediaDraftProcessor.maxAttachmentCount else {
             presentMaxAttachmentWarning()
-            return
+            return false
         }
         mediaDrafts.append(attachment)
         if attachment.kind == .audio {
             draft = ""
             dismissKeyboard()
-            return
+            return true
         }
         composerFocusRequest += 1
+        return true
     }
 
     private func removeMediaDraft(_ id: MediaDraftAttachment.ID) {

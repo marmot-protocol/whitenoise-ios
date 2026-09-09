@@ -45,9 +45,11 @@ New-user onboarding measurements describe opted-in users, never all installation
 
 Typed observations cover screen visits, create/import steps, foreground readiness,
 new-chat compose open/cancel, message search, attachments, settings, and system
-notification permission results. MDK already registers their schemas; the host's
-additional registry stays empty. The new arbitrary `recordHostTiming` API is
-intentionally unused because it requires explicitly registered custom schemas.
+notification permission results. MDK already registers their schemas. The host
+registers 16 additional aggregate preparation stages described in
+[host timings](host-timings.md), using the published `recordHostTiming` API.
+MDK owns duration bucketing and aggregation; these custom stages export through
+Aptabase and add no OTLP series. The registry expansion requires renewed consent.
 Message-visible timings use MDK's approved host-performance enum instead: Send
 through visible local bubble, and a new inbound projection through visible frame.
 History reads and passive re-projections do not start these measurements.

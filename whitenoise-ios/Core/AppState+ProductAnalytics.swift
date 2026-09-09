@@ -56,6 +56,10 @@ extension AppState: DeviceDiagnosticsDataSource {
         if snapshot.settings.decision == .granted {
             productAnalytics.activateSink(performance: { [activeClient] operation, milliseconds in
                 activeClient.recordHostPerformance(operation: operation, durationMs: milliseconds, outcome: .success)
+            }, timing: { [activeClient] stage, milliseconds, outcome in
+                _ = try activeClient.marmot.recordHostTiming(
+                    name: stage.rawValue, durationMs: milliseconds, outcome: outcome
+                )
             }) { [activeClient] event in
                 _ = try? activeClient.marmot.recordProductEvent(event: event.ffi)
             }

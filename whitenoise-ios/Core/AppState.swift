@@ -1190,6 +1190,8 @@ final class AppState {
     /// the optimistic record with the confirmed, fully-parsed one (#226).
     func parseMarkdown(text: String) async -> MarkdownDocumentFfi {
         guard let client = foregroundSettingsReadClient() else { return .emptyDocument }
+        let timing = productAnalytics.beginTiming()
+        defer { productAnalytics.recordTiming(.composerMarkdown, since: timing) }
         return await client.parseMarkdown(text: text)
     }
 

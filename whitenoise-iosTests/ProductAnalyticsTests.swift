@@ -180,7 +180,7 @@ struct ProductAnalyticsTests {
         #expect(staging.appKey == nil)
         #expect(staging.endpoint == nil)
         #expect(staging.environment == "staging")
-        #expect(production.runtimeConfig.registry.isEmpty)
+        #expect(production.runtimeConfig.registry.map(\.name) == ProductTimingStage.allCases.map(\.rawValue))
         #expect(!production.runtimeConfig.allowLoopback)
     }
 
@@ -218,6 +218,9 @@ struct ProductAnalyticsTests {
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
         try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
         #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
         #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
         try await client.marmot.shutdownAndClose()
@@ -245,6 +248,134 @@ struct ProductAnalyticsTests {
         #expect(reset.settings.decision == .acceptanceRequired)
         #expect(!reset.auditEnabled)
         try await erased.marmot.shutdownAndClose()
+    }
+
+    @Test func timingConsentAndDuration() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let events = Mutex<[(ProductTimingStage, UInt64, HostPerformanceOutcomeFfi)]>([])
+        let start = ContinuousClock.now
+        let beforeConsent = recorder.beginTiming(at: start)
+        recorder.activateSink(timing: { stage, milliseconds, outcome in
+            events.withLock { $0.append((stage, milliseconds, outcome)) }
+        }) { _ in }
+        #expect(recorder.recordTiming(.inboxBatch, since: beforeConsent) == nil)
+        let timing = try #require(recorder.beginTiming(at: start))
+        await recorder.recordTiming(.inboxBatch, since: timing, at: start.advanced(by: .milliseconds(250)))?.value
+        await recorder.recordTiming(
+            .libraryPrepare, since: timing, outcome: .failure, at: start.advanced(by: .milliseconds(251))
+        )?.value
+        let recorded = events.withLock { $0 }
+        #expect(recorded.map { $0.0 } == [.inboxBatch, .libraryPrepare])
+        #expect(recorded.map { $0.1 } == [250, 251])
+        #expect(recorded.map { $0.2 } == [.success, .failure])
+        recorder.replaceSink(nil)
+        recorder.activateSink(timing: { stage, milliseconds, outcome in
+            events.withLock { $0.append((stage, milliseconds, outcome)) }
+        }) { _ in }
+        #expect(recorder.recordTiming(.inboxBatch, since: timing) == nil)
+        #expect(events.withLock { $0.count } == 2)
+    }
+
+    @Test func timingClampsEarlierCompletionAndTruncatesSubmillisecondDuration() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let durations = Mutex<[UInt64]>([])
+        recorder.activateSink(timing: { _, milliseconds, _ in durations.withLock { $0.append(milliseconds) } }) { _ in }
+        let start = ContinuousClock.now
+        let timing = try #require(recorder.beginTiming(at: start))
+        await recorder.recordTiming(.timelineWindow, since: timing, at: start.advanced(by: .milliseconds(-1)))?.value
+        await recorder.recordTiming(.timelineWindow, since: timing, at: start.advanced(by: .microseconds(1_999)))?.value
+        #expect(durations.withLock { $0 } == [0, 1])
+    }
+
+    @Test func rejectedTimingSinkStopsRecording() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        recorder.activateSink(timing: { _, _, _ in throw CancellationError() }) { _ in }
+        let timing = try #require(recorder.beginTiming())
+        await recorder.recordTiming(.timelineWindow, since: timing)?.value
+        #expect(recorder.ticket() == nil)
+        recorder.activateSink(timing: { _, _, _ in }) { _ in }
+        #expect(recorder.recordTiming(.timelineWindow, since: timing) == nil)
+    }
+
+    @Test func timingRequiresItsOwnSinkAndBypassesProductEvents() async throws {
+        let recorder = ProductAnalyticsRecorder()
+        let events = Mutex<[String]>([])
+        let stages = Mutex<[ProductTimingStage]>([])
+        recorder.activateSink { event in events.withLock { $0.append(event.ffi.name) } }
+        #expect(recorder.beginTiming() == nil)
+        recorder.activateSink(timing: { stage, _, _ in stages.withLock { $0.append(stage) } }) { event in
+            events.withLock { $0.append(event.ffi.name) }
+        }
+        let timing = try #require(recorder.beginTiming())
+        await recorder.recordTiming(.timelineWindow, since: timing)?.value
+        await recorder.record(.screen(.inbox), ticket: recorder.ticket())?.value
+        #expect(stages.withLock { $0 } == [.timelineWindow])
+        #expect(events.withLock { $0 } == ["app_screen_viewed"])
+    }
+
+    @Test @MainActor func hostTimingRegistryAccepted() async throws {
+        let client = try MarmotClient.testClient()
+        let config = ProductAnalyticsBuildConfig(
+            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
+            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
+            deviceClass: "phone", environment: "staging", isDebug: true
+        )
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config.runtimeConfig)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
+        try await client.marmot.setProductAnalyticsActivity(activity: .foreground)
+        for stage in ProductTimingStage.allCases {
+            for outcome in [HostPerformanceOutcomeFfi.success, .failure] {
+                #expect(try client.marmot.recordHostTiming(name: stage.rawValue, durationMs: 251, outcome: outcome) == .recorded)
+            }
+        }
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: false)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
+        #expect(try client.marmot.usageDiagnosticsStatus().queuedEvents == 0)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test @MainActor func expandingTimingRegistryRequiresNewConsent() async throws {
+        let client = try MarmotClient.testClient()
+        var config = ProductAnalyticsBuildConfig(
+            endpoint: "https://analytics.invalid/api/v0/events", appKey: "A-SH-test",
+            operatorLabel: "test", retentionDisclosure: nil, appVersion: "1", osMajorVersion: "27",
+            deviceClass: "phone", environment: "staging", isDebug: true
+        ).runtimeConfig
+        config.registry = []
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        try await client.marmot.start()
+        _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
+        let oldRegistry = try client.marmot.usageDiagnosticsSettings().registryRevision
+        config.registry = ProductTimingStage.registry
+        try client.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        #expect(try client.marmot.usageDiagnosticsSettings().decision == .acceptanceRequired)
+        let liveResult = try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        )
+        #expect(liveResult == .ignoredDisabled)
+        try await client.marmot.shutdownAndClose()
+
+        let upgraded = try MarmotClient(rootPath: client.rootPath, relayUrls: [])
+        try upgraded.marmot.setProductAnalyticsRuntimeConfig(config: config)
+        try await upgraded.marmot.start()
+        #expect(try upgraded.marmot.usageDiagnosticsSettings().decision == .acceptanceRequired)
+        let upgradedResult = try upgraded.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        )
+        #expect(upgradedResult == .ignoredDisabled)
+        _ = try upgraded.marmot.setUsageDiagnosticsConsent(enabled: true)
+        #expect(try upgraded.marmot.usageDiagnosticsSettings().registryRevision != oldRegistry)
+        try await upgraded.marmot.setProductAnalyticsActivity(activity: .foreground)
+        #expect(try upgraded.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .recorded)
+        _ = try upgraded.marmot.setUsageDiagnosticsConsent(enabled: false)
+        try await upgraded.marmot.shutdownAndClose()
     }
 
     @Test func durationBucketsUseInclusiveBoundaries() {
@@ -304,6 +435,9 @@ struct ProductAnalyticsTests {
         )
         try client.marmot.setProductAnalyticsRuntimeConfig(config: config.runtimeConfig)
         #expect(try client.marmot.recordProductEvent(event: ProductEvent.screen(.inbox).ffi) == .ignoredDisabled)
+        #expect(try client.marmot.recordHostTiming(
+            name: ProductTimingStage.inboxBatch.rawValue, durationMs: 250, outcome: .success
+        ) == .ignoredDisabled)
         #expect(throws: MarmotKitError.self) { try client.marmot.telemetryInstallId() }
         _ = try client.marmot.setUsageDiagnosticsConsent(enabled: true)
         let firstID = try client.marmot.telemetryInstallId()

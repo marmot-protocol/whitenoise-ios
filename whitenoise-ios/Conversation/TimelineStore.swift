@@ -524,6 +524,9 @@ final class TimelineStore {
     }
 
     private func applyTimelineWindowPage(_ page: TimelinePageFfi) {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.timelineWindow, since: timing) }
+
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
         let shouldEvictAbsentRecords = shouldEvictAbsentTimelineRecords(from: page)
@@ -574,6 +577,9 @@ final class TimelineStore {
     private func applyTimelineProjectionUpdate(_ runtimeUpdate: RuntimeProjectionUpdateFfi) {
         let update = runtimeUpdate.update
         guard update.groupIdHex == groupIdHex else { return }
+
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.timelineDelta, since: timing) }
 
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
@@ -634,6 +640,9 @@ final class TimelineStore {
     }
 
     private func applyTimelineTailRefreshPage(_ page: TimelinePageFfi) {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.timelineTail, since: timing) }
+
         let existingMessageIds = Set(messageById.keys)
         let records = hasMoreAfter
             ? page.messages.filter { existingMessageIds.contains($0.messageIdHex) }
@@ -823,6 +832,9 @@ final class TimelineStore {
 
     @discardableResult
     private func rebuildTimeline() -> Bool {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.timelineRebuild, since: timing) }
+
         let signpost = Self.performanceSignposter.beginInterval("TimelineStore.rebuildTimeline")
         defer { Self.performanceSignposter.endInterval("TimelineStore.rebuildTimeline", signpost) }
         #if DEBUG
@@ -839,12 +851,16 @@ final class TimelineStore {
             from: next,
             replyTargetId: { replyTargetId(for: $0) }
         )
+        let markdownTiming = appState?.productAnalytics.beginTiming()
         let markdownChanged = markdownProjections.rebuild(
             for: next,
             onlyRowsWithMentions: false,
             resolver: mentionDisplayNameResolver
         )
+        appState?.productAnalytics.recordTiming(.markdownRebuild, since: markdownTiming)
+        let mediaTiming = appState?.productAnalytics.beginTiming()
         let mediaChanged = mediaProjections.rebuild(for: next)
+        appState?.productAnalytics.recordTiming(.mediaRebuild, since: mediaTiming)
         agentEventProjections.prune(keeping: Set(next.map(\.id)))
         return assignTimeline(next) || markdownChanged || mediaChanged
     }
@@ -891,6 +907,9 @@ final class TimelineStore {
     }
 
     func refreshProfileDependentTimelineProjections() {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.timelineProfiles, since: timing) }
+
         replyPreviewDisplayCache.removeAll()
         groupSystemDisplayCache.removeAll()
         markdownProjections.rebuild(for: timeline, onlyRowsWithMentions: true, resolver: mentionDisplayNameResolver)
@@ -1079,6 +1098,9 @@ final class TimelineStore {
     // MARK: - Optimistic send overlay
 
     func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi) {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.outgoingProjection, since: timing) }
+
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
         let changed = upsertTimelineItem(item)
@@ -1088,6 +1110,9 @@ final class TimelineStore {
     }
 
     func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
+        let timing = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordTiming(.outgoingConfirmation, since: timing) }
+
         var projectionChanged = false
         let realId = messageId ?? ""
         let durableRowAlreadyLoaded = !realId.isEmpty && messageById[realId] != nil
