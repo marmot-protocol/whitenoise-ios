@@ -43,17 +43,17 @@ struct ChatRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel(Text(L10n.string("Group ended")))
-                    } else if item.leaveRequestPending {
+                    } else if item.departureStatus == .leaving {
                         Image(systemName: "hourglass")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel(Text(L10n.string("Leaving…")))
-                    } else if !item.isActiveMember {
+                    } else if case .membershipEnded(let membership) = item.departureStatus {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .accessibilityLabel(
-                                item.selfMembership == .left
+                                membership == .left
                                     ? Text("Left chat")
                                     : Text("Removed from chat")
                             )
@@ -135,22 +135,22 @@ struct ChatRow: View {
         activeAccountIdHex: String?,
         senderName: (String) -> String
     ) -> ChatRowPreviewPresentation {
-        if item.leaveRequestPending {
+        switch item.departureStatus {
+        case .leaving:
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("Leaving…"))
-        }
-        if item.selfMembership == .left {
+        case .membershipEnded(.left):
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You left this chat."))
-        }
-        if item.selfMembership == .removed {
+        case .membershipEnded:
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You were removed from this chat."))
-        }
-        if item.row.pendingConfirmation {
+        case .pendingInvite:
             return ChatRowPreviewPresentation(
                 prefix: nil,
                 body: ConversationInvitePresentation.invitationText(
                     inviterName: item.inviterAccountIdHex.map(senderName)
                 )
             )
+        case nil:
+            break
         }
         if let draftPreview = item.draftPreview {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.formatted("Draft: %@", draftPreview))

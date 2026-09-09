@@ -764,7 +764,10 @@ final class GroupDetailsViewModel {
 
     func deleteLocal(using appState: AppState, dismiss: () -> Void) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
-        guard !conversation.leaveRequestPending else {
+        // Only a leave the group has not committed yet blocks the local delete.
+        // Once membership has ended the departure is already on the wire, and
+        // the pending flag may never clear.
+        guard conversation.departureStatus != .leaving else {
             actionError = GroupManagementPresentation.leavingGroupComposerMessage
             return
         }

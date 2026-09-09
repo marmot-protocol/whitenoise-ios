@@ -36,22 +36,23 @@ nonisolated enum ChatListSwipeActionsPresentation: Equatable {
         leaveRequestPending: Bool,
         isMuted: Bool
     ) -> Actions {
-        if leaveRequestPending {
+        let departureAction = ChatDepartureAction.action(
+            membership: selfMembership,
+            leaveRequestPending: leaveRequestPending
+        )
+        // No honest destructive action: the SelfRemove is out but the group has
+        // not committed it, so a second leave is rejected and dropping the local
+        // copy while still a member would strand the conversation.
+        guard let departureAction else {
             return isArchived ? [.unarchive] : [.archive]
         }
-        let isActiveMember = GroupManagementPresentation.isActiveChatListMember(selfMembership)
+
         if isArchived {
-            var actions: Actions = [.unarchive]
-            if isActiveMember {
-                actions.insert(.leave)
-            } else {
-                actions.insert(.delete)
-            }
-            return actions
+            return departureAction == .leave ? [.unarchive, .leave] : [.unarchive, .delete]
         }
 
         var actions: Actions = [.archive]
-        if isActiveMember {
+        if departureAction == .leave {
             actions.insert(.leave)
             actions.insert(isMuted ? .unmute : .mute)
         } else {

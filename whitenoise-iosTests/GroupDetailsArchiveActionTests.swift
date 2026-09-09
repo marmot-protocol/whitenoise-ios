@@ -502,7 +502,7 @@ struct GroupDetailsArchiveActionTests {
         #expect(dismissed)
     }
 
-    @Test func deleteLocalIsUnavailableWhileLeaveIsPending() async throws {
+    @Test func deleteLocalIsUnavailableWhileStillAMemberWithALeaveInFlight() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
@@ -511,7 +511,7 @@ struct GroupDetailsArchiveActionTests {
             group: archiveTestGroup(
                 groupIdHex: groupIdHex,
                 archived: false,
-                selfMembership: .left,
+                selfMembership: .member,
                 leaveRequestPending: true
             )
         )
@@ -528,6 +528,39 @@ struct GroupDetailsArchiveActionTests {
 
         #expect(!deleteRequested)
         #expect(model.actionError == GroupManagementPresentation.leavingGroupComposerMessage)
+    }
+
+    /// A departed chat keeps `leaveRequestPending` until some remaining member
+    /// commits the removal, which may never happen. Withholding the local delete
+    /// there left the chat with no action that could clear its "Leaving" state.
+    @Test func deleteLocalStaysAvailableAfterDepartureWithAnUncommittedLeave() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let groupIdHex = String(repeating: "ab", count: 32)
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(
+                groupIdHex: groupIdHex,
+                archived: false,
+                selfMembership: .left,
+                leaveRequestPending: true
+            )
+        )
+        let model = GroupDetailsViewModel()
+        var deleteRequested = false
+        var dismissed = false
+
+        model.conversation = conversation
+        model.deleteGroupLocalForTesting = { _, _ in
+            deleteRequested = true
+            return true
+        }
+
+        await model.deleteLocal(using: appState, dismiss: { dismissed = true })
+
+        #expect(deleteRequested)
+        #expect(dismissed)
+        #expect(model.actionError == nil)
     }
 }
 

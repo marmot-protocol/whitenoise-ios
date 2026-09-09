@@ -942,7 +942,7 @@ struct GroupDetailsView: View {
             }
 
             if !viewModel.isGroupDisbanding {
-                if viewModel.leaveRequestPending {
+                if viewModel.departureStatus == .leaving {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
@@ -986,7 +986,7 @@ struct GroupDetailsView: View {
                 ) {
                     Text(blocker)
                 }
-                if viewModel.leaveRequestPending {
+                if viewModel.departureStatus == .leaving {
                     Text(GroupManagementPresentation.leavingGroupComposerMessage)
                 } else if let leaveFooter = GroupManagementPresentation.leaveFooter(
                     state: viewModel.managementState,
