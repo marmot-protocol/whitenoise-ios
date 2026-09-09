@@ -67,9 +67,10 @@ before every release tag.
       automatically opening Chats, including readiness reached before Open Chats.
 - [ ] Close setup and explicitly sign in again: fresh checks run, and previously
       published profile/relay changes remain. There is no Later or Finish Setup.
-- [ ] MDK #1741 remains a runtime limitation: an approved unfinished publication
-      cannot yet be discarded. Verify safe sign-out/close where supported, and
-      actionable recovery if the runtime refuses it; never wipe to escape setup.
+- [ ] Cancel an approved unfinished publication with MDK 0.9.20. Host callbacks
+      invalidate before cancellation, and cancellation finishes before another
+      attempt begins. A failed cancellation stays retryable; never sign out,
+      reuse the old checkpoint, or wipe to escape setup.
 - [ ] Ready removes the checking subtitle/spinner, retains Skipped results, and
       enables the full-width Open Chats action. Required failures still gate entry.
 - [ ] Verify large text, VoiceOver, Reduce Motion, Light and Dark appearances,
