@@ -49,6 +49,41 @@ nonisolated struct RemoteGiphyMedia: Equatable, Sendable {
         return RemoteGiphyMedia(url: url, width: 4, height: 3, attribution: attribution)
     }
 
+    /// The one-line label every preview surface (chat list, reply preview,
+    /// notification body) shows for a GIPHY message, or nil when `text` is not
+    /// an envelope.
+    static func envelopePreviewText(for text: String) -> String? {
+        isEnvelopeText(text) ? L10n.string("GIF via GIPHY") : nil
+    }
+
+    /// Whether peer text is a GIPHY envelope for display purposes. Looser than
+    /// `parse(wireText:)`, which needs the credit line intact to recover
+    /// attribution: an envelope whose credit line is missing, unrecognized, or
+    /// clipped upstream still has to degrade to the label instead of rendering
+    /// the remote CDN URL as message text.
+    static func isEnvelopeText(_ text: String) -> Bool {
+        let bounded = String(text.prefix(maximumWireTextLength + 1))
+        guard bounded.count <= maximumWireTextLength else { return false }
+        let firstLine = bounded.prefix { $0 != "\n" }
+        return isMediaURLShape(String(firstLine).trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Scheme/host shape of an envelope's media URL, without the path checks
+    /// `validatedMediaURL` applies, so a URL clipped before its extension is
+    /// still recognized as GIF media.
+    private static func isMediaURLShape(_ raw: String) -> Bool {
+        guard raw.utf8.count <= ContentSanitizer.maxImageURLLength,
+              let components = URLComponents(string: raw),
+              components.scheme?.lowercased() == "https",
+              components.user == nil,
+              components.password == nil,
+              components.port == nil,
+              let host = components.host?.lowercased(),
+              isAllowedMediaHost(host)
+        else { return false }
+        return true
+    }
+
     static func validatedMediaURL(_ raw: String) -> URL? {
         guard raw.count <= ContentSanitizer.maxImageURLLength,
               let url = URL(string: raw),

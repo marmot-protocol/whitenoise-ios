@@ -524,3 +524,121 @@ struct GiphyDraftPersistenceTests {
             == ConversationGiphyDraftRecord.mediaType)
     }
 }
+
+private let giphyEnvelopeURL =
+    "https://media3.giphy.com/media/v1.Y2lkPWFjZTYxYTllNTRoMDhkdHg1MGIy/giphy.gif?cid=abc&ct=g"
+
+/// A GIF message must read the same in a notification as in the chat list, and
+/// neither surface may render the remote CDN URL as message text — including
+/// envelopes this build cannot fully parse: a newer sender's extra lines, a
+/// missing or unrecognized credit line, or a preview clipped upstream.
+struct GiphyEnvelopePreviewTests {
+    private func notificationBody(_ previewText: String) -> String? {
+        LocalNotificationProjection.makePresentation(
+            for: giphyPreviewUpdate(previewText: previewText)
+        )?.body
+    }
+
+    private func chatListPreview(_ plaintext: String) -> String {
+        MessagePreview.body(
+            ChatListMessagePreviewFfi(
+                messageIdHex: "01",
+                sender: "11",
+                senderDisplayName: nil,
+                plaintext: plaintext,
+                contentTokens: MarkdownDocumentFfi(blocks: [], truncated: false),
+                kind: MessageSemantics.kindChat,
+                timelineAt: 1,
+                deleted: false
+            )
+        )
+    }
+
+    @Test func everyEnvelopeShapeReadsAsTheGIFLabel() throws {
+        let shapes = [
+            "\(giphyEnvelopeURL)\nvia GIPHY",
+            "\(giphyEnvelopeURL)\nvia GIPHY · Creator",
+            "\(giphyEnvelopeURL)\nvia GIPHY · Creator\nlook at this one",
+            "\(giphyEnvelopeURL)\nvia GIPHY\n\nvia GIPHY",
+            "\(giphyEnvelopeURL)\nvia TENOR",
+            "\(giphyEnvelopeURL)\n",
+            "  \(giphyEnvelopeURL)  \nvia GIPHY",
+            giphyEnvelopeURL,
+            String("\(giphyEnvelopeURL)\nvia GIPHY".prefix(64)),
+            String(giphyEnvelopeURL.prefix(48))
+        ]
+
+        for shape in shapes {
+            #expect(chatListPreview(shape) == "GIF via GIPHY")
+            #expect(try #require(notificationBody(shape)) == "Alice: GIF via GIPHY")
+        }
+    }
+
+    @Test func notificationsAndTheChatListAgreeOnEveryPreview() throws {
+        let texts = [
+            "\(giphyEnvelopeURL)\nvia GIPHY · Creator\ncaption",
+            String(giphyEnvelopeURL.prefix(48)),
+            "hello world",
+            "look at this \(giphyEnvelopeURL) lol"
+        ]
+
+        for text in texts {
+            #expect(try #require(notificationBody(text)) == "Alice: \(chatListPreview(text))")
+        }
+    }
+
+    @Test func textAroundALinkStaysTheSendersOwnWords() {
+        // A pasted link inside a sentence is message text, not an envelope, so
+        // the preview keeps what the sender wrote.
+        #expect(chatListPreview("look at this \(giphyEnvelopeURL) lol")
+            == "look at this \(giphyEnvelopeURL) lol")
+        #expect(chatListPreview("https://example.com/a.gif") == "https://example.com/a.gif")
+        #expect(chatListPreview("https://media.giphy.example.com/a.gif")
+            == "https://media.giphy.example.com/a.gif")
+    }
+
+    @Test func nonGiphyHostsAndSchemesAreNotEnvelopes() {
+        #expect(RemoteGiphyMedia.isEnvelopeText("http://media.giphy.com/a.gif") == false)
+        #expect(RemoteGiphyMedia.isEnvelopeText("https://media.giphy.com:8443/a.gif") == false)
+        #expect(RemoteGiphyMedia.isEnvelopeText("https://user:pw@media.giphy.com/a.gif") == false)
+        #expect(RemoteGiphyMedia.isEnvelopeText("https://giphy.com/gifs/abc") == false)
+        #expect(RemoteGiphyMedia.isEnvelopeText("") == false)
+    }
+
+    @Test func overlongTextIsNeverClassifiedAsAnEnvelope() {
+        let padded = "\(giphyEnvelopeURL)\nvia GIPHY\n"
+            + String(repeating: "a", count: RemoteGiphyMedia.maximumWireTextLength)
+
+        #expect(RemoteGiphyMedia.isEnvelopeText(padded) == false)
+    }
+}
+
+private func giphyPreviewUpdate(previewText: String) -> NotificationUpdateFfi {
+    NotificationUpdateFfi(
+        notificationKey: "notif-a",
+        conversationKey: "conv-a",
+        trigger: .newMessage,
+        accountRef: "account-a",
+        accountIdHex: String(repeating: "11", count: 32),
+        groupIdHex: "group-a",
+        groupName: nil,
+        isDm: false,
+        isMention: false,
+        messageIdHex: "message-a",
+        sender: NotificationUserFfi(
+            accountIdHex: String(repeating: "22", count: 32),
+            displayName: "Alice",
+            pictureUrl: nil
+        ),
+        receiver: NotificationUserFfi(
+            accountIdHex: String(repeating: "11", count: 32),
+            displayName: "Me",
+            pictureUrl: nil
+        ),
+        previewText: previewText,
+        reactionEmoji: nil,
+        reactedToPreview: nil,
+        timestampMs: 1_700_000_000_123,
+        isFromSelf: false
+    )
+}

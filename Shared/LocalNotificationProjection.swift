@@ -240,8 +240,8 @@ nonisolated enum LocalNotificationProjection {
 
     private static func notificationPreview(_ raw: String?) -> String? {
         guard let raw else { return nil }
-        if RemoteGiphyMedia.parse(wireText: raw) != nil {
-            return L10n.string("GIF via GIPHY")
+        if let label = RemoteGiphyMedia.envelopePreviewText(for: raw) {
+            return label
         }
         return sanitizedPreview(raw)
     }
