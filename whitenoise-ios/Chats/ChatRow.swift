@@ -80,14 +80,27 @@ struct ChatRow: View {
                             .rotationEffect(.degrees(PinBadgePresentation.rotationDegrees))
                             .accessibilityLabel(Text(L10n.string("Pinned")))
                     }
-                    if item.hasUnread {
-                        UnreadCountBadge(count: item.unreadCount)
+                    switch status {
+                    case .invitation:
+                        ChatInviteBadge()
+                    case .unread(let count):
+                        UnreadCountBadge(count: count)
+                    case .none:
+                        EmptyView()
                     }
                 }
             }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+
+    private var status: ChatRowStatusPresentation.Status {
+        ChatRowStatusPresentation.status(
+            isInvitationPending: item.row.pendingConfirmation,
+            hasUnread: item.hasUnread,
+            unreadCount: item.unreadCount
+        )
     }
 
     private var title: String {

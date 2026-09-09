@@ -11,10 +11,22 @@ struct WNBadge: View {
         case neutral
     }
 
+    nonisolated enum Content: Equatable {
+        case text(String)
+        case symbol(String)
+    }
+
     nonisolated enum Metrics {
-        static let horizontalPadding: CGFloat = 6
         static let verticalPadding: CGFloat = 2
         static let dotDiameter: CGFloat = 10
+        static let minimumHeight: CGFloat = 20
+
+        static func horizontalPadding(for content: Content) -> CGFloat {
+            switch content {
+            case .text: 6
+            case .symbol: 0
+            }
+        }
 
         /// The badge rides the same monochrome accent as `WNButton`, not the
         /// asset accent colour, so it stays black-on-white and white-on-black.
@@ -55,15 +67,31 @@ struct WNBadge: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .caption2)
+    private var minimumHeight = WNBadge.Metrics.minimumHeight
 
-    let text: String
+    let content: Content
     var emphasis = Emphasis.prominent
+
+    init(text: String, emphasis: Emphasis = .prominent) {
+        self.init(content: .text(text), emphasis: emphasis)
+    }
+
+    init(symbol: String, emphasis: Emphasis = .prominent) {
+        self.init(content: .symbol(symbol), emphasis: emphasis)
+    }
+
+    init(content: Content, emphasis: Emphasis = .prominent) {
+        self.content = content
+        self.emphasis = emphasis
+    }
 
     var body: some View {
         label
             .foregroundStyle(Metrics.foreground(for: emphasis))
-            .padding(.horizontal, Metrics.horizontalPadding)
+            .padding(.horizontal, Metrics.horizontalPadding(for: content))
             .padding(.vertical, Metrics.verticalPadding)
+            .frame(minWidth: minimumHeight, minHeight: minimumHeight)
             .background(
                 Capsule().fill(
                     Metrics.background(for: emphasis, colorScheme: colorScheme)
@@ -72,9 +100,17 @@ struct WNBadge: View {
     }
 
     private var label: Text {
-        let base = Text(text)
-            .font(.caption2.weight(Metrics.fontWeight(for: emphasis)))
+        let base = glyph.font(.caption2.weight(Metrics.fontWeight(for: emphasis)))
         return Metrics.usesMonospacedDigits(emphasis) ? base.monospacedDigit() : base
+    }
+
+    private var glyph: Text {
+        switch content {
+        case .text(let value):
+            Text(value)
+        case .symbol(let name):
+            Text(Image(systemName: name))
+        }
     }
 }
 
@@ -82,6 +118,7 @@ struct WNBadge: View {
     VStack(spacing: 16) {
         WNBadge(text: "1")
         WNBadge(text: "99+")
+        WNBadge(symbol: "plus")
         WNBadge(text: "Signed out", emphasis: .neutral)
         WNBadge(text: "Read-only", emphasis: .neutral)
     }
@@ -93,6 +130,7 @@ struct WNBadge: View {
     VStack(spacing: 16) {
         WNBadge(text: "1")
         WNBadge(text: "99+")
+        WNBadge(symbol: "plus")
         WNBadge(text: "Signed out", emphasis: .neutral)
         WNBadge(text: "Read-only", emphasis: .neutral)
     }
