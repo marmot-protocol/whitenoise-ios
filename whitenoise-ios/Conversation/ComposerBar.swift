@@ -208,6 +208,9 @@ struct ComposerBar: View {
     let voiceRecordingDurationSeconds: Double
     let focusRequest: Int
     let dismissRequest: Int
+    /// Reports text-input focus upward so the conversation can restore it
+    /// after a cancelled interactive pop, and only then.
+    var onInputFocusChange: (Bool) -> Void = { _ in }
     let mentionCandidates: [ComposerMentionCandidate]
     var submissionEnabled = true
     var submissionAccessibilityLabel = L10n.string("Send")
@@ -320,6 +323,9 @@ struct ComposerBar: View {
             NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification),
             perform: handleKeyboardDidHide
         )
+        .onChange(of: isTextInputFocused) { _, focused in
+            onInputFocusChange(focused)
+        }
         .onChange(of: focusRequest) { _, _ in
             showSystemKeyboard()
         }

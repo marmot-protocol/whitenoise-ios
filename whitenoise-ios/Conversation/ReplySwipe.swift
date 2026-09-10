@@ -9,6 +9,10 @@ enum ReplySwipe {
     static let completionAnimationDuration: TimeInterval = 0.045
     static let resetAnimationDuration: TimeInterval = 0.08
     static let completionPauseNanoseconds: UInt64 = 18_000_000
+    /// UIKit's screen-edge pop recognizer claims roughly this much of the
+    /// leading edge. A rightward drag that starts inside it is the back
+    /// swipe, so the reply gesture must not compete for it.
+    static let leadingEdgeNavigationWidth: CGFloat = 44
 
     private static let horizontalDominance: CGFloat = 1.2
 
@@ -29,6 +33,11 @@ enum ReplySwipe {
         return min(maximumFeedbackOffset, translation.width * 0.42)
     }
 
+    static func isInLeadingEdgeNavigationRegion(startLocation: CGPoint, in bounds: CGRect) -> Bool {
+        guard bounds.width > 0 else { return false }
+        return startLocation.x - bounds.minX < leadingEdgeNavigationWidth
+    }
+
     private static func isRightwardHorizontal(_ translation: CGSize) -> Bool {
         translation.width > 0
             && translation.width > abs(translation.height) * horizontalDominance
@@ -36,13 +45,24 @@ enum ReplySwipe {
 }
 
 extension View {
-    func replySwipeToReply(isEnabled: Bool, onReply: @escaping () -> Void) -> some View {
-        modifier(ReplySwipeModifier(isEnabled: isEnabled, onReply: onReply))
+    func replySwipeToReply(
+        isEnabled: Bool,
+        isNavigating: Bool,
+        onReply: @escaping () -> Void
+    ) -> some View {
+        modifier(
+            ReplySwipeModifier(
+                isEnabled: isEnabled,
+                isNavigating: isNavigating,
+                onReply: onReply
+            )
+        )
     }
 }
 
 private struct ReplySwipeModifier: ViewModifier {
     let isEnabled: Bool
+    let isNavigating: Bool
     let onReply: () -> Void
 
     @State private var offset: CGFloat = 0
@@ -67,12 +87,18 @@ private struct ReplySwipeModifier: ViewModifier {
                 .contentShape(.rect)
                 .gesture(
                     ReplySwipePanGesture(
+                        isNavigating: isNavigating,
                         onChanged: handleSwipeChange,
                         onEnded: handleSwipeEnd,
                         onCancelled: resetReplySwipe
                     )
                 )
                 .onDisappear { resetTask?.cancel() }
+                .onChange(of: isNavigating) { _, navigating in
+                    // The pop owns the touch now; a queued reply must not land
+                    // behind the transition.
+                    if navigating { resetReplySwipe() }
+                }
         } else {
             content
         }
@@ -94,6 +120,10 @@ private struct ReplySwipeModifier: ViewModifier {
     }
 
     private func completeReplySwipe() {
+        guard !isNavigating else {
+            resetReplySwipe()
+            return
+        }
         resetTask?.cancel()
         Haptics.tap()
         withAnimation(.snappy(duration: ReplySwipe.completionAnimationDuration, extraBounce: 0)) {
@@ -108,8 +138,9 @@ private struct ReplySwipeModifier: ViewModifier {
             withAnimation(.snappy(duration: ReplySwipe.resetAnimationDuration, extraBounce: 0)) {
                 offset = 0
             }
-            onReply()
             resetTask = nil
+            guard !isNavigating else { return }
+            onReply()
         }
     }
 
@@ -123,27 +154,19 @@ private struct ReplySwipeModifier: ViewModifier {
 }
 
 private struct ReplySwipePanGesture: UIGestureRecognizerRepresentable {
+    let isNavigating: Bool
     let onChanged: (CGSize) -> Void
     let onEnded: (CGSize) -> Void
     let onCancelled: () -> Void
 
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    @MainActor
+    final class Coordinator: NSObject {
+        let arbiter = ReplySwipeGestureArbiter()
         var gesture: ReplySwipePanGesture
 
         init(gesture: ReplySwipePanGesture) {
             self.gesture = gesture
-        }
-
-        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-            guard let panGesture = gestureRecognizer as? UIPanGestureRecognizer else { return false }
-            return ReplySwipe.shouldBegin(velocity: panGesture.velocity(in: panGesture.view))
-        }
-
-        func gestureRecognizer(
-            _: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith _: UIGestureRecognizer
-        ) -> Bool {
-            true
+            arbiter.isNavigating = gesture.isNavigating
         }
     }
 
@@ -155,12 +178,13 @@ private struct ReplySwipePanGesture: UIGestureRecognizerRepresentable {
         let gesture = UIPanGestureRecognizer()
         gesture.cancelsTouchesInView = false
         gesture.maximumNumberOfTouches = 1
-        gesture.delegate = context.coordinator
+        gesture.delegate = context.coordinator.arbiter
         return gesture
     }
 
     func updateUIGestureRecognizer(_: UIPanGestureRecognizer, context: Context) {
         context.coordinator.gesture = self
+        context.coordinator.arbiter.isNavigating = isNavigating
     }
 
     func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
