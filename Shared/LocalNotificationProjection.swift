@@ -69,9 +69,18 @@ nonisolated enum LocalNotificationProjection {
     /// pair — the same App-Group-backed override the in-app UI reads — so a set
     /// nickname wins over the kind:0 sender name in notification titles too.
     /// Defaults to none so the many test/summary call sites stay unchanged.
+    ///
+    /// `previewMode` is the single redaction point for every delivery path: the
+    /// foreground presenter, the extension's primary content, its additional
+    /// presentations, and overflow summaries all build their content here, so a
+    /// presentation that carries no sender or preview cannot leak one
+    /// downstream. It defaults to the fully revealing mode to match the
+    /// permissive defaults of the other policy inputs; the two production call
+    /// sites pass `NotificationPreviewStore.mode()`.
     static func makePresentation(
         for update: NotificationUpdateFfi,
-        nickname: (String, String) -> String? = { _, _ in nil }
+        nickname: (String, String) -> String? = { _, _ in nil },
+        previewMode: NotificationPreviewMode = .senderAndMessage
     ) -> LocalNotificationPresentation? {
         guard !update.isFromSelf else { return nil }
 
@@ -86,15 +95,22 @@ nonisolated enum LocalNotificationProjection {
             for: update.sender,
             nickname: nickname(update.accountIdHex, update.sender.accountIdHex)
         )
-        let preview = notificationPreview(update.previewText)
-        let content = contentText(
-            trigger: update.trigger,
-            isDm: update.isDm,
-            isMention: update.isMention,
-            senderName: senderName,
-            groupName: ContentSanitizer.groupName(update.groupName),
-            preview: preview
-        )
+        // A withheld preview reuses the existing "no preview text" wording
+        // ("Alice sent a message", "Alice mentioned you"), so sender-only
+        // delivery needs no separate copy.
+        let preview = previewMode.revealsMessageContent
+            ? notificationPreview(update.previewText)
+            : nil
+        let content = previewMode.revealsSenderIdentity
+            ? contentText(
+                trigger: update.trigger,
+                isDm: update.isDm,
+                isMention: update.isMention,
+                senderName: senderName,
+                groupName: ContentSanitizer.groupName(update.groupName),
+                preview: preview
+            )
+            : genericContentText()
 
         return LocalNotificationPresentation(
             identifier: route.notificationKey,
@@ -114,11 +130,23 @@ nonisolated enum LocalNotificationProjection {
                 trigger: update.trigger,
                 messageIdHex: update.messageIdHex
             ),
-            senderName: senderName,
-            senderAccountIdHex: update.sender.accountIdHex,
-            senderPictureUrl: ContentSanitizer.imageURL(update.sender.pictureUrl)?.absoluteString,
-            isGroupConversation: !update.isDm
+            // Dropping the sender fields is what keeps the generic mode out of
+            // the communication intent: the decorator returns the content
+            // untouched without a sender name, so no name, avatar, or intent
+            // `content` is donated, and no avatar is fetched.
+            senderName: previewMode.revealsSenderIdentity ? senderName : nil,
+            senderAccountIdHex: previewMode.revealsSenderIdentity ? update.sender.accountIdHex : nil,
+            senderPictureUrl: previewMode.revealsSenderIdentity
+                ? ContentSanitizer.imageURL(update.sender.pictureUrl)?.absoluteString
+                : nil,
+            isGroupConversation: previewMode.revealsSenderIdentity && !update.isDm
         )
+    }
+
+    /// Indistinguishable from the extension's fallback content, so a generic
+    /// notification does not disclose that local state existed for it.
+    static func genericContentText() -> (title: String, body: String) {
+        (title: L10n.string("White Noise"), body: L10n.string("New encrypted message"))
     }
 
     /// Mention bit persisted alongside the route so `willPresent` can

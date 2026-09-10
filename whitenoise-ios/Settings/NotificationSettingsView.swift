@@ -35,6 +35,12 @@ struct NotificationSettingsView: View {
                 Text("Uses a generic wake-up signal to check for new messages in the background. Message details stay on this iPhone.")
             }
 
+            NotificationPreviewSection(
+                mode: model.previewMode,
+                isEnabled: previewControlsEnabled,
+                setMode: { model.setPreviewMode($0) }
+            )
+
             statusSection
 
             if appState.developerMode {
@@ -194,6 +200,20 @@ struct NotificationSettingsView: View {
                 || model.registration == nil
         }
         return false
+    }
+
+    /// The preview choice only governs notifications this device renders, so
+    /// it stays inert until local notifications can actually be delivered.
+    private var previewControlsEnabled: Bool {
+        guard let settings = model.settings, settings.localNotificationsEnabled else { return false }
+        switch model.authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .denied, .notDetermined:
+            return false
+        @unknown default:
+            return false
+        }
     }
 
     private var notificationsEnabled: Bool {

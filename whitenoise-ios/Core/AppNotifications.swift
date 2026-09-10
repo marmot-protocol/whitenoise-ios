@@ -238,7 +238,8 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
                     ownerAccountIdHex: ownerAccountIdHex,
                     contactAccountIdHex: contactAccountIdHex
                 )
-            }
+            },
+            previewMode: NotificationPreviewStore.mode()
         ) else {
             return
         }
