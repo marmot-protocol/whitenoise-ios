@@ -406,9 +406,19 @@ the test device.
       system notification permission and persists the enabled state.
 - [ ] Settings → Notifications: enabling Native push requests an APNS token,
       syncs a redacted token fingerprint, and does not expose the raw token.
-- [ ] While device B is outside the app, sending a message from device A
-      causes device B to receive a generic APNS wake that is rewritten by the
-      Notification Service Extension into sender/message text.
+- [ ] Settings → Notifications → Preview starts on Generic on a fresh install
+      and on upgrade, and the example row matches the selected option.
+- [ ] With Preview set to Sender and Message, a message from device A while
+      device B is outside the app produces a generic APNS wake that the
+      Notification Service Extension rewrites into sender/message text.
+- [ ] With Preview set to Sender Only, the same notification names the sender
+      (avatar still rendered) and its body says only that an encrypted message
+      arrived — on the Lock Screen, in the banner, and in Notification Center.
+- [ ] With Preview set to Generic, that notification reads
+      "White Noise / New encrypted message" with no sender name or avatar, and
+      an offline backlog delivers only generic extra notifications.
+- [ ] Turning Local Notifications off disables the Preview options; the
+      selection survives the app being force-quit and relaunched.
 - [ ] The app-icon badge increases to the locally computed unread total after
       that background push; the generic Transponder/APNS payload contains no
       account identifiers or unread count.

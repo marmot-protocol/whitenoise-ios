@@ -67,8 +67,29 @@ final class NotificationSettingsViewModel {
     var errorMessage: String?
     var savedAt: Date?
 
+    /// Per-device, so it is read from shared defaults rather than from the
+    /// account-scoped `settings` this screen otherwise renders.
+    var previewMode: NotificationPreviewMode
+
     private var actionGate = AsyncActionGate()
     private var reloadRequestedAfterAction = false
+    private let previewDefaults: UserDefaults?
+
+    /// Tests inject an isolated suite; the shared App Group suite is visible to
+    /// every concurrently running suite (and to the extension).
+    init(previewDefaults: UserDefaults? = NotificationPreviewStore.defaults) {
+        self.previewDefaults = previewDefaults
+        previewMode = previewDefaults.map { NotificationPreviewStore.mode(defaults: $0) }
+            ?? NotificationPreviewStore.migrationDefault
+    }
+
+    /// Publishes storage, not the tap: an unresolvable suite cannot persist the
+    /// choice, so the control must keep showing the mode still in force.
+    func setPreviewMode(_ mode: NotificationPreviewMode) {
+        guard let previewDefaults else { return }
+        NotificationPreviewStore.setMode(mode, defaults: previewDefaults)
+        previewMode = NotificationPreviewStore.mode(defaults: previewDefaults)
+    }
 
     /// Whether a mutating action is currently in flight. Mirrors the action gate
     /// so the view can disable controls and show progress.
@@ -145,6 +166,9 @@ final class NotificationSettingsViewModel {
         guard let reloadTicket = actionGate.reloadTicket() else {
             requestReloadAfterAction()
             return
+        }
+        if let previewDefaults {
+            previewMode = NotificationPreviewStore.mode(defaults: previewDefaults)
         }
         let accountRef = appState.activeAccountRef
         let reloadedAuthorizationStatus = await appState.notificationAuthorizationStatus()

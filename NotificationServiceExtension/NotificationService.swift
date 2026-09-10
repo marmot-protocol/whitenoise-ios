@@ -136,6 +136,7 @@ final class NotificationService: UNNotificationServiceExtension {
                 // couldn't be resolved, so delivery fails safe (all suppressed).
                 let notifyModeSnapshot = ChatMuteStore.notifyModeSnapshot()
                 let contactNicknames = ContactNicknameStore.nicknamesByKey()
+                let previewMode = NotificationPreviewStore.mode()
                 let accountRefs = Set(result.notifications.map(\.accountRef))
                 let enabledByAccountRef = await NotificationServiceStorageReader
                     .localNotificationsEnabled(marmot: marmot, accountRefs: accountRefs)
@@ -179,7 +180,8 @@ final class NotificationService: UNNotificationServiceExtension {
                             contactAccountIdHex: contactAccountIdHex,
                             in: contactNicknames
                         )
-                    }
+                    },
+                    previewMode: previewMode
                 )
                 // An empty wake can't be attributed: the engine drops
                 // disabled accounts' records at ingest, so `.noData` is
