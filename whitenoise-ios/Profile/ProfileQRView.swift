@@ -18,8 +18,8 @@ struct ProfileQRView: View {
     @ScaledMetric(relativeTo: .title)
     private var nameFontSize: CGFloat = 30
 
-    private var npub: String { appState.npub(forAccountIdHex: accountIdHex) }
-    private var deepLink: String { DeepLink.profile(npub: npub).url.absoluteString }
+    private var npub: String? { appState.npub(forAccountIdHex: accountIdHex) }
+    private var deepLink: String? { npub.map { DeepLink.profile(npub: $0).url.absoluteString } }
 
     var body: some View {
         NavigationStack {
@@ -39,20 +39,22 @@ struct ProfileQRView: View {
                             .lineLimit(2)
                             .minimumScaleFactor(0.6)
 
-                        Button(action: copyNpub) {
-                            HStack(spacing: 8) {
-                                Text(copied ? L10n.string("Copied") : IdentityFormatter.short(npub, head: 16, tail: 14))
-                                    .font(.system(.callout, design: .monospaced))
-                                    .foregroundStyle(copied ? Color.green : Color.secondary)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.7)
-                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                                    .font(.caption)
-                                    .foregroundStyle(copied ? Color.green : Color.accentColor)
+                        if let npub {
+                            Button { copyNpub(npub) } label: {
+                                HStack(spacing: 8) {
+                                    Text(copied ? L10n.string("Copied") : IdentityFormatter.short(npub, head: 16, tail: 14))
+                                        .font(.system(.callout, design: .monospaced))
+                                        .foregroundStyle(copied ? Color.green : Color.secondary)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.7)
+                                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                        .font(.caption)
+                                        .foregroundStyle(copied ? Color.green : Color.accentColor)
+                                }
+                                .contentShape(.rect)
                             }
-                            .contentShape(.rect)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
 
                         qrCard
                             .padding(.top, 12)
@@ -89,9 +91,11 @@ struct ProfileQRView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarLeading) {
-                    ShareLink(item: deepLink) {
-                        Image(systemName: "square.and.arrow.up")
+                if let deepLink {
+                    ToolbarItem(placement: .topBarLeading) {
+                        ShareLink(item: deepLink) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
                     }
                 }
             }
@@ -107,7 +111,7 @@ struct ProfileQRView: View {
                     .appAppearance()
             }
             .task(id: deepLink) {
-                qrImage = QRCode.image(from: deepLink)
+                qrImage = deepLink.flatMap { QRCode.image(from: $0) }
             }
         }
     }
@@ -135,7 +139,7 @@ struct ProfileQRView: View {
         }
     }
 
-    private func copyNpub() {
+    private func copyNpub(_ npub: String) {
         UIPasteboard.general.string = npub
         Haptics.selection()
         withAnimation(.smooth(duration: 0.15)) { copied = true }

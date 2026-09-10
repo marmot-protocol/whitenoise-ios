@@ -202,7 +202,6 @@ struct AddMembersSheet: View {
         } label: {
             RecipientRow(
                 accountIdHex: candidate.accountIdHex,
-                npub: candidate.npub,
                 profileOverride: candidate.searchProfile,
                 searchContext: RecipientSearch.resultContext(
                     for: candidate,

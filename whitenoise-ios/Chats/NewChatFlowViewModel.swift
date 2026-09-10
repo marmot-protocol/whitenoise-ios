@@ -111,8 +111,10 @@ final class NewChatFlowViewModel {
         conversationChooser = ConversationChooserPresentation(
             targetAccountIdHex: accountIdHex,
             memberRef: memberRef,
-            recipientName: appState.knownDisplayName(forAccountIdHex: accountIdHex)
-                ?? appState.shortNpub(forAccountIdHex: accountIdHex),
+            recipientName: IdentityPresentation.text(
+                accountIdHex: accountIdHex,
+                knownName: appState.knownDisplayName(forAccountIdHex: accountIdHex)
+            ),
             choices: choices
         )
         Haptics.selection()
@@ -444,7 +446,7 @@ final class NewChatFlowViewModel {
                 // Soft validation — keep the flow open and name who can't be added.
                 groupCreateError = L10n.formatted(
                     "%@ hasn't published a compatible key package, so they can't be added yet.",
-                    appState.shortNpub(forAccountIdHex: account)
+                    IdentityPresentation.text(accountIdHex: account)
                 )
             } else {
                 groupCreateError = marmotError.localizedDescription

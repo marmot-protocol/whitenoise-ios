@@ -34,7 +34,7 @@ enum MessagePreview {
     static func body(
         _ record: AppMessageRecordFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,
-        systemEventNaming: GroupSystemEventNaming = .shortIdentities
+        systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         switch MessageSemantics.classify(record) {
         case .media(let attachments):
@@ -78,7 +78,7 @@ enum MessagePreview {
     static func body(
         _ preview: TimelineReplyPreviewFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,
-        systemEventNaming: GroupSystemEventNaming = .shortIdentities
+        systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         if preview.deleted {
             return L10n.string("This message was deleted")
@@ -113,7 +113,7 @@ enum MessagePreview {
     static func body(
         _ preview: ChatListMessagePreviewFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil,
-        systemEventNaming: GroupSystemEventNaming = .shortIdentities
+        systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         if preview.deleted {
             return L10n.string("This message was deleted")

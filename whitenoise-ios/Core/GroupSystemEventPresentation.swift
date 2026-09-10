@@ -47,7 +47,7 @@ nonisolated enum GroupSystemEventPresentation {
         from plaintext: String,
         sender: String = "",
         currentAccountIdHex: String? = nil,
-        displayName: DisplayNameResolver = { IdentityFormatter.short($0) }
+        displayName: DisplayNameResolver = { IdentityPresentation.text(accountIdHex: $0) }
     ) -> String? {
         guard let payload = parsePayload(plaintext) else { return nil }
         return payload.resolvedText(
@@ -462,9 +462,11 @@ nonisolated enum GroupSystemEventPresentation {
 /// resolver and the local account travel together because a row names both an
 /// actor and a subject, either of which can be the reader.
 nonisolated struct GroupSystemEventNaming {
-    static let shortIdentities = GroupSystemEventNaming(
+    /// No profile lookup available: participants render as short npubs, or as
+    /// localized generic copy when a payload's key is malformed.
+    static let unresolvedIdentities = GroupSystemEventNaming(
         currentAccountIdHex: nil,
-        displayName: { IdentityFormatter.short($0) }
+        displayName: { IdentityPresentation.text(accountIdHex: $0) }
     )
 
     let currentAccountIdHex: String?

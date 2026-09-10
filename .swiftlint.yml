@@ -107,3 +107,13 @@ custom_rules:
     included: '.*whitenoise-iosTests/.*\.swift'
     message: "Tests must assert on behavior, not source text. Don't read a .swift file with String(contentsOf:) to check how code is spelled."
     severity: error
+  no_raw_identity_display_name:
+    name: "Raw hex identity fallback"
+    regex: 'IdentityFormatter\.displayName'
+    message: "IdentityFormatter.displayName declared short raw hex as an account's fallback. Use IdentityPresentation.resolve/text, which yields a name, an npub, or localized generic copy."
+    severity: error
+  no_npub_helper_echoing_input:
+    name: "npub helper echoing its input"
+    regex: 'NostrProfileReference\.npub\([^)]*\)\s*\?\?\s*(id|accountIdHex|hex)\b'
+    message: "An npub encoder that falls back to its own argument hands raw hex to callers that label it 'npub'. Keep the optional and hide the affordance, or use IdentityPresentation."
+    severity: error

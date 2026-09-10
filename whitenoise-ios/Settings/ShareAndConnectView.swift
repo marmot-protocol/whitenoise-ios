@@ -16,12 +16,12 @@ struct ShareAndConnectView: View {
 
     let accountIdHex: String
 
-    private var npub: String {
+    private var npub: String? {
         appState.npub(forAccountIdHex: accountIdHex)
     }
 
-    private var deepLink: String {
-        DeepLink.profile(npub: npub).url.absoluteString
+    private var deepLink: String? {
+        npub.map { DeepLink.profile(npub: $0).url.absoluteString }
     }
 
     var body: some View {
@@ -52,7 +52,7 @@ struct ShareAndConnectView: View {
                 .frame(width: 180)
             }
 
-            if mode == .share {
+            if mode == .share, let deepLink {
                 ToolbarItem(placement: .topBarTrailing) {
                     ShareLink(item: deepLink) {
                         Label("Share Profile", systemImage: "square.and.arrow.up")
@@ -62,7 +62,7 @@ struct ShareAndConnectView: View {
             }
         }
         .task(id: deepLink) {
-            qrImage = QRCode.image(from: deepLink)
+            qrImage = deepLink.flatMap { QRCode.image(from: $0) }
         }
         .navigationDestination(isPresented: scannedProfileIsPresented) {
             if let scannedNpub {
@@ -86,11 +86,13 @@ struct ShareAndConnectView: View {
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
 
-                    CopyableValueChip(
-                        display: appState.shortNpub(forAccountIdHex: accountIdHex),
-                        copyValue: npub,
-                        copiedToastTitle: L10n.string("npub")
-                    )
+                    if let npub {
+                        CopyableValueChip(
+                            display: IdentityFormatter.short(npub),
+                            copyValue: npub,
+                            copiedToastTitle: L10n.string("npub")
+                        )
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)

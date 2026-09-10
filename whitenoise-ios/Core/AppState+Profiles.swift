@@ -105,7 +105,10 @@ extension AppState {
     /// Best-effort display name. Prefers the known name, then canonical npub.
     @MainActor
     func displayName(forAccountIdHex id: String) -> String {
-        knownDisplayName(forAccountIdHex: id) ?? shortNpub(forAccountIdHex: id)
+        IdentityPresentation.text(
+            accountIdHex: id,
+            knownName: knownDisplayName(forAccountIdHex: id)
+        )
     }
 
     /// Display name for a markdown mention entity (npub/nprofile). nil when
@@ -127,21 +130,24 @@ extension AppState {
         profileStore.avatarURL(forAccountIdHex: id)
     }
 
-    /// The `npub...` bech32 form of an account id hex, read from the binding.
-    /// Falls back to the hex if conversion fails (shouldn't, for a valid pubkey).
+    /// The canonical `npub...` form of an account id hex, or nil when the value
+    /// isn't a 32-byte public key. Optional on purpose: a caller that needs a
+    /// copyable or shareable npub must hide the affordance rather than fall
+    /// back to the hex it was handed.
     @MainActor
-    func npub(forAccountIdHex id: String) -> String {
+    func npub(forAccountIdHex id: String) -> String? {
         // Pure bech32 encode: the runtime accessor rebuilds the released
         // client (reopening on-disk storage) and traps if that throws —
         // callers here are SwiftUI body paths that may render while the
         // runtime is suspended.
-        NostrProfileReference.npub(fromAccountIdHex: id) ?? id
+        IdentityPresentation.canonicalNpub(accountIdHex: id)
     }
 
-    /// Truncated npub for compact UI (e.g. `npub1abc...wxyz`).
+    /// Truncated npub for compact UI (e.g. `npub1abc…wxyz`), or localized
+    /// generic copy for a malformed key.
     @MainActor
     func shortNpub(forAccountIdHex id: String) -> String {
-        IdentityFormatter.short(npub(forAccountIdHex: id))
+        IdentityPresentation.text(accountIdHex: id)
     }
 
     @MainActor

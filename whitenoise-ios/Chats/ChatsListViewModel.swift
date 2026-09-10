@@ -105,7 +105,7 @@ final class ChatsListViewModel {
             leaveRequestPending: Bool = false,
             draftSummary: MessageDraftSummaryFfi? = nil,
             mentionDisplayName: MarkdownMentionResolver? = nil,
-            systemEventNaming: GroupSystemEventNaming = .shortIdentities
+            systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
         ) {
             let previewText = Self.sanitizedPreview(
                 from: row.lastMessage,
@@ -840,8 +840,10 @@ final class ChatsListViewModel {
             systemEventNaming: GroupSystemEventNaming(
                 currentAccountIdHex: muteLookup.accountIdHex,
                 displayName: { [weak appState] accountIdHex in
-                    appState?.displayName(forAccountIdHex: accountIdHex)
-                        ?? IdentityFormatter.short(accountIdHex)
+                    IdentityPresentation.text(
+                        accountIdHex: accountIdHex,
+                        knownName: appState?.knownDisplayName(forAccountIdHex: accountIdHex)
+                    )
                 }
             )
         )
@@ -931,8 +933,10 @@ final class ChatsListViewModel {
            ContentSanitizer.groupName(row.groupName) == nil {
             if let cachedDirectPeerAccountId {
                 return Display(
-                    title: appState.knownDisplayName(forAccountIdHex: cachedDirectPeerAccountId)
-                        ?? appState.shortNpub(forAccountIdHex: cachedDirectPeerAccountId),
+                    title: IdentityPresentation.text(
+                        accountIdHex: cachedDirectPeerAccountId,
+                        knownName: appState.knownDisplayName(forAccountIdHex: cachedDirectPeerAccountId)
+                    ),
                     avatarURL: appState.avatarURL(forAccountIdHex: cachedDirectPeerAccountId)
                         ?? fallbackAvatarURL,
                     avatarSeed: cachedDirectPeerAccountId,
