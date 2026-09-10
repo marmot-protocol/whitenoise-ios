@@ -7,15 +7,55 @@ import Foundation
 nonisolated struct RemoteGiphyMedia: Equatable, Sendable {
     static let maximumWireTextLength = 2_304
     static let maximumAttributionLength = 80
+    static let maximumCaptionLength = 1_024
+    static let maximumDimension = 4_096
+
+    private static let creditPrefix = "via GIPHY · "
+    private static let bareCredit = "via GIPHY"
 
     let url: URL
     let width: Int
     let height: Int
     let attribution: String?
+    /// Composer text sent with the GIF. It rides in the envelope so one Send
+    /// stays one message instead of splitting the caption into its own bubble.
+    let caption: String?
+
+    init(url: URL, width: Int, height: Int, attribution: String?, caption: String? = nil) {
+        self.url = url
+        self.width = width
+        self.height = height
+        self.attribution = attribution
+        self.caption = caption
+    }
 
     var wireText: String {
-        let credit = attribution.map { "via GIPHY · \($0)" } ?? "via GIPHY"
-        return "\(url.absoluteString)\n\(credit)"
+        wireText(caption: caption)
+    }
+
+    /// The bare URL/credit envelope. A caption-free GIF is byte-identical to
+    /// the pre-caption wire format, so uncaptioned sends stay interoperable.
+    var uncaptionedWireText: String {
+        wireText(caption: nil)
+    }
+
+    func wireText(caption: String?) -> String {
+        let credit = attribution.map { "\(Self.creditPrefix)\($0)" } ?? Self.bareCredit
+        let envelope = "\(url.absoluteString)\n\(credit)"
+        guard let caption = Self.sanitizedCaption(caption) else { return envelope }
+        return "\(envelope)\n\(caption)"
+    }
+
+    /// Envelope carrying `caption`, or nil when the caption cannot fit the wire
+    /// budget. Callers send the overflow as its own message rather than
+    /// silently truncating what the user typed.
+    func captionedWireText(_ caption: String) -> String? {
+        // Checked before sanitizing, which would bound an overlong caption to
+        // maximumCaptionLength and quietly drop the rest of what was typed.
+        guard caption.count <= Self.maximumCaptionLength else { return nil }
+        let candidate = wireText(caption: caption)
+        guard candidate.count <= Self.maximumWireTextLength else { return nil }
+        return candidate
     }
 
     var aspectRatio: CGFloat {
@@ -27,33 +67,54 @@ nonisolated struct RemoteGiphyMedia: Equatable, Sendable {
         guard bounded.count <= maximumWireTextLength else { return nil }
         let lines = bounded.split(
             separator: "\n",
-            maxSplits: 1,
+            maxSplits: 2,
             omittingEmptySubsequences: false
         ).map(String.init)
-        guard lines.count == 2,
-              let url = validatedMediaURL(lines[0]),
-              lines[1] == "via GIPHY" || lines[1].hasPrefix("via GIPHY · ")
+        guard lines.count >= 2,
+              let url = validatedMediaURL(lines[0])
         else { return nil }
 
         let attribution: String?
-        if lines[1] == "via GIPHY" {
+        if lines[1] == bareCredit {
             attribution = nil
-        } else {
-            let raw = String(lines[1].dropFirst("via GIPHY · ".count))
+        } else if lines[1].hasPrefix(creditPrefix) {
+            let raw = String(lines[1].dropFirst(creditPrefix.count))
             guard let sanitized = ContentSanitizer.singleLine(
                 raw,
                 maxLength: maximumAttributionLength
             ), sanitized == raw else { return nil }
             attribution = sanitized
+        } else {
+            return nil
         }
-        return RemoteGiphyMedia(url: url, width: 4, height: 3, attribution: attribution)
+
+        // An unusable caption is dropped rather than failing the parse; a
+        // rejected envelope would render the raw CDN URL as message text.
+        return RemoteGiphyMedia(
+            url: url,
+            width: 4,
+            height: 3,
+            attribution: attribution,
+            caption: lines.count > 2 ? sanitizedCaption(lines[2]) : nil
+        )
+    }
+
+    static func boundedDimension(_ value: Int) -> Int? {
+        (1...maximumDimension).contains(value) ? value : nil
+    }
+
+    static func sanitizedCaption(_ raw: String?) -> String? {
+        ContentSanitizer.multilineText(raw, maxLength: maximumCaptionLength)
     }
 
     /// The one-line label every preview surface (chat list, reply preview,
     /// notification body) shows for a GIPHY message, or nil when `text` is not
     /// an envelope.
     static func envelopePreviewText(for text: String) -> String? {
-        isEnvelopeText(text) ? L10n.string("GIF via GIPHY") : nil
+        guard isEnvelopeText(text) else { return nil }
+        // A recoverable envelope may carry a caption. Anything else, including
+        // a clipped or unrecognized credit line, degrades to the label.
+        return parse(wireText: text)?.caption ?? L10n.string("GIF via GIPHY")
     }
 
     /// Whether peer text is a GIPHY envelope for display purposes. Looser than

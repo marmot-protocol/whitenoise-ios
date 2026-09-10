@@ -419,9 +419,27 @@ struct GiphySearchPreviewView: View {
     }
 }
 
+extension RemoteGiphyMedia {
+    var creditLabel: String {
+        attribution.map { L10n.formatted("via GIPHY · %@", $0) } ?? L10n.string("via GIPHY")
+    }
+}
+
 struct RemoteGiphyMediaView: View {
+    /// A grid cell fills a square and drops the credit row, which cannot fit;
+    /// the grid carries one shared attribution line instead.
+    nonisolated enum Layout: Equatable {
+        case card
+        case gridCell(CGSize)
+        case fullscreen
+    }
+
     let media: RemoteGiphyMedia
     let mayLoadAutomatically: Bool
+    var layout: Layout = .card
+    /// Set on a bubble GIF so a loaded tile opens the fullscreen gallery, the
+    /// way a photo tile does. Absent while the tile is still tap-to-load.
+    var onOpenFullscreen: (() -> Void)?
 
     @State private var loadingStore = RemoteGIFLoadingStore.shared
     private let playbackBudget = GiphyPlaybackBudget.shared
@@ -433,9 +451,16 @@ struct RemoteGiphyMediaView: View {
     @State private var displayGeometry: StableGiphyDisplayGeometry
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
 
-    init(media: RemoteGiphyMedia, mayLoadAutomatically: Bool) {
+    init(
+        media: RemoteGiphyMedia,
+        mayLoadAutomatically: Bool,
+        layout: Layout = .card,
+        onOpenFullscreen: (() -> Void)? = nil
+    ) {
         self.media = media
         self.mayLoadAutomatically = mayLoadAutomatically
+        self.layout = layout
+        self.onOpenFullscreen = onOpenFullscreen
         _displayGeometry = State(
             initialValue: StableGiphyDisplayGeometry(fallbackAspectRatio: media.aspectRatio)
         )
@@ -446,35 +471,8 @@ struct RemoteGiphyMediaView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack {
-                Color.black
-                if let playback {
-                    GiphyPlaybackView(playback: playback)
-                } else {
-                    placeholder
-                }
-            }
-            .aspectRatio(displayGeometry.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: .infinity)
-            .clipped()
-
-            HStack(spacing: 5) {
-                Text(media.attribution.map { L10n.formatted("via GIPHY · %@", $0) } ?? L10n.string("via GIPHY"))
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                if !mayLoadAutomatically && !loadingStore.automaticallyLoads && playback != nil {
-                    Image(systemName: "hand.tap")
-                        .accessibilityHidden(true)
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-        }
-        .background(Color(.secondarySystemBackground))
-        .task(id: GiphyPlaybackTaskID(
+        content
+            .task(id: GiphyPlaybackTaskID(
             contentID: media.url.absoluteString,
             isEligible: isTimelineRowVisible && shouldLoad,
             requestGeneration: loadRequestGeneration
@@ -488,6 +486,76 @@ struct RemoteGiphyMediaView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(L10n.string("GIF via GIPHY"))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch layout {
+        case .fullscreen:
+            VStack(spacing: 14) {
+                surface
+                    .aspectRatio(displayGeometry.aspectRatio, contentMode: .fit)
+
+                Text(media.creditLabel)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .card:
+            VStack(alignment: .leading, spacing: 0) {
+                surface
+                    .aspectRatio(displayGeometry.aspectRatio, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .clipped()
+
+                HStack(spacing: 5) {
+                    Text(media.creditLabel)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if !mayLoadAutomatically && !loadingStore.automaticallyLoads && playback != nil {
+                        Image(systemName: "hand.tap")
+                            .accessibilityHidden(true)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 7)
+            }
+            .background(Color(.secondarySystemBackground))
+        case .gridCell(let size):
+            surface
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        }
+    }
+
+    @ViewBuilder
+    private var surface: some View {
+        let base = ZStack {
+            Color.black
+            if let playback {
+                GiphyPlaybackView(playback: playback)
+            } else {
+                placeholder
+            }
+        }
+        // While unloaded the placeholder button owns the tap, so opening
+        // fullscreen only takes over once the GIF is playing.
+        if let onOpenFullscreen, playback != nil {
+            base
+                .contentShape(.rect)
+                .onTapGesture(perform: onOpenFullscreen)
+        } else {
+            base
+        }
+    }
+
+    private var showsCompactPlaceholder: Bool {
+        if case .gridCell = layout { return true }
+        return false
     }
 
     @ViewBuilder
@@ -507,9 +575,11 @@ struct RemoteGiphyMediaView: View {
                         .foregroundStyle(.white)
                         .frame(width: 48, height: 48)
                         .background(.white.opacity(0.16), in: Circle())
-                    Text(didFail ? L10n.string("Retry") : L10n.string("Load GIF"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
+                    if !showsCompactPlaceholder {
+                        Text(didFail ? L10n.string("Retry") : L10n.string("Load GIF"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
                 }
             }
             .buttonStyle(.plain)

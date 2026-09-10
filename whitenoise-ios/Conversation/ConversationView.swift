@@ -215,19 +215,20 @@ struct ConversationSendPayload {
     let viewModel: ConversationViewModel
     let dispatch: ConversationSendDispatch
 
-    var giphyWireText: String? { dispatch.giphyWireText }
-    var text: String { dispatch.text }
-    var attachments: [MediaDraftAttachment] { dispatch.attachments }
+    var steps: [ConversationSendDispatch.Step] { dispatch.steps }
 }
 
 nonisolated struct ConversationSendDispatch: Equatable {
-    let giphyWireText: String?
-    let text: String
-    let attachments: [MediaDraftAttachment]
+    nonisolated enum Step: Equatable {
+        case text(String)
+        case media([MediaDraftAttachment], caption: String)
+    }
 
-    var sendsGiphyMessage: Bool { giphyWireText != nil }
-
-    var sendsComposerMessage: Bool { !text.isEmpty || !attachments.isEmpty }
+    /// The messages one Send publishes, in publication order. A staged GIF
+    /// folds the composer text into its envelope caption, so this is normally a
+    /// single step. Typed text leads only when it cannot fit that envelope, so
+    /// the reply target stays on what the user wrote rather than on the GIF.
+    let steps: [Step]
 }
 
 enum ConversationSendPreparation {
@@ -236,13 +237,24 @@ enum ConversationSendPreparation {
         giphyDraft: RemoteGiphyMedia?,
         mediaDrafts: [MediaDraftAttachment]
     ) -> ConversationSendDispatch? {
-        let dispatch = ConversationSendDispatch(
-            giphyWireText: giphyDraft?.wireText,
-            text: text,
-            attachments: mediaDrafts
-        )
-        guard dispatch.sendsGiphyMessage || dispatch.sendsComposerMessage else { return nil }
-        return dispatch
+        guard let giphyDraft else {
+            guard !text.isEmpty || !mediaDrafts.isEmpty else { return nil }
+            return ConversationSendDispatch(steps: [step(text: text, attachments: mediaDrafts)])
+        }
+        if let captioned = giphyDraft.captionedWireText(text) {
+            return ConversationSendDispatch(steps: [step(text: captioned, attachments: mediaDrafts)])
+        }
+        return ConversationSendDispatch(steps: [
+            .text(text),
+            step(text: giphyDraft.uncaptionedWireText, attachments: mediaDrafts)
+        ])
+    }
+
+    private static func step(
+        text: String,
+        attachments: [MediaDraftAttachment]
+    ) -> ConversationSendDispatch.Step {
+        attachments.isEmpty ? .text(text) : .media(attachments, caption: text)
     }
 
     static func prepare(
@@ -2487,14 +2499,13 @@ struct ConversationView: View {
         )
         composerSendBottomScrollRequest &+= 1
         Task {
-            if let giphyWireText = payload.giphyWireText {
-                await payload.viewModel.sendPreparedComposerText(giphyWireText)
-            }
-            guard payload.dispatch.sendsComposerMessage else { return }
-            if payload.attachments.isEmpty {
-                await payload.viewModel.sendPreparedComposerText(payload.text)
-            } else {
-                await payload.viewModel.sendPreparedMedia(payload.attachments, caption: payload.text)
+            for step in payload.steps {
+                switch step {
+                case .text(let text):
+                    await payload.viewModel.sendPreparedComposerText(text)
+                case .media(let attachments, let caption):
+                    await payload.viewModel.sendPreparedMedia(attachments, caption: caption)
+                }
             }
         }
     }

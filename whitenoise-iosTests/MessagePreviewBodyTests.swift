@@ -91,6 +91,27 @@ struct MessagePreviewBodyTests {
         #expect(MessagePreview.body(record) == "GIF via GIPHY")
     }
 
+    /// A GIF sharing its message with photos classifies as media, whose preview
+    /// branch flattens plaintext — which here is the envelope, not a caption.
+    @Test func mediaClassifiedGiphyMessagePreviewsItsCaptionNotTheEnvelope() throws {
+        let media = RemoteGiphyMedia(
+            url: try #require(URL(string: "https://media.giphy.com/media/abc/giphy.gif")),
+            width: 480,
+            height: 270,
+            attribution: "Marmot Studio"
+        )
+        let record = previewRecord(
+            kind: MessageSemantics.kindChat,
+            plaintext: try #require(media.captionedWireText("both of these")),
+            tags: [encryptedMediaTag()]
+        )
+
+        let preview = MessagePreview.body(record)
+
+        #expect(preview == "both of these")
+        #expect(!preview.contains("giphy.com"))
+    }
+
     @Test func tokenlessEditedBodyRendersCanonicalMentionAsDisplayName() throws {
         // MDK emits empty markdown tokens for kind-1009 edits. Once projected
         // onto the original chat row, the body must still render the mention.

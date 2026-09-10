@@ -198,14 +198,42 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] On the receiving device, opening the chat does not contact or load the
       GIF. Tapping **Load GIF** loads and loops it; the chat-list preview says
       **GIF via GIPHY** instead of exposing the media URL.
+- [ ] Type a caption, then choose a GIF and send. Both arrive as **one**
+      message: the GIF tile with the caption beneath it in the same bubble,
+      the way a photo caption renders. The chat-list preview and the
+      notification show the caption, never the media URL.
+- [ ] Stage a GIF, a photo, and a caption together and send. All three arrive
+      as one bubble, with the GIF and the photo as equal cells in the same
+      media grid — not the GIF stacked above the photo — one **via GIPHY**
+      credit line beneath the grid, then the shared caption. Nothing splits
+      into a second message.
+- [ ] Send a GIF alongside a document or a voice note. The GIF keeps its
+      full-width card with its own credit row and the file rows sit beneath it.
+- [ ] On the receiving device with automatic GIF loading off, a GIF sharing a
+      grid with photos shows a play glyph and no "Load GIF" label (the cell is
+      too small); tapping it loads and loops only that cell.
+- [ ] Tap a looping GIF in a sent bubble. The fullscreen viewer opens on the
+      GIF, which loops there with its **via GIPHY** credit beneath it.
+- [ ] In a message holding a GIF and two photos, tap a photo to open the
+      viewer, then swipe. The GIF is the first page and the counter reads
+      **1 of 3**. On the GIF page, Save, Share and Forward are unavailable;
+      swiping to a photo re-enables them and they act on that photo.
+- [ ] Close the viewer from the GIF page and confirm the conversation is
+      unchanged and the bubble's GIF still loops.
+- [ ] Send a GIF with a caption longer than a couple of thousand characters.
+      The caption sends first as its own message and the GIF follows without
+      one, with no text lost. With a reply active, the reply badge stays on the
+      caption message.
+- [ ] Mention a member in a GIF caption. The caption renders the display name,
+      not a raw `npub`.
 - [ ] Enable Settings → Data & Storage → Automatically Load Remote GIFs and
       confirm received GIFs then load on opening a chat. Disable it and confirm
       the tap-to-load behavior returns.
 - [ ] Reply to a message and choose a GIF. Confirm the reply context remains
       attached and the GIF bubble renders without shifting nearby rows.
 - [ ] Send landscape, square, and portrait GIFs. Confirm each follows its
-      source aspect ratio, meets the bubble's rounded edges without
-      letterboxing, and loads visibly sharper than its search thumbnail.
+      source aspect ratio, sits inset in the bubble with rounded corners like a
+      photo attachment, and loads visibly sharper than its search thumbnail.
 - [ ] With no GIPHY key configured, the GIF drawer action explains that search
       is unavailable and no network request is made.
 

@@ -241,7 +241,9 @@ nonisolated enum LocalNotificationProjection {
     private static func notificationPreview(_ raw: String?) -> String? {
         guard let raw else { return nil }
         if let label = RemoteGiphyMedia.envelopePreviewText(for: raw) {
-            return label
+            // The label may now be a sender caption, so it goes through the
+            // same bounding every other peer preview text does.
+            return sanitizedPreview(label) ?? L10n.string("GIF via GIPHY")
         }
         return sanitizedPreview(raw)
     }

@@ -184,8 +184,8 @@ nonisolated struct GiphySearchClient {
     }
 
     private static func boundedDimension(_ raw: String?) -> Int? {
-        guard let raw, let value = Int(raw), (1...4_096).contains(value) else { return nil }
-        return value
+        guard let raw, let value = Int(raw) else { return nil }
+        return RemoteGiphyMedia.boundedDimension(value)
     }
 
     private static func boundedByteCount(_ raw: String?) -> Int? {

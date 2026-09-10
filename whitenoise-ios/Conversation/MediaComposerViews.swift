@@ -101,9 +101,9 @@ struct VideoPreviewPlayOverlay: View {
 
 struct MediaDraftStrip: View {
     let attachments: [MediaDraftAttachment]
-    var giphyDraft: RemoteGiphyMedia?
+    let giphyDraft: RemoteGiphyMedia?
     let onRemove: (MediaDraftAttachment.ID) -> Void
-    var onRemoveGiphyDraft: () -> Void = {}
+    let onRemoveGiphyDraft: () -> Void
     let onPreviewVisual: (MediaDraftAttachment.ID) -> Void
 
     private var containsVisualMedia: Bool {
@@ -248,7 +248,7 @@ struct MediaDraftStrip: View {
     }
 }
 
-struct ComposerGiphyDraftTile: View {
+private struct ComposerGiphyDraftTile: View {
     let media: RemoteGiphyMedia
 
     var body: some View {

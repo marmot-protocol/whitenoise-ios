@@ -120,12 +120,62 @@ struct GiphyIntegrationTests {
         #expect(RemoteGiphyMedia.validatedMediaURL(rawURL) == nil)
     }
 
-    @Test func wireParserRejectsExtraOrMalformedMetadata() {
+    @Test func wireParserRejectsMalformedMetadata() {
         let url = "https://media.giphy.com/media/abc/giphy.mp4"
         #expect(RemoteGiphyMedia.parse(wireText: url) == nil)
         #expect(RemoteGiphyMedia.parse(wireText: "\(url)\nnot GIPHY") == nil)
-        #expect(RemoteGiphyMedia.parse(wireText: "\(url)\nvia GIPHY\nextra") == nil)
         #expect(RemoteGiphyMedia.parse(wireText: "\(url)\nvia GIPHY · \(String(repeating: "a", count: 81))") == nil)
+    }
+
+    @Test func captionRidesInTheSameEnvelopeAsTheGIF() throws {
+        let media = GiphyDraftFixture.media
+        let wireText = try #require(media.captionedWireText("look at this"))
+
+        let parsed = try #require(RemoteGiphyMedia.parse(wireText: wireText))
+
+        #expect(parsed.url == media.url)
+        #expect(parsed.attribution == media.attribution)
+        #expect(parsed.caption == "look at this")
+    }
+
+    @Test func captionSurvivesItsOwnNewlines() throws {
+        let wireText = try #require(GiphyDraftFixture.media.captionedWireText("first\nsecond"))
+
+        #expect(RemoteGiphyMedia.parse(wireText: wireText)?.caption == "first\nsecond")
+    }
+
+    /// An uncaptioned GIF must stay byte-identical to the pre-caption wire
+    /// format so peers that only understand two lines keep rendering it.
+    @Test func uncaptionedEnvelopeKeepsTheTwoLineWireFormat() {
+        let media = GiphyDraftFixture.media
+
+        #expect(media.uncaptionedWireText == "\(media.url.absoluteString)\nvia GIPHY · Marmot Studio")
+        #expect(media.captionedWireText("") == media.uncaptionedWireText)
+        #expect(media.captionedWireText("   \n  ") == media.uncaptionedWireText)
+    }
+
+    /// Rejecting the envelope over a bad caption would render the raw CDN URL
+    /// as message text, so an unusable caption is dropped instead.
+    @Test func unusableCaptionDropsTheCaptionRatherThanTheGIF() throws {
+        let media = GiphyDraftFixture.media
+        let wireText = "\(media.url.absoluteString)\nvia GIPHY\n\u{200B}\u{200B}"
+
+        let parsed = try #require(RemoteGiphyMedia.parse(wireText: wireText))
+
+        #expect(parsed.url == media.url)
+        #expect(parsed.caption == nil)
+    }
+
+    /// The caption sanitizer bounds its output, so an overlong caption has to
+    /// be refused before sanitizing or the tail is silently dropped.
+    @Test func captionTooLargeForTheBudgetIsRefusedRatherThanTruncated() throws {
+        let media = GiphyDraftFixture.media
+        let atLimit = String(repeating: "a", count: RemoteGiphyMedia.maximumCaptionLength)
+        let overLimit = String(repeating: "a", count: RemoteGiphyMedia.maximumCaptionLength + 1)
+
+        #expect(media.captionedWireText(overLimit) == nil)
+        let fitted = try #require(media.captionedWireText(atLimit))
+        #expect(RemoteGiphyMedia.parse(wireText: fitted)?.caption == atLimit)
     }
 
     @Test func searchRequestKeepsTheQueryAndUsesThePrivacyTransportPolicy() throws {
@@ -376,23 +426,70 @@ struct GiphyDraftDispatchTests {
             mediaDrafts: []
         ))
 
-        #expect(dispatch.giphyWireText == GiphyDraftFixture.media.wireText)
-        #expect(dispatch.sendsGiphyMessage)
-        #expect(!dispatch.sendsComposerMessage)
-        #expect(RemoteGiphyMedia.parse(wireText: try #require(dispatch.giphyWireText)) != nil)
+        #expect(dispatch.steps == [.text(GiphyDraftFixture.media.uncaptionedWireText)])
     }
 
-    @Test func stagedGIFKeepsTypedTextInItsOwnMessage() throws {
+    /// #964 follow-up — a GIF and the text typed with it used to arrive as two
+    /// bubbles. One Send is now one message carrying both.
+    @Test func stagedGIFCarriesTypedTextInTheSameMessage() throws {
         let dispatch = try #require(ConversationSendPreparation.dispatch(
             text: "look at this",
             giphyDraft: GiphyDraftFixture.media,
             mediaDrafts: []
         ))
 
-        #expect(dispatch.giphyWireText == GiphyDraftFixture.media.wireText)
-        #expect(dispatch.text == "look at this")
-        #expect(dispatch.sendsComposerMessage)
-        #expect(RemoteGiphyMedia.parse(wireText: try #require(dispatch.giphyWireText)) != nil)
+        #expect(dispatch.steps.count == 1)
+        guard case .text(let body) = try #require(dispatch.steps.first) else {
+            Issue.record("expected a single text message")
+            return
+        }
+        let parsed = try #require(RemoteGiphyMedia.parse(wireText: body))
+        #expect(parsed.url == GiphyDraftFixture.media.url)
+        #expect(parsed.caption == "look at this")
+    }
+
+    /// A GIF, a photo, and a caption belong to one message so the caption is no
+    /// longer stranded on the photo while the GIF sends separately.
+    @Test func stagedGIFSharesOneMessageWithStagedMediaAndCaption() throws {
+        let photo = MediaDraftAttachment(
+            fileName: "photo.jpg",
+            mediaType: "image/jpeg",
+            data: Data([0xFF, 0xD8, 0xFF]),
+            dim: "100x80"
+        )
+
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: "both of these",
+            giphyDraft: GiphyDraftFixture.media,
+            mediaDrafts: [photo]
+        ))
+
+        #expect(dispatch.steps.count == 1)
+        guard case .media(let attachments, let caption) = try #require(dispatch.steps.first) else {
+            Issue.record("expected a single media message")
+            return
+        }
+        #expect(attachments.map(\.id) == [photo.id])
+        #expect(RemoteGiphyMedia.parse(wireText: caption)?.caption == "both of these")
+    }
+
+    /// A caption too large for the envelope follows as its own message rather
+    /// than being silently truncated away.
+    @Test func captionThatCannotFitTheEnvelopeFollowsAsItsOwnMessage() throws {
+        let oversized = String(repeating: "a", count: RemoteGiphyMedia.maximumCaptionLength + 1)
+
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: oversized,
+            giphyDraft: GiphyDraftFixture.media,
+            mediaDrafts: []
+        ))
+
+        // The typed text leads so an active reply target stays on what the
+        // user wrote instead of moving to the GIF.
+        #expect(dispatch.steps == [
+            .text(oversized),
+            .text(GiphyDraftFixture.media.uncaptionedWireText)
+        ])
     }
 
     @Test func composerWithoutGIFDraftIsUnchanged() throws {
@@ -402,9 +499,130 @@ struct GiphyDraftDispatchTests {
             mediaDrafts: []
         ))
 
-        #expect(dispatch.giphyWireText == nil)
-        #expect(!dispatch.sendsGiphyMessage)
-        #expect(dispatch.text == "plain")
+        #expect(dispatch.steps == [.text("plain")])
+    }
+
+    /// Editing a GIF works on the caption; the envelope must never reach the
+    /// composer and must survive the round trip intact.
+    @Test func editingAGIFWorksOnItsCaptionAndKeepsTheEnvelope() throws {
+        let media = GiphyDraftFixture.media
+        let original = try #require(media.captionedWireText("first"))
+
+        #expect(GiphyMessageEditProjection.editableCaption(for: original) == "first")
+        #expect(GiphyMessageEditProjection.editableCaption(for: media.uncaptionedWireText) == "")
+        #expect(GiphyMessageEditProjection.editableCaption(for: "plain message") == nil)
+
+        let edited = try #require(GiphyMessageEditProjection.editedPlaintext(
+            original: original,
+            caption: "second"
+        ))
+        let parsed = try #require(RemoteGiphyMedia.parse(wireText: edited))
+        #expect(parsed.url == media.url)
+        #expect(parsed.attribution == media.attribution)
+        #expect(parsed.caption == "second")
+
+        #expect(GiphyMessageEditProjection.editedPlaintext(
+            original: "plain message",
+            caption: "second"
+        ) == "second")
+        #expect(GiphyMessageEditProjection.editedPlaintext(
+            original: original,
+            caption: String(repeating: "a", count: RemoteGiphyMedia.maximumCaptionLength + 1)
+        ) == nil)
+    }
+
+    /// The envelope's URL and credit must never surface as user-facing text in
+    /// the bubble or in any preview.
+    @Test func capturedGIFTextNeverExposesTheCDNURL() throws {
+        let wireText = try #require(GiphyDraftFixture.media.captionedWireText("look at this"))
+        let media = try #require(RemoteGiphyMedia.parse(wireText: wireText))
+
+        #expect(MessageBubble.giphyCaptionText(media) == "look at this")
+        #expect(MessagePreview.giphyPreview(wireText) == "look at this")
+        #expect(MessagePreview.giphyPreview(GiphyDraftFixture.media.uncaptionedWireText) == "GIF via GIPHY")
+        #expect(MessageBubble.giphyCaptionText(
+            try #require(RemoteGiphyMedia.parse(wireText: GiphyDraftFixture.media.uncaptionedWireText))
+        ) == "")
+    }
+
+    /// A reply plus typed text plus a GIF is one message, so the reply target
+    /// cannot land on the GIF while the typed text goes out detached.
+    @Test func gifAndTypedTextNeverSplitWhenTheCaptionFits() throws {
+        let dispatch = try #require(ConversationSendPreparation.dispatch(
+            text: "haha",
+            giphyDraft: GiphyDraftFixture.media,
+            mediaDrafts: []
+        ))
+
+        #expect(dispatch.steps.count == 1)
+    }
+
+    /// A GIF sits inside the visual grid next to photos and videos rather than
+    /// stacked above them, but documents and audio keep their own rows.
+    @Test func gifJoinsTheGridOnlyWhenEveryAttachmentIsVisual() {
+        #expect(MessageGiphyGridPresentation.gridsWithGiphy(isVisualMedia: [true]))
+        #expect(MessageGiphyGridPresentation.gridsWithGiphy(isVisualMedia: [true, true, true]))
+        #expect(!MessageGiphyGridPresentation.gridsWithGiphy(isVisualMedia: [true, false]))
+        #expect(!MessageGiphyGridPresentation.gridsWithGiphy(isVisualMedia: [false]))
+        #expect(!MessageGiphyGridPresentation.gridsWithGiphy(isVisualMedia: []))
+    }
+
+    /// The GIF occupies a real grid slot, so the layout must size for it.
+    @Test func giphyCellCountsTowardTheGridLayout() {
+        let gifPlusOnePhoto = MessageMediaGridPresentation.layout(totalCount: 2, maxWidth: 256)
+        let onePhotoAlone = MessageMediaGridPresentation.layout(totalCount: 1, maxWidth: 256)
+
+        #expect(gifPlusOnePhoto.frames.count == 2)
+        #expect(onePhotoAlone.frames.count == 1)
+        #expect(gifPlusOnePhoto.frames[0].width == gifPlusOnePhoto.frames[1].width)
+        #expect(gifPlusOnePhoto.overflowCount == 0)
+    }
+
+    @Test func giphyCreditLabelCarriesTheAttributionForTheWholeGrid() {
+        #expect(GiphyDraftFixture.media.creditLabel
+            == L10n.formatted("via GIPHY · %@", "Marmot Studio"))
+        #expect(RemoteGiphyMedia(
+            url: GiphyDraftFixture.media.url,
+            width: 4,
+            height: 3,
+            attribution: nil
+        ).creditLabel == L10n.string("via GIPHY"))
+    }
+
+    /// Tapping the GIF opens the gallery on the GIF, and a photo opened from
+    /// the same message must still page to it.
+    @Test func galleryPagesIncludeTheGIFFromEitherEntryPoint() throws {
+        let photo = MessageMediaAttachment(
+            id: "owner:aa:1:0",
+            reference: nil,
+            fileName: "photo.jpg",
+            mediaType: "image/jpeg",
+            dim: "100x80",
+            localData: Data([0xFF, 0xD8, 0xFF]),
+            thumbnail: nil
+        )
+        let media = GiphyDraftFixture.media
+
+        let fromGIF = MessageMediaGallery(giphyMedia: media, items: [photo])
+        #expect(fromGIF.pages.map(\.id) == [MessageMediaGallery.giphyPageID, photo.id])
+        #expect(fromGIF.initialItemID == MessageMediaGallery.giphyPageID)
+
+        let fromPhoto = try #require(MessageMediaGallery(
+            items: [photo],
+            initialItem: photo,
+            giphyMedia: media
+        ))
+        #expect(fromPhoto.pages.map(\.id) == [MessageMediaGallery.giphyPageID, photo.id])
+        #expect(fromPhoto.initialItemID == photo.id)
+
+        // A colon-free sentinel cannot collide with an "owner:digest:epoch:index" id.
+        #expect(!MessageMediaGallery.giphyPageID.contains(":"))
+        #expect(photo.id.contains(":"))
+
+        // Galleries without a GIF are unchanged.
+        let mediaOnly = try #require(MessageMediaGallery(items: [photo], initialItem: photo))
+        #expect(mediaOnly.pages.map(\.id) == [photo.id])
+        #expect(mediaOnly.giphyMedia == nil)
     }
 
     @Test func stagedGIFTileWidthTracksItsAspectRatio() {
@@ -434,6 +652,77 @@ struct GiphyDraftPersistenceTests {
             mediaAttachments: media,
             giphyMedia: giphy
         )
+    }
+
+    /// The GIF record is prepended to persistedAttachments, so a full media
+    /// strip plus a GIF must not exceed the app's own attachment cap.
+    @Test func aStagedGIFReservesOneOfTheAttachmentSlots() {
+        let capped = MediaDraftProcessor.maxAttachmentCount
+
+        #expect(ConversationDraftAttachmentBudget.mediaCapacity(hasGiphyDraft: false) == capped)
+        #expect(ConversationDraftAttachmentBudget.mediaCapacity(hasGiphyDraft: true) == capped - 1)
+
+        let photos = (0..<ConversationDraftAttachmentBudget.mediaCapacity(hasGiphyDraft: true))
+            .map { index in
+                MediaDraftAttachment(
+                    fileName: "photo\(index).jpg",
+                    mediaType: "image/jpeg",
+                    data: Data([0xFF, 0xD8, 0xFF]),
+                    dim: "100x80"
+                )
+            }
+
+        #expect(snapshot(media: photos, giphy: GiphyDraftFixture.media)
+            .persistedAttachments.count == capped)
+    }
+
+    /// A GIF staged next to a photo must stay visible in the chat list rather
+    /// than being hidden behind the photo's filename.
+    @Test func chatListPreviewCountsAStagedGIFAlongsideMedia() {
+        let photo = MediaDraftAttachment(
+            fileName: "photo.jpg",
+            mediaType: "image/jpeg",
+            data: Data([0xFF, 0xD8, 0xFF]),
+            dim: "100x80"
+        )
+
+        #expect(preview(for: snapshot(media: [photo], giphy: GiphyDraftFixture.media))
+            == L10n.plural("📎 %lld attachments", Int64(2)))
+        #expect(preview(for: snapshot(giphy: GiphyDraftFixture.media))
+            == L10n.string("GIF via GIPHY"))
+        #expect(preview(for: snapshot(media: [photo], giphy: nil)) == "📎 photo.jpg")
+    }
+
+    private func preview(for snapshot: ConversationDraftSnapshot) -> String? {
+        ConversationDraftPreview.text(from: MessageDraftSummaryFfi(
+            groupIdHex: "aa",
+            content: snapshot.canonicalText,
+            replyToMessageIdHex: snapshot.replyToMessageIdHex,
+            mediaAttachments: snapshot.persistedAttachmentSummaries,
+            createdAtMs: 0,
+            updatedAtMs: 0
+        ))
+    }
+
+    /// A corrupt row must not yield an absurd aspect ratio.
+    @Test func outOfRangeGeometryFallsBackToTheParsedPlaceholder() throws {
+        let record = try #require(snapshot().persistedAttachments.first)
+        let hostile = MessageDraftAttachmentFfi(
+            id: record.id,
+            fileName: record.fileName,
+            mediaType: record.mediaType,
+            plaintext: record.plaintext,
+            dim: "999999999999x1",
+            thumbhash: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
+
+        let restored = try #require(ConversationGiphyDraftRecord.media(from: hostile))
+
+        #expect(restored.width <= RemoteGiphyMedia.maximumDimension)
+        #expect(restored.height <= RemoteGiphyMedia.maximumDimension)
+        #expect(restored.url == GiphyDraftFixture.media.url)
     }
 
     @Test func stagedGIFPersistsAsAURLReferenceRatherThanBytes() throws {
@@ -554,12 +843,10 @@ struct GiphyEnvelopePreviewTests {
         )
     }
 
-    @Test func everyEnvelopeShapeReadsAsTheGIFLabel() throws {
+    @Test func envelopeShapesWithoutACaptionReadAsTheGIFLabel() throws {
         let shapes = [
             "\(giphyEnvelopeURL)\nvia GIPHY",
             "\(giphyEnvelopeURL)\nvia GIPHY · Creator",
-            "\(giphyEnvelopeURL)\nvia GIPHY · Creator\nlook at this one",
-            "\(giphyEnvelopeURL)\nvia GIPHY\n\nvia GIPHY",
             "\(giphyEnvelopeURL)\nvia TENOR",
             "\(giphyEnvelopeURL)\n",
             "  \(giphyEnvelopeURL)  \nvia GIPHY",
@@ -572,6 +859,19 @@ struct GiphyEnvelopePreviewTests {
             #expect(chatListPreview(shape) == "GIF via GIPHY")
             #expect(try #require(notificationBody(shape)) == "Alice: GIF via GIPHY")
         }
+    }
+
+    /// A caption is the sender's own words, so it previews the way a photo
+    /// caption does. The CDN URL still never reaches preview text.
+    @Test func aCaptionedEnvelopeReadsAsItsCaption() throws {
+        let captioned = "\(giphyEnvelopeURL)\nvia GIPHY · Creator\nlook at this one"
+
+        #expect(chatListPreview(captioned) == "look at this one")
+        #expect(try #require(notificationBody(captioned)) == "Alice: look at this one")
+        #expect(!chatListPreview(captioned).contains("giphy.com"))
+
+        // A trailing line that mimics the credit is still only sender text.
+        #expect(chatListPreview("\(giphyEnvelopeURL)\nvia GIPHY\n\nvia GIPHY") == "via GIPHY")
     }
 
     @Test func notificationsAndTheChatListAgreeOnEveryPreview() throws {
