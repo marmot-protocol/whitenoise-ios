@@ -236,8 +236,10 @@ final class ProfileViewModel {
             conversationChooser = ConversationChooserPresentation(
                 targetAccountIdHex: hex,
                 memberRef: memberRef,
-                recipientName: appState.knownDisplayName(forAccountIdHex: hex)
-                    ?? appState.shortNpub(forAccountIdHex: hex),
+                recipientName: IdentityPresentation.text(
+                    accountIdHex: hex,
+                    knownName: appState.knownDisplayName(forAccountIdHex: hex)
+                ),
                 choices: choices
             )
             Haptics.selection()

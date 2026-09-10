@@ -849,7 +849,7 @@ final class GroupDetailsViewModel {
         case .MissingKeyPackage(let account):
             return L10n.formatted(
                 "%@ hasn't published a compatible key package yet.",
-                IdentityFormatter.short(account)
+                IdentityPresentation.text(accountIdHex: account)
             )
         default:
             return marmotError.localizedDescription

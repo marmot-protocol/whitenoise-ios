@@ -104,10 +104,7 @@ struct NewGroupSetupView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(model.groupSelection.members, id: \.accountIdHex) { member in
-                        RecipientRow(
-                            accountIdHex: member.accountIdHex,
-                            npub: member.npub
-                        ) {
+                        RecipientRow(accountIdHex: member.accountIdHex) {
                             EmptyView()
                         }
                     }

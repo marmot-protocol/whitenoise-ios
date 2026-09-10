@@ -4520,11 +4520,6 @@ struct IdentityFormatterTests {
         #expect(IdentityFormatter.short(short) == short)
     }
 
-    @Test func displayNameFallsBackToShortIdWhenLabelEmpty() {
-        let id = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
-        let result = IdentityFormatter.displayName(label: "", accountIdHex: id)
-        #expect(result.contains("…"))
-    }
 }
 
 @MainActor
@@ -4716,7 +4711,12 @@ struct NotificationPresentationTests {
 
         let presentation = LocalNotificationProjection.makePresentation(for: update)
 
-        #expect(presentation?.title == "01234567…abcdef")
+        #expect(
+            presentation?.title
+                == IdentityPresentation.text(
+                    accountIdHex: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                )
+        )
         #expect(presentation?.body == "New encrypted message")
     }
 }

@@ -228,6 +228,15 @@ Do not add a second storage path for data Marmot already owns.
 - Privacy/audit settings screens should load Marmot settings and audit-file details through off-main projection helpers, then render precomputed row strings from SwiftUI body.
 - Normalize optional group metadata before handing it to Marmot. Group names and descriptions go through `ContentSanitizer`; blank descriptions pass `nil`, unnamed group creates use MarmotKit's empty-string sentinel, and blank renames are rejected.
 - Sanitize peer-controlled group names with `ContentSanitizer.groupName` before storing or rendering timeline/system-event display strings, and use static `L10n.formatted` keys for dynamic text.
+- Name Nostr accounts in ordinary UI through `IdentityPresentation` only. It
+  prefers a sanitized nickname/known profile name, otherwise encodes a valid
+  32-byte key to a lowercase bech32 npub, otherwise returns localized generic
+  copy; raw hex is not a possible output, so a pre-hydration first frame cannot
+  leak one. `IdentityFormatter.short` is for opaque non-identity values (group
+  ids, MLS member ids, message ids, hashes, already-bech32 strings). An npub
+  needed for copy/share/QR is optional: withhold the affordance rather than fall
+  back to hex. The Settings "Public Key" section's labelled "Hex" row and
+  developer diagnostics are the only exemptions.
 - Use `L10n.plural` for dynamic counts and static `L10n.formatted` keys for formatted strings so the string catalog can carry plural variations and translations.
 - Chat-list relative time labels must use localized duration/date formatters; do not hand-build minute/hour suffixes or date patterns. If `RelativeTime.short` receives an injected `now`, today/yesterday bucketing must compare against that value rather than the device wall clock.
 - Route peer-controlled profile and group image URLs through `ContentSanitizer.imageURL`; it only allows HTTPS public hosts and rejects local/private IPv4/IPv6 hosts, loopback/unspecified/link-local forms, IPv4-mapped and IPv4-compatible IPv6 embeddings, and legacy IPv4 literal spellings.

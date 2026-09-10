@@ -71,8 +71,10 @@ enum GroupDisplay {
             return L10n.plural("%lld person group", Int64(display.memberCount))
         }
         if display.isDirectMessage, let other = display.otherMember {
-            return appState.knownDisplayName(forAccountIdHex: other)
-                ?? appState.shortNpub(forAccountIdHex: other)
+            return IdentityPresentation.text(
+                accountIdHex: other,
+                knownName: appState.knownDisplayName(forAccountIdHex: other)
+            )
         }
         return IdentityFormatter.short(display.group.groupIdHex)
     }

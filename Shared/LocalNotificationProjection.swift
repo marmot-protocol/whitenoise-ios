@@ -222,16 +222,11 @@ nonisolated enum LocalNotificationProjection {
     private static func displayName(for user: NotificationUserFfi, nickname: String?) -> String {
         // A private nickname overrides the kind:0 sender name; it is already
         // sanitized at the store boundary but re-checked here for safety.
-        if let nickname = ContentSanitizer.displayName(nickname) {
-            return nickname
-        }
-        if let name = ContentSanitizer.displayName(user.displayName) {
-            return name
-        }
-        if user.accountIdHex.isEmpty {
-            return L10n.string("Someone")
-        }
-        return IdentityFormatter.short(user.accountIdHex)
+        IdentityPresentation.text(
+            accountIdHex: user.accountIdHex,
+            knownName: ContentSanitizer.displayName(nickname) ?? user.displayName,
+            unknown: .sender
+        )
     }
 
     private static func sanitizedPreview(_ raw: String?) -> String? {

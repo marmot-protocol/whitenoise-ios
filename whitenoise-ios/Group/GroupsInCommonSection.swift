@@ -205,7 +205,7 @@ struct AddToGroupSheet: View {
             if case .MissingKeyPackage(let account) = marmotError {
                 error = L10n.formatted(
                     "%@ hasn't published a compatible key package yet.",
-                    IdentityFormatter.short(account)
+                    IdentityPresentation.text(accountIdHex: account)
                 )
             } else {
                 error = marmotError.localizedDescription
