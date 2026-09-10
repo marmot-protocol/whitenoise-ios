@@ -145,6 +145,33 @@ before every release tag.
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
 
+## Conversation back navigation vs. swipe-to-reply
+
+UIKit decides the final recognizer and keyboard ordering here, so these checks
+have no XCTest UI coverage. Run them on a notched or Dynamic Island iPhone, on
+both the iOS 18.0 deployment target and the newest installed iOS.
+
+- [ ] Open a chat, tap the composer so the keyboard is up, then swipe back
+      from the leading screen edge and complete the pop. The chat list
+      appears with no keyboard, composer pane, or reply preview flashing
+      behind or after the transition.
+- [ ] Repeat with a reply already staged (swipe a message to reply, keep the
+      preview visible): completing the edge pop returns to the chat list with
+      no reply-preview or keyboard flash, and no message row animates as if
+      swipe-to-reply had fired.
+- [ ] Start the edge swipe over a message bubble and complete it. The row
+      under the finger must not slide right or show the reply arrow.
+- [ ] Type a draft, attach a photo, stage a reply, focus the composer, then
+      start the edge swipe and release it back to cancel the pop. You stay in
+      the chat with the same draft text, the same attachment, the same reply
+      target, and the keyboard back up.
+- [ ] Cancel an edge swipe with the keyboard **down**: you stay in the chat
+      and the keyboard stays down. No reply target appears.
+- [ ] Swipe a message to reply starting well away from the leading edge
+      (mid-bubble): the reply preview appears and the keyboard comes up once.
+- [ ] Tap the header back chevron with the keyboard up: same result as the
+      completed edge swipe — no keyboard or reply UI behind the pop.
+
 ## Chat-list search
 
 Chats is the root of its navigation stack, so a search surface without a
