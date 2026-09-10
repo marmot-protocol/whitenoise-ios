@@ -230,14 +230,16 @@ nonisolated enum NotificationServiceProjection {
         localNotificationsEnabled: (String) -> Bool = { _ in true },
         isArchived: (String, String) -> Bool = { _, _ in false },
         notifyMode: (String, String) -> ChatNotifyMode = { _, _ in .all },
-        nickname: (String, String) -> String? = { _, _ in nil }
+        nickname: (String, String) -> String? = { _, _ in nil },
+        previewMode: NotificationPreviewMode = .senderAndMessage
     ) -> NotificationServiceRenderDecision {
         NotificationPresentationPolicy.serviceDecision(
             for: collection,
             localNotificationsEnabled: localNotificationsEnabled,
             isArchived: isArchived,
             notifyMode: notifyMode,
-            nickname: nickname
+            nickname: nickname,
+            previewMode: previewMode
         )
     }
 
