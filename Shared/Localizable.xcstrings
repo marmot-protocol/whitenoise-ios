@@ -92679,6 +92679,12 @@
             "state" : "translated",
             "value" : "AI 代理"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 代理"
+          }
         }
       }
     },
@@ -92731,6 +92737,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关于 AI 代理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關於 AI 代理"
           }
         }
       }
@@ -92785,6 +92797,12 @@
             "state" : "translated",
             "value" : "代理分享其 npub 后，从 %@ 将其添加为联系人并开始聊天。完整说明请参阅代理连接器文档。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理分享其 npub 後，從 %@ 將其新增為聯絡人並開始聊天。完整說明請參閱代理連接器文件。"
+          }
         }
       }
     },
@@ -92838,6 +92856,12 @@
             "state" : "translated",
             "value" : "代理连接器文档"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代理連接器文件"
+          }
         }
       }
     },
@@ -92887,6 +92911,12 @@
           }
         },
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex"
@@ -92944,6 +92974,12 @@
             "state" : "translated",
             "value" : "连接器"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "連接器"
+          }
         }
       }
     },
@@ -92997,6 +93033,12 @@
             "state" : "translated",
             "value" : "复制 %@ 设置提示"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製 %@ 設定提示"
+          }
         }
       }
     },
@@ -93046,6 +93088,12 @@
           }
         },
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hermes"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Hermes"
@@ -93103,6 +93151,12 @@
             "state" : "translated",
             "value" : "隐藏 %@ 设置提示"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隱藏 %@ 設定提示"
+          }
         }
       }
     },
@@ -93155,6 +93209,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "安装脚本、健康检查与故障排除"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安裝指令碼、健康檢查與疑難排解"
           }
         }
       }
@@ -93209,6 +93269,12 @@
             "state" : "translated",
             "value" : "手动设置"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手動設定"
+          }
         }
       }
     },
@@ -93261,6 +93327,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开源编程代理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開源程式設計代理"
           }
         }
       }
@@ -93315,6 +93387,12 @@
             "state" : "translated",
             "value" : "OpenAI Codex CLI 编码代理"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI Codex CLI 程式設計代理"
+          }
         }
       }
     },
@@ -93364,6 +93442,12 @@
           }
         },
         "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenClaw"
+          }
+        },
+        "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "OpenClaw"
@@ -93421,6 +93505,12 @@
             "state" : "translated",
             "value" : "OpenCode"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode"
+          }
         }
       }
     },
@@ -93473,6 +93563,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "提示已复制——请粘贴到你的代理中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示已複製——請貼上到你的代理中。"
           }
         }
       }
@@ -93527,6 +93623,12 @@
             "state" : "translated",
             "value" : "自托管个人 AI 助手"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自架個人 AI 助理"
+          }
         }
       }
     },
@@ -93579,6 +93681,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示 %@ 设置提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示 %@ 設定提示"
           }
         }
       }
@@ -93633,6 +93741,12 @@
             "state" : "translated",
             "value" : "Nous Research 的终端代理"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous Research 的終端機代理"
+          }
         }
       }
     },
@@ -93685,6 +93799,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这些是安装提示。选择你的代理，复制相应提示并将其粘贴到该代理中，即可将其连接到 White Noise。提示包含你的 npub（公钥，并非秘密），并会让代理先解释连接器的工作方式，再请求你的安装批准。请仅使用由你运行且信任的代理；其中绝不会包含你的私钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這些是安裝提示。選擇你的代理，複製相應提示並將其貼上到該代理中，即可將其連接到 White Noise。提示包含你的 npub（公開金鑰，並非祕密），並會讓代理先解釋連接器的運作方式，再請求你的安裝批准。請僅使用由你執行且信任的代理；其中絕不會包含你的私密金鑰。"
           }
         }
       }
@@ -93739,6 +93859,12 @@
             "state" : "translated",
             "value" : "这是一条安装提示，用于通过 Marmot 将此 Codex 设置连接到 White Noise。请阅读权威 Codex harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md，以及长期有效的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。确认前提条件：Codex CLI 已安装、已认证并可在 PATH 中使用，且此机器使用与手机相同的公共中继集合。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请使用经过校验和验证的 install-codex-marmot.sh 发布流程，为该 npub 引导 wn-agent 并使用允许的 welcomer，然后验证 wn-codex --version。接下来回复你的代理 npub，请我在 White Noise 中邀请它，并通过已配置的中继从这个允许的 npub 发送测试消息。在 wn-codex 通过 White Noise 回复之前，不要声称设置已完成；如果无法自动验证这一往返流程，请明确标记仍需设备验证。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 Codex 設定連接到 White Noise。請閱讀權威 Codex harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md，以及長期有效的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。確認前提條件：Codex CLI 已安裝、已驗證並可在 PATH 中使用，且此機器使用與手機相同的公共中繼集合。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請使用經過總和檢查碼驗證的 install-codex-marmot.sh 發布流程，為該 npub 引導 wn-agent 並使用允許的 welcomer，然後驗證 wn-codex --version。接下來回覆你的代理 npub，請我在 White Noise 中邀請它，並透過已設定的中繼從這個允許的 npub 傳送測試訊息。在 wn-codex 透過 White Noise 回覆之前，不要聲稱設定已完成；如果無法自動驗證這一往返流程，請明確標記仍需裝置驗證。"
+          }
         }
       }
     },
@@ -93791,6 +93917,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这是一条安装提示，用于通过 Marmot 将此 Hermes 安装连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 Hermes 安裝連接到 White Noise。請閱讀最新的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請安裝並驗證連接器，然後回覆你的代理 npub。"
           }
         }
       }
@@ -93845,6 +93977,12 @@
             "state" : "translated",
             "value" : "这是一条安装提示，用于通过 Marmot 将此 OpenClaw 实例连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 OpenClaw 實例連接到 White Noise。請閱讀最新的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請安裝並驗證連接器，然後回覆你的代理 npub。"
+          }
         }
       }
     },
@@ -93898,6 +94036,12 @@
             "state" : "translated",
             "value" : "这是一条安装提示，用于通过 Marmot 将此 OpenCode 设置连接到 White Noise。请阅读最新的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请安装并验证连接器，然后回复你的代理 npub。"
           }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 OpenCode 設定連接到 White Noise。請閱讀最新的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請安裝並驗證連接器，然後回覆你的代理 npub。"
+          }
         }
       }
     },
@@ -93950,6 +94094,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise 可与 AI 代理配合使用。你的代理在你自己的电脑或服务器上作为独立的 Marmot 账户运行；你可以在这里像与任何联系人一样与它端到端加密聊天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 可與 AI 代理搭配使用。你的代理在你自己的電腦或伺服器上作為獨立的 Marmot 帳戶執行；你可以在這裡像與任何聯絡人一樣與它端到端加密聊天。"
           }
         }
       }
