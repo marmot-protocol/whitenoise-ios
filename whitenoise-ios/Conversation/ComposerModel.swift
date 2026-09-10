@@ -68,6 +68,7 @@ final class ComposerModel {
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let groupIdHex: String
     @ObservationIgnored private unowned let timelineStore: TimelineStore
+    @ObservationIgnored private let sendQueue = OutgoingSendQueue()
     @ObservationIgnored var canSendMessages: () -> Bool = { false }
     @ObservationIgnored var canSendMediaAttachments: () -> Bool = { false }
     /// Surfaces a send failure to the view model (sets its observable `error`).
@@ -156,7 +157,6 @@ final class ComposerModel {
         // markdown parse below introduces an `await`, so leaving the flag unset
         // would let a second send task start during a long parse (#226 review).
         sendInFlight = true
-        defer { sendInFlight = false }
 
         let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
         let tempId = UUID().uuidString
@@ -188,31 +188,37 @@ final class ComposerModel {
         )
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
+        // The composer is free the moment the message is parked in the
+        // timeline: the round-trip below waits in `sendQueue`, not on the
+        // Send button (#226 blocked the button for its whole duration).
+        sendInFlight = false
 
-        do {
-            let summary = try await sendText(
-                appState: appState,
-                accountRef: accountRef,
-                replyTargetId: replyTargetId,
-                text: outgoing
-            )
-            switch SendAcceptancePolicy.action(for: summary) {
-            case .confirmPublished(let messageId):
-                timelineStore.confirmSent(tempId: tempId, record: optimistic, messageId: messageId)
-            case .awaitDurableProjection:
-                // Marmot retained the exact event for durable delivery. Keep the
-                // optimistic row sending until the timeline projection supplies
-                // the pending row and eventual disposition.
-                break
+        await sendQueue.enqueue { [self] in
+            do {
+                let summary = try await sendText(
+                    appState: appState,
+                    accountRef: accountRef,
+                    replyTargetId: replyTargetId,
+                    text: outgoing
+                )
+                switch SendAcceptancePolicy.action(for: summary) {
+                case .confirmPublished(let messageId):
+                    timelineStore.confirmSent(tempId: tempId, record: optimistic, messageId: messageId)
+                case .awaitDurableProjection:
+                    // Marmot retained the exact event for durable delivery. Keep the
+                    // optimistic row sending until the timeline projection supplies
+                    // the pending row and eventual disposition.
+                    break
+                }
+            } catch {
+                timelineStore.markFailed(tempId: tempId)
+                onError(error.localizedDescription)
+                await MainActor.run {
+                    Haptics.error()
+                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                }
             }
-        } catch {
-            timelineStore.markFailed(tempId: tempId)
-            onError(error.localizedDescription)
-            await MainActor.run {
-                Haptics.error()
-                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-            }
-        }
+        }.value
     }
 
     private func sendText(
@@ -261,7 +267,6 @@ final class ComposerModel {
         // caption parse below introduces an `await`, so leaving the flag unset
         // would let a second send task start during a long parse (#226 review).
         sendInFlight = true
-        defer { sendInFlight = false }
 
         // Captured before the upload round-trip: a wipe completing while the
         // send is in flight must invalidate the post-upload cache store.
@@ -285,72 +290,77 @@ final class ComposerModel {
         timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
+        // Freed at hand-off, like a text send: the upload and publish below
+        // belong to the parked row's bubble, not to the Send button.
+        sendInFlight = false
 
-        do {
-            let client = try appState.currentMarmotClient()
-            let result = try await client.uploadMedia(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                request: MediaUploadRequestFfi(
-                    attachments: attachments.map(\.uploadRequest),
-                    caption: captionForRust,
-                    send: true,
-                    blossomServer: nil
+        await sendQueue.enqueue { [self] in
+            do {
+                let client = try appState.currentMarmotClient()
+                let result = try await client.uploadMedia(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    request: MediaUploadRequestFfi(
+                        attachments: attachments.map(\.uploadRequest),
+                        caption: captionForRust,
+                        send: true,
+                        blossomServer: nil
+                    )
                 )
-            )
-            let verifiedAttachments = await MediaUploadIntegrity.verifiedAttachments(
-                plaintexts: attachments.map(\.data),
-                references: result.attachments.map(\.reference)
-            )
-            let references = verifiedAttachments.map(\.reference)
-            for attachment in verifiedAttachments {
-                await MessageMediaCache.store(
-                    attachment.data,
-                    for: attachment.reference,
-                    producerGeneration: uploadEpoch
+                let verifiedAttachments = await MediaUploadIntegrity.verifiedAttachments(
+                    plaintexts: attachments.map(\.data),
+                    references: result.attachments.map(\.reference)
                 )
-            }
-            let confirmed = AppMessageRecordFfi(
-                messageIdHex: "",
-                direction: "sent",
-                groupIdHex: groupIdHex,
-                sender: optimistic.sender,
-                plaintext: outgoingCaption,
-                contentTokens: captionTokens,
-                kind: MessageSemantics.kindChat,
-                tags: references.map(MessageSemantics.imetaTag(for:)),
-                recordedAt: now,
-                receivedAt: now
-            )
-            if let sent = result.sent,
-               case .awaitDurableProjection = SendAcceptancePolicy.action(for: sent) {
-                // Keep the staged media and optimistic row alive until Marmot's
-                // durable pending projection replaces them.
-            } else {
-                let messageId: String?
-                if let sent = result.sent,
-                   case .confirmPublished(let publishedMessageId) = SendAcceptancePolicy.action(for: sent) {
-                    messageId = publishedMessageId
-                } else {
-                    messageId = nil
+                let references = verifiedAttachments.map(\.reference)
+                for attachment in verifiedAttachments {
+                    await MessageMediaCache.store(
+                        attachment.data,
+                        for: attachment.reference,
+                        producerGeneration: uploadEpoch
+                    )
                 }
-                timelineStore.confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
-                if let messageId, !messageId.isEmpty {
-                    // Render the just-sent attachments immediately from the upload's
-                    // resolved references; the subscription row will mirror the same.
-                    if timelineStore.replaceMediaReferences(references, forMessageId: messageId) {
-                        timelineStore.noteProjectionChanged()
+                let confirmed = AppMessageRecordFfi(
+                    messageIdHex: "",
+                    direction: "sent",
+                    groupIdHex: groupIdHex,
+                    sender: optimistic.sender,
+                    plaintext: outgoingCaption,
+                    contentTokens: captionTokens,
+                    kind: MessageSemantics.kindChat,
+                    tags: references.map(MessageSemantics.imetaTag(for:)),
+                    recordedAt: now,
+                    receivedAt: now
+                )
+                if let sent = result.sent,
+                   case .awaitDurableProjection = SendAcceptancePolicy.action(for: sent) {
+                    // Keep the staged media and optimistic row alive until Marmot's
+                    // durable pending projection replaces them.
+                } else {
+                    let messageId: String?
+                    if let sent = result.sent,
+                       case .confirmPublished(let publishedMessageId) = SendAcceptancePolicy.action(for: sent) {
+                        messageId = publishedMessageId
+                    } else {
+                        messageId = nil
+                    }
+                    timelineStore.confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
+                    if let messageId, !messageId.isEmpty {
+                        // Render the just-sent attachments immediately from the upload's
+                        // resolved references; the subscription row will mirror the same.
+                        if timelineStore.replaceMediaReferences(references, forMessageId: messageId) {
+                            timelineStore.noteProjectionChanged()
+                        }
                     }
                 }
+            } catch {
+                timelineStore.markFailed(tempId: tempId)
+                onError(error.localizedDescription)
+                await MainActor.run {
+                    Haptics.error()
+                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                }
             }
-        } catch {
-            timelineStore.markFailed(tempId: tempId)
-            onError(error.localizedDescription)
-            await MainActor.run {
-                Haptics.error()
-                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-            }
-        }
+        }.value
     }
 
     private func replyTargetMessageId() -> String? {
