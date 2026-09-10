@@ -6,7 +6,8 @@ struct DeveloperToolsSettingsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @State private var model = PrivacySecuritySettingsViewModel()
-    @State private var exportDocument = DiagnosticLogDocument(text: "")
+    @State private var exportDocument = DiagnosticLogDocument()
+    @State private var exportFileName = "audit.jsonl"
     @State private var showExport = false
     @State private var exporting = false
     @State private var exportError: String?
@@ -102,14 +103,27 @@ struct DeveloperToolsSettingsView: View {
                 Section {
                     LabeledContent("Diagnostic Logging", value: model.auditSettings?.enabled == true ? L10n.string("On") : L10n.string("Off"))
                     if model.auditFileRows.contains(where: { $0.sizeBytes > 0 }) {
-                        ForEach(model.auditFileRows.filter { $0.sizeBytes > 0 }) { row in auditFileRow(row) }
-                        Button("Export Diagnostic Logs", systemImage: "square.and.arrow.up") { exportLogs() }
+                        Button("Export Latest Audit Log", systemImage: "square.and.arrow.up") { exportLogs() }
                             .disabled(exporting)
+                        ForEach(model.auditFileRows.filter { $0.sizeBytes > 0 }) { row in
+                            Button { exportLogs(path: row.path) } label: {
+                                HStack {
+                                    auditFileRow(row)
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "square.and.arrow.up")
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .foregroundStyle(.primary)
+                            .disabled(exporting)
+                            .accessibilityLabel(L10n.formatted("Export %@", row.fileName))
+                            .accessibilityValue(row.detailText)
+                        }
                     } else {
                         Text("There are no logs.").foregroundStyle(.secondary)
                     }
                 } header: { Text("Diagnostic Logs") } footer: {
-                    Text("Configure or clear logs in Privacy & Security → Diagnostics & Improvements. Export saves a sanitized activity summary without event payloads.")
+                    Text("Export the most recently modified audit log on this device, or tap a file to export it. Exports preserve the full original JSONL, including event details. Configure or clear logs in Privacy & Security → Diagnostics & Improvements.")
                 }
             }
 
@@ -157,24 +171,25 @@ struct DeveloperToolsSettingsView: View {
                 await quarantinedGroupsModel.reload(using: appState)
             }
         }
-        .fileExporter(isPresented: $showExport, document: exportDocument, contentType: .plainText,
-                      defaultFilename: "White Noise Diagnostic Logs") { result in
+        .fileExporter(isPresented: $showExport, document: exportDocument, contentType: .data,
+                      defaultFilename: exportFileName) { result in
             if case .failure = result { exportError = L10n.string("Couldn’t save diagnostic logs. Try again.") }
-            exportDocument = DiagnosticLogDocument(text: "")
+            exportDocument = DiagnosticLogDocument()
         }
         .alert("Couldn’t Export Diagnostic Logs", isPresented: Binding(
             get: { exportError != nil }, set: { if !$0 { exportError = nil } }
         )) { Button("OK", role: .cancel) {} } message: { Text(exportError ?? "") }
     }
 
-    private func exportLogs() {
+    private func exportLogs(path: String? = nil) {
         guard !exporting else { return }
         exporting = true
         Task {
             defer { exporting = false }
             do {
-                let text = try await appState.diagnosticLogExport()
-                exportDocument = DiagnosticLogDocument(text: text)
+                let snapshot = try await appState.diagnosticLogExport(path: path)
+                exportDocument = DiagnosticLogDocument(data: snapshot.data)
+                exportFileName = snapshot.fileName
                 showExport = true
             } catch {
                 exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")

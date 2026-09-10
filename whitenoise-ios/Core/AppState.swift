@@ -1221,12 +1221,21 @@ final class AppState {
         return try await client.auditFileRows()
     }
 
-    func diagnosticLogExport() async throws -> String {
+    func diagnosticLogExport(path: String? = nil) async throws -> DiagnosticLogSnapshot {
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let files = try await lease.client.auditLogFiles()
-        let paths = files.filter { $0.sizeBytes > 0 }.map(\.path)
-        return try await Task.detached(priority: .userInitiated) { try DiagnosticLogExport.report(paths: paths) }.value
+        let file = try DiagnosticLogExport.fileForExport(in: files, path: path)
+        return try await Task.detached(priority: .userInitiated) {
+            for attempt in 0..<3 {
+                do {
+                    return try DiagnosticLogExport.snapshot(file: file)
+                } catch DiagnosticLogExport.ExportError.fileChangedDuringRead where attempt < 2 {
+                    try await Task.sleep(for: .milliseconds(25))
+                }
+            }
+            throw DiagnosticLogExport.ExportError.fileChangedDuringRead
+        }.value
     }
 
     @MainActor

@@ -15679,71 +15679,6 @@
         }
       }
     },
-    "Configure or clear logs in Privacy & Security → Diagnostics & Improvements. Export saves a sanitized activity summary without event payloads." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Protokolle unter Datenschutz & Sicherheit → Diagnose & Verbesserungen konfigurieren oder löschen. Der Export speichert eine bereinigte Aktivitätsübersicht ohne Ereignisinhalte."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configure or clear logs in Privacy & Security → Diagnostics & Improvements. Export saves a sanitized activity summary without event payloads."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configura o borra los registros en Privacidad y seguridad → Diagnóstico y mejoras. La exportación guarda un resumen de actividad depurado sin el contenido de los eventos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configurez ou effacez les journaux dans Confidentialité et sécurité → Diagnostic et améliorations. L’export enregistre un résumé d’activité expurgé, sans le contenu des événements."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configura o cancella i log in Privacy e sicurezza → Diagnostica e miglioramenti. L’esportazione salva un riepilogo delle attività depurato, senza il contenuto degli eventi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configure ou limpe os registros em Privacidade e segurança → Diagnóstico e melhorias. A exportação salva um resumo de atividades higienizado, sem o conteúdo dos eventos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настроить или очистить журналы можно в разделе «Конфиденциальность и безопасность → Диагностика и улучшения». При экспорте сохраняется очищенная сводка активности без содержимого событий."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Günlükleri Gizlilik ve Güvenlik → Tanılama ve İyileştirmeler bölümünde yapılandırın veya temizleyin. Dışa aktarma, olay içerikleri olmadan arındırılmış bir etkinlik özeti kaydeder."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在“隐私与安全 → 诊断与改进”中配置或清除日志。导出会保存经过脱敏的活动摘要，不包含事件内容。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在「隱私權與安全性 → 診斷與改進」中設定或清除記錄。匯出會儲存經過去識別化的活動摘要，不包含事件內容。"
-          }
-        }
-      }
-    },
     "Configured" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -93950,6 +93885,183 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise 可与 AI 代理配合使用。你的代理在你自己的电脑或服务器上作为独立的 Marmot 账户运行；你可以在这里像与任何联系人一样与它端到端加密聊天。"
+          }
+        }
+      }
+    },
+    "Export Latest Audit Log" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuestes Audit-Protokoll exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar el registro de auditoría más reciente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter le dernier journal d’audit"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta il registro di audit più recente"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar o registro de auditoria mais recente"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать последний журнал аудита"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En son denetim günlüğünü dışa aktar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出最新审计日志"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出最新稽核日誌"
+          }
+        }
+      }
+    },
+    "Export %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ exportieren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta %@"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортировать %@"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ dosyasını dışa aktar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 %@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出 %@"
+          }
+        }
+      }
+    },
+    "Export the most recently modified audit log on this device, or tap a file to export it. Exports preserve the full original JSONL, including event details. Configure or clear logs in Privacy & Security → Diagnostics & Improvements." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportiere das zuletzt geänderte Audit-Protokoll auf diesem Gerät oder tippe auf eine Datei, um sie zu exportieren. Exporte enthalten die vollständigen ursprünglichen JSONL-Daten einschließlich aller Ereignisdetails. Protokolle lassen sich unter Datenschutz & Sicherheit → Diagnose & Verbesserungen konfigurieren oder löschen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporta el registro de auditoría modificado más recientemente en este dispositivo o toca un archivo para exportarlo. Las exportaciones conservan el JSONL original completo, incluidos los detalles de los eventos. Configura o borra los registros en Privacidad y seguridad → Diagnósticos y mejoras."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportez le journal d’audit le plus récemment modifié sur cet appareil, ou touchez un fichier pour l’exporter. Les exports conservent l’intégralité du JSONL d’origine, y compris les détails des événements. Configurez ou effacez les journaux dans Confidentialité et sécurité → Diagnostics et améliorations."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esporta il registro di audit modificato più di recente su questo dispositivo oppure tocca un file per esportarlo. Le esportazioni conservano il JSONL originale completo, inclusi i dettagli degli eventi. Configura o cancella i registri in Privacy e sicurezza → Diagnostica e miglioramenti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporte o registro de auditoria modificado mais recentemente neste dispositivo ou toque em um arquivo para exportá-lo. As exportações preservam o JSONL original completo, incluindo os detalhes dos eventos. Configure ou limpe os registros em Privacidade e segurança → Diagnósticos e melhorias."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Экспортируйте журнал аудита с самой поздней датой изменения на этом устройстве или нажмите на файл, чтобы экспортировать его. Экспорт сохраняет исходный JSONL целиком, включая сведения о событиях. Настроить или очистить журналы можно в разделе «Конфиденциальность и безопасность → Диагностика и улучшения»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazda en son değiştirilen denetim günlüğünü dışa aktarın veya dışa aktarmak için bir dosyaya dokunun. Dışa aktarımlar, olay ayrıntıları dahil orijinal JSONL dosyasının tamamını korur. Günlükleri Gizlilik ve Güvenlik → Tanılama ve İyileştirmeler bölümünden yapılandırın veya temizleyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出此设备上最近修改的审计日志，或轻点某个文件以导出。导出会保留完整的原始 JSONL，包括事件详情。请在“隐私与安全 → 诊断与改进”中配置或清除日志。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯出此裝置上最近修改的稽核日誌，或點一下檔案以匯出。匯出會保留完整的原始 JSONL，包括事件詳細資訊。請在「隱私權與安全性 → 診斷與改進」中設定或清除日誌。"
           }
         }
       }

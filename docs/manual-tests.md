@@ -95,8 +95,13 @@ before every release tag.
 - [ ] Logging off retains local logs; Clear Diagnostic Logs clears every profile's
       logs without changing the preference. The runtime rotates active files.
 - [ ] Developer Tools shows retained nonempty files even with logging off. Export
-      Diagnostic Logs opens the native Files picker and exports only activity
-      timestamps/types, excluding identifiers, source labels, filenames and payloads.
+      Latest Audit Log opens the native Files picker with the most recently
+      modified file's original `.jsonl` filename. Verify the export contains full
+      JSON records, including context and event payloads, and no summary header.
+- [ ] Tap an older audit segment to export that exact file. Compare its bytes
+      with the source while recording is off. Cancel the picker and export again;
+      the next export must use fresh data. Export while logging is active and
+      around a rotation; verify complete JSONL records and no silent truncation.
 - [ ] Sign Out defaults Wipe Data From This Device on. Exact profile-name entry
       enables Sign Out in the same sheet; mismatched case/name stays disabled.
       Turning wiping off requires no typed confirmation and preserves local data.

@@ -98,20 +98,6 @@ struct DeviceSettingsFlowTests {
         #expect(ProfileExitConfirmation.erasePhrase().split(separator: " ").count == 3)
     }
 
-    @Test func diagnosticSummaryExcludesPayloadsAndIdentifyingMetadata() throws {
-        let row: [String: Any] = [
-            "wall_time_ms": 1_700_000_000_000 as UInt64,
-            "kind": ["type": "epoch_confirmed", "message": "PRIVATE", "epoch": 17],
-            "account_ref": "secret-account", "context": ["source": ["device_name": "private device"]]
-        ]
-        let line = try #require(DiagnosticLogExport.summaryLine(JSONSerialization.data(withJSONObject: row)))
-        #expect(line.contains("epoch_confirmed"))
-        #expect(!line.contains("PRIVATE"))
-        #expect(!line.contains("secret-account"))
-        #expect(!line.contains("private device"))
-        #expect(DiagnosticLogExport.summaryLine(Data("invalid".utf8)) == nil)
-    }
-
     @Test func erasurePreservesLockInodeAndRefusesAConcurrentOwner() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -1,71 +1,72 @@
 import Foundation
+import MarmotKit
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct DiagnosticLogDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.plainText] }
-    var text: String
+    static var readableContentTypes: [UTType] { [.data] }
+    var data: Data
 
-    init(text: String) { self.text = text }
+    init(data: Data = Data()) { self.data = data }
     init(configuration: ReadConfiguration) throws {
-        text = String(decoding: configuration.file.regularFileContents ?? Data(), as: UTF8.self)
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        self.data = data
     }
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        FileWrapper(regularFileWithContents: Data(text.utf8))
+        FileWrapper(regularFileWithContents: data)
     }
 }
 
+nonisolated struct DiagnosticLogSnapshot: Sendable {
+    let fileName: String
+    let data: Data
+}
+
 nonisolated enum DiagnosticLogExport {
-    static let maximumBytes = 16 * 1024 * 1024
-
-    /// Export an activity summary, excluding identities, source labels and event payloads.
-    static func summaryLine(_ data: Data) -> String? {
-        guard let row = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let kind = row["kind"] as? [String: Any],
-              let type = kind["type"] as? String, knownEvents.contains(type),
-              let time = row["wall_time_ms"] as? UInt64 else { return nil }
-        let date = Date(timeIntervalSince1970: Double(time) / 1_000)
-        return "\(date.formatted(.iso8601)) | \(type)"
+    enum ExportError: Error {
+        case noLogs
+        case fileChangedDuringRead
     }
 
-    static func report(paths: [String]) throws -> String {
-        var lines = ["White Noise Diagnostic Logs", "Activity summary. Identities, filenames, source labels and event payloads are excluded.", ""]
-        var remaining = maximumBytes
-        var omitted = false
-        for path in paths {
-            guard remaining > 0 else { omitted = true; break }
-            let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
-            defer { try? handle.close() }
-            let data = try handle.read(upToCount: remaining + 1) ?? Data()
-            let accepted = data.prefix(remaining)
-            remaining -= accepted.count
-            if data.count > accepted.count { omitted = true }
-            var rows = accepted.split(separator: 0x0A, omittingEmptySubsequences: true)
-            // A recorder may still be appending the final row.
-            if accepted.last != 0x0A { rows = rows.dropLast() }
-            for row in rows {
-                if let line = summaryLine(Data(row)) { lines.append(line) } else { omitted = true }
-            }
+    static func fileForExport(in files: [AuditLogFileFfi], path: String? = nil) throws -> AuditLogFileFfi {
+        let file: AuditLogFileFfi?
+        if let path {
+            file = files.first { $0.path == path && $0.sizeBytes > 0 }
+        } else {
+            file = latestFile(in: files)
         }
-        if omitted { lines.append("Some records were omitted because they were incomplete, unsupported, or exceeded the export limit.") }
-        return lines.joined(separator: "\n") + "\n"
+        guard let file else { throw ExportError.noLogs }
+        return file
     }
 
-    private static let knownEvents: Set<String> = [
-        "recorder_started", "engine_context", "group_context",
-        "recorder_health", "human_action", "transport_received",
-        "ingest_entry", "ingest_outcome", "ingest_error",
-        "send_entry", "source_context", "recipient_expectation",
-        "send_outcome", "send_error", "create_group_entry",
-        "create_group_outcome", "create_group_error", "publish_attempt",
-        "publish_outcome", "publish_failure", "epoch_confirmed",
-        "epoch_rolled_back", "epoch_state_changed", "group_state_changed",
-        "pending_commit_recovered_on_open", "group_hydration_quarantined", "group_hydration_recovered",
-        "snapshot_created", "fork_resolution", "convergence_run_state",
-        "convergence_decision", "peeler_outcome", "auto_commit_decision",
-        "message_state_changed", "rejection", "subscription_rebuild",
-        "sync_drain", "epoch_stall_backfill_armed", "epoch_stall_backfill_started",
-        "epoch_stall_backfill_completed", "epoch_stall_backfill_failed", "epoch_stall_backfill_deferred",
-        "epoch_stall_backfill_escalated", "convergence_pass_discarded"
-    ]
+    static func latestFile(in files: [AuditLogFileFfi]) -> AuditLogFileFfi? {
+        files.filter { $0.sizeBytes > 0 }.max { left, right in
+            let leftTime = left.modifiedAtMs ?? 0
+            let rightTime = right.modifiedAtMs ?? 0
+            if leftTime != rightTime { return leftTime < rightTime }
+            return left.path < right.path
+        }
+    }
+
+    static func snapshot(file: AuditLogFileFfi) throws -> DiagnosticLogSnapshot {
+        let handle = try FileHandle(forReadingFrom: URL(fileURLWithPath: file.path))
+        defer { try? handle.close() }
+        // Keep one inode open across rotation; capture only bytes present at the start.
+        let length = try handle.seekToEnd()
+        try handle.seek(toOffset: 0)
+        var remaining = length
+        var data = Data()
+        while remaining > 0 {
+            try Task.checkCancellation()
+            let chunk = try handle.read(upToCount: Int(min(remaining, 1024 * 1024))) ?? Data()
+            guard !chunk.isEmpty else { throw ExportError.fileChangedDuringRead }
+            data.append(chunk)
+            remaining -= UInt64(chunk.count)
+        }
+        // Never silently truncate a record caught mid-write. The caller can retry.
+        guard !data.isEmpty, data.last == 0x0A else { throw ExportError.fileChangedDuringRead }
+        return DiagnosticLogSnapshot(fileName: file.fileName, data: data)
+    }
 }
