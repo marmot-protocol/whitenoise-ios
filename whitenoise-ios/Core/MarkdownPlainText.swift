@@ -84,6 +84,10 @@ nonisolated enum MarkdownPlainText {
                     appendTableRow(row, to: &state, depth: depth)
                     guard !state.exhausted else { return }
                 }
+            case .details(let summary, _, let body, _):
+                appendInlines(summary, to: &state, depth: depth)
+                guard !state.exhausted else { return }
+                appendBlocks(body, to: &state, depth: depth + 1)
             case .thematicBreak:
                 break
             }

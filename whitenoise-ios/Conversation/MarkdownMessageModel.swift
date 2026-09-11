@@ -259,6 +259,16 @@ enum MarkdownMessageBuilder {
 
             case .mathBlock(let content):
                 appendCodeBlock(content, to: &out, budget: &budget)
+
+            case .details(let summary, _, let body, _):
+                appendDetails(
+                    summary: summary,
+                    body: body,
+                    to: &out,
+                    budget: &budget,
+                    depth: depth,
+                    mentionDisplayName: mentionDisplayName
+                )
             }
         }
         return out
@@ -300,6 +310,33 @@ enum MarkdownMessageBuilder {
             ) {
                 out.append(.paragraph(rowLine))
             }
+        }
+    }
+
+    private static func appendDetails(
+        summary: [MarkdownInlineFfi],
+        body: [MarkdownBlockFfi],
+        to out: inout [MarkdownDisplayBlock],
+        budget: inout Budget,
+        depth: Int,
+        mentionDisplayName: MarkdownMentionResolver?
+    ) {
+        var line = AttributedString()
+        var context = InlineContext(baseFont: .body)
+        context.bold = true
+        context.mentionDisplayName = mentionDisplayName
+        _ = walkInlines(summary, into: &line, context: context, budget: &budget, depth: depth)
+        if hasVisibleContent(line) {
+            out.append(.paragraph(line))
+        }
+        let nested = walkBlocks(
+            body,
+            budget: &budget,
+            depth: depth + 1,
+            mentionDisplayName: mentionDisplayName
+        )
+        if !nested.isEmpty {
+            out.append(.blockQuote(nested))
         }
     }
 

@@ -182,6 +182,7 @@ final class RecipientUserSearch {
         while !Task.isCancelled, let update = await subscription.nextUpdate() {
             guard requestIsCurrent(id: id, query: query), !Task.isCancelled else { return }
             aggregate.append(contentsOf: update.newResults)
+            aggregate = Self.applyingReplacements(update.updatedResults, to: aggregate)
             results = Self.sortedUniqueResults(
                 aggregate,
                 followedAccountIds: followedAccountIds
@@ -195,7 +196,7 @@ final class RecipientUserSearch {
             case .searchCompleted:
                 finishRequest(id: id, query: query)
                 return
-            case .radiusStarted, .resultsFound, .discoveryResultsFound, .radiusCompleted:
+            case .radiusStarted, .resultsFound, .discoveryResultsFound, .cachedResultsFound, .radiusCompleted:
                 break
             }
         }
@@ -259,6 +260,21 @@ final class RecipientUserSearch {
 
     nonisolated static func shouldSearch(query: String, isIdentifierQuery: Bool) -> Bool {
         !isIdentifierQuery && !normalizedQuery(query).isEmpty
+    }
+
+    nonisolated static func applyingReplacements(
+        _ replacements: [UserDirectorySearchResultFfi],
+        to aggregate: [UserDirectorySearchResultFfi]
+    ) -> [UserDirectorySearchResultFfi] {
+        guard !replacements.isEmpty else { return aggregate }
+        var byAccountId: [String: UserDirectorySearchResultFfi] = [:]
+        for replacement in replacements {
+            byAccountId[replacement.accountIdHex.lowercased()] = replacement
+        }
+        var merged = aggregate.map { byAccountId[$0.accountIdHex.lowercased()] ?? $0 }
+        let known = Set(aggregate.map { $0.accountIdHex.lowercased() })
+        merged.append(contentsOf: replacements.filter { !known.contains($0.accountIdHex.lowercased()) })
+        return merged
     }
 
     nonisolated static func sortedUniqueResults(
