@@ -242,9 +242,11 @@ private struct LongChatScrollHarness: View {
                                 )
                                 .id(row.id)
                             }
-                            Color.clear
-                                .frame(height: 2)
-                                .id(Self.bottomID)
+                            ForEach([Self.bottomID], id: \.self) { _ in
+                                Color.clear
+                                    .frame(height: 2)
+                                    .id(Self.bottomID)
+                            }
                         }
                         .scrollTargetLayout()
                     }
@@ -304,6 +306,18 @@ private struct LongChatScrollHarness: View {
 @MainActor
 @Suite(.serialized)
 struct ConversationLongChatScrollTests {
+    private static let settleTimeout = Duration.seconds(20)
+
+    private func settle(_ window: UIWindow, until isSettled: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
+        while true {
+            window.layoutIfNeeded()
+            if isSettled() { return }
+            guard ContinuousClock.now < deadline else { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     @Test func heterogeneousHundredMessageChatStaysAtBottomAsRowsExpand() async throws {
         let fixture = LongChatStressFixture()
         #expect(fixture.rows.count == LongChatStressFixture.messageCount)
@@ -339,28 +353,22 @@ struct ConversationLongChatScrollTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        for _ in 0..<300 {
-            if lastViewport?.isPinned == true,
-               visibleTargets.contains(LongChatScrollHarness.bottomID)
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+        try await settle(window) {
+            lastViewport?.isPinned == true
+                && visibleTargets.contains(LongChatScrollHarness.bottomID)
         }
         let initialContentHeight = try #require(lastViewport?.contentHeight)
         #expect(lastViewport?.isPinned == true, "Initial viewport: \(String(describing: lastViewport))")
-        #expect(visibleTargets.contains(LongChatScrollHarness.bottomID))
+        #expect(
+            visibleTargets.contains(LongChatScrollHarness.bottomID),
+            "Initial targets: \(visibleTargets.sorted()) viewport: \(String(describing: lastViewport))"
+        )
 
         model.revealsDeferredContent = true
-        for _ in 0..<300 {
-            let didGrow = (lastViewport?.contentHeight ?? 0) > initialContentHeight + 1_000
-            if didGrow,
-               lastViewport?.isPinned == true,
-               visibleTargets.contains(LongChatScrollHarness.bottomID)
-            {
-                break
-            }
-            try await Task.sleep(for: .milliseconds(10))
+        try await settle(window) {
+            (lastViewport?.contentHeight ?? 0) > initialContentHeight + 1_000
+                && lastViewport?.isPinned == true
+                && visibleTargets.contains(LongChatScrollHarness.bottomID)
         }
 
         #expect(
@@ -368,6 +376,9 @@ struct ConversationLongChatScrollTests {
             "Expected deferred long text and image rows above the viewport to grow the timeline"
         )
         #expect(lastViewport?.isPinned == true, "Final viewport: \(String(describing: lastViewport))")
-        #expect(visibleTargets.contains(LongChatScrollHarness.bottomID))
+        #expect(
+            visibleTargets.contains(LongChatScrollHarness.bottomID),
+            "Final targets: \(visibleTargets.sorted()) viewport: \(String(describing: lastViewport))"
+        )
     }
 }
