@@ -40,6 +40,7 @@ final class ConversationReadMarker {
 
     private var pendingWatermarkMessageIdHex: String?
     private var flushedWatermarkMessageIdHex: String?
+    private var lastFlushFailureDescription: String?
     private var readMarkTask: Task<Void, Never>?
     private var readMarkTaskID: UUID?
     private var failedFlushAttempts = 0
@@ -86,9 +87,18 @@ final class ConversationReadMarker {
         flushedWatermarkMessageIdHex = messageIdHex
     }
 
+    /// Kinds that render as their own user-visible timeline row and can
+    /// therefore carry the read watermark. Reactions, deletes and edits mutate
+    /// another row rather than occupying one, and agent stream events are
+    /// developer-mode only.
+    nonisolated static func canAdvanceWatermark(kind: UInt64) -> Bool {
+        kind == MessageSemantics.kindChat || kind == MessageSemantics.kindGroupSystem
+    }
+
     /// The accepted watermark position, or nil when the candidate is ineligible
-    /// (not a kind-9 chat message, deleted, outside the loaded window) or is not
-    /// strictly newer than both the pending and the already-flushed watermark.
+    /// (not a user-visible row kind, deleted, outside the loaded window) or is
+    /// not strictly newer than both the pending and the already-flushed
+    /// watermark.
     nonisolated static func nextWatermarkIndex(
         candidateIndex: Int?,
         pendingIndex: Int?,
@@ -97,7 +107,7 @@ final class ConversationReadMarker {
         isDeleted: Bool
     ) -> Int? {
         guard !isDeleted,
-              kind == MessageSemantics.kindChat,
+              canAdvanceWatermark(kind: kind),
               let candidateIndex
         else { return nil }
         if let pendingIndex, candidateIndex <= pendingIndex { return nil }
@@ -204,6 +214,7 @@ final class ConversationReadMarker {
                 groupIdHex: groupIdHex,
                 messageIdHexes: [messageIdHex]
             )
+            lastFlushFailureDescription = results.compactMap(\.failureDescription).last
             let latestRow = results.compactMap(\.row).last
             if let latestRow {
                 onChatListRowUpdated?(latestRow)
@@ -239,18 +250,52 @@ final class ConversationReadMarker {
     /// to produce a later frame.
     private func requeueFailedFlush(messageIdHex: String) {
         let nextAttempts = failedFlushAttempts + 1
-        guard let retryMessageIdHex = Self.retryStateAfterFailedFlush(
+        let retryMessageIdHex = Self.retryStateAfterFailedFlush(
             failedMessageIdHex: messageIdHex,
             failedIndex: timelineIndex(messageIdHex),
             pendingIndex: pendingWatermarkMessageIdHex.flatMap(timelineIndex),
             attempts: nextAttempts,
             maximumAttempts: Self.maximumFailedFlushAttempts
-        ) else {
+        )
+        if Self.shouldSurfaceExhaustedFailure(
+            retryMessageIdHex: retryMessageIdHex,
+            attempts: nextAttempts,
+            maximumAttempts: Self.maximumFailedFlushAttempts
+        ) {
+            presentExhaustedFailureBanner(messageIdHex: messageIdHex)
+        }
+        guard let retryMessageIdHex else {
             failedFlushAttempts = 0
             return
         }
         pendingWatermarkMessageIdHex = retryMessageIdHex
         failedFlushAttempts = nextAttempts
+    }
+
+    /// Whether a failed flush has run out of retries, as opposed to standing
+    /// aside for a newer candidate. Only an exhausted candidate is worth
+    /// telling the user about; the retry path resolves itself.
+    nonisolated static func shouldSurfaceExhaustedFailure(
+        retryMessageIdHex: String?,
+        attempts: Int,
+        maximumAttempts: Int
+    ) -> Bool {
+        retryMessageIdHex == nil && attempts >= maximumAttempts
+    }
+
+    // TEMPORARY diagnostic surface: remove once kind-1210 read marking is
+    // confirmed working against MDK.
+    private func presentExhaustedFailureBanner(messageIdHex: String) {
+        let diagnostic = [
+            "message=\(messageIdHex)",
+            "group=\(groupIdHex)",
+            lastFlushFailureDescription.map { "error=\($0)" } ?? "error=none"
+        ].joined(separator: "\n")
+        appState?.present(.error(
+            "Couldn't mark as read",
+            message: "Marmot rejected the read marker.",
+            diagnostic: diagnostic
+        ))
     }
 
     nonisolated static func pendingFlushDecision(

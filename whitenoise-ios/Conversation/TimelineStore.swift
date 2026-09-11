@@ -652,8 +652,12 @@ final class TimelineStore {
             // reports more history exists; never widen a backward edge the user
             // already exhausted, or it re-arms a redundant "load older" fetch.
             hasMoreBefore = hasMoreBefore && page.hasMoreBefore
-            hasMoreAfter = page.hasMoreAfter
         }
+        hasMoreAfter = ConversationPaginationPolicy.forwardEdgeAfterTailRefresh(
+            currentHasMoreAfter: hasMoreAfter,
+            pageHasMoreAfter: page.hasMoreAfter,
+            droppedNewerRecords: records.count != page.messages.count
+        )
         rebuildProjectedState(
             rebuildTimeline: false,
             projectionChanged: projectionChanged,
