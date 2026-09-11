@@ -42,15 +42,14 @@ nonisolated enum SendAcceptancePolicy {
     }
 }
 
-/// Owns the conversation composer's send pipeline: the in-flight send guard, the
-/// reply target, and the text/media send FFI orchestration. Optimistic rows are
+/// Owns the conversation composer's send pipeline: the reply target, the
+/// outgoing publish queue, and the text/media send FFI orchestration. Optimistic rows are
 /// handed to `TimelineStore` (the overlay is timeline-mirror state, not composer
 /// state); the group-derived send gates are injected as closures so the composer
 /// holds no group roster. Carved out of `ConversationViewModel` (Phase 5b).
 @Observable
 @MainActor
 final class ComposerModel {
-    private(set) var sendInFlight = false
     /// The message the composer is currently replying to (set by swipe / menu).
     var replyingTo: AppMessageRecordFfi? {
         didSet {
@@ -67,7 +66,7 @@ final class ComposerModel {
 
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let groupIdHex: String
-    @ObservationIgnored private unowned let timelineStore: TimelineStore
+    @ObservationIgnored private let timelineStore: TimelineStore
     @ObservationIgnored private let sendQueue = OutgoingSendQueue()
     @ObservationIgnored var canSendMessages: () -> Bool = { false }
     @ObservationIgnored var canSendMediaAttachments: () -> Bool = { false }
@@ -127,7 +126,7 @@ final class ComposerModel {
         // row itself: the awaits above are wide enough for a second retry or
         // a Delete to have consumed it already.
         guard timelineStore.failedTransientRecord(rowId: rowId) != nil else { return false }
-        guard !sendInFlight, canSendMessages() else {
+        guard canSendMessages() else {
             onError(L10n.string("Send failed"))
             return false
         }
@@ -143,8 +142,7 @@ final class ComposerModel {
 
     private func send(_ text: String, replyTargetId overrideReplyTargetId: String?) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sendInFlight,
-              canSendMessages(),
+        guard canSendMessages(),
               !trimmed.isEmpty,
               let appState,
               let accountRef = appState.activeAccountRef else { return }
@@ -152,11 +150,6 @@ final class ComposerModel {
         // Defense-in-depth: clamp to the protocol's max length so an oversized
         // paste can't bypass the composer's cap (#54).
         let outgoing = ConversationViewModel.cappedOutgoingText(trimmed)
-
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // markdown parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
 
         let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
         let tempId = UUID().uuidString
@@ -188,12 +181,8 @@ final class ComposerModel {
         )
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
-        // The composer is free the moment the message is parked in the
-        // timeline: the round-trip below waits in `sendQueue`, not on the
-        // Send button (#226 blocked the button for its whole duration).
-        sendInFlight = false
 
-        await sendQueue.enqueue { [self] in
+        let publish = sendQueue.enqueue { [self] in
             do {
                 let summary = try await sendText(
                     appState: appState,
@@ -211,14 +200,19 @@ final class ComposerModel {
                     break
                 }
             } catch {
-                timelineStore.markFailed(tempId: tempId)
-                onError(error.localizedDescription)
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                failSend(tempId: tempId, error: error, appState: appState)
             }
-        }.value
+        }
+        await publish.value
+    }
+
+    /// Marks the optimistic row failed and reports it once, to the view model
+    /// and as a toast.
+    private func failSend(tempId: String, error: Error, appState: AppState) {
+        timelineStore.markFailed(tempId: tempId)
+        onError(error.localizedDescription)
+        Haptics.error()
+        appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
     }
 
     private func sendText(
@@ -249,8 +243,7 @@ final class ComposerModel {
     }
 
     func sendMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
-        guard !sendInFlight,
-              !attachments.isEmpty,
+        guard !attachments.isEmpty,
               canSendMediaAttachments(),
               let appState,
               let accountRef = appState.activeAccountRef else { return }
@@ -262,11 +255,6 @@ final class ComposerModel {
         timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
         let tempRowId = "msg:\(tempId)"
         let now = UInt64(Date().timeIntervalSince1970)
-
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // caption parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
 
         // Captured before the upload round-trip: a wipe completing while the
         // send is in flight must invalidate the post-upload cache store.
@@ -290,11 +278,8 @@ final class ComposerModel {
         timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
-        // Freed at hand-off, like a text send: the upload and publish below
-        // belong to the parked row's bubble, not to the Send button.
-        sendInFlight = false
 
-        await sendQueue.enqueue { [self] in
+        let publish = sendQueue.enqueue { [self] in
             do {
                 let client = try appState.currentMarmotClient()
                 let result = try await client.uploadMedia(
@@ -353,14 +338,10 @@ final class ComposerModel {
                     }
                 }
             } catch {
-                timelineStore.markFailed(tempId: tempId)
-                onError(error.localizedDescription)
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                failSend(tempId: tempId, error: error, appState: appState)
             }
-        }.value
+        }
+        await publish.value
     }
 
     private func replyTargetMessageId() -> String? {
