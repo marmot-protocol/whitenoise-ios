@@ -24,16 +24,24 @@ struct InteractivePopGestureEnablerTests {
         return (window, navigation, pushed)
     }
 
+    private func attach(
+        _ controller: InteractivePopGestureController,
+        to viewController: UIViewController,
+        in window: UIWindow
+    ) {
+        let attachment = InteractivePopGestureAttachmentView()
+        attachment.controller = controller
+        viewController.view.addSubview(attachment)
+        window.layoutIfNeeded()
+        attachment.resolveNavigationController()
+    }
+
     @Test func attachmentViewAdoptsTheEnclosingStacksPopRecognizer() throws {
         let (window, navigation, pushed) = try makeStack()
         defer { window.isHidden = true }
 
-        let controller = InteractivePopGestureController(onBegin: {})
-        let attachment = InteractivePopGestureAttachmentView()
-        attachment.controller = controller
-        pushed.view.addSubview(attachment)
-        window.layoutIfNeeded()
-        attachment.resolveNavigationController()
+        let controller = InteractivePopGestureController(onBegin: { 1 }, onFinish: { _, _ in })
+        attach(controller, to: pushed, in: window)
 
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         #expect(recognizer.delegate === controller)
@@ -48,12 +56,8 @@ struct InteractivePopGestureEnablerTests {
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         let systemDelegate = recognizer.delegate
 
-        let controller = InteractivePopGestureController(onBegin: {})
-        let attachment = InteractivePopGestureAttachmentView()
-        attachment.controller = controller
-        pushed.view.addSubview(attachment)
-        window.layoutIfNeeded()
-        attachment.resolveNavigationController()
+        let controller = InteractivePopGestureController(onBegin: { 1 }, onFinish: { _, _ in })
+        attach(controller, to: pushed, in: window)
         #expect(recognizer.delegate === controller)
 
         controller.restore()
@@ -76,34 +80,139 @@ struct InteractivePopGestureEnablerTests {
         window.layoutIfNeeded()
         defer { window.isHidden = true }
 
-        var didBegin = false
-        let controller = InteractivePopGestureController(onBegin: { didBegin = true })
-        let attachment = InteractivePopGestureAttachmentView()
-        attachment.controller = controller
-        root.view.addSubview(attachment)
-        window.layoutIfNeeded()
-        attachment.resolveNavigationController()
+        var begins = 0
+        let controller = InteractivePopGestureController(
+            onBegin: {
+                begins += 1
+                return begins
+            },
+            onFinish: { _, _ in }
+        )
+        attach(controller, to: root, in: window)
 
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         #expect(recognizer.delegate === controller)
         #expect(!controller.gestureRecognizerShouldBegin(recognizer))
-        #expect(!didBegin)
+        #expect(begins == 0)
     }
 
     @Test func beginningTheSwipeResignsTheKeyboardFirst() throws {
         let (window, navigation, pushed) = try makeStack()
         defer { window.isHidden = true }
 
-        var didBegin = false
-        let controller = InteractivePopGestureController(onBegin: { didBegin = true })
-        let attachment = InteractivePopGestureAttachmentView()
-        attachment.controller = controller
-        pushed.view.addSubview(attachment)
-        window.layoutIfNeeded()
-        attachment.resolveNavigationController()
+        var begins = 0
+        let controller = InteractivePopGestureController(
+            onBegin: {
+                begins += 1
+                return begins
+            },
+            onFinish: { _, _ in }
+        )
+        attach(controller, to: pushed, in: window)
 
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         #expect(controller.gestureRecognizerShouldBegin(recognizer))
-        #expect(didBegin)
+        #expect(begins == 1)
+    }
+
+    @Test func aCancelledTransitionIsReportedOnceForTheEpochItBegan() throws {
+        let (window, navigation, pushed) = try makeStack()
+        defer { window.isHidden = true }
+
+        var outcomes: [(Int, Bool)] = []
+        let controller = InteractivePopGestureController(
+            onBegin: { 7 },
+            onFinish: { outcomes.append(($0, $1)) }
+        )
+        attach(controller, to: pushed, in: window)
+
+        let recognizer = try #require(navigation.interactivePopGestureRecognizer)
+        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+
+        controller.completeTransition(isCancelled: true)
+        controller.completeTransition(isCancelled: true)
+        controller.completeTransition(isCancelled: false)
+
+        #expect(outcomes.count == 1)
+        #expect(outcomes.first?.0 == 7)
+        #expect(outcomes.first?.1 == true)
+    }
+
+    @Test func aCompletedTransitionIsReportedOnceForTheEpochItBegan() throws {
+        let (window, navigation, pushed) = try makeStack()
+        defer { window.isHidden = true }
+
+        var outcomes: [(Int, Bool)] = []
+        let controller = InteractivePopGestureController(
+            onBegin: { 3 },
+            onFinish: { outcomes.append(($0, $1)) }
+        )
+        attach(controller, to: pushed, in: window)
+
+        let recognizer = try #require(navigation.interactivePopGestureRecognizer)
+        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+
+        controller.completeTransition(isCancelled: false)
+        controller.completeTransition(isCancelled: true)
+
+        #expect(outcomes.count == 1)
+        #expect(outcomes.first?.0 == 3)
+        #expect(outcomes.first?.1 == false)
+    }
+
+    @Test func anOutcomeWithoutAGestureIsNotReported() throws {
+        let (window, _, pushed) = try makeStack()
+        defer { window.isHidden = true }
+
+        var outcomes: [(Int, Bool)] = []
+        let controller = InteractivePopGestureController(
+            onBegin: { 1 },
+            onFinish: { outcomes.append(($0, $1)) }
+        )
+        attach(controller, to: pushed, in: window)
+
+        controller.completeTransition(isCancelled: true)
+        #expect(outcomes.isEmpty)
+    }
+
+    @Test func restoringDropsAnOutcomeFromTheAbandonedGesture() throws {
+        let (window, navigation, pushed) = try makeStack()
+        defer { window.isHidden = true }
+
+        var outcomes: [(Int, Bool)] = []
+        let controller = InteractivePopGestureController(
+            onBegin: { 5 },
+            onFinish: { outcomes.append(($0, $1)) }
+        )
+        attach(controller, to: pushed, in: window)
+
+        let recognizer = try #require(navigation.interactivePopGestureRecognizer)
+        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+        controller.restore()
+        controller.completeTransition(isCancelled: true)
+
+        #expect(outcomes.isEmpty)
+    }
+
+    @Test func aSecondBeginKeepsTheEpochTheScreenIsStillHolding() throws {
+        let (window, navigation, pushed) = try makeStack()
+        defer { window.isHidden = true }
+
+        var state = InteractivePopTransitionState()
+        var outcomes: [(Int, Bool)] = []
+        let controller = InteractivePopGestureController(
+            onBegin: { state.begin(isComposerFocused: false) },
+            onFinish: { outcomes.append(($0, $1)) }
+        )
+        attach(controller, to: pushed, in: window)
+
+        let recognizer = try #require(navigation.interactivePopGestureRecognizer)
+        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+        // The screen refuses the second begin, so the epoch must not move.
+        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+        controller.completeTransition(isCancelled: true)
+
+        #expect(outcomes.count == 1)
+        #expect(outcomes.first?.0 == 1)
     }
 }

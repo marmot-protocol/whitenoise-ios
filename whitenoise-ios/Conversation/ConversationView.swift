@@ -571,6 +571,8 @@ struct ConversationView: View {
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
     @State private var composerFocusRequest = 0
     @State private var composerDismissRequest = 0
+    @State private var popTransition = InteractivePopTransitionState()
+    @State private var isComposerInputFocused = false
     /// Bumped by `send()` to ask the timeline to re-pin. The composer is a
     /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
     /// carries the request into the reader's scope.
@@ -765,7 +767,10 @@ struct ConversationView: View {
             // Hiding the bar also takes the back button's screen-edge pop
             // gesture with it; this puts the swipe-back to Chats back.
             .background {
-                InteractivePopGestureEnabler(onBegin: dismissKeyboard)
+                InteractivePopGestureEnabler(
+                    onBegin: beginPopTransition,
+                    onFinish: finishPopTransition
+                )
                     .accessibilityHidden(true)
             }
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -1130,6 +1135,7 @@ struct ConversationView: View {
                     voiceRecordingDurationSeconds: voiceRecorder.durationSeconds,
                     focusRequest: composerFocusRequest,
                     dismissRequest: composerDismissRequest,
+                    onInputFocusChange: { isComposerInputFocused = $0 },
                     mentionCandidates: mentionCandidates,
                     submissionEnabled: editSubmissionEnabled,
                     submissionAccessibilityLabel: editSession == nil
@@ -1361,10 +1367,7 @@ struct ConversationView: View {
     private var conversationHeaderBar: some View {
         HStack(spacing: 16) {
             Button {
-                // Resign the composer before popping so the keyboard animates
-                // down first instead of flashing mid-screen during the pop.
-                dismissKeyboard()
-                dismiss()
+                navigateBack()
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 20, weight: .semibold))
@@ -1880,7 +1883,8 @@ struct ConversationView: View {
             showsSenderIdentity: showsSenderIdentity
         )
         .replySwipeToReply(
-            isEnabled: interactionsEnabled && canReply(to: record, viewModel: viewModel)
+            isEnabled: interactionsEnabled && canReply(to: record, viewModel: viewModel),
+            isNavigating: popTransition.isNavigating
         ) {
             beginReply(to: record, viewModel: viewModel)
         }
@@ -2386,10 +2390,11 @@ struct ConversationView: View {
     }
 
     private func beginReply(to record: AppMessageRecordFfi, viewModel: ConversationViewModel) {
+        guard !popTransition.isNavigating else { return }
         guard canReply(to: record, viewModel: viewModel) else { return }
         cancelEdit()
         viewModel.replyingTo = record
-        composerFocusRequest += 1
+        requestComposerFocus()
     }
 
     private func beginEdit(_ message: AppMessageRecordFfi, viewModel: ConversationViewModel) {
@@ -2418,7 +2423,7 @@ struct ConversationView: View {
             preservedReplyTargetMessageIdHex: preservedReplyTargetMessageIdHex
         )
         draft = viewModel.editingText(for: message)
-        composerFocusRequest += 1
+        requestComposerFocus()
     }
 
     private var editSubmissionEnabled: Bool {
@@ -2761,7 +2766,7 @@ struct ConversationView: View {
         if accepted.count < attachments.count {
             presentMaxAttachmentWarning()
         }
-        composerFocusRequest += 1
+        requestComposerFocus()
         return accepted.count == attachments.count
     }
 
@@ -2894,7 +2899,7 @@ struct ConversationView: View {
             dismissKeyboard()
             return true
         }
-        composerFocusRequest += 1
+        requestComposerFocus()
         return true
     }
 
@@ -2921,6 +2926,43 @@ struct ConversationView: View {
 
     private func presentMaxAttachmentWarning() {
         appState.present(.warning(L10n.plural("You can send up to %lld attachments at once", Int64(MediaDraftProcessor.maxAttachmentCount))))
+    }
+
+    /// Opens a navigation epoch for the pop and dismisses input chrome once
+    /// per gesture, remembering whether the composer was focused so a
+    /// cancelled pop can put it back.
+    private func beginPopTransition() -> Int? {
+        guard let epoch = popTransition.begin(isComposerFocused: isComposerInputFocused)
+        else { return nil }
+        dismissKeyboard()
+        return epoch
+    }
+
+    private func finishPopTransition(epoch: Int, isCancelled: Bool) {
+        switch popTransition.finish(epoch: epoch, isCancelled: isCancelled) {
+        case .ignored, .completed:
+            break
+        case .cancelled(let restoresComposerFocus):
+            if restoresComposerFocus {
+                requestComposerFocus()
+            }
+        }
+    }
+
+    /// The explicit back button holds the same invariant as the edge swipe:
+    /// input chrome goes down before the pop, and nothing may raise it again.
+    private func navigateBack() {
+        if let epoch = beginPopTransition() {
+            finishPopTransition(epoch: epoch, isCancelled: false)
+        }
+        dismiss()
+    }
+
+    /// A pop that has begun or completed owns the screen, so a queued focus
+    /// request must not raise the keyboard behind the transition.
+    private func requestComposerFocus() {
+        guard !popTransition.isNavigating else { return }
+        composerFocusRequest &+= 1
     }
 
     private func dismissKeyboard() {
