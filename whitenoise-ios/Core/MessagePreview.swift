@@ -39,6 +39,11 @@ enum MessagePreview {
         switch MessageSemantics.classify(record) {
         case .media(let attachments):
             if !record.plaintext.isEmpty {
+                // A GIF sharing its message with photos classifies as media,
+                // and its plaintext is the envelope, not a caption.
+                if let giphy = giphyPreview(record.plaintext, mentionDisplayName: mentionDisplayName) {
+                    return giphy
+                }
                 return flattenedBody(
                     plaintext: record.plaintext,
                     tokens: record.contentTokens,
@@ -57,8 +62,8 @@ enum MessagePreview {
             ) ?? ""
         case .chat, .reply, .streamFinal:
             // Reply text, stream transcript, and plain chat all live in plaintext.
-            if let label = RemoteGiphyMedia.envelopePreviewText(for: record.plaintext) {
-                return label
+            if let giphy = giphyPreview(record.plaintext, mentionDisplayName: mentionDisplayName) {
+                return giphy
             }
             return flattenedBody(
                 plaintext: record.plaintext,
@@ -95,8 +100,8 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
-            if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
-                return label
+            if let giphy = giphyPreview(preview.plaintext, mentionDisplayName: mentionDisplayName) {
+                return giphy
             }
             return flattenedBody(
                 plaintext: preview.plaintext,
@@ -130,8 +135,8 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
-            if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
-                return label
+            if let giphy = giphyPreview(preview.plaintext, mentionDisplayName: mentionDisplayName) {
+                return giphy
             }
             return flattenedBody(
                 plaintext: preview.plaintext,
@@ -140,6 +145,21 @@ enum MessagePreview {
             )
         }
         return L10n.string("New message")
+    }
+
+    /// A GIF preview shows the sender's caption when there is one, and the
+    /// generic label otherwise. The envelope's URL never becomes preview text.
+    static func giphyPreview(
+        _ plaintext: String,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String? {
+        // The shared gate is looser than `parse`, so an envelope with a
+        // clipped credit line still degrades to the label instead of leaking
+        // the CDN URL; projection is a no-op on that label.
+        guard let label = RemoteGiphyMedia.envelopePreviewText(for: plaintext) else { return nil }
+        return CanonicalMentionDisplayProjection.project(label) { npub in
+            mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+        }.text
     }
 
     /// Previews show markdown stripped of syntax when parsed tokens exist.

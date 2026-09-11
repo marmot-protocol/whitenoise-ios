@@ -54,6 +54,14 @@ enum MessageBubbleReplyLayout {
     static let receivedCardOpacity = 0.09
 }
 
+nonisolated enum MessageGiphyGridPresentation {
+    /// A GIF joins the visual grid only when every attachment is visual.
+    /// Documents and audio keep their own rows beneath a full-width GIF card.
+    static func gridsWithGiphy(isVisualMedia: [Bool]) -> Bool {
+        !isVisualMedia.isEmpty && isVisualMedia.allSatisfy { $0 }
+    }
+}
+
 nonisolated enum MessageRichMediaBubblePresentation {
     static func contentWidth(
         maxWidth: CGFloat,
@@ -138,11 +146,29 @@ struct MessageBubble: View {
     /// Body text projected from the decoded unsigned Nostr app event's kind,
     /// tags, and content.
     private var bodyText: String {
-        Self.bodyText(
+        if let remoteGiphyMedia {
+            return Self.giphyCaptionText(
+                remoteGiphyMedia,
+                mentionDisplayName: { appState.mentionDisplayName(for: $0) }
+            )
+        }
+        return Self.bodyText(
             for: record,
             hasMediaItems: !mediaItems.isEmpty,
             mentionDisplayName: { appState.mentionDisplayName(for: $0) }
         )
+    }
+
+    /// A GIF bubble renders only the caption its sender typed. The envelope's
+    /// URL and credit line must never surface as message text.
+    static func giphyCaptionText(
+        _ media: RemoteGiphyMedia,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String {
+        guard let caption = media.caption else { return "" }
+        return CanonicalMentionDisplayProjection.project(caption) { npub in
+            mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+        }.text
     }
 
     static func bodyText(
@@ -174,7 +200,7 @@ struct MessageBubble: View {
     }
 
     private var remoteGiphyMedia: RemoteGiphyMedia? {
-        guard debugStyle == nil, mediaItems.isEmpty else { return nil }
+        guard debugStyle == nil else { return nil }
         return RemoteGiphyMedia.parse(wireText: record.plaintext)
     }
 
@@ -315,15 +341,84 @@ struct MessageBubble: View {
             .accessibilityElement(children: .combine)
     }
 
+    private var giphySharesMediaGrid: Bool {
+        MessageGiphyGridPresentation.gridsWithGiphy(
+            isVisualMedia: mediaItems.map { $0.isImage || $0.isVideo }
+        )
+    }
+
+    @ViewBuilder
+    private func remoteGiphyVisual(_ media: RemoteGiphyMedia) -> some View {
+        if giphySharesMediaGrid {
+            MessageMediaGrid(
+                cells: [.giphy(media)] + mediaItems.map(MessageVisualCell.media),
+                isFromMe: isFromMe,
+                maxWidth: mediaGridWidth,
+                onLoadMedia: onLoadMedia,
+                onOpenImage: { item, data in
+                    mediaGallery = MessageMediaGallery(
+                        items: mediaItems,
+                        initialItem: item,
+                        initialImageData: data,
+                        messageIdByItemID: mediaMessageIds,
+                        giphyMedia: media
+                    )
+                },
+                onOpenVideo: { item in
+                    mediaGallery = MessageMediaGallery(
+                        items: mediaItems,
+                        initialItem: item,
+                        messageIdByItemID: mediaMessageIds,
+                        giphyMedia: media
+                    )
+                },
+                onOpenGiphy: { openGiphyGallery($0) }
+            )
+
+            // A grid cell has no room for a credit line, so the whole grid
+            // carries the attribution GIPHY requires.
+            Text(media.creditLabel)
+                .font(.caption2)
+                .lineLimit(1)
+                .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+        } else {
+            RemoteGiphyMediaView(
+                media: media,
+                mayLoadAutomatically: isFromMe,
+                onOpenFullscreen: { openGiphyGallery(media) }
+            )
+            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+
+            if !mediaItems.isEmpty {
+                mediaAttachments
+            }
+        }
+    }
+
+    private func openGiphyGallery(_ media: RemoteGiphyMedia) {
+        mediaGallery = MessageMediaGallery(
+            giphyMedia: media,
+            items: giphySharesMediaGrid ? mediaItems : [],
+            messageIdByItemID: mediaMessageIds
+        )
+    }
+
     private func remoteGiphyMessageContent(_ media: RemoteGiphyMedia) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 6) {
             if let replyPreview {
                 replyCard(replyPreview)
-                    .padding(6)
             }
-            RemoteGiphyMediaView(media: media, mayLoadAutomatically: isFromMe)
+
+            remoteGiphyVisual(media)
+
+            if hasVisibleBodyText {
+                // Markdown blocks are parsed from the whole record content,
+                // which here is the envelope, not the caption alone.
+                messageBodyText(hasReply: false, richContent: true, plainText: true)
+            }
         }
         .frame(width: MessageBubbleReplyLayout.richContentWidth, alignment: .leading)
+        .padding(6)
         .background { bubbleBackground }
         .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
         .opacity(status == .sending ? 0.7 : 1)
@@ -637,13 +732,17 @@ struct MessageBubble: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func messageBodyText(hasReply: Bool, richContent: Bool = false) -> some View {
+    private func messageBodyText(
+        hasReply: Bool,
+        richContent: Bool = false,
+        plainText: Bool = false
+    ) -> some View {
         let isCollapsed = MessageBodyCollapsePresentation.isCollapsed(
             sanitizedBodyText,
             isExpanded: isBodyExpanded
         )
         return VStack(alignment: .leading, spacing: 5) {
-            messageBodyContent
+            messageBodyContent(plainText: plainText)
                 .frame(
                     maxHeight: isCollapsed ? MessageBodyCollapsePresentation.collapsedBodyMaxHeight : nil,
                     alignment: .topLeading
@@ -700,8 +799,8 @@ struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private var messageBodyContent: some View {
-        if let blocks = markdownBlocks {
+    private func messageBodyContent(plainText: Bool) -> some View {
+        if let blocks = markdownBlocks, !plainText {
             MarkdownMessageView(
                 blocks: blocks,
                 quoteBar: isFromMe ? MessageBubblePalette.sentForeground.opacity(0.8) : Color.accentColor
@@ -1335,34 +1434,42 @@ nonisolated enum MessageExternalLinkConfirmation {
     }
 }
 
+/// A cell in the visual grid. A staged GIF is a remote URL rather than an
+/// encrypted attachment, so the grid holds both shapes.
+private enum MessageVisualCell {
+    case giphy(RemoteGiphyMedia)
+    case media(MessageMediaAttachment)
+}
+
 private struct MessageMediaGrid: View {
-    let items: [MessageMediaAttachment]
+    let cells: [MessageVisualCell]
     let isFromMe: Bool
     let maxWidth: CGFloat
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
+    var onOpenGiphy: ((RemoteGiphyMedia) -> Void)?
 
     private let cornerRadius: CGFloat = 12
 
-    private var visibleItems: [MessageMediaAttachment] {
-        Array(items.prefix(MessageMediaGridPresentation.visibleCount(totalCount: items.count)))
+    private var visibleCells: [MessageVisualCell] {
+        Array(cells.prefix(MessageMediaGridPresentation.visibleCount(totalCount: cells.count)))
     }
 
     private var layout: MessageMediaGridLayout {
-        MessageMediaGridPresentation.layout(totalCount: items.count, maxWidth: maxWidth)
+        MessageMediaGridPresentation.layout(totalCount: cells.count, maxWidth: maxWidth)
     }
 
     var body: some View {
         let resolvedLayout = layout
-        let resolvedItems = visibleItems
+        let resolvedCells = visibleCells
         ZStack(alignment: .topLeading) {
             ForEach(Array(resolvedLayout.frames.enumerated()), id: \.offset) { index, frame in
-                if index < resolvedItems.count {
+                if index < resolvedCells.count {
                     tile(
-                        item: resolvedItems[index],
+                        cell: resolvedCells[index],
                         size: frame.size,
-                        hiddenCount: index == resolvedItems.count - 1
+                        hiddenCount: index == resolvedCells.count - 1
                             ? resolvedLayout.overflowCount
                             : 0
                     )
@@ -1374,20 +1481,31 @@ private struct MessageMediaGrid: View {
         .clipShape(.rect(cornerRadius: cornerRadius))
     }
 
+    @ViewBuilder
     private func tile(
-        item: MessageMediaAttachment,
+        cell: MessageVisualCell,
         size: CGSize,
         hiddenCount: Int
     ) -> some View {
-        MessageMediaTile(
-            item: item,
-            isFromMe: isFromMe,
-            size: size,
-            hiddenCount: hiddenCount,
-            onLoadMedia: onLoadMedia,
-            onOpenImage: onOpenImage,
-            onOpenVideo: onOpenVideo
-        )
+        switch cell {
+        case .giphy(let media):
+            RemoteGiphyMediaView(
+                media: media,
+                mayLoadAutomatically: isFromMe,
+                layout: .gridCell(size),
+                onOpenFullscreen: onOpenGiphy.map { open in { open(media) } }
+            )
+        case .media(let item):
+            MessageMediaTile(
+                item: item,
+                isFromMe: isFromMe,
+                size: size,
+                hiddenCount: hiddenCount,
+                onLoadMedia: onLoadMedia,
+                onOpenImage: onOpenImage,
+                onOpenVideo: onOpenVideo
+            )
+        }
     }
 }
 
@@ -1474,7 +1592,7 @@ private struct MessageMediaAttachmentContent: View {
             )
         } else if usesVisualGrid {
             MessageMediaGrid(
-                items: items,
+                cells: items.map(MessageVisualCell.media),
                 isFromMe: isFromMe,
                 maxWidth: maxWidth,
                 onLoadMedia: onLoadMedia,
@@ -3301,28 +3419,67 @@ enum MessageMediaThumbnailDecoder {
     }
 }
 
+/// A page in the fullscreen gallery. A GIF is a remote URL with no encrypted
+/// payload, so it pages alongside media without being one.
+enum MessageMediaGalleryPage: Identifiable {
+    case giphy(RemoteGiphyMedia)
+    case media(MessageMediaAttachment)
+
+    var id: String {
+        switch self {
+        case .giphy: MessageMediaGallery.giphyPageID
+        case .media(let item): item.id
+        }
+    }
+}
+
 struct MessageMediaGallery: Identifiable {
+    /// Media ids join owner, digest, epoch and index with ":", so a
+    /// colon-free sentinel cannot collide with one.
+    static let giphyPageID = "remote-giphy-page"
+
     let id = UUID()
     let items: [MessageMediaAttachment]
+    let giphyMedia: RemoteGiphyMedia?
     let initialItemID: String
     let initialMediaData: Data?
     let messageIdByItemID: [String: String]
 
+    /// The GIF leads the pages the way it leads the grid cells.
+    var pages: [MessageMediaGalleryPage] {
+        (giphyMedia.map { [MessageMediaGalleryPage.giphy($0)] } ?? [])
+            + items.map(MessageMediaGalleryPage.media)
+    }
+
     init?(item: MessageMediaAttachment, imageData: Data) {
         self.init(items: [item], initialItem: item, initialMediaData: imageData)
+    }
+
+    init(
+        giphyMedia: RemoteGiphyMedia,
+        items: [MessageMediaAttachment] = [],
+        messageIdByItemID: [String: String] = [:]
+    ) {
+        self.items = items.filter { $0.isImage || $0.isVideo }
+        self.giphyMedia = giphyMedia
+        self.initialItemID = Self.giphyPageID
+        self.initialMediaData = nil
+        self.messageIdByItemID = messageIdByItemID
     }
 
     init?(
         items: [MessageMediaAttachment],
         initialItem: MessageMediaAttachment,
         initialImageData: Data,
-        messageIdByItemID: [String: String] = [:]
+        messageIdByItemID: [String: String] = [:],
+        giphyMedia: RemoteGiphyMedia? = nil
     ) {
         self.init(
             items: items,
             initialItem: initialItem,
             initialMediaData: initialImageData,
-            messageIdByItemID: messageIdByItemID
+            messageIdByItemID: messageIdByItemID,
+            giphyMedia: giphyMedia
         )
     }
 
@@ -3330,7 +3487,8 @@ struct MessageMediaGallery: Identifiable {
         items: [MessageMediaAttachment],
         initialItem: MessageMediaAttachment,
         initialMediaData: Data? = nil,
-        messageIdByItemID: [String: String] = [:]
+        messageIdByItemID: [String: String] = [:],
+        giphyMedia: RemoteGiphyMedia? = nil
     ) {
         guard initialItem.isImage || initialItem.isVideo else { return nil }
         let visualItems = items.filter { $0.isImage || $0.isVideo }
@@ -3339,6 +3497,7 @@ struct MessageMediaGallery: Identifiable {
         } else {
             self.items = [initialItem] + visualItems
         }
+        self.giphyMedia = giphyMedia
         self.initialItemID = initialItem.id
         self.initialMediaData = initialMediaData
         self.messageIdByItemID = messageIdByItemID
@@ -3498,14 +3657,26 @@ struct MessageMediaFullscreenGalleryView: View {
             Color.black.ignoresSafeArea()
 
             TabView(selection: $selectedItemID) {
-                ForEach(gallery.items) { item in
-                    MessageMediaFullscreenPage(
-                        item: item,
-                        isSelected: item.id == selectedItemID,
-                        initialImageData: gallery.initialData(for: item),
-                        onLoadMedia: onLoadMedia
-                    )
-                    .tag(item.id)
+                ForEach(gallery.pages) { page in
+                    switch page {
+                    case .giphy(let media):
+                        // Opening fullscreen is the explicit action that the
+                        // tap-to-load gate asks for, so this page may load.
+                        RemoteGiphyMediaView(
+                            media: media,
+                            mayLoadAutomatically: true,
+                            layout: .fullscreen
+                        )
+                        .tag(page.id)
+                    case .media(let item):
+                        MessageMediaFullscreenPage(
+                            item: item,
+                            isSelected: item.id == selectedItemID,
+                            initialImageData: gallery.initialData(for: item),
+                            onLoadMedia: onLoadMedia
+                        )
+                        .tag(page.id)
+                    }
                 }
             }
             .tabViewStyle(
@@ -3513,7 +3684,7 @@ struct MessageMediaFullscreenGalleryView: View {
             )
             .ignoresSafeArea()
 
-            if gallery.items.count > 1 {
+            if gallery.pages.count > 1 {
                 Text(pageCountLabel)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.white)
@@ -3660,7 +3831,10 @@ struct MessageMediaFullscreenGalleryView: View {
     }
 
     private func prepareSelectedMedia() async {
-        guard let selectedItem else { return }
+        guard let selectedItem else {
+            preparedMedia = nil
+            return
+        }
         preparedMedia = nil
         do {
             let data = try await onLoadMedia.data(for: selectedItem)
@@ -3713,8 +3887,8 @@ struct MessageMediaFullscreenGalleryView: View {
 
     private var pageCountLabel: String {
         MessageMediaFullscreenGalleryPresentation.pageCountLabel(
-            selectedIndex: gallery.items.firstIndex(where: { $0.id == selectedItemID }),
-            totalCount: gallery.items.count
+            selectedIndex: gallery.pages.firstIndex(where: { $0.id == selectedItemID }),
+            totalCount: gallery.pages.count
         )
     }
 }

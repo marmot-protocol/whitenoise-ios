@@ -46,7 +46,7 @@ nonisolated enum ConversationGiphyDraftRecord {
             id: recordID,
             fileName: fileName,
             mediaType: mediaType,
-            plaintext: Data(media.wireText.utf8),
+            plaintext: Data(media.uncaptionedWireText.utf8),
             dim: "\(media.width)x\(media.height)",
             thumbhash: nil,
             durationSeconds: nil,
@@ -60,11 +60,11 @@ nonisolated enum ConversationGiphyDraftRecord {
               let wireText = String(data: attachment.plaintext, encoding: .utf8),
               let parsed = RemoteGiphyMedia.parse(wireText: wireText)
         else { return nil }
-        guard let dimensions = dimensions(from: attachment.dim) else { return parsed }
+        let dimensions = dimensions(from: attachment.dim)
         return RemoteGiphyMedia(
             url: parsed.url,
-            width: dimensions.width,
-            height: dimensions.height,
+            width: dimensions?.width ?? parsed.width,
+            height: dimensions?.height ?? parsed.height,
             attribution: parsed.attribution
         )
     }
@@ -88,12 +88,20 @@ nonisolated enum ConversationGiphyDraftRecord {
         guard let dim else { return nil }
         let parts = dim.lowercased().split(separator: "x", omittingEmptySubsequences: false)
         guard parts.count == 2,
-              let width = Int(parts[0]),
-              let height = Int(parts[1]),
-              width > 0,
-              height > 0
+              let rawWidth = Int(parts[0]),
+              let rawHeight = Int(parts[1]),
+              let width = RemoteGiphyMedia.boundedDimension(rawWidth),
+              let height = RemoteGiphyMedia.boundedDimension(rawHeight)
         else { return nil }
         return (width, height)
+    }
+}
+
+nonisolated enum ConversationDraftAttachmentBudget {
+    /// The GIF reference is prepended to `persistedAttachments`, so it has to
+    /// come out of the same cap the media attachments share.
+    static func mediaCapacity(hasGiphyDraft: Bool) -> Int {
+        max(0, MediaDraftProcessor.maxAttachmentCount - (hasGiphyDraft ? 1 : 0))
     }
 }
 
@@ -116,9 +124,6 @@ nonisolated enum ConversationDraftPreview {
             !ConversationGiphyDraftRecord.isRecord(mediaType: $0.mediaType)
         }
         let hasGiphyDraft = stagedAttachments.count != summary.mediaAttachments.count
-        if hasGiphyDraft, stagedAttachments.isEmpty {
-            return L10n.string("GIF via GIPHY")
-        }
 
         let fileNames = stagedAttachments.compactMap {
             ContentSanitizer.compactSingleLine(
@@ -126,14 +131,18 @@ nonisolated enum ConversationDraftPreview {
                 maxLength: MessageSemantics.maxImetaFileNameBytes
             )
         }
+        let stagedCount = fileNames.count + (hasGiphyDraft ? 1 : 0)
+        if stagedCount > 1 {
+            return L10n.plural("📎 %lld attachments", Int64(stagedCount))
+        }
+        if hasGiphyDraft {
+            return L10n.string("GIF via GIPHY")
+        }
         if fileNames.count == 1 {
             return ContentSanitizer.singleLine(
                 "📎 \(fileNames[0])",
                 maxLength: maximumLength
             )
-        }
-        if fileNames.count > 1 {
-            return L10n.plural("📎 %lld attachments", Int64(fileNames.count))
         }
         if summary.replyToMessageIdHex != nil {
             return L10n.string("Reply")
@@ -583,7 +592,9 @@ final class ConversationDraftStore {
         let replyToMessageIdHex = Hex.normalized32Bytes(snapshot.replyToMessageIdHex)
         var attachmentIDs = Set<UUID>()
         let attachments = snapshot.mediaAttachments
-            .prefix(MediaDraftProcessor.maxAttachmentCount)
+            .prefix(ConversationDraftAttachmentBudget.mediaCapacity(
+                hasGiphyDraft: snapshot.giphyMedia != nil
+            ))
             .filter { attachment in
                 let maxBytes = attachment.kind == .image
                     ? MediaDraftProcessor.maxImageAttachmentBytes

@@ -616,7 +616,7 @@ final class ConversationViewModel {
 
     func editingText(for message: AppMessageRecordFfi) -> String {
         mentionController.prepareEditingText(
-            message.plaintext,
+            GiphyMessageEditProjection.editableCaption(for: message.plaintext) ?? message.plaintext,
             appState: appState,
             members: members,
             groupMemberDetails: groupMemberDetails,
@@ -2491,12 +2491,19 @@ final class ConversationViewModel {
               let accountRef = appState.activeAccountRef
         else { return false }
 
-        guard outgoing != message.plaintext else { return true }
+        guard let plaintext = GiphyMessageEditProjection.editedPlaintext(
+            original: message.plaintext,
+            caption: outgoing
+        ) else {
+            appState.present(.warning(L10n.string("That GIF caption is too long.")))
+            return false
+        }
+        guard plaintext != message.plaintext else { return true }
 
-        let contentTokens = await appState.parseMarkdown(text: outgoing)
+        let contentTokens = await appState.parseMarkdown(text: plaintext)
         timelineStore.applyOptimisticEdit(
             to: message,
-            plaintext: outgoing,
+            plaintext: plaintext,
             contentTokens: contentTokens
         )
         do {
@@ -2505,7 +2512,7 @@ final class ConversationViewModel {
                 accountRef: accountRef,
                 groupIdHex: group.groupIdHex,
                 targetMessageId: message.messageIdHex,
-                content: outgoing
+                content: plaintext
             )
             Haptics.tap()
             return true

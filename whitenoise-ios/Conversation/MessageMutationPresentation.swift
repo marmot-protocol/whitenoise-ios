@@ -45,6 +45,23 @@ nonisolated enum MessageEditingPolicy {
     }
 }
 
+/// A GIF message is edited through its caption. The envelope's URL and credit
+/// line stay out of the composer and are re-attached on save, so an edit cannot
+/// expose or mangle the remote media reference.
+nonisolated enum GiphyMessageEditProjection {
+    static func editableCaption(for plaintext: String) -> String? {
+        guard let media = RemoteGiphyMedia.parse(wireText: plaintext) else { return nil }
+        return media.caption ?? ""
+    }
+
+    /// Nil when the edited caption no longer fits the GIF envelope; refusing
+    /// beats truncating the text or dropping the GIF.
+    static func editedPlaintext(original: String, caption: String) -> String? {
+        guard let media = RemoteGiphyMedia.parse(wireText: original) else { return caption }
+        return media.captionedWireText(caption)
+    }
+}
+
 nonisolated struct MessageDeleteCapability: Equatable, Sendable {
     let canDeleteForMe: Bool
     let canDeleteForEveryone: Bool
