@@ -4,9 +4,12 @@ import Foundation
 ///
 /// The composer parks its optimistic row, claims a slot here, and is free
 /// again — so a second Send is never blocked behind the first. Queueing rather
-/// than racing is what keeps back-to-back messages publishing in the order Send
-/// was pressed: two concurrent `sendText` calls would reach the relays in
-/// whatever order their round-trips happened to finish.
+/// than racing is what keeps the timeline and the relays agreeing: two
+/// concurrent `sendText` calls would reach the relays in whatever order their
+/// round-trips happened to finish, while the rows above them stayed put. A slot
+/// is claimed in the same synchronous step that parks the row, so messages
+/// publish in the order their rows appeared — which is press order except for
+/// sends whose markdown parses overlap.
 @MainActor
 final class OutgoingSendQueue {
     private var tail: Task<Void, Never>?
