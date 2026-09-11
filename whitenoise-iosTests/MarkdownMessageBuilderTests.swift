@@ -539,6 +539,54 @@ struct MarkdownMessageBuilderTests {
         #expect(String(math.characters) == "\\int_0^1 x dx")
     }
 
+    @Test func collapsedDetailsKeepsSummaryAndBodyVisible() throws {
+        let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([
+            .details(
+                summary: [.text(content: "Spoiler")],
+                open: false,
+                body: [para([.text(content: "hidden body")])],
+                blankLinesBefore: Data([0])
+            )
+        ])))
+
+        #expect(blocks.count == 2)
+        guard case .paragraph(let summary) = blocks[0] else {
+            throw TestFailure("expected the summary to render as a paragraph")
+        }
+        #expect(String(summary.characters) == "Spoiler")
+        #expect(try #require(summary.runs.first).font == Font.body.bold())
+
+        guard case .blockQuote(let body) = blocks[1] else {
+            throw TestFailure("expected the details body to render as an indented group")
+        }
+        guard case .paragraph(let bodyText) = try #require(body.first) else {
+            throw TestFailure("expected a body paragraph")
+        }
+        #expect(String(bodyText.characters) == "hidden body")
+    }
+
+    @Test func deepDetailsNestingStopsAtRenderDepthCap() throws {
+        var block: MarkdownBlockFfi = para([.text(content: "core")])
+        for _ in 0..<30 {
+            block = .details(
+                summary: [.text(content: "s")],
+                open: true,
+                body: [block],
+                blankLinesBefore: Data([0])
+            )
+        }
+        let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: doc([block])))
+
+        func quoteDepth(_ blocks: [MarkdownDisplayBlock]) -> Int {
+            blocks.reduce(into: 0) { deepest, block in
+                if case .blockQuote(let nested) = block {
+                    deepest = max(deepest, 1 + quoteDepth(nested))
+                }
+            }
+        }
+        #expect(quoteDepth(blocks) <= MarkdownMessageBuilder.maxRenderDepth)
+    }
+
     // MARK: - Fallback contract
 
     @Test func emptyAndUnrenderableDocumentsReturnNil() {

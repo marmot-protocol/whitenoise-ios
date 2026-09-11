@@ -114,12 +114,12 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         )
     }
 
-    func auditTrackerConfig() -> AuditLogTrackerConfigFfi {
-        AuditLogTrackerConfigFfi(
+    func auditTrackerConfig() -> AuditLogTrackerConfigV4Ffi {
+        AuditLogTrackerConfigV4Ffi(
             endpoint: nil,
             authorizationBearerToken: auditLogBearerToken,
-            source: AuditLogUploadSourceFfi(
-                deviceLabel: deviceModelIdentifier,
+            source: AuditLogUploadSourceV4Ffi(
+                hardwareModel: deviceModelIdentifier,
                 platform: "ios",
                 appVersion: serviceVersion
             )

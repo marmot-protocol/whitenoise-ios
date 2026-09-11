@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -156,6 +157,18 @@ struct MarkdownPlainTextTests {
         )
 
         #expect(body == "@Jeff")
+    }
+
+    @Test func detailsFlattensSummaryThenBody() {
+        let flattened = MarkdownPlainText.flatten(doc([
+            .details(
+                summary: [.text(content: "Spoiler")],
+                open: false,
+                body: [.paragraph(inlines: [.text(content: "hidden body")])],
+                blankLinesBefore: Data([0])
+            )
+        ]))
+        #expect(flattened == "Spoiler hidden body")
     }
 
     @Test func emptyDocumentsFlattenToNil() {
