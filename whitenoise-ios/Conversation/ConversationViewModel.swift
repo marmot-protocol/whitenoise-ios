@@ -203,7 +203,7 @@ final class ConversationViewModel {
     /// and reads projections back out. See `TimelineStore`.
     @ObservationIgnored let timelineStore: TimelineStore
 
-    /// The send pipeline: in-flight guard, reply target, text/media send FFI.
+    /// The send pipeline: reply target, publish queue, text/media send FFI.
     /// Hands optimistic rows to `timelineStore`. See `ComposerModel`.
     @ObservationIgnored let composer: ComposerModel
 
@@ -238,7 +238,6 @@ final class ConversationViewModel {
     private(set) var inviteActionInFlight: ConversationInviteAction?
 
     // Composer surface forwarded from `composer`.
-    var sendInFlight: Bool { composer.sendInFlight }
     /// The message the composer is currently replying to (set by swipe / menu).
     var replyingTo: AppMessageRecordFfi? {
         get { composer.replyingTo }

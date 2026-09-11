@@ -1119,7 +1119,7 @@ struct ConversationView: View {
                 let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: mediaDrafts)
                 ComposerBar(
                     draft: $draft,
-                    isSending: (viewModel?.sendInFlight ?? false) || editSaveInFlight,
+                    isSending: editSaveInFlight,
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
