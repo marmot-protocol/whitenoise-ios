@@ -182,7 +182,7 @@ final class ComposerModel {
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        await sendQueue.enqueue { [self] in
+        let publish = sendQueue.enqueue { [self] in
             do {
                 let summary = try await sendText(
                     appState: appState,
@@ -200,14 +200,19 @@ final class ComposerModel {
                     break
                 }
             } catch {
-                timelineStore.markFailed(tempId: tempId)
-                onError(error.localizedDescription)
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                failSend(tempId: tempId, error: error, appState: appState)
             }
-        }.value
+        }
+        await publish.value
+    }
+
+    /// Marks the optimistic row failed and reports it once, to the view model
+    /// and as a toast.
+    private func failSend(tempId: String, error: Error, appState: AppState) {
+        timelineStore.markFailed(tempId: tempId)
+        onError(error.localizedDescription)
+        Haptics.error()
+        appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
     }
 
     private func sendText(
@@ -274,7 +279,7 @@ final class ComposerModel {
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
 
-        await sendQueue.enqueue { [self] in
+        let publish = sendQueue.enqueue { [self] in
             do {
                 let client = try appState.currentMarmotClient()
                 let result = try await client.uploadMedia(
@@ -333,14 +338,10 @@ final class ComposerModel {
                     }
                 }
             } catch {
-                timelineStore.markFailed(tempId: tempId)
-                onError(error.localizedDescription)
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                failSend(tempId: tempId, error: error, appState: appState)
             }
-        }.value
+        }
+        await publish.value
     }
 
     private func replyTargetMessageId() -> String? {
