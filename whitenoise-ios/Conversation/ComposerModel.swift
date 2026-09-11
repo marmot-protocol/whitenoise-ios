@@ -66,7 +66,7 @@ final class ComposerModel {
 
     @ObservationIgnored private weak var appState: AppState?
     @ObservationIgnored private let groupIdHex: String
-    @ObservationIgnored private unowned let timelineStore: TimelineStore
+    @ObservationIgnored private let timelineStore: TimelineStore
     @ObservationIgnored private let sendQueue = OutgoingSendQueue()
     @ObservationIgnored var canSendMessages: () -> Bool = { false }
     @ObservationIgnored var canSendMediaAttachments: () -> Bool = { false }
