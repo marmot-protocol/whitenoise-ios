@@ -241,7 +241,7 @@ final class GroupDetailsViewModel {
         } catch {
             await refreshAfterFailedMutation(using: appState)
             Haptics.error()
-            actionError = error.localizedDescription
+            actionError = UserFacingError.message(for: error)
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't update group info"), error: error))
             return false
         }
@@ -414,7 +414,7 @@ final class GroupDetailsViewModel {
             onProgress(.finishing)
             await refreshAfterFailedMutation(using: appState)
             Haptics.error()
-            actionError = error.localizedDescription
+            actionError = UserFacingError.message(for: error)
             onProgress(nil)
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't update group image"), error: error))
             throw error
@@ -559,7 +559,7 @@ final class GroupDetailsViewModel {
             appState.present(archived ? .warning(L10n.string("Group archived")) : .success(L10n.string("Group unarchived")))
         } catch {
             Haptics.error()
-            actionError = error.localizedDescription
+            actionError = UserFacingError.message(for: error)
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't update archive"), error: error))
         }
     }
@@ -820,7 +820,7 @@ final class GroupDetailsViewModel {
 
     private func actionMessage(for error: Error) -> String {
         guard let marmotError = error as? MarmotKitError else {
-            return error.localizedDescription
+            return UserFacingError.message(for: error)
         }
         switch marmotError {
         case .LeaveAlreadyRequested:
@@ -852,7 +852,7 @@ final class GroupDetailsViewModel {
                 IdentityFormatter.short(account)
             )
         default:
-            return marmotError.localizedDescription
+            return UserFacingError.message(for: marmotError)
         }
     }
 
@@ -910,7 +910,7 @@ final class GroupDetailsViewModel {
         } catch is CancellationError {
             // The export task can be cancelled while the detached worker is paging history.
         } catch {
-            transcriptExportError = error.localizedDescription
+            transcriptExportError = UserFacingError.message(for: error)
         }
     }
 
@@ -950,14 +950,14 @@ final class GroupDetailsViewModel {
             pushDebugError = nil
         } catch {
             pushDebugInfo = nil
-            pushDebugError = error.localizedDescription
+            pushDebugError = UserFacingError.message(for: error)
         }
         do {
             maintenanceStatus = try await maintenanceResult
             maintenanceStatusError = nil
         } catch {
             maintenanceStatus = nil
-            maintenanceStatusError = error.localizedDescription
+            maintenanceStatusError = UserFacingError.message(for: error)
         }
     }
 }

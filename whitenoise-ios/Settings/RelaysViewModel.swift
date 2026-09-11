@@ -202,7 +202,7 @@ final class RelaysViewModel {
             // Keep the last-known list on a transient reload failure rather than
             // blanking an already-loaded screen back to the loading state.
             if lists == nil {
-                loadError = error.localizedDescription
+                loadError = UserFacingError.message(for: error)
             }
         }
     }
@@ -305,7 +305,7 @@ final class RelaysViewModel {
                 lists = reloadedLists
             }
             Haptics.error()
-            saveError = error.localizedDescription
+            saveError = UserFacingError.message(for: error)
             dataSource.present(UserFacingError.toast(title: L10n.string("Relay update failed"), error: error))
             actionGate.end()
             await drainDeferredReload(using: dataSource)

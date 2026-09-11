@@ -78,7 +78,7 @@ final class DiagnosticsViewModel {
             )
             append("sent ping to self in \(IdentityFormatter.short(groupId))")
         } catch {
-            append("send-to-self failed: \(error.localizedDescription)")
+            append("send-to-self failed: \(UserFacingError.message(for: error))")
         }
     }
 

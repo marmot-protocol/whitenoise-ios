@@ -22,6 +22,6 @@ struct IdentityKeyExportPresentationTests {
         let message = IdentityKeyExportPresentation.errorMessage(
             for: MarmotKitError.EncryptionFailed(details: "bad params")
         )
-        #expect(message == L10n.formatted("Encrypted export failed: %@", "bad params"))
+        #expect(message == L10n.formatted("Encrypted export failed: %@", "Bad params"))
     }
 }

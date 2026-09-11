@@ -2983,7 +2983,7 @@ struct TelemetryBuildConfigTests {
         #expect(tracker.endpoint == nil)
         // Must carry the dedicated audit-log token, NOT the OTLP/telemetry token.
         #expect(tracker.authorizationBearerToken == "audit-token")
-        #expect(tracker.source.deviceLabel == "iPhone99,9")
+        #expect(tracker.source.hardwareModel == "iPhone99,9")
         #expect(tracker.source.platform == "ios")
         #expect(tracker.source.appVersion == "2.0+9")
     }

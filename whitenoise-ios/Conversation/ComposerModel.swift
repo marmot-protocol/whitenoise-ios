@@ -207,7 +207,7 @@ final class ComposerModel {
             }
         } catch {
             timelineStore.markFailed(tempId: tempId)
-            onError(error.localizedDescription)
+            onError(UserFacingError.message(for: error))
             await MainActor.run {
                 Haptics.error()
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
@@ -345,7 +345,7 @@ final class ComposerModel {
             }
         } catch {
             timelineStore.markFailed(tempId: tempId)
-            onError(error.localizedDescription)
+            onError(UserFacingError.message(for: error))
             await MainActor.run {
                 Haptics.error()
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))

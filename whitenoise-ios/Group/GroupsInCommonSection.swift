@@ -208,11 +208,11 @@ struct AddToGroupSheet: View {
                     IdentityFormatter.short(account)
                 )
             } else {
-                error = marmotError.localizedDescription
+                error = UserFacingError.message(for: marmotError)
             }
         } catch {
             Haptics.error()
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }

@@ -13,6 +13,17 @@ struct MarkdownMessageBuilderTests {
         MarkdownDocumentFfi(blocks: blocks, truncated: false)
     }
 
+    @Test func detailsDisplaySummaryAndBodyWithoutDroppingCollapsedContent() throws {
+        let document = doc([.details(
+            summary: [.text(content: "Summary")], open: false,
+            body: [.paragraph(inlines: [.text(content: "Body")])], blankLinesBefore: Data()
+        )])
+        let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: document))
+        #expect(blocks.count == 2)
+        #expect(try firstParagraphText(blocks) == "Summary")
+        #expect(try firstParagraphText(Array(blocks.dropFirst())) == "Body")
+    }
+
     private func para(_ inlines: [MarkdownInlineFfi]) -> MarkdownBlockFfi {
         .paragraph(inlines: inlines)
     }

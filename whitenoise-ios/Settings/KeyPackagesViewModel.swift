@@ -85,7 +85,7 @@ final class KeyPackagesViewModel {
                 loadedMaintenanceError = nil
             } catch {
                 loadedMaintenanceStatus = nil
-                loadedMaintenanceError = error.localizedDescription
+                loadedMaintenanceError = UserFacingError.message(for: error)
             }
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
             lists = loadedLists
@@ -96,7 +96,7 @@ final class KeyPackagesViewModel {
             loadedRef = ref
         } catch {
             guard reloadTicket == ticket, appState.activeAccountRef == ref else { return }
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 

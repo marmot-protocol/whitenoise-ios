@@ -14,13 +14,13 @@ nonisolated enum StartChatFailurePresentation {
 
     static func failure(for error: Error) -> Failure {
         guard let marmotError = error as? MarmotKitError else {
-            return .other(message: error.localizedDescription)
+            return .other(message: UserFacingError.message(for: error))
         }
         switch marmotError {
         case .MissingKeyPackage, .InvalidKeyPackageEvent, .InvalidIdentity:
             return .missingSetup
         default:
-            return .other(message: marmotError.localizedDescription)
+            return .other(message: UserFacingError.message(for: marmotError))
         }
     }
 

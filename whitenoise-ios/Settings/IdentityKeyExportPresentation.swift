@@ -4,7 +4,7 @@ import MarmotKit
 enum IdentityKeyExportPresentation {
     static func errorMessage(for error: Error) -> String {
         guard let error = error as? MarmotKitError else {
-            return error.localizedDescription
+            return UserFacingError.message(for: error)
         }
         switch error {
         case .EmptyPassphrase:
@@ -13,10 +13,10 @@ enum IdentityKeyExportPresentation {
             return L10n.string("This account cannot export a private key.")
         case .KeystoreUnavailable:
             return L10n.string("The account keystore is unavailable right now.")
-        case let .EncryptionFailed(details):
-            return L10n.formatted("Encrypted export failed: %@", details)
+        case .EncryptionFailed:
+            return L10n.formatted("Encrypted export failed: %@", UserFacingError.message(for: error))
         default:
-            return error.localizedDescription
+            return UserFacingError.message(for: error)
         }
     }
 }

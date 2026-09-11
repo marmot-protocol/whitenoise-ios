@@ -743,6 +743,186 @@ public func FfiConverterTypeAgentStreamSubscription_lower(_ value: AgentStreamSu
 
 
 
+public protocol AgentTextPublisherProtocol: AnyObject, Sendable {
+
+    func append(kind: PublisherRecordFfi, text: String) async throws  -> PublisherAckFfi
+
+    func cancel() async
+
+    func finish() async throws  -> SendSummaryFfi
+
+    func info()  -> PublisherInfoFfi
+
+}
+open class AgentTextPublisher: AgentTextPublisherProtocol, @unchecked Sendable {
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noPointer: NoPointer) {
+        self.pointer = nil
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_marmot_uniffi_fn_clone_agenttextpublisher(self.pointer, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_marmot_uniffi_fn_free_agenttextpublisher(pointer, $0) }
+    }
+
+
+
+
+open func append(kind: PublisherRecordFfi, text: String)async throws  -> PublisherAckFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_agenttextpublisher_append(
+                    self.uniffiClonePointer(),
+                    FfiConverterTypePublisherRecordFfi_lower(kind),FfiConverterString.lower(text)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypePublisherAckFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func cancel()async   {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_agenttextpublisher_cancel(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_void,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: nil
+
+        )
+}
+
+open func finish()async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_agenttextpublisher_finish(
+                    self.uniffiClonePointer()
+
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+open func info() -> PublisherInfoFfi  {
+    return try!  FfiConverterTypePublisherInfoFfi_lift(try! rustCall() {
+    uniffi_marmot_uniffi_fn_method_agenttextpublisher_info(self.uniffiClonePointer(),$0
+    )
+})
+}
+
+
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentTextPublisher: FfiConverter {
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = AgentTextPublisher
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentTextPublisher {
+        return AgentTextPublisher(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: AgentTextPublisher) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentTextPublisher {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if (ptr == nil) {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: AgentTextPublisher, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentTextPublisher_lift(_ pointer: UnsafeMutableRawPointer) throws -> AgentTextPublisher {
+    return try FfiConverterTypeAgentTextPublisher.lift(pointer)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentTextPublisher_lower(_ value: AgentTextPublisher) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeAgentTextPublisher.lower(value)
+}
+
+
+
+
+
+
 public protocol ChatListSubscriptionProtocol: AnyObject, Sendable {
 
     /**
@@ -2380,6 +2560,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func onboardingSnapshot(accountRef: String) throws  -> OnboardingSnapshotFfi?
 
     /**
+     * Publish a new stream start and return a handle for appending records.
+     * No exporter secret or framing state crosses the foreign boundary.
+     */
+    func openAgentPublisher(accountRef: String, groupIdHex: String, options: PublisherOptionsFfi) async throws  -> AgentTextPublisher
+
+    /**
      * Returns an attached handle containing the initial snapshot. Take its snapshot once,
      * then consume whole replacement updates; dispose the old handle on account switch.
      */
@@ -2676,29 +2862,25 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func scheduleGroupSelfUpdate(accountRef: String, groupIdHex: String) async throws  -> String
 
     /**
-     * Search the searcher's web of trust, streaming matches as each radius
-     * resolves.
+     * Search public identities cached through any connected account, without
+     * network or group-membership work. Follow flags refer only to the selected
+     * searcher. Call off the UI thread; zero limit returns no rows.
+     */
+    func searchCachedUsers(accountIdHex: String, query: String, limit: UInt32) throws  -> [UserDirectorySearchResultFfi]
+
+    /**
+     * Stream cached public identities across accounts, then independent provider
+     * and graph results. The radius window bounds known social distances;
+     * cached/provider identities without a known distance remain discoverable.
+     * Those identities can recur when paging radii: deduplicate by account id
+     * across pages as well as within each subscription.
      *
-     * `radius_start`/`radius_end` are inclusive social distances: 0 is the
-     * searcher, 1 their direct follows. Lower radii are still traversed to
-     * reach the window, they just do not emit — which is what makes
-     * `radius_start` usable for paging further out without re-delivering
-     * results the host already has.
-     *
-     * Returns as soon as the traversal is spawned; drive
-     * [`UserSearchSubscription::next_update`] in a loop until it yields
-     * `None`. Dropping the subscription cancels the traversal, so a host that
-     * abandons a search should release it rather than draining it.
-     *
-     * Radius 1 covers more than the follow list: people sharing a group with
-     * the searcher are seeded into it, because sharing a group is social
-     * proximity even when neither has followed the other. That membership is
-     * gathered here, where both the app and the runtime are in scope, rather
-     * than inside the search — hosts pass nothing extra for it.
-     *
-     * People found this way are deliberately *not* added to the local
-     * directory: a search result is not a relationship. `user_profile` keeps
-     * answering only for accounts the user has actually interacted with.
+     * Returns without waiting for group membership. Consume until completion,
+     * inserting `new_results` and replacing `updated_results` by account id.
+     * Release the subscription on query/account changes to cancel its work.
+     * Direct-follow labels use `is_followed_by_searcher`, not radius 1 (which
+     * also includes group co-members). Search never promotes strangers into
+     * the directory's live subscription set.
      */
     func searchUsers(accountIdHex: String, query: String, radiusStart: UInt8, radiusEnd: UInt8) async throws  -> UserSearchSubscription
 
@@ -2762,13 +2944,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
 
     /**
      * Supply non-persisted audit tracker upload metadata: optional Goggles
-     * upload URL override, bearer token from the host app, and optional human
-     * source labels.
+     * upload URL override, bearer token from the host app, and optional system
+     * hardware model, platform, and app version.
      *
      * The returned config confirms what was stored but never echoes the
      * bearer token back across FFI: secrets flow in, not out.
      */
-    func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi) throws  -> AuditLogTrackerConfigFfi
+    func setAuditLogTrackerConfig(config: AuditLogTrackerConfigV4Ffi) throws  -> AuditLogTrackerConfigV4Ffi
 
     /**
      * Set or clear a manual unread reminder without moving the durable
@@ -3229,6 +3411,21 @@ public static func newWithCursorPersistence(rootPath: String, relayUrls: [String
         FfiConverterString.lower(rootPath),
         FfiConverterSequenceString.lower(relayUrls),
         FfiConverterTypeCursorPersistenceFfi_lower(cursorPersistence),$0
+    )
+})
+}
+
+    /**
+     * Open with an explicit relay policy and optional host-owned key storage.
+     * Existing constructors retain their public-only relay policy.
+     */
+public static func newWithOptions(rootPath: String, relayUrls: [String], relayPolicy: RelayPolicyFfi, secretStore: SecretStore?)throws  -> Marmot  {
+    return try  FfiConverterTypeMarmot_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_constructor_marmot_new_with_options(
+        FfiConverterString.lower(rootPath),
+        FfiConverterSequenceString.lower(relayUrls),
+        FfiConverterTypeRelayPolicyFfi_lower(relayPolicy),
+        FfiConverterOptionTypeSecretStore.lower(secretStore),$0
     )
 })
 }
@@ -5038,6 +5235,27 @@ open func onboardingSnapshot(accountRef: String)throws  -> OnboardingSnapshotFfi
 }
 
     /**
+     * Publish a new stream start and return a handle for appending records.
+     * No exporter secret or framing state crosses the foreign boundary.
+     */
+open func openAgentPublisher(accountRef: String, groupIdHex: String, options: PublisherOptionsFfi)async throws  -> AgentTextPublisher  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_open_agent_publisher(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypePublisherOptionsFfi_lower(options)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_pointer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_pointer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_pointer,
+            liftFunc: FfiConverterTypeAgentTextPublisher_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Returns an attached handle containing the initial snapshot. Take its snapshot once,
      * then consume whole replacement updates; dispose the old handle on account switch.
      */
@@ -6024,29 +6242,33 @@ open func scheduleGroupSelfUpdate(accountRef: String, groupIdHex: String)async t
 }
 
     /**
-     * Search the searcher's web of trust, streaming matches as each radius
-     * resolves.
+     * Search public identities cached through any connected account, without
+     * network or group-membership work. Follow flags refer only to the selected
+     * searcher. Call off the UI thread; zero limit returns no rows.
+     */
+open func searchCachedUsers(accountIdHex: String, query: String, limit: UInt32)throws  -> [UserDirectorySearchResultFfi]  {
+    return try  FfiConverterSequenceTypeUserDirectorySearchResultFfi.lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_search_cached_users(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountIdHex),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+
+    /**
+     * Stream cached public identities across accounts, then independent provider
+     * and graph results. The radius window bounds known social distances;
+     * cached/provider identities without a known distance remain discoverable.
+     * Those identities can recur when paging radii: deduplicate by account id
+     * across pages as well as within each subscription.
      *
-     * `radius_start`/`radius_end` are inclusive social distances: 0 is the
-     * searcher, 1 their direct follows. Lower radii are still traversed to
-     * reach the window, they just do not emit — which is what makes
-     * `radius_start` usable for paging further out without re-delivering
-     * results the host already has.
-     *
-     * Returns as soon as the traversal is spawned; drive
-     * [`UserSearchSubscription::next_update`] in a loop until it yields
-     * `None`. Dropping the subscription cancels the traversal, so a host that
-     * abandons a search should release it rather than draining it.
-     *
-     * Radius 1 covers more than the follow list: people sharing a group with
-     * the searcher are seeded into it, because sharing a group is social
-     * proximity even when neither has followed the other. That membership is
-     * gathered here, where both the app and the runtime are in scope, rather
-     * than inside the search — hosts pass nothing extra for it.
-     *
-     * People found this way are deliberately *not* added to the local
-     * directory: a search result is not a relationship. `user_profile` keeps
-     * answering only for accounts the user has actually interacted with.
+     * Returns without waiting for group membership. Consume until completion,
+     * inserting `new_results` and replacing `updated_results` by account id.
+     * Release the subscription on query/account changes to cancel its work.
+     * Direct-follow labels use `is_followed_by_searcher`, not radius 1 (which
+     * also includes group co-members). Search never promotes strangers into
+     * the directory's live subscription set.
      */
 open func searchUsers(accountIdHex: String, query: String, radiusStart: UInt8, radiusEnd: UInt8)async throws  -> UserSearchSubscription  {
     return
@@ -6275,16 +6497,16 @@ open func setAuditLogSettings(settings: AuditLogSettingsFfi)async throws  -> Aud
 
     /**
      * Supply non-persisted audit tracker upload metadata: optional Goggles
-     * upload URL override, bearer token from the host app, and optional human
-     * source labels.
+     * upload URL override, bearer token from the host app, and optional system
+     * hardware model, platform, and app version.
      *
      * The returned config confirms what was stored but never echoes the
      * bearer token back across FFI: secrets flow in, not out.
      */
-open func setAuditLogTrackerConfig(config: AuditLogTrackerConfigFfi)throws  -> AuditLogTrackerConfigFfi  {
-    return try  FfiConverterTypeAuditLogTrackerConfigFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+open func setAuditLogTrackerConfig(config: AuditLogTrackerConfigV4Ffi)throws  -> AuditLogTrackerConfigV4Ffi  {
+    return try  FfiConverterTypeAuditLogTrackerConfigV4Ffi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
     uniffi_marmot_uniffi_fn_method_marmot_set_audit_log_tracker_config(self.uniffiClonePointer(),
-        FfiConverterTypeAuditLogTrackerConfigFfi_lower(config),$0
+        FfiConverterTypeAuditLogTrackerConfigV4Ffi_lower(config),$0
     )
 })
 }
@@ -11441,19 +11663,21 @@ public func FfiConverterTypeAuditLogSettingsFfi_lower(_ value: AuditLogSettingsF
 
 
 /**
- * Tracker upload config supplied by the host app. Write-only across FFI:
+ * V4 tracker config. The versioned type name changes the UniFFI method checksum
+ * so old generated bindings cannot reinterpret device labels as hardware models.
+ * Write-only across FFI:
  * `authorization_bearer_token` is accepted here but never returned back to
  * the host — [`redacted`](Self::redacted) strips it — and the hand-written
  * `Debug` impl below never prints it.
  */
-public struct AuditLogTrackerConfigFfi {
+public struct AuditLogTrackerConfigV4Ffi {
     public var endpoint: String?
     public var authorizationBearerToken: String?
-    public var source: AuditLogUploadSourceFfi
+    public var source: AuditLogUploadSourceV4Ffi
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(endpoint: String?, authorizationBearerToken: String?, source: AuditLogUploadSourceFfi) {
+    public init(endpoint: String?, authorizationBearerToken: String?, source: AuditLogUploadSourceV4Ffi) {
         self.endpoint = endpoint
         self.authorizationBearerToken = authorizationBearerToken
         self.source = source
@@ -11461,12 +11685,12 @@ public struct AuditLogTrackerConfigFfi {
 }
 
 #if compiler(>=6)
-extension AuditLogTrackerConfigFfi: Sendable {}
+extension AuditLogTrackerConfigV4Ffi: Sendable {}
 #endif
 
 
-extension AuditLogTrackerConfigFfi: Equatable, Hashable {
-    public static func ==(lhs: AuditLogTrackerConfigFfi, rhs: AuditLogTrackerConfigFfi) -> Bool {
+extension AuditLogTrackerConfigV4Ffi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogTrackerConfigV4Ffi, rhs: AuditLogTrackerConfigV4Ffi) -> Bool {
         if lhs.endpoint != rhs.endpoint {
             return false
         }
@@ -11491,20 +11715,20 @@ extension AuditLogTrackerConfigFfi: Equatable, Hashable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeAuditLogTrackerConfigFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogTrackerConfigFfi {
+public struct FfiConverterTypeAuditLogTrackerConfigV4Ffi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogTrackerConfigV4Ffi {
         return
-            try AuditLogTrackerConfigFfi(
+            try AuditLogTrackerConfigV4Ffi(
                 endpoint: FfiConverterOptionString.read(from: &buf),
                 authorizationBearerToken: FfiConverterOptionString.read(from: &buf),
-                source: FfiConverterTypeAuditLogUploadSourceFfi.read(from: &buf)
+                source: FfiConverterTypeAuditLogUploadSourceV4Ffi.read(from: &buf)
         )
     }
 
-    public static func write(_ value: AuditLogTrackerConfigFfi, into buf: inout [UInt8]) {
+    public static func write(_ value: AuditLogTrackerConfigV4Ffi, into buf: inout [UInt8]) {
         FfiConverterOptionString.write(value.endpoint, into: &buf)
         FfiConverterOptionString.write(value.authorizationBearerToken, into: &buf)
-        FfiConverterTypeAuditLogUploadSourceFfi.write(value.source, into: &buf)
+        FfiConverterTypeAuditLogUploadSourceV4Ffi.write(value.source, into: &buf)
     }
 }
 
@@ -11512,15 +11736,15 @@ public struct FfiConverterTypeAuditLogTrackerConfigFfi: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeAuditLogTrackerConfigFfi_lift(_ buf: RustBuffer) throws -> AuditLogTrackerConfigFfi {
-    return try FfiConverterTypeAuditLogTrackerConfigFfi.lift(buf)
+public func FfiConverterTypeAuditLogTrackerConfigV4Ffi_lift(_ buf: RustBuffer) throws -> AuditLogTrackerConfigV4Ffi {
+    return try FfiConverterTypeAuditLogTrackerConfigV4Ffi.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeAuditLogTrackerConfigFfi_lower(_ value: AuditLogTrackerConfigFfi) -> RustBuffer {
-    return FfiConverterTypeAuditLogTrackerConfigFfi.lower(value)
+public func FfiConverterTypeAuditLogTrackerConfigV4Ffi_lower(_ value: AuditLogTrackerConfigV4Ffi) -> RustBuffer {
+    return FfiConverterTypeAuditLogTrackerConfigV4Ffi.lower(value)
 }
 
 
@@ -11680,28 +11904,34 @@ public func FfiConverterTypeAuditLogUploadResultFfi_lower(_ value: AuditLogUploa
 }
 
 
-public struct AuditLogUploadSourceFfi {
-    public var deviceLabel: String?
+public struct AuditLogUploadSourceV4Ffi {
+    /**
+     * System model identifier; never a user-assigned device name, hostname, or serial number.
+     */
+    public var hardwareModel: String?
     public var platform: String?
     public var appVersion: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(deviceLabel: String?, platform: String?, appVersion: String?) {
-        self.deviceLabel = deviceLabel
+    public init(
+        /**
+         * System model identifier; never a user-assigned device name, hostname, or serial number.
+         */hardwareModel: String?, platform: String?, appVersion: String?) {
+        self.hardwareModel = hardwareModel
         self.platform = platform
         self.appVersion = appVersion
     }
 }
 
 #if compiler(>=6)
-extension AuditLogUploadSourceFfi: Sendable {}
+extension AuditLogUploadSourceV4Ffi: Sendable {}
 #endif
 
 
-extension AuditLogUploadSourceFfi: Equatable, Hashable {
-    public static func ==(lhs: AuditLogUploadSourceFfi, rhs: AuditLogUploadSourceFfi) -> Bool {
-        if lhs.deviceLabel != rhs.deviceLabel {
+extension AuditLogUploadSourceV4Ffi: Equatable, Hashable {
+    public static func ==(lhs: AuditLogUploadSourceV4Ffi, rhs: AuditLogUploadSourceV4Ffi) -> Bool {
+        if lhs.hardwareModel != rhs.hardwareModel {
             return false
         }
         if lhs.platform != rhs.platform {
@@ -11714,7 +11944,7 @@ extension AuditLogUploadSourceFfi: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(deviceLabel)
+        hasher.combine(hardwareModel)
         hasher.combine(platform)
         hasher.combine(appVersion)
     }
@@ -11725,18 +11955,18 @@ extension AuditLogUploadSourceFfi: Equatable, Hashable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeAuditLogUploadSourceFfi: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogUploadSourceFfi {
+public struct FfiConverterTypeAuditLogUploadSourceV4Ffi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuditLogUploadSourceV4Ffi {
         return
-            try AuditLogUploadSourceFfi(
-                deviceLabel: FfiConverterOptionString.read(from: &buf),
+            try AuditLogUploadSourceV4Ffi(
+                hardwareModel: FfiConverterOptionString.read(from: &buf),
                 platform: FfiConverterOptionString.read(from: &buf),
                 appVersion: FfiConverterOptionString.read(from: &buf)
         )
     }
 
-    public static func write(_ value: AuditLogUploadSourceFfi, into buf: inout [UInt8]) {
-        FfiConverterOptionString.write(value.deviceLabel, into: &buf)
+    public static func write(_ value: AuditLogUploadSourceV4Ffi, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.hardwareModel, into: &buf)
         FfiConverterOptionString.write(value.platform, into: &buf)
         FfiConverterOptionString.write(value.appVersion, into: &buf)
     }
@@ -11746,15 +11976,15 @@ public struct FfiConverterTypeAuditLogUploadSourceFfi: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeAuditLogUploadSourceFfi_lift(_ buf: RustBuffer) throws -> AuditLogUploadSourceFfi {
-    return try FfiConverterTypeAuditLogUploadSourceFfi.lift(buf)
+public func FfiConverterTypeAuditLogUploadSourceV4Ffi_lift(_ buf: RustBuffer) throws -> AuditLogUploadSourceV4Ffi {
+    return try FfiConverterTypeAuditLogUploadSourceV4Ffi.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeAuditLogUploadSourceFfi_lower(_ value: AuditLogUploadSourceFfi) -> RustBuffer {
-    return FfiConverterTypeAuditLogUploadSourceFfi.lower(value)
+public func FfiConverterTypeAuditLogUploadSourceV4Ffi_lower(_ value: AuditLogUploadSourceV4Ffi) -> RustBuffer {
+    return FfiConverterTypeAuditLogUploadSourceV4Ffi.lower(value)
 }
 
 
@@ -19480,6 +19710,230 @@ public func FfiConverterTypeProductPropertySchemaFfi_lower(_ value: ProductPrope
 }
 
 
+public struct PublisherAckFfi {
+    public var chunkCount: UInt64
+    /**
+     * A preview transport error does not discard the accepted transcript.
+     */
+    public var liveError: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(chunkCount: UInt64,
+        /**
+         * A preview transport error does not discard the accepted transcript.
+         */liveError: String?) {
+        self.chunkCount = chunkCount
+        self.liveError = liveError
+    }
+}
+
+#if compiler(>=6)
+extension PublisherAckFfi: Sendable {}
+#endif
+
+
+extension PublisherAckFfi: Equatable, Hashable {
+    public static func ==(lhs: PublisherAckFfi, rhs: PublisherAckFfi) -> Bool {
+        if lhs.chunkCount != rhs.chunkCount {
+            return false
+        }
+        if lhs.liveError != rhs.liveError {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(chunkCount)
+        hasher.combine(liveError)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePublisherAckFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherAckFfi {
+        return
+            try PublisherAckFfi(
+                chunkCount: FfiConverterUInt64.read(from: &buf),
+                liveError: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PublisherAckFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.chunkCount, into: &buf)
+        FfiConverterOptionString.write(value.liveError, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherAckFfi_lift(_ buf: RustBuffer) throws -> PublisherAckFfi {
+    return try FfiConverterTypePublisherAckFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherAckFfi_lower(_ value: PublisherAckFfi) -> RustBuffer {
+    return FfiConverterTypePublisherAckFfi.lower(value)
+}
+
+
+public struct PublisherInfoFfi {
+    public var streamIdHex: String
+    public var startMessageIdHex: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(streamIdHex: String, startMessageIdHex: String) {
+        self.streamIdHex = streamIdHex
+        self.startMessageIdHex = startMessageIdHex
+    }
+}
+
+#if compiler(>=6)
+extension PublisherInfoFfi: Sendable {}
+#endif
+
+
+extension PublisherInfoFfi: Equatable, Hashable {
+    public static func ==(lhs: PublisherInfoFfi, rhs: PublisherInfoFfi) -> Bool {
+        if lhs.streamIdHex != rhs.streamIdHex {
+            return false
+        }
+        if lhs.startMessageIdHex != rhs.startMessageIdHex {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(streamIdHex)
+        hasher.combine(startMessageIdHex)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePublisherInfoFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherInfoFfi {
+        return
+            try PublisherInfoFfi(
+                streamIdHex: FfiConverterString.read(from: &buf),
+                startMessageIdHex: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PublisherInfoFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.streamIdHex, into: &buf)
+        FfiConverterString.write(value.startMessageIdHex, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherInfoFfi_lift(_ buf: RustBuffer) throws -> PublisherInfoFfi {
+    return try FfiConverterTypePublisherInfoFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherInfoFfi_lower(_ value: PublisherInfoFfi) -> RustBuffer {
+    return FfiConverterTypePublisherInfoFfi.lower(value)
+}
+
+
+public struct PublisherOptionsFfi {
+    public var candidate: String
+    public var serverCertDer: Data?
+    public var trust: PublisherTrustFfi
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(candidate: String, serverCertDer: Data?, trust: PublisherTrustFfi) {
+        self.candidate = candidate
+        self.serverCertDer = serverCertDer
+        self.trust = trust
+    }
+}
+
+#if compiler(>=6)
+extension PublisherOptionsFfi: Sendable {}
+#endif
+
+
+extension PublisherOptionsFfi: Equatable, Hashable {
+    public static func ==(lhs: PublisherOptionsFfi, rhs: PublisherOptionsFfi) -> Bool {
+        if lhs.candidate != rhs.candidate {
+            return false
+        }
+        if lhs.serverCertDer != rhs.serverCertDer {
+            return false
+        }
+        if lhs.trust != rhs.trust {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(candidate)
+        hasher.combine(serverCertDer)
+        hasher.combine(trust)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePublisherOptionsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherOptionsFfi {
+        return
+            try PublisherOptionsFfi(
+                candidate: FfiConverterString.read(from: &buf),
+                serverCertDer: FfiConverterOptionData.read(from: &buf),
+                trust: FfiConverterTypePublisherTrustFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PublisherOptionsFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.candidate, into: &buf)
+        FfiConverterOptionData.write(value.serverCertDer, into: &buf)
+        FfiConverterTypePublisherTrustFfi.write(value.trust, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherOptionsFfi_lift(_ buf: RustBuffer) throws -> PublisherOptionsFfi {
+    return try FfiConverterTypePublisherOptionsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherOptionsFfi_lower(_ value: PublisherOptionsFfi) -> RustBuffer {
+    return FfiConverterTypePublisherOptionsFfi.lower(value)
+}
+
+
 public struct PushRegistrationFfi {
     public var accountRef: String
     public var accountIdHex: String
@@ -22608,18 +23062,20 @@ public func FfiConverterTypeUsageDiagnosticsStatusFfi_lower(_ value: UsageDiagno
 /**
  * One person the search found.
  *
- * `radius` is social distance from the searcher: 0 is the searcher, 1 a
- * direct follow. Render it as provenance ("via someone you follow").
- *
- * `255` is the exception and means *off-graph*: this person came from a
- * configured fallback or a discovery provider rather than through anyone the user
- * knows. Present those as discovery, never as a connection -- they are not a
- * distance from the user at all.
+ * `is_followed_by_searcher` is the direct-follow label for the selected account.
+ * Radius 1 can also mean a shared group; it must not be used as a follow flag.
+ * Radius 255 means no relationship has been established for this result yet;
+ * a later update may supply a graph radius. Cached public profiles can come
+ * from any connected account without inheriting that account's relationships.
  */
 public struct UserDirectorySearchResultFfi {
     public var accountIdHex: String
     public var npub: String
     public var radius: UInt8
+    /**
+     * Direct follow of the selected searcher; radius 1 alone is insufficient.
+     */
+    public var isFollowedBySearcher: Bool
     public var matchedField: MatchedFieldFfi
     public var matchQuality: MatchQualityFfi
     /**
@@ -22630,13 +23086,17 @@ public struct UserDirectorySearchResultFfi {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(accountIdHex: String, npub: String, radius: UInt8, matchedField: MatchedFieldFfi, matchQuality: MatchQualityFfi,
+    public init(accountIdHex: String, npub: String, radius: UInt8,
+        /**
+         * Direct follow of the selected searcher; radius 1 alone is insufficient.
+         */isFollowedBySearcher: Bool, matchedField: MatchedFieldFfi, matchQuality: MatchQualityFfi,
         /**
          * Rank supplied by an off-graph discovery provider.
          */providerRank: Double?, profile: UserProfileMetadataFfi?) {
         self.accountIdHex = accountIdHex
         self.npub = npub
         self.radius = radius
+        self.isFollowedBySearcher = isFollowedBySearcher
         self.matchedField = matchedField
         self.matchQuality = matchQuality
         self.providerRank = providerRank
@@ -22660,6 +23120,9 @@ extension UserDirectorySearchResultFfi: Equatable, Hashable {
         if lhs.radius != rhs.radius {
             return false
         }
+        if lhs.isFollowedBySearcher != rhs.isFollowedBySearcher {
+            return false
+        }
         if lhs.matchedField != rhs.matchedField {
             return false
         }
@@ -22679,6 +23142,7 @@ extension UserDirectorySearchResultFfi: Equatable, Hashable {
         hasher.combine(accountIdHex)
         hasher.combine(npub)
         hasher.combine(radius)
+        hasher.combine(isFollowedBySearcher)
         hasher.combine(matchedField)
         hasher.combine(matchQuality)
         hasher.combine(providerRank)
@@ -22698,6 +23162,7 @@ public struct FfiConverterTypeUserDirectorySearchResultFfi: FfiConverterRustBuff
                 accountIdHex: FfiConverterString.read(from: &buf),
                 npub: FfiConverterString.read(from: &buf),
                 radius: FfiConverterUInt8.read(from: &buf),
+                isFollowedBySearcher: FfiConverterBool.read(from: &buf),
                 matchedField: FfiConverterTypeMatchedFieldFfi.read(from: &buf),
                 matchQuality: FfiConverterTypeMatchQualityFfi.read(from: &buf),
                 providerRank: FfiConverterOptionDouble.read(from: &buf),
@@ -22709,6 +23174,7 @@ public struct FfiConverterTypeUserDirectorySearchResultFfi: FfiConverterRustBuff
         FfiConverterString.write(value.accountIdHex, into: &buf)
         FfiConverterString.write(value.npub, into: &buf)
         FfiConverterUInt8.write(value.radius, into: &buf)
+        FfiConverterBool.write(value.isFollowedBySearcher, into: &buf)
         FfiConverterTypeMatchedFieldFfi.write(value.matchedField, into: &buf)
         FfiConverterTypeMatchQualityFfi.write(value.matchQuality, into: &buf)
         FfiConverterOptionDouble.write(value.providerRank, into: &buf)
@@ -22848,14 +23314,17 @@ public func FfiConverterTypeUserProfileMetadataFfi_lower(_ value: UserProfileMet
 public struct UserSearchUpdateFfi {
     public var trigger: SearchUpdateTriggerFfi
     /**
-     * Matches found by this step, pre-sorted within the batch. Ordering
-     * *across* graph updates is radius order; an optional discovery batch
-     * follows graph traversal and may contain results retaining graph
-     * provenance. A host rendering one flat list should re-sort the aggregate.
+     * New identities, sorted within this batch. Cache, provider, and graph
+     * sources arrive independently. Merge by account id and re-sort after
+     * applying `updated_results` as replacements.
      */
     public var newResults: [UserDirectorySearchResultFfi]
     /**
-     * Running total this search has emitted so far, including `new_results`.
+     * Replace existing rows with these values, matching by account id.
+     */
+    public var updatedResults: [UserDirectorySearchResultFfi]
+    /**
+     * Unique person count; replacements do not increment it.
      */
     public var totalResultCount: UInt32
 
@@ -22863,16 +23332,19 @@ public struct UserSearchUpdateFfi {
     // declare one manually.
     public init(trigger: SearchUpdateTriggerFfi,
         /**
-         * Matches found by this step, pre-sorted within the batch. Ordering
-         * *across* graph updates is radius order; an optional discovery batch
-         * follows graph traversal and may contain results retaining graph
-         * provenance. A host rendering one flat list should re-sort the aggregate.
+         * New identities, sorted within this batch. Cache, provider, and graph
+         * sources arrive independently. Merge by account id and re-sort after
+         * applying `updated_results` as replacements.
          */newResults: [UserDirectorySearchResultFfi],
         /**
-         * Running total this search has emitted so far, including `new_results`.
+         * Replace existing rows with these values, matching by account id.
+         */updatedResults: [UserDirectorySearchResultFfi],
+        /**
+         * Unique person count; replacements do not increment it.
          */totalResultCount: UInt32) {
         self.trigger = trigger
         self.newResults = newResults
+        self.updatedResults = updatedResults
         self.totalResultCount = totalResultCount
     }
 }
@@ -22890,6 +23362,9 @@ extension UserSearchUpdateFfi: Equatable, Hashable {
         if lhs.newResults != rhs.newResults {
             return false
         }
+        if lhs.updatedResults != rhs.updatedResults {
+            return false
+        }
         if lhs.totalResultCount != rhs.totalResultCount {
             return false
         }
@@ -22899,6 +23374,7 @@ extension UserSearchUpdateFfi: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(trigger)
         hasher.combine(newResults)
+        hasher.combine(updatedResults)
         hasher.combine(totalResultCount)
     }
 }
@@ -22914,6 +23390,7 @@ public struct FfiConverterTypeUserSearchUpdateFfi: FfiConverterRustBuffer {
             try UserSearchUpdateFfi(
                 trigger: FfiConverterTypeSearchUpdateTriggerFfi.read(from: &buf),
                 newResults: FfiConverterSequenceTypeUserDirectorySearchResultFfi.read(from: &buf),
+                updatedResults: FfiConverterSequenceTypeUserDirectorySearchResultFfi.read(from: &buf),
                 totalResultCount: FfiConverterUInt32.read(from: &buf)
         )
     }
@@ -22921,6 +23398,7 @@ public struct FfiConverterTypeUserSearchUpdateFfi: FfiConverterRustBuffer {
     public static func write(_ value: UserSearchUpdateFfi, into buf: inout [UInt8]) {
         FfiConverterTypeSearchUpdateTriggerFfi.write(value.trigger, into: &buf)
         FfiConverterSequenceTypeUserDirectorySearchResultFfi.write(value.newResults, into: &buf)
+        FfiConverterSequenceTypeUserDirectorySearchResultFfi.write(value.updatedResults, into: &buf)
         FfiConverterUInt32.write(value.totalResultCount, into: &buf)
     }
 }
@@ -25369,6 +25847,11 @@ public enum MarkdownBlockFfi {
     )
     case mathBlock(content: String
     )
+    case details(summary: [MarkdownInlineFfi], `open`: Bool, body: [MarkdownBlockFfi],
+        /**
+         * Blank source lines before each corresponding body block.
+         */blankLinesBefore: Data
+    )
 }
 
 
@@ -25407,6 +25890,9 @@ public struct FfiConverterTypeMarkdownBlockFfi: FfiConverterRustBuffer {
         )
 
         case 8: return .mathBlock(content: try FfiConverterString.read(from: &buf)
+        )
+
+        case 9: return .details(summary: try FfiConverterSequenceTypeMarkdownInlineFfi.read(from: &buf), open: try FfiConverterBool.read(from: &buf), body: try FfiConverterSequenceTypeMarkdownBlockFfi.read(from: &buf), blankLinesBefore: try FfiConverterData.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -25462,6 +25948,14 @@ public struct FfiConverterTypeMarkdownBlockFfi: FfiConverterRustBuffer {
         case let .mathBlock(content):
             writeInt(&buf, Int32(8))
             FfiConverterString.write(content, into: &buf)
+
+
+        case let .details(summary,`open`,body,blankLinesBefore):
+            writeInt(&buf, Int32(9))
+            FfiConverterSequenceTypeMarkdownInlineFfi.write(summary, into: &buf)
+            FfiConverterBool.write(`open`, into: &buf)
+            FfiConverterSequenceTypeMarkdownBlockFfi.write(body, into: &buf)
+            FfiConverterData.write(blankLinesBefore, into: &buf)
 
         }
     }
@@ -29050,6 +29544,153 @@ extension ProductRecordResultFfi: Equatable, Hashable {}
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum PublisherRecordFfi {
+
+    case text
+    case status
+    case progress
+}
+
+
+#if compiler(>=6)
+extension PublisherRecordFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePublisherRecordFfi: FfiConverterRustBuffer {
+    typealias SwiftType = PublisherRecordFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherRecordFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .text
+
+        case 2: return .status
+
+        case 3: return .progress
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PublisherRecordFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .text:
+            writeInt(&buf, Int32(1))
+
+
+        case .status:
+            writeInt(&buf, Int32(2))
+
+
+        case .progress:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherRecordFfi_lift(_ buf: RustBuffer) throws -> PublisherRecordFfi {
+    return try FfiConverterTypePublisherRecordFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherRecordFfi_lower(_ value: PublisherRecordFfi) -> RustBuffer {
+    return FfiConverterTypePublisherRecordFfi.lower(value)
+}
+
+
+extension PublisherRecordFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum PublisherTrustFfi {
+
+    case publicOnly
+    case allowLoopback
+}
+
+
+#if compiler(>=6)
+extension PublisherTrustFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePublisherTrustFfi: FfiConverterRustBuffer {
+    typealias SwiftType = PublisherTrustFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublisherTrustFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .publicOnly
+
+        case 2: return .allowLoopback
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PublisherTrustFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .publicOnly:
+            writeInt(&buf, Int32(1))
+
+
+        case .allowLoopback:
+            writeInt(&buf, Int32(2))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherTrustFfi_lift(_ buf: RustBuffer) throws -> PublisherTrustFfi {
+    return try FfiConverterTypePublisherTrustFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePublisherTrustFfi_lower(_ value: PublisherTrustFfi) -> RustBuffer {
+    return FfiConverterTypePublisherTrustFfi.lower(value)
+}
+
+
+extension PublisherTrustFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum PushPlatformFfi {
 
     case apns
@@ -29276,6 +29917,90 @@ extension RelayEndpointPolicyFfi: Equatable, Hashable {}
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Relay endpoint policy. Loopback is an explicit local-test opt-in;
+ * private, link-local, and public plaintext endpoints remain rejected.
+ */
+
+public enum RelayPolicyFfi {
+
+    case publicOnly
+    case allowLoopback
+    /**
+     * Explicit development opt-in for both relay and blob loopback endpoints.
+     */
+    case allowLoopbackRelaysAndBlobs
+}
+
+
+#if compiler(>=6)
+extension RelayPolicyFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRelayPolicyFfi: FfiConverterRustBuffer {
+    typealias SwiftType = RelayPolicyFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RelayPolicyFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .publicOnly
+
+        case 2: return .allowLoopback
+
+        case 3: return .allowLoopbackRelaysAndBlobs
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: RelayPolicyFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case .publicOnly:
+            writeInt(&buf, Int32(1))
+
+
+        case .allowLoopback:
+            writeInt(&buf, Int32(2))
+
+
+        case .allowLoopbackRelaysAndBlobs:
+            writeInt(&buf, Int32(3))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayPolicyFfi_lift(_ buf: RustBuffer) throws -> RelayPolicyFfi {
+    return try FfiConverterTypeRelayPolicyFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRelayPolicyFfi_lower(_ value: RelayPolicyFfi) -> RustBuffer {
+    return FfiConverterTypeRelayPolicyFfi.lower(value)
+}
+
+
+extension RelayPolicyFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum RetentionSweepStatusFfi {
 
@@ -29390,6 +30115,7 @@ public enum SearchUpdateTriggerFfi {
      * carries its own graph or discovery provenance.
      */
     case discoveryResultsFound
+    case cachedResultsFound
     case radiusCompleted(radius: UInt8
     )
     /**
@@ -29439,18 +30165,20 @@ public struct FfiConverterTypeSearchUpdateTriggerFfi: FfiConverterRustBuffer {
 
         case 3: return .discoveryResultsFound
 
-        case 4: return .radiusCompleted(radius: try FfiConverterUInt8.read(from: &buf)
+        case 4: return .cachedResultsFound
+
+        case 5: return .radiusCompleted(radius: try FfiConverterUInt8.read(from: &buf)
         )
 
-        case 5: return .radiusTimeout(radius: try FfiConverterUInt8.read(from: &buf)
+        case 6: return .radiusTimeout(radius: try FfiConverterUInt8.read(from: &buf)
         )
 
-        case 6: return .radiusTruncated(radius: try FfiConverterUInt8.read(from: &buf)
+        case 7: return .radiusTruncated(radius: try FfiConverterUInt8.read(from: &buf)
         )
 
-        case 7: return .searchCompleted
+        case 8: return .searchCompleted
 
-        case 8: return .error(message: try FfiConverterString.read(from: &buf)
+        case 9: return .error(message: try FfiConverterString.read(from: &buf)
         )
 
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -29475,27 +30203,31 @@ public struct FfiConverterTypeSearchUpdateTriggerFfi: FfiConverterRustBuffer {
             writeInt(&buf, Int32(3))
 
 
-        case let .radiusCompleted(radius):
+        case .cachedResultsFound:
             writeInt(&buf, Int32(4))
-            FfiConverterUInt8.write(radius, into: &buf)
 
 
-        case let .radiusTimeout(radius):
+        case let .radiusCompleted(radius):
             writeInt(&buf, Int32(5))
             FfiConverterUInt8.write(radius, into: &buf)
 
 
-        case let .radiusTruncated(radius):
+        case let .radiusTimeout(radius):
             writeInt(&buf, Int32(6))
             FfiConverterUInt8.write(radius, into: &buf)
 
 
-        case .searchCompleted:
+        case let .radiusTruncated(radius):
             writeInt(&buf, Int32(7))
+            FfiConverterUInt8.write(radius, into: &buf)
+
+
+        case .searchCompleted:
+            writeInt(&buf, Int32(8))
 
 
         case let .error(message):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(message, into: &buf)
 
         }
@@ -30491,6 +31223,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeSecretStore: FfiConverterRustBuffer {
+    typealias SwiftType = SecretStore?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSecretStore.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSecretStore.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -32874,6 +33630,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_agentstreamsubscription_stream_id_hex() != 57056) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_append() != 61007) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_cancel() != 13026) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_finish() != 21671) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_agenttextpublisher_info() != 54665) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_chatlistsubscription_next() != 41564) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -33207,6 +33975,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_onboarding_snapshot() != 30406) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_open_agent_publisher() != 14224) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_open_presented_chat_list() != 49767) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -33360,7 +34131,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_schedule_group_self_update() != 23804) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_search_users() != 58582) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_search_cached_users() != 51849) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_search_users() != 58221) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_secure_delete_expired() != 16091) {
@@ -33393,7 +34167,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_settings() != 36141) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_tracker_config() != 61397) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_set_audit_log_tracker_config() != 26569) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_set_chat_manually_unread() != 46440) {
@@ -33604,6 +34378,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_cursor_persistence() != 18903) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_options() != 20223) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_constructor_marmot_new_with_secret_store() != 61899) {

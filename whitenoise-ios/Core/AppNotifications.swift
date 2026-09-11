@@ -224,7 +224,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func recordRegistrationFailure(_ error: Error) {
-        lastRegistrationError = error.localizedDescription
+        lastRegistrationError = UserFacingError.message(for: error)
     }
 
     func present(update: NotificationUpdateFfi) async {

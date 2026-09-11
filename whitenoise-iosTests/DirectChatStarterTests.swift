@@ -158,6 +158,14 @@ struct DirectChatStarterTests {
         }
     }
 
+    @Test func runtimeKeyPackageAndConnectivityFailuresStayRetryable() {
+        for (details, expected) in [("recipient KeyPackage incompatible", "Recipient KeyPackage incompatible"), ("relay disconnected", "Relay disconnected")] {
+            #expect(StartChatFailurePresentation.failure(
+                for: MarmotKitError.Runtime(details: details)
+            ) == .other(message: expected))
+        }
+    }
+
     @Test func inviteCopyUsesTheKnownNameOrAGenericFallback() {
         let named = StartChatFailurePresentation.inviteDetail(recipientName: "Alice")
         let generic = StartChatFailurePresentation.inviteDetail(recipientName: nil)

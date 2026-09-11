@@ -196,7 +196,7 @@ final class PrivacySecuritySettingsViewModel {
                 await deferOrReload(.full, using: dataSource)
                 return
             }
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(for: error)
         }
     }
 
@@ -229,7 +229,7 @@ final class PrivacySecuritySettingsViewModel {
                 await deferOrReload(.auditFiles, using: dataSource)
                 return
             }
-            auditErrorMessage = error.localizedDescription
+            auditErrorMessage = UserFacingError.message(for: error)
         }
     }
 

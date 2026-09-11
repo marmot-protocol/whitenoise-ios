@@ -43,7 +43,7 @@ final class RecipientUserSearch {
                 sharedChatCount: 0,
                 searchProfile: $0.profile,
                 searchRadius: $0.radius,
-                isFollowedBySearcher: followedAccountIds.contains($0.accountIdHex.lowercased())
+                isFollowedBySearcher: Self.isFollowed($0, followedAccountIds: followedAccountIds, overrides: followStatusOverrides)
             )
         }
     }
@@ -117,7 +117,7 @@ final class RecipientUserSearch {
                     )
                     self.results = Self.sortedUniqueResults(
                         self.results,
-                        followedAccountIds: self.followedAccountIds
+                        followedAccountIds: self.followedAccountIds, followStatusOverrides: self.followStatusOverrides
                     )
                     self.finishFollowsRequest(id: id, query: query)
                 }
@@ -178,13 +178,14 @@ final class RecipientUserSearch {
         requestID id: UUID,
         query: String
     ) async {
-        var aggregate: [UserDirectorySearchResultFfi] = []
+        var aggregate: [String: UserDirectorySearchResultFfi] = [:]
         while !Task.isCancelled, let update = await subscription.nextUpdate() {
             guard requestIsCurrent(id: id, query: query), !Task.isCancelled else { return }
-            aggregate.append(contentsOf: update.newResults)
+            for result in update.newResults { aggregate[result.accountIdHex.lowercased()] = result }
+            for result in update.updatedResults { aggregate[result.accountIdHex.lowercased()] = result }
             results = Self.sortedUniqueResults(
-                aggregate,
-                followedAccountIds: followedAccountIds
+                Array(aggregate.values),
+                followedAccountIds: followedAccountIds, followStatusOverrides: followStatusOverrides
             )
 
             switch update.trigger {
@@ -195,7 +196,7 @@ final class RecipientUserSearch {
             case .searchCompleted:
                 finishRequest(id: id, query: query)
                 return
-            case .radiusStarted, .resultsFound, .discoveryResultsFound, .radiusCompleted:
+            case .radiusStarted, .resultsFound, .cachedResultsFound, .discoveryResultsFound, .radiusCompleted:
                 break
             }
         }
@@ -241,7 +242,7 @@ final class RecipientUserSearch {
         }
         results = Self.sortedUniqueResults(
             results,
-            followedAccountIds: followedAccountIds
+            followedAccountIds: followedAccountIds, followStatusOverrides: followStatusOverrides
         )
     }
 
@@ -263,11 +264,12 @@ final class RecipientUserSearch {
 
     nonisolated static func sortedUniqueResults(
         _ results: [UserDirectorySearchResultFfi],
-        followedAccountIds: Set<String> = []
+        followedAccountIds: Set<String> = [],
+        followStatusOverrides: [String: Bool] = [:]
     ) -> [UserDirectorySearchResultFfi] {
         let sorted = results.sorted {
-            let lhsFollowed = followedAccountIds.contains($0.accountIdHex.lowercased())
-            let rhsFollowed = followedAccountIds.contains($1.accountIdHex.lowercased())
+            let lhsFollowed = isFollowed($0, followedAccountIds: followedAccountIds, overrides: followStatusOverrides)
+            let rhsFollowed = isFollowed($1, followedAccountIds: followedAccountIds, overrides: followStatusOverrides)
             if lhsFollowed != rhsFollowed {
                 return lhsFollowed
             }
@@ -295,6 +297,13 @@ final class RecipientUserSearch {
         return sorted.filter {
             seen.insert($0.accountIdHex.lowercased()).inserted
         }
+    }
+
+    private nonisolated static func isFollowed(
+        _ result: UserDirectorySearchResultFfi, followedAccountIds: Set<String>, overrides: [String: Bool]
+    ) -> Bool {
+        let id = result.accountIdHex.lowercased()
+        return overrides[id] ?? (result.isFollowedBySearcher || followedAccountIds.contains(id))
     }
 
     private nonisolated static func normalizedQuery(_ query: String) -> String {

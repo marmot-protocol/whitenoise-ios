@@ -881,7 +881,7 @@ final class AppState {
             if destructive {
                 localCleanupFailures.append(WipeFailureItem(
                     subject: nil,
-                    reason: "\(L10n.string("Couldn't refresh accounts")): \(error.localizedDescription)"
+                    reason: "\(L10n.string("Couldn't refresh accounts")): \(UserFacingError.message(for: error))"
                 ))
             } else {
                 present(UserFacingError.toast(title: L10n.string("Couldn't refresh accounts"), error: error))

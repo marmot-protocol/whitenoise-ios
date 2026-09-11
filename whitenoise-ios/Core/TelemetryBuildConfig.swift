@@ -114,12 +114,12 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         )
     }
 
-    func auditTrackerConfig() -> AuditLogTrackerConfigFfi {
-        AuditLogTrackerConfigFfi(
+    func auditTrackerConfig() -> AuditLogTrackerConfigV4Ffi {
+        AuditLogTrackerConfigV4Ffi(
             endpoint: nil,
             authorizationBearerToken: auditLogBearerToken,
-            source: AuditLogUploadSourceFfi(
-                deviceLabel: deviceModelIdentifier,
+            source: AuditLogUploadSourceV4Ffi(
+                hardwareModel: deviceModelIdentifier,
                 platform: "ios",
                 appVersion: serviceVersion
             )
@@ -187,7 +187,7 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         }
 
         var systemInfo = utsname()
-        uname(&systemInfo)
+        guard uname(&systemInfo) == 0 else { return nil }
         let bytes = Mirror(reflecting: systemInfo.machine).children.compactMap { $0.value as? Int8 }
         return machineIdentifier(fromMachineBytes: bytes)
     }

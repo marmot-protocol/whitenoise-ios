@@ -263,8 +263,13 @@ struct AddMembersSheet: View {
     }
 
     private func scheduleMemberKeyPackagePrewarm() {
-        model.scheduleMemberKeyPackagePrewarm { [weak appState] memberRefs in
-            guard let appState else { return }
+        let accountRef = appState.activeAccountRef
+        let generation = appState.runtimeGeneration
+        model.scheduleMemberKeyPackagePrewarm(
+            accountRef: accountRef, runtimeGeneration: generation
+        ) { [weak appState] memberRefs in
+            guard let appState, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation else { return }
             _ = try? await appState.prewarmGroupMemberKeyPackages(memberRefs: memberRefs)
         }
     }

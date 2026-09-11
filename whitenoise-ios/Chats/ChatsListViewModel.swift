@@ -400,7 +400,7 @@ final class ChatsListViewModel {
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true
                     else { return }
                     if self?.rowByGroupId.isEmpty == true {
-                        self?.loadError = error.localizedDescription
+                        self?.loadError = UserFacingError.message(for: error)
                     }
                     self?.isLoading = false
                 }

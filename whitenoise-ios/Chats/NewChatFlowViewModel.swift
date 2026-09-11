@@ -39,7 +39,7 @@ final class NewChatFlowViewModel {
     )?
 #endif
 
-    @ObservationIgnored private var keyPackagePrewarmTask: Task<Void, Never>?
+    @ObservationIgnored private let keyPackagePrewarmer = MemberKeyPackagePrewarmer()
 
     var isBusy: Bool {
         choosingAccountIdHex != nil || starter.isCreating || isCreatingGroup
@@ -172,7 +172,7 @@ final class NewChatFlowViewModel {
         } catch {
             Haptics.error()
             startPrompt = StartChatPrompt(
-                kind: .error(message: error.localizedDescription),
+                kind: .error(message: UserFacingError.message(for: error)),
                 recipientName: appState.knownDisplayName(forAccountIdHex: accountIdHex),
                 accountIdHex: accountIdHex,
                 memberRef: memberRef,
@@ -314,20 +314,20 @@ final class NewChatFlowViewModel {
     }
 
     func prewarmSelectedGroupMembers(using appState: AppState) {
-        keyPackagePrewarmTask?.cancel()
-        let memberRefs = groupSelection.memberRefs
-        guard !memberRefs.isEmpty else { return }
-        keyPackagePrewarmTask = Task { @MainActor [weak self, weak appState] in
-            guard let appState else { return }
+        let accountRef = appState.activeAccountRef
+        let generation = appState.runtimeGeneration
+        keyPackagePrewarmer.schedule(
+            memberRefs: groupSelection.memberRefs, accountRef: accountRef,
+            runtimeGeneration: generation
+        ) { [weak appState] memberRefs in
+            guard let appState, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation else { return }
             _ = try? await appState.prewarmGroupMemberKeyPackages(memberRefs: memberRefs)
-            guard !Task.isCancelled else { return }
-            self?.keyPackagePrewarmTask = nil
         }
     }
 
     func cancelGroupMemberPrewarm() {
-        keyPackagePrewarmTask?.cancel()
-        keyPackagePrewarmTask = nil
+        keyPackagePrewarmer.cancel()
     }
 
     /// Normalizes a resolved identifier through Marmot before selecting it so
@@ -447,12 +447,12 @@ final class NewChatFlowViewModel {
                     appState.shortNpub(forAccountIdHex: account)
                 )
             } else {
-                groupCreateError = marmotError.localizedDescription
+                groupCreateError = UserFacingError.message(for: marmotError)
                 appState.present(UserFacingError.toast(title: L10n.string("Couldn't create chat"), error: marmotError))
             }
         } catch {
             Haptics.error()
-            groupCreateError = error.localizedDescription
+            groupCreateError = UserFacingError.message(for: error)
             appState.present(UserFacingError.toast(title: L10n.string("Couldn't create chat"), error: error))
         }
     }

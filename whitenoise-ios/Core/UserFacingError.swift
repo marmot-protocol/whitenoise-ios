@@ -13,42 +13,57 @@ struct UserFacingError: Equatable {
         return Toast.error(
             presentation.title,
             message: presentation.message,
-            diagnostic: presentation.diagnostic
+            diagnostic: presentation.diagnostic == presentation.message ? nil : presentation.diagnostic
         )
     }
 
     static func present(title: String, error: Error, fallbackMessage: String? = nil) -> UserFacingError {
-        let diagnostic = sanitizedDiagnostic(for: error)
-        if isDuplicateIdentity(error, diagnostic: diagnostic) {
-            return UserFacingError(
-                title: title,
-                message: L10n.string("Identity already signed in on this device"),
-                diagnostic: diagnostic
-            )
-        }
-        if let setupMessage = accountSetupMessage(for: error) {
-            return UserFacingError(
-                title: title,
-                message: setupMessage,
-                diagnostic: diagnostic
-            )
-        }
-        if let sendMessage = sendMessage(for: error) {
-            return UserFacingError(
-                title: title,
-                message: sendMessage,
-                diagnostic: diagnostic
-            )
-        }
-
-        return UserFacingError(
-            title: title,
-            message: fallbackMessage ?? L10n.string("Retry"),
-            diagnostic: diagnostic
+        UserFacingError(
+            title: capitalizingFirstLetter(title),
+            message: message(for: error, fallbackMessage: fallbackMessage),
+            diagnostic: sanitizedDiagnostic(for: error)
         )
     }
 
-    private static func isDuplicateIdentity(_ error: Error, diagnostic: String) -> Bool {
+    nonisolated static func message(for error: Error, fallbackMessage: String? = nil) -> String {
+        let error = underlyingError(error)
+        let raw = rawMessage(for: error)
+        if isDuplicateIdentity(error, diagnostic: raw ?? "") {
+            return capitalizingFirstLetter(L10n.string("Identity already signed in on this device"))
+        }
+        if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
+        if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
+        let message = sanitizedText(fallbackMessage ?? raw ?? "")
+        return message.isEmpty ? L10n.string("Please try again.") : message
+    }
+
+    private nonisolated static func underlyingError(_ error: Error) -> Error {
+        if let failure = error as? RelaySettingsSaveFailure {
+            return underlyingError(failure.underlyingError)
+        }
+        return error
+    }
+
+    /// UniFFI's LocalizedError conformance reflects the enum, not its message.
+    private nonisolated static func rawMessage(for error: Error) -> String? {
+        guard let error = error as? MarmotKitError else {
+            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+        switch error {
+        case .Runtime(let details), .Publish(let details), .AccountCatchUp(let details),
+             .InvalidChatPin(let details), .InvalidMessageDraft(let details),
+             .InvalidMediaReference(let details), .InvalidHex(let details),
+             .InvalidIdentity(let details), .InvalidKeyPackageEvent(let details),
+             .StorageBusy(let details), .StorageClosed(let details),
+             .SecretNotFound(let details), .KeystoreUnavailable(let details),
+             .EncryptionFailed(let details), .Io(let details):
+            return details
+        default:
+            return nil
+        }
+    }
+
+    private nonisolated static func isDuplicateIdentity(_ error: Error, diagnostic: String) -> Bool {
         if let marmotError = error as? MarmotKitError,
            case .DuplicateIdentity = marmotError {
             return true
@@ -60,7 +75,7 @@ struct UserFacingError: Equatable {
         return diagnostic.localizedCaseInsensitiveContains("account id is already in use")
     }
 
-    private static func accountSetupMessage(for error: Error) -> String? {
+    private nonisolated static func accountSetupMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
         case .AccountSetupRecoveryRequired:
@@ -74,7 +89,7 @@ struct UserFacingError: Equatable {
         }
     }
 
-    private static func sendMessage(for error: Error) -> String? {
+    private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
         case .GroupSendQueueFull:
@@ -98,13 +113,23 @@ struct UserFacingError: Equatable {
 
     /// Runtime errors may include an nsec if input validation failed. Never
     /// make a secret copyable from a diagnostic surface.
-    static func sanitizedDiagnostic(for error: Error) -> String {
-        let raw = (error as? LocalizedError)?.errorDescription
-            ?? error.localizedDescription
-        return raw
+    nonisolated static func sanitizedDiagnostic(for error: Error) -> String {
+        let error = underlyingError(error)
+        let diagnostic = sanitizedText(rawMessage(for: error) ?? "")
+        return diagnostic.isEmpty ? message(for: error) : diagnostic
+    }
+
+    private nonisolated static func sanitizedText(_ raw: String) -> String {
+        let text = raw
             .replacing(/nsec1[a-z0-9]+/.ignoresCase(), with: "nsec1…")
             .replacing(/[0-9a-fA-F]{64,}/, with: "…")
             .prefix(4_000)
-            .description
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return capitalizingFirstLetter(text)
+    }
+
+    private nonisolated static func capitalizingFirstLetter(_ text: String) -> String {
+        guard let index = text.firstIndex(where: { $0.isLetter }) else { return text }
+        return String(text[..<index]) + String(text[index]).uppercased() + text[text.index(after: index)...]
     }
 }

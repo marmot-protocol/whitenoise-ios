@@ -104,7 +104,7 @@ struct GiphySearchView: View {
             guard !Task.isCancelled else { return }
             results = []
             isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = UserFacingError.message(for: error)
         }
     }
 }

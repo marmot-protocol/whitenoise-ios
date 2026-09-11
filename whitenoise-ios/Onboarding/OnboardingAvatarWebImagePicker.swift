@@ -217,7 +217,7 @@ struct OnboardingAvatarWebImagePicker: View {
             return
         } catch {
             isSearching = false
-            searchError = error.localizedDescription
+            searchError = UserFacingError.message(for: error)
         }
     }
 

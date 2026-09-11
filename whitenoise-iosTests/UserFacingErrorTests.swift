@@ -33,7 +33,7 @@ struct UserFacingErrorTests {
 
         let diagnostic = UserFacingError.sanitizedDiagnostic(for: error)
 
-        #expect(diagnostic == "runtime rejected nsec1…")
+        #expect(diagnostic == "Runtime rejected nsec1…")
     }
 
     @Test func accountSetupErrorsUseActionableCopy() {
@@ -50,14 +50,77 @@ struct UserFacingErrorTests {
         #expect(retry.message == "Identity setup can be resumed. Try importing again.")
     }
 
-    @Test func ordinaryFailuresUseTheOperationTitleAndRetryCopy() {
-        let error = RuntimeError(errorDescription: "network timed out")
+    @Test(arguments: [
+        ("network timed out", "Network timed out"),
+        ("  recipient KeyPackage incompatible", "Recipient KeyPackage incompatible"),
+        ("“relay” returned HTTP 503", "“Relay” returned HTTP 503"),
+        ("échec du relais", "Échec du relais"),
+        ("HTTP 503", "HTTP 503"),
+        ("503", "503")
+    ])
+    func ordinaryFailuresKeepTheOperationTitleAndReadableMessage(_ input: String, _ expected: String) {
+        let error = RuntimeError(errorDescription: input)
 
-        let toast = UserFacingError.toast(title: "Send failed", error: error)
+        let toast = UserFacingError.toast(title: "send failed", error: error)
 
         #expect(toast.title == "Send failed")
-        #expect(toast.message == "Retry")
-        #expect(toast.diagnostic == "network timed out")
+        #expect(toast.message == expected)
+        #expect(toast.diagnostic == nil)
+    }
+
+    @Test(arguments: [
+        MarmotKitError.Runtime(details: "Recipient needs to regenerate their KeyPackage."),
+        .Publish(details: "Recipient needs to regenerate their KeyPackage."),
+        .AccountCatchUp(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidChatPin(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidMessageDraft(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidMediaReference(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidHex(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidIdentity(details: "Recipient needs to regenerate their KeyPackage."),
+        .InvalidKeyPackageEvent(details: "Recipient needs to regenerate their KeyPackage."),
+        .StorageBusy(details: "Recipient needs to regenerate their KeyPackage."),
+        .StorageClosed(details: "Recipient needs to regenerate their KeyPackage."),
+        .SecretNotFound(details: "Recipient needs to regenerate their KeyPackage."),
+        .KeystoreUnavailable(details: "Recipient needs to regenerate their KeyPackage."),
+        .EncryptionFailed(details: "Recipient needs to regenerate their KeyPackage."),
+        .Io(details: "Recipient needs to regenerate their KeyPackage.")
+    ])
+    func marmotDetailsAreDisplayedWithoutTheGeneratedWrapper(_ error: MarmotKitError) {
+        let expected = "Recipient needs to regenerate their KeyPackage."
+        let toast = UserFacingError.toast(title: "Couldn't create chat", error: error)
+        #expect(toast.title == "Couldn't create chat")
+        #expect(toast.message == expected)
+        #expect(toast.diagnostic == nil)
+        #expect(UserFacingError.message(for: error) == expected)
+        #expect(UserFacingError.sanitizedDiagnostic(for: error) == expected)
+    }
+
+    @Test func detailsPreserveQuotesAndNewlinesAndRedactSecrets() {
+        let secret = "nsec1" + String(repeating: "q", count: 58)
+        let hex = String(repeating: "a", count: 64)
+        let error = MarmotKitError.Runtime(details: "Could not use \"key\".\nRejected \(secret) and \(hex)")
+        let expected = "Could not use \"key\".\nRejected nsec1… and …"
+        #expect(UserFacingError.message(for: error) == expected)
+        #expect(UserFacingError.sanitizedDiagnostic(for: error) == expected)
+        #expect(UserFacingError.message(for: MarmotKitError.Runtime(details: String(repeating: "x", count: 5_000))).count == 4_000)
+    }
+
+    @Test func emptyAndUnmappedErrorsHaveReadableFallbacks() {
+        for error in [MarmotKitError.Runtime(details: " \n"), .UnknownGroup(groupIdHex: "private-id")] {
+            #expect(UserFacingError.message(for: error) == "Please try again.")
+            #expect(!UserFacingError.sanitizedDiagnostic(for: error).contains("MarmotKit"))
+            #expect(UserFacingError.toast(title: "Operation failed", error: error).diagnostic == nil)
+        }
+    }
+
+    @Test func contextualFallbackAndRelayWrappedErrorsUseSharedFormatting() {
+        let error = MarmotKitError.Runtime(details: "Relay unavailable")
+        let wrapped = RelaySettingsSaveFailure(underlyingError: error, reloadedLists: nil)
+        #expect(UserFacingError.message(for: wrapped) == "Relay unavailable")
+        #expect(UserFacingError.sanitizedDiagnostic(for: wrapped) == "Relay unavailable")
+        let toast = UserFacingError.toast(title: "Import failed", error: error, fallbackMessage: "Try importing again.")
+        #expect(toast.message == "Try importing again.")
+        #expect(toast.diagnostic == "Relay unavailable")
     }
 
     @Test func fullGroupSendQueueExplainsWhenToResend() {

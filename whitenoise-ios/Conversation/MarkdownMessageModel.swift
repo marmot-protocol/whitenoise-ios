@@ -259,6 +259,22 @@ enum MarkdownMessageBuilder {
 
             case .mathBlock(let content):
                 appendCodeBlock(content, to: &out, budget: &budget)
+
+            case .details(let summary, _, let body, _):
+                // Keep disclosure content readable until the UI supports folding it.
+                let attributed = attributedString(
+                    for: summary,
+                    baseFont: .body,
+                    budget: &budget,
+                    mentionDisplayName: mentionDisplayName
+                )
+                if hasVisibleContent(attributed) { out.append(.paragraph(attributed)) }
+                out.append(contentsOf: walkBlocks(
+                    body,
+                    budget: &budget,
+                    depth: depth + 1,
+                    mentionDisplayName: mentionDisplayName
+                ))
             }
         }
         return out

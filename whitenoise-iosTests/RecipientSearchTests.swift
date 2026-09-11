@@ -251,19 +251,20 @@ struct RecipientSearchTests {
     }
 
     @MainActor
-    @Test func streamedResultsDoNotWaitForFollowEnrichment() async {
+    @Test(arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
+    func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async {
         let model = RecipientUserSearch()
         let follows = RecipientSearchFollowsGate()
         let result = searchResult(alice, radius: 1, field: .name, quality: .exact)
         let subscription = RecipientSearchSubscriptionStub(updates: [
             UserSearchUpdateFfi(
-                trigger: .resultsFound(radius: 1),
-                newResults: [result],
+                trigger: trigger,
+                newResults: [result], updatedResults: [],
                 totalResultCount: 1
             ),
             UserSearchUpdateFfi(
                 trigger: .searchCompleted,
-                newResults: [],
+                newResults: [], updatedResults: [],
                 totalResultCount: 1
             ),
         ])
@@ -293,6 +294,30 @@ struct RecipientSearchTests {
         }
         #expect(model.followedAccountIds == [alice])
         #expect(model.candidates.first?.isFollowedBySearcher == true)
+        model.cancel()
+    }
+
+    @MainActor
+    @Test func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async {
+        let cached = searchResult(alice, radius: 1, field: .name, quality: .exact)
+        var replacement = cached
+        replacement.radius = 2
+        replacement.isFollowedBySearcher = true
+        let subscription = RecipientSearchSubscriptionStub(updates: [
+            UserSearchUpdateFfi(trigger: .cachedResultsFound, newResults: [cached],
+                               updatedResults: [], totalResultCount: 1),
+            UserSearchUpdateFfi(trigger: .searchCompleted, newResults: [],
+                               updatedResults: [replacement], totalResultCount: 1),
+        ])
+        let model = RecipientUserSearch()
+        model.updateForTesting(query: "alice") {
+            RecipientUserSearchOperations(searchUsers: { subscription }, accountFollows: { [] })
+        }
+        await waitForRecipientSearch { !model.isSearching && model.results == [replacement] }
+        #expect(model.results == [replacement])
+        #expect(model.candidates.first?.isFollowedBySearcher == true)
+        model.setFollowStatus(accountIdHex: alice, isFollowing: false)
+        #expect(model.candidates.first?.isFollowedBySearcher == false)
         model.cancel()
     }
 
@@ -371,6 +396,7 @@ struct RecipientSearchTests {
             accountIdHex: hex,
             npub: candidate(hex).npub,
             radius: radius,
+            isFollowedBySearcher: false,
             matchedField: field,
             matchQuality: quality,
             providerRank: providerRank,

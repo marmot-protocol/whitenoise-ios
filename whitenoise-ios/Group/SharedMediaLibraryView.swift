@@ -579,7 +579,7 @@ struct SharedMediaLibraryView: View {
         } catch is CancellationError {
             return
         } catch {
-            fileOpenError = error.localizedDescription
+            fileOpenError = UserFacingError.message(for: error)
         }
     }
 }

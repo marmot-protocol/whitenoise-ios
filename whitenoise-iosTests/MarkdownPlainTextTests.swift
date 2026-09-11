@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -9,6 +10,14 @@ struct MarkdownPlainTextTests {
 
     private func doc(_ blocks: [MarkdownBlockFfi]) -> MarkdownDocumentFfi {
         MarkdownDocumentFfi(blocks: blocks, truncated: false)
+    }
+
+    @Test func detailsPreserveSummaryAndBodyInPreviews() {
+        let document = doc([.details(
+            summary: [.text(content: "Summary")], open: false,
+            body: [.paragraph(inlines: [.text(content: "Body")])], blankLinesBefore: Data()
+        )])
+        #expect(MarkdownPlainText.flatten(document) == "Summary Body")
     }
 
     @Test func stylingSyntaxIsDroppedAndTextKept() {

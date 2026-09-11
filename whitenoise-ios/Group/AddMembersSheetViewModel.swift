@@ -12,7 +12,7 @@ final class AddMembersSheetViewModel {
     let selection = RecipientSelection()
     var isInviting = false
     var error: String?
-    @ObservationIgnored private var keyPackagePrewarmTask: Task<Void, Never>?
+    @ObservationIgnored private let keyPackagePrewarmer = MemberKeyPackagePrewarmer()
 
     @discardableResult
     func toggle(_ candidate: RecipientCandidate, excludedAccountIds: Set<String>) -> Bool {
@@ -33,35 +33,21 @@ final class AddMembersSheetViewModel {
         return selection.count != previousCount
     }
 
-    /// Coalesces rapid multi-selection changes before warming the exact set the
-    /// invite mutation will resolve. Marmot can then reuse those KeyPackages
-    /// when the user taps Invite instead of starting every relay lookup then.
+    /// Coalesces changes and avoids repeating relay lookups for the same selection.
     func scheduleMemberKeyPackagePrewarm(
+        accountRef: String? = nil,
+        runtimeGeneration: Int = 0,
         debounce: Duration = .milliseconds(250),
         prewarm: @escaping @MainActor ([String]) async -> Void
     ) {
-        keyPackagePrewarmTask?.cancel()
-        let memberRefs = selection.memberRefs
-        guard !memberRefs.isEmpty else {
-            keyPackagePrewarmTask = nil
-            return
-        }
-        keyPackagePrewarmTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: debounce)
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            await prewarm(memberRefs)
-            guard !Task.isCancelled else { return }
-            self?.keyPackagePrewarmTask = nil
-        }
+        keyPackagePrewarmer.schedule(
+            memberRefs: selection.memberRefs, accountRef: accountRef,
+            runtimeGeneration: runtimeGeneration, debounce: debounce, prewarm: prewarm
+        )
     }
 
     func cancelMemberKeyPackagePrewarm() {
-        keyPackagePrewarmTask?.cancel()
-        keyPackagePrewarmTask = nil
+        keyPackagePrewarmer.cancel()
     }
 
     /// Normalizes a resolved identifier through Marmot before selecting it so
@@ -104,7 +90,7 @@ final class AddMembersSheetViewModel {
             dismiss()
         } catch {
             isInviting = false
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 }

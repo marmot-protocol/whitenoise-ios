@@ -242,7 +242,7 @@ final class RecipientDirectory {
                 completingTaskID: taskID,
                 completingAccountRef: accountRef
             ) else { return }
-            loadError = error.localizedDescription
+            loadError = UserFacingError.message(for: error)
         }
     }
 

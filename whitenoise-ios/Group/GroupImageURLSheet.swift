@@ -412,7 +412,7 @@ struct GroupImageURLSheet: View {
                     preparePhotoSelection(selection)
                 },
                 onError: { error in
-                    saveError = error.localizedDescription
+                    saveError = UserFacingError.message(for: error)
                 },
                 onDismiss: {
                     showPhotoPicker = false
@@ -651,7 +651,7 @@ struct GroupImageURLSheet: View {
                 currentQuery: searchQuery,
                 isCancelled: Task.isCancelled
             ) else { return }
-            searchError = error.localizedDescription
+            searchError = UserFacingError.message(for: error)
         }
     }
 
@@ -686,7 +686,7 @@ struct GroupImageURLSheet: View {
                     sourceURL: result.imageURL
                 )
             } catch {
-                saveError = error.localizedDescription
+                saveError = UserFacingError.message(for: error)
                 Haptics.error()
             }
         }
@@ -711,7 +711,7 @@ struct GroupImageURLSheet: View {
             )
             Haptics.selection()
         } catch {
-            saveError = error.localizedDescription
+            saveError = UserFacingError.message(for: error)
             Haptics.error()
         }
     }
@@ -730,7 +730,7 @@ struct GroupImageURLSheet: View {
             }
             dismiss()
         } catch {
-            saveError = error.localizedDescription
+            saveError = UserFacingError.message(for: error)
             Haptics.error()
         }
     }

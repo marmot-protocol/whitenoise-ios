@@ -489,7 +489,7 @@ final class RuntimeLifecycle {
                 )
             }
             await releaseRuntimeAfterStartupFailure()
-            appState.setPhase(.failed(error.localizedDescription))
+            appState.setPhase(.failed(UserFacingError.message(for: error)))
         }
     }
 
@@ -835,7 +835,7 @@ final class RuntimeLifecycle {
                     if ownsForegroundActivation(id: activationID) {
                         appState?.stopNotificationSubscription()
                         await appState?.cancelNativePushRegistrationTask()
-                        appState?.setPhase(.failed(error.localizedDescription))
+                        appState?.setPhase(.failed(UserFacingError.message(for: error)))
                     }
                     return
                 }
@@ -858,7 +858,7 @@ final class RuntimeLifecycle {
                     if client === restored { client = nil }
                     try? await restored.marmot.shutdownAndClose()
                     if ownsForegroundActivation(id: activationID), !(error is CancellationError) {
-                        appState?.setPhase(.failed(error.localizedDescription))
+                        appState?.setPhase(.failed(UserFacingError.message(for: error)))
                     }
                     return
                 }
@@ -889,7 +889,7 @@ final class RuntimeLifecycle {
                 if ownsForegroundActivation(id: activationID) {
                     appState?.stopNotificationSubscription()
                     await appState?.cancelNativePushRegistrationTask()
-                    appState?.setPhase(.failed(error.localizedDescription))
+                    appState?.setPhase(.failed(UserFacingError.message(for: error)))
                 }
                 return
             }

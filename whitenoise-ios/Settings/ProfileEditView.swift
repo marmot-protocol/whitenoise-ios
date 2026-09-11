@@ -213,7 +213,7 @@ struct ProfileEditView: View {
                         sourceURL: nil
                     )
                 },
-                onError: { photoError = $0.localizedDescription },
+                onError: { photoError = UserFacingError.message(for: $0) },
                 onDismiss: { showPhotoPicker = false }
             )
             .ignoresSafeArea()
@@ -326,7 +326,7 @@ struct ProfileEditView: View {
             photoError = nil
             Task { await loadImportedFile(url) }
         case .failure(let error):
-            photoError = error.localizedDescription
+            photoError = UserFacingError.message(for: error)
         }
     }
 
@@ -346,7 +346,7 @@ struct ProfileEditView: View {
                 sourceURL: url
             )
         } catch {
-            photoError = error.localizedDescription
+            photoError = UserFacingError.message(for: error)
         }
     }
 
@@ -362,7 +362,7 @@ struct ProfileEditView: View {
                     sourceURL: url
                 )
             } catch {
-                photoError = error.localizedDescription
+                photoError = UserFacingError.message(for: error)
             }
         }
     }
@@ -390,7 +390,7 @@ struct ProfileEditView: View {
                 await save(draft)
             } catch {
                 photoProgressPhase = nil
-                photoError = error.localizedDescription
+                photoError = UserFacingError.message(for: error)
                 Haptics.error()
             }
         }
@@ -407,7 +407,7 @@ struct ProfileEditView: View {
             try await model.updatePicture(with: draft, using: appState)
             Haptics.selection()
         } catch {
-            photoError = error.localizedDescription
+            photoError = UserFacingError.message(for: error)
             Haptics.error()
         }
     }

@@ -43,6 +43,11 @@ These stay the same for production, staging, Debug, and Release:
 - Do not split the OTLP endpoint by flavor.
 - Keep the push relay hint shared unless the relays themselves diverge.
 - Keep the push server pubkey flavor-specific.
+- Audit v4 uses `AuditLogTrackerConfigV4Ffi` and `AuditLogUploadSourceV4Ffi`.
+  Supply optional `hardwareModel` from system model information, never a
+  user-assigned device name. Continue supplying `platform` and `appVersion`.
+  MDK owns schema eligibility and any legacy-log cleanup; the app exports
+  original files without migrating or filtering their contents.
 
 ## Product analytics
 

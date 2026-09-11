@@ -1201,7 +1201,7 @@ final class ConversationViewModel {
                           appState?.canUseRuntimeForForegroundWork == true
                     else { return }
                     self?.timelineStore.setLoading(false)
-                    self?.error = error.localizedDescription
+                    self?.error = UserFacingError.message(for: error)
                     if !startedStandaloneSnapshotFallback,
                        self?.timeline.isEmpty == true {
                         startedStandaloneSnapshotFallback = true
@@ -1257,7 +1257,7 @@ final class ConversationViewModel {
                 self.initialTimelineSnapshotTask = nil
                 if self.timeline.isEmpty {
                     self.timelineStore.setLoading(false)
-                    self.error = error.localizedDescription
+                    self.error = UserFacingError.message(for: error)
                 }
             }
         }
@@ -1297,7 +1297,7 @@ final class ConversationViewModel {
                     return
                 } catch {
                     guard !Task.isCancelled else { return }
-                    self?.error = error.localizedDescription
+                    self?.error = UserFacingError.message(for: error)
                 }
                 guard !Task.isCancelled,
                       appState?.canUseRuntimeForForegroundWork == true
@@ -1335,7 +1335,7 @@ final class ConversationViewModel {
                 self.applyGroupRoster(roster)
             } catch {
                 guard !Task.isCancelled else { return }
-                self.error = error.localizedDescription
+                self.error = UserFacingError.message(for: error)
             }
         }
     }
@@ -1512,7 +1512,7 @@ final class ConversationViewModel {
             }
         } catch {
             search.notePagingFailure()
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 
@@ -1534,7 +1534,7 @@ final class ConversationViewModel {
                 timelineStore.setHasMoreAfter(false)
             }
         } catch {
-            self.error = error.localizedDescription
+            self.error = UserFacingError.message(for: error)
         }
     }
 

@@ -102,6 +102,13 @@ before every release tag.
       with the source while recording is off. Cancel the picker and export again;
       the next export must use fresh data. Export while logging is active and
       around a rotation; verify complete JSONL records and no silent truncation.
+- [ ] With MarmotKit 0.9.21 and logging enabled, export a newly recorded
+      file: its name ends in `-v4.jsonl` (or a v4 segment suffix), records declare
+      `marmot-forensics-audit/v4`, and source metadata contains system hardware
+      model, platform, and app version without account/device names or labels.
+      Logging remains off for users who have it disabled. On upgrade/startup,
+      MDK removes legacy v1-v3 audit files and segments even with recording off;
+      existing v4 files remain. The app implements no cleanup or filtering.
 - [ ] Sign Out defaults Wipe Data From This Device on. Exact profile-name entry
       enables Sign Out in the same sheet; mismatched case/name stays disabled.
       Turning wiping off requires no typed confirmation and preserves local data.
@@ -469,6 +476,10 @@ the test device.
       error toast; reconnecting and tapping send again succeeds.
 - [ ] Invalid recipient npub in **New chat** surfaces an error toast
       and stays on the sheet.
+- [ ] A failed Create/Invite shows the operation title and readable error details
+      in toasts and inline messages, without `MarmotKitError.Runtime(details: ...)`
+      wrappers. The selection stays available for retry. Expanded diagnostics
+      also omit the wrapper and redact private-key-shaped input.
 
 ## Accessibility & visual
 
