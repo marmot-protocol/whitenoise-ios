@@ -120,8 +120,18 @@ struct WNButtonTests {
         )
     }
 
-    @Test func compactDropsBelowTheCallToActionControlSize() {
+    /// `ControlSize` only gained `Comparable` on iOS 26. Swift does not enforce
+    /// availability on a conformance, so `<` compiles here and then segfaults
+    /// the test host on the iOS 18 floor, looking for a witness table that does
+    /// not exist. `allCases` carries the same order on every version.
+    @Test func compactDropsBelowTheCallToActionControlSize() throws {
+        let order = ControlSize.allCases
+        let compact = try #require(
+            order.firstIndex(of: WNButton.Metrics.controlSize(for: .compact))
+        )
+        let callToAction = try #require(order.firstIndex(of: .extraLarge))
+
         #expect(WNButton.Metrics.controlSize(for: .large) == .extraLarge)
-        #expect(WNButton.Metrics.controlSize(for: .compact) < .extraLarge)
+        #expect(compact < callToAction)
     }
 }
