@@ -7818,6 +7818,135 @@ struct ConversationTimelineProjectionTests {
         ) == nil)
     }
 
+    @Test func tailRefreshNarrowsAStaleForwardEdge() {
+        #expect(ConversationPaginationPolicy.forwardEdgeAfterTailRefresh(
+            currentHasMoreAfter: true,
+            pageHasMoreAfter: false,
+            droppedNewerRecords: false
+        ) == false)
+        #expect(ConversationPaginationPolicy.forwardEdgeAfterTailRefresh(
+            currentHasMoreAfter: true,
+            pageHasMoreAfter: false,
+            droppedNewerRecords: true
+        ) == true)
+        #expect(ConversationPaginationPolicy.forwardEdgeAfterTailRefresh(
+            currentHasMoreAfter: true,
+            pageHasMoreAfter: true,
+            droppedNewerRecords: false
+        ) == true)
+        #expect(ConversationPaginationPolicy.forwardEdgeAfterTailRefresh(
+            currentHasMoreAfter: false,
+            pageHasMoreAfter: true,
+            droppedNewerRecords: false
+        ) == true)
+    }
+
+    @Test func scrollToBottomControlStaysHiddenWhenAlreadyPinned() {
+        #expect(!TimelineBottom.shouldShowScrollToBottomControl(
+            userMovedAwayFromBottom: false,
+            hasMoreAfter: true,
+            isAtBottom: true
+        ))
+        #expect(TimelineBottom.shouldShowScrollToBottomControl(
+            userMovedAwayFromBottom: false,
+            hasMoreAfter: true,
+            isAtBottom: false
+        ))
+        #expect(TimelineBottom.shouldShowScrollToBottomControl(
+            userMovedAwayFromBottom: true,
+            hasMoreAfter: false,
+            isAtBottom: true
+        ))
+        #expect(!TimelineBottom.shouldShowScrollToBottomControl(
+            userMovedAwayFromBottom: false,
+            hasMoreAfter: false,
+            isAtBottom: true
+        ))
+    }
+
+    @Test func unreadDividerHidesWhenFirstUnreadRowNeedsNoScroll() {
+        #expect(TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
+            firstUnreadRowKey: "msg:aa",
+            visibleRowKeys: ["msg:99", "msg:aa"],
+            didScrollToUnreadTarget: false
+        ))
+        #expect(!TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
+            firstUnreadRowKey: "msg:aa",
+            visibleRowKeys: ["msg:99"],
+            didScrollToUnreadTarget: false
+        ))
+        #expect(!TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
+            firstUnreadRowKey: "msg:aa",
+            visibleRowKeys: ["msg:aa"],
+            didScrollToUnreadTarget: true
+        ))
+        #expect(!TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
+            firstUnreadRowKey: nil,
+            visibleRowKeys: ["msg:aa"],
+            didScrollToUnreadTarget: false
+        ))
+    }
+
+    @Test func readWatermarkAdvancesForGroupSystemRows() {
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 5,
+            pendingIndex: nil,
+            flushedIndex: 4,
+            kind: MessageSemantics.kindGroupSystem,
+            isDeleted: false
+        ) == 5)
+        #expect(ConversationReadMarker.nextWatermarkIndex(
+            candidateIndex: 5,
+            pendingIndex: nil,
+            flushedIndex: 4,
+            kind: MessageSemantics.kindGroupSystem,
+            isDeleted: true
+        ) == nil)
+    }
+
+    @Test func readWatermarkAcceptsOnlyUserVisibleRowKinds() {
+        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindChat))
+        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindGroupSystem))
+        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindReaction))
+        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindDelete))
+        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindEdit))
+        #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindAgentActivity))
+    }
+
+    @Test func newestVisibleWatermarkCandidateTakesGroupSystemTail() {
+        let readChat = message(id: hex("11"), kind: MessageSemantics.kindChat)
+        let memberAdded = message(id: hex("22"), kind: MessageSemantics.kindGroupSystem)
+        let memberRemoved = message(id: hex("33"), kind: MessageSemantics.kindGroupSystem)
+        let indexes = [hex("11"): 7, hex("22"): 8, hex("33"): 9]
+
+        let candidate = ConversationReadMarker.newestWatermarkCandidate(
+            in: [readChat, memberAdded, memberRemoved],
+            isDeleted: { _ in false },
+            timelineIndex: { indexes[$0] }
+        )
+
+        #expect(candidate?.messageIdHex == memberRemoved.messageIdHex)
+    }
+
+    @Test func exhaustedReadMarkFailureSurfacesOnceAtTheAttemptCap() {
+        let cap = ConversationReadMarker.maximumFailedFlushAttempts
+        #expect(ConversationReadMarker.shouldSurfaceExhaustedFailure(
+            retryMessageIdHex: nil,
+            attempts: cap,
+            maximumAttempts: cap
+        ))
+        #expect(!ConversationReadMarker.shouldSurfaceExhaustedFailure(
+            retryMessageIdHex: hex("11"),
+            attempts: cap - 1,
+            maximumAttempts: cap
+        ))
+        #expect(!ConversationReadMarker.shouldSurfaceExhaustedFailure(
+            retryMessageIdHex: nil,
+            attempts: 1,
+            maximumAttempts: cap
+        ))
+    }
+
     @Test func newestVisibleWatermarkCandidateIgnoresVisibilityOrder() {
         let older = message(id: hex("11"), kind: MessageSemantics.kindChat)
         let newest = message(id: hex("22"), kind: MessageSemantics.kindChat)
@@ -13735,27 +13864,56 @@ struct TimelineBottomTests {
 
         #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
             target: target,
-            visibleTargetIDs: ["msg:older", "msg:newer"]
+            visibleTargetIDs: ["msg:older", "msg:newer"],
+            didApplyRequestedPosition: true
         ))
         #expect(TimelineInitialTargetScrollPolicy.shouldSettle(
             target: target,
-            visibleTargetIDs: ["msg:older", "unread:message-target"]
+            visibleTargetIDs: ["msg:older", "unread:message-target"],
+            didApplyRequestedPosition: true
         ))
         #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
             target: nil,
-            visibleTargetIDs: ["unread:message-target"]
+            visibleTargetIDs: ["unread:message-target"],
+            didApplyRequestedPosition: true
         ))
         #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
             target: .latest(id: "msg-latest"),
-            visibleTargetIDs: []
+            visibleTargetIDs: [],
+            didApplyRequestedPosition: true
         ))
         #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
             target: .latest(id: "msg-latest"),
-            visibleTargetIDs: ["msg:older"]
+            visibleTargetIDs: ["msg:older"],
+            didApplyRequestedPosition: true
         ))
         #expect(TimelineInitialTargetScrollPolicy.shouldSettle(
             target: .latest(id: "msg-latest"),
-            visibleTargetIDs: ["msg-latest"]
+            visibleTargetIDs: ["msg-latest"],
+            didApplyRequestedPosition: true
+        ))
+    }
+
+    @Test func initialPositionSettlesOnlyAfterTheRequestedScrollIsApplied() {
+        let target = TimelineInitialPositionTarget.item(
+            id: "unread:message-target",
+            anchor: .top
+        )
+
+        #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
+            target: target,
+            visibleTargetIDs: ["unread:message-target"],
+            didApplyRequestedPosition: false
+        ))
+        #expect(TimelineInitialTargetScrollPolicy.shouldSettle(
+            target: target,
+            visibleTargetIDs: ["unread:message-target"],
+            didApplyRequestedPosition: true
+        ))
+        #expect(!TimelineInitialTargetScrollPolicy.shouldSettle(
+            target: .latest(id: "msg-latest"),
+            visibleTargetIDs: ["msg-latest"],
+            didApplyRequestedPosition: false
         ))
     }
 

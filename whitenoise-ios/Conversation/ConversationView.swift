@@ -28,6 +28,18 @@ enum TimelineBottom {
         true
     }
 
+    /// The button is a position affordance, so unloaded newer rows only
+    /// justify it while the viewport is not already sitting at the tail. A
+    /// forward edge left open by a bounded refresh must not strand the button
+    /// on a bottomed-out timeline.
+    static func shouldShowScrollToBottomControl(
+        userMovedAwayFromBottom: Bool,
+        hasMoreAfter: Bool,
+        isAtBottom: Bool
+    ) -> Bool {
+        userMovedAwayFromBottom || (hasMoreAfter && !isAtBottom)
+    }
+
     /// Sending is an unambiguous intent to be at the tail, so it clears a
     /// moved-away viewport whatever keyboard growth, a media strip, or an
     /// earlier scroll left behind. Both the send's follow-up scroll and its
@@ -61,6 +73,16 @@ enum TimelineBottom {
         if viewportIsPinned { return false }
         if isUserScrolling { return true }
         return previous
+    }
+}
+
+enum TimelineTailVisibility {
+    static func isTailOnScreen(
+        visibleTargetIDs: Set<String>,
+        bottomSentinelID: String,
+        hasMoreAfter: Bool
+    ) -> Bool {
+        !hasMoreAfter && visibleTargetIDs.contains(bottomSentinelID)
     }
 }
 
@@ -128,9 +150,10 @@ enum TimelineInitialTargetScrollPolicy {
 
     static func shouldSettle(
         target: TimelineInitialPositionTarget?,
-        visibleTargetIDs: Set<String>
+        visibleTargetIDs: Set<String>,
+        didApplyRequestedPosition: Bool
     ) -> Bool {
-        guard let target else { return false }
+        guard didApplyRequestedPosition, let target else { return false }
         switch target {
         case .item(let id, _), .latest(let id):
             return visibleTargetIDs.contains(id)
@@ -367,6 +390,19 @@ enum TimelineViewportVisibility {
 }
 
 enum TimelineUnreadDivider {
+    /// The divider marks where to resume reading, so it earns its place only
+    /// when the first unread row needs scrolling to reach. A row already on
+    /// screen at the settled initial position needs no marker. Navigating to
+    /// the divider itself is the exception: that target was requested.
+    static func shouldSuppressForVisibleFirstUnread(
+        firstUnreadRowKey: String?,
+        visibleRowKeys: Set<String>,
+        didScrollToUnreadTarget: Bool
+    ) -> Bool {
+        guard !didScrollToUnreadTarget, let firstUnreadRowKey else { return false }
+        return visibleRowKeys.contains(firstUnreadRowKey)
+    }
+
     static func shouldShow(
         before item: TimelineItem,
         firstUnreadMessageIdHex: String?
@@ -582,10 +618,12 @@ struct ConversationView: View {
     @State private var userMovedAwayFromTimelineBottom = false
     @State private var didRequestInitialTimelinePosition = false
     @State private var isInitialTimelinePositionSettled = false
+    @State private var suppressesInitialUnreadDivider = false
     @State private var pendingInitialPositionTarget: TimelineInitialPositionTarget?
     @State private var initialTargetHistoryPageLoads = 0
     @State private var timelineTargetVisibility = TimelineTargetVisibilityStore()
     @State private var initialTimelinePositionRequestGeneration = 0
+    @State private var appliedInitialPositionGeneration: Int?
     @State private var pendingBottomScrollRequest: TimelineBottomScrollRequest?
     @State private var pendingBottomScrollTask: Task<Void, Never>?
     @State private var isOlderTimelineTriggerVisible = false
@@ -1554,7 +1592,9 @@ struct ConversationView: View {
                                             ForEach(section.items) { item in
                                                 if TimelineUnreadDivider.shouldShow(
                                                     before: item,
-                                                    firstUnreadMessageIdHex: initialUnreadMessageIdHex
+                                                    firstUnreadMessageIdHex: suppressesInitialUnreadDivider
+                                                        ? nil
+                                                        : initialUnreadMessageIdHex
                                                 ) {
                                                     UnreadMessagesDivider()
                                                         .id(unreadDividerID(for: initialUnreadMessageIdHex ?? ""))
@@ -1619,6 +1659,8 @@ struct ConversationView: View {
                                   let target = pendingInitialPositionTarget
                             else { return }
                             scrollToInitialTimelineTarget(target, proxy: proxy)
+                            appliedInitialPositionGeneration = initialTimelinePositionRequestGeneration
+                            settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
                         }
                         // Only scroll/bounce when the messages actually exceed
                         // the viewport; with a few messages the timeline stays put.
@@ -1646,6 +1688,9 @@ struct ConversationView: View {
                         ) { visibleIDs in
                             timelineTargetVisibility.replace(with: Set(visibleIDs))
                             settleInitialTimelinePositionIfTargetVisible(viewModel: viewModel)
+                            if !isInitialTimelinePositioning {
+                                reconcileTimelineTailVisibility(viewModel: viewModel)
+                            }
                         }
                         .onScrollGeometryChange(for: Bool.self) { geometry in
                             TimelineBottom.distanceToBottom(
@@ -2062,7 +2107,8 @@ struct ConversationView: View {
                     .opacity(viewModel.isLoadingNewer ? 1 : 0.01)
                 Spacer()
             }
-            .frame(height: 28)
+            .frame(height: viewModel.isLoadingNewer ? 28 : 0)
+            .clipped()
             .onAppear {
                 let shouldRequest = TimelinePaginationTrigger.shouldRequestPage(
                     hasMore: viewModel.hasMoreAfter,
@@ -2080,7 +2126,11 @@ struct ConversationView: View {
 
     @ViewBuilder
     private func scrollToBottomButton(proxy: ScrollViewProxy, viewModel: ConversationViewModel) -> some View {
-        if userMovedAwayFromTimelineBottom || viewModel.hasMoreAfter {
+        if TimelineBottom.shouldShowScrollToBottomControl(
+            userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+            hasMoreAfter: viewModel.hasMoreAfter,
+            isAtBottom: isAtTimelineBottom
+        ) {
             Button {
                 Haptics.tap()
                 if viewModel.hasMoreAfter {
@@ -2287,6 +2337,7 @@ struct ConversationView: View {
         isAtTimelineBottom = target.isBottom
         userMovedAwayFromTimelineBottom = !target.isBottom
         isInitialTimelinePositionSettled = false
+        appliedInitialPositionGeneration = nil
         pendingInitialPositionTarget = target
         initialTimelinePositionRequestGeneration &+= 1
     }
@@ -2295,7 +2346,8 @@ struct ConversationView: View {
         guard let target = pendingInitialPositionTarget else { return }
         if TimelineInitialTargetScrollPolicy.shouldSettle(
             target: target,
-            visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs
+            visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs,
+            didApplyRequestedPosition: didApplyRequestedInitialPosition
         ) {
             settleInitialTimelinePosition(viewModel: viewModel)
         } else {
@@ -2315,6 +2367,10 @@ struct ConversationView: View {
         }
     }
 
+    private var didApplyRequestedInitialPosition: Bool {
+        appliedInitialPositionGeneration == initialTimelinePositionRequestGeneration
+    }
+
     private var isInitialTimelinePositioning: Bool {
         TimelineInitialTargetScrollPolicy.isPositioning(
             hasPositionIntent: didRequestInitialTimelinePosition || initialTargetMessageIdHex != nil,
@@ -2332,7 +2388,8 @@ struct ConversationView: View {
     private func settleInitialTimelinePositionIfTargetVisible(viewModel: ConversationViewModel) {
         guard TimelineInitialTargetScrollPolicy.shouldSettle(
             target: pendingInitialPositionTarget,
-            visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs
+            visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs,
+            didApplyRequestedPosition: didApplyRequestedInitialPosition
         ) else { return }
         settleInitialTimelinePosition(viewModel: viewModel)
     }
@@ -2362,7 +2419,37 @@ struct ConversationView: View {
         guard !isInitialTimelinePositionSettled else { return }
         isInitialTimelinePositionSettled = true
         pendingInitialPositionTarget = nil
+        suppressesInitialUnreadDivider = TimelineUnreadDivider.shouldSuppressForVisibleFirstUnread(
+            firstUnreadRowKey: initialUnreadRowKey(viewModel: viewModel),
+            visibleRowKeys: timelineVisibility.visibleRowKeys,
+            didScrollToUnreadTarget: initialTargetMessageIdHex == initialUnreadMessageIdHex
+        )
         markCurrentlyVisibleMessagesRead(viewModel: viewModel)
+        reconcileTimelineTailVisibility(viewModel: viewModel)
+    }
+
+    private func reconcileTimelineTailVisibility(viewModel: ConversationViewModel) {
+        guard TimelineTailVisibility.isTailOnScreen(
+            visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs,
+            bottomSentinelID: Self.timelineBottomID,
+            hasMoreAfter: viewModel.hasMoreAfter
+        ) else { return }
+        if !isAtTimelineBottom {
+            isAtTimelineBottom = true
+        }
+        if userMovedAwayFromTimelineBottom {
+            userMovedAwayFromTimelineBottom = false
+        }
+        guard isInitialTimelinePositionSettled else { return }
+        viewModel.markConversationReadThroughTail()
+    }
+
+    private func initialUnreadRowKey(viewModel: ConversationViewModel) -> String? {
+        guard let initialUnreadMessageIdHex else { return nil }
+        return viewModel.timeline.first { item in
+            guard case .message(let record, _) = item.kind else { return false }
+            return record.messageIdHex == initialUnreadMessageIdHex
+        }?.rowFrameKey
     }
 
     private func markCurrentlyVisibleMessagesRead(viewModel: ConversationViewModel) {
