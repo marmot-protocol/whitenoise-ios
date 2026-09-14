@@ -119,7 +119,7 @@ struct ConversationTailVisibilityTests {
     }
 
     @Test func timelineScrolledAwayFromTailDoesNotReportTailOnScreen() async throws {
-        let (visible, _) = try await render(rowCount: 200, scrollsToTop: true)
+        let (visible, _) = try await render(rowCount: 60, scrollsToTop: true)
         #expect(
             !visible.contains(Self.sentinelID),
             "A timeline scrolled to its head must not report its tail visible. Visible: \(visible)"

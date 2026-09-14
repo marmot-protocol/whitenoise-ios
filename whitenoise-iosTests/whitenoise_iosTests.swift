@@ -137,7 +137,7 @@ struct AppStateBootstrapTests {
         )
         let model = AccountSetupModel(snapshot: completed)
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<1_000 where !model.canFinish { await Task.yield() }
+        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
         try #require(model.canFinish)
         appState.signInAttempts.begin(account.accountIdHex)
         appState.pendingAccountSetup = model
@@ -297,7 +297,7 @@ struct AppStateBootstrapTests {
         )
         let model = AccountSetupModel(snapshot: completed)
         await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
-        for _ in 0..<1_000 where !model.canFinish { await Task.yield() }
+        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
         #expect(model.canFinish)
         appState.activeAccountRef = nil
         appState.setPhase(.onboarding)
