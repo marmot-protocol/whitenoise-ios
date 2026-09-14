@@ -2,30 +2,17 @@ import MarmotKit
 
 /// Pure swipe-action policy for chat-list rows (#345). Inactive memberships
 /// (`left` / `removed`) keep archive controls but swap leave for local delete.
-nonisolated enum ChatListSwipeActionsPresentation: Equatable {
-    nonisolated struct Actions: OptionSet, Equatable {
-        let rawValue: Int
-
-        static let leave = Actions(rawValue: 1 << 0)
-        static let archive = Actions(rawValue: 1 << 1)
-        static let unarchive = Actions(rawValue: 1 << 2)
-        static let delete = Actions(rawValue: 1 << 3)
-        static let mute = Actions(rawValue: 1 << 4)
-        static let unmute = Actions(rawValue: 1 << 5)
-        static let read = Actions(rawValue: 1 << 6)
-        static let unread = Actions(rawValue: 1 << 7)
-        static let pin = Actions(rawValue: 1 << 8)
-        static let unpin = Actions(rawValue: 1 << 9)
-    }
-
+/// Order is part of the policy: the first entry sits nearest the swiped edge
+/// and is what a full swipe triggers.
+nonisolated enum ChatListSwipeActionsPresentation {
     static func leadingActions(
         hasUnread: Bool,
         isPinned: Bool,
         isArchived: Bool
-    ) -> Actions {
-        var actions: Actions = [hasUnread ? .read : .unread]
+    ) -> [ChatListSwipeAction] {
+        var actions: [ChatListSwipeAction] = [hasUnread ? .read : .unread]
         if !isArchived {
-            actions.insert(isPinned ? .unpin : .pin)
+            actions.append(isPinned ? .unpin : .pin)
         }
         return actions
     }
@@ -35,7 +22,7 @@ nonisolated enum ChatListSwipeActionsPresentation: Equatable {
         selfMembership: SelfMembershipFfi,
         leaveRequestPending: Bool,
         isMuted: Bool
-    ) -> Actions {
+    ) -> [ChatListSwipeAction] {
         let departureAction = ChatDepartureAction.action(
             membership: selfMembership,
             leaveRequestPending: leaveRequestPending
@@ -48,16 +35,17 @@ nonisolated enum ChatListSwipeActionsPresentation: Equatable {
         }
 
         if isArchived {
-            return departureAction == .leave ? [.unarchive, .leave] : [.unarchive, .delete]
+            return [.unarchive, departureAction == .leave ? .leave : .delete]
         }
 
-        var actions: Actions = [.archive]
+        var actions: [ChatListSwipeAction] = []
         if departureAction == .leave {
-            actions.insert(.leave)
-            actions.insert(isMuted ? .unmute : .mute)
+            actions.append(isMuted ? .unmute : .mute)
+            actions.append(.leave)
         } else {
-            actions.insert(.delete)
+            actions.append(.delete)
         }
+        actions.append(.archive)
         return actions
     }
 }
