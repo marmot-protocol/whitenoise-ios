@@ -17,6 +17,15 @@ This repo is a SwiftUI iOS app around the Marmot Rust runtime. Read this before 
 - Flavor build settings (telemetry, audit, push): `Config/AGENTS.md`
 - Manual release checks: `docs/manual-tests.md`
 
+## UI and UX
+
+- Read [docs/ios-design.md](docs/ios-design.md) before UI or UX work.
+- Prefer native SwiftUI/UIKit patterns and reuse the existing `WN` components.
+- Work on one selected screen or bounded flow at a time. Preserve production
+  behavior; flag any required backend, persistence, or lifecycle change separately.
+- Verify visual changes in the current build. The user is the final visual and
+  product acceptance authority.
+
 ## Architecture
 
 Swift owns UI, app lifecycle, navigation, presentation state, and iOS notification plumbing. Marmot owns accounts, MLS group state, storage, relay catch-up, message processing, and push-token cryptography.
