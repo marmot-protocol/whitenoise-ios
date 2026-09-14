@@ -63,13 +63,15 @@ final class InteractivePopGestureController: NSObject, UIGestureRecognizerDelega
         guard let controller,
               let recognizer = controller.interactivePopGestureRecognizer
         else { return }
+        if let trackedRecognizer, trackedRecognizer !== recognizer {
+            restore()
+        }
         if recognizer.delegate !== self {
             navigationController = controller
             originalDelegate = recognizer.delegate
             recognizer.delegate = self
         }
         if trackedRecognizer !== recognizer {
-            trackedRecognizer?.removeTarget(self, action: nil)
             recognizer.addTarget(self, action: #selector(popGestureDidChange))
             trackedRecognizer = recognizer
         }
