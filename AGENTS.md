@@ -303,9 +303,6 @@ privacy manifests and the separate native SDK/export/App Store Connect checks.
 
 ## Git Hygiene
 
-The user chooses branch names. Use the exact supplied name without `codex/` or
-any automatic prefix; ask for a name before creating a branch if none was given.
-
 The worktree may contain user edits. Do not revert changes you did not make. If a generated file changes, confirm whether it came from a published MarmotKit release installed by `scripts/sync-bindings.sh` before touching it.
 
 Commit related work as one clear checkpoint when asked. Leave unrelated cleanup for a separate commit.
