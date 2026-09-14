@@ -488,7 +488,8 @@ private actor RecipientSearchFollowsGate {
 
 @MainActor
 private func waitForRecipientSearch(
-    timeout: Duration = .milliseconds(250),
+    timeout: Duration = .seconds(10),
+    sourceLocation: SourceLocation = #_sourceLocation,
     condition: () -> Bool
 ) async {
     let clock = ContinuousClock()
@@ -497,6 +498,11 @@ private func waitForRecipientSearch(
         if condition() { return }
         try? await Task.sleep(for: .milliseconds(5))
     }
+    if condition() { return }
+    Issue.record(
+        "recipient search condition never became true within \(timeout)",
+        sourceLocation: sourceLocation
+    )
 }
 
 private enum MembershipReadFailure: Error {

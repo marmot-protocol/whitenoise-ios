@@ -158,7 +158,7 @@ struct AppNotificationsRefreshTests {
                 Issue.record("unexpected error: \(error)")
                 return
             }
-            #expect(message == "simulator unavailable")
+            #expect(message == "Simulator unavailable")
         } catch {
             Issue.record("unexpected error: \(error)")
         }

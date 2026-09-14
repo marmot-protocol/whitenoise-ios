@@ -122,6 +122,6 @@ struct WNButtonTests {
 
     @Test func compactDropsBelowTheCallToActionControlSize() {
         #expect(WNButton.Metrics.controlSize(for: .large) == .extraLarge)
-        #expect(WNButton.Metrics.controlSize(for: .compact) < .extraLarge)
+        #expect(WNButton.Metrics.controlSize(for: .compact) == .regular)
     }
 }
