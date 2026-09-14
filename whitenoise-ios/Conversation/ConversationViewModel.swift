@@ -314,6 +314,11 @@ final class ConversationViewModel {
         category: "conversation-load"
     )
 
+    private static let readStateLog = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise",
+        category: "read-state"
+    )
+
     private func logLoadDuration(_ label: String, since start: ContinuousClock.Instant) {
         let elapsed = start.duration(to: ContinuousClock.now).components
         let elapsedMs = Double(elapsed.seconds) * 1000
@@ -1088,6 +1093,15 @@ final class ConversationViewModel {
                 groupIdHex: group.groupIdHex
             ) {
                 guard !Task.isCancelled else { return }
+                Self.readStateLog.debug(
+                    """
+                    entry group=\(self.group.groupIdHex, privacy: .public) \
+                    unreadCount=\(row.unreadCount, privacy: .public) \
+                    firstUnread=\(row.firstUnreadMessageIdHex ?? "nil", privacy: .public) \
+                    lastRead=\(row.lastReadMessageIdHex ?? "nil", privacy: .public) \
+                    tailKind=\(row.lastMessage.map { String($0.kind) } ?? "nil", privacy: .public)
+                    """
+                )
                 readMarker.seedFlushedWatermark(messageIdHex: row.lastReadMessageIdHex)
                 onChatListRowUpdated?(row)
             }

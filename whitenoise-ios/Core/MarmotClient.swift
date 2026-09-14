@@ -6,6 +6,19 @@ struct TimelineReadMarkResult {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool
+    let failureDescription: String?
+
+    init(
+        messageIdHex: String,
+        row: ChatListRowFfi?,
+        succeeded: Bool,
+        failureDescription: String? = nil
+    ) {
+        self.messageIdHex = messageIdHex
+        self.row = row
+        self.succeeded = succeeded
+        self.failureDescription = failureDescription
+    }
 }
 
 /// Thin wrapper around the UniFFI-generated `Marmot` handle.
@@ -17,6 +30,11 @@ nonisolated final class MarmotClient: Sendable {
     private static let coldBootstrapLog = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios",
         category: "cold-bootstrap"
+    )
+
+    private static let readMarkLog = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "dev.ipf.whitenoise.ios",
+        category: "read-mark"
     )
 
     /// Seed relays used to start the Rust relay plane and bootstrap new local
@@ -386,7 +404,20 @@ nonisolated final class MarmotClient: Sendable {
                     )
                     return TimelineReadMarkResult(messageIdHex: messageIdHex, row: row, succeeded: true)
                 } catch {
-                    return TimelineReadMarkResult(messageIdHex: messageIdHex, row: nil, succeeded: false)
+                    Self.readMarkLog.error(
+                        """
+                        markTimelineMessageRead rejected \
+                        group=\(groupIdHex, privacy: .public) \
+                        message=\(messageIdHex, privacy: .public) \
+                        error=\(String(describing: error), privacy: .public)
+                        """
+                    )
+                    return TimelineReadMarkResult(
+                        messageIdHex: messageIdHex,
+                        row: nil,
+                        succeeded: false,
+                        failureDescription: String(describing: error)
+                    )
                 }
             }
         }.value
