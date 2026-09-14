@@ -238,7 +238,7 @@ struct InteractivePopGestureEnablerTests {
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         #expect(controller.gestureRecognizerShouldBegin(recognizer))
         // The screen refuses the second begin, so the epoch must not move.
-        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+        #expect(!controller.gestureRecognizerShouldBegin(recognizer))
         controller.completeTransition(isCancelled: true)
 
         #expect(outcomes.count == 1)

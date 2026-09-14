@@ -99,10 +99,8 @@ final class InteractivePopGestureController: NSObject, UIGestureRecognizerDelega
             stackDepth: navigationController.viewControllers.count,
             isTransitioning: navigationController.transitionCoordinator != nil
         )
-        guard shouldBegin else { return false }
-        if let epoch = onBegin() {
-            activeEpoch = epoch
-        }
+        guard shouldBegin, let epoch = onBegin() else { return false }
+        activeEpoch = epoch
         isAwaitingTransition = true
         return true
     }
