@@ -73,6 +73,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
 private func waitUntil(
     timeoutNanoseconds: UInt64 = 10_000_000_000,
     pollIntervalNanoseconds: UInt64 = 5_000_000,
+    sourceLocation: SourceLocation = #_sourceLocation,
     _ condition: () -> Bool
 ) async {
     let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
@@ -80,6 +81,11 @@ private func waitUntil(
         if condition() { return }
         try? await Task.sleep(nanoseconds: pollIntervalNanoseconds)
     }
+    if condition() { return }
+    Issue.record(
+        "condition never became true within \(timeoutNanoseconds / 1_000_000_000)s",
+        sourceLocation: sourceLocation
+    )
 }
 
 private final class TailRefreshTaskProbe: Sendable {
