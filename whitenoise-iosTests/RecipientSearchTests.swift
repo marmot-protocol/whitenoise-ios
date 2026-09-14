@@ -385,22 +385,58 @@ struct RecipientSearchTests {
         )
     }
 
+    @Test func updatedResultsReplaceMatchingRowsAndKeepUnknownOnes() {
+        let alice = String(repeating: "a", count: 64)
+        let bob = String(repeating: "b", count: 64)
+        let carol = String(repeating: "c", count: 64)
+        let aggregate = [
+            searchResult(alice, radius: 2, field: .npub, quality: .prefix),
+            searchResult(bob, radius: 2, field: .npub, quality: .prefix),
+        ]
+        let enrichedAlice = searchResult(
+            alice,
+            radius: 1,
+            field: .name,
+            quality: .exact,
+            isFollowedBySearcher: true
+        )
+        let lateCarol = searchResult(carol, radius: 2, field: .name, quality: .exact)
+
+        let merged = RecipientUserSearch.applyingReplacements(
+            [enrichedAlice, lateCarol],
+            to: aggregate
+        )
+
+        #expect(merged.map(\.accountIdHex) == [alice, bob, carol])
+        #expect(merged[0] == enrichedAlice)
+        #expect(merged[1] == aggregate[1])
+    }
+
+    @Test func emptyReplacementsLeaveTheAggregateUntouched() {
+        let aggregate = [
+            searchResult(String(repeating: "a", count: 64), radius: 1, field: .name, quality: .exact)
+        ]
+        #expect(RecipientUserSearch.applyingReplacements([], to: aggregate) == aggregate)
+    }
+
     private func searchResult(
         _ hex: String,
         radius: UInt8,
         field: MatchedFieldFfi,
         quality: MatchQualityFfi,
-        providerRank: Double? = nil
+        providerRank: Double? = nil,
+        isFollowedBySearcher: Bool = false,
+        profile: UserProfileMetadataFfi? = nil
     ) -> UserDirectorySearchResultFfi {
         UserDirectorySearchResultFfi(
             accountIdHex: hex,
             npub: candidate(hex).npub,
             radius: radius,
-            isFollowedBySearcher: false,
+            isFollowedBySearcher: isFollowedBySearcher,
             matchedField: field,
             matchQuality: quality,
             providerRank: providerRank,
-            profile: nil
+            profile: profile
         )
     }
 }

@@ -167,6 +167,18 @@ struct MarkdownPlainTextTests {
         #expect(body == "@Jeff")
     }
 
+    @Test func detailsFlattensSummaryThenBody() {
+        let flattened = MarkdownPlainText.flatten(doc([
+            .details(
+                summary: [.text(content: "Spoiler")],
+                open: false,
+                body: [.paragraph(inlines: [.text(content: "hidden body")])],
+                blankLinesBefore: Data([0])
+            )
+        ]))
+        #expect(flattened == "Spoiler hidden body")
+    }
+
     @Test func emptyDocumentsFlattenToNil() {
         #expect(MarkdownPlainText.flatten(MarkdownDocumentFfi.emptyDocument) == nil)
         #expect(MarkdownPlainText.flatten(doc([.paragraph(inlines: [.softBreak])])) == nil)

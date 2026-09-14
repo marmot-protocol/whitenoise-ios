@@ -72,9 +72,6 @@ nonisolated enum MarkdownPlainText {
                 state.append(content)
             case .blockQuote(let nested, _):
                 appendBlocks(nested, to: &state, depth: depth + 1)
-            case .details(let summary, _, let body, _):
-                appendInlines(summary, to: &state, depth: depth + 1)
-                appendBlocks(body, to: &state, depth: depth + 1)
             case .listBlock(_, _, let items):
                 for item in items {
                     guard state.consumeNode() else { return }
@@ -87,6 +84,10 @@ nonisolated enum MarkdownPlainText {
                     appendTableRow(row, to: &state, depth: depth)
                     guard !state.exhausted else { return }
                 }
+            case .details(let summary, _, let body, _):
+                appendInlines(summary, to: &state, depth: depth)
+                guard !state.exhausted else { return }
+                appendBlocks(body, to: &state, depth: depth + 1)
             case .thematicBreak:
                 break
             }

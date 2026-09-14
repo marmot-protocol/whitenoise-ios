@@ -178,13 +178,13 @@ final class RecipientUserSearch {
         requestID id: UUID,
         query: String
     ) async {
-        var aggregate: [String: UserDirectorySearchResultFfi] = [:]
+        var aggregate: [UserDirectorySearchResultFfi] = []
         while !Task.isCancelled, let update = await subscription.nextUpdate() {
             guard requestIsCurrent(id: id, query: query), !Task.isCancelled else { return }
-            for result in update.newResults { aggregate[result.accountIdHex.lowercased()] = result }
-            for result in update.updatedResults { aggregate[result.accountIdHex.lowercased()] = result }
+            aggregate.append(contentsOf: update.newResults)
+            aggregate = Self.applyingReplacements(update.updatedResults, to: aggregate)
             results = Self.sortedUniqueResults(
-                Array(aggregate.values),
+                aggregate,
                 followedAccountIds: followedAccountIds, followStatusOverrides: followStatusOverrides
             )
 
@@ -196,7 +196,7 @@ final class RecipientUserSearch {
             case .searchCompleted:
                 finishRequest(id: id, query: query)
                 return
-            case .radiusStarted, .resultsFound, .cachedResultsFound, .discoveryResultsFound, .radiusCompleted:
+            case .radiusStarted, .resultsFound, .discoveryResultsFound, .cachedResultsFound, .radiusCompleted:
                 break
             }
         }
@@ -260,6 +260,21 @@ final class RecipientUserSearch {
 
     nonisolated static func shouldSearch(query: String, isIdentifierQuery: Bool) -> Bool {
         !isIdentifierQuery && !normalizedQuery(query).isEmpty
+    }
+
+    nonisolated static func applyingReplacements(
+        _ replacements: [UserDirectorySearchResultFfi],
+        to aggregate: [UserDirectorySearchResultFfi]
+    ) -> [UserDirectorySearchResultFfi] {
+        guard !replacements.isEmpty else { return aggregate }
+        var byAccountId: [String: UserDirectorySearchResultFfi] = [:]
+        for replacement in replacements {
+            byAccountId[replacement.accountIdHex.lowercased()] = replacement
+        }
+        var merged = aggregate.map { byAccountId[$0.accountIdHex.lowercased()] ?? $0 }
+        let known = Set(aggregate.map { $0.accountIdHex.lowercased() })
+        merged.append(contentsOf: replacements.filter { !known.contains($0.accountIdHex.lowercased()) })
+        return merged
     }
 
     nonisolated static func sortedUniqueResults(

@@ -6,6 +6,20 @@ import Foundation
 /// more in that direction). Extracted from `ConversationViewModel` so the decision
 /// is independently testable, ahead of the TimelineStore split.
 enum ConversationPaginationPolicy {
+    /// A tail refresh re-reads only the newest rows, so its forward edge is
+    /// authoritative only when the window had nothing to drop from the page.
+    /// Narrowing a stale-open edge is what lets a fully loaded tail stop
+    /// advertising newer rows that do not exist; keeping it open after a
+    /// dropped page avoids claiming a tail the window never ingested.
+    static func forwardEdgeAfterTailRefresh(
+        currentHasMoreAfter: Bool,
+        pageHasMoreAfter: Bool,
+        droppedNewerRecords: Bool
+    ) -> Bool {
+        guard currentHasMoreAfter else { return pageHasMoreAfter }
+        return droppedNewerRecords ? true : pageHasMoreAfter
+    }
+
     static func movedOlder(
         previousOldestMessageId: String?,
         nextMessageIds: [String]
