@@ -793,37 +793,14 @@ struct ChatsListView: View {
             isArchived: item.isArchived
         )
 
-        if actions.contains(.read) {
-            Button {
-                Task { await markRead(item) }
-            } label: {
-                Label(L10n.string("Mark as read"), systemImage: "checkmark.message")
+        ForEach(actions) { action in
+            WNSwipeActionButton(
+                title: action.title,
+                systemImage: action.systemImage,
+                tint: action.tint
+            ) {
+                perform(action, on: item)
             }
-            .tint(.blue)
-        }
-        if actions.contains(.unread) {
-            Button {
-                Task { await markUnread(item) }
-            } label: {
-                Label(L10n.string("Mark as unread"), systemImage: "envelope.badge")
-            }
-            .tint(.blue)
-        }
-        if actions.contains(.unpin) {
-            Button {
-                Task { await setPinned(item, pinned: false) }
-            } label: {
-                Label(L10n.string("Unpin"), systemImage: "pin.slash")
-            }
-            .tint(.orange)
-        }
-        if actions.contains(.pin) {
-            Button {
-                Task { await setPinned(item, pinned: true) }
-            } label: {
-                Label(L10n.string("Pin"), systemImage: "pin")
-            }
-            .tint(.orange)
         }
     }
 
@@ -836,59 +813,49 @@ struct ChatsListView: View {
             isMuted: item.isMuted
         )
 
-        if actions.contains(.unmute) {
-            Button {
-                setMuted(groupIdHex: item.id, muted: false)
-            } label: {
-                Label(L10n.string("Unmute"), systemImage: "bell.fill")
+        ForEach(actions) { action in
+            WNSwipeActionButton(
+                title: action.title,
+                systemImage: action.systemImage,
+                tint: action.tint
+            ) {
+                perform(action, on: item)
             }
-            .tint(.indigo)
         }
-        if actions.contains(.mute) {
-            Button {
-                setMuted(groupIdHex: item.id, muted: true)
-            } label: {
-                Label(L10n.string("Mute"), systemImage: "bell.slash.fill")
-            }
-            .tint(.indigo)
-        }
-        if actions.contains(.unarchive) {
-            Button {
-                Task { await setArchived(groupIdHex: item.id, archived: false) }
-            } label: {
-                Label("Unarchive", systemImage: "tray.and.arrow.up")
-            }
-            .tint(.blue)
-        }
-        if actions.contains(.delete) {
-            // A destructive-role swipe button makes SwiftUI optimistically
-            // remove the row before our confirmation dialog has resolved.
-            Button {
-                pendingSingleDelete = LocalDeleteTarget(id: item.id, title: item.title)
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            .tint(.red)
-        }
-        if actions.contains(.leave) {
-            Button {
-                let target = ChatListLeavePresentation.Target(
-                    groupIdHex: item.id,
-                    title: item.title
-                )
-                Task { await prepareLeave(target) }
-            } label: {
-                Label("Leave", systemImage: "person.crop.circle.badge.minus")
-            }
-            .tint(.red)
-        }
-        if actions.contains(.archive) {
-            Button {
-                Task { await setArchived(groupIdHex: item.id, archived: true) }
-            } label: {
-                Label("Archive", systemImage: "archivebox")
-            }
-            .tint(.gray)
+    }
+
+    @MainActor
+    private func perform(
+        _ action: ChatListSwipeAction,
+        on item: ChatsListViewModel.Item
+    ) {
+        switch action {
+        case .read:
+            Task { await markRead(item) }
+        case .unread:
+            Task { await markUnread(item) }
+        case .pin:
+            Task { await setPinned(item, pinned: true) }
+        case .unpin:
+            Task { await setPinned(item, pinned: false) }
+        case .mute:
+            setMuted(groupIdHex: item.id, muted: true)
+        case .unmute:
+            setMuted(groupIdHex: item.id, muted: false)
+        case .archive:
+            Task { await setArchived(groupIdHex: item.id, archived: true) }
+        case .unarchive:
+            Task { await setArchived(groupIdHex: item.id, archived: false) }
+        case .leave:
+            let target = ChatListLeavePresentation.Target(
+                groupIdHex: item.id,
+                title: item.title
+            )
+            Task { await prepareLeave(target) }
+        case .delete:
+            // Never give this a destructive role: SwiftUI would optimistically
+            // remove the row before the confirmation dialog has resolved.
+            pendingSingleDelete = LocalDeleteTarget(id: item.id, title: item.title)
         }
     }
 

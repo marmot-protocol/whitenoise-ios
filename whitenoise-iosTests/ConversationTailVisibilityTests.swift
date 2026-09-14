@@ -63,9 +63,16 @@ private struct TimelineTailVisibilityHarness: View {
 struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 
+    private static let settleTimeout = Duration.seconds(20)
+
+    /// Waits for the condition the caller is about to assert, rather than for
+    /// the first row to appear. A loaded CI machine can deliver `row-0` and
+    /// leave the rest of the layout, and the bottom sentinel with it, a frame
+    /// or more behind.
     private func render(
         rowCount: Int,
-        scrollsToTop: Bool
+        scrollsToTop: Bool,
+        until isSettled: (Set<String>, TimelineBottomViewport?) -> Bool
     ) async throws -> (visible: Set<String>, viewport: TimelineBottomViewport?) {
         var visible: Set<String> = []
         var viewport: TimelineBottomViewport?
@@ -88,15 +95,17 @@ struct ConversationTailVisibilityTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        for _ in 0..<120 where visible.isEmpty {
+        let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
+        while !isSettled(visible, viewport), ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(10))
         }
-        try await Task.sleep(for: .milliseconds(250))
         return (visible, viewport)
     }
 
     @Test func timelineShorterThanViewportReportsTailOnScreen() async throws {
-        let (visible, _) = try await render(rowCount: 3, scrollsToTop: false)
+        let (visible, _) = try await render(rowCount: 3, scrollsToTop: false) { visible, _ in
+            visible.contains(Self.sentinelID)
+        }
         #expect(
             visible.contains(Self.sentinelID),
             "A timeline that fits the viewport must report its tail visible. Visible: \(visible)"
@@ -109,7 +118,9 @@ struct ConversationTailVisibilityTests {
     }
 
     @Test func timelineShorterThanViewportLeavesNoDistanceToBottom() async throws {
-        let (_, viewport) = try await render(rowCount: 3, scrollsToTop: false)
+        let (_, viewport) = try await render(rowCount: 3, scrollsToTop: false) { _, viewport in
+            viewport?.distanceToBottom == 0
+        }
         let measured = try #require(viewport)
         #expect(
             measured.distanceToBottom == 0,
@@ -119,7 +130,9 @@ struct ConversationTailVisibilityTests {
     }
 
     @Test func timelineScrolledAwayFromTailDoesNotReportTailOnScreen() async throws {
-        let (visible, _) = try await render(rowCount: 60, scrollsToTop: true)
+        let (visible, _) = try await render(rowCount: 60, scrollsToTop: true) { visible, _ in
+            visible.contains("row-0") && !visible.contains(Self.sentinelID)
+        }
         #expect(
             !visible.contains(Self.sentinelID),
             "A timeline scrolled to its head must not report its tail visible. Visible: \(visible)"
