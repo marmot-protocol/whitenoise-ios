@@ -198,7 +198,6 @@ struct ComposerBar: View {
     let hasAttachments: Bool
     let audioDraft: MediaDraftAttachment?
     let preparedAttachments: [MediaDraftAttachment]
-    let giphyDraft: RemoteGiphyMedia?
     let replyPreview: ComposerReplyPreview?
     let mediaEnabled: Bool
     let disabledMessage: String?
@@ -224,7 +223,6 @@ struct ComposerBar: View {
     let onPasteImage: (UIImage) -> Void
     let onRemoveAudioDraft: (MediaDraftAttachment.ID) -> Void
     let onRemovePreparedAttachment: (MediaDraftAttachment.ID) -> Void
-    let onRemoveGiphyDraft: () -> Void
     let onPreviewPreparedMedia: (MediaDraftAttachment.ID) -> Void
     let onCancelReply: () -> Void
     let onCancelVoiceRecording: () -> Void
@@ -482,12 +480,10 @@ struct ComposerBar: View {
 
     @ViewBuilder
     private var preparedContent: some View {
-        if !preparedAttachments.isEmpty || giphyDraft != nil {
+        if !preparedAttachments.isEmpty {
             MediaDraftStrip(
                 attachments: preparedAttachments,
-                giphyDraft: giphyDraft,
                 onRemove: onRemovePreparedAttachment,
-                onRemoveGiphyDraft: onRemoveGiphyDraft,
                 onPreviewVisual: onPreviewPreparedMedia
             )
         }
@@ -599,9 +595,7 @@ struct ComposerBar: View {
     }
 
     private var hasSendableContent: Bool {
-        hasAttachments
-            || giphyDraft != nil
-            || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        hasAttachments || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var canSend: Bool {
