@@ -152,6 +152,9 @@ final class ComposerModel {
         let outgoing = ConversationViewModel.cappedOutgoingText(trimmed)
 
         let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
+        // Consumed before `parseMarkdown` suspends off the MainActor: a Send
+        // pressed in that window would otherwise inherit this send's target.
+        replyingTo = nil
         let tempId = UUID().uuidString
         timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
         let now = UInt64(Date().timeIntervalSince1970)
@@ -180,7 +183,6 @@ final class ComposerModel {
             receivedAt: now
         )
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
 
         let publish = sendQueue.enqueue { [self] in
             do {
@@ -260,6 +262,7 @@ final class ComposerModel {
         // send is in flight must invalidate the post-upload cache store.
         let uploadEpoch = MessageMediaCache.currentProducerEpoch()
 
+        replyingTo = nil
         let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
             ? .emptyDocument
             : await appState.parseMarkdown(text: outgoingCaption)
@@ -277,7 +280,6 @@ final class ComposerModel {
         )
         timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
 
         let publish = sendQueue.enqueue { [self] in
             do {

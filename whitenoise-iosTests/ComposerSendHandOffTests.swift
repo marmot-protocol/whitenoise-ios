@@ -76,6 +76,25 @@ struct ComposerSendHandOffTests {
         #expect(published.sorted() == ["first", "second"])
     }
 
+    /// The reply banner is dismissed the instant Send is pressed, so a send
+    /// started during another's preparation must not inherit the target that
+    /// press already consumed.
+    @Test func aSendStartedDuringAnothersPreparationDoesNotReuseItsReplyTarget() async {
+        composer.restoreReplyTarget(messageIdHex: hex("bb"), record: nil)
+        var replyTargets: [String?] = []
+        composer.sendTextForTesting = { _, _, replyTargetId, text in
+            replyTargets.append(replyTargetId)
+            return publishedSummary(messageId: text)
+        }
+
+        async let first: Void = composer.send("first")
+        async let second: Void = composer.send("second")
+        _ = await (first, second)
+
+        #expect(replyTargets.count == 2)
+        #expect(replyTargets.compactMap { $0 } == [hex("bb")])
+    }
+
     @Test func aSendPressedDuringAnothersRoundTripParksItsRowAndPublishesBehindIt() async {
         var publishing: [String] = []
         var firstRoundTripMayFinish = false
