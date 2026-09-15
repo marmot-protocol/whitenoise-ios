@@ -1541,7 +1541,7 @@ final class AppState {
         defer { if !created { productAnalytics.record(.onboarding(.localReady, .create, .failure), ticket: ticket) } }
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let relays = MarmotClient.seedRelays
+        let relays = lease.client.relayUrls
         let existingAccountLabels = Set(accounts.map(\.label))
         let creation = try await lease.client.marmot.createIdentityWithProfile(
             defaultRelays: relays,
@@ -1587,7 +1587,7 @@ final class AppState {
         let performance = HostActionPerformance.begin()
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let relays = MarmotClient.seedRelays
+        let relays = lease.client.relayUrls
         var snapshot: OnboardingSnapshotFfi
         do {
             let existing = try await lease.client.listAccounts()
@@ -1653,7 +1653,7 @@ final class AppState {
         let performance = HostActionPerformance.begin()
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-        let relays = MarmotClient.seedRelays
+        let relays = lease.client.relayUrls
         let summary: AccountSummaryFfi
         do {
             summary = try await lease.client.marmot.loginRecoveringIncompleteSetup(

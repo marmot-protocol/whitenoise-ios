@@ -118,10 +118,10 @@ struct RuntimeOwnershipTests {
         let client = try MarmotClient.testClient()
         do {
             try await client.startRuntime()
-            let account = try await client.marmot.createIdentity(
-                defaultRelays: MarmotClient.seedRelays,
-                bootstrapRelays: MarmotClient.seedRelays
-            )
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: client.relayUrls,
+                bootstrapRelays: client.relayUrls
+            ).account
             let created = try await client.createGroupWithOptionsDetailed(
                 accountRef: account.label,
                 name: "Local readiness",

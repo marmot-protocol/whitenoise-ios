@@ -2559,7 +2559,7 @@ struct AppStateBootstrapTests {
     }
 
     @Test func newIdentityFromFullySignedOutShellRestartsForegroundMaintenance() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities()
+        let seeded = try await readyAppStateWithCreatedIdentities(generatesFurtherIdentities: true)
         let appState = seeded.appState
         appState.activeAccountRef = seeded.accounts[0].label
 
@@ -2625,10 +2625,11 @@ struct AppStateBootstrapTests {
 
     private func testAppState(
         notifications: AppNotifications? = nil,
-        suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil
+        suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig? = nil,
+        relayUrls: [String] = MarmotClient.unreachableTestRelays
     ) throws -> AppState {
         resetPersistedActiveAccountRef()
-        let client = try MarmotClient.testClient()
+        let client = try MarmotClient.testClient(relayUrls: relayUrls)
         if let suspendedRuntimeTelemetryBuildConfig {
             return AppState(
                 client: client,
@@ -2646,21 +2647,21 @@ struct AppStateBootstrapTests {
 
     private func readyAppStateWithCreatedIdentities(
         accountCount: Int = 1,
+        generatesFurtherIdentities: Bool = false,
         notifications: AppNotifications? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
-        let appState = try testAppState(notifications: notifications)
+        let needsPublication = accountCount > 1 || generatesFurtherIdentities
+        let appState = try testAppState(
+            notifications: notifications,
+            relayUrls: needsPublication ? MarmotClient.seedRelays : MarmotClient.unreachableTestRelays
+        )
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
         var accounts: [AccountSummaryFfi] = []
         for index in 0..<accountCount {
             let account = try await appState.createIdentity()
             accounts.append(account)
-            if index + 1 < accountCount {
-                // The production API now returns at local readiness. MDK
-                // intentionally coalesces another generated-identity request
-                // until this background publication finishes, so wait for its
-                // local readiness projection before asking for an independent
-                // second test account.
+            if index + 1 < accountCount || generatesFurtherIdentities {
                 try await waitForGeneratedAccountNetworkReadiness(
                     appState: appState,
                     accountRef: account.label
@@ -2676,8 +2677,12 @@ struct AppStateBootstrapTests {
         accountRef: String
     ) async throws {
         let marmot = try #require(appState.client?.marmot)
-        for _ in 0..<300 {
-            switch try marmot.accountSetupReadiness(accountRef: accountRef) {
+        let polls = 300
+        var lastState = "never read"
+        for _ in 0..<polls {
+            let readiness = try marmot.accountSetupReadiness(accountRef: accountRef)
+            lastState = String(describing: readiness)
+            switch readiness {
             case .networkReady:
                 return
             case .recoveryRequired:
@@ -2686,7 +2691,7 @@ struct AppStateBootstrapTests {
                 try await Task.sleep(for: .milliseconds(100))
             }
         }
-        throw MarmotKitError.AccountSetupRetryRequired
+        throw GeneratedAccountReadinessTimeout(accountRef: accountRef, lastState: lastState, polls: polls)
     }
 
     private func deniedNotifications(
@@ -5658,10 +5663,10 @@ struct NotificationServiceProjectionTests {
         let client = try MarmotClient.testClient()
         do {
             try await client.startRuntime()
-            let account = try await client.marmot.createIdentity(
-                defaultRelays: MarmotClient.seedRelays,
-                bootstrapRelays: MarmotClient.seedRelays
-            )
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: client.relayUrls,
+                bootstrapRelays: client.relayUrls
+            ).account
             let expected = try await client.notificationSettings(accountRef: account.label)
 
             let enabled = await NotificationServiceStorageReader.localNotificationsEnabled(
@@ -14977,6 +14982,17 @@ private func waitForExpectation(
     #expect(predicate())
 }
 
+private struct GeneratedAccountReadinessTimeout: Error, CustomStringConvertible {
+    let accountRef: String
+    let lastState: String
+    let polls: Int
+
+    var description: String {
+        "Generated account \(accountRef) never reached network readiness: "
+            + "\(polls) polls, last observed readiness \(lastState)."
+    }
+}
+
 private actor AsyncTestCheckpoint {
     private var isPaused = false
     private var isReleased = false
@@ -15044,14 +15060,16 @@ private actor AsyncTestGate {
 }
 
 extension MarmotClient {
+    static let unreachableTestRelays = ["wss://relay.invalid.test"]
+
     /// Builds a MarmotClient pointed at a unique temp directory so unit tests
     /// stay hermetic. Falls back to the production root only if the temp dir
     /// can't be created (which would itself be a test environment problem).
-    static func testClient() throws -> MarmotClient {
+    static func testClient(relayUrls: [String] = unreachableTestRelays) throws -> MarmotClient {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("MarmotTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
-        return try MarmotClient(rootPath: tmp.path, relayUrls: ["wss://relay.invalid.test"])
+        return try MarmotClient(rootPath: tmp.path, relayUrls: relayUrls)
     }
 }
 
