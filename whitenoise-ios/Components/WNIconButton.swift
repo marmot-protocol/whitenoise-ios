@@ -60,7 +60,7 @@ private extension View {
     @ViewBuilder
     func wnIconButtonStyle(_ emphasis: WNButton.Emphasis) -> some View {
         switch emphasis {
-        case .primary:
+        case .primary, .destructive:
             wnPrimaryButtonStyle()
         case .secondary:
             wnSecondaryButtonStyle(.circle)

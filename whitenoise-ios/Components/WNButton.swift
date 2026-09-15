@@ -4,12 +4,18 @@ struct WNButton: View {
     nonisolated enum Emphasis: Equatable {
         case primary
         case secondary
+        /// A filled red action that destroys data. Carries `ButtonRole` so the
+        /// intent survives for assistive technology, not just the fill.
+        case destructive
     }
 
     /// `large` is the full-width call to action at the bottom of a screen.
+    /// `standard` is full width too but one step shorter, for an action that
+    /// sits inside a `Form` section rather than under the whole screen.
     /// `compact` hugs its label so the same chrome fits a toolbar or a row.
     nonisolated enum Size: Equatable {
         case large
+        case standard
         case compact
     }
 
@@ -32,11 +38,27 @@ struct WNButton: View {
                 return colorScheme == .dark ? .black : .white
             case .secondary:
                 return accent(for: colorScheme)
+            case .destructive:
+                // The red fill does not flip with the scheme, so the label
+                // cannot either without losing contrast in one of them.
+                return .white
             }
         }
 
+        static func tint(for emphasis: Emphasis, colorScheme: ColorScheme) -> Color {
+            emphasis == .destructive ? .red : accent(for: colorScheme)
+        }
+
         static func controlSize(for size: Size) -> ControlSize {
-            size == .large ? .extraLarge : .regular
+            switch size {
+            case .large: .extraLarge
+            case .standard: .large
+            case .compact: .regular
+            }
+        }
+
+        static func role(for emphasis: Emphasis) -> ButtonRole? {
+            emphasis == .destructive ? .destructive : nil
         }
 
         /// A compact secondary button is a toolbar item, and an iOS 26 toolbar
@@ -47,10 +69,10 @@ struct WNButton: View {
             !(emphasis == .secondary && size == .compact)
         }
 
-        /// Only the large size claims the full width; a compact button in a
-        /// toolbar has to stay as wide as its title.
+        /// Both full-width sizes claim the whole row; only a compact button,
+        /// which lives in a toolbar, stays as wide as its title.
         static func stretches(_ size: Size) -> Bool {
-            size == .large
+            size != .compact
         }
     }
 
@@ -71,7 +93,7 @@ struct WNButton: View {
             isEnabled: isEnabled
         )
 
-        return Button(action: action) {
+        return Button(role: Metrics.role(for: emphasis), action: action) {
             ZStack {
                 WNButtonTitle(title: title, systemImage: systemImage)
                     .opacity(isLoading ? 0 : 1)
@@ -148,7 +170,10 @@ extension View {
         _ emphasis: WNButton.Emphasis,
         colorScheme: ColorScheme
     ) -> some View {
-        if #available(iOS 26.0, *), emphasis == .secondary {
+        if emphasis == .destructive {
+            // Glass does not carry "this deletes your data"; the red does.
+            tint(.red)
+        } else if #available(iOS 26.0, *), emphasis == .secondary {
             self
         } else {
             tint(WNButton.Metrics.accent(for: colorScheme))
@@ -187,7 +212,7 @@ extension View {
             self
         } else {
             switch emphasis {
-            case .primary:
+            case .primary, .destructive:
                 wnPrimaryButtonStyle()
             case .secondary:
                 wnSecondaryButtonStyle()
@@ -256,6 +281,17 @@ extension View {
     }
     .safeAreaPadding(.horizontal)
     .preferredColorScheme(.dark)
+}
+
+#Preview("WNButton — Destructive") {
+    VStack(spacing: 16) {
+        WNButton(title: "Sign Out", emphasis: .destructive, size: .standard) {}
+        WNButton(title: "Sign Out", emphasis: .destructive, size: .standard, isLoading: true) {}
+        WNButton(title: "Sign Out", emphasis: .destructive, size: .standard) {}
+            .disabled(true)
+        WNButton(title: "Erase", emphasis: .destructive) {}
+    }
+    .safeAreaPadding(.horizontal)
 }
 
 #Preview("WNButton — Compact") {

@@ -343,8 +343,8 @@ private struct AccountActionsSheet: View {
                         WNInput(
                             placeholder: L10n.string("Profile name"),
                             text: $confirmation,
+                            fill: WNInputMetrics.groupedFill,
                             submitLabel: .done,
-                            showsClear: true,
                             focus: $confirmationFocused
                         )
                         .wnInputRow()
@@ -356,14 +356,13 @@ private struct AccountActionsSheet: View {
                 }
                 if let error { Text(error).foregroundStyle(.orange) }
                 Section {
-                    Button(role: .destructive) { signOut() } label: {
-                        HStack {
-                            if isBusy { ProgressView() }
-                            Text(isBusy ? (shouldWipeData ? "Signing out and wiping data…" : "Signing out…") : "Sign Out")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent).controlSize(.large).tint(.red)
+                    WNButton(
+                        title: busyTitle,
+                        emphasis: .destructive,
+                        size: .standard,
+                        isLoading: isBusy,
+                        action: signOut
+                    )
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                     .disabled(!ProfileExitConfirmation.canSignOut(
                         wiping: shouldWipeData, input: confirmation, profileName: profileName,
@@ -376,8 +375,14 @@ private struct AccountActionsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Close").disabled(isBusy)
+                    WNIconButton(
+                        title: "Close",
+                        systemImage: "xmark",
+                        chrome: .container
+                    ) {
+                        dismiss()
+                    }
+                    .disabled(isBusy)
                 }
             }
         }
@@ -396,6 +401,13 @@ private struct AccountActionsSheet: View {
                 profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
             }
         }
+    }
+
+    /// The spinner hides the label, but it stays in the hierarchy for
+    /// VoiceOver, so the busy wording still has to be accurate.
+    private var busyTitle: LocalizedStringKey {
+        guard isBusy else { return "Sign Out" }
+        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
     }
 
     @ViewBuilder
