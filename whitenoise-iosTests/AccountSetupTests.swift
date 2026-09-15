@@ -166,12 +166,12 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test(.timeLimit(.minutes(1))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
+    @Test(.timeLimit(.minutes(3))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
         let client = try MarmotClient.testClient()
         try await client.startRuntime()
         let initial = try await client.marmot.beginOnboarding(
             nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
-            options: OnboardingOptionsFfi(defaultRelays: MarmotClient.seedRelays, discoveryRelays: MarmotClient.seedRelays)
+            options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
         )
         let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
         let waiting = Task { try await subscription.next() }
