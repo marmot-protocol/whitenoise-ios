@@ -251,7 +251,7 @@ struct RecipientSearchTests {
     }
 
     @MainActor
-    @Test(arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
+    @Test(.timeLimit(.minutes(1)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
     func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async {
         let model = RecipientUserSearch()
         let follows = RecipientSearchFollowsGate()
@@ -280,9 +280,7 @@ struct RecipientSearchTests {
         }
 
         await follows.waitUntilStarted()
-        await waitForRecipientSearch {
-            model.results == [result] && !model.isSearching
-        }
+        await model.awaitSearchForTesting()
 
         #expect(model.results == [result])
         #expect(!model.isSearching)
@@ -298,7 +296,8 @@ struct RecipientSearchTests {
     }
 
     @MainActor
-    @Test func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async {
+    @Test(.timeLimit(.minutes(1)))
+    func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async {
         let cached = searchResult(alice, radius: 1, field: .name, quality: .exact)
         var replacement = cached
         replacement.radius = 2
@@ -313,7 +312,8 @@ struct RecipientSearchTests {
         model.updateForTesting(query: "alice") {
             RecipientUserSearchOperations(searchUsers: { subscription }, accountFollows: { [] })
         }
-        await waitForRecipientSearch { !model.isSearching && model.results == [replacement] }
+        await model.awaitSearchForTesting()
+        #expect(!model.isSearching)
         #expect(model.results == [replacement])
         #expect(model.candidates.first?.isFollowedBySearcher == true)
         model.setFollowStatus(accountIdHex: alice, isFollowing: false)

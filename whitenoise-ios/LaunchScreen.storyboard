@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="launch-controller">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24504"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <scene sceneID="launch-scene">
+            <objects>
+                <viewController id="launch-controller" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-background">
+                        <rect key="frame" x="0.0" y="0.0" width="402" height="874"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="WhiteNoiseMark" translatesAutoresizingMaskIntoConstraints="NO" id="launch-mark">
+                                <rect key="frame" x="100.5" y="315.9923076923" width="201" height="154.6153846154"/>
+                                <constraints>
+                                    <constraint firstAttribute="width" secondItem="launch-mark" secondAttribute="height" multiplier="598:460" id="mark-aspect"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="launch-mark" firstAttribute="centerX" secondItem="launch-background" secondAttribute="centerX" id="mark-center-x"/>
+                            <constraint firstItem="launch-mark" firstAttribute="centerY" secondItem="launch-background" secondAttribute="centerY" multiplier="0.9" id="mark-center-y"/>
+                            <constraint firstItem="launch-mark" firstAttribute="width" secondItem="launch-background" secondAttribute="width" multiplier="0.5" priority="999" id="mark-width"/>
+                            <constraint firstItem="launch-mark" firstAttribute="height" relation="lessThanOrEqual" secondItem="launch-background" secondAttribute="height" multiplier="0.3" id="mark-height-limit"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="launch-responder" sceneMemberID="firstResponder"/>
+            </objects>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="WhiteNoiseMark" width="598" height="460"/>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+    </resources>
+</document>

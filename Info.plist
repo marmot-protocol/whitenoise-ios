@@ -24,15 +24,8 @@
 	<array>
 		<string>INSendMessageIntent</string>
 	</array>
-	<key>UILaunchScreen</key>
-	<dict>
-		<key>UIColorName</key>
-		<string>LaunchBackground</string>
-		<key>UIImageName</key>
-		<string>WnLogo</string>
-		<key>UIImageRespectsSafeAreaInsets</key>
-		<true/>
-	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
 	<key>WNFlavor</key>
 	<string>$(WN_FLAVOR)</string>
 	<key>WNLegacyURLScheme</key>
