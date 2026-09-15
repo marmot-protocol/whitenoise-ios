@@ -13,6 +13,7 @@ struct WelcomeView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var sheetRoute: SheetRoute?
     @State private var showSignIn = false
@@ -37,35 +38,43 @@ struct WelcomeView: View {
         colorScheme == .dark ? .white : .black
     }
 
+    private var actionLayout: AnyLayout {
+        verticalSizeClass == .compact ? AnyLayout(HStackLayout()) : AnyLayout(VStackLayout())
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
 
-            Image("WhiteNoiseMark")
-                .resizable()
-                .scaledToFit()
-                .containerRelativeFrame(.horizontal, count: 2, span: 1, spacing: 0)
-                .accessibilityLabel("White Noise")
+                ScrollView {
+                    actionLayout {
+                        WNButton(title: "Sign In", emphasis: .secondary) {
+                            open(.signIn)
+                        }
+                        .accessibilityIdentifier("welcome.sign-in")
 
-            Spacer()
-
-            VStack {
-                WNButton(title: "Sign In", emphasis: .secondary) {
-                    open(.signIn)
+                        WNButton(title: "Sign Up") {
+                            open(.signUp)
+                        }
+                        .accessibilityIdentifier("welcome.sign-up")
+                    }
+                    .padding(.vertical, 4)
                 }
-                .accessibilityIdentifier("welcome.sign-in")
-
-                WNButton(title: "Sign Up") {
-                    open(.signUp)
-                }
-                .accessibilityIdentifier("welcome.sign-up")
+                .defaultScrollAnchor(.bottom, for: .alignment)
+                .defaultScrollAnchor(.top, for: .sizeChanges)
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(height: geometry.size.height * 0.3)
             }
+            .safeAreaPadding(.horizontal)
+            .safeAreaPadding(.bottom)
         }
-        .safeAreaPadding(.horizontal)
-        .safeAreaPadding(.bottom)
         .background {
-            Color(.systemBackground)
+            LaunchBrandView()
                 .ignoresSafeArea()
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("White Noise")
+                .accessibilitySortPriority(1)
         }
         .tint(accentColor)
         .navigationDestination(isPresented: $showSignIn) {

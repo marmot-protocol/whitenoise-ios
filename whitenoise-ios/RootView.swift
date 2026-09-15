@@ -83,12 +83,9 @@ struct RootView: View {
 
 private struct BootstrapSplash: View {
     var body: some View {
-        ZStack {
-            Color(.systemBackground)
-                .ignoresSafeArea()
-            Image("WnLogo")
-                .accessibilityHidden(true)
-        }
+        LaunchBrandView()
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
     }
 }
 
