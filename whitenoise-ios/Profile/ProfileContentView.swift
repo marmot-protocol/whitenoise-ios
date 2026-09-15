@@ -584,7 +584,7 @@ struct ProfileContentView: View {
         CopyableValueChip(
             display: IdentityFormatter.short(displayReference, head: 12, tail: 10),
             copyValue: displayReference,
-            copiedToastTitle: L10n.string("npub")
+            valueName: L10n.string("npub")
         )
     }
 
