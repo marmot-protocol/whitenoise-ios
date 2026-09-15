@@ -324,6 +324,7 @@ private struct AccountActionsSheet: View {
     @State private var profileRef: String?
     @State private var profileName = ""
     @State private var error: String?
+    @FocusState private var confirmationFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -339,8 +340,14 @@ private struct AccountActionsSheet: View {
                 }
                 if shouldWipeData {
                     Section {
-                        TextField("Profile name", text: $confirmation)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        WNInput(
+                            placeholder: L10n.string("Profile name"),
+                            text: $confirmation,
+                            submitLabel: .done,
+                            showsClear: true,
+                            focus: $confirmationFocused
+                        )
+                        .wnInputRow()
                     } header: {
                         Text("Enter Profile Name").wnSectionHeader()
                     } footer: {
@@ -376,6 +383,13 @@ private struct AccountActionsSheet: View {
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(isBusy)
+        .onChange(of: shouldWipeData) { _, wiping in
+            guard !wiping else { return }
+            // The field is removed from the hierarchy here, so focus has to be
+            // surrendered explicitly or the keyboard outlives its input.
+            confirmationFocused = false
+            confirmation = ""
+        }
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
