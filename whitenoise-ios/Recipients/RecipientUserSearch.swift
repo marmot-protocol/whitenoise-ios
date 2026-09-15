@@ -91,6 +91,10 @@ final class RecipientUserSearch {
         startRequest(query: query, debounce: debounce, makeOperations: makeOperations)
     }
 
+    func awaitSearchForTesting() async {
+        await task?.value
+    }
+
     private func startRequest(
         query: String,
         debounce: Duration,
