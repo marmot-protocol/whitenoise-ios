@@ -100,8 +100,11 @@ Keep copy calm, direct, and useful, following Apple's
   again. Distinguish required corrections from usability improvements and optional
   polish; report evidence, user impact, and an observable expected result.
 - Follow the existing validation guidance and relevant [manual tests](manual-tests.md).
-  Put screenshots and validation notes in the PR description. Do not create
-  per-change Markdown reports or screenshot READMEs in the repository.
+  Upload screenshots directly as PR attachments and embed them in the PR
+  description alongside validation notes. Do not commit review screenshots to
+  Git or create per-change Markdown reports or screenshot READMEs in the
+  repository. Keep temporary captures in an ignored local directory. If direct
+  attachment upload is unavailable, report it rather than committing images.
   Include concise before/after evidence for visual changes and identify the build,
   device/OS, and states inspected. State what remains unverified, including any
   device or assistive-technology checks. A build or unit-test pass alone is not
