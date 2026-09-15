@@ -194,6 +194,35 @@ struct InteractivePopGestureEnablerTests {
         #expect(outcomes.isEmpty)
     }
 
+    @Test func movingTheAttachmentToANewStackHandsTheOldRecognizerBack() throws {
+        let (firstWindow, firstNavigation, firstPushed) = try makeStack()
+        let (secondWindow, secondNavigation, secondPushed) = try makeStack()
+        defer {
+            firstWindow.isHidden = true
+            secondWindow.isHidden = true
+        }
+
+        let firstRecognizer = try #require(firstNavigation.interactivePopGestureRecognizer)
+        let secondRecognizer = try #require(secondNavigation.interactivePopGestureRecognizer)
+        let firstSystemDelegate = firstRecognizer.delegate
+
+        let controller = InteractivePopGestureController(onBegin: { 1 }, onFinish: { _, _ in })
+        let attachment = InteractivePopGestureAttachmentView()
+        attachment.controller = controller
+        firstPushed.view.addSubview(attachment)
+        firstWindow.layoutIfNeeded()
+        attachment.resolveNavigationController()
+        #expect(firstRecognizer.delegate === controller)
+
+        secondPushed.view.addSubview(attachment)
+        secondWindow.layoutIfNeeded()
+        attachment.resolveNavigationController()
+
+        #expect(secondRecognizer.delegate === controller)
+        #expect(firstRecognizer.delegate === firstSystemDelegate)
+        #expect(controller.gestureRecognizerShouldBegin(secondRecognizer))
+    }
+
     @Test func aSecondBeginKeepsTheEpochTheScreenIsStillHolding() throws {
         let (window, navigation, pushed) = try makeStack()
         defer { window.isHidden = true }
@@ -209,7 +238,7 @@ struct InteractivePopGestureEnablerTests {
         let recognizer = try #require(navigation.interactivePopGestureRecognizer)
         #expect(controller.gestureRecognizerShouldBegin(recognizer))
         // The screen refuses the second begin, so the epoch must not move.
-        #expect(controller.gestureRecognizerShouldBegin(recognizer))
+        #expect(!controller.gestureRecognizerShouldBegin(recognizer))
         controller.completeTransition(isCancelled: true)
 
         #expect(outcomes.count == 1)

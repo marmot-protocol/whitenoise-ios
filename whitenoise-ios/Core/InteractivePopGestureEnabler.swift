@@ -63,13 +63,15 @@ final class InteractivePopGestureController: NSObject, UIGestureRecognizerDelega
         guard let controller,
               let recognizer = controller.interactivePopGestureRecognizer
         else { return }
+        if let trackedRecognizer, trackedRecognizer !== recognizer {
+            restore()
+        }
         if recognizer.delegate !== self {
             navigationController = controller
             originalDelegate = recognizer.delegate
             recognizer.delegate = self
         }
         if trackedRecognizer !== recognizer {
-            trackedRecognizer?.removeTarget(self, action: nil)
             recognizer.addTarget(self, action: #selector(popGestureDidChange))
             trackedRecognizer = recognizer
         }
@@ -97,10 +99,8 @@ final class InteractivePopGestureController: NSObject, UIGestureRecognizerDelega
             stackDepth: navigationController.viewControllers.count,
             isTransitioning: navigationController.transitionCoordinator != nil
         )
-        guard shouldBegin else { return false }
-        if let epoch = onBegin() {
-            activeEpoch = epoch
-        }
+        guard shouldBegin, let epoch = onBegin() else { return false }
+        activeEpoch = epoch
         isAwaitingTransition = true
         return true
     }

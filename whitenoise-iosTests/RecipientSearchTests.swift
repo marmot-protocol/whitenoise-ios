@@ -489,18 +489,25 @@ private actor RecipientSearchFollowsGate {
 @MainActor
 private func waitForRecipientSearch(
     timeout: Duration = .seconds(10),
+    minimumSchedulingOpportunities: Int = 400,
+    interval: Duration = .milliseconds(5),
     sourceLocation: SourceLocation = #_sourceLocation,
     condition: () -> Bool
 ) async {
     let clock = ContinuousClock()
     let deadline = clock.now.advanced(by: timeout)
-    while clock.now < deadline {
+    var schedulingOpportunities = 0
+    while schedulingOpportunities < minimumSchedulingOpportunities || clock.now < deadline {
         if condition() { return }
-        try? await Task.sleep(for: .milliseconds(5))
+        schedulingOpportunities += 1
+        try? await Task.sleep(for: interval)
     }
     if condition() { return }
     Issue.record(
-        "recipient search condition never became true within \(timeout)",
+        """
+        recipient search condition never became true within \(timeout) \
+        or \(schedulingOpportunities) main-actor scheduling opportunities
+        """,
         sourceLocation: sourceLocation
     )
 }

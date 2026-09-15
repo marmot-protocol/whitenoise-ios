@@ -64,6 +64,7 @@ struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 
     private static let settleTimeout = Duration.seconds(20)
+    private static let minimumSettleSchedulingOpportunities = 400
 
     /// Waits for the condition the caller is about to assert, rather than for
     /// the first row to appear. A loaded CI machine can deliver `row-0` and
@@ -72,6 +73,7 @@ struct ConversationTailVisibilityTests {
     private func render(
         rowCount: Int,
         scrollsToTop: Bool,
+        sourceLocation: SourceLocation = #_sourceLocation,
         until isSettled: (Set<String>, TimelineBottomViewport?) -> Bool
     ) async throws -> (visible: Set<String>, viewport: TimelineBottomViewport?) {
         var visible: Set<String> = []
@@ -96,8 +98,22 @@ struct ConversationTailVisibilityTests {
         defer { window.isHidden = true }
 
         let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
-        while !isSettled(visible, viewport), ContinuousClock.now < deadline {
+        var schedulingOpportunities = 0
+        while !isSettled(visible, viewport),
+              schedulingOpportunities < Self.minimumSettleSchedulingOpportunities
+                || ContinuousClock.now < deadline {
+            schedulingOpportunities += 1
             try await Task.sleep(for: .milliseconds(10))
+        }
+        if !isSettled(visible, viewport) {
+            Issue.record(
+                """
+                timeline harness never settled within \(Self.settleTimeout) or \
+                \(schedulingOpportunities) main-actor scheduling opportunities. \
+                Visible: \(visible.sorted())
+                """,
+                sourceLocation: sourceLocation
+            )
         }
         return (visible, viewport)
     }
