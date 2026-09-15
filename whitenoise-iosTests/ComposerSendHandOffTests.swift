@@ -140,12 +140,16 @@ struct ComposerSendHandOffTests {
         async let second: Void = composer.send("second")
         _ = await (first, second)
 
-        let statuses = Set(timelineStore.timeline.compactMap { item -> MessageStatus? in
-            guard case .message(_, let status) = item.kind else { return nil }
-            return status
-        })
+        // Keyed by plaintext, not row order: the stub throws on the text, but
+        // which send reaches it first is not ordered.
+        let statusByText = timelineStore.timeline.reduce(into: [String: MessageStatus]()) { statuses, item in
+            guard case .message(let record, let status) = item.kind else { return }
+            statuses[record.plaintext] = status
+        }
         #expect(publishedTexts == ["second"])
-        #expect(statuses == [.failed, .sent])
+        #expect(timelineStore.timeline.count == 2)
+        #expect(statusByText["first"] == .failed)
+        #expect(statusByText["second"] == .sent)
         #expect(surfacedErrors.count == 1)
     }
 }
