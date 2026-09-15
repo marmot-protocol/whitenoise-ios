@@ -60,6 +60,646 @@
         }
       }
     },
+    "Automatically gathers and uploads feature activity and telemetry metrics for every profile on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erfasst Funktionsaktivitäten und Telemetriemesswerte für alle Profile auf diesem Gerät und lädt sie automatisch hoch."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically gathers and uploads feature activity and telemetry metrics for every profile on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recopila y sube automáticamente la actividad de funciones y las métricas de telemetría de todos los perfiles de este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collecte et envoie automatiquement l’activité des fonctionnalités et les mesures de télémétrie pour tous les profils de cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raccoglie e carica automaticamente l’attività delle funzionalità e le metriche di telemetria per tutti i profili su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coleta e envia automaticamente a atividade dos recursos e as métricas de telemetria de todos os perfis neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автоматически собирает и отправляет данные об использовании функций и показатели телеметрии для всех профилей на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazdaki tüm profillerin özellik etkinliğini ve telemetri ölçümlerini otomatik olarak toplar ve yükler."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动收集并上传此设备上所有个人资料的功能活动和遥测指标。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動收集並上傳此裝置上所有個人檔案的功能活動與遙測指標。"
+          }
+        }
+      }
+    },
+    "Automatically gathers and uploads technical logs about groups for every profile on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erfasst technische Protokolle über Gruppen für alle Profile auf diesem Gerät und lädt sie automatisch hoch."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically gathers and uploads technical logs about groups for every profile on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recopila y sube automáticamente registros técnicos sobre grupos de todos los perfiles de este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collecte et envoie automatiquement des journaux techniques sur les groupes pour tous les profils de cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raccoglie e carica automaticamente log tecnici sui gruppi per tutti i profili su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coleta e envia automaticamente registros técnicos sobre grupos de todos os perfis neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Автоматически собирает и отправляет технические журналы о группах для всех профилей на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu cihazdaki tüm profiller için gruplarla ilgili teknik günlükleri otomatik olarak toplar ve yükler."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动收集并上传此设备上所有个人资料的群组相关技术日志。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自動收集並上傳此裝置上所有個人檔案的群組相關技術記錄。"
+          }
+        }
+      }
+    },
+    "Clearing diagnostic logs deletes logs from this device only. It does not delete copies already uploaded to White Noise servers or turn off recording and automatic uploads." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Löschen der Diagnoseprotokolle werden nur die Protokolle auf diesem Gerät gelöscht. Bereits auf White Noise-Server hochgeladene Kopien werden dadurch nicht gelöscht. Auch die Aufzeichnung und automatische Uploads werden dadurch nicht deaktiviert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clearing diagnostic logs deletes logs from this device only. It does not delete copies already uploaded to White Noise servers or turn off recording and automatic uploads."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al borrar los registros de diagnóstico, solo se eliminan los registros de este dispositivo. No se eliminan las copias ya subidas a los servidores de White Noise ni se desactivan la recopilación de registros y las subidas automáticas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’effacement des journaux de diagnostic supprime uniquement les journaux de cet appareil. Il ne supprime pas les copies déjà envoyées aux serveurs de White Noise et ne désactive ni l’enregistrement ni les envois automatiques."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cancellazione dei log diagnostici elimina solo i log presenti su questo dispositivo. Non elimina le copie già caricate sui server di White Noise e non disattiva la registrazione né i caricamenti automatici."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limpar os registros de diagnóstico exclui apenas os registros deste dispositivo. Isso não exclui as cópias já enviadas aos servidores do White Noise nem desativa a gravação e os envios automáticos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистка журналов диагностики удаляет журналы только с этого устройства. Она не удаляет копии, уже отправленные на серверы White Noise, и не отключает запись и автоматическую отправку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tanılama günlüklerini temizlemek yalnızca bu cihazdaki günlükleri siler. White Noise sunucularına zaten yüklenmiş kopyaları silmez; kayıt işlemini veya otomatik yüklemeleri kapatmaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除诊断日志只会删除此设备上的日志，不会删除已上传至 White Noise 服务器的副本，也不会关闭日志记录或自动上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除診斷記錄只會刪除此裝置上的記錄，不會刪除已上傳至 White Noise 伺服器的副本，也不會關閉記錄功能或自動上傳。"
+          }
+        }
+      }
+    },
+    "Enabling group diagnostic log sharing may upload logs already stored on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn du das Teilen von Gruppendiagnoseprotokollen aktivierst, können auch bereits auf diesem Gerät gespeicherte Protokolle hochgeladen werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabling group diagnostic log sharing may upload logs already stored on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al activar el envío de registros de diagnóstico de grupos, es posible que se suban registros ya almacenados en este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’activation du partage des journaux de diagnostic des groupes peut entraîner l’envoi de journaux déjà stockés sur cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’attivazione della condivisione dei log diagnostici dei gruppi può comportare il caricamento di log già memorizzati su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ativar o compartilhamento de registros de diagnóstico de grupos pode enviar registros já armazenados neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "При включении отправки журналов диагностики групп могут быть отправлены журналы, уже сохранённые на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup tanılama günlüğü paylaşımını açmak, bu cihazda zaten kayıtlı olan günlüklerin yüklenmesine neden olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用群组诊断日志共享后，此设备上已存储的日志也可能被上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "啟用群組診斷記錄分享後，此裝置上已儲存的記錄也可能會被上傳。"
+          }
+        }
+      }
+    },
+    "Feature activity and telemetry data include feature usage counts and app performance metrics. Usage data uses temporary session identifiers, and telemetry uses a resettable installation identifier. Neither includes account or group identifiers." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daten zu Funktionsaktivitäten und Telemetrie umfassen Nutzungshäufigkeiten von Funktionen und Messwerte zur App-Leistung. Nutzungsdaten verwenden temporäre Sitzungskennungen, Telemetriedaten eine zurücksetzbare Installationskennung. Beide enthalten keine Konto- oder Gruppenkennungen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feature activity and telemetry data include feature usage counts and app performance metrics. Usage data uses temporary session identifiers, and telemetry uses a resettable installation identifier. Neither includes account or group identifiers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos de actividad de funciones y telemetría incluyen recuentos de uso de funciones y métricas de rendimiento de la app. Los datos de uso emplean identificadores de sesión temporales, y la telemetría utiliza un identificador de instalación que se puede restablecer. Ninguno incluye identificadores de cuentas o grupos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données d’activité des fonctionnalités et de télémétrie comprennent les nombres d’utilisations des fonctionnalités et les mesures de performance de l’app. Les données d’utilisation emploient des identifiants de session temporaires, et la télémétrie utilise un identifiant d’installation réinitialisable. Aucune de ces données ne contient d’identifiants de comptes ou de groupes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dati sull’attività delle funzionalità e la telemetria includono conteggi di utilizzo delle funzionalità e metriche sulle prestazioni dell’app. I dati di utilizzo impiegano identificatori di sessione temporanei, mentre la telemetria utilizza un identificatore di installazione reimpostabile. Nessuno dei due include identificatori di account o gruppi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os dados de atividade dos recursos e de telemetria incluem contagens de uso dos recursos e métricas de desempenho do app. Os dados de uso utilizam identificadores temporários de sessão, e a telemetria usa um identificador de instalação que pode ser redefinido. Nenhum deles inclui identificadores de contas ou grupos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные об использовании функций и телеметрия включают количество использований функций и показатели производительности приложения. Для данных об использовании применяются временные идентификаторы сеансов, а для телеметрии — сбрасываемый идентификатор установки. Ни те, ни другие не содержат идентификаторов аккаунтов или групп."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Özellik etkinliği ve telemetri verileri, özellik kullanım sayılarını ve uygulama performans ölçümlerini içerir. Kullanım verileri geçici oturum tanımlayıcıları, telemetri ise sıfırlanabilir bir kurulum tanımlayıcısı kullanır. İkisi de hesap veya grup tanımlayıcıları içermez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能活动和遥测数据包括功能使用次数及应用性能指标。使用情况数据使用临时会话标识符，遥测数据则使用可重置的安装标识符。两者均不包含账号或群组标识符。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "功能活動與遙測資料包含功能使用次數及 App 效能指標。使用情況資料使用暫時的工作階段識別碼，遙測資料則使用可重設的安裝識別碼。兩者均不包含帳號或群組識別碼。"
+          }
+        }
+      }
+    },
+    "Group diagnostic logs are deleted from our servers after 30 days, telemetry after 90 days, and product analytics after 180 days." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppendiagnoseprotokolle werden nach 30 Tagen von unseren Servern gelöscht, Telemetriedaten nach 90 Tagen und Produktanalysedaten nach 180 Tagen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group diagnostic logs are deleted from our servers after 30 days, telemetry after 90 days, and product analytics after 180 days."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los registros de diagnóstico de grupos se eliminan de nuestros servidores después de 30 días, la telemetría después de 90 días y los datos de análisis del producto después de 180 días."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les journaux de diagnostic des groupes sont supprimés de nos serveurs après 30 jours, la télémétrie après 90 jours et les données d’analyse du produit après 180 jours."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I log diagnostici dei gruppi vengono eliminati dai nostri server dopo 30 giorni, la telemetria dopo 90 giorni e i dati di analisi del prodotto dopo 180 giorni."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os registros de diagnóstico de grupos são excluídos dos nossos servidores após 30 dias, a telemetria após 90 dias e os dados de análise do produto após 180 dias."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Журналы диагностики групп удаляются с наших серверов через 30 дней, телеметрия — через 90 дней, а данные продуктовой аналитики — через 180 дней."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup tanılama günlükleri 30 gün, telemetri verileri 90 gün ve ürün analizi verileri 180 gün sonra sunucularımızdan silinir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群组诊断日志会在 30 天后、遥测数据会在 90 天后、产品分析数据会在 180 天后从我们的服务器中删除。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群組診斷記錄會在 30 天後、遙測資料會在 90 天後、產品分析資料會在 180 天後從我們的伺服器刪除。"
+          }
+        }
+      }
+    },
+    "Group diagnostic logs help investigate group reliability and consistency. They include technical identifiers, timestamps, and membership changes, using hashed references instead of member identities. They never contain message contents, profile names, group names, or private keys." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppendiagnoseprotokolle helfen dabei, die Zuverlässigkeit und Konsistenz von Gruppen zu untersuchen. Sie enthalten technische Kennungen, Zeitstempel und Änderungen der Mitgliedschaft. Statt der Identitäten von Mitgliedern werden gehashte Referenzen verwendet. Sie enthalten niemals Nachrichteninhalte, Profilnamen, Gruppennamen oder private Schlüssel."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group diagnostic logs help investigate group reliability and consistency. They include technical identifiers, timestamps, and membership changes, using hashed references instead of member identities. They never contain message contents, profile names, group names, or private keys."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los registros de diagnóstico de grupos ayudan a investigar la fiabilidad y coherencia de los grupos. Incluyen identificadores técnicos, marcas de tiempo y cambios en la composición de los grupos, y utilizan referencias derivadas mediante hash en lugar de las identidades de los miembros. Nunca contienen contenido de mensajes, nombres de perfiles, nombres de grupos ni claves privadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les journaux de diagnostic des groupes permettent d’étudier la fiabilité et la cohérence des groupes. Ils comprennent des identifiants techniques, des horodatages et des changements de composition des groupes, en utilisant des références hachées plutôt que les identités des membres. Ils ne contiennent jamais le contenu des messages, les noms de profils, les noms de groupes ni les clés privées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I log diagnostici dei gruppi aiutano a verificare l’affidabilità e la coerenza dei gruppi. Includono identificatori tecnici, date e orari e modifiche alla composizione dei gruppi, utilizzando riferimenti derivati tramite hash al posto delle identità dei membri. Non contengono mai contenuti dei messaggi, nomi dei profili, nomi dei gruppi o chiavi private."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os registros de diagnóstico de grupos ajudam a investigar a confiabilidade e a consistência dos grupos. Eles incluem identificadores técnicos, registros de data e hora e alterações na composição dos grupos, usando referências derivadas por hash em vez das identidades dos membros. Nunca contêm conteúdo de mensagens, nomes de perfis, nomes de grupos ou chaves privadas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Журналы диагностики групп помогают исследовать надёжность и согласованность состояния групп. Они содержат технические идентификаторы, временные метки и изменения состава групп. Вместо идентификационных данных участников используются хешированные ссылки. Журналы никогда не содержат содержимое сообщений, имена профилей, названия групп или приватные ключи."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup tanılama günlükleri, grupların güvenilirliğini ve tutarlılığını incelemeye yardımcı olur. Teknik tanımlayıcıları, zaman damgalarını ve üyelik değişikliklerini içerir; üyelerin kimlikleri yerine özetleme yoluyla oluşturulmuş referanslar kullanır. Asla mesaj içeriği, profil adları, grup adları veya özel anahtarlar içermez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群组诊断日志有助于调查群组的可靠性和一致性。日志包含技术标识符、时间戳和成员变更，并使用经过哈希处理的引用来代替成员身份。日志绝不包含消息内容、个人资料名称、群组名称或私钥。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "群組診斷記錄有助於調查群組的可靠性與一致性。記錄包含技術識別碼、時間戳記和成員變更，並使用經過雜湊處理的參照來取代成員身分。記錄絕不包含訊息內容、個人檔案名稱、群組名稱或私密金鑰。"
+          }
+        }
+      }
+    },
+    "Share group diagnostic logs" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppendiagnoseprotokolle teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share group diagnostic logs"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir registros de diagnóstico de grupos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager les journaux de diagnostic des groupes"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi log diagnostici dei gruppi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar registros de diagnóstico de grupos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлять журналы диагностики групп"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grup tanılama günlüklerini paylaş"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享群组诊断日志"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享群組診斷記錄"
+          }
+        }
+      }
+    },
+    "Share usage and telemetry" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzungs- und Telemetriedaten teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share usage and telemetry"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir uso y telemetría"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager les données d’utilisation et de télémétrie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi dati di utilizzo e telemetria"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhar uso e telemetria"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлять данные об использовании и телеметрию"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanım ve telemetri verilerini paylaş"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共享使用情况和遥测数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享使用情況與遙測資料"
+          }
+        }
+      }
+    },
+    "Turning these off stops new recording and prevents new automatic uploads. An automatic log upload batch already in progress may finish. Turning these off does not delete data already stored on this device or our servers." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Deaktivieren dieser Optionen stoppt neue Aufzeichnungen und verhindert neue automatische Uploads. Ein bereits laufender automatischer Upload mehrerer Protokolle kann noch abgeschlossen werden. Bereits auf diesem Gerät oder unseren Servern gespeicherte Daten werden dadurch nicht gelöscht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turning these off stops new recording and prevents new automatic uploads. An automatic log upload batch already in progress may finish. Turning these off does not delete data already stored on this device or our servers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al desactivar estas opciones, se dejan de recopilar nuevos registros y se impiden nuevas subidas automáticas. Un lote de registros cuya subida automática ya esté en curso podría terminar de subirse. Desactivar estas opciones no elimina los datos ya almacenados en este dispositivo ni en nuestros servidores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La désactivation de ces options arrête les nouveaux enregistrements et empêche les nouveaux envois automatiques. L’envoi automatique d’un lot de journaux déjà en cours peut se terminer. La désactivation ne supprime pas les données déjà stockées sur cet appareil ou sur nos serveurs."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La disattivazione di queste opzioni interrompe le nuove registrazioni e impedisce nuovi caricamenti automatici. Il caricamento automatico di un insieme di log già in corso potrebbe completarsi. La disattivazione non elimina i dati già memorizzati su questo dispositivo o sui nostri server."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desativar essas opções interrompe novas gravações e impede novos envios automáticos. Um lote de registros cujo envio automático já esteja em andamento pode terminar de ser enviado. Desativar essas opções não exclui os dados já armazenados neste dispositivo ou nos nossos servidores."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отключение этих параметров прекращает новую запись и предотвращает новые автоматические отправки. Автоматическая отправка пакета журналов, которая уже началась, может завершиться. Отключение не удаляет данные, уже сохранённые на этом устройстве или наших серверах."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu seçenekleri kapatmak yeni kayıtları durdurur ve yeni otomatik yüklemeleri engeller. Otomatik yüklemesi zaten başlamış olan bir günlük grubu yüklenmeye devam edip tamamlanabilir. Bu seçenekleri kapatmak, bu cihazda veya sunucularımızda zaten kayıtlı olan verileri silmez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭这些选项会停止新的记录并阻止新的自动上传。已开始自动上传的一批日志可能仍会完成上传。关闭这些选项不会删除此设备或我们的服务器上已存储的数据。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉這些選項會停止新的記錄並阻止新的自動上傳。已開始自動上傳的一批記錄可能仍會完成上傳。關閉這些選項不會刪除此裝置或我們的伺服器上已儲存的資料。"
+          }
+        }
+      }
+    },
     "·" : {
       "comment" : "A period.",
       "isCommentAutoGenerated" : true,

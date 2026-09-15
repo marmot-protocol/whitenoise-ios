@@ -20,9 +20,7 @@ struct DiagnosticsAndImprovementsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
                     if let explanation = appState.diagnosticsConsent.explanation { Text(explanation) }
-                    Text("Usage includes approved, bucketed activity and temporary session IDs, without message contents or account and group identifiers. Diagnostics includes a random installation identifier that changes after you turn sharing off.")
-                    Text("Diagnostic logs share sanitized technical activity from all profiles on this device.")
-                    Text(appState.client?.productConfig.localizedRetentionDisclosure ?? L10n.string("Retention policy has not yet been verified for this development build."))
+                    sharingDisclosure
                 }
                 .padding(.top, 12)
             }
@@ -36,7 +34,11 @@ struct DiagnosticsAndImprovementsView: View {
                         model.showDeleteAuditLogsConfirmation = true
                     }
                     .disabled(model.auditDeleteDisabled || model.auditFileRows.isEmpty)
-                } header: { Text("Stored Diagnostic Logs") }
+                } header: {
+                    Text("Stored Diagnostic Logs")
+                } footer: {
+                    Text("Clearing diagnostic logs deletes logs from this device only. It does not delete copies already uploaded to White Noise servers or turn off recording and automatic uploads.")
+                }
             }
             if let error = appState.diagnosticsConsent.errorMessage ?? model.errorMessage ?? model.auditErrorMessage {
                 Section {
@@ -78,14 +80,23 @@ struct DiagnosticsAndImprovementsView: View {
         if !isPrompt { await model.reload(using: appState) }
     }
 
+    @ViewBuilder
+    private var sharingDisclosure: some View {
+        Text("Feature activity and telemetry data include feature usage counts and app performance metrics. Usage data uses temporary session identifiers, and telemetry uses a resettable installation identifier. Neither includes account or group identifiers.")
+        Text("Group diagnostic logs help investigate group reliability and consistency. They include technical identifiers, timestamps, and membership changes, using hashed references instead of member identities. They never contain message contents, profile names, group names, or private keys.")
+        Text("Enabling group diagnostic log sharing may upload logs already stored on this device.")
+        Text("Group diagnostic logs are deleted from our servers after 30 days, telemetry after 90 days, and product analytics after 180 days.")
+        Text("Turning these off stops new recording and prevents new automatic uploads. An automatic log upload batch already in progress may finish. Turning these off does not delete data already stored on this device or our servers.")
+    }
+
     private var analyticsToggle: some View {
         Toggle(isOn: Binding(
             get: { appState.diagnosticsConsent.usageEnabled },
             set: { enabled in Task { await appState.diagnosticsConsent.setUsage(enabled, using: appState) } }
         )) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Share usage and diagnostics")
-                Text("Feature activity and reliability metrics, with temporary sessions and a resettable diagnostic identifier.")
+                Text("Share usage and telemetry")
+                Text("Automatically gathers and uploads feature activity and telemetry metrics for every profile on this device.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -98,8 +109,8 @@ struct DiagnosticsAndImprovementsView: View {
             set: { enabled in Task { await appState.diagnosticsConsent.setAudit(enabled, using: appState) } }
         )) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Share Diagnostic Logs")
-                Text("Automatically uploads technical logs from every profile on this device.")
+                Text("Share group diagnostic logs")
+                Text("Automatically gathers and uploads technical logs about groups for every profile on this device.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
