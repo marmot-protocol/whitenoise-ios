@@ -18,7 +18,14 @@ class PrivacyReleaseConfigTests(unittest.TestCase):
         self.addCleanup(self.root.cleanup)
         self.app = pathlib.Path(self.root.name) / "Fixture.app"
         catalog = json.loads((ROOT / "whitenoise-ios/InfoPlist.xcstrings").read_text())["strings"]
-        self.write("Info.plist", {key: catalog[key]["localizations"]["en"]["stringUnit"]["value"] for key in CHECK.PERMISSIONS})
+        self.write("Info.plist", {
+            **{key: catalog[key]["localizations"]["en"]["stringUnit"]["value"] for key in CHECK.PERMISSIONS},
+            "CFBundleShortVersionString": "2026.9.9", "CFBundleVersion": "33",
+            "WhiteNoiseAuditLogBearerToken": "fixture-secret",
+        })
+        self.write("PlugIns/NotificationServiceExtension.appex/Info.plist", {
+            "CFBundleShortVersionString": "2026.9.9", "CFBundleVersion": "33",
+        })
         for locale in CHECK.LOCALES:
             self.write(f"{locale}.lproj/InfoPlist.strings", {
                 key: catalog[key]["localizations"][locale]["stringUnit"]["value"] for key in CHECK.PERMISSIONS
@@ -65,6 +72,39 @@ class PrivacyReleaseConfigTests(unittest.TestCase):
         (self.app / "PlugIns/NotificationServiceExtension.appex/PrivacyInfo.xcprivacy").unlink()
         with self.assertRaises(FileNotFoundError):
             CHECK.verify(self.app, ROOT)
+
+    def test_mismatched_extension_version_fails(self):
+        path = "PlugIns/NotificationServiceExtension.appex/Info.plist"
+        info = CHECK.read_plist(self.app / path)
+        info["CFBundleVersion"] = "32"
+        self.write(path, info)
+        with self.assertRaisesRegex(ValueError, "mismatched app/extension version"):
+            CHECK.verify(self.app, ROOT)
+
+    def test_report_excludes_credentials_and_flags_missing_sdk_manifest(self):
+        sdk = self.app.parent / "MarmotKit.xcframework"
+        sdk.mkdir()
+        report = CHECK.privacy_inventory(self.app, sdk)
+        self.assertNotIn("fixture-secret", json.dumps(report))
+        self.assertNotIn("BearerToken", json.dumps(report))
+        self.assertEqual(report["bundles"][0]["CFBundleVersion"], "33")
+        self.assertEqual(report["sdk"]["privacyManifests"], [])
+        self.assertIn("upstream", report["sdk"]["reviewStatus"])
+
+    def test_archive_resolution_and_path_escape(self):
+        archive = self.app.parent / "Fixture.xcarchive"
+        archived_app = archive / "Products/Applications/Fixture.app"
+        archived_app.mkdir(parents=True)
+        info_path = archive / "Info.plist"
+        info_path.write_bytes(plistlib.dumps({"ApplicationProperties": {
+            "ApplicationPath": "Applications/Fixture.app",
+        }}))
+        self.assertEqual(CHECK.resolve_app(archive), archived_app.resolve())
+        info_path.write_bytes(plistlib.dumps({"ApplicationProperties": {
+            "ApplicationPath": str(self.app),
+        }}))
+        with self.assertRaisesRegex(ValueError, "path is invalid"):
+            CHECK.resolve_app(archive)
 
 
 if __name__ == "__main__":

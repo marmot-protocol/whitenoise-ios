@@ -1,6 +1,8 @@
 # Permissions and submission checks
 
-Checked against source and the production/staging Release bundles on 2026-09-09.
+Original permission audit: source and production/staging Release bundles on 2026-09-09.
+The September 15 follow-up, matching signed archive check, native SDK handoff,
+and current policy corrections are in [App Store privacy evidence](app-store-privacy-evidence.md).
 This documents the app's permission surfaces and remaining submission work;
 local builds do not establish App Review approval.
 
@@ -57,7 +59,8 @@ or replace the App Store Connect privacy answers.
 
 ### Native SDK follow-up before submission
 
-The formal MarmotKit 0.9.20 package does not contain a privacy manifest. Apple
+The submitted-version MarmotKit 0.9.20 package and current 0.9.21 package do not
+contain a privacy manifest. Apple
 [requires SDK authors to report their own required-reason usage](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api).
 Do not treat the host manifest as completing the native SDK audit.
 
@@ -77,10 +80,10 @@ generated binding source or vendor binary in this app to bypass that work.
 
 - Privacy & Security now links to the published
   [White Noise privacy policy](https://www.whitenoise.chat/privacy). Confirm the
-  same URL in App Store Connect. The policy dated March 30, 2026 still describes
-  analytics as anonymized and does not state the 180-day retention period.
-  Update its analytics/diagnostic identity and retention wording before shipping
-  this integration. Apple's [review guidelines](https://developer.apple.com/app-store/review/guidelines/#privacy)
+  same URL in App Store Connect. The repaired page returned HTTP 200 on September
+  15 and now states 180-day analytics retention. Its manual-only audit-upload
+  wording and conflicting diagnostic identifier statements still need correction;
+  see the linked evidence document. Apple's [review guidelines](https://developer.apple.com/app-store/review/guidelines/#privacy)
   require an accessible link both in-app and in the store metadata.
 - Reconcile App Privacy answers with the deployed services: optional usage and
   diagnostic exports, installation identity, server-derived approximate

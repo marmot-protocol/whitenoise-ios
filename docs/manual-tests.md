@@ -398,18 +398,20 @@ biometric paths); the simulator can fake enrollment via Features → Face ID.
 - [ ] On a device without a passcode, the toggle is greyed out with the
       explanatory footer.
 
-## Screen capture
+## Screen privacy
 
-- [ ] Settings → Privacy & Security: with **Block screenshots** on, a
-      screenshot captures a blank screen instead of conversation content.
-- [ ] With Block screenshots on, a screen recording (and QuickTime device
-      mirroring) shows blank app content; the app-switcher preview is blank
-      as well.
-- [ ] Content presented over the root view — the QR code sheet, full-screen
-      confirmation covers — is excluded from captures too.
-- [ ] Turning the toggle off immediately restores normal screenshots without
-      a relaunch, and the app keeps rendering and responding normally across
-      several on/off flips.
+- [ ] Enable **Hide Screen in App Switcher** in Privacy & Security. Background
+      the app from a conversation, a QR sheet, and a full-screen cover: the app
+      switcher shows only the privacy cover. Returning restores the same content.
+- [ ] With the setting on, start screen recording or mirroring: once iOS reports
+      capture, the cover hides the content on both the device and the recording.
+      Stop capture and confirm content returns without relaunching.
+- [ ] Ordinary screenshots remain possible, as the settings footer explains.
+- [ ] With the setting off, recording and the app-switcher preview work normally
+      unless the separate app-lock setting requires its own shield.
+- [ ] Repeat with app lock on/off, authentication prompts, rotation, large text,
+      VoiceOver, and iPad windows. The cover never steals keyboard focus and does
+      not expose a sheet while transitioning to the background.
 - [ ] Sign-out of the last profile and reactivation from Settings → Profiles
       restores live foreground notifications (send a message from another
       device) and disappearing-message sweeps without relaunching.

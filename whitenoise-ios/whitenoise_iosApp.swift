@@ -95,7 +95,6 @@ struct whitenoise_iosApp: App {
     @State private var appState: AppState
     @State private var appearance: AppAppearanceStore
     @State private var appLockOverlay = AppLockOverlayPresenter()
-    @State private var captureProtection = WindowCaptureProtection()
 
     init() {
         let appState = AppState()
@@ -127,7 +126,6 @@ struct whitenoise_iosApp: App {
                         controller: appState.appLock,
                         appearance: appearance
                     )
-                    syncCaptureProtection()
                     await appState.bootstrap()
                 }
                 .onOpenURL { url in
@@ -151,8 +149,9 @@ struct whitenoise_iosApp: App {
                         appearance: appearance
                     )
                 }
-                .onChange(of: appState.blockScreenshots) { _, _ in
-                    syncCaptureProtection()
+                .background {
+                    ScreenPrivacyProtection(isEnabled: appState.blockScreenshots)
+                        .allowsHitTesting(false)
                 }
         }
     }
@@ -182,16 +181,6 @@ struct whitenoise_iosApp: App {
         let backgroundTask = BackgroundRuntimeSuspensionTask(name: "Suspend Marmot runtime")
         let suspensionTask = appState.startRuntimeSuspension()
         backgroundTask.endWhenSuspensionCompletes(suspensionTask)
-    }
-
-    @MainActor
-    private func syncCaptureProtection() {
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?
-            .windows
-            .first { $0.isKeyWindow }
-        captureProtection.setActive(appState.blockScreenshots, window: window)
     }
 
 }

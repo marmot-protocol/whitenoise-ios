@@ -99,7 +99,7 @@ struct DiagnosticsAndImprovementsView: View {
         )) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Share Diagnostic Logs")
-                Text("Technical logs from every profile on this device, shared separately.")
+                Text("Automatically uploads technical logs from every profile on this device.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

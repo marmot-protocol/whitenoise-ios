@@ -19,7 +19,7 @@ struct PrivacySecuritySettingsView: View {
             } header: {
                 Text("App Security")
             } footer: {
-                Text("Hides your conversations and profile details in the app switcher. Screenshots and screen recordings also show a blank screen.")
+                Text("Hides app content in the app switcher and while iOS detects screen recording or sharing. Regular screenshots are still possible.")
             }
 
             Section {
