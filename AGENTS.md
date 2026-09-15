@@ -133,7 +133,9 @@ binding refresh and run its native cancellation test. Do not patch generated bin
 ## Chat presentation and invitation recovery
 
 Render titles/avatars from MDK's presented chat-list snapshots; do not reselect
-from profiles or rosters. Take the attached snapshot once, then consume complete
+from profiles or rosters. Layer the active account's cached local nickname over
+direct-peer titles; preserve MDK's avatar and avoid profile hydration for this override.
+Take the attached snapshot once, then consume complete
 updates in generation/sequence order. Presentation revision alone cannot suppress
 unread/pin updates. Reopen when the account-store epoch changes. Cancel native
 `next` waits when replacing the handle. Keep pending-invite avatar egress suppressed.

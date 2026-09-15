@@ -28,11 +28,18 @@ struct PresentedChatListCursor: Equatable {
 
 @MainActor
 enum SelectedChatPresentation {
-    static func display(_ selected: ConversationPresentationFfi, row: ChatListRowFfi) -> ChatsListViewModel.Display {
+    static func display(
+        _ selected: ConversationPresentationFfi,
+        row: ChatListRowFfi,
+        nickname: String? = nil
+    ) -> ChatsListViewModel.Display {
         let title: String
         switch selected.title {
         case .literal(let text):
-            title = ContentSanitizer.groupName(text) ?? L10n.string("Unnamed group")
+            let localTitle = row.conversationKind == .direct && selected.peerId != nil
+                ? ContentSanitizer.displayName(nickname)
+                : nil
+            title = localTitle ?? ContentSanitizer.groupName(text) ?? L10n.string("Unnamed group")
         case .unnamedGroup:
             title = L10n.string("Unnamed group")
         case .unavailableConversation:

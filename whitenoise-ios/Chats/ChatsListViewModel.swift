@@ -891,7 +891,12 @@ final class ChatsListViewModel {
         details: GroupDetailsFfi?
     ) -> Display {
         if let selected = selectedPresentationByGroupId[row.groupIdHex] {
-            return SelectedChatPresentation.display(selected, row: row)
+            // Nicknames are local-only; keep the rest of MDK's selection intact.
+            let nickname = row.conversationKind == .direct
+                && (currentAccount == nil || currentAccount == appState?.activeAccountRef)
+                ? selected.peerId.flatMap { appState?.contactNickname(forAccountIdHex: $0) }
+                : nil
+            return SelectedChatPresentation.display(selected, row: row, nickname: nickname)
         }
         let fallbackAvatarURL = ContentSanitizer.imageURL(row.avatarUrl ?? avatarURLByGroupId[row.groupIdHex])
         return Self.display(

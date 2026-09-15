@@ -15159,6 +15159,78 @@ struct PresentedChatListTests {
         #expect(model.items.isEmpty)
     }
 
+    @Test(arguments: [false, true])
+    func localNicknameOverridesSelectedDirectTitleAndRefreshesWithoutHydration(archived: Bool) async throws {
+        let client = try MarmotClient.testClient()
+        let appState = AppState(client: client)
+        let suite = "PresentedChatNicknames.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        appState.profileStore.contactNicknameDefaults = defaults
+        let owner = String(repeating: "aa", count: 32)
+        let secondOwner = String(repeating: "bb", count: 32)
+        let peer = String(repeating: "cc", count: 32)
+        appState.accountStore.accounts = [
+            AccountSummaryFfi(label: "first", accountIdHex: owner, localSigning: true, signedOut: false, running: false),
+            AccountSummaryFfi(label: "second", accountIdHex: secondOwner, localSigning: true, signedOut: false, running: false)
+        ]
+        appState.activeAccountRef = "first"
+        appState.setContactNickname("Bestie", forAccountIdHex: peer)
+        let model = ChatsListViewModel(appState: appState)
+        let row = chatListRow(groupIdHex: "nickname-chat", archived: archived, title: "Legacy", conversationKind: .direct)
+        let selected = ConversationPresentationFfi(
+            title: .literal(text: "Public name"),
+            avatar: .remoteImage(url: "https://example.com/selected.png", cacheKey: "selected-avatar"),
+            titleSource: .peerProfile, avatarSource: .peerProfile, peerId: peer, resolution: .lastKnown
+        )
+        let snapshot = PresentedChatListSnapshotFfi(
+            rows: [PresentedChatRowFfi(row: row, presentation: selected)],
+            presentationVersion: PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
+        )
+        model.applyPresentedSnapshot(snapshot)
+        #expect((archived ? model.archivedItems : model.items).first?.title == "Bestie")
+        #expect(model.item(groupIdHex: row.groupIdHex)?.selectedAvatar == selected.avatar)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.avatarSeed == "selected-avatar")
+        #expect(model.item(groupIdHex: row.groupIdHex)?.searchHaystack.contains("bestie") == true)
+        let unchangedRevision = model.visibleRowsRevision
+        model.refreshDisplayProjections()
+        #expect(model.visibleRowsRevision == unchangedRevision)
+
+        appState.setContactNickname("Buddy", forAccountIdHex: peer)
+        model.refreshDisplayProjections()
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Buddy")
+        #expect(model.item(groupIdHex: row.groupIdHex)?.searchHaystack.contains("bestie") == false)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Buddy")
+
+        appState.activeAccountRef = "second"
+        model.refreshDisplayProjections()
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Public name")
+        appState.activeAccountRef = "first"
+        appState.setContactNickname(nil, forAccountIdHex: peer)
+        model.refreshDisplayProjections()
+        #expect(model.item(groupIdHex: row.groupIdHex)?.title == "Public name")
+        #expect(appState.profileStore.queuedProfileProjectionLoadIDs.isEmpty)
+        #expect(appState.profileStore.queuedProfileFetchIDs.isEmpty)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func nicknameDoesNotReplaceGroupTitlesOrUnavailableConversation() {
+        var row = chatListRow(groupIdHex: "group", title: "Legacy", conversationKind: .group)
+        var selected = ConversationPresentationFfi(
+            title: .literal(text: "Project room"), avatar: .placeholder(stableSeed: "group", source: .groupFallback),
+            titleSource: .group, avatarSource: .groupFallback, peerId: "peer", resolution: .lastKnown
+        )
+        #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title == "Project room")
+        row.conversationKind = .direct
+        selected.title = .unavailableConversation
+        #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title
+            == L10n.string("Conversation unavailable"))
+        selected.title = .literal(text: "Public name")
+        selected.peerId = nil
+        #expect(SelectedChatPresentation.display(selected, row: row, nickname: "Bestie").title == "Public name")
+    }
+
     @Test func selectedAvatarRejectsPrivateURLsAndUsesLocalizableFallbacks() {
         let row = chatListRow(groupIdHex: "presented", title: "Legacy title")
         let selected = ConversationPresentationFfi(
