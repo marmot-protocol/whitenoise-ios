@@ -124,4 +124,68 @@ struct WNButtonTests {
         #expect(WNButton.Metrics.controlSize(for: .large) == .extraLarge)
         #expect(WNButton.Metrics.controlSize(for: .compact) == .regular)
     }
+
+    @Test func standardSitsBetweenTheCallToActionAndTheToolbarSize() {
+        #expect(WNButton.Metrics.controlSize(for: .standard) == .large)
+    }
+
+    @Test func standardClaimsTheFullWidthWithoutTheCallToActionHeight() {
+        #expect(WNButton.Metrics.stretches(.standard))
+        #expect(WNButton.Metrics.controlSize(for: .standard) != WNButton.Metrics.controlSize(for: .large))
+    }
+
+    @Test func destructiveTintsRedRegardlessOfColorScheme() {
+        #expect(WNButton.Metrics.tint(for: .destructive, colorScheme: .light) == .red)
+        #expect(WNButton.Metrics.tint(for: .destructive, colorScheme: .dark) == .red)
+    }
+
+    @Test func nonDestructiveEmphasesKeepTheMonochromeAccent() {
+        for emphasis in [WNButton.Emphasis.primary, .secondary] {
+            for colorScheme in [ColorScheme.light, .dark] {
+                #expect(
+                    WNButton.Metrics.tint(for: emphasis, colorScheme: colorScheme)
+                        == WNButton.Metrics.accent(for: colorScheme)
+                )
+            }
+        }
+    }
+
+    /// The red fill is the same red in both schemes, so unlike the monochrome
+    /// emphases the label cannot flip with the scheme or it loses contrast.
+    @Test func destructiveLabelStaysLightOnTheRedFillInBothSchemes() {
+        #expect(
+            WNButton.Metrics.contentColor(
+                emphasis: .destructive,
+                colorScheme: .light,
+                isEnabled: true
+            ) == .white
+        )
+        #expect(
+            WNButton.Metrics.contentColor(
+                emphasis: .destructive,
+                colorScheme: .dark,
+                isEnabled: true
+            ) == .white
+        )
+    }
+
+    @Test func disabledDestructiveDimsLikeEveryOtherEmphasis() {
+        for colorScheme in [ColorScheme.light, .dark] {
+            #expect(
+                WNButton.Metrics.contentColor(
+                    emphasis: .destructive,
+                    colorScheme: colorScheme,
+                    isEnabled: false
+                ) == .secondary
+            )
+        }
+    }
+
+    /// A destructive button is never a bare toolbar item, so it always paints
+    /// its own red surface instead of borrowing a container's.
+    @Test func destructiveAlwaysPaintsItsOwnSurface() {
+        for size in [WNButton.Size.large, .standard, .compact] {
+            #expect(WNButton.Metrics.drawsOwnSurface(emphasis: .destructive, size: size))
+        }
+    }
 }

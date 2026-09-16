@@ -26,6 +26,11 @@ nonisolated enum WNInputMetrics {
 
     static var fill: Color { Color(.secondarySystemFill) }
 
+    /// A field inside a grouped `Form` reads as the row it replaced, so it
+    /// takes the row's own background rather than the translucent fill that
+    /// suits a field standing on a plain screen.
+    static var groupedFill: Color { Color(.secondarySystemGroupedBackground) }
+
     /// A multi-line field keeps the corner a capsule has at the collapsed
     /// height, so at one line it is a pill and taller states stay in the same
     /// family. Growing the radius with the box instead would push the curve

@@ -324,6 +324,7 @@ private struct AccountActionsSheet: View {
     @State private var profileRef: String?
     @State private var profileName = ""
     @State private var error: String?
+    @FocusState private var confirmationFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -339,8 +340,14 @@ private struct AccountActionsSheet: View {
                 }
                 if shouldWipeData {
                     Section {
-                        TextField("Profile name", text: $confirmation)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        WNInput(
+                            placeholder: L10n.string("Profile name"),
+                            text: $confirmation,
+                            fill: WNInputMetrics.groupedFill,
+                            submitLabel: .done,
+                            focus: $confirmationFocused
+                        )
+                        .wnInputRow()
                     } header: {
                         Text("Enter Profile Name").wnSectionHeader()
                     } footer: {
@@ -349,14 +356,13 @@ private struct AccountActionsSheet: View {
                 }
                 if let error { Text(error).foregroundStyle(.orange) }
                 Section {
-                    Button(role: .destructive) { signOut() } label: {
-                        HStack {
-                            if isBusy { ProgressView() }
-                            Text(isBusy ? (shouldWipeData ? "Signing out and wiping data…" : "Signing out…") : "Sign Out")
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent).controlSize(.large).tint(.red)
+                    WNButton(
+                        title: busyTitle,
+                        emphasis: .destructive,
+                        size: .standard,
+                        isLoading: isBusy,
+                        action: signOut
+                    )
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                     .disabled(!ProfileExitConfirmation.canSignOut(
                         wiping: shouldWipeData, input: confirmation, profileName: profileName,
@@ -369,19 +375,39 @@ private struct AccountActionsSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button { dismiss() } label: { Image(systemName: "xmark") }
-                        .accessibilityLabel("Close").disabled(isBusy)
+                    WNIconButton(
+                        title: "Close",
+                        systemImage: "xmark",
+                        chrome: .container
+                    ) {
+                        dismiss()
+                    }
+                    .disabled(isBusy)
                 }
             }
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(isBusy)
+        .onChange(of: shouldWipeData) { _, wiping in
+            guard !wiping else { return }
+            // The field is removed from the hierarchy here, so focus has to be
+            // surrendered explicitly or the keyboard outlives its input.
+            confirmationFocused = false
+            confirmation = ""
+        }
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
                 profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
             }
         }
+    }
+
+    /// The spinner hides the label, but it stays in the hierarchy for
+    /// VoiceOver, so the busy wording still has to be accurate.
+    private var busyTitle: LocalizedStringKey {
+        guard isBusy else { return "Sign Out" }
+        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
     }
 
     @ViewBuilder
