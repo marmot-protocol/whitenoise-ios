@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MarmotKit
 
 /// People-first entry point for starting a conversation. The root screen is
@@ -17,7 +18,6 @@ struct NewChatFlowView: View {
     @State private var model = NewChatFlowViewModel()
     @State private var path: [Route] = []
     @State private var scanTarget: ScanTarget?
-    @State private var showMyCode = false
     @State private var productCompose = ProductComposeObservation()
     @State private var didSeedInitialMembers = false
 
@@ -42,9 +42,7 @@ struct NewChatFlowView: View {
         NavigationStack(path: $path) {
             NewMessageScreen(
                 model: model,
-                onNewGroup: { path.append(.groupPicker) },
                 onScan: { scanTarget = .message },
-                onShowMyCode: { showMyCode = true },
                 onOpen: open
             )
             .productScreen(.directory)
@@ -95,12 +93,6 @@ struct NewChatFlowView: View {
                 handleScan(raw, target: target)
             }
             .appAppearance()
-        }
-        .sheet(isPresented: $showMyCode) {
-            if let accountIdHex = appState.activeAccount?.accountIdHex {
-                ProfileQRView(accountIdHex: accountIdHex)
-                    .appAppearance()
-            }
         }
         .sheet(item: $model.conversationChooser) { chooser in
             ConversationChooserView(
@@ -161,10 +153,10 @@ struct NewChatFlowView: View {
 /// Search over known people, quick actions, and the paste-a-profile resolver.
 struct NewMessageScreen: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismissFlow
     @Bindable var model: NewChatFlowViewModel
-    let onNewGroup: () -> Void
     let onScan: () -> Void
-    let onShowMyCode: () -> Void
     let onOpen: (String) -> Void
     @State private var profilePreview: ProfilePreview?
 
@@ -180,12 +172,6 @@ struct NewMessageScreen: View {
     var body: some View {
         @Bindable var query = model.messageQuery
         List {
-            Section {
-                RecipientSearchField(text: $query.text)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
-                    .listRowBackground(Color.clear)
-            }
-
             if let prompt = model.startPrompt {
                 StartChatPromptSection(
                     prompt: prompt,
@@ -196,10 +182,15 @@ struct NewMessageScreen: View {
                 )
             }
 
-            if query.isBlank {
-                quickActionsSection
-                peopleSection(candidates: browseResults)
-            } else if query.isIdentifierQuery {
+            quickActionsSection
+
+            switch RecipientQueryMode.mode(
+                isBlank: query.isBlank,
+                isIdentifierQuery: query.isIdentifierQuery
+            ) {
+            case .browse:
+                peopleSection
+            case .resolve:
                 RecipientResolutionSection(
                     query: model.messageQuery,
                     excludedAccountIds: model.excludedAccountIds(using: appState),
@@ -217,8 +208,8 @@ struct NewMessageScreen: View {
                         )
                     }
                 )
-            } else {
-                peopleSection(candidates: browseResults)
+            case .search:
+                peopleSection
                 RecipientUserSearchStatus(
                     isSearching: model.messageUserSearch.isSearching,
                     isIncomplete: model.messageUserSearch.isIncomplete,
@@ -228,13 +219,33 @@ struct NewMessageScreen: View {
             }
         }
         .listStyle(.insetGrouped)
+        // A `Label` icon in a list row takes the accent colour, and the app
+        // ships no accent asset, so the action rows render system blue. The
+        // tint has to be pinned on the List — on the Section it never reaches
+        // the rows.
+        .tint(WNButton.Metrics.accent(for: colorScheme))
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("New Chat")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismissFlow() }
-                    .disabled(model.isBusy)
-            }
+        // iOS 26 anchors a native `.searchable` field to the bottom of the
+        // screen; below that floor `SearchFieldPlacement` has nothing there,
+        // so the shared bottom bar stands in — and its ✕ is this screen's way
+        // out, which is why there is no Cancel above.
+        .safeAreaInset(edge: .bottom) {
+            WNSearchBar(
+                query: $query.text,
+                prompt: "Name or npub",
+                focusesOnAppear: false,
+                onPaste: {
+                    if let pasted = RecipientPasteboard.profileQuery(
+                        from: UIPasteboard.general.string
+                    ) {
+                        model.messageQuery.text = pasted
+                    }
+                },
+                onClose: { dismissFlow() }
+            )
+            .disabled(model.isBusy)
         }
         .task {
             await model.directory.load(using: appState)
@@ -268,12 +279,6 @@ struct NewMessageScreen: View {
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
         }
-    }
-
-    @Environment(\.dismiss) private var dismissFlowAction
-
-    private func dismissFlow() {
-        dismissFlowAction()
     }
 
     private var browseResults: [RecipientCandidate] {
@@ -329,71 +334,41 @@ struct NewMessageScreen: View {
 
     private var quickActionsSection: some View {
         Section {
-            RecipientQuickActionRow(
-                title: "New Group",
-                systemImage: "person.2",
-                action: onNewGroup
-            )
+            // A link rather than a button, so the row carries the system
+            // disclosure and push behaviour of the step it opens.
+            NavigationLink(value: NewChatFlowView.Route.groupPicker) {
+                Label("New Group", systemImage: "person.2")
+            }
+            .wnGroupedCardRow(.first)
             RecipientQuickActionRow(
                 title: "Scan QR Code",
                 systemImage: "qrcode.viewfinder",
+                showsDisclosure: true,
                 action: onScan
             )
-            if appState.activeAccount != nil {
-                RecipientQuickActionRow(
-                    title: "Show My QR Code",
-                    systemImage: "qrcode",
-                    action: onShowMyCode
-                )
-            }
+            .wnGroupedCardRow(.last)
         }
         .disabled(model.isBusy)
     }
 
-    @ViewBuilder
-    private func peopleSection(candidates: [RecipientCandidate]) -> some View {
-        if model.directory.isLoading && candidates.isEmpty {
-            Section {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-                .padding(.vertical, 16)
-            }
-        } else if let loadError = model.directory.loadError, candidates.isEmpty {
-            Section {
-                Label(loadError, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.secondary)
-                Button("Retry") {
-                    Task { await model.directory.load(using: appState, force: true) }
-                }
-            }
-        } else if candidates.isEmpty && model.messageUserSearch.isSearching {
-            EmptyView()
-        } else if candidates.isEmpty {
-            Section {
-                if model.messageQuery.isBlank {
-                    ContentUnavailableView {
-                        Label("No people yet", systemImage: "person.2")
-                    } description: {
-                        Text("Paste an npub, scan a QR code, or share yours to start chatting.")
-                    }
-                } else {
-                    ContentUnavailableView.search(text: model.messageQuery.trimmedText)
-                }
-            }
-        } else {
-            Section {
-                ForEach(candidates) { candidate in
-                    personRow(candidate)
-                }
-            } header: {
-                if model.messageQuery.isBlank {
-                    Text("Recent")
-                }
-            }
-        }
+    private var peopleSection: some View {
+        let candidates = browseResults
+        return RecipientPeopleSection(
+            state: .resolve(
+                candidateCount: candidates.count,
+                isLoadingDirectory: model.directory.isLoading,
+                directoryLoadError: model.directory.loadError,
+                isSearchingNetwork: model.messageUserSearch.isSearching,
+                trimmedQuery: model.messageQuery.trimmedText
+            ),
+            candidates: candidates,
+            roundsSectionCard: true,
+            emptyDescription: "Paste an npub, scan a QR code, or share yours to start chatting.",
+            onRetryLoad: {
+                Task { await model.directory.load(using: appState, force: true) }
+            },
+            row: personRow
+        )
     }
 
     private func personRow(_ candidate: RecipientCandidate) -> some View {

@@ -46,6 +46,12 @@ struct WNSearchBar: View {
 
     @Binding var query: String
     let prompt: LocalizedStringKey
+    /// A screen that *is* the search (New Chat) shows the bar on arrival and
+    /// must not seize the keyboard; one that mounts it on demand should.
+    var focusesOnAppear = true
+    /// Shown in place of the clear control while the field is empty, for
+    /// screens where the query is usually pasted rather than typed.
+    var onPaste: (() -> Void)?
     let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -63,6 +69,7 @@ struct WNSearchBar: View {
         .padding(.horizontal, Metrics.horizontalInset)
         .padding(.vertical, Metrics.verticalInset)
         .onAppear {
+            guard focusesOnAppear else { return }
             // Focus after the inset has been laid out, or the keyboard rises
             // into a bar that has not claimed its height yet.
             Task { @MainActor in
@@ -100,6 +107,15 @@ struct WNSearchBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
+            } else if let onPaste {
+                Button(action: onPaste) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Palette.fieldGlyph)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Paste")
             }
         }
         .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
