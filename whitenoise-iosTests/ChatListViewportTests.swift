@@ -1,80 +1,66 @@
-import Combine
-import SwiftUI
-import Testing
 import MarmotKit
+import Testing
+import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-private final class WindowListFixture: ObservableObject {
-    @Published var ids = Array(0..<200)
-    @Published var sequence: UInt64 = 0
-    let viewport = ChatListViewport()
-}
-
-private struct WindowListHarness: View {
-    @ObservedObject var model: WindowListFixture
-    var body: some View {
-        List(model.ids, id: \.self) { id in
-            Text("Chat \(id)")
-                .frame(height: 44)
-                .background {
-                    ChatListRowAnchor(groupId: String(id), sequence: model.sequence, viewport: model.viewport)
-                }
-        }
-        .listStyle(.plain)
-    }
-}
-
-@MainActor
-@Suite(.serialized)
+@Suite
 struct ChatListViewportTests {
-    @Test func retainedRowKeepsPixelOffsetAfterLeadingRowsAreEvicted() async throws {
-        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let previousWindow = scene.windows.first(where: \.isKeyWindow)
+    private let rowHeight: CGFloat = 44
+    private let viewportHeight: CGFloat = 700
+
+    /// A plain scroll view stands in for the list. `ChatListViewport` only ever
+    /// reads anchor frames and the enclosing scroll view, so driving those
+    /// directly keeps the geometry exact instead of inheriting whatever a lazy
+    /// `List` and the current device decide.
+    /// `visibleRow()` ignores anchors whose `window` is nil, so the scroll view
+    /// has to be hosted. The frame is pinned rather than inherited so the
+    /// geometry is the same on every device and CI runner.
+    private func makeList(
+        ids: [String],
+        viewport: ChatListViewport,
+        sequence: UInt64 = 0
+    ) throws -> (window: UIWindow, scroll: UIScrollView) {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
-        let model = WindowListFixture()
-        let host = UIHostingController(rootView: WindowListHarness(model: model))
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: viewportHeight)
+        let scroll = UIScrollView(frame: window.bounds)
+        scroll.contentInsetAdjustmentBehavior = .never
+        let host = UIViewController()
+        host.view.addSubview(scroll)
         window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousWindow?.makeKeyAndVisible() }
-        await settle(host.view)
-        let scroll = try #require(descendants(host.view).compactMap { $0 as? UIScrollView }.first)
-        scroll.setContentOffset(CGPoint(x: 0, y: 6_013), animated: false)
-        await settle(host.view)
-        let anchor = try #require(model.viewport.visibleAnchor())
-        let oldOffset = try offset(anchor, in: host.view, scroll: scroll)
-        model.viewport.prepare(for: snapshot(sequence: 1, anchor: .retained(groupIdHex: anchor, index: 0)))
-        model.ids = Array(50..<250)
-        model.sequence = 1
-        await settle(host.view)
-        let newOffset = try offset(anchor, in: host.view, scroll: scroll)
-        #expect(abs(newOffset - oldOffset) < 2)
-        #expect(model.viewport.visibleAnchor() == anchor)
+        window.isHidden = false
+        window.layoutIfNeeded()
+        scroll.frame = CGRect(x: 0, y: 0, width: 390, height: viewportHeight)
+        layout(ids: ids, in: scroll, viewport: viewport, sequence: sequence)
+        return (window, scroll)
     }
 
-    @Test func recoveredRowTakesTheDeletedAnchorsOffset() async throws {
-        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
-        let previousWindow = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
-        let model = WindowListFixture()
-        let host = UIHostingController(rootView: WindowListHarness(model: model))
-        window.rootViewController = host
-        window.makeKeyAndVisible()
-        defer { window.isHidden = true; window.rootViewController = nil; previousWindow?.makeKeyAndVisible() }
-        await settle(host.view)
-        let scroll = try #require(descendants(host.view).compactMap { $0 as? UIScrollView }.first)
-        scroll.setContentOffset(CGPoint(x: 0, y: 3_013), animated: false)
-        await settle(host.view)
-        let anchor = try #require(model.viewport.visibleAnchor())
-        let oldOffset = try offset(anchor, in: host.view, scroll: scroll)
-        let oldID = try #require(Int(anchor))
-        let recovered = String(oldID + 1)
-        model.viewport.prepare(for: snapshot(sequence: 1, anchor: .recovered(groupIdHex: recovered, index: 0)))
-        model.ids.removeAll { $0 == oldID }
-        model.sequence = 1
-        await settle(host.view)
-        let newOffset = try offset(recovered, in: host.view, scroll: scroll)
-        #expect(abs(newOffset - oldOffset) < 2)
+    private func layout(
+        ids: [String],
+        in scroll: UIScrollView,
+        viewport: ChatListViewport,
+        sequence: UInt64
+    ) {
+        scroll.subviews.forEach { $0.removeFromSuperview() }
+        for (index, id) in ids.enumerated() {
+            let row = ChatListAnchorView()
+            row.frame = CGRect(x: 0, y: CGFloat(index) * rowHeight, width: scroll.bounds.width, height: rowHeight)
+            row.groupId = id
+            row.sequence = sequence
+            row.viewport = viewport
+            scroll.addSubview(row)
+        }
+        scroll.contentSize = CGSize(width: scroll.bounds.width, height: CGFloat(ids.count) * rowHeight)
+        scroll.layoutIfNeeded()
+    }
+
+    private func offset(of id: String, in scroll: UIScrollView) throws -> CGFloat {
+        let row = try #require(
+            scroll.subviews.compactMap { $0 as? ChatListAnchorView }.first { $0.groupId == id },
+            "Row \(id) is not in the list"
+        )
+        return row.frame.minY - scroll.contentOffset.y - scroll.adjustedContentInset.top
     }
 
     private func snapshot(sequence: UInt64, anchor: ChatListAnchorOutcomeFfi) -> ChatListWindowSnapshotFfi {
@@ -82,19 +68,60 @@ struct ChatListViewportTests {
                                   rows: [], hasMoreBefore: true, hasMoreAfter: true, anchor: anchor)
     }
 
-    private func offset(_ id: String, in view: UIView, scroll: UIScrollView) throws -> CGFloat {
-        let row = try #require(descendants(view).compactMap { $0 as? ChatListAnchorView }.first { $0.groupId == id })
-        return row.convert(row.bounds, to: scroll).minY - scroll.contentOffset.y - scroll.adjustedContentInset.top
+    @Test func visibleAnchorReportsTheTopmostRowInsideTheViewport() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: (0..<200).map(String.init), viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight)
+        scroll.layoutIfNeeded()
+        #expect(viewport.visibleAnchor() == "100")
     }
 
-    private func descendants(_ view: UIView) -> [UIView] {
-        [view] + view.subviews.flatMap(descendants)
+    @Test func retainedRowKeepsPixelOffsetAfterLeadingRowsAreEvicted() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: (0..<200).map(String.init), viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight + 17)
+        scroll.layoutIfNeeded()
+
+        let anchor = try #require(viewport.visibleAnchor())
+        let oldOffset = try offset(of: anchor, in: scroll)
+
+        viewport.prepare(for: snapshot(sequence: 1, anchor: .retained(groupIdHex: anchor, index: 0)))
+        layout(ids: (50..<250).map(String.init), in: scroll, viewport: viewport, sequence: 1)
+
+        let newOffset = try offset(of: anchor, in: scroll)
+        #expect(abs(newOffset - oldOffset) < 0.5, "Retained row moved \(newOffset - oldOffset)pt")
     }
 
-    private func settle(_ view: UIView) async {
-        for _ in 0..<20 {
-            view.layoutIfNeeded()
-            try? await Task.sleep(for: .milliseconds(20))
-        }
+    @Test func recoveredRowTakesTheDeletedAnchorsOffset() throws {
+        let viewport = ChatListViewport()
+        var ids = (0..<200).map(String.init)
+        let (window, scroll) = try makeList(ids: ids, viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight + 9)
+        scroll.layoutIfNeeded()
+
+        let anchor = try #require(viewport.visibleAnchor())
+        let oldOffset = try offset(of: anchor, in: scroll)
+        let recovered = try #require(Int(anchor)).advanced(by: 1).description
+
+        viewport.prepare(for: snapshot(sequence: 1, anchor: .recovered(groupIdHex: recovered, index: 0)))
+        ids.removeAll { $0 == anchor }
+        layout(ids: ids, in: scroll, viewport: viewport, sequence: 1)
+
+        let newOffset = try offset(of: recovered, in: scroll)
+        #expect(abs(newOffset - oldOffset) < 0.5, "Recovered row moved \(newOffset - oldOffset)pt")
+    }
+
+    @Test func requestTopOverridesTheRetainedOffset() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: (0..<200).map(String.init), viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight)
+        scroll.layoutIfNeeded()
+
+        viewport.requestTop()
+        #expect(scroll.contentOffset.y == -scroll.adjustedContentInset.top)
     }
 }
