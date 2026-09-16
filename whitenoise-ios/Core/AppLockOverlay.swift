@@ -67,14 +67,9 @@ struct AppLockShieldView: View {
                     Text("White Noise is locked")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button {
+                    WNButton(title: "Unlock", size: .compact) {
                         Task { await appLock.requestUnlock() }
-                    } label: {
-                        Text("Unlock")
-                            .font(.body.weight(.semibold))
-                            .padding(.horizontal, 24)
                     }
-                    .buttonStyle(.borderedProminent)
                     .padding(.top, 12)
                     .padding(.bottom, 48)
                 }

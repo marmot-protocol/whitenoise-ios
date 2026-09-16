@@ -102,14 +102,14 @@ struct LocationPickerView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Button {
+            WNButton(
+                title: "Send this location",
+                systemImage: "location.fill",
+                size: .standard
+            ) {
                 guard let coordinate = location.selectedCoordinate else { return }
                 onSend(coordinate)
-            } label: {
-                Label(L10n.string("Send this location"), systemImage: "location.fill")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
             .disabled(location.selectedCoordinate == nil)
         }
         .padding()

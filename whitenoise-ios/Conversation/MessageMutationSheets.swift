@@ -148,23 +148,9 @@ struct ForwardMessageSheet: View {
                     .foregroundStyle(.red)
             }
 
-            Button {
+            WNButton(title: "Forward", size: .standard, isLoading: isSending) {
                 Task { await forward() }
-            } label: {
-                Group {
-                    if isSending {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Text("Forward")
-                            .fontWeight(.semibold)
-                    }
-                }
-                .frame(maxWidth: .infinity, minHeight: 24)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .buttonBorderShape(.capsule)
             .disabled(selectedGroupIds.isEmpty || isSending || isLoading)
         }
         .padding(.horizontal, 16)

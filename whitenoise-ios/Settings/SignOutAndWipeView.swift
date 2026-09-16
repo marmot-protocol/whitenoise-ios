@@ -100,14 +100,12 @@ struct SignOutAndWipeCover: View {
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                         .font(.body.monospaced())
-                    Button(role: .destructive, action: onConfirm) {
-                        Text("Sign Out & Wipe")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.large)
-                    .tint(.red)
+                    WNButton(
+                        title: "Sign Out & Wipe",
+                        emphasis: .destructive,
+                        size: .standard,
+                        action: onConfirm
+                    )
                     .listRowBackground(Color.clear)
                     .disabled(!model.isConfirmed)
                 }

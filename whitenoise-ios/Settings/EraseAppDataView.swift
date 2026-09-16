@@ -25,7 +25,12 @@ struct EraseAppDataView: View {
                 if isRecovery { Text("Erasure didn’t finish. Some data may remain. Try again.").foregroundStyle(.orange) }
                 if let error { Text(error).foregroundStyle(.orange) }
                 Section {
-                    Button(role: .destructive) {
+                    WNButton(
+                        title: busy ? "Erasing…" : isRecovery ? "Retry" : "Erase",
+                        emphasis: .destructive,
+                        size: .standard,
+                        isLoading: busy
+                    ) {
                         guard !busy, isRecovery || ProfileExitConfirmation.matches(confirmation, expected: phrase) else { return }
                         busy = true
                         error = nil
@@ -38,13 +43,7 @@ struct EraseAppDataView: View {
                             }
                             busy = false
                         }
-                    } label: {
-                        HStack {
-                            if busy { ProgressView() }
-                            Text(busy ? "Erasing…" : isRecovery ? "Retry" : "Erase").frame(maxWidth: .infinity)
-                        }
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large).tint(.red)
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                     .disabled(busy || (!isRecovery && !ProfileExitConfirmation.matches(confirmation, expected: phrase)))
                 }

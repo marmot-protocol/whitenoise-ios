@@ -1803,10 +1803,9 @@ struct ConversationView: View {
                 } description: {
                     Text(viewModel.error ?? "")
                 } actions: {
-                    Button("Retry") {
+                    WNButton(title: "Retry", size: .compact) {
                         Task { await viewModel.start() }
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             case .connecting:
                 // The local snapshot hasn't landed yet because the runtime is
@@ -1827,14 +1826,15 @@ struct ConversationView: View {
                     } description: {
                         Text("Add members to start the conversation.")
                     } actions: {
-                        Button {
+                        WNButton(
+                            title: "Add members",
+                            systemImage: "person.badge.plus",
+                            size: .compact
+                        ) {
                             dismissKeyboard()
                             openAddMembersOnDetails = true
                             showDetails = true
-                        } label: {
-                            Label("Add members", systemImage: "person.badge.plus")
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                 } else {
                     ContentUnavailableView(

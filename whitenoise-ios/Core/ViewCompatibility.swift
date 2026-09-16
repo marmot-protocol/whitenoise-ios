@@ -264,25 +264,17 @@ struct FullScreenConfirmationDialog: View {
                 Spacer(minLength: 32)
 
                 VStack(spacing: 12) {
-                    Button(role: .destructive, action: onConfirm) {
-                        Text(destructiveTitle)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .background(Color.red, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    WNButton(
+                        title: LocalizedStringKey(destructiveTitle),
+                        emphasis: .destructive,
+                        action: onConfirm
+                    )
 
-                    Button(role: .cancel, action: onCancel) {
-                        Text(cancelTitle)
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    WNButton(
+                        title: LocalizedStringKey(cancelTitle),
+                        emphasis: .secondary,
+                        action: onCancel
+                    )
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
