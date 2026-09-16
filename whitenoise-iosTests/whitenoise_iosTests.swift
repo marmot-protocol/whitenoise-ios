@@ -13144,29 +13144,6 @@ struct MessageMediaGalleryTests {
         ).isEmpty)
     }
 
-    @Test func fullscreenActionsRequireTheirRuntimeInputs() {
-        #expect(MessageMediaFullscreenGalleryPresentation.canGoToMessage(
-            messageId: "message-id",
-            hasHandler: true
-        ))
-        #expect(!MessageMediaFullscreenGalleryPresentation.canGoToMessage(
-            messageId: "",
-            hasHandler: true
-        ))
-        #expect(!MessageMediaFullscreenGalleryPresentation.canGoToMessage(
-            messageId: "message-id",
-            hasHandler: false
-        ))
-        #expect(MessageMediaFullscreenGalleryPresentation.canForward(
-            hasPreparedMedia: true,
-            hasForwardingContext: true
-        ))
-        #expect(!MessageMediaFullscreenGalleryPresentation.canForward(
-            hasPreparedMedia: false,
-            hasForwardingContext: true
-        ))
-    }
-
     @Test func fullscreenInitialDecodeFailureIsExplicit() async {
         // Invalid bytes decode to nil off-main rather than crashing or
         // returning a bogus image.

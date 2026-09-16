@@ -537,7 +537,7 @@ private struct ComposerMediaPreviewPage: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            WNMediaSurface()
             if attachment.kind == .video {
                 if let player {
                     VideoPlayer(player: player)
@@ -546,7 +546,7 @@ private struct ComposerMediaPreviewPage: View {
                         .resizable()
                         .scaledToFit()
                 } else {
-                    ProgressView().tint(.white)
+                    ProgressView()
                 }
             } else if let image {
                 Image(uiImage: image)
@@ -557,7 +557,7 @@ private struct ComposerMediaPreviewPage: View {
                     .resizable()
                     .scaledToFit()
             } else {
-                ProgressView().tint(.white)
+                ProgressView()
             }
         }
         .task(id: attachment.id) {
