@@ -1,10 +1,6 @@
 import Testing
 
-#if compiler(>=6.3)
 typealias WindowTestOperation = @concurrent @Sendable () async throws -> Void
-#else
-typealias WindowTestOperation = @Sendable () async throws -> Void
-#endif
 
 /// Window tests share one application scene, even across serialized suites.
 struct SharedWindowTestScope: TestTrait, SuiteTrait, TestScoping {
