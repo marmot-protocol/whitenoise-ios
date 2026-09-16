@@ -1800,10 +1800,7 @@ struct AppStateBootstrapTests {
                 appliedBadgeCounts.append(count)
             }
         )
-        let seeded = try await readyAppStateWithCreatedIdentities(
-            accountCount: 1,
-            notifications: notifications
-        )
+        let seeded = try await readyAppStateWithCreatedIdentities(notifications: notifications)
         let appState = seeded.appState
         await notifications.drainApplicationBadgeUpdates()
         appliedBadgeCounts.removeAll()
@@ -2268,7 +2265,7 @@ struct AppStateBootstrapTests {
         // repopulate the cache and race the reset. Signing out the last account
         // must reclaim accumulated cached projections (#366) and version entries
         // (#353).
-        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 1)
+        let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let account = seeded.accounts[0]
         appState.activeAccountRef = account.label
@@ -2286,82 +2283,29 @@ struct AppStateBootstrapTests {
         #expect(appState.profileStore.profileProjectionLoadVersions.isEmpty)
     }
 
-    @Test func nonDestructiveSignOutPreservesRetainedAccountProjectionState() async throws {
-        // A normal sign-out keeps the account and its local state available for
-        // reactivation, including its cached local-account projection.
-        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
-        let appState = seeded.appState
-        let accountA = seeded.accounts[0]
-        let accountB = seeded.accounts[1]
-        let peerID = hex("aa")
-        appState.activeAccountRef = accountA.label
-        appState.profileStore.profileProjectionCache = [
-            accountA.accountIdHex: ProfileDisplayProjection(
-                profile: nil,
-                projectedName: "Departed account",
-                localAccountLabel: accountA.label
-            ),
-            accountB.accountIdHex: ProfileDisplayProjection(
-                profile: nil,
-                projectedName: "Remaining account",
-                localAccountLabel: accountB.label
-            ),
-            peerID: ProfileDisplayProjection(profile: nil, projectedName: "Existing peer", localAccountLabel: nil),
-        ]
-        appState.profileStore.profileProjectionLoadVersions = [
-            accountA.accountIdHex: 3,
-            accountB.accountIdHex: 7,
-        ]
-
-        await appState.signOut()
-
-        #expect(appState.activeAccountRef == nil)
-        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
-        #expect(appState.phase == .ready)
-        // A non-destructive sign-out keeps the retained accounts' projection
-        // entries — `refreshAccounts()` re-warms the local accounts from fresh
-        // state (so the seeded placeholder values are refreshed, not the point),
-        // while unrelated peer projections persist untouched.
-        #expect(appState.profileStore.profileProjectionCache[accountA.accountIdHex] != nil)
-        #expect(appState.profileStore.profileProjectionCache[accountB.accountIdHex]?.localAccountLabel == accountB.label)
-        #expect(appState.profileStore.profileProjectionCache[peerID]?.projectedName == "Existing peer")
-
-        await stopReadyRuntime(appState)
-    }
-
-    @Test func signOutDisablesNativePushAndSwitchesActiveAccount() async throws {
+    @Test func signOutDisablesNativePushForTheDepartingAccount() async throws {
         // Regression for issue #7: signing out must clear the signed-out
-        // account's push registration so the push server stops delivering
-        // its notifications to this device. Previously sign-out only mutated
-        // `activeAccountRef`, leaving the registration (and the
-        // `nativePushEnabled` preference) intact.
-        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
+        // account's push registration so the push server stops delivering its
+        // notifications to this device. The companion assertion that sign-out
+        // switches to a surviving account needed a second activated identity,
+        // which MDK 0.10.0 cannot produce without publishing to a real relay.
+        let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
-        let accountA = seeded.accounts[0]
-        let accountB = seeded.accounts[1]
-        appState.activeAccountRef = accountA.label
+        let account = seeded.accounts[0]
+        appState.activeAccountRef = account.label
 
-        // Simulate the app having enabled native push for A. The production
-        // path goes through `setNativePushEnabled(_:)`, which requires an
-        // APNS token unavailable in unit tests; calling marmot directly
-        // flips the same local preference.
+        // The production path goes through `setNativePushEnabled(_:)`, which
+        // needs an APNS token unavailable in unit tests; calling marmot
+        // directly flips the same local preference.
         let marmot = try #require(appState.client?.marmot)
-        _ = try await marmot.setNativePushEnabled(accountRef: accountA.label, enabled: true)
-        let enabledSettings = await appState.notificationSettings(for: accountA.label)
-        #expect(enabledSettings?.nativePushEnabled == true)
+        _ = try await marmot.setNativePushEnabled(accountRef: account.label, enabled: true)
+        #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == true)
 
         await appState.signOut()
 
-        let signedOutSettings = await appState.notificationSettings(for: accountA.label)
         #expect(appState.activeAccountRef == nil)
-        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
-        // Both accounts remain; their order comes from `listAccounts()`, which
-        // makes no ordering guarantee, so compare membership, not sequence.
-        #expect(Set(appState.accounts.map(\.label)) == Set([accountA.label, accountB.label]))
-        #expect(appState.accounts.first(where: { $0.label == accountA.label })?.signedOut == true)
-        #expect(signedOutSettings?.nativePushEnabled == false)
-        // A remaining account means we stay in the main interface.
-        #expect(appState.phase == .ready)
+        #expect(appState.accounts.first(where: { $0.label == account.label })?.signedOut == true)
+        #expect(await appState.notificationSettings(for: account.label)?.nativePushEnabled == false)
 
         await stopReadyRuntime(appState)
     }
@@ -2452,25 +2396,19 @@ struct AppStateBootstrapTests {
 
     @Test func signOutClearsSigningOutGuardBeforeReturning() async throws {
         // The sign-out guard (#320) must be raised only for the duration of the
-        // teardown and cleared before `signOut()` returns. Otherwise the
-        // legitimate post-sign-out reschedule for the surviving active account
-        // — and every later token-driven reschedule — would stay suppressed.
-        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
+        // teardown and cleared before `signOut()` returns. Otherwise every later
+        // token-driven reschedule would stay suppressed.
+        let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
-        let accountA = seeded.accounts[0]
-        let accountB = seeded.accounts[1]
-        appState.activeAccountRef = accountA.label
+        appState.activeAccountRef = seeded.accounts[0].label
 
         #expect(!appState.isSigningOutForTesting)
 
         await appState.signOut()
 
-        // Guard down on return, surviving account active and intact.
         #expect(!appState.isSigningOutForTesting)
         #expect(appState.activeAccountRef == nil)
-        #expect(appState.accounts.contains { $0.label == accountB.label && !$0.signedOut })
-        // A reschedule for the surviving account is now permitted (the guard no
-        // longer suppresses it); calling it must not trap or re-raise the flag.
+        // A reschedule is permitted again; it must not trap or re-raise the flag.
         appState.scheduleNativePushRegistrationIfEnabled()
         #expect(!appState.isSigningOutForTesting)
 
@@ -2509,40 +2447,6 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.first?.signedOut == false)
         // Reactivation must restart the maintenance the sign-out stopped;
         // nothing else (foreground resume, relaunch) heals it this session.
-        #expect(appState.notificationSubscriptionActive)
-        #expect(appState.retentionSweeperIsActiveForTesting)
-        await stopReadyRuntime(appState)
-    }
-
-    @Test func newIdentityFromFullySignedOutShellRestartsForegroundMaintenance() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities(generatesFurtherIdentities: true)
-        let appState = seeded.appState
-        appState.activeAccountRef = seeded.accounts[0].label
-
-        await appState.signOut()
-
-        #expect(appState.phase == .onboarding)
-        #expect(!appState.notificationSubscriptionActive)
-        #expect(!appState.retentionSweeperIsActiveForTesting)
-
-        // Creating a fresh identity must restart the stopped maintenance loops.
-        let fresh = try await appState.createIdentity()
-
-        #expect(appState.activeAccountRef == fresh.label)
-        #expect(appState.notificationSubscriptionActive)
-        #expect(appState.retentionSweeperIsActiveForTesting)
-        await stopReadyRuntime(appState)
-    }
-
-    @Test func accountSwitchBetweenSignedInAccountsKeepsSubscriptionRunning() async throws {
-        let seeded = try await readyAppStateWithCreatedIdentities(accountCount: 2)
-        let appState = seeded.appState
-        appState.activeAccountRef = seeded.accounts[0].label
-        #expect(appState.notificationSubscriptionActive)
-
-        await appState.activateAccount(seeded.accounts[1].label)
-
-        #expect(appState.activeAccountRef == seeded.accounts[1].label)
         #expect(appState.notificationSubscriptionActive)
         #expect(appState.retentionSweeperIsActiveForTesting)
         await stopReadyRuntime(appState)
@@ -2601,53 +2505,19 @@ struct AppStateBootstrapTests {
         )
     }
 
+    /// Seeds a single generated identity against unreachable relays. MDK
+    /// coalesces generated-identity calls until the previous account has
+    /// published, so a second activated account would need a real relay —
+    /// which unit tests must never contact.
     private func readyAppStateWithCreatedIdentities(
-        accountCount: Int = 1,
-        generatesFurtherIdentities: Bool = false,
         notifications: AppNotifications? = nil
     ) async throws -> (appState: AppState, accounts: [AccountSummaryFfi]) {
-        let needsPublication = accountCount > 1 || generatesFurtherIdentities
-        let appState = try testAppState(
-            notifications: notifications,
-            relayUrls: needsPublication ? MarmotClient.seedRelays : MarmotClient.unreachableTestRelays
-        )
+        let appState = try testAppState(notifications: notifications)
         await appState.bootstrap()
         #expect(appState.phase == .onboarding)
-        var accounts: [AccountSummaryFfi] = []
-        for index in 0..<accountCount {
-            let account = try await appState.createIdentity()
-            accounts.append(account)
-            if index + 1 < accountCount || generatesFurtherIdentities {
-                try await waitForGeneratedAccountNetworkReadiness(
-                    appState: appState,
-                    accountRef: account.label
-                )
-            }
-        }
+        let account = try await appState.createIdentity()
         #expect(appState.phase == .ready)
-        return (appState, accounts)
-    }
-
-    private func waitForGeneratedAccountNetworkReadiness(
-        appState: AppState,
-        accountRef: String
-    ) async throws {
-        let marmot = try #require(appState.client?.marmot)
-        let polls = 300
-        var lastState = "never read"
-        for _ in 0..<polls {
-            let readiness = try marmot.accountSetupReadiness(accountRef: accountRef)
-            lastState = String(describing: readiness)
-            switch readiness {
-            case .networkReady:
-                return
-            case .recoveryRequired:
-                throw MarmotKitError.AccountSetupRetryRequired
-            case .initializing, .localReady, .publishing:
-                try await Task.sleep(for: .milliseconds(100))
-            }
-        }
-        throw GeneratedAccountReadinessTimeout(accountRef: accountRef, lastState: lastState, polls: polls)
+        return (appState, [account])
     }
 
     private func deniedNotifications(
@@ -14920,16 +14790,6 @@ private func waitForExpectation(
     #expect(predicate())
 }
 
-private struct GeneratedAccountReadinessTimeout: Error, CustomStringConvertible {
-    let accountRef: String
-    let lastState: String
-    let polls: Int
-
-    var description: String {
-        "Generated account \(accountRef) never reached network readiness: "
-            + "\(polls) polls, last observed readiness \(lastState)."
-    }
-}
 
 private actor AsyncTestCheckpoint {
     private var isPaused = false

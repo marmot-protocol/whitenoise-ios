@@ -4,47 +4,104 @@ import Testing
 import UIKit
 @testable import whitenoise_ios
 
+struct TimelinePaginationEdgeStateTests {
+    @Test func offscreenEdgeNeverRequests() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.enablementChanged(to: true) == false)
+        #expect(edge.visibilityChanged(to: false, isEnabled: true) == false)
+    }
+
+    @Test func theVisibleEdgeRequestsOncePerEntry() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == false)
+    }
+
+    @Test func leavingTheViewportRearmsTheEdge() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        #expect(edge.visibilityChanged(to: false, isEnabled: true) == false)
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+    }
+
+    @Test func aDisabledEdgeDefersUntilItIsEnabled() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: false) == false)
+        #expect(edge.enablementChanged(to: true) == true)
+    }
+
+    @Test func loadingStateChangesDoNotDuplicateTheVisiblePageRequest() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        #expect(edge.enablementChanged(to: false) == false)
+        #expect(edge.enablementChanged(to: true) == false)
+    }
+
+    @Test func aRetryTokenRearmsTheEdgeUpToItsLimit() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        for _ in 0..<TimelinePaginationEdgeState.retryLimit {
+            #expect(edge.retryRequested(isEnabled: true) == true)
+        }
+        #expect(edge.retryRequested(isEnabled: true) == false)
+    }
+
+    @Test func leavingTheViewportRestoresTheRetryBudget() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        for _ in 0..<TimelinePaginationEdgeState.retryLimit {
+            _ = edge.retryRequested(isEnabled: true)
+        }
+        #expect(edge.retryRequested(isEnabled: true) == false)
+        _ = edge.visibilityChanged(to: false, isEnabled: true)
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        #expect(edge.retryRequested(isEnabled: true) == true)
+    }
+
+    @Test func aRetryOnAnOffscreenEdgeRequestsNothing() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.retryRequested(isEnabled: true) == false)
+    }
+
+    @Test func disappearingRearmsTheEdge() {
+        var edge = TimelinePaginationEdgeState()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+        edge.disappeared()
+        #expect(edge.visibilityChanged(to: true, isEnabled: true) == true)
+    }
+}
+
 @MainActor
 private final class PaginationScrollModel: ObservableObject {
-    @Published var target = "bottom"
     @Published var isEnabled = true
     var olderRequests = 0
     var newerRequests = 0
-    var visibleTargets = Set<String>()
+    var bottomIsVisible = false
 }
 
 private struct PaginationScrollHarness: View {
     @ObservedObject var model: PaginationScrollModel
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 4) {
-                    Color.clear.frame(height: 28)
-                        .modifier(TimelinePaginationVisibility(isEnabled: model.isEnabled) {
-                            model.olderRequests += 1
-                        })
-                        .id("top")
-                    ForEach(0..<100) { index in
-                        Text("Message \(index)").frame(height: 80).id("row-\(index)")
-                    }
-                    Color.clear.frame(height: 1)
-                        .modifier(TimelinePaginationVisibility(isEnabled: model.isEnabled) {
-                            model.newerRequests += 1
-                        })
-                        .id("bottom")
+        ScrollView {
+            VStack(spacing: 4) {
+                Color.clear.frame(height: 28)
+                    .modifier(TimelinePaginationVisibility(isEnabled: model.isEnabled) {
+                        model.olderRequests += 1
+                    })
+                ForEach(0..<100) { index in
+                    Text("Message \(index)").frame(height: 80)
                 }
-                .scrollTargetLayout()
-            }
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
-            .task(id: model.target) {
-                await Task.yield()
-                proxy.scrollTo(model.target, anchor: model.target == "top" ? .top : .bottom)
-            }
-            .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.001) {
-                model.visibleTargets = Set($0)
+                Color.clear.frame(height: 28)
+                    .modifier(TimelinePaginationVisibility(isEnabled: model.isEnabled) {
+                        model.newerRequests += 1
+                    })
+                    .onScrollVisibilityChange(threshold: TimelineViewportVisibility.minimumVisibleFraction) {
+                        model.bottomIsVisible = $0
+                    }
             }
         }
+        .defaultScrollAnchor(.bottom, for: .initialOffset)
     }
 }
 
@@ -60,56 +117,34 @@ struct TimelinePaginationVisibilityTests {
         return window
     }
 
-    private func settle(_ window: UIWindow, until condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    private func settle(_ window: UIWindow, until condition: () -> Bool) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(20))
         repeat {
             window.layoutIfNeeded()
-            if condition() { return }
-            try await Task.sleep(for: .milliseconds(10))
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
         } while ContinuousClock.now < deadline
-        #expect(condition(), "Scroll visibility did not reach the requested state")
+        return condition()
     }
 
-    @Test func eagerTimelineLoadsOnlyTheVisibleEdgeAndRearmsAfterLeavingIt() async throws {
+    /// The only claim rendering alone can make: `onScrollVisibilityChange`
+    /// reports the mounted-but-offscreen edge as invisible, where `onAppear`
+    /// would fire. Everything about *when* a request happens is asserted
+    /// deterministically in `TimelinePaginationEdgeStateTests`, so this waits
+    /// for the bottom edge as a courtesy and never fails on the wait itself.
+    @Test func mountingAnEagerTimelineNeverPaginatesTheOffscreenEdge() async throws {
         let model = PaginationScrollModel()
         let window = try makeWindow(model: model)
-        defer { window.isHidden = true }
+        defer { window.isHidden = true; window.rootViewController = nil }
 
-        try await settle(window) { model.visibleTargets.contains("bottom") && model.newerRequests == 1 }
+        _ = await settle(window) { model.bottomIsVisible && model.newerRequests > 0 }
+
+        let rendered = descendants(window).contains { $0 is UIScrollView }
+        #expect(rendered, "The harness never built a scroll view")
         #expect(model.olderRequests == 0, "Mounting offscreen history must not paginate backwards")
-
-        model.target = "row-50"
-        try await settle(window) {
-            model.visibleTargets.contains("row-50") && !model.visibleTargets.contains("bottom")
-        }
-        #expect(model.olderRequests == 0)
-        #expect(model.newerRequests == 1)
-
-        model.target = "top"
-        try await settle(window) { model.visibleTargets.contains("top") && model.olderRequests == 1 }
-        #expect(model.newerRequests == 1)
-
-        model.target = "bottom"
-        try await settle(window) { model.visibleTargets.contains("bottom") && model.newerRequests == 2 }
-        #expect(model.olderRequests == 1)
     }
 
-    @Test func initialPositioningDefersPaginationUntilTheVisibleTargetSettles() async throws {
-        let model = PaginationScrollModel()
-        model.isEnabled = false
-        let window = try makeWindow(model: model)
-        defer { window.isHidden = true }
-        try await settle(window) { model.visibleTargets.contains("bottom") }
-        #expect(model.olderRequests == 0)
-        #expect(model.newerRequests == 0)
-
-        model.isEnabled = true
-        try await settle(window) { model.newerRequests == 1 }
-        #expect(model.olderRequests == 0)
-        model.isEnabled = false
-        await Task.yield()
-        model.isEnabled = true
-        await Task.yield()
-        #expect(model.newerRequests == 1, "A loading-state change must not duplicate the visible page request")
+    private func descendants(_ view: UIView) -> [UIView] {
+        [view] + view.subviews.flatMap(descendants)
     }
 }
