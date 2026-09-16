@@ -106,8 +106,10 @@ nonisolated enum AddMembersPresentation {
 
     @MainActor
     static func displayName(for member: MemberRefFfi, appState: AppState) -> String {
-        appState.knownDisplayName(forAccountIdHex: member.accountIdHex)
-            ?? appState.shortNpub(forAccountIdHex: member.accountIdHex)
+        IdentityPresentation.text(
+            accountIdHex: member.accountIdHex,
+            knownName: appState.knownDisplayName(forAccountIdHex: member.accountIdHex)
+        )
     }
 
     static func secondaryIdentity(for member: MemberRefFfi) -> String {

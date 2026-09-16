@@ -812,13 +812,13 @@ final class GroupDetailsViewModel {
     }
 
     private func handleActionError(_ error: Error, title: String, using appState: AppState) {
-        let message = actionMessage(for: error)
+        let message = actionMessage(for: error, using: appState)
         Haptics.error()
         actionError = message
         appState.present(.error(title, message: message))
     }
 
-    private func actionMessage(for error: Error) -> String {
+    private func actionMessage(for error: Error, using appState: AppState) -> String {
         guard let marmotError = error as? MarmotKitError else {
             return UserFacingError.message(for: error)
         }
@@ -849,7 +849,10 @@ final class GroupDetailsViewModel {
         case .MissingKeyPackage(let account):
             return L10n.formatted(
                 "%@ hasn't published a compatible key package yet.",
-                IdentityFormatter.short(account)
+                IdentityPresentation.text(
+                    accountIdHex: account,
+                    knownName: appState.knownDisplayName(forAccountIdHex: account)
+                )
             )
         default:
             return UserFacingError.message(for: marmotError)

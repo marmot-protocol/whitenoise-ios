@@ -20,11 +20,13 @@ struct IdentityView: View {
                         display: IdentityFormatter.short(active.accountIdHex),
                         copyValue: active.accountIdHex
                     )
-                    CopyableValueRow(
-                        label: "npub",
-                        display: appState.shortNpub(forAccountIdHex: active.accountIdHex),
-                        copyValue: appState.npub(forAccountIdHex: active.accountIdHex)
-                    )
+                    if let npub = appState.npub(forAccountIdHex: active.accountIdHex) {
+                        CopyableValueRow(
+                            label: "npub",
+                            display: IdentityFormatter.short(npub),
+                            copyValue: npub
+                        )
+                    }
                 } header: {
                     Text("Public Key")
                 } footer: {

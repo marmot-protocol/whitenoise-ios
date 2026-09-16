@@ -9,20 +9,17 @@ import MarmotKit
 struct RecipientRow<Trailing: View>: View {
     @Environment(AppState.self) private var appState
     let accountIdHex: String
-    let npub: String
     let profileOverride: UserProfileMetadataFfi?
     let searchContext: RecipientSearch.ResultContext?
     let trailing: Trailing
 
     init(
         accountIdHex: String,
-        npub: String,
         profileOverride: UserProfileMetadataFfi? = nil,
         searchContext: RecipientSearch.ResultContext? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.accountIdHex = accountIdHex
-        self.npub = npub
         self.profileOverride = profileOverride
         self.searchContext = searchContext
         self.trailing = trailing()
@@ -48,11 +45,13 @@ struct RecipientRow<Trailing: View>: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                 }
-                Text(npub)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                if let npub {
+                    Text(npub)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             Spacer(minLength: 8)
             trailing
@@ -61,14 +60,20 @@ struct RecipientRow<Trailing: View>: View {
         .accessibilityElement(children: .combine)
     }
 
+    private var npub: String? {
+        IdentityPresentation.canonicalNpub(accountIdHex: accountIdHex)
+    }
+
     private var displayName: String {
-        appState.knownDisplayName(forAccountIdHex: accountIdHex)
-            ?? AppState.resolvedKnownDisplayName(
-                profile: profileOverride,
-                projectedName: nil,
-                localAccountLabel: nil
-            )
-            ?? IdentityFormatter.short(npub)
+        IdentityPresentation.text(
+            accountIdHex: accountIdHex,
+            knownName: appState.knownDisplayName(forAccountIdHex: accountIdHex)
+                ?? AppState.resolvedKnownDisplayName(
+                    profile: profileOverride,
+                    projectedName: nil,
+                    localAccountLabel: nil
+                )
+        )
     }
 
     private var searchContextLabel: String? {
@@ -145,8 +150,10 @@ struct SelectedRecipientRail: View {
     }
 
     private func railChip(for member: MemberRefFfi) -> some View {
-        let name = appState.knownDisplayName(forAccountIdHex: member.accountIdHex)
-            ?? IdentityFormatter.short(member.npub)
+        let name = IdentityPresentation.text(
+            accountIdHex: member.accountIdHex,
+            knownName: appState.knownDisplayName(forAccountIdHex: member.accountIdHex)
+        )
         return Button {
             onRemove(member)
         } label: {

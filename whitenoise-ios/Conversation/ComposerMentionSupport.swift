@@ -20,11 +20,12 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
         memberIdHex = details.memberIdHex
         npub = details.npub
         let accountIdHex = GroupMemberDetailsPresentation.profileAccountIdHex(for: details)
-        displayName =
-            appState.contactNickname(forAccountIdHex: accountIdHex)
-            ?? ContentSanitizer.displayName(details.displayName)
-            ?? appState.knownDisplayName(forAccountIdHex: accountIdHex)
-            ?? appState.shortNpub(forAccountIdHex: accountIdHex)
+        displayName = IdentityPresentation.text(
+            accountIdHex: accountIdHex,
+            knownName: appState.contactNickname(forAccountIdHex: accountIdHex)
+                ?? ContentSanitizer.displayName(details.displayName)
+                ?? appState.knownDisplayName(forAccountIdHex: accountIdHex)
+        )
         avatarPictureURL = appState.avatarURL(forAccountIdHex: accountIdHex)
         id = memberIdHex
         displayNameLowercased = displayName.lowercased()

@@ -378,7 +378,7 @@ struct RecipientSearchTests {
     private func candidate(_ hex: String) -> RecipientCandidate {
         RecipientCandidate(
             accountIdHex: hex,
-            npub: NostrProfileReference.npub(fromAccountIdHex: hex.lowercased()) ?? hex,
+            npub: IdentityPresentation.canonicalNpub(accountIdHex: hex) ?? "",
             lastActivityAt: 0,
             directChatGroupIdHex: nil,
             sharedChatCount: 1
