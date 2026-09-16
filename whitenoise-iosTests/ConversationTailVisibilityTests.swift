@@ -8,6 +8,7 @@ private struct TimelineTailVisibilityHarness: View {
     let scrollsToTop: Bool
     let onVisibleTargetsChanged: (Set<String>) -> Void
     let onViewportChanged: (TimelineBottomViewport) -> Void
+    @State private var didRequestScrollToTop = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -37,6 +38,11 @@ private struct TimelineTailVisibilityHarness: View {
                     threshold: TimelineViewportVisibility.minimumVisibleFraction
                 ) { visibleIDs in
                     onVisibleTargetsChanged(Set(visibleIDs))
+                    // Let the initial bottom anchor settle before moving away from it.
+                    guard scrollsToTop, !didRequestScrollToTop,
+                          visibleIDs.contains(Self.bottomSentinelID) else { return }
+                    didRequestScrollToTop = true
+                    proxy.scrollTo("row-0", anchor: .top)
                 }
                 .onScrollGeometryChange(for: TimelineBottomViewport.self) { geometry in
                     TimelineBottomViewport(
@@ -47,11 +53,6 @@ private struct TimelineTailVisibilityHarness: View {
                 } action: { _, viewport in
                     onViewportChanged(viewport)
                 }
-                .task {
-                    guard scrollsToTop else { return }
-                    await Task.yield()
-                    proxy.scrollTo("row-0", anchor: .top)
-                }
             }
         }
     }
@@ -60,6 +61,7 @@ private struct TimelineTailVisibilityHarness: View {
 }
 
 @MainActor
+@Suite(SharedWindowTestScope())
 struct ConversationTailVisibilityTests {
     private static let sentinelID = TimelineTailVisibilityHarness.bottomSentinelID
 
@@ -96,6 +98,7 @@ struct ConversationTailVisibilityTests {
         window.rootViewController = controller
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
+        window.layoutIfNeeded()
 
         let deadline = ContinuousClock.now.advanced(by: Self.settleTimeout)
         var schedulingOpportunities = 0
@@ -105,16 +108,15 @@ struct ConversationTailVisibilityTests {
             schedulingOpportunities += 1
             try await Task.sleep(for: .milliseconds(10))
         }
-        if !isSettled(visible, viewport) {
-            Issue.record(
-                """
-                timeline harness never settled within \(Self.settleTimeout) or \
-                \(schedulingOpportunities) main-actor scheduling opportunities. \
-                Visible: \(visible.sorted())
-                """,
-                sourceLocation: sourceLocation
-            )
-        }
+        try #require(
+            isSettled(visible, viewport),
+            """
+            timeline harness never settled within \(Self.settleTimeout) or \
+            \(schedulingOpportunities) main-actor scheduling opportunities. \
+            Visible: \(visible.sorted()). Viewport: \(String(describing: viewport))
+            """,
+            sourceLocation: sourceLocation
+        )
         return (visible, viewport)
     }
 
@@ -149,6 +151,7 @@ struct ConversationTailVisibilityTests {
         let (visible, _) = try await render(rowCount: 60, scrollsToTop: true) { visible, _ in
             visible.contains("row-0") && !visible.contains(Self.sentinelID)
         }
+        #expect(visible.contains("row-0"))
         #expect(
             !visible.contains(Self.sentinelID),
             "A timeline scrolled to its head must not report its tail visible. Visible: \(visible)"

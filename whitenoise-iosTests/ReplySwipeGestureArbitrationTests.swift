@@ -54,7 +54,7 @@ private final class ConversationPopHarness {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, SharedWindowTestScope())
 struct ReplySwipeGestureArbitrationTests {
     private struct Stack {
         let window: UIWindow

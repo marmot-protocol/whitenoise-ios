@@ -26,7 +26,7 @@ private struct WindowListHarness: View {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, SharedWindowTestScope())
 struct ChatListViewportTests {
     @Test func retainedRowKeepsPixelOffsetAfterLeadingRowsAreEvicted() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)

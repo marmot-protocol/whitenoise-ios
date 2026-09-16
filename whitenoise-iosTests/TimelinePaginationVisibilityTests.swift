@@ -49,7 +49,7 @@ private struct PaginationScrollHarness: View {
 }
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, SharedWindowTestScope())
 struct TimelinePaginationVisibilityTests {
     private func makeWindow(model: PaginationScrollModel) throws -> UIWindow {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

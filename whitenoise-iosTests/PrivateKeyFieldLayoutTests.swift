@@ -4,7 +4,7 @@ import UIKit
 @testable import whitenoise_ios
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, SharedWindowTestScope())
 struct PrivateKeyFieldLayoutTests {
     @Test(arguments: [320.0, 402.0], [63, 512])
     func pastedKeyStaysWithinTheSignInForm(width: Double, keyLength: Int) async throws {

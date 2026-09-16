@@ -21,8 +21,20 @@ This repo is a SwiftUI iOS app around the Marmot Rust runtime. Read this before 
 
 - Read [docs/ios-design.md](docs/ios-design.md) before UI or UX work.
 - Prefer native SwiftUI/UIKit patterns and reuse the existing `WN` components.
-- Work on one selected screen or bounded flow at a time. Preserve production
-  behavior; flag any required backend, persistence, or lifecycle change separately.
+- Work on one selected screen or bounded flow at a time. UI work includes
+  presentation, accessibility, localization, UI state, wiring existing capabilities,
+  and relevant tests. Preserve production behavior; get explicit agreement before
+  expanding into backend, business rules, persistence, runtime lifecycle, or SDK changes
+  unless that work is already authorized.
+- New screens and flows are in scope. If required functionality is missing, UI
+  work may proceed in a draft PR. In its description, tell developers what must
+  be implemented, the expected inputs, results and errors, and the integration
+  checks required before merge. Keep mocks in previews/tests and the PR in draft
+  until those dependencies are implemented and integration is verified.
+- Investigate test failures before attributing them to UI changes. Compare with
+  the unchanged base in the same environment when needed and authorized. Report
+  baseline failures separately; do not fix unrelated failures or weaken tests just
+  to make CI pass without agreement to expand the scope.
 - Verify visual changes in the current build. The user is the final visual and
   product acceptance authority.
 

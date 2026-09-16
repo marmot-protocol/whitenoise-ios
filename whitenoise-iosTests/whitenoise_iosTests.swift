@@ -13532,7 +13532,7 @@ private struct TimelineShortContentResizeHarness: View {
 @MainActor
 struct TimelineBottomTests {
 
-    @Test func shortTimelineRemainsVisibleWhenViewportShrinks() async throws {
+    @Test(SharedWindowTestScope()) func shortTimelineRemainsVisibleWhenViewportShrinks() async throws {
         let model = TimelineResizeHarnessModel()
         var visibleTargets = Set<String>()
         let controller = UIHostingController(
@@ -13549,6 +13549,7 @@ struct TimelineBottomTests {
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
         window.rootViewController = controller
         window.makeKeyAndVisible()
+        defer { window.isHidden = true }
 
         for _ in 0..<100 where !visibleTargets.contains("message") {
             try await Task.sleep(for: .milliseconds(10))
@@ -13559,10 +13560,9 @@ struct TimelineBottomTests {
         try await Task.sleep(for: .milliseconds(100))
 
         #expect(visibleTargets.contains("message"))
-        window.isHidden = true
     }
 
-    @Test func swiftUIStableTimelineResolvesSemanticBottomTarget() async throws {
+    @Test(SharedWindowTestScope()) func swiftUIStableTimelineResolvesSemanticBottomTarget() async throws {
         let target = TimelineInitialPositionTarget.latest(id: "bottom")
         var didReachTarget = false
         var didSeeBottomTarget = false
@@ -13588,6 +13588,7 @@ struct TimelineBottomTests {
         window.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
         window.rootViewController = controller
         window.makeKeyAndVisible()
+        defer { window.isHidden = true }
 
         for _ in 0..<100 where !didReachTarget || !didSeeBottomTarget {
             try await Task.sleep(for: .milliseconds(10))
@@ -13595,7 +13596,6 @@ struct TimelineBottomTests {
 
         #expect(didReachTarget, "Last viewport: \(String(describing: lastViewport))")
         #expect(didSeeBottomTarget)
-        window.isHidden = true
     }
 
     @Test func initialEntryStartsAtBottomWhenMessagesExist() {
