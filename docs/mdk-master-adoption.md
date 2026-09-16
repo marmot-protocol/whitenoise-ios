@@ -24,6 +24,30 @@ Storage migration 75 is not downgrade-compatible. Use fresh simulator storage or
 back up existing data before running this release. SDK privacy resources are
 packaged with the static framework; App Store privacy/audit acceptance is separate.
 
+## Conversation live-update behavior
+
+Prepared snapshots remain the sole authoritative retained window. iOS compares
+rows before applying them, preserves MDK order, and layers bounded local sends
+above that mirror. Exact send-summary message IDs bind local display identities
+to protocol IDs; repeated snapshot rows never acknowledge sends by matching text.
+Pending attachment bytes retire when the authoritative row arrives. Once mirrored,
+rows follow window eviction; absence before that handoff does not mean deletion.
+
+Viewport intent distinguishes following latest from reading history. Rejected stale
+commands retry against received revisions with a finite attempt budget. Timeout
+and NotReady can follow admission, so they await stream completion rather than
+replaying a page. Recoverable receive errors keep the same native handle; closure
+reopens using the current navigation intent.
+
+MarmotKit 0.10.0 supplies no pre-completion host send-correlation token. A durable
+row arriving before its send result can temporarily coexist with the local echo;
+the exact result merges them without changing the local display ID. An outcome
+without an ID stays unresolved for the session, never guessed or resent. Local
+echoes are capped at 200; capacity returns after reconciliation, discard of failed
+sends, or session reset. Improving exact early correlation requires a separate MDK
+API change. New edit metadata, system-event provenance, local-first opening, and
+incremental prepared streams remain separate future binding work.
+
 ## Current validation
 
 Build 36 checkpoint: app and NSE use `2026.9.16 (36)` in both flavors.

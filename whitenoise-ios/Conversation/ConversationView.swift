@@ -1044,8 +1044,12 @@ struct ConversationView: View {
                 }
                 viewModel?.openingMessageId = initialTargetMessageIdHex == initialUnreadMessageIdHex ? nil : initialTargetMessageIdHex
                 let viewport = conversationViewport
-                viewModel?.windowWillChange = { snapshot in
-                    viewport.prepare(for: snapshot)
+                viewModel?.windowWillChange = { [weak model = viewModel] snapshot in
+                    guard let model, model.viewportIntent != .followingLatest else {
+                        viewport.cancelRestoration()
+                        return
+                    }
+                    viewport.prepare(for: snapshot, displayID: { model.displayID(for: $0) })
                 }
                 await viewModel?.start()
             }
@@ -1574,46 +1578,44 @@ struct ConversationView: View {
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
+                let dayHeaders = Dictionary(viewModel.timelineDaySections().compactMap { section in
+                    section.items.first.map { ($0.id, section.day) }
+                }, uniquingKeysWith: { first, _ in first })
                 ScrollViewReader { proxy in
                     GeometryReader { outer in
                         ScrollView {
                             VStack(spacing: 0) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     olderTimelineTrigger(viewModel: viewModel)
-                                    ForEach(viewModel.timelineDaySections()) { section in
-                                        Section {
-                                            ForEach(section.items) { item in
-                                                if TimelineUnreadDivider.shouldShow(
-                                                    before: item,
-                                                    firstUnreadMessageIdHex: suppressesInitialUnreadDivider
-                                                        ? nil
-                                                        : viewModel.initialWindowUnreadMessageId
-                                                ) {
-                                                    UnreadMessagesDivider()
-                                                        .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
-                                                }
-                                                row(
-                                                    for: item,
-                                                    viewModel: viewModel,
-                                                    showsSenderIdentity: showsSenderIdentity
-                                                )
-                                                    .background {
-                                                        searchMatchHighlight(for: item, viewModel: viewModel)
-                                                        ChatListRowAnchor(groupId: item.id,
-                                                            sequence: viewModel.conversationWindow?.revision.sequence ?? 0,
-                                                            viewport: conversationViewport)
-                                                    }
-                                                    .modifier(TimelineRowVisibilityModifier(
-                                                        rowKey: item.rowFrameKey,
-                                                        store: timelineVisibility,
-                                                        onBecameVisible: {
-                                                            markCurrentlyVisibleMessagesRead(viewModel: viewModel)
-                                                        }
-                                                    ))
-                                            }
-                                        } header: {
-                                            timelineDateHeader(section)
+                                    ForEach(viewModel.timeline) { item in
+                                        if let day = dayHeaders[item.id] { timelineDateHeader(day) }
+                                        if TimelineUnreadDivider.shouldShow(
+                                            before: item,
+                                            firstUnreadMessageIdHex: suppressesInitialUnreadDivider
+                                                ? nil
+                                                : viewModel.initialWindowUnreadMessageId
+                                        ) {
+                                            UnreadMessagesDivider()
+                                                .id(unreadDividerID(for: viewModel.initialWindowUnreadMessageId ?? ""))
                                         }
+                                        row(
+                                            for: item,
+                                            viewModel: viewModel,
+                                            showsSenderIdentity: showsSenderIdentity
+                                        )
+                                            .background {
+                                                searchMatchHighlight(for: item, viewModel: viewModel)
+                                                ChatListRowAnchor(groupId: item.id,
+                                                    sequence: viewModel.conversationWindow?.revision.sequence ?? 0,
+                                                    viewport: conversationViewport)
+                                            }
+                                            .modifier(TimelineRowVisibilityModifier(
+                                                rowKey: item.rowFrameKey,
+                                                store: timelineVisibility,
+                                                onBecameVisible: {
+                                                    markCurrentlyVisibleMessagesRead(viewModel: viewModel)
+                                                }
+                                            ))
                                     }
                                     .padding(.bottom, 4)
                                     newerTimelineTrigger(viewModel: viewModel)
@@ -1671,9 +1673,8 @@ struct ConversationView: View {
                                 cancelPendingBottomScroll()
                             }
                             if phase == .idle {
-                                if let id = conversationViewport.visibleAnchor(), id.hasPrefix("msg:") {
-                                    viewModel.setVisibleConversationAnchor(String(id.dropFirst(4)))
-                                }
+                                viewModel.reportConversationViewport(atTail: isAtTimelineBottom,
+                                    visibleRowID: conversationViewport.visibleAnchor())
                                 if isAtTimelineBottom { userMovedAwayFromTimelineBottom = false }
                             }
                         }
@@ -1849,8 +1850,8 @@ struct ConversationView: View {
         .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
     }
 
-    private func timelineDateHeader(_ section: TimelineDaySection) -> some View {
-        Text(ConversationDateHeader.label(timestamp: UInt64(max(0, section.day.timeIntervalSince1970))))
+    private func timelineDateHeader(_ day: Date) -> some View {
+        Text(ConversationDateHeader.label(timestamp: UInt64(max(0, day.timeIntervalSince1970))))
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 11)
@@ -2086,10 +2087,11 @@ struct ConversationView: View {
             }
             .frame(height: 28)
             .modifier(TimelinePaginationVisibility(
-                isEnabled: isInitialTimelinePositionSettled && viewModel.hasMoreBefore && !viewModel.isLoadingOlder
+                isEnabled: isInitialTimelinePositionSettled && viewModel.hasMoreBefore && !viewModel.isLoadingOlder && !viewModel.isAwaitingPageCompletion,
+                retryToken: viewModel.paginationRetryToken
             ) {
-                if let id = conversationViewport.visibleAnchor(), id.hasPrefix("msg:") {
-                    viewModel.setVisibleConversationAnchor(String(id.dropFirst(4)))
+                if let row = conversationViewport.visibleAnchor(), let id = viewModel.protocolID(forDisplayID: row) {
+                    viewModel.setVisibleConversationAnchor(id)
                 }
                 Task { await viewModel.loadOlderTimelinePage() }
             })
@@ -2109,10 +2111,11 @@ struct ConversationView: View {
             .frame(height: viewModel.isLoadingNewer ? 28 : 1)
             .clipped()
             .modifier(TimelinePaginationVisibility(
-                isEnabled: isInitialTimelinePositionSettled && viewModel.hasMoreAfter && !viewModel.isLoadingNewer
+                isEnabled: isInitialTimelinePositionSettled && viewModel.hasMoreAfter && !viewModel.isLoadingNewer && !viewModel.isAwaitingPageCompletion,
+                retryToken: viewModel.paginationRetryToken
             ) {
-                if let id = conversationViewport.visibleAnchor(), id.hasPrefix("msg:") {
-                    viewModel.setVisibleConversationAnchor(String(id.dropFirst(4)))
+                if let row = conversationViewport.visibleAnchor(), let id = viewModel.protocolID(forDisplayID: row) {
+                    viewModel.setVisibleConversationAnchor(id)
                 }
                 Task { await viewModel.loadNewerTimelinePage() }
             })
@@ -2527,6 +2530,7 @@ struct ConversationView: View {
                 }
                 guard !Task.isCancelled, draft == originalText, mediaDrafts.map(\.id) == originalAttachments.map(\.id),
                       viewModel.replyTargetMessageIdHex == originalReply,
+                      viewModel.canSendMessages,
                       appState.activeAccountRef == accountRef,
                       let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel) else {
                     await completion(false)
@@ -2534,6 +2538,7 @@ struct ConversationView: View {
                 }
                 isAtTimelineBottom = true
                 userMovedAwayFromTimelineBottom = false
+                payload.viewModel.followConversationLatest()
                 composerSendBottomScrollRequest &+= 1
                 if payload.attachments.isEmpty {
                     await payload.viewModel.sendPreparedComposerText(payload.text, draftRevision: revision, completion: completion)
@@ -3047,21 +3052,23 @@ struct ConversationView: View {
         replyNavigationGeneration &+= 1
         let generation = replyNavigationGeneration
         replyNavigationTask = Task { @MainActor in
+            let viewportToken = conversationViewport.beginProgrammaticScroll()
             defer {
+                conversationViewport.endProgrammaticScroll(viewportToken)
                 if replyNavigationGeneration == generation {
                     replyNavigationTask = nil
                 }
             }
 
             if viewModel.record(for: messageIdHex) != nil {
-                replyNavigationTargetItemId = "msg:\(messageIdHex)"
+                replyNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
                 return
             }
 
             await viewModel.jumpToConversationMessage(messageIdHex)
             guard !Task.isCancelled else { return }
             if viewModel.record(for: messageIdHex) != nil {
-                replyNavigationTargetItemId = "msg:\(messageIdHex)"
+                replyNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
                 return
             }
 
@@ -3099,16 +3106,25 @@ struct ConversationView: View {
     /// bottom-follow is cancelled so it cannot race the targeted jump.
     private func scheduleSearchMatchScroll(to itemId: String, proxy: ScrollViewProxy) {
         cancelPendingBottomScroll()
+        let viewportToken = conversationViewport.beginProgrammaticScroll()
+        if let model = viewModel, let id = model.protocolID(forDisplayID: itemId) {
+            model.setVisibleConversationAnchor(id)
+        }
         userMovedAwayFromTimelineBottom = true
         pendingSearchMatchScrollTask?.cancel()
         pendingSearchMatchScrollTask = Task { @MainActor in
             await Task.yield()
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                conversationViewport.endProgrammaticScroll(viewportToken)
+                return
+            }
             pendingSearchMatchScrollTask = nil
             isAtTimelineBottom = false
             userMovedAwayFromTimelineBottom = true
-            withAnimation(.smooth(duration: 0.2)) {
+            withAnimation(.smooth(duration: 0.2), completionCriteria: .logicallyComplete) {
                 proxy.scrollTo(itemId, anchor: .center)
+            } completion: {
+                conversationViewport.endProgrammaticScroll(viewportToken)
             }
         }
     }

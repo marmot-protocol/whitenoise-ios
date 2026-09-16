@@ -276,6 +276,13 @@ final class ConversationViewModel {
     @ObservationIgnored private var windowLifetime = UUID()
     @ObservationIgnored private var startRequest = UUID()
     @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
+    private(set) var viewportIntent: ConversationViewportIntent = .followingLatest
+    private(set) var paginationRetryToken = 0
+    private var pageAdmission = ConversationPageAdmission()
+    var isAwaitingPageCompletion: Bool { pageAdmission.unresolvedRevision != nil }
+    @ObservationIgnored private var navigationIntentRevision = 0
+    @ObservationIgnored private var latestAnchorIntent: String?
+    @ObservationIgnored private var navigationFailure: String?
     private(set) var windowAnchorMessageId: String?
     @ObservationIgnored var windowWillChange: ((ConversationWindowSnapshotFfi) -> Void)?
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
@@ -526,6 +533,7 @@ final class ConversationViewModel {
     }
 
     var canSendMessages: Bool {
+        guard timelineStore.canStageOutgoingMessage else { return false }
         if let header = conversationWindow?.header { return !isLocallyReset && header.capabilities.canSend && windowSubscription != nil }
         if usesConversationWindow { return false }
         guard !isLocallyReset, !group.pendingConfirmation else { return false }
@@ -553,6 +561,7 @@ final class ConversationViewModel {
 
     var inactiveGroupMessage: String? {
         guard !canSendMessages else { return nil }
+        if !timelineStore.canStageOutgoingMessage { return L10n.string("Waiting for pending messages to resolve.") }
         if isGroupDisbanded {
             return GroupManagementPresentation.disbandedComposerMessage
         }
@@ -616,8 +625,9 @@ final class ConversationViewModel {
 
     // Timeline projection accessors — forwarded to `timelineStore`.
     func reactions(for messageIdHex: String) -> [ReactionTally] {
+        _ = timelineStore.timelineProjectionGeneration
         if let reactions = windowReactions[messageIdHex] {
-            return reactions.items.map { ReactionTally(emoji: $0.emoji, count: Int(clamping: $0.count), mine: $0.viewerReacted) }
+            return timelineStore.reactionProjections.preparedDetails(reactions, target: messageIdHex, me: myAccountId ?? "").tallies
         }
         return timelineStore.reactions(for: messageIdHex)
     }
@@ -628,11 +638,9 @@ final class ConversationViewModel {
     }
 
     func reactionDetails(for messageIdHex: String) -> ReactionDetails {
+        _ = timelineStore.timelineProjectionGeneration
         if let value = windowReactions[messageIdHex] {
-            return ReactionDetails(groups: value.items.map {
-                ReactionDetails.EmojiGroup(emoji: $0.emoji, senders: $0.reactors, mine: $0.viewerReacted,
-                    totalCount: Int(clamping: $0.count))
-            }, omittedKinds: value.omittedKinds, totalCount: Int(clamping: value.totalCount))
+            return timelineStore.reactionProjections.preparedDetails(value, target: messageIdHex, me: myAccountId ?? "")
         }
         return timelineStore.reactionDetails(for: messageIdHex)
     }
@@ -912,6 +920,7 @@ final class ConversationViewModel {
 
     func prepareForLocalGroupReset() async {
         isLocallyReset = true
+        resetOptimisticState()
         await stopLiveSubscriptions()
         await mediaDownloader.stopAndDrain()
     }
@@ -923,6 +932,7 @@ final class ConversationViewModel {
     }
 
     func prepareForLocalGroupRemoval() async {
+        resetOptimisticState()
         await stopLiveSubscriptions()
     }
 
@@ -1208,6 +1218,7 @@ final class ConversationViewModel {
         let window = windowSubscription
         windowSubscription = nil
         windowCursor = nil
+        pageAdmission = ConversationPageAdmission()
         windowCommandTask = nil
         previous?.cancel()
         commands?.cancel()
@@ -1272,12 +1283,18 @@ final class ConversationViewModel {
                           appState.activeAccountRef == accountRef else { return }
                     let client = try appState.currentMarmotClient()
                     let window: ConversationWindowSubscription
+                    var targetUnavailable = false
                     do {
-                        let target = self?.openingMessageId
+                        let target: String?
+                        if self?.conversationWindow != nil {
+                            if case .history(let anchor) = self?.viewportIntent { target = anchor }
+                            else { target = nil }
+                        } else { target = self?.openingMessageId }
+                        let mode: ConversationOpenModeFfi = target != nil ? .message : (self?.conversationWindow == nil ? .automatic : .latest)
                         window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex,
-                            mode: target == nil ? .automatic : .message, messageIdHex: target)
+                            mode: mode, messageIdHex: target)
                     } catch MarmotKitError.ConversationWindowMessageNotRetained {
-                        self?.openingTargetUnavailable = true
+                        targetUnavailable = true
                         window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex, mode: .latest)
                     }
                     guard !Task.isCancelled, self?.windowLifetime == lifetime,
@@ -1286,6 +1303,11 @@ final class ConversationViewModel {
                         return
                     }
                     self?.windowSubscription = window
+                    self?.pageAdmission = ConversationPageAdmission()
+                    if targetUnavailable {
+                        self?.openingTargetUnavailable = true
+                        self?.viewportIntent = .followingLatest
+                    }
                     do {
                         if let initial = await Task.detached(priority: .utility, operation: { window.snapshot() }).value {
                             guard !Task.isCancelled, self?.windowLifetime == lifetime,
@@ -1296,7 +1318,20 @@ final class ConversationViewModel {
                             self?.windowCursor = ProjectionSequenceCursor(generation: initial.revision.generation, sequence: initial.revision.sequence)
                             self?.installConversationWindow(initial)
                         }
-                        while let snapshot = try await window.nextCancellable() {
+                        while !Task.isCancelled {
+                            let next: ConversationWindowSnapshotFfi?
+                            do { next = try await window.nextCancellable() }
+                            catch is CancellationError { throw CancellationError() }
+                            catch MarmotKitError.ConversationWindowClosed { break }
+                            catch MarmotKitError.ConversationWindowWrongGeneration { break }
+                            catch {
+                                guard !Task.isCancelled, self?.windowLifetime == lifetime else { break }
+                                self?.error = UserFacingError.message(for: error)
+                                // A recoverable capture error leaves the receiver alive. A terminal
+                                // worker error closes it, so the next receive returns nil and reopens.
+                                continue
+                            }
+                            guard let snapshot = next else { break }
                             guard !Task.isCancelled, self?.windowLifetime == lifetime,
                                   appState.activeAccountRef == accountRef,
                                   appState.canUseRuntimeForLocalForegroundWork else { break }
@@ -1333,75 +1368,148 @@ final class ConversationViewModel {
         installConversationWindow(snapshot)
     }
 
-    private func installConversationWindow(_ snapshot: ConversationWindowSnapshotFfi) {
-        windowWillChange?(snapshot)
-        if conversationWindow == nil { initialWindowUnreadMessageId = snapshot.readState.firstUnreadMessageIdHex }
+    func installConversationWindow(_ snapshot: ConversationWindowSnapshotFfi) {
+        if conversationWindow?.messages != snapshot.messages || conversationWindow?.identities != snapshot.identities {
+            windowWillChange?(snapshot)
+        }
+        if conversationWindow == nil {
+            initialWindowUnreadMessageId = snapshot.readState.firstUnreadMessageIdHex
+            if snapshot.anchor.kind == .firstUnread || snapshot.anchor.kind == .message {
+                let id = snapshot.anchor.index.flatMap { snapshot.messages.indices.contains(Int($0)) ? snapshot.messages[Int($0)].timeline.messageIdHex : nil }
+                viewportIntent = .history(id)
+            }
+        }
         conversationWindow = snapshot
+        pageAdmission.observe(snapshot.revision)
         if let accountRef = appState?.activeAccountRef {
             appState?.conversationDraftStore.receiveSelection(snapshot.draft, accountRef: accountRef, groupIdHex: group.groupIdHex)
         }
         let previousIdentities = windowIdentities
         windowIdentities = Dictionary(snapshot.identities.map { ($0.accountIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
+        let previousReactions = windowReactions
         windowReactions = Dictionary(snapshot.messages.map { ($0.timeline.messageIdHex, $0.references.reactions) }, uniquingKeysWith: { _, latest in latest })
+        for message in snapshot.messages where previousReactions[message.timeline.messageIdHex] != message.references.reactions {
+            timelineStore.reactionProjections.installPrepared(message.references.reactions,
+                target: message.timeline.messageIdHex, me: myAccountId ?? "")
+        }
         if let index = snapshot.anchor.index, snapshot.messages.indices.contains(Int(index)) {
             windowAnchorMessageId = snapshot.messages[Int(index)].timeline.messageIdHex
         } else { windowAnchorMessageId = nil }
         readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
         timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: snapshot.messages.map(\.timeline),
             hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
-        if previousIdentities != windowIdentities { timelineStore.refreshProfileDependentTimelineProjections() }
-        error = nil
+        if previousIdentities != windowIdentities {
+            let changed = Set(previousIdentities.keys).union(windowIdentities.keys).filter { previousIdentities[$0] != windowIdentities[$0] }
+            let affected = Set(snapshot.messages.compactMap { message -> String? in
+                let references = message.references
+                let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
+                return references.system != nil || !identities.isDisjoint(with: changed) ? message.timeline.messageIdHex : nil
+            })
+            timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
+        }
+        error = navigationFailure
+    }
+
+    func displayID(for messageID: String) -> String { timelineStore.displayID(for: messageID) }
+    func protocolID(forDisplayID id: String) -> String? { timelineStore.protocolID(forDisplayID: id) }
+
+    func reportConversationViewport(atTail: Bool, visibleRowID: String?) {
+        if atTail && !hasMoreAfter {
+            if viewportIntent != .followingLatest { followConversationLatest() }
+        } else if let id = visibleRowID.flatMap({ protocolID(forDisplayID: $0) }) {
+            setVisibleConversationAnchor(id)
+        }
     }
 
     func setVisibleConversationAnchor(_ messageId: String) {
-        guard conversationWindow?.messages.contains(where: { $0.timeline.messageIdHex == messageId }) == true,
-              messageId != windowAnchorMessageId else { return }
-        enqueueConversationCommand { window, revision in
-            try await window.setVisibleAnchor(revision: revision, messageIdHex: messageId, timeoutMs: 0)
-        }
+        guard conversationWindow?.messages.contains(where: { $0.timeline.messageIdHex == messageId }) == true else { return }
+        let wasFollowing = viewportIntent == .followingLatest
+        if !wasFollowing, latestAnchorIntent == messageId { return }
+        navigationFailure = nil
+        viewportIntent = .history(messageId)
+        latestAnchorIntent = messageId
+        guard wasFollowing || messageId != windowAnchorMessageId else { return }
+        enqueueConversationCommand(.anchor(messageId))
+    }
+
+    func followConversationLatest() {
+        navigationFailure = nil
+        viewportIntent = .followingLatest
+        navigationIntentRevision &+= 1
+        latestAnchorIntent = nil
+        enqueueConversationCommand(.latest)
     }
 
     func returnConversationToLatest() async {
-        enqueueConversationCommand { window, revision in
-            try await window.returnToLatest(revision: revision, timeoutMs: 0)
-        }
+        followConversationLatest()
         await windowCommandTask?.value
     }
 
     func jumpToConversationMessage(_ messageId: String) async {
-        enqueueConversationCommand { window, revision in
-            try await window.jumpToMessage(revision: revision, messageIdHex: messageId, timeoutMs: 0)
-        }
+        navigationFailure = nil
+        viewportIntent = .history(messageId)
+        navigationIntentRevision &+= 1
+        latestAnchorIntent = nil
+        enqueueConversationCommand(.jump(messageId))
         await windowCommandTask?.value
     }
 
-    private func enqueueConversationCommand(
-        _ operation: @escaping (ConversationWindowSubscription, ConversationWindowRevisionFfi) async throws -> ConversationWindowSnapshotFfi
-    ) {
+    private func enqueueConversationCommand(_ command: ConversationWindowCommand) {
         guard let window = windowSubscription else { return }
         let account = appState?.activeAccountRef
+        let intentRevision = navigationIntentRevision
         let previous = windowCommandTask
         windowCommandTask = Task { @MainActor [weak self] in
             await previous?.value
-            guard let self, !Task.isCancelled, self.windowSubscription === window,
-                  self.appState?.activeAccountRef == account,
-                  let revision = self.conversationWindow?.revision else { return }
-            do {
-                let snapshot = try await operation(window, revision)
-                guard !Task.isCancelled, self.appState?.activeAccountRef == account else { return }
+            guard let self else { return }
+            var attemptedRevision: ConversationWindowRevisionFfi?
+            let result = await ConversationCommandRunner.run(isCurrent: {
+                guard self.windowSubscription === window, self.appState?.activeAccountRef == account,
+                      self.navigationIntentRevision == intentRevision else { return false }
+                if case .page = command, self.isAwaitingPageCompletion { return false }
+                if case .anchor(let id) = command {
+                    return self.latestAnchorIntent == id
+                        && self.conversationWindow?.messages.contains(where: { $0.timeline.messageIdHex == id }) == true
+                }
+                return true
+            }, revision: { self.conversationWindow?.revision }, waitForUpdate: { revision in
+                // snapshot() is take-once; only the receiver consumes replacements.
+                for _ in 0..<20 {
+                    guard !Task.isCancelled, self.windowSubscription === window,
+                          self.conversationWindow?.revision == revision else { return }
+                    do { try await Task.sleep(for: .milliseconds(25)) } catch { return }
+                }
+            }, execute: { revision in
+                attemptedRevision = revision
+                return try await command.execute(on: window, revision: revision)
+            })
+            guard !Task.isCancelled, self.windowSubscription === window else { return }
+            switch result {
+            case .applied(let snapshot):
+                switch command {
+                case .latest, .jump: self.navigationFailure = nil
+                case .anchor, .page: break
+                }
                 self.acceptConversationWindow(snapshot, from: window)
-            } catch {
-                guard !Task.isCancelled, self.windowSubscription === window else { return }
+            case .superseded: break
+            case .awaitingProjection(let error):
+                if case .page = command, let attemptedRevision {
+                    self.pageAdmission.awaitCompletion(of: attemptedRevision, installed: self.conversationWindow?.revision)
+                }
+                self.error = UserFacingError.message(for: error)
+            case .rejected(let error):
+                if case .anchor(let id) = command, self.latestAnchorIntent == id { self.latestAnchorIntent = nil }
+                self.error = UserFacingError.message(for: error)
                 switch error {
-                case MarmotKitError.ConversationWindowStale, MarmotKitError.ConversationWindowWrongGeneration,
-                     MarmotKitError.ConversationWindowNotReady, MarmotKitError.ConversationWindowAnchorOutside:
-                    break
+                case MarmotKitError.ConversationWindowStale, MarmotKitError.ConversationWindowAnchorOutside:
+                    self.paginationRetryToken &+= 1
                 case MarmotKitError.ConversationWindowMessageNotRetained:
                     self.error = L10n.string("Message unavailable")
-                case MarmotKitError.ConversationWindowTimedOut:
-                    self.error = L10n.string("The operation may have completed. Refreshing the conversation is required before retrying.")
-                default:
-                    self.error = UserFacingError.message(for: error)
+                default: break
+                }
+                switch command {
+                case .latest, .jump: self.navigationFailure = self.error
+                case .anchor, .page: break
                 }
             }
         }
@@ -1624,22 +1732,18 @@ final class ConversationViewModel {
 #endif
 
     func loadOlderTimelinePage() async {
-        guard !isLocallyReset, hasMoreBefore, !isLoadingOlder, windowSubscription != nil else { return }
+        guard !isLocallyReset, !isAwaitingPageCompletion, hasMoreBefore, !isLoadingOlder, windowSubscription != nil else { return }
         isLoadingOlder = true
         defer { isLoadingOlder = false }
-        enqueueConversationCommand { window, revision in
-            try await window.page(revision: revision, direction: .older, count: Self.timelinePageLimit, timeoutMs: 0)
-        }
+        enqueueConversationCommand(.page(.older))
         await windowCommandTask?.value
     }
 
     func loadNewerTimelinePage() async {
-        guard !isLocallyReset, hasMoreAfter, !isLoadingNewer, windowSubscription != nil else { return }
+        guard !isLocallyReset, !isAwaitingPageCompletion, hasMoreAfter, !isLoadingNewer, windowSubscription != nil else { return }
         isLoadingNewer = true
         defer { isLoadingNewer = false }
-        enqueueConversationCommand { window, revision in
-            try await window.page(revision: revision, direction: .newer, count: Self.timelinePageLimit, timeoutMs: 0)
-        }
+        enqueueConversationCommand(.page(.newer))
         await windowCommandTask?.value
     }
 

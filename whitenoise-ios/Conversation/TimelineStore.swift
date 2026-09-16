@@ -68,6 +68,57 @@ final class TimelineStore {
 
     /// Renderable timeline messages we've loaded by id.
     @ObservationIgnored private var messageById: [String: AppMessageRecordFfi] = [:]
+    // Prepared windows own order and membership; local echoes live until an exact ID handoff.
+    enum LocalSendPhase: Equatable {
+        case pending, accepted, completionUnknown, published, failed
+    }
+    @ObservationIgnored private var localSendPhases: [String: LocalSendPhase] = [:]
+    @ObservationIgnored private var localSendOrder: [String: UInt64] = [:]
+    @ObservationIgnored private var nextLocalSendOrder: UInt64 = 0
+    static let maximumLocalEchoes = 200
+
+    var canStageOutgoingMessage: Bool {
+        _ = timelineProjectionGeneration
+        let unresolved = localSendPhases.keys.filter { transientTimelineItems[$0] != nil }.count
+        return unresolved + confirmedPendingTimelineRecordIds.count < Self.maximumLocalEchoes
+    }
+
+    func localSendPhase(rowID: String) -> LocalSendPhase? { localSendPhases[rowID] }
+
+    func markSendCompletionUnknown(tempId: String) {
+        guard localSendPhases["msg:\(tempId)"] != nil else { return }
+        localSendPhases["msg:\(tempId)"] = .completionUnknown
+    }
+
+    func acceptSend(tempId: String, record: AppMessageRecordFfi, summary: SendSummaryFfi) {
+        let rowID = "msg:\(tempId)"
+        guard localSendPhases[rowID] != nil else { return }
+        switch summary.acceptDisposition {
+        case .published: localSendPhases[rowID] = .published
+        case .acceptedPending: localSendPhases[rowID] = .accepted
+        case .completionUnknown: localSendPhases[rowID] = .completionUnknown
+        }
+        if let id = summary.messageIds.first, !id.isEmpty {
+            confirmSent(tempId: tempId, record: record, messageId: id, published: summary.acceptDisposition == .published)
+        } else if summary.acceptDisposition == .published {
+            confirmSent(tempId: tempId, record: record, messageId: nil)
+        }
+    }
+
+    @ObservationIgnored private(set) var outgoingLifetime = UUID()
+    @ObservationIgnored private var preparedOrder: [String]?
+    @ObservationIgnored private var preparedRecords: [String: TimelineMessageRecordFfi] = [:]
+    @ObservationIgnored private var displayIDByMessageID: [String: String] = [:]
+
+    func displayID(for messageID: String) -> String {
+        displayIDByMessageID[messageID] ?? "msg:\(messageID)"
+    }
+
+    func protocolID(forDisplayID displayID: String) -> String? {
+        guard let record = messageByRowFrameKey[displayID], !record.messageIdHex.isEmpty else { return nil }
+        return record.messageIdHex
+    }
+
     @ObservationIgnored private var messageByRowFrameKey: [String: AppMessageRecordFfi] = [:]
     /// Position of a message id in `timeline`, oldest → newest. Backs the read
     /// watermark's monotonic guard, which has to be O(1) on every visible row.
@@ -194,6 +245,8 @@ final class TimelineStore {
         let retentionExpiresAt: UInt64?
         let recordedAt: UInt64
         let receivedAt: UInt64
+        let contentTokens: MarkdownDocumentFfi
+        let tags: [MessageTagFfi]
         let tokenBlockCount: Int
         let tokensTruncated: Bool
         let tagCount: Int
@@ -212,6 +265,8 @@ final class TimelineStore {
             retentionExpiresAt = record.retentionExpiresAt
             recordedAt = record.recordedAt
             receivedAt = record.receivedAt
+            contentTokens = record.contentTokens
+            tags = record.tags
             tokenBlockCount = record.contentTokens.blocks.count
             tokensTruncated = record.contentTokens.truncated
             tagCount = record.tags.count
@@ -525,7 +580,34 @@ final class TimelineStore {
     }
 
     func applyConversationWindowPage(_ page: TimelinePageFfi) {
-        applyTimelineWindowPage(page, completeReplacement: true)
+        let order = page.messages.map(\.messageIdHex)
+        let orderChanged = preparedOrder != order
+        preparedOrder = order
+        let incoming = Dictionary(page.messages.map { ($0.messageIdHex, $0) }, uniquingKeysWith: { _, last in last })
+        var changed = false
+        var targets: Set<String> = []
+        for id in Array(messageById.keys) where incoming[id] == nil && !confirmedPendingTimelineRecordIds.contains(id) {
+            changed = removeTimelineRecord(messageIdHex: id, updateTimeline: false) || changed
+            preparedRecords[id] = nil
+            localSendOrder.removeValue(forKey: displayID(for: id))
+            localSendPhases.removeValue(forKey: displayID(for: id))
+            displayIDByMessageID[id] = nil
+            targets.insert(id)
+        }
+        let changedRecords = page.messages.filter { preparedRecords[$0.messageIdHex] != $0 }
+        streamWatcher?.recordFinalizedStreams(in: changedRecords)
+        for record in changedRecords {
+            preparedRecords[record.messageIdHex] = record
+            changed = applyTimelineRecord(record) || changed
+            targets.insert(record.messageIdHex)
+        }
+        streamWatcher?.pruneScannedFinalizedMessageIds(keeping: Set(messageById.keys))
+        hasMoreBefore = page.hasMoreBefore
+        hasMoreAfter = page.hasMoreAfter
+        if changed || orderChanged {
+            rebuildProjectedState(projectionChanged: changed, changedReactionTargets: targets)
+        }
+        isLoading = false
     }
 
     private func applyTimelineWindowPage(_ page: TimelinePageFfi, completeReplacement: Bool = false) {
@@ -543,7 +625,7 @@ final class TimelineStore {
         if shouldEvictAbsentRecords {
             let incomingMessageIds = Set(page.messages.map(\.messageIdHex).filter { !$0.isEmpty })
             for messageId in Array(messageById.keys) where !incomingMessageIds.contains(messageId) {
-                if !completeReplacement && confirmedPendingTimelineRecordIds.contains(messageId) {
+                if confirmedPendingTimelineRecordIds.contains(messageId) {
                     continue
                 }
                 projectionChanged = removeTimelineRecord(
@@ -735,19 +817,21 @@ final class TimelineStore {
             // the bounded decrypted-media cache owns the bytes and the pending
             // projection must be released so it cannot mask canonical metadata
             // for the lifetime of the conversation.
-            mediaProjections.removePending(forRowId: "msg:\(appRecord.messageIdHex)")
+            mediaProjections.removePending(forRowId: displayID(for: appRecord.messageIdHex))
         }
         reactionProjections.setSummary(record.reactions, forMessageId: appRecord.messageIdHex)
-        reactionProjections.pruneConfirmedOptimistic(
-            target: appRecord.messageIdHex,
-            summary: record.reactions,
-            me: myAccountId ?? ""
-        )
+        if preparedOrder == nil {
+            reactionProjections.pruneConfirmedOptimistic(
+                target: appRecord.messageIdHex,
+                summary: record.reactions,
+                me: myAccountId ?? ""
+            )
+        }
         deletedProjections.setProjected(deleted: record.deleted, forMessageId: record.messageIdHex)
-        let reconciledStatus = reconcilePendingOutgoingMessage(
+        let reconciledStatus = preparedOrder == nil ? reconcilePendingOutgoingMessage(
             with: appRecord,
             replyTargetId: record.replyToMessageIdHex
-        )
+        ) : nil
         projectionChanged = (reconciledStatus != nil) || projectionChanged
         messageStatusById[appRecord.messageIdHex] = durableRowStatus(
             for: appRecord,
@@ -764,7 +848,7 @@ final class TimelineStore {
             ) {
                 projectionChanged = upsertTimelineItem(item) || projectionChanged
             } else {
-                projectionChanged = removeTimelineItem(id: "msg:\(appRecord.messageIdHex)") || projectionChanged
+                projectionChanged = removeTimelineItem(id: displayID(for: appRecord.messageIdHex)) || projectionChanged
             }
             for targetMessageIdHex in affectedEditTargets where targetMessageIdHex != appRecord.messageIdHex {
                 if let targetItem = visibleTimelineItem(forMessageId: targetMessageIdHex) {
@@ -798,7 +882,7 @@ final class TimelineStore {
         deletedProjections.removeProjected(forMessageId: messageIdHex)
         streamWatcher?.forgetScannedFinalized(messageIdHex)
         var timelineChanged = updateTimeline
-            ? removeTimelineItem(id: "msg:\(messageIdHex)")
+            ? removeTimelineItem(id: displayID(for: messageIdHex))
             : false
         if updateTimeline {
             for targetMessageIdHex in affectedEditTargets where targetMessageIdHex != messageIdHex {
@@ -852,10 +936,7 @@ final class TimelineStore {
         next.append(contentsOf: transientTimelineItems.values)
         next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
-        next = ConversationViewModel.normalizedTimeline(
-            from: next,
-            replyTargetId: { replyTargetId(for: $0) }
-        )
+        next = orderedTimeline(next)
         let markdownTiming = appState?.productAnalytics.beginTiming()
         let markdownChanged = markdownProjections.rebuild(
             for: next,
@@ -868,6 +949,23 @@ final class TimelineStore {
         appState?.productAnalytics.recordTiming(.mediaRebuild, since: mediaTiming)
         agentEventProjections.prune(keeping: Set(next.map(\.id)))
         return assignTimeline(next) || markdownChanged || mediaChanged
+    }
+
+    private func orderedTimeline(_ items: [TimelineItem]) -> [TimelineItem] {
+        guard let preparedOrder else {
+            return ConversationViewModel.normalizedTimeline(from: items, replyTargetId: { replyTargetId(for: $0) })
+        }
+        let byID = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        let durableIDs = Set(preparedOrder.map { displayID(for: $0) })
+        let durable = preparedOrder.compactMap { byID[displayID(for: $0)] }
+        // Local sends and session previews follow retained history until MDK gives them a position.
+        let overlays = items.filter { !durableIDs.contains($0.id) }.sorted {
+            if $0.timestamp != $1.timestamp { return $0.timestamp < $1.timestamp }
+            let left = localSendOrder[$0.id] ?? UInt64.max
+            let right = localSendOrder[$1.id] ?? UInt64.max
+            return left == right ? $0.id < $1.id : left < right
+        }
+        return durable + overlays
     }
 
     func refreshStreamingDebugPresentation() {
@@ -911,13 +1009,24 @@ final class TimelineStore {
         return evicted
     }
 
-    func refreshProfileDependentTimelineProjections() {
+    func refreshProfileDependentTimelineProjections(affectedMessageIDs: Set<String>? = nil) {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.timelineProfiles, since: timing) }
 
-        replyPreviewDisplayCache.removeAll()
-        groupSystemDisplayCache.removeAll()
-        markdownProjections.rebuild(for: timeline, onlyRowsWithMentions: true, resolver: mentionDisplayNameResolver)
+        if let affectedMessageIDs {
+            guard !affectedMessageIDs.isEmpty else { return }
+            for id in affectedMessageIDs {
+                replyPreviewDisplayCache[id] = nil
+                groupSystemDisplayCache[id] = nil
+                if let item = visibleTimelineItem(forMessageId: id) {
+                    _ = markdownProjections.update(for: item, force: true, resolver: mentionDisplayNameResolver)
+                }
+            }
+        } else {
+            replyPreviewDisplayCache.removeAll()
+            groupSystemDisplayCache.removeAll()
+            markdownProjections.rebuild(for: timeline, onlyRowsWithMentions: true, resolver: mentionDisplayNameResolver)
+        }
         noteProjectionChanged()
     }
 
@@ -925,15 +1034,19 @@ final class TimelineStore {
         for record: AppMessageRecordFfi,
         status: MessageStatus?
     ) -> TimelineItem? {
+        func row(_ value: AppMessageRecordFfi) -> TimelineItem {
+            let item = TimelineItem.message(value, status: status)
+            return TimelineItem(id: displayID(for: value.messageIdHex), kind: item.kind, timestamp: item.timestamp)
+        }
         if let messageId = Hex.normalized32Bytes(record.messageIdHex),
            hiddenMessageIds.contains(messageId) {
             return nil
         }
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media, .streamFinal:
-            return TimelineItem.message(editProjections.displayRecord(for: record), status: status)
+            return row(editProjections.displayRecord(for: record))
         case .agentActivity, .agentOperation:
-            let item = TimelineItem.message(record, status: status)
+            let item = row(record)
             guard agentEventProjections.display(for: item) != nil else { return nil }
             return item
         case .groupSystem:
@@ -941,10 +1054,10 @@ final class TimelineStore {
                 record,
                 groupSystem: groupSystemByMessageId[record.messageIdHex]
             ) else { return nil }
-            return TimelineItem.message(record, status: status)
+            return row(record)
         case .reaction, .delete, .edit, .agentStreamStart, .unknown:
             guard streamingDebugEnabled else { return nil }
-            return TimelineItem.message(record, status: status)
+            return row(record)
         }
     }
 
@@ -958,10 +1071,7 @@ final class TimelineStore {
         }
         var next = timeline.filter { $0.id != item.id }
         next.append(item)
-        next = ConversationViewModel.normalizedTimeline(
-            from: next,
-            replyTargetId: { replyTargetId(for: $0) }
-        )
+        next = orderedTimeline(next)
         let markdownChanged = markdownProjections.update(for: item, resolver: mentionDisplayNameResolver)
         let mediaChanged = mediaProjections.update(for: item)
         return assignTimeline(next) || markdownChanged || mediaChanged
@@ -1128,6 +1238,11 @@ final class TimelineStore {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.outgoingProjection, since: timing) }
 
+        localSendPhases["msg:\(tempId)"] = .pending
+        if localSendOrder["msg:\(tempId)"] == nil {
+            nextLocalSendOrder &+= 1
+            localSendOrder["msg:\(tempId)"] = nextLocalSendOrder
+        }
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
         let changed = upsertTimelineItem(item)
@@ -1136,12 +1251,14 @@ final class TimelineStore {
         }
     }
 
-    func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?) {
+    func confirmSent(tempId: String, record: AppMessageRecordFfi, messageId: String?, published: Bool = true) {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.outgoingConfirmation, since: timing) }
 
+        guard localSendPhases["msg:\(tempId)"] != nil else { return }
         var projectionChanged = false
         let realId = messageId ?? ""
+        if !realId.isEmpty { displayIDByMessageID[realId] = "msg:\(tempId)" }
         let durableRowAlreadyLoaded = !realId.isEmpty && messageById[realId] != nil
         let confirmed = AppMessageRecordFfi(
             messageIdHex: realId,
@@ -1173,25 +1290,25 @@ final class TimelineStore {
             }
             let needsProjectionAckGuard = !durableRowAlreadyLoaded
                 || undeliveredOwnMessageIds.contains(realId)
-            if needsProjectionAckGuard {
+            if needsProjectionAckGuard && published {
                 publishedOutgoingMessageIdsAwaitingProjection.insert(realId)
             }
-            undeliveredOwnMessageIds.remove(realId)
-            if messageStatusById[realId] != .sent {
+            if !durableRowAlreadyLoaded {
+                if published { undeliveredOwnMessageIds.remove(realId) }
+                else { undeliveredOwnMessageIds.insert(realId) }
+                messageStatusById[realId] = published ? .sent : .sending
                 projectionChanged = true
             }
-            messageStatusById[realId] = .sent
         }
-        let rowId = "msg:\(realId.isEmpty ? tempId : realId)"
+        let rowId = "msg:\(tempId)"
         visibilityPerformance.move(from: "msg:\(tempId)", to: rowId)
         projectionChanged = (transientTimelineItems.removeValue(forKey: "msg:\(tempId)") != nil) || projectionChanged
         let removedPendingMedia = mediaProjections.removePending(forRowId: "msg:\(tempId)")
         projectionChanged = (removedPendingMedia != nil) || projectionChanged
-        projectionChanged = removeTimelineItem(id: "msg:\(tempId)") || projectionChanged
-        // Re-stage the just-picked bytes under the confirmed row id (real or
-        // temp) so the sent bubble keeps rendering from memory instead of
-        // re-downloading and re-decrypting the attachment we just uploaded. The
-        // real-id branches previously dropped these, forcing a needless fetch.
+        if !realId.isEmpty {
+            projectionChanged = removeTimelineItem(id: "msg:\(realId)") || projectionChanged
+        }
+        // Keep picked bytes under the stable display ID until canonical media owns the row.
         if let removedPendingMedia {
             mediaProjections.setPending(removedPendingMedia, forRowId: rowId)
         }
@@ -1211,10 +1328,12 @@ final class TimelineStore {
             }
         } else {
             projectionChanged = upsertTimelineItem(
-                TimelineItem.message(confirmed, status: messageStatusById[realId] ?? .sent)
+                TimelineItem(id: rowId, kind: .message(record: confirmed, status: messageStatusById[realId] ?? .sent), timestamp: confirmed.recordedAt)
             ) || projectionChanged
         }
+        if durableRowAlreadyLoaded { mediaProjections.removePending(forRowId: rowId) }
         if projectionChanged {
+            _ = rebuildTimeline()
             noteProjectionChanged()
         }
     }
@@ -1285,8 +1404,7 @@ final class TimelineStore {
     /// delivered, if `rowId` names one. These retry through group
     /// convergence — re-sending the text would mint a duplicate message.
     func undeliveredDurableMessageId(rowId: String) -> String? {
-        guard rowId.hasPrefix("msg:") else { return nil }
-        let messageIdHex = String(rowId.dropFirst("msg:".count))
+        guard let messageIdHex = protocolID(forDisplayID: rowId) else { return nil }
         return undeliveredOwnMessageIds.contains(messageIdHex) ? messageIdHex : nil
     }
 
@@ -1314,6 +1432,8 @@ final class TimelineStore {
     func discardTransientRow(rowId: String) {
         guard transientTimelineItems[rowId] != nil else { return }
         transientTimelineItems[rowId] = nil
+        localSendPhases[rowId] = nil
+        localSendOrder[rowId] = nil
         mediaProjections.removePending(forRowId: rowId)
         if removeTimelineItem(id: rowId) {
             noteProjectionChanged()
@@ -1322,8 +1442,10 @@ final class TimelineStore {
 
     func markFailed(tempId: String) {
         let rowId = "msg:\(tempId)"
-        guard let item = transientTimelineItems[rowId],
+        guard localSendPhases[rowId] == .pending,
+              let item = transientTimelineItems[rowId],
               case .message(let record, _) = item.kind else { return }
+        localSendPhases[rowId] = .failed
         let failedItem = TimelineItem(
             id: "msg:\(tempId)",
             kind: .message(record: record, status: .failed),
@@ -1431,6 +1553,7 @@ final class TimelineStore {
     // MARK: - Optimistic reset
 
     func resetOptimisticState() {
+        outgoingLifetime = UUID()
         visibilityPerformance.reset()
         let backingChanged = deletedProjections.hasOptimistic ||
             reactionProjections.hasOptimistic ||
@@ -1444,6 +1567,12 @@ final class TimelineStore {
         editProjections.removeAllOptimistic()
         systemTimelineItems.removeAll()
         transientTimelineItems.removeAll()
+        localSendPhases.removeAll()
+        localSendOrder.removeAll()
+        for id in Array(confirmedPendingTimelineRecordIds) {
+            _ = removeTimelineRecord(messageIdHex: id, updateTimeline: false)
+            displayIDByMessageID[id] = nil
+        }
         publishedOutgoingMessageIdsAwaitingProjection.removeAll()
         mediaProjections.removeAllPending()
         let deletedChanged = deletedProjections.rebuild()

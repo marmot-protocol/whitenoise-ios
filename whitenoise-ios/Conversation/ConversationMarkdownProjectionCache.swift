@@ -26,6 +26,7 @@ final class ConversationMarkdownProjectionCache {
         let kind: UInt64
         let recordedAt: UInt64
         let receivedAt: UInt64
+        let contentTokens: MarkdownDocumentFfi
         let tokenBlockCount: Int
         let tokensTruncated: Bool
         let tagCount: Int
@@ -38,6 +39,7 @@ final class ConversationMarkdownProjectionCache {
             kind = record.kind
             recordedAt = record.recordedAt
             receivedAt = record.receivedAt
+            contentTokens = record.contentTokens
             tokenBlockCount = record.contentTokens.blocks.count
             tokensTruncated = record.contentTokens.truncated
             tagCount = record.tags.count

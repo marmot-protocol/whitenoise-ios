@@ -18,6 +18,18 @@ final class ChatListViewport {
     private weak var scrollView: UIScrollView?
     private var pending: Pending?
     private var isRestoring = false
+    private var programmaticScroll: UUID?
+
+    func beginProgrammaticScroll() -> UUID {
+        let token = UUID()
+        programmaticScroll = token
+        pending = nil
+        return token
+    }
+
+    func endProgrammaticScroll(_ token: UUID) {
+        if programmaticScroll == token { programmaticScroll = nil }
+    }
     private var topRequested = false
 
     func requestTop() {
@@ -56,16 +68,18 @@ final class ChatListViewport {
         prepare(anchor: snapshot.anchor, sequence: snapshot.sequence)
     }
 
-    func prepare(for snapshot: ConversationWindowSnapshotFfi) {
+    func cancelRestoration() { pending = nil }
+
+    func prepare(for snapshot: ConversationWindowSnapshotFfi, displayID: (String) -> String = { "msg:" + $0 }) {
         guard let index = snapshot.anchor.index, snapshot.messages.indices.contains(Int(index)) else { return }
-        let id = "msg:" + snapshot.messages[Int(index)].timeline.messageIdHex
+        let id = displayID(snapshot.messages[Int(index)].timeline.messageIdHex)
         // Initial positioning belongs to the conversation scroll coordinator.
         guard !rows.isEmpty else { return }
         let anchor: ChatListAnchorOutcomeFfi
         switch snapshot.anchor.kind {
         case .recoveredNext, .recoveredPrevious: anchor = .recovered(groupIdHex: id, index: index)
         default:
-            guard let visible = visibleRow(), snapshot.messages.contains(where: { "msg:" + $0.timeline.messageIdHex == visible.id }) else {
+            guard let visible = visibleRow(), snapshot.messages.contains(where: { displayID($0.timeline.messageIdHex) == visible.id }) else {
                 anchor = .recovered(groupIdHex: id, index: index)
                 prepare(anchor: anchor, sequence: snapshot.revision.sequence)
                 return
@@ -76,7 +90,7 @@ final class ChatListViewport {
     }
 
     private func prepare(anchor: ChatListAnchorOutcomeFfi, sequence: UInt64) {
-        guard let scrollView, !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else {
+        guard programmaticScroll == nil, let scrollView, !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else {
             pending = nil
             return
         }
@@ -100,7 +114,7 @@ final class ChatListViewport {
         }
     }
 
-    func reset() { pending = nil; topRequested = false; rows = [:]; scrollView = nil }
+    func reset() { pending = nil; programmaticScroll = nil; topRequested = false; rows = [:]; scrollView = nil }
 
     private func restoreIfReady(from view: ChatListAnchorView) {
         guard !isRestoring, let pending, pending.sequence == view.sequence,

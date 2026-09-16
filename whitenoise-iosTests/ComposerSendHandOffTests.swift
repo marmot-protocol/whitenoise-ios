@@ -9,6 +9,38 @@ private final class SendOrderRecorder {
 
 @MainActor
 struct ComposerSendHandOffTests {
+    @Test func admittedTimeoutKeepsAnUnresolvedBubbleWithoutFreshSendRetry() async throws {
+        let client = try MarmotClient.testClient()
+        let state = AppState(client: client)
+        state.activeAccountRef = "account-ref"
+        let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
+        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
+        composer.canSendMessages = { true }
+        composer.sendTextForTesting = { _, _, _, _ in throw MarmotKitError.AccountWorkerResponseTimedOut }
+        await composer.send("uncertain send")
+        let row = try #require(store.timeline.first)
+        #expect(store.localSendPhase(rowID: row.id) == .completionUnknown)
+        #expect(store.failedTransientRecord(rowId: row.id) == nil)
+        #expect(state.activeToast == nil)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func lateSendResultAfterTeardownCannotRecreateItsBubble() async throws {
+        let client = try MarmotClient.testClient()
+        let state = AppState(client: client)
+        state.activeAccountRef = "account-ref"
+        let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
+        let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
+        composer.canSendMessages = { true }
+        composer.sendTextForTesting = { _, _, _, _ in
+            store.resetOptimisticState()
+            return SendSummaryFfi(published: 1, messageIds: ["late"], acceptDisposition: .published, maintenanceDisposition: .ready)
+        }
+        await composer.send("retired send")
+        #expect(store.timeline.isEmpty)
+        try await client.marmot.shutdownAndClose()
+    }
+
     @Test func queuedSendFailureUsesReadableInlineAndToastMessages() async throws {
         let client = try MarmotClient.testClient()
         let appState = AppState(client: client)

@@ -67,6 +67,44 @@ final class ConversationReactionProjectionCache {
         )
     }
 
+    func installPrepared(_ value: ConversationReactionsFfi, target: String, me: String) {
+        let mine = Set(value.items.filter(\.viewerReacted).map(\.emoji))
+        optimisticRecords = optimisticRecords.filter { _, record in
+            guard record.sender == me, mine.contains(record.plaintext),
+                  case .reaction(let id) = MessageSemantics.classify(record), id == target else { return true }
+            return false
+        }
+        optimisticRemovals = optimisticRemovals.filter {
+            $0.targetMessageIdHex != target || $0.sender != me || mine.contains($0.emoji)
+        }
+    }
+
+    func preparedDetails(_ value: ConversationReactionsFfi, target: String, me: String) -> ConversationViewModel.ReactionDetails {
+        var groups = value.items.map {
+            ConversationViewModel.ReactionDetails.EmojiGroup(emoji: $0.emoji, senders: $0.reactors,
+                mine: $0.viewerReacted, totalCount: Int(clamping: $0.count))
+        }
+        let additions = Set(optimisticRecords.values.compactMap { record -> String? in
+            guard record.sender == me, case .reaction(let id) = MessageSemantics.classify(record), id == target else { return nil }
+            return record.plaintext
+        })
+        for emoji in additions where !groups.contains(where: { $0.emoji == emoji }) {
+            groups.append(.init(emoji: emoji, senders: [], mine: false, totalCount: 0))
+        }
+        groups = groups.compactMap { group in
+            let removed = optimisticRemovals.contains { $0.targetMessageIdHex == target && $0.emoji == group.emoji && $0.sender == me }
+            let mine = removed ? false : (group.mine || additions.contains(group.emoji))
+            let count = max(0, group.count + (mine ? 1 : 0) - (group.mine ? 1 : 0))
+            guard count > 0 else { return nil }
+            var senders = group.senders.filter { $0 != me }
+            if mine && !me.isEmpty { senders.append(me) }
+            return .init(emoji: group.emoji, senders: senders, mine: mine, totalCount: count)
+        }
+        let original = value.items.reduce(0) { $0 + Int(clamping: $1.count) }
+        let adjusted = Int(clamping: value.totalCount) + groups.reduce(0) { $0 + $1.count } - original
+        return .init(groups: groups, omittedKinds: value.omittedKinds, totalCount: max(0, adjusted))
+    }
+
     // MARK: Optimistic overlay (toggle write-path)
 
     var hasOptimistic: Bool { !optimisticRecords.isEmpty || !optimisticRemovals.isEmpty }

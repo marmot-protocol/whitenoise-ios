@@ -8666,7 +8666,7 @@ struct ConversationTimelineProjectionTests {
             placement: .window
         )
 
-        let rowId = "msg:\(messageId)"
+        let rowId = viewModel.displayID(for: messageId)
         func status() -> MessageStatus? {
             viewModel.timeline.compactMap { item -> MessageStatus? in
                 guard item.id == rowId, case .message(_, let status) = item.kind else { return nil }
@@ -8907,7 +8907,7 @@ struct ConversationTimelineProjectionTests {
         let messageId = hex("b2")
         let tempId = "pending-media-real-id"
         let tempRowId = "msg:\(tempId)"
-        let realRowId = "msg:\(messageId)"
+        let realRowId = tempRowId
         let reference = encryptedMediaReference(
             fileName: "canonical.jpg",
             plaintextByte: "31",

@@ -92,9 +92,8 @@ final class ComposerModel {
     }
 
     /// Re-sends a failed text message from its retained optimistic record.
-    /// The failed row is discarded first so the retry produces a single fresh
-    /// pending row; media sends are not retried here (their compressed bytes
-    /// aren't retained), only discarded. Returns false when the row isn't a
+    /// Reuses the local display identity while creating a new send attempt.
+    /// Media sends are only discarded here. Returns false when the row isn't a
     /// retryable failed text send.
     @discardableResult
     func retryFailedTextSend(rowId: String) async -> Bool {
@@ -132,8 +131,7 @@ final class ComposerModel {
             return false
         }
         let replyTargetId = ConversationViewModel.replyTargetMessageId(in: record)
-        timelineStore.discardTransientRow(rowId: rowId)
-        await send(record.plaintext, replyTargetId: replyTargetId)
+        await send(record.plaintext, replyTargetId: replyTargetId, retryTempId: String(rowId.dropFirst("msg:".count)))
         return true
     }
 
@@ -142,7 +140,7 @@ final class ComposerModel {
         await send(text, replyTargetId: nil, draftRevision: draftRevision, completion: completion)
     }
 
-    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?,
+    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?, retryTempId: String? = nil,
                       draftRevision: MessageDraftRevisionFfi? = nil,
                       completion: (@MainActor (Bool) async -> Void)? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,9 +158,10 @@ final class ComposerModel {
         // markdown parse below introduces an `await`, so leaving the flag unset
         // would let a second send task start during a long parse (#226 review).
         sendInFlight = true
+        let lifetime = timelineStore.outgoingLifetime
 
         let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
-        let tempId = UUID().uuidString
+        let tempId = retryTempId ?? UUID().uuidString
         timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
         let now = UInt64(Date().timeIntervalSince1970)
         // A reply is a kind-9 with `e` + `q` tags pointing at the parent; a plain
@@ -189,6 +188,11 @@ final class ComposerModel {
             recordedAt: now,
             receivedAt: now
         )
+        guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+            sendInFlight = false
+            await completion?(false)
+            return
+        }
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
         // The composer is free the moment the message is parked in the
@@ -197,6 +201,10 @@ final class ComposerModel {
         sendInFlight = false
 
         await sendQueue.enqueue { [self] in
+            guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+                await completion?(false)
+                return
+            }
             do {
                 let summary = try await sendText(
                     appState: appState,
@@ -206,17 +214,19 @@ final class ComposerModel {
                     draftRevision: draftRevision
                 )
                 await completion?(true)
-                switch SendAcceptancePolicy.action(for: summary) {
-                case .confirmPublished(let messageId):
-                    timelineStore.confirmSent(tempId: tempId, record: optimistic, messageId: messageId)
-                case .awaitDurableProjection:
-                    // Marmot retained the exact event for durable delivery. Keep the
-                    // optimistic row sending until the timeline projection supplies
-                    // the pending row and eventual disposition.
-                    break
-                }
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                timelineStore.acceptSend(tempId: tempId, record: optimistic, summary: summary)
             } catch {
-                await completion?(false)
+                let ambiguous = error is CancellationError
+                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+                // Refresh the selected revision after uncertain admission before releasing draft writes.
+                await completion?(ambiguous)
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                if ambiguous {
+                    timelineStore.markSendCompletionUnknown(tempId: tempId)
+                    onError(UserFacingError.message(for: error))
+                    return
+                }
                 timelineStore.markFailed(tempId: tempId)
                 onError(UserFacingError.message(for: error))
                 await MainActor.run {
@@ -279,6 +289,7 @@ final class ComposerModel {
         // caption parse below introduces an `await`, so leaving the flag unset
         // would let a second send task start during a long parse (#226 review).
         sendInFlight = true
+        let lifetime = timelineStore.outgoingLifetime
 
         // Captured before the upload round-trip: a wipe completing while the
         // send is in flight must invalidate the post-upload cache store.
@@ -299,6 +310,11 @@ final class ComposerModel {
             recordedAt: now,
             receivedAt: now
         )
+        guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+            sendInFlight = false
+            await completion?(false)
+            return
+        }
         timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
         timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
         replyingTo = nil
@@ -307,6 +323,10 @@ final class ComposerModel {
         sendInFlight = false
 
         await sendQueue.enqueue { [self] in
+            guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+                await completion?(false)
+                return
+            }
             do {
                 let client = try appState.currentMarmotClient()
                 let result = try await client.uploadMedia(
@@ -324,11 +344,16 @@ final class ComposerModel {
                     references: result.attachments.map(\.reference)
                 )
                 let references = verifiedAttachments.map(\.reference)
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+                    await completion?(false)
+                    return
+                }
                 let sent: SendSummaryFfi?
                 if let draftRevision {
                     sent = try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: references)
                 } else { sent = result.sent }
                 await completion?(true)
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
                 for attachment in verifiedAttachments {
                     await MessageMediaCache.store(
                         attachment.data,
@@ -336,6 +361,7 @@ final class ComposerModel {
                         producerGeneration: uploadEpoch
                     )
                 }
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
                 let confirmed = AppMessageRecordFfi(
                     messageIdHex: "",
                     direction: "sent",
@@ -348,29 +374,26 @@ final class ComposerModel {
                     recordedAt: now,
                     receivedAt: now
                 )
-                if let sent,
-                   case .awaitDurableProjection = SendAcceptancePolicy.action(for: sent) {
-                    // Keep the staged media and optimistic row alive until Marmot's
-                    // durable pending projection replaces them.
+                if let sent {
+                    timelineStore.acceptSend(tempId: tempId, record: confirmed, summary: sent)
+                    if let id = sent.messageIds.first, !id.isEmpty,
+                       timelineStore.replaceMediaReferences(references, forMessageId: id) {
+                        timelineStore.noteProjectionChanged()
+                    }
                 } else {
-                    let messageId: String?
-                    if let sent,
-                       case .confirmPublished(let publishedMessageId) = SendAcceptancePolicy.action(for: sent) {
-                        messageId = publishedMessageId
-                    } else {
-                        messageId = nil
-                    }
-                    timelineStore.confirmSent(tempId: tempId, record: confirmed, messageId: messageId)
-                    if let messageId, !messageId.isEmpty {
-                        // Render the just-sent attachments immediately from the upload's
-                        // resolved references; the subscription row will mirror the same.
-                        if timelineStore.replaceMediaReferences(references, forMessageId: messageId) {
-                            timelineStore.noteProjectionChanged()
-                        }
-                    }
+                    timelineStore.markSendCompletionUnknown(tempId: tempId)
                 }
             } catch {
-                await completion?(false)
+                let ambiguous = error is CancellationError
+                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+                // Refresh the selected revision after uncertain admission before releasing draft writes.
+                await completion?(ambiguous)
+                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                if ambiguous {
+                    timelineStore.markSendCompletionUnknown(tempId: tempId)
+                    onError(UserFacingError.message(for: error))
+                    return
+                }
                 timelineStore.markFailed(tempId: tempId)
                 onError(UserFacingError.message(for: error))
                 await MainActor.run {

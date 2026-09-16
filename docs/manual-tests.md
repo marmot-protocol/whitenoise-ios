@@ -628,6 +628,16 @@ Marmot root. Automated simulator checks do not replace these device checks.
       messages arrive. Retained/recovered anchors preserve the visible position;
       the latest-message button returns directly to the tail. Repeat at 50 and
       200 retained rows and record replacement/layout timings on a physical device.
+- [ ] Send identical short messages rapidly, including text sent earlier in the
+      chat. Each send retains its bubble through confirmation; an old message
+      never acknowledges a new send. Repeat with slow delivery and media.
+- [ ] At the bottom of a full 200-row window, stop scrolling, receive another
+      message, then send. New rows stay live without leaving and reopening.
+      Reading history preserves position; the latest button and sending restore
+      tail following. Repeat with the keyboard visible and during deceleration.
+- [ ] Simulate slow paging while messages arrive. A rejected revision can retry
+      while the edge remains visible; a timed-out admitted page must not advance
+      twice. Verify search/reply jumps and first-unread opening separately.
 - [ ] Search the retained conversation and continue into older history. Matches
       removed from the window disappear. Back/foreground/account changes retire
       the old receive loop; late results must not change the new screen.

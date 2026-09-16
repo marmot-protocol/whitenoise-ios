@@ -4,7 +4,8 @@ struct TimelineDaySection: Identifiable, Equatable {
     let day: Date
     var items: [TimelineItem]
 
-    var id: Date { day }
+    // Canonical protocol order can revisit the same calendar day.
+    var id: String { items.first?.id ?? String(day.timeIntervalSince1970) }
 }
 
 @MainActor
