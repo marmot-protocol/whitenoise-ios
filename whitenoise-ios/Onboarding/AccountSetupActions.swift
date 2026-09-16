@@ -164,9 +164,13 @@ private struct AccountSetupDiscoverySheet: View {
     var body: some View {
         Form {
             Section {
-                TextField("wss://relay.example.com", text: $relay)
-                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityLabel("Relay URL")
+                WNInput(
+                    placeholder: L10n.string("wss://relay.example.com"),
+                    text: $relay
+                )
+                .keyboardType(.URL)
+                .accessibilityLabel("Relay URL")
+                .wnInputRow()
             } footer: {
                 Text("Choose a relay you’ve used with this profile. We’ll look there for your existing settings without publishing anything.")
             }

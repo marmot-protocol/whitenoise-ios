@@ -90,16 +90,14 @@ struct OnboardingAvatarWebImagePicker: View {
                 }
 
                 searchCard {
-                    TextField("Search Images", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .background(
-                            Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: .rect(cornerRadius: 10)
-                        )
+                    WNInput(
+                        placeholder: L10n.string("Search Images"),
+                        text: $query,
+                        icon: "magnifyingglass",
+                        fill: Color(uiColor: .tertiarySystemGroupedBackground),
+                        submitLabel: .search,
+                        showsClear: true
+                    )
                 }
 
                 if isSearching {
@@ -153,12 +151,14 @@ struct OnboardingAvatarWebImagePicker: View {
             }
 
             Section("Image URL") {
-                TextField("https://example.com/image.jpg", text: $imageURL)
-                    .textContentType(.URL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($isURLFocused)
+                WNInput(
+                    placeholder: L10n.string("https://example.com/image.jpg"),
+                    text: $imageURL,
+                    showsClear: true,
+                    focus: $isURLFocused
+                )
+                .textContentType(.URL)
+                .keyboardType(.URL)
 
                 if imageURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Enter an image URL to preview it below.")

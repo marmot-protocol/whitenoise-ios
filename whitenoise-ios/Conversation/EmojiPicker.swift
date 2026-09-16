@@ -307,26 +307,15 @@ private struct EmojiPickerContent: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(L10n.string("Search emoji"), text: $query)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.string("Clear search"))
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(Color(.secondarySystemBackground), in: Capsule())
+        WNInput(
+            placeholder: L10n.string("Search emoji"),
+            text: $query,
+            icon: "magnifyingglass",
+            fill: Color(.secondarySystemBackground),
+            submitLabel: .search,
+            showsClear: true,
+            clearLabel: L10n.string("Clear search")
+        )
     }
 
     private var columns: [GridItem] {

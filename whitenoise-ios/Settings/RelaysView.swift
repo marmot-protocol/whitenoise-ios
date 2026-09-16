@@ -155,11 +155,13 @@ private struct AddRelaySettingsSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("wss://relay.example.com", text: $url)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .font(.body.monospaced())
+                    WNInput(
+                        placeholder: L10n.string("wss://relay.example.com"),
+                        text: $url
+                    )
+                    .keyboardType(.URL)
+                    .font(.body.monospaced())
+                    .wnInputRow()
                 } header: {
                     Text("Relay URL")
                 } footer: {

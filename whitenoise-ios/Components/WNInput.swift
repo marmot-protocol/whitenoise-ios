@@ -189,7 +189,9 @@ extension WNInput where Trailing == EmptyView {
     }
 }
 
-private struct WNInputTextEntry: View {
+/// Turns a `WNInputKind` into a field. Shared by the filled capsule and its
+/// grouped-row sibling so both spell `.secure` and `.multiline` the same way.
+struct WNInputTextEntry: View {
     let placeholder: String
     @Binding var text: String
     let kind: WNInputKind
@@ -198,6 +200,10 @@ private struct WNInputTextEntry: View {
     let disablesAutocorrection: Bool
     let focus: FocusState<Bool>.Binding
     let onSubmit: (() -> Void)?
+    /// A capsule standing on its own has no room to scroll a long value, so it
+    /// keeps both ends readable. A grouped row leaves the system's own
+    /// end-truncation alone.
+    var truncatesLongValuesInMiddle = true
 
     var body: some View {
         field
@@ -215,10 +221,10 @@ private struct WNInputTextEntry: View {
         switch kind {
         case .text:
             TextField(placeholder, text: $text)
-                .modifier(WNInputSingleLine())
+                .modifier(WNInputSingleLine(isActive: truncatesLongValuesInMiddle))
         case .secure:
             SecureField(placeholder, text: $text)
-                .modifier(WNInputSingleLine())
+                .modifier(WNInputSingleLine(isActive: truncatesLongValuesInMiddle))
         case .multiline(let lineLimit):
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(lineLimit)
@@ -229,10 +235,12 @@ private struct WNInputTextEntry: View {
 /// Long pasted identifiers and URLs stay readable at both ends rather than
 /// running off the trailing edge.
 private struct WNInputSingleLine: ViewModifier {
+    let isActive: Bool
+
     func body(content: Content) -> some View {
         content
             .lineLimit(1)
-            .truncationMode(.middle)
+            .truncationMode(isActive ? .middle : .tail)
     }
 }
 

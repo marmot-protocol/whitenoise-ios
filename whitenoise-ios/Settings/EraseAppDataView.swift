@@ -19,8 +19,11 @@ struct EraseAppDataView: View {
                 }
                 if !isRecovery { Section {
                     Text(phrase).font(.headline).textSelection(.enabled)
-                    TextField("Confirmation phrase", text: $confirmation)
-                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    WNInput(
+                        placeholder: L10n.string("Confirmation phrase"),
+                        text: $confirmation,
+                        submitLabel: .done
+                    )
                 } footer: { Text("Enter the three words exactly to continue.") } }
                 if isRecovery { Text("Erasure didn’t finish. Some data may remain. Try again.").foregroundStyle(.orange) }
                 if let error { Text(error).foregroundStyle(.orange) }

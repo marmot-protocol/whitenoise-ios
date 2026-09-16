@@ -149,10 +149,16 @@ private struct EncryptedNsecExportSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField("Passphrase", text: $passphrase)
-                        .textContentType(.password)
-                        .focused($passphraseFocused)
-                        .disabled(isExporting)
+                    WNInput(
+                        placeholder: L10n.string("Passphrase"),
+                        text: $passphrase,
+                        kind: .secure,
+                        submitLabel: .done,
+                        focus: $passphraseFocused
+                    )
+                    .textContentType(.password)
+                    .disabled(isExporting)
+                    .wnInputRow()
                 } footer: {
                     Text("Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it.")
                         .font(.footnote)

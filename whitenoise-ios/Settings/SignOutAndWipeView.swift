@@ -96,10 +96,13 @@ struct SignOutAndWipeCover: View {
                     Text(L10n.formatted("Type %@ to confirm.", model.keyword))
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    TextField(model.keyword, text: $model.confirmInput)
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .font(.body.monospaced())
+                    WNInput(
+                        placeholder: model.keyword,
+                        text: $model.confirmInput,
+                        submitLabel: .done,
+                        autocapitalization: .characters
+                    )
+                    .font(.body.monospaced())
                     Button(role: .destructive, action: onConfirm) {
                         Text("Sign Out & Wipe")
                             .frame(maxWidth: .infinity)

@@ -217,67 +217,59 @@ struct RecipientQuickActionRow: View {
 struct RecipientSearchField: View {
     @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
-    var placeholder: LocalizedStringKey = "Search people or paste a profile"
+    var placeholder = L10n.string("Search people or paste a profile")
     /// Optional QR-scan affordance rendered beside the paste icon.
     var onScan: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(placeholder, text: $text)
-                .font(.body)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(minWidth: 0, maxWidth: .infinity)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .clipped()
+        WNInput(
+            placeholder: placeholder,
+            text: $text,
+            icon: "magnifyingglass",
+            fill: Color(.tertiarySystemFill),
+            submitLabel: .search,
+            showsClear: true,
+            clearLabel: L10n.string("Clear search")
+        ) {
             if text.isEmpty {
-                Button {
-                    if let pasted = RecipientPasteboard.profileQuery(
-                        from: UIPasteboard.general.string
-                    ) {
-                        text = pasted
-                    }
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.callout)
-                        .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Paste")
+                pasteButton
                 if let onScan {
-                    Button(action: onScan) {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.callout)
-                            .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Scan QR Code")
+                    accessory(
+                        systemImage: "qrcode.viewfinder",
+                        label: L10n.string("Scan QR Code"),
+                        action: onScan
+                    )
                 }
-            } else {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
             }
         }
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
+    }
+
+    private var pasteButton: some View {
+        accessory(systemImage: "doc.on.clipboard", label: L10n.string("Paste")) {
+            guard let pasted = RecipientPasteboard.profileQuery(
+                from: UIPasteboard.general.string
+            ) else { return }
+            text = pasted
+        }
+    }
+
+    private func accessory(
+        systemImage: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.callout)
+                .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
+                .frame(
+                    width: WNInputMetrics.accessoryTarget,
+                    height: WNInputMetrics.accessoryTarget
+                )
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 

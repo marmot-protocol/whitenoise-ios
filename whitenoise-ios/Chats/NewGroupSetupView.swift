@@ -15,6 +15,8 @@ struct NewGroupSetupView: View {
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
     @State private var showGroupImagePicker = false
+    @FocusState private var nameFocused: Bool
+    @FocusState private var descriptionFocused: Bool
 
     var body: some View {
         Form {
@@ -53,21 +55,24 @@ struct NewGroupSetupView: View {
             .listRowSeparator(.hidden)
 
             Section {
-                TextField(
-                    model.groupSelection.isEmpty
+                WNGroupedInput(
+                    placeholder: model.groupSelection.isEmpty
                         ? L10n.string("Group name")
                         : L10n.string("Group name (optional)"),
-                    text: $name
+                    text: $name,
+                    submitLabel: .next,
+                    focus: $nameFocused,
+                    onSubmit: { descriptionFocused = true }
                 )
-                    .textContentType(.organizationName)
-                    .disabled(model.isCreatingGroup)
+                .textContentType(.organizationName)
+                .disabled(model.isCreatingGroup)
 
-                TextField(
-                    L10n.string("Description"),
+                WNGroupedInput(
+                    placeholder: L10n.string("Description"),
                     text: $description,
-                    axis: .vertical
+                    kind: .multiline(2 ... 5),
+                    focus: $descriptionFocused
                 )
-                .lineLimit(2...5)
                 .disabled(model.isCreatingGroup)
             } header: {
                 Text("Group Details")

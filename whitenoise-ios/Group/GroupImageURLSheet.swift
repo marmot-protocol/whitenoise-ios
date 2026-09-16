@@ -531,28 +531,33 @@ struct GroupImageURLSheet: View {
 
     private var searchSection: some View {
         Section("Search the web") {
-            HStack(spacing: 8) {
-                TextField("Image search", text: $searchQuery)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.search)
-                    .disabled(isBusy)
-                    .onSubmit { startSearch() }
-
-                Button {
-                    startSearch()
-                } label: {
-                    if isSearching || isPreparing {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "magnifyingglass")
+            WNInput(
+                placeholder: L10n.string("Image search"),
+                text: $searchQuery,
+                submitLabel: .search,
+                showsClear: true,
+                onSubmit: startSearch
+            ) {
+                Button(action: startSearch) {
+                    Group {
+                        if isSearching || isPreparing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                        }
                     }
+                    .frame(
+                        width: WNInputMetrics.accessoryTarget,
+                        height: WNInputMetrics.accessoryTarget
+                    )
+                    .contentShape(.rect)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .foregroundStyle(.tint)
                 .disabled(searchButtonDisabled)
-                .accessibilityLabel("Search the web")
+                .accessibilityLabel(L10n.string("Search the web"))
             }
+            .disabled(isBusy)
 
             Label(
                 L10n.string("Web search sends your query and IP address to DuckDuckGo and image hosts."),

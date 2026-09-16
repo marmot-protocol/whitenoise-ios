@@ -45,6 +45,8 @@ struct GroupDetailsView: View {
     @State private var memberProfileTarget: MemberProfileTarget?
     @State private var memberSearchText = ""
     @State private var membersExpanded = false
+    @FocusState private var renameFocused: Bool
+    @FocusState private var descriptionFocused: Bool
     @State private var showTechnicalDetails = false
     @State private var showNotifications = false
     @State private var showMediaLibrary = false
@@ -237,15 +239,21 @@ struct GroupDetailsView: View {
             NavigationStack {
                 Form {
                     Section {
-                        TextField("Group name", text: $model.renameDraft)
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.done)
-                        TextField(
-                            "Description",
-                            text: $model.descriptionDraft,
-                            axis: .vertical
+                        WNGroupedInput(
+                            placeholder: L10n.string("Group name"),
+                            text: $model.renameDraft,
+                            submitLabel: .next,
+                            autocapitalization: .words,
+                            focus: $renameFocused,
+                            onSubmit: { descriptionFocused = true }
                         )
-                        .lineLimit(4...8)
+
+                        WNGroupedInput(
+                            placeholder: L10n.string("Description"),
+                            text: $model.descriptionDraft,
+                            kind: .multiline(4 ... 8),
+                            focus: $descriptionFocused
+                        )
                     } footer: {
                         Text("Everyone in the group will see this name and description. Leave the description blank to remove it.")
                     }
@@ -799,23 +807,14 @@ struct GroupDetailsView: View {
     }
 
     private var memberSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search members", text: $memberSearchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !memberSearchText.isEmpty {
-                Button {
-                    memberSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear member search")
-            }
-        }
+        WNInput(
+            placeholder: L10n.string("Search members"),
+            text: $memberSearchText,
+            icon: "magnifyingglass",
+            submitLabel: .search,
+            showsClear: true,
+            clearLabel: L10n.string("Clear member search")
+        )
     }
 
     // MARK: - Technical details
