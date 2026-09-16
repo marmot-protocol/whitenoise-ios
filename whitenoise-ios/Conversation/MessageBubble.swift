@@ -2566,9 +2566,6 @@ private struct MessageFullscreenVideoPlayerView: View {
     @State private var audioSession = ObservableVideoPlaybackAudioSession()
     @State private var dismissDragOffset: CGFloat = 0
 
-    @ScaledMetric(relativeTo: .body)
-    private var closeButtonSize: CGFloat = 44
-
     init(video: MessageFullscreenVideo, onDismiss: @escaping () -> Void) {
         self.video = video
         self.onDismiss = onDismiss
@@ -2577,22 +2574,14 @@ private struct MessageFullscreenVideoPlayerView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            WNMediaSurface().ignoresSafeArea()
 
             VideoPlayer(player: player)
                 .ignoresSafeArea()
 
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: closeButtonSize, height: closeButtonSize)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .padding(.top, 14)
-            .padding(.trailing, 14)
+            WNIconButton(title: "Close", systemImage: "xmark", action: onDismiss)
+                .padding(.top, 14)
+                .padding(.trailing, 14)
         }
         .offset(y: dismissDragOffset)
         .opacity(1 - min(dismissDragOffset / 420, 0.35))
@@ -3446,15 +3435,6 @@ nonisolated enum MessageMediaFullscreenGalleryPresentation {
         let total = LocalizedNumberLabel.decimal(UInt64(totalCount), locale: locale)
         return L10n.formatted("%@ of %@", arguments: [current, total], locale: locale)
     }
-
-    static func canGoToMessage(messageId: String?, hasHandler: Bool) -> Bool {
-        guard hasHandler, let messageId else { return false }
-        return !messageId.isEmpty
-    }
-
-    static func canForward(hasPreparedMedia: Bool, hasForwardingContext: Bool) -> Bool {
-        hasPreparedMedia && hasForwardingContext
-    }
 }
 
 struct MessageMediaFullscreenGalleryView: View {
@@ -3462,7 +3442,6 @@ struct MessageMediaFullscreenGalleryView: View {
     let gallery: MessageMediaGallery
     let onLoadMedia: ConversationMediaLoader
     var forwardingContext: MediaForwardingContext?
-    var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
     @State private var selectedItemID: String
@@ -3474,28 +3453,26 @@ struct MessageMediaFullscreenGalleryView: View {
     @State private var isExporting = false
     @State private var actionError: String?
     @State private var forwardMedia: FullscreenMediaPrepared?
+    @State private var chrome = MediaViewerChrome()
 
-    @ScaledMetric(relativeTo: .body)
-    private var closeButtonSize: CGFloat = 42
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         gallery: MessageMediaGallery,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
-        onGoToMessage: ((String) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.gallery = gallery
         self.onLoadMedia = onLoadMedia
         self.forwardingContext = forwardingContext
-        self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
         _selectedItemID = State(initialValue: gallery.initialItemID)
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+        ZStack {
+            WNMediaSurface().ignoresSafeArea()
 
             TabView(selection: $selectedItemID) {
                 ForEach(gallery.items) { item in
@@ -3503,7 +3480,8 @@ struct MessageMediaFullscreenGalleryView: View {
                         item: item,
                         isSelected: item.id == selectedItemID,
                         initialImageData: gallery.initialData(for: item),
-                        onLoadMedia: onLoadMedia
+                        onLoadMedia: onLoadMedia,
+                        onToggleChrome: toggleChrome
                     )
                     .tag(item.id)
                 }
@@ -3513,32 +3491,17 @@ struct MessageMediaFullscreenGalleryView: View {
             )
             .ignoresSafeArea()
 
-            if gallery.items.count > 1 {
-                Text(pageCountLabel)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 76)
+            if chrome.isVisible {
+                MessageMediaFullscreenGalleryChrome(
+                    pageCountLabel: gallery.items.count > 1 ? pageCountLabel : nil,
+                    controlState: controlState,
+                    onClose: onDismiss,
+                    onSave: saveSelectedMedia,
+                    onShare: shareSelectedMedia,
+                    onForward: { forwardMedia = preparedMedia }
+                )
+                .transition(.opacity)
             }
-
-            Button(action: onDismiss) {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: closeButtonSize, height: closeButtonSize)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Close")
-            .padding(.top, 14)
-            .padding(.trailing, 14)
-
-            actionMenu
-
-            bottomActions
         }
         .offset(y: dismissDragOffset)
         .opacity(1 - min(dismissDragOffset / 420, 0.35))
@@ -3592,71 +3555,29 @@ struct MessageMediaFullscreenGalleryView: View {
         gallery.items.first { $0.id == selectedItemID }
     }
 
-    private var actionMenu: some View {
-        Menu {
-            Button("Save", systemImage: "square.and.arrow.down") {
-                guard let preparedMedia else { return }
-                saveProductTicket = appState.productAnalytics.ticket()
-                exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
-                isExporting = true
-            }
-            .disabled(preparedMedia == nil)
-
-            if let messageId = gallery.messageIdByItemID[selectedItemID],
-               MessageMediaFullscreenGalleryPresentation.canGoToMessage(
-                    messageId: messageId,
-                    hasHandler: onGoToMessage != nil
-               )
-            {
-                Button("Go to Message", systemImage: "bubble.left") {
-                    onDismiss()
-                    onGoToMessage?(messageId)
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.body.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: closeButtonSize, height: closeButtonSize)
-                .background(.ultraThinMaterial, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("More")
-        .padding(.top, 14)
-        .padding(.trailing, closeButtonSize + 24)
+    private var controlState: MediaViewerControlState {
+        MediaViewerControlState(
+            hasPreparedMedia: preparedMedia != nil,
+            hasForwardingContext: forwardingContext != nil
+        )
     }
 
-    private var bottomActions: some View {
-        HStack {
-            Button {
-                if let url = preparedMedia?.url {
-                    mediaShare = FullscreenMediaShare(url: url)
-                }
-            } label: {
-                Label("Share", systemImage: "square.and.arrow.up")
-                    .frame(minHeight: 44)
-            }
-            .disabled(preparedMedia == nil)
-
-            Spacer()
-
-            Button {
-                forwardMedia = preparedMedia
-            } label: {
-                Label("Forward", systemImage: "arrowshape.turn.up.right")
-                    .frame(minHeight: 44)
-            }
-            .disabled(!MessageMediaFullscreenGalleryPresentation.canForward(
-                hasPreparedMedia: preparedMedia != nil,
-                hasForwardingContext: forwardingContext != nil
-            ))
+    private func toggleChrome() {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+            chrome.toggle()
         }
-        .font(.callout.weight(.semibold))
-        .foregroundStyle(.white)
-        .padding(.horizontal, 22)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    private func saveSelectedMedia() {
+        guard let preparedMedia else { return }
+        saveProductTicket = appState.productAnalytics.ticket()
+        exportDocument = DecryptedMediaExportDocument(data: preparedMedia.data)
+        isExporting = true
+    }
+
+    private func shareSelectedMedia() {
+        guard let url = preparedMedia?.url else { return }
+        mediaShare = FullscreenMediaShare(url: url)
     }
 
     private func prepareSelectedMedia() async {
@@ -3724,6 +3645,7 @@ private struct MessageMediaFullscreenPage: View {
     let isSelected: Bool
     let initialImageData: Data?
     let onLoadMedia: ConversationMediaLoader
+    let onToggleChrome: () -> Void
 
     var body: some View {
         if item.isVideo {
@@ -3736,7 +3658,8 @@ private struct MessageMediaFullscreenPage: View {
             MessageMediaFullscreenImagePage(
                 item: item,
                 initialImageData: initialImageData,
-                onLoadMedia: onLoadMedia
+                onLoadMedia: onLoadMedia,
+                onToggleChrome: onToggleChrome
             )
         }
     }
@@ -3756,7 +3679,7 @@ private struct MessageMediaFullscreenVideoPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            WNMediaSurface().ignoresSafeArea()
 
             if let player {
                 VideoPlayer(player: player)
@@ -3770,20 +3693,14 @@ private struct MessageMediaFullscreenVideoPage: View {
 
             if isLoading {
                 ProgressView()
-                    .tint(.white)
                     .controlSize(.regular)
+                    .tint(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.5), in: Circle())
             } else if didFail {
-                Button {
+                WNMediaRetryButton {
                     Task { await loadAndPlay(force: true) }
-                } label: {
-                    Label(L10n.string("Retry"), systemImage: "arrow.clockwise")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(.ultraThinMaterial, in: Capsule())
                 }
-                .buttonStyle(.plain)
             } else if player == nil {
                 Button {
                     Task { await loadAndPlay() }
@@ -3886,13 +3803,17 @@ private struct MessageMediaFullscreenImagePage: View {
 
     @Environment(\.displayScale) private var displayScale
 
+    let onToggleChrome: () -> Void
+
     init(
         item: MessageMediaAttachment,
         initialImageData: Data?,
-        onLoadMedia: ConversationMediaLoader
+        onLoadMedia: ConversationMediaLoader,
+        onToggleChrome: @escaping () -> Void
     ) {
         self.item = item
         self.onLoadMedia = onLoadMedia
+        self.onToggleChrome = onToggleChrome
         // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
         // `loadImageIfNeeded`, which runs the decode off the MainActor and
         // bounded to a screen-sized pixel budget. Stash the raw initial bytes
@@ -3909,31 +3830,22 @@ private struct MessageMediaFullscreenImagePage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                Color.black.ignoresSafeArea()
+                WNMediaSurface().ignoresSafeArea()
 
                 if let image {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .simultaneousGesture(TapGesture().onEnded { onToggleChrome() })
                 } else if isLoading {
                     ProgressView()
-                        .tint(.white)
                 } else if didFail {
-                    Button {
+                    WNMediaRetryButton {
                         Task { await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale, force: true) }
-                    } label: {
-                        Label("Retry", systemImage: "arrow.clockwise")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(.ultraThinMaterial, in: Capsule())
                     }
-                    .buttonStyle(.plain)
                 } else {
                     ProgressView()
-                        .tint(.white)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
