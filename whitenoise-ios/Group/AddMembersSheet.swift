@@ -37,7 +37,11 @@ struct AddMembersSheet: View {
                     }
                 }
 
-                if query.isIdentifierQuery {
+                switch RecipientQueryMode.mode(
+                    isBlank: query.isBlank,
+                    isIdentifierQuery: query.isIdentifierQuery
+                ) {
+                case .resolve:
                     RecipientResolutionSection(
                         query: model.query,
                         excludedAccountIds: excludedAccountIds,
@@ -49,7 +53,7 @@ struct AddMembersSheet: View {
                             Task { await selectResolved(resolved) }
                         }
                     )
-                } else {
+                case .browse, .search:
                     peopleSection
                     RecipientUserSearchStatus(
                         isSearching: model.userSearch.isSearching,
@@ -138,59 +142,38 @@ struct AddMembersSheet: View {
             : excludedMemberMessage
     }
 
-    @ViewBuilder
     private var peopleSection: some View {
+        let candidates = browseResults
+        return RecipientPeopleSection(
+            state: .resolve(
+                candidateCount: candidates.count,
+                isLoadingDirectory: model.directory.isLoading,
+                directoryLoadError: model.directory.loadError,
+                isSearchingNetwork: model.userSearch.isSearching,
+                trimmedQuery: model.query.trimmedText
+            ),
+            candidates: candidates,
+            header: model.query.isBlank ? "People" : nil,
+            emptyDescription: "Paste an npub or scan a QR code to add someone you haven't chatted with yet.",
+            onRetryLoad: {
+                Task { await model.directory.load(using: appState, force: true) }
+            },
+            row: memberRow
+        )
+    }
+
+    private var browseResults: [RecipientCandidate] {
         let known = RecipientSearch.browse(
             model.directory.candidates,
             query: model.query.text,
             excludedAccountIds: excludedAccountIds,
             fields: { model.directory.matchFields(for: $0) }
         )
-        let candidates = RecipientSearch.merge(
+        return RecipientSearch.merge(
             known: known,
             discovered: model.userSearch.candidates,
             excludedAccountIds: excludedAccountIds
         )
-        if model.directory.isLoading && candidates.isEmpty {
-            Section {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
-                .padding(.vertical, 16)
-            }
-        } else if let loadError = model.directory.loadError, candidates.isEmpty {
-            Section {
-                Label(loadError, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.secondary)
-                Button("Retry") {
-                    Task { await model.directory.load(using: appState, force: true) }
-                }
-            }
-        } else if candidates.isEmpty && model.userSearch.isSearching {
-            EmptyView()
-        } else if candidates.isEmpty {
-            Section {
-                if model.query.isBlank {
-                    Text("Paste an npub or scan a QR code to add someone you haven't chatted with yet.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ContentUnavailableView.search(text: model.query.trimmedText)
-                }
-            }
-        } else {
-            Section {
-                ForEach(candidates) { candidate in
-                    memberRow(candidate)
-                }
-            } header: {
-                if model.query.isBlank {
-                    Text("People")
-                }
-            }
-        }
     }
 
     private func memberRow(_ candidate: RecipientCandidate) -> some View {

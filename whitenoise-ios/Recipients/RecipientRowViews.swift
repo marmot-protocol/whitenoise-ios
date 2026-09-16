@@ -33,11 +33,11 @@ struct RecipientRow<Trailing: View>: View {
                 pictureURL: appState.avatarURL(forAccountIdHex: accountIdHex)
                     ?? ContentSanitizer.imageURL(profileOverride?.picture)
             )
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
-                    .font(.body)
+                    .font(.headline)
                     .lineLimit(1)
                 if let searchContextLabel {
                     Text(searchContextLabel)
@@ -182,27 +182,31 @@ struct SelectedRecipientRail: View {
     }
 }
 
-/// Quick action rows shown above the people list (New Group, Scan QR Code,
-/// Show My QR Code).
+/// Quick action rows shown above the people list (New Group, Scan QR Code).
 struct RecipientQuickActionRow: View {
     let title: LocalizedStringKey
     let systemImage: String
+    /// Matches the disclosure a `NavigationLink` draws for itself, for an
+    /// action row that sits in the same card as one.
+    var showsDisclosure = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.body)
-                    .foregroundStyle(.tint)
-                    .frame(width: 28)
-                Text(title)
-                    .font(.body)
+            HStack {
+                Label(title, systemImage: systemImage)
                 Spacer(minLength: 0)
+                if showsDisclosure {
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
             }
-            .frame(minHeight: 32)
             .contentShape(.rect)
         }
+        // Plain keeps the label at label colour, so an action row reads the
+        // same as the navigating row it sits beside.
         .buttonStyle(.plain)
     }
 }
@@ -211,6 +215,7 @@ struct RecipientQuickActionRow: View {
 /// affordance while empty (a clear button once text is present). Pasting
 /// feeds the same query pipeline as typing.
 struct RecipientSearchField: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
     var placeholder: LocalizedStringKey = "Search people or paste a profile"
     /// Optional QR-scan affordance rendered beside the paste icon.
@@ -230,15 +235,15 @@ struct RecipientSearchField: View {
                 .clipped()
             if text.isEmpty {
                 Button {
-                    if let pasted = UIPasteboard.general.string?
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                        !pasted.isEmpty {
+                    if let pasted = RecipientPasteboard.profileQuery(
+                        from: UIPasteboard.general.string
+                    ) {
                         text = pasted
                     }
                 } label: {
                     Image(systemName: "doc.on.clipboard")
                         .font(.callout)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
                         .frame(width: 28, height: 28)
                         .contentShape(Rectangle())
                 }
@@ -248,7 +253,7 @@ struct RecipientSearchField: View {
                     Button(action: onScan) {
                         Image(systemName: "qrcode.viewfinder")
                             .font(.callout)
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
                             .frame(width: 28, height: 28)
                             .contentShape(Rectangle())
                     }
