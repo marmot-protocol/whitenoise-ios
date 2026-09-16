@@ -173,6 +173,77 @@ final class ConversationDraftStore {
     ] = [:]
     @ObservationIgnored private var pendingWrites: [ConversationDraftKey: PendingWrite] = [:]
     @ObservationIgnored private var saveTasks: [ConversationDraftKey: Task<Void, Never>] = [:]
+    @ObservationIgnored private var resetPausedKeys: Set<ConversationDraftKey> = []
+    @ObservationIgnored private var resetKeys: Set<ConversationDraftKey> = []
+    @ObservationIgnored private var activeWrites: [ConversationDraftKey: Int] = [:]
+    @ObservationIgnored private var resetWaiters: [ConversationDraftKey: [CheckedContinuation<Void, Never>]] = [:]
+    @ObservationIgnored private var selections: [ConversationDraftKey: SelectedMessageDraftFfi] = [:]
+    @ObservationIgnored private var sendingKeys: Set<ConversationDraftKey> = []
+    @ObservationIgnored private var suppressEmptyAfterSendKeys: Set<ConversationDraftKey> = []
+    @ObservationIgnored private var editedWhileSending: Set<ConversationDraftKey> = []
+    private(set) var loadErrorKeys: Set<ConversationDraftKey> = []
+    private(set) var conflictedKeys: Set<ConversationDraftKey> = []
+
+    func receiveSelection(_ selection: SelectedMessageDraftFfi, accountRef: String, groupIdHex: String) {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard pendingWrites[key] == nil, activeWrites[key, default: 0] == 0,
+              !sendingKeys.contains(key), !conflictedKeys.contains(key) else { return }
+        selections[key] = selection
+    }
+
+    func resolveConflict(accountRef: String, groupIdHex: String, keepLocal: Bool) async throws {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard let state = persistence as? AppState else { return }
+        let client = try state.currentMarmotClient()
+        let fresh = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
+        selections[key] = fresh
+        conflictedKeys.remove(key)
+        if keepLocal { scheduleSave(for: key) }
+        else {
+            pendingWrites[key] = nil
+            saveTasks.removeValue(forKey: key)?.cancel()
+            summaries[key] = Self.summary(for: fresh)
+            generation &+= 1
+        }
+    }
+
+    func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }
+        setDraft(snapshot, accountRef: accountRef, groupIdHex: groupIdHex)
+        await flush(key: key, using: nil)
+        guard pendingWrites[key] == nil, let selection = selections[key], selection.draft != nil else {
+            throw MarmotKitError.MessageDraftRevisionConflict
+        }
+        sendingKeys.insert(key)
+        suppressEmptyAfterSendKeys.insert(key)
+        activeWrites[key, default: 0] += 1
+        editedWhileSending.remove(key)
+        return selection.revision
+    }
+
+    func finishSend(accountRef: String, groupIdHex: String, accepted: Bool) async {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        if accepted, let state = persistence as? AppState,
+           let client = try? state.currentMarmotClient(),
+           let selected = try? await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex) {
+            selections[key] = selected
+            if pendingWrites[key] == nil {
+                summaries[key] = Self.summary(for: selected)
+                generation &+= 1
+            }
+        }
+        if sendingKeys.remove(key) != nil {
+            activeWrites[key, default: 0] -= 1
+            if activeWrites[key] == 0 {
+                activeWrites[key] = nil
+                resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
+            }
+        }
+        editedWhileSending.remove(key)
+        if pendingWrites[key] != nil { scheduleSave(for: key) }
+    }
+
     @ObservationIgnored private var nextRevision: UInt64 = 0
 
     init(
@@ -234,6 +305,7 @@ final class ConversationDraftStore {
     func snapshot(accountRef: String, groupIdHex: String) async -> ConversationDraftSnapshot? {
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
         if let pending = pendingWrites[key] {
             switch pending.operation {
             case .save(let snapshot):
@@ -243,14 +315,22 @@ final class ConversationDraftStore {
             }
         }
         guard let persistence else { return nil }
+        loadErrorKeys.remove(key)
         do {
-            guard let draft = try await persistence.loadMessageDraft(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex
-            ) else { return nil }
+            let loaded: MessageDraftFfi?
+            if let state = persistence as? AppState {
+                let client = try state.currentMarmotClient()
+                let selected = try await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
+                selections[key] = selected
+                loaded = try await client.hydrateSelectedDraft(accountRef: accountRef, selected: selected)
+            } else {
+                loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
+            }
+            guard let draft = loaded else { return nil }
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
                 from: draft.mediaAttachments
             )
+            guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
             return Self.normalizedSnapshot(ConversationDraftSnapshot(
                 canonicalText: draft.content,
                 replyToMessageIdHex: draft.replyToMessageIdHex,
@@ -259,6 +339,10 @@ final class ConversationDraftStore {
         } catch is CancellationError {
             return nil
         } catch {
+            loadErrorKeys.insert(key)
+            if let state = persistence as? AppState {
+                state.present(UserFacingError.toast(title: L10n.string("Couldn't load draft"), error: error))
+            }
             Self.logger.error("Failed to hydrate encrypted composer draft")
             return nil
         }
@@ -270,7 +354,15 @@ final class ConversationDraftStore {
         groupIdHex: String
     ) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard !resetPausedKeys.contains(key) else { return }
+        resetKeys.remove(key)
         let operation = Self.normalizedSnapshot(snapshot).map(PendingOperation.save) ?? .delete
+        if case .delete = operation, suppressEmptyAfterSendKeys.contains(key) { return }
+        suppressEmptyAfterSendKeys.remove(key)
+        if sendingKeys.contains(key) {
+            if case .delete = operation, !editedWhileSending.contains(key) { return }
+            editedWhileSending.insert(key)
+        }
         if pendingWrites[key]?.operation == operation {
             return
         }
@@ -301,7 +393,33 @@ final class ConversationDraftStore {
         scheduleSave(for: key)
     }
 
+    func pauseForGroupReset(accountRef: String, groupIdHex: String) async {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        resetPausedKeys.insert(key)
+        saveTasks.removeValue(forKey: key)?.cancel()
+        if activeWrites[key, default: 0] > 0 {
+            await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
+        }
+    }
+
+    func finishGroupReset(accountRef: String, groupIdHex: String, succeeded: Bool) {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        resetPausedKeys.remove(key)
+        if succeeded {
+            resetKeys.insert(key)
+            selections[key] = nil
+            suppressEmptyAfterSendKeys.remove(key)
+            conflictedKeys.remove(key)
+            pendingWrites[key] = nil
+            summaries[key] = nil
+            generation &+= 1
+        } else if pendingWrites[key] != nil {
+            scheduleSave(for: key)
+        }
+    }
+
     func removeDraft(accountRef: String, groupIdHex: String) {
+        guard !resetKeys.contains(ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)) else { return }
         setDraft(
             ConversationDraftSnapshot(
                 canonicalText: "",
@@ -319,11 +437,17 @@ final class ConversationDraftStore {
     func removeDrafts(accountRef: String) {
         let keys = Set(summaries.keys.filter { $0.accountRef == accountRef })
             .union(pendingWrites.keys.filter { $0.accountRef == accountRef })
+            .union(selections.keys.filter { $0.accountRef == accountRef })
         guard !keys.isEmpty else { return }
         for key in keys {
             saveTasks.removeValue(forKey: key)?.cancel()
             pendingWrites[key] = nil
             summaries[key] = nil
+            selections[key] = nil
+            suppressEmptyAfterSendKeys.remove(key)
+            conflictedKeys.remove(key)
+            sendingKeys.remove(key)
+            editedWhileSending.remove(key)
         }
         loadedAccounts.remove(accountRef)
         generation &+= 1
@@ -359,7 +483,7 @@ final class ConversationDraftStore {
                 accountRef: accountRef,
                 groupIdHex: summary.groupIdHex
             )
-            if pendingWrites[key] == nil {
+            if pendingWrites[key] == nil, !resetPausedKeys.contains(key), !resetKeys.contains(key) {
                 summaries[key] = summary
             }
         }
@@ -381,9 +505,45 @@ final class ConversationDraftStore {
 
     private func flush(key: ConversationDraftKey, using client: MarmotClient?) async {
         saveTasks.removeValue(forKey: key)?.cancel()
-        guard let pending = pendingWrites[key] else { return }
+        guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { return }
+        if activeWrites[key, default: 0] > 0 {
+            await withCheckedContinuation { resetWaiters[key, default: []].append($0) }
+        }
+        guard !resetPausedKeys.contains(key), !sendingKeys.contains(key),
+              !conflictedKeys.contains(key), let pending = pendingWrites[key] else { return }
+        activeWrites[key, default: 0] += 1
+        defer {
+            activeWrites[key, default: 0] -= 1
+            if activeWrites[key] == 0 {
+                activeWrites[key] = nil
+                resetWaiters.removeValue(forKey: key)?.forEach { $0.resume() }
+            }
+        }
 
         do {
+            let state = persistence as? AppState
+            let lease = try client == nil ? state?.runtimeLifecycle.beginForegroundRuntimeMutation() : nil
+            defer { if let lease { state?.runtimeLifecycle.endForegroundRuntimeMutation(lease) } }
+            if let liveClient = client ?? lease?.client {
+                let selected: SelectedMessageDraftFfi
+                if let cached = selections[key] { selected = cached }
+                else { selected = try await liveClient.selectedMessageDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex) }
+                let saved: SelectedMessageDraftFfi
+                switch pending.operation {
+                case .save(let snapshot):
+                    saved = try await liveClient.saveMessageDraftIfRevision(accountRef: key.accountRef,
+                        revision: selected.revision, snapshot: snapshot)
+                case .delete:
+                    saved = try await liveClient.clearMessageDraftIfRevision(accountRef: key.accountRef, revision: selected.revision)
+                }
+                selections[key] = saved
+                if pendingWrites[key]?.revision == pending.revision {
+                    pendingWrites[key] = nil
+                    summaries[key] = Self.summary(for: saved)
+                    generation &+= 1
+                }
+                return
+            }
             let saved: MessageDraftFfi?
             switch pending.operation {
             case .save(let snapshot):
@@ -423,6 +583,8 @@ final class ConversationDraftStore {
             pendingWrites[key] = nil
             summaries[key] = saved.map(MessageDraftSummaryFfi.init)
             generation &+= 1
+        } catch MarmotKitError.MessageDraftRevisionConflict {
+            conflictedKeys.insert(key)
         } catch is CancellationError {
             return
         } catch {
@@ -469,17 +631,39 @@ final class ConversationDraftStore {
                 mediaAttachments: []
             )
             do {
-                let saved = try await persistence.persistMessageDraft(
-                    accountRef: accountRef,
-                    groupIdHex: key.groupIdHex,
-                    snapshot: snapshot
-                )
-                summaries[key] = MessageDraftSummaryFfi(saved)
+                if let state = persistence as? AppState {
+                    let lease = try state.runtimeLifecycle.beginForegroundRuntimeMutation()
+                    defer { state.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+                    let selected = try await lease.client.selectedMessageDraft(accountRef: accountRef, groupIdHex: key.groupIdHex)
+                    // A durable SDK draft always wins over legacy device storage.
+                    if selected.draft == nil {
+                        let saved = try await lease.client.saveMessageDraftIfRevision(accountRef: accountRef,
+                            revision: selected.revision, snapshot: snapshot)
+                        selections[key] = saved
+                        if let hydrated = try await lease.client.hydrateSelectedDraft(accountRef: accountRef, selected: saved) {
+                            summaries[key] = MessageDraftSummaryFfi(hydrated)
+                        }
+                    }
+                } else {
+                    let saved = try await persistence.persistMessageDraft(accountRef: accountRef,
+                        groupIdHex: key.groupIdHex, snapshot: snapshot)
+                    summaries[key] = MessageDraftSummaryFfi(saved)
+                }
                 generation &+= 1
                 await legacyFile.remove(key: key)
             } catch {
                 Self.logger.error("Failed to migrate legacy composer draft")
             }
+        }
+    }
+
+    private static func summary(for selection: SelectedMessageDraftFfi) -> MessageDraftSummaryFfi? {
+        selection.draft.map { draft in
+            MessageDraftSummaryFfi(groupIdHex: draft.groupIdHex, content: draft.content,
+                replyToMessageIdHex: draft.replyToMessageIdHex,
+                mediaAttachments: draft.mediaAttachments.map { MessageDraftAttachmentSummaryFfi(
+                    id: $0.id, fileName: $0.fileName, mediaType: $0.mediaType, plaintextSize: $0.plaintextSize) },
+                createdAtMs: draft.createdAtMs, updatedAtMs: draft.updatedAtMs)
         }
     }
 

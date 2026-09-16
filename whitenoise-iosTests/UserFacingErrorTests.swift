@@ -8,6 +8,19 @@ struct UserFacingErrorTests {
         let errorDescription: String?
     }
 
+    @Test func mediaFailuresUseTypedCopyInsteadOfRemoteDetails() {
+        let detail = "Peer supplied diagnostic location"
+        let cases: [(MarmotKitError, String)] = [
+            (.MediaAttachmentRejected(kind: .unsupportedFormat, details: detail), "Unsupported attachment"),
+            (.MediaUnfetchable(details: detail), "No safe download location is available for this attachment."),
+            (.MediaDownloadFailed(details: detail), "Attachment download failed. Please try again."),
+        ]
+        for (error, expected) in cases {
+            #expect(UserFacingError.message(for: error) == expected)
+            #expect(UserFacingError.sanitizedDiagnostic(for: error) == detail)
+        }
+    }
+
     @Test func typedDuplicateIdentityUsesActionableCopy() {
         let error = MarmotKitError.DuplicateIdentity(account: "existing-account")
 

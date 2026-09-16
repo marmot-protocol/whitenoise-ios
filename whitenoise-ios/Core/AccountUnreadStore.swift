@@ -1,16 +1,13 @@
 import Foundation
 import MarmotKit
 
-/// Owns the per-account unread totals shown as badges on the account switcher.
-/// A dumb mirror of Marmot's materialized chat-list aggregate, patched from
-/// live active-list updates. Kept pure: index mutations take the current
-/// `accounts` as a parameter, so the store needs no `AppState` back-reference —
-/// AppState performs the Marmot fetch (its domain) and feeds the result here.
+/// Mirrors MDK's account-wide attention totals independently of loaded chat rows.
 @MainActor
 @Observable
 final class AccountUnreadStore {
     /// Cached per-account unread totals keyed by account id hex.
     private(set) var byAccountId: [String: AccountUnreadFfi] = [:]
+    private(set) var unavailableAccountIds: Set<String> = []
     private var incrementalRevision: UInt64 = 0
     private var incrementalRevisionByAccountId: [String: UInt64] = [:]
 
@@ -19,13 +16,16 @@ final class AccountUnreadStore {
     }
 
     func badgeCount(forAccountIdHex accountIdHex: String) -> UInt64? {
+        guard !unavailableAccountIds.contains(accountIdHex) else { return nil }
         guard let summary = byAccountId[accountIdHex] else { return nil }
         let count = ApplicationBadgeCountProjection.contribution(for: summary)
         return count > 0 ? count : nil
     }
 
-    func applicationBadgeCount() -> Int {
-        ApplicationBadgeCountProjection.count(for: byAccountId.values)
+    func applicationBadgeCount() -> Int? {
+        // An unavailable account with no prior total must not clear the system badge.
+        guard unavailableAccountIds.allSatisfy({ byAccountId[$0] != nil }) else { return nil }
+        return ApplicationBadgeCountProjection.count(for: byAccountId.values)
     }
 
     /// Replace the whole index from a fresh Marmot aggregate. Empty accounts
@@ -41,22 +41,51 @@ final class AccountUnreadStore {
     ) {
         guard !accounts.isEmpty else {
             byAccountId = [:]
+            unavailableAccountIds = []
             incrementalRevisionByAccountId = [:]
             return
         }
         var refreshed = AccountUnreadSummaryProjection.byAccountId(summaries, accounts: accounts)
-        let knownAccountIds = Set(accounts.map(\.accountIdHex))
+        let knownAccountIds = Set(accounts.filter { !$0.signedOut }.map(\.accountIdHex))
         for account in accounts {
             let accountIdHex = account.accountIdHex
             let hasNewerLiveUpdate = incrementalRevisionByAccountId[accountIdHex, default: 0]
                 > baseline[accountIdHex, default: 0]
-            if hasNewerLiveUpdate, let live = byAccountId[accountIdHex] {
-                refreshed[accountIdHex] = live
+            if hasNewerLiveUpdate {
+                refreshed[accountIdHex] = byAccountId[accountIdHex]
+            } else {
+                unavailableAccountIds.remove(accountIdHex)
             }
         }
         byAccountId = refreshed
+        unavailableAccountIds.formIntersection(knownAccountIds)
         incrementalRevisionByAccountId = incrementalRevisionByAccountId.filter {
             knownAccountIds.contains($0.key)
+        }
+    }
+
+    func applyAttention(_ snapshot: AccountAttentionSnapshotFfi, accounts: [AccountSummaryFfi]) {
+        let known = Set(accounts.filter { !$0.signedOut }.map(\.accountIdHex))
+        let included = Set(snapshot.accounts.map(\.accountIdHex)).intersection(known)
+        byAccountId = byAccountId.filter { included.contains($0.key) }
+        unavailableAccountIds.formIntersection(included)
+        incrementalRevisionByAccountId = incrementalRevisionByAccountId.filter { included.contains($0.key) }
+        for entry in snapshot.accounts where known.contains(entry.accountIdHex) {
+            // Even an unavailable update fences an older finite refresh.
+            incrementalRevision &+= 1
+            incrementalRevisionByAccountId[entry.accountIdHex] = incrementalRevision
+            guard case .ready(let total) = entry.state else {
+                unavailableAccountIds.insert(entry.accountIdHex)
+                continue
+            }
+            unavailableAccountIds.remove(entry.accountIdHex)
+            byAccountId[entry.accountIdHex] = AccountUnreadFfi(
+                accountIdHex: entry.accountIdHex,
+                unreadCount: total.unreadCount,
+                unreadConversations: total.unreadConversations,
+                attentionOnlyConversations: total.attentionOnlyConversations,
+                hasUnread: total.unreadConversations > 0
+            )
         }
     }
 
@@ -75,8 +104,9 @@ final class AccountUnreadStore {
     /// Drop entries for accounts that no longer exist (used as the fallback when
     /// a refresh fetch fails, so stale signed-out totals don't linger).
     func pruneToCurrentAccounts(_ accounts: [AccountSummaryFfi]) {
-        let knownAccountIds = Set(accounts.map(\.accountIdHex))
+        let knownAccountIds = Set(accounts.filter { !$0.signedOut }.map(\.accountIdHex))
         byAccountId = byAccountId.filter { knownAccountIds.contains($0.key) }
+        unavailableAccountIds.formIntersection(knownAccountIds)
         incrementalRevisionByAccountId = incrementalRevisionByAccountId.filter {
             knownAccountIds.contains($0.key)
         }

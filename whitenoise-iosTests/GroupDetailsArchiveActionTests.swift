@@ -4,6 +4,7 @@ import Testing
 @testable import MarmotKit
 
 @MainActor
+@Suite(.serialized)
 struct GroupDetailsArchiveActionTests {
 
     /// #446 — the Archive/Unarchive row already disables itself from
@@ -448,6 +449,65 @@ struct GroupDetailsArchiveActionTests {
         #expect(changedRecords.map(\.leaveRequestPending) == [true])
         #expect(leftGroupIds == [groupIdHex])
         #expect(dismissed)
+    }
+
+    @Test func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.setPhase(.ready)
+        appState.isAppSceneActive = true
+        appState.activeAccountRef = "account-1"
+        let previousMode = appState.developerMode
+        appState.developerMode = true
+        defer { appState.developerMode = previousMode }
+        let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
+        let model = GroupDetailsViewModel()
+        model.conversation = conversation
+        var deleted: [String] = []
+        var calls = 0
+        model.onGroupDeleted = { deleted.append($0) }
+        model.clearResetMediaForTesting = { true }
+        model.forgetGroupLocalForTesting = { account, group in
+            #expect(account == "account-1" && group == "group")
+            #expect(conversation.isLocallyReset)
+            calls += 1
+            return false // Already awaiting a fresh invitation is also a successful local reset.
+        }
+        await model.resetLocal(using: appState, dismiss: {})
+        #expect(calls == 1)
+        #expect(deleted == ["group"])
+        #expect(conversation.isLocallyReset)
+        #expect(!model.membershipActionInFlight)
+        await model.resetLocal(using: appState, dismiss: {})
+        #expect(calls == 1)
+    }
+
+    @Test func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.setPhase(.ready)
+        appState.isAppSceneActive = true
+        appState.activeAccountRef = "account-1"
+        let previousMode = appState.developerMode
+        defer { appState.developerMode = previousMode }
+        let conversation = ConversationViewModel(appState: appState, group: archiveTestGroup(groupIdHex: "group", archived: false))
+        let model = GroupDetailsViewModel()
+        model.conversation = conversation
+        var calls = 0
+        model.onGroupDeleted = { _ in Issue.record("Failed reset must not remove the group") }
+        model.forgetGroupLocalForTesting = { _, _ in
+            calls += 1
+            throw MarmotKitError.Runtime(details: "reset failed")
+        }
+        appState.developerMode = false
+        await model.resetLocal(using: appState, dismiss: {})
+        #expect(calls == 0)
+        appState.developerMode = true
+        await model.resetLocal(using: appState, dismiss: {})
+        #expect(calls == 1)
+        #expect(model.actionError == "Reset failed")
+        #expect(!conversation.isLocallyReset)
+        #expect(!model.membershipActionInFlight)
+        appState.isAppSceneActive = false
+        await conversation.start()
     }
 
     @Test func deleteLocalIsGatedUntilMembershipIsInactive() async throws {

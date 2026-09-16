@@ -108,6 +108,10 @@ struct MessageBubble: View {
     var mediaItems: [MessageMediaAttachment] = []
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
     var reactions: [ConversationViewModel.ReactionTally] = []
+    var omittedReactionKinds: UInt64 = 0
+    var projectedReactionTotal: UInt64? = nil
+    var identityName: ((String) -> String)? = nil
+    var identityAvatar: ((String) -> URL?)? = nil
     var onShowReactionDetails: (String?) -> Void = { _ in }
     var onReplyPreviewTap: () -> Void = {}
     var onLoadMedia = ConversationMediaLoader { _ in Data() }
@@ -215,13 +219,16 @@ struct MessageBubble: View {
             if !isFromMe, clusterPresentation.reservesIdentityLane {
                 GroupMessageIdentityLane(
                     accountIdHex: record.sender,
-                    showsAvatar: clusterPresentation.showsAvatar
+                    showsAvatar: clusterPresentation.showsAvatar,
+                    projectedName: identityName?(record.sender),
+                    projectedAvatar: identityAvatar?(record.sender),
+                    usesProjection: identityAvatar != nil
                 )
             }
 
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 2) {
                 if !isFromMe, clusterPresentation.showsSenderName {
-                    Text(appState.displayName(forAccountIdHex: record.sender))
+                    Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .padding(.leading, 12)
@@ -752,7 +759,7 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var bubbleMetadataRow: some View {
-        if reactions.isEmpty || isDeleted {
+        if (reactions.isEmpty && omittedReactionKinds == 0) || isDeleted {
             metadataWithoutReactions
         } else {
             reactionMetadata
@@ -780,8 +787,8 @@ struct MessageBubble: View {
     private var reactionMetadata: some View {
         let allPills = ReactionPillPresentation.sorted(reactions)
         let pills = Array(allPills.prefix(ReactionPillPresentation.maximumRenderedPills))
-        let preHiddenCount = allPills.count - pills.count
-        let totalCount = allPills.reduce(0) { $0 + $1.count }
+        let preHiddenCount = allPills.count - pills.count + Int(clamping: min(omittedReactionKinds, UInt64(Int.max - allPills.count)))
+        let totalCount = projectedReactionTotal.map { Int(clamping: $0) } ?? allPills.reduce(0) { $0 + $1.count }
         let mine = allPills.contains(where: \.mine)
 
         return ReactionMetadataRowLayout(reactionsOnLeadingEdge: isFromMe) {
@@ -908,6 +915,9 @@ private struct GroupMessageIdentityLane: View {
     @Environment(AppState.self) private var appState
     let accountIdHex: String
     let showsAvatar: Bool
+    var projectedName: String? = nil
+    var projectedAvatar: URL? = nil
+    var usesProjection = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -915,8 +925,8 @@ private struct GroupMessageIdentityLane: View {
             if showsAvatar {
                 AvatarBubble(
                     seed: accountIdHex,
-                    title: appState.displayName(forAccountIdHex: accountIdHex),
-                    pictureURL: appState.avatarURL(forAccountIdHex: accountIdHex)
+                    title: projectedName ?? appState.displayName(forAccountIdHex: accountIdHex),
+                    pictureURL: usesProjection ? projectedAvatar : appState.avatarURL(forAccountIdHex: accountIdHex)
                 )
             }
         }
@@ -1484,39 +1494,47 @@ private struct MessageMediaAttachmentContent: View {
         } else {
             VStack(alignment: isFromMe ? .trailing : .leading, spacing: 6) {
                 ForEach(items) { item in
-                    switch item.kind {
-                    case .image:
-                        MessageMediaTile(
-                            item: item,
-                            isFromMe: isFromMe,
-                            size: MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim),
-                            hiddenCount: 0,
-                            onLoadMedia: onLoadMedia,
-                            onOpenImage: onOpenImage,
-                            onOpenVideo: onOpenVideo
-                        )
-                        .clipShape(.rect(cornerRadius: 12))
-                    case .video:
-                        MessageSingleVideoBubble(
-                            item: item,
-                            isFromMe: isFromMe,
-                            maxWidth: maxWidth,
-                            onLoadMedia: onLoadMedia
-                        )
-                    case .audio:
-                        MessageAudioAttachmentView(
-                            item: item,
-                            isFromMe: isFromMe,
-                            width: maxWidth,
-                            onLoadMedia: onLoadMedia
-                        )
-                    case .document, .unsupported:
-                        MessageDocumentAttachmentView(
-                            item: item,
-                            isFromMe: isFromMe,
-                            width: maxWidth,
-                            onLoadMedia: onLoadMedia
-                        )
+                    if let rejection = item.rejectionMessage {
+                        Label(rejection, systemImage: "exclamationmark.document")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .padding(8)
+                    } else {
+                        switch item.kind {
+                        case .image:
+                            MessageMediaTile(
+                                item: item,
+                                isFromMe: isFromMe,
+                                size: MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim),
+                                hiddenCount: 0,
+                                onLoadMedia: onLoadMedia,
+                                onOpenImage: onOpenImage,
+                                onOpenVideo: onOpenVideo
+                            )
+                            .clipShape(.rect(cornerRadius: 12))
+                        case .video:
+                            MessageSingleVideoBubble(
+                                item: item,
+                                isFromMe: isFromMe,
+                                maxWidth: maxWidth,
+                                onLoadMedia: onLoadMedia
+                            )
+                        case .audio:
+                            MessageAudioAttachmentView(
+                                item: item,
+                                isFromMe: isFromMe,
+                                width: maxWidth,
+                                onLoadMedia: onLoadMedia
+                            )
+                        case .document, .unsupported:
+                            MessageDocumentAttachmentView(
+                                item: item,
+                                isFromMe: isFromMe,
+                                width: maxWidth,
+                                onLoadMedia: onLoadMedia
+                            )
+                        }
                     }
                 }
             }

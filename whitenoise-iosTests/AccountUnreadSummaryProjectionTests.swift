@@ -154,7 +154,7 @@ struct AccountUnreadSummaryProjectionTests {
         #expect(summary.attentionOnlyConversations == 1)
     }
 
-    @Test func pendingInvitesContributeWithoutDoubleCountingUnreadMessages() {
+    @Test func pendingInvitesNeverContributeToUnreadBadges() {
         let rows = [
             row(
                 groupIdHex: "pending-invite",
@@ -180,9 +180,9 @@ struct AccountUnreadSummaryProjectionTests {
             accountIdHex: "account-a",
             rows: rows
         )
-        #expect(summary.unreadCount == 2)
-        #expect(summary.attentionOnlyConversations == 1)
-        #expect(ApplicationBadgeCountProjection.contribution(for: summary) == 3)
+        #expect(summary.unreadCount == 0)
+        #expect(summary.attentionOnlyConversations == 0)
+        #expect(ApplicationBadgeCountProjection.contribution(for: summary) == 0)
     }
 
     @MainActor

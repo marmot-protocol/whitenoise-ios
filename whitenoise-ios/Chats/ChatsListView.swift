@@ -33,6 +33,7 @@ struct ChatsListView: View {
     @State private var path: [ChatNavigationTarget] = []
     @State private var search = ChatListSearchPresentation()
     @State private var scope: ChatScope = .active
+    @State private var listViewport = ChatListViewport()
     @State private var selectedChatIds = Set<String>()
     @State private var chatListEditMode: EditMode = .inactive
     @State private var showBulkDeleteConfirmation = false
@@ -259,7 +260,10 @@ struct ChatsListView: View {
                 // this one, leaving the list permanently empty and unbound.
                 let vm = viewModel ?? ChatsListViewModel(appState: appState)
                 if viewModel == nil { viewModel = vm }
-                await vm.bind(accountRef: appState.activeAccountRef, force: true)
+                listViewport.reset()
+                let viewport = listViewport
+                vm.windowWillChange = { [weak viewport] snapshot in viewport?.prepare(for: snapshot) }
+                await vm.bind(accountRef: appState.activeAccountRef, force: true, mode: listMode)
             }
             .onAppear {
                 // Reflect messages we sent from a conversation (which emit no
@@ -373,7 +377,8 @@ struct ChatsListView: View {
         SubscriptionScope(
             accountRef: appState.activeAccountRef,
             runtimeGeneration: appState.runtimeGeneration,
-            isAppSceneActive: appState.isAppSceneActive
+            isAppSceneActive: appState.isAppSceneActive,
+            mode: listMode
         )
     }
 
@@ -381,6 +386,17 @@ struct ChatsListView: View {
         let accountRef: String?
         let runtimeGeneration: Int
         let isAppSceneActive: Bool
+        var mode: ChatsListViewModel.ListMode = .complete
+    }
+
+    private var listMode: ChatsListViewModel.ListMode {
+        if search.isActive || selectionMode { return .complete }
+        switch scope {
+        case .active: return .window(.chats)
+        case .unread: return .window(.unread)
+        case .archived: return .window(.archived)
+        case .left: return .window(.left)
+        }
     }
 
     // MARK: - Filter
@@ -447,7 +463,7 @@ struct ChatsListView: View {
         viewModel: ChatsListViewModel,
         rows: [ChatsListViewModel.Item]
     ) -> some View {
-        if viewModel.isLoading && viewModel.items.isEmpty {
+        if viewModel.isLoading && rows.isEmpty {
             ProgressView()
         } else if let error = viewModel.loadError {
             ContentUnavailableView(
@@ -463,6 +479,13 @@ struct ChatsListView: View {
             let otherRows = canReorderPinnedRows ? rows.filter { !$0.isPinned } : []
 
             List {
+                if viewModel.windowSnapshot?.hasMoreBefore == true {
+                    windowPageButton(.backward, viewModel: viewModel)
+                    Button("Return to newest chats") {
+                        listViewport.requestTop()
+                        Task { await viewModel.returnWindowToTop() }
+                    }
+                }
                 if canReorderPinnedRows {
                     ForEach(pinnedRows) { item in
                         chatListRow(item)
@@ -479,6 +502,17 @@ struct ChatsListView: View {
                         chatListRow(item)
                     }
                 }
+                if viewModel.windowSnapshot?.hasMoreAfter == true {
+                    windowPageButton(.forward, viewModel: viewModel)
+                }
+                if let error = viewModel.pageError {
+                    Text(error).foregroundStyle(.secondary)
+                }
+            }
+            .onScrollPhaseChange { _, phase in
+                if phase == .idle, let id = listViewport.visibleAnchor() {
+                    viewModel.setVisibleWindowAnchor(id)
+                }
             }
             .environment(\.editMode, $chatListEditMode)
             .listStyle(.plain)
@@ -487,8 +521,38 @@ struct ChatsListView: View {
             .overlay {
                 if rows.isEmpty { emptyState }
             }
-            .refreshable { await viewModel.refreshRows() }
+            .refreshable {
+                if case .window = viewModel.listMode {
+                    listViewport.requestTop()
+                    await viewModel.returnWindowToTop()
+                } else {
+                    await viewModel.refreshRows()
+                }
+            }
         }
+    }
+
+    private func windowPageButton(
+        _ direction: ChatListPageDirectionFfi, viewModel: ChatsListViewModel
+    ) -> some View {
+        Button {
+            requestWindowPage(direction, viewModel: viewModel)
+        } label: {
+            HStack {
+                Text(direction == .forward ? L10n.string("Load more chats") : L10n.string("Load previous chats"))
+                if viewModel.isPaging { ProgressView() }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .disabled(viewModel.isPaging)
+        .modifier(TimelinePaginationVisibility(isEnabled: !viewModel.isPaging) {
+            requestWindowPage(direction, viewModel: viewModel)
+        })
+    }
+
+    private func requestWindowPage(_ direction: ChatListPageDirectionFfi, viewModel: ChatsListViewModel) {
+        if let id = listViewport.visibleAnchor() { viewModel.setVisibleWindowAnchor(id) }
+        Task { await viewModel.pageWindow(direction) }
     }
 
     private func chatListRow(_ item: ChatsListViewModel.Item) -> some View {
@@ -522,6 +586,11 @@ struct ChatsListView: View {
                 }
             } else if isPreparingLeave {
                 ProgressView()
+            }
+        }
+        .background {
+            if let sequence = viewModel?.windowSnapshot?.sequence {
+                ChatListRowAnchor(groupId: item.id, sequence: sequence, viewport: listViewport)
             }
         }
         .contentShape(.rect)
@@ -720,16 +789,19 @@ struct ChatsListView: View {
     }
 
     private func currentRows(_ viewModel: ChatsListViewModel) -> [ChatsListViewModel.Item] {
+        if case .window = viewModel.listMode {
+            return viewModel.windowSnapshot?.rows.compactMap { viewModel.item(groupIdHex: $0.row.groupIdHex) } ?? []
+        }
         let base: [ChatsListViewModel.Item]
         switch scope {
         case .active:
-            base = viewModel.items
+            base = viewModel.items.filter { !$0.belongsToLeft }
         case .archived:
-            base = viewModel.archivedItems
+            base = viewModel.archivedItems.filter { !$0.belongsToLeft }
         case .unread:
-            base = viewModel.items.filter(\.hasUnread)
+            base = viewModel.items.filter { !$0.belongsToLeft && !$0.row.pendingConfirmation && ($0.hasUnread || $0.row.manuallyMarkedUnread) }
         case .left:
-            base = viewModel.items.filter { !$0.isActiveMember }
+            base = (viewModel.items + viewModel.archivedItems).filter(\.belongsToLeft)
         }
         return base.filter {
             ChatListSearch.matches(query: search.query, in: $0.searchHaystack)
@@ -775,6 +847,7 @@ struct ChatsListView: View {
     }
 
     private func navigate(to item: ChatsListViewModel.Item) {
+        viewModel?.retainDestination(groupIdHex: item.id)
         exitSearch()
         path.append(
             ChatNavigationTarget(
@@ -987,8 +1060,11 @@ struct ChatsListView: View {
         isMarkingAllRead = true
         defer { isMarkingAllRead = false }
 
+        let unreadItems: [ChatsListViewModel.Item]
+        do { unreadItems = try await viewModel.allUnreadItems() }
+        catch { presentMarkReadFailure(); return }
         var hadFailure = false
-        for item in viewModel.items where item.hasUnread {
+        for item in unreadItems {
             if let messageIdHex = item.lastMessage?.messageIdHex {
                 if !(await markRead(groupIdHex: item.id, messageIdHex: messageIdHex)) {
                     hadFailure = true
@@ -1298,7 +1374,7 @@ private struct ChatDestination: View {
                 initialUnreadMessageIdHex: target.unreadMessageIdHex,
                 initialAppState: appState,
                 forwardDestinationProvider: {
-                    viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
+                    try await viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
                 },
                 onChatListRowUpdated: { viewModel.enqueueChatListRowUpdate($0) },
                 onGroupChanged: { viewModel.applyLocalGroupChange($0) },

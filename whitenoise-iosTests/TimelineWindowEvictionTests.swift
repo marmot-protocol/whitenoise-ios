@@ -5,6 +5,18 @@ import Testing
 
 struct TimelineWindowEvictionTests {
     @MainActor
+    @Test func completeConversationReplacementRemovesFilteredAndEvictedRows() throws {
+        let viewModel = ConversationViewModel(appState: AppState(client: try MarmotClient.testClient()), group: testGroup())
+        let hidden = timelineRecord(messageIdHex: hexId(1), timelineAt: 1)
+        let retained = timelineRecord(messageIdHex: hexId(2), timelineAt: 2)
+        viewModel.timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: [hidden, retained], hasMoreBefore: true, hasMoreAfter: true))
+        viewModel.timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: [retained], hasMoreBefore: true, hasMoreAfter: true))
+        #expect(timelineMessageIds(in: viewModel) == [retained.messageIdHex])
+        viewModel.timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: [], hasMoreBefore: true, hasMoreAfter: true))
+        #expect(timelineMessageIds(in: viewModel).isEmpty)
+    }
+
+    @MainActor
     @Test func boundedWindowPageKeepsPreviouslyLoadedHistory() throws {
         let viewModel = ConversationViewModel(
             appState: AppState(client: try MarmotClient.testClient()),

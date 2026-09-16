@@ -182,15 +182,21 @@ struct ReactionDetailsSheet: View {
 
     let details: ConversationViewModel.ReactionDetails
     let onRemoveOwnReaction: ((String) -> Void)?
+    var identityName: ((String) -> String)?
+    var identityAvatar: ((String) -> URL?)?
     @State private var selectedEmoji: String?
 
     init(
         details: ConversationViewModel.ReactionDetails,
         initialEmoji: String?,
-        onRemoveOwnReaction: ((String) -> Void)? = nil
+        onRemoveOwnReaction: ((String) -> Void)? = nil,
+        identityName: ((String) -> String)? = nil,
+        identityAvatar: ((String) -> URL?)? = nil
     ) {
         self.details = details
         self.onRemoveOwnReaction = onRemoveOwnReaction
+        self.identityName = identityName
+        self.identityAvatar = identityAvatar
         _selectedEmoji = State(initialValue: initialEmoji)
     }
 
@@ -199,6 +205,12 @@ struct ReactionDetailsSheet: View {
             VStack(spacing: 0) {
                 filters
                 Divider()
+                if details.isTruncated {
+                    Text("Showing a limited preview of reactions.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
                 reactionList
             }
             .navigationTitle("Reactions")
@@ -287,7 +299,7 @@ struct ReactionDetailsSheet: View {
     private var sortedUsers: [ConversationViewModel.ReactionDetails.User] {
         let users = details.users(filteredBy: selectedEmoji)
         let namesBySender = Dictionary(uniqueKeysWithValues: users.map { user in
-            (user.sender, appState.displayName(forAccountIdHex: user.sender))
+            (user.sender, (identityName?(user.sender) ?? appState.displayName(forAccountIdHex: user.sender)))
         })
 
         return users.sorted { lhs, rhs in
@@ -303,14 +315,14 @@ struct ReactionDetailsSheet: View {
     }
 
     private func reactionRow(_ user: ConversationViewModel.ReactionDetails.User) -> some View {
-        let name = appState.displayName(forAccountIdHex: user.sender)
+        let name = (identityName?(user.sender) ?? appState.displayName(forAccountIdHex: user.sender))
         let isMe = user.sender == appState.activeAccount?.accountIdHex
 
         return HStack(spacing: 12) {
             AvatarBubble(
                 seed: user.sender,
                 title: name,
-                pictureURL: appState.avatarURL(forAccountIdHex: user.sender)
+                pictureURL: identityAvatar != nil ? identityAvatar?(user.sender) : appState.avatarURL(forAccountIdHex: user.sender)
             )
             .frame(width: 44, height: 44)
 

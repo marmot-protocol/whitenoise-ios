@@ -48,18 +48,27 @@ struct WelcomeView: View {
                 Spacer(minLength: 0)
 
                 ScrollView {
-                    actionLayout {
-                        WNButton(title: "Sign In", emphasis: .secondary) {
-                            open(.signIn)
-                        }
-                        .accessibilityIdentifier("welcome.sign-in")
+                    VStack(spacing: 12) {
+                        actionLayout {
+                            WNButton(title: "Sign In", emphasis: .secondary) {
+                                open(.signIn)
+                            }
+                            .accessibilityIdentifier("welcome.sign-in")
 
-                        WNButton(title: "Sign Up") {
-                            open(.signUp)
+                            WNButton(title: "Sign Up") {
+                                open(.signUp)
+                            }
+                            .accessibilityIdentifier("welcome.sign-up")
                         }
-                        .accessibilityIdentifier("welcome.sign-up")
+                        .padding(.vertical, 4)
+
+                        Text("By signing up or signing in, you agree to our [Terms of Service](https://whitenoise.chat/terms).")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("welcome.terms")
                     }
-                    .padding(.vertical, 4)
                 }
                 .defaultScrollAnchor(.bottom, for: .alignment)
                 .defaultScrollAnchor(.top, for: .sizeChanges)

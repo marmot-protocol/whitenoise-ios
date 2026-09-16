@@ -21,6 +21,8 @@ nonisolated enum ChatDeveloperToolsPresentation {
 }
 
 struct ChatDeveloperToolsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var showResetConfirmation = false
     @Environment(AppState.self) private var appState
     @Bindable var model: GroupDetailsViewModel
     @Bindable var conversation: ConversationViewModel
@@ -31,6 +33,7 @@ struct ChatDeveloperToolsView: View {
             deliverySection
             maintenanceSection
             diagnosticsSection
+            resetSection
         }
         .navigationTitle("Chat Developer Tools")
         .navigationBarTitleDisplayMode(.inline)
@@ -52,6 +55,14 @@ struct ChatDeveloperToolsView: View {
         } message: {
             Text(model.transcriptExportError ?? "")
         }
+        .alert("Delete local group?", isPresented: $showResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete Local Group", role: .destructive) {
+                Task { await model.resetLocal(using: appState, dismiss: { dismiss() }) }
+            }
+        } message: {
+            Text("Stop recovery loops in a broken group by deleting its local history, state, and draft. Downloaded media caches are also cleared. Other members are unaffected. Rejoining requires a fresh invitation from someone still in the group.")
+        }
         .sheet(
             isPresented: $model.showTranscriptShareSheet,
             onDismiss: model.cleanupTranscriptExportFile
@@ -62,6 +73,15 @@ struct ChatDeveloperToolsView: View {
                     onComplete: model.cleanupTranscriptExportFile
                 )
             }
+        }
+    }
+
+    private var resetSection: some View {
+        Section {
+            Button("Delete Local Group", role: .destructive) { showResetConfirmation = true }
+                .disabled(!appState.developerMode || model.membershipActionInFlight || model.isExportingTranscript)
+        } footer: {
+            Text("Stop recovery loops in a broken group by deleting its local history, state, and draft. Downloaded media caches are also cleared. Other members are unaffected. Rejoining requires a fresh invitation from someone still in the group.")
         }
     }
 

@@ -10,6 +10,8 @@ import MarmotKit
 @Observable
 final class KeyPackagesViewModel {
     var packages: [AccountKeyPackageFfi] = []
+    var relayHistory: [AccountKeyPackageRelayEventFfi] = []
+    var relayHistoryError: String?
     var lists: AccountRelayListsFfi?
     var presentation = KeyPackagesPresentation()
     var hasLoaded = false
@@ -34,6 +36,8 @@ final class KeyPackagesViewModel {
             loadedRef = nil
             loadError = nil
             packages = []
+            relayHistory = []
+            relayHistoryError = nil
             lists = nil
             presentation = KeyPackagesPresentation()
             hasLoaded = false
@@ -55,6 +59,8 @@ final class KeyPackagesViewModel {
         // account's data while another's loads.
         if loadedRef != ref {
             packages = []
+            relayHistory = []
+            relayHistoryError = nil
             lists = nil
             presentation = KeyPackagesPresentation()
             hasLoaded = false
@@ -88,6 +94,19 @@ final class KeyPackagesViewModel {
                 loadedMaintenanceError = UserFacingError.message(for: error)
             }
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
+            let history: [AccountKeyPackageRelayEventFfi]
+            let historyError: String?
+            do {
+                history = try await client.marmot.accountKeyPackageRelayEvents(accountRef: ref,
+                    bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists))
+                historyError = nil
+            } catch {
+                history = []
+                historyError = UserFacingError.message(for: error)
+            }
+            guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
+            relayHistory = history
+            relayHistoryError = historyError
             lists = loadedLists
             packages = loadedPackages
             presentation = KeyPackagesPresentation(packages: loadedPackages, status: loadedMaintenanceStatus)

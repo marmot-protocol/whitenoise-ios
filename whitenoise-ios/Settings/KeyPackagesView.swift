@@ -69,6 +69,19 @@ struct KeyPackagesView: View {
                     }
                 }
             }
+            Section("Relay Event History") {
+                if let error = model.relayHistoryError {
+                    Text(error).foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.relayHistory, id: \.eventIdHex) { event in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(event.isCurrent ? "Current" : "Superseded")
+                                .font(.caption).foregroundStyle(.secondary)
+                            packageDetails(identifier: event.eventIdHex, publishedAt: event.createdAt, bytes: event.keyPackageBytes)
+                        }
+                    }
+                }
+            }
         }
         .localizedNavigationTitle("Key Packages")
         .navigationBarTitleDisplayMode(.inline)

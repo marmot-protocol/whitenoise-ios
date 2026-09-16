@@ -5,6 +5,47 @@ import Testing
 
 @MainActor
 struct ConversationDraftStoreTests {
+    @Test func groupResetDrainsWritesAndBlocksLateComposerPersistence() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        var release: CheckedContinuation<Void, Never>?
+        persistence.beforePersist = { await withCheckedContinuation { release = $0 } }
+        store.setDraft(textSnapshot("before reset"), accountRef: "account", groupIdHex: "group")
+        let write = Task { await store.flush() }
+        while release == nil { await Task.yield() }
+        var prepared = false
+        let reset = Task {
+            await store.pauseForGroupReset(accountRef: "account", groupIdHex: "group")
+            prepared = true
+        }
+        await Task.yield()
+        #expect(!prepared)
+        store.setDraft(textSnapshot("late view callback"), accountRef: "account", groupIdHex: "group")
+        release?.resume()
+        await write.value
+        await reset.value
+        #expect(prepared)
+        store.finishGroupReset(accountRef: "account", groupIdHex: "group", succeeded: true)
+        #expect(store.summary(accountRef: "account", groupIdHex: "group") == nil)
+        #expect(await store.snapshot(accountRef: "account", groupIdHex: "group") == nil)
+        #expect(persistence.persistCount == 1)
+        // A newly opened, freshly joined group can draft again.
+        persistence.beforePersist = nil
+        store.setDraft(textSnapshot("after rejoin"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "after rejoin")
+    }
+
+    @Test func failedGroupResetResumesTheUnsavedDraft() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        store.setDraft(textSnapshot("keep this"), accountRef: "account", groupIdHex: "group")
+        await store.pauseForGroupReset(accountRef: "account", groupIdHex: "group")
+        store.finishGroupReset(accountRef: "account", groupIdHex: "group", succeeded: false)
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "keep this")
+    }
+
     @Test func draftsPersistAcrossStoreInstancesAndStayAccountGroupScoped() async {
         let persistence = DraftPersistenceProbe()
         let first = ConversationDraftStore(persistence: persistence)
@@ -234,6 +275,7 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
     private var drafts: [ConversationDraftKey: MessageDraftFfi] = [:]
     private(set) var summaryLoadCount = 0
     private(set) var persistCount = 0
+    var beforePersist: (() async -> Void)?
     private(set) var deleteCount = 0
     private var clock: Int64 = 0
 
@@ -272,6 +314,7 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
         snapshot: ConversationDraftSnapshot
     ) async throws -> MessageDraftFfi {
         persistCount += 1
+        await beforePersist?()
         clock += 1
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         let saved = MessageDraftFfi(

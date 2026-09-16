@@ -159,9 +159,10 @@ final class ConversationViewModel {
             let emoji: String
             let senders: [String]
             let mine: Bool
+            var totalCount: Int? = nil
 
             var id: String { emoji }
-            var count: Int { senders.count }
+            var count: Int { totalCount ?? senders.count }
         }
 
         struct User: Identifiable, Hashable {
@@ -172,6 +173,9 @@ final class ConversationViewModel {
         }
 
         let groups: [EmojiGroup]
+        var omittedKinds: UInt64 = 0
+        var totalCount: Int? = nil
+        var isTruncated: Bool { omittedKinds > 0 || groups.contains { $0.count > $0.senders.count } }
 
         var tallies: [ReactionTally] {
             groups.map { group in
@@ -180,7 +184,7 @@ final class ConversationViewModel {
         }
 
         var totalReactionCount: Int {
-            groups.reduce(0) { $0 + $1.count }
+            totalCount ?? groups.reduce(0) { $0 + $1.count }
         }
 
         func users(filteredBy emoji: String?) -> [User] {
@@ -219,7 +223,7 @@ final class ConversationViewModel {
     var hasMoreAfter: Bool { timelineStore.hasMoreAfter }
     var isLoading: Bool { timelineStore.isLoading }
     var canLoadOlderTimelinePage: Bool {
-        hasMoreBefore && !isLoadingOlder && timelineSubscription != nil
+        hasMoreBefore && !isLoadingOlder && windowSubscription != nil
     }
 
     let recovery = GroupRecoveryModel()
@@ -252,10 +256,8 @@ final class ConversationViewModel {
     private let initialMemberCount: Int?
     private let onChatListRowUpdated: ((ChatListRowFfi) -> Void)?
     private var timelineTask: Task<Void, Never>?
-    private var initialTimelineSnapshotTask: Task<Void, Never>?
     private var groupStateTask: Task<Void, Never>?
     private var groupDetailsTask: Task<Void, Never>?
-    private var readStateTask: Task<Void, Never>?
     private var tailRefreshTask: Task<Void, Never>?
     private var tailRefreshGeneration: UInt64 = 0
 
@@ -264,7 +266,20 @@ final class ConversationViewModel {
     private static let liveSubscriptionMaximumRetryDelayNanoseconds: UInt64 = 8_000_000_000
     nonisolated static let maxSystemTimelineItems = 64
 
-    @ObservationIgnored private var timelineSubscription: TimelineMessagesSubscription?
+    @ObservationIgnored private var usesConversationWindow = false
+    @ObservationIgnored var openingMessageId: String?
+    private(set) var openingTargetUnavailable = false
+    private(set) var initialWindowUnreadMessageId: String?
+    private(set) var conversationWindow: ConversationWindowSnapshotFfi?
+    private var windowSubscription: ConversationWindowSubscription?
+    @ObservationIgnored private var windowCursor: ProjectionSequenceCursor?
+    @ObservationIgnored private var windowLifetime = UUID()
+    @ObservationIgnored private var startRequest = UUID()
+    @ObservationIgnored private var windowCommandTask: Task<Void, Never>?
+    private(set) var windowAnchorMessageId: String?
+    @ObservationIgnored var windowWillChange: ((ConversationWindowSnapshotFfi) -> Void)?
+    private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
+    private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
@@ -373,11 +388,13 @@ final class ConversationViewModel {
     /// member that isn't us. `memberIdHex` is the pubkey hex (same space as
     /// `accountIdHex`); `member.account` is a local-only label, not comparable.
     var otherMember: String? {
-        GroupDisplay.otherMemberAccount(in: members, myAccountId: myAccountId)
+        conversationWindow?.header.selected.peerId
+            ?? GroupDisplay.otherMemberAccount(in: members, myAccountId: myAccountId)
             ?? initialOtherMember
     }
 
     private var displayMemberCount: Int {
+        if let count = conversationWindow?.header.memberCount { return Int(clamping: count) }
         if !members.isEmpty { return members.count }
         if !groupMemberDetails.isEmpty { return groupMemberDetails.count }
         return initialMemberCount ?? 0
@@ -399,6 +416,15 @@ final class ConversationViewModel {
     }
 
     func displayTitle(for groupDisplay: GroupDisplay.Resolved) -> String {
+        if let selected = conversationWindow?.header.selected {
+            switch selected.title {
+            case .literal(let title):
+                return selected.peerId.flatMap { appState?.contactNickname(forAccountIdHex: $0) }
+                    ?? ContentSanitizer.groupName(title) ?? L10n.string("Unnamed group")
+            case .unnamedGroup: return L10n.string("Unnamed group")
+            case .unavailableConversation: return L10n.string("Conversation unavailable")
+            }
+        }
         guard let appState else {
             if let name = groupDisplay.sanitizedName { return name }
             if let initialTitle = ContentSanitizer.groupName(initialTitle) { return initialTitle }
@@ -424,7 +450,8 @@ final class ConversationViewModel {
     /// Mirrors Android's empty-group affordance: only a confirmed sole-member
     /// admin sees the invite CTA, never a roster that simply has not loaded yet.
     var canInviteFromEmptyGroup: Bool {
-        EmptyGroupConversationPresentation.canInvite(
+        if conversationWindow?.header.capabilities.canInvite == false { return false }
+        return EmptyGroupConversationPresentation.canInvite(
             isSelfMember: group.selfMembership == .member,
             isSelfAdmin: isSelfAdmin,
             membersLoaded: !groupMemberDetails.isEmpty,
@@ -441,22 +468,24 @@ final class ConversationViewModel {
     }
 
     var isSelfAdmin: Bool {
+        if let header = conversationWindow?.header { return header.capabilities.isSelfAdmin }
         if let managementState { return managementState.isSelfAdmin }
         guard let me = myAccountId else { return false }
         return group.admins.contains(me)
     }
 
     var isLastAdmin: Bool {
+        if let header = conversationWindow?.header { return header.capabilities.isLastAdmin }
         if let managementState { return managementState.isLastAdmin }
         return isSelfAdmin && group.admins.count <= 1
     }
 
     var isGroupDisbanding: Bool {
-        group.disbanding || managementState?.disbanding == true
+        conversationWindow?.header.disbanding ?? (group.disbanding || managementState?.disbanding == true)
     }
 
     var isGroupDisbanded: Bool {
-        group.disbanded || managementState?.lifecycleState == .disbanded
+        conversationWindow.map { $0.header.lifecycle == .disbanded } ?? (group.disbanded || managementState?.lifecycleState == .disbanded)
     }
 
     var isGroupDisbandingOrDisbanded: Bool {
@@ -464,11 +493,42 @@ final class ConversationViewModel {
     }
 
     var isGroupUnrecoverable: Bool {
-        group.unrecoverable || managementState?.lifecycleState == .unrecoverable
+        conversationWindow?.header.unrecoverable ?? (group.unrecoverable || managementState?.lifecycleState == .unrecoverable)
+    }
+
+    var canInviteMembers: Bool {
+        conversationWindow?.header.capabilities.canInvite ?? GroupManagementPresentation.canInvite(
+            state: managementState, fallbackIsAdmin: isSelfAdmin)
+    }
+
+    var canEditGroup: Bool {
+        conversationWindow?.header.capabilities.canEditGroup ?? isSelfAdmin
+    }
+
+    var canEndGroup: Bool {
+        if let capabilities = conversationWindow?.header.capabilities {
+            return capabilities.canEnableDisbanding || capabilities.canDisband
+        }
+        return GroupManagementPresentation.canEndGroup(state: managementState)
+    }
+
+    var canLeaveGroup: Bool {
+        conversationWindow?.header.capabilities.canLeave ?? GroupManagementPresentation.canLeave(
+            state: managementState, fallbackIsLastAdmin: isLastAdmin)
+    }
+
+    var isActiveParticipant: Bool {
+        if let capabilities = conversationWindow?.header.capabilities {
+            return capabilities.participation == .active || capabilities.participation == .leaving
+        }
+        return GroupManagementPresentation.isActiveMember(state: managementState, members: members,
+            groupMemberDetails: groupMemberDetails, myAccountId: myAccountId, fallbackSelfMembership: group.selfMembership)
     }
 
     var canSendMessages: Bool {
-        guard !group.pendingConfirmation else { return false }
+        if let header = conversationWindow?.header { return !isLocallyReset && header.capabilities.canSend && windowSubscription != nil }
+        if usesConversationWindow { return false }
+        guard !isLocallyReset, !group.pendingConfirmation else { return false }
         guard !leaveRequestPending else { return false }
         guard !isGroupDisbandingOrDisbanded else { return false }
         guard !isGroupUnrecoverable else { return false }
@@ -508,6 +568,7 @@ final class ConversationViewModel {
         if group.selfMembership == .left {
             return GroupManagementPresentation.leftGroupComposerMessage
         }
+        if isActiveParticipant { return L10n.string("Conversation unavailable") }
         return GroupManagementPresentation.inactiveGroupComposerMessage
     }
 
@@ -519,7 +580,7 @@ final class ConversationViewModel {
     }
 
     var hasPendingInvite: Bool {
-        group.pendingConfirmation
+        conversationWindow?.pendingConfirmation ?? group.pendingConfirmation
     }
 
     var inviterAccountIdHex: String? {
@@ -555,11 +616,51 @@ final class ConversationViewModel {
 
     // Timeline projection accessors — forwarded to `timelineStore`.
     func reactions(for messageIdHex: String) -> [ReactionTally] {
-        timelineStore.reactions(for: messageIdHex)
+        if let reactions = windowReactions[messageIdHex] {
+            return reactions.items.map { ReactionTally(emoji: $0.emoji, count: Int(clamping: $0.count), mine: $0.viewerReacted) }
+        }
+        return timelineStore.reactions(for: messageIdHex)
+    }
+
+    func windowDisplayName(for accountId: String) -> String {
+        guard conversationWindow != nil else { return appState?.displayName(forAccountIdHex: accountId) ?? L10n.string("Unknown user") }
+        return IdentityPresentation.resolve(accountIdHex: accountId, knownName: windowIdentities[accountId]?.displayName).text
     }
 
     func reactionDetails(for messageIdHex: String) -> ReactionDetails {
-        timelineStore.reactionDetails(for: messageIdHex)
+        if let value = windowReactions[messageIdHex] {
+            return ReactionDetails(groups: value.items.map {
+                ReactionDetails.EmojiGroup(emoji: $0.emoji, senders: $0.reactors, mine: $0.viewerReacted,
+                    totalCount: Int(clamping: $0.count))
+            }, omittedKinds: value.omittedKinds, totalCount: Int(clamping: value.totalCount))
+        }
+        return timelineStore.reactionDetails(for: messageIdHex)
+    }
+
+    func windowAvatarURL(for accountId: String) -> URL? {
+        guard conversationWindow != nil else { return appState?.avatarURL(forAccountIdHex: accountId) }
+        if case .remoteImage(let url, _) = windowIdentities[accountId]?.avatar { return ContentSanitizer.imageURL(url) }
+        return nil
+    }
+
+    var selectedAvatarSeed: String {
+        switch conversationWindow?.header.selected.avatar {
+        case .remoteImage(_, let seed), .encryptedGroupImage(_, let seed), .placeholder(let seed, _): return seed
+        case nil: return GroupDisplay.avatarSeed(for: groupDisplay)
+        }
+    }
+
+    var selectedAvatarURL: URL? {
+        guard let avatar = conversationWindow?.header.selected.avatar else { return appState.flatMap { GroupDisplay.avatarURL(for: groupDisplay, appState: $0) } }
+        if case .remoteImage(let url, _) = avatar { return ContentSanitizer.imageURL(url) }
+        return nil
+    }
+
+    var selectedImageHash: String? {
+        guard !group.pendingConfirmation else { return nil }
+        guard let avatar = conversationWindow?.header.selected.avatar else { return group.imageHashHex }
+        if case .encryptedGroupImage(let image, _) = avatar { return image.imageHashHex }
+        return nil
     }
 
     func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
@@ -672,6 +773,7 @@ final class ConversationViewModel {
 
     // Timeline drive points — forwarded to `timelineStore`.
     func applyTimelinePage(_ page: TimelinePageFfi, placement: TimelinePagePlacement) {
+        guard !isLocallyReset else { return }
         timelineStore.applyTimelinePage(page, placement: placement)
     }
 
@@ -755,8 +857,12 @@ final class ConversationViewModel {
         search.loadOlderPage = { [weak self] in await self?.loadOlderTimelinePage() }
         streamWatcher.sink = timelineStore
         timelineStore.streamWatcher = streamWatcher
-        timelineStore.mentionResolver = { [weak appState] entity in
-            appState?.mentionDisplayName(for: entity)
+        timelineStore.identityNameResolver = { [weak self] id in self?.windowDisplayName(for: id) ?? L10n.string("Unknown user") }
+        timelineStore.mentionResolver = { [weak self, weak appState] entity in
+            if self?.conversationWindow != nil, let id = NostrProfileReference.pubkeyHex(fromBech32: entity.bech32) {
+                return self?.windowDisplayName(for: id)
+            }
+            return appState?.mentionDisplayName(for: entity)
         }
         composer.canSendMessages = { [weak self] in self?.canSendMessages ?? false }
         composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
@@ -765,16 +871,18 @@ final class ConversationViewModel {
 
     isolated deinit {
         timelineTask?.cancel()
-        initialTimelineSnapshotTask?.cancel()
+        windowCommandTask?.cancel()
+        if let windowSubscription { Task { await windowSubscription.cancel() } }
         groupStateTask?.cancel()
         groupDetailsTask?.cancel()
-        readStateTask?.cancel()
         tailRefreshTask?.cancel()
         streamWatcher.cancelAll()
     }
 
     func start() async {
-        guard let appState,
+        let request = UUID()
+        startRequest = request
+        guard !isLocallyReset, let appState,
               let accountRef = appState.activeAccountRef
         else { return }
         let canLoadLocalSnapshot = appState.canUseRuntimeForLocalForegroundWork
@@ -783,9 +891,9 @@ final class ConversationViewModel {
             canLoadLocalSnapshot: canLoadLocalSnapshot,
             canStartLiveWork: canStartLiveWork
         )
-        stopLiveSubscriptions()
+        await stopLiveSubscriptions()
+        guard startRequest == request, !Task.isCancelled else { return }
         guard startDecision != .skipForegroundWork else {
-            initialTimelineSnapshotTask?.cancel()
             return
         }
         resetOptimisticState()
@@ -793,18 +901,29 @@ final class ConversationViewModel {
         if timeline.isEmpty {
             timelineStore.setLoading(true)
         }
-        guard case .loadLocalSnapshot(startLiveWork: true) = startDecision else {
-            startInitialTimelineSnapshot(accountRef: accountRef)
-            return
-        }
+        usesConversationWindow = true
         startLiveTimeline(accountRef: accountRef)
+        guard canStartLiveWork else { return }
         startLiveGroupState(accountRef: accountRef)
         startDeferredGroupDetails(accountRef: accountRef)
-        startDeferredReadState()
     }
 
-    func prepareForLocalGroupRemoval() {
-        stopLiveSubscriptions()
+    private(set) var isLocallyReset = false
+
+    func prepareForLocalGroupReset() async {
+        isLocallyReset = true
+        await stopLiveSubscriptions()
+        await mediaDownloader.stopAndDrain()
+    }
+
+    func resumeAfterFailedLocalGroupReset() async {
+        isLocallyReset = false
+        mediaDownloader.resume()
+        await start()
+    }
+
+    func prepareForLocalGroupRemoval() async {
+        await stopLiveSubscriptions()
     }
 
     func markLeaveRequested() {
@@ -1081,62 +1200,32 @@ final class ConversationViewModel {
         return min(doubled.partialValue, liveSubscriptionMaximumRetryDelayNanoseconds)
     }
 
-    private func initializeReadState() async {
-        guard let appState,
-              appState.canUseRuntimeForForegroundWork,
-              let accountRef = appState.activeAccountRef
-        else { return }
-        do {
-            let client = try appState.currentMarmotClient()
-            if let row = try await client.initializeChatReadState(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex
-            ) {
-                guard !Task.isCancelled else { return }
-                Self.readStateLog.debug(
-                    """
-                    entry group=\(self.group.groupIdHex, privacy: .public) \
-                    unreadCount=\(row.unreadCount, privacy: .public) \
-                    firstUnread=\(row.firstUnreadMessageIdHex ?? "nil", privacy: .public) \
-                    lastRead=\(row.lastReadMessageIdHex ?? "nil", privacy: .public) \
-                    tailKind=\(row.lastMessage.map { String($0.kind) } ?? "nil", privacy: .public)
-                    """
-                )
-                readMarker.seedFlushedWatermark(messageIdHex: row.lastReadMessageIdHex)
-                onChatListRowUpdated?(row)
-            }
-        } catch {
-            // Read-state setup is opportunistic; the conversation itself still works.
-        }
-    }
-
-    private func stopLiveSubscriptions() {
+    private func stopLiveSubscriptions() async {
+        windowLifetime = UUID()
+        let retiringLifetime = windowLifetime
+        let previous = timelineTask
+        let commands = windowCommandTask
+        let window = windowSubscription
+        windowSubscription = nil
+        windowCursor = nil
+        windowCommandTask = nil
+        previous?.cancel()
+        commands?.cancel()
+        await window?.cancel()
+        await previous?.value
+        await commands?.value
+        guard windowLifetime == retiringLifetime else { return }
         timelineStore.visibilityPerformance.reset()
         recovery.invalidate()
         timelineTask?.cancel()
         timelineTask = nil
-        initialTimelineSnapshotTask?.cancel()
-        initialTimelineSnapshotTask = nil
-        timelineSubscription = nil
         groupStateTask?.cancel()
         groupStateTask = nil
         groupDetailsTask?.cancel()
         groupDetailsTask = nil
-        readStateTask?.cancel()
-        readStateTask = nil
         readMarker.cancelPendingReadMarks()
         cancelTimelineTailRefresh()
         streamWatcher.cancelAll()
-    }
-
-    private func installTimelineSubscription(_ subscription: TimelineMessagesSubscription) {
-        timelineSubscription = subscription
-    }
-
-    private func clearTimelineSubscription(_ subscription: TimelineMessagesSubscription) {
-        if timelineSubscription === subscription {
-            timelineSubscription = nil
-        }
     }
 
 #if DEBUG
@@ -1172,105 +1261,146 @@ final class ConversationViewModel {
 #endif
 
     private func startLiveTimeline(accountRef: String) {
-        guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+        guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
         let groupIdHex = group.groupIdHex
+        let lifetime = windowLifetime
         timelineTask = Task { [weak self, weak appState] in
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
-            var startedStandaloneSnapshotFallback = false
             while !Task.isCancelled {
                 do {
-                    guard let appState, appState.canUseRuntimeForForegroundWork else { return }
+                    guard let appState, appState.canUseRuntimeForLocalForegroundWork,
+                          appState.activeAccountRef == accountRef else { return }
                     let client = try appState.currentMarmotClient()
-                    let subscribeStart = ContinuousClock.now
-                    let timelineSub = try await client.subscribeTimelineMessages(
-                        accountRef: accountRef,
-                        groupIdHex: groupIdHex,
-                        limit: Self.timelinePageLimit
-                    )
-                    self?.logLoadDuration("timeline.subscribe", since: subscribeStart)
-                    guard !Task.isCancelled else { return }
-                    self?.error = nil
-                    self?.installTimelineSubscription(timelineSub)
-                    defer { self?.clearTimelineSubscription(timelineSub) }
-                    let snapshotStart = ContinuousClock.now
-                    if let snapshot = await client.timelineSubscriptionSnapshot(timelineSub) {
-                        self?.logLoadDuration("timeline.snapshot", since: snapshotStart)
-                        guard !Task.isCancelled,
-                              appState.canUseRuntimeForForegroundWork
-                        else { return }
-                        self?.applyTimelinePage(snapshot, placement: .window)
+                    let window: ConversationWindowSubscription
+                    do {
+                        let target = self?.openingMessageId
+                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex,
+                            mode: target == nil ? .automatic : .message, messageIdHex: target)
+                    } catch MarmotKitError.ConversationWindowMessageNotRetained {
+                        self?.openingTargetUnavailable = true
+                        window = try await client.openConversationWindow(accountRef: accountRef, groupIdHex: groupIdHex, mode: .latest)
                     }
-                    self?.timelineStore.setLoading(false)
-                    for await update in SubscriptionDriver.timelineMessageUpdates(timelineSub) {
-                        guard !Task.isCancelled,
-                              appState.canUseRuntimeForForegroundWork
-                        else { return }
-                        retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
-                        self?.applyTimelineSubscriptionUpdate(update)
+                    guard !Task.isCancelled, self?.windowLifetime == lifetime,
+                          appState.activeAccountRef == accountRef else {
+                        await window.cancel()
+                        return
+                    }
+                    self?.windowSubscription = window
+                    do {
+                        if let initial = await Task.detached(priority: .utility, operation: { window.snapshot() }).value {
+                            guard !Task.isCancelled, self?.windowLifetime == lifetime,
+                                  appState.activeAccountRef == accountRef else {
+                                await window.cancel()
+                                return
+                            }
+                            self?.windowCursor = ProjectionSequenceCursor(generation: initial.revision.generation, sequence: initial.revision.sequence)
+                            self?.installConversationWindow(initial)
+                        }
+                        while let snapshot = try await window.nextCancellable() {
+                            guard !Task.isCancelled, self?.windowLifetime == lifetime,
+                                  appState.activeAccountRef == accountRef,
+                                  appState.canUseRuntimeForLocalForegroundWork else { break }
+                            self?.acceptConversationWindow(snapshot, from: window)
+                            retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
+                        }
+                        await window.cancel()
+                    } catch {
+                        await window.cancel()
+                        throw error
+                    }
+                    if self?.windowSubscription === window {
+                        self?.windowSubscription = nil
+                        self?.windowCursor = nil
                     }
                 } catch is CancellationError {
                     return
                 } catch {
-                    guard !Task.isCancelled,
-                          appState?.canUseRuntimeForForegroundWork == true
-                    else { return }
+                    guard !Task.isCancelled, self?.windowLifetime == lifetime else { return }
+                    self?.windowSubscription = nil
+                    self?.windowCursor = nil
                     self?.timelineStore.setLoading(false)
                     self?.error = UserFacingError.message(for: error)
-                    if !startedStandaloneSnapshotFallback,
-                       self?.timeline.isEmpty == true {
-                        startedStandaloneSnapshotFallback = true
-                        self?.startInitialTimelineSnapshot(accountRef: accountRef)
-                    }
                 }
-                guard !Task.isCancelled,
-                      appState?.canUseRuntimeForForegroundWork == true
-                else { return }
-                do {
-                    try await Task.sleep(nanoseconds: retryDelay)
-                } catch {
-                    return
-                }
+                do { try await Task.sleep(nanoseconds: retryDelay) } catch { return }
                 retryDelay = Self.nextLiveSubscriptionRetryDelay(after: retryDelay)
             }
         }
     }
 
-    private func startInitialTimelineSnapshot(accountRef: String) {
-        initialTimelineSnapshotTask?.cancel()
-        guard let appState, appState.canUseRuntimeForLocalForegroundWork else { return }
-        let groupIdHex = group.groupIdHex
-        initialTimelineSnapshotTask = Task { [weak self, weak appState] in
+    private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: ConversationWindowSubscription) {
+        guard windowSubscription === window,
+              windowCursor?.accept(generation: snapshot.revision.generation, sequence: snapshot.revision.sequence) == true else { return }
+        installConversationWindow(snapshot)
+    }
+
+    private func installConversationWindow(_ snapshot: ConversationWindowSnapshotFfi) {
+        windowWillChange?(snapshot)
+        if conversationWindow == nil { initialWindowUnreadMessageId = snapshot.readState.firstUnreadMessageIdHex }
+        conversationWindow = snapshot
+        if let accountRef = appState?.activeAccountRef {
+            appState?.conversationDraftStore.receiveSelection(snapshot.draft, accountRef: accountRef, groupIdHex: group.groupIdHex)
+        }
+        let previousIdentities = windowIdentities
+        windowIdentities = Dictionary(snapshot.identities.map { ($0.accountIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
+        windowReactions = Dictionary(snapshot.messages.map { ($0.timeline.messageIdHex, $0.references.reactions) }, uniquingKeysWith: { _, latest in latest })
+        if let index = snapshot.anchor.index, snapshot.messages.indices.contains(Int(index)) {
+            windowAnchorMessageId = snapshot.messages[Int(index)].timeline.messageIdHex
+        } else { windowAnchorMessageId = nil }
+        readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
+        timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: snapshot.messages.map(\.timeline),
+            hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
+        if previousIdentities != windowIdentities { timelineStore.refreshProfileDependentTimelineProjections() }
+        error = nil
+    }
+
+    func setVisibleConversationAnchor(_ messageId: String) {
+        guard conversationWindow?.messages.contains(where: { $0.timeline.messageIdHex == messageId }) == true,
+              messageId != windowAnchorMessageId else { return }
+        enqueueConversationCommand { window, revision in
+            try await window.setVisibleAnchor(revision: revision, messageIdHex: messageId, timeoutMs: 0)
+        }
+    }
+
+    func returnConversationToLatest() async {
+        enqueueConversationCommand { window, revision in
+            try await window.returnToLatest(revision: revision, timeoutMs: 0)
+        }
+        await windowCommandTask?.value
+    }
+
+    func jumpToConversationMessage(_ messageId: String) async {
+        enqueueConversationCommand { window, revision in
+            try await window.jumpToMessage(revision: revision, messageIdHex: messageId, timeoutMs: 0)
+        }
+        await windowCommandTask?.value
+    }
+
+    private func enqueueConversationCommand(
+        _ operation: @escaping (ConversationWindowSubscription, ConversationWindowRevisionFfi) async throws -> ConversationWindowSnapshotFfi
+    ) {
+        guard let window = windowSubscription else { return }
+        let account = appState?.activeAccountRef
+        let previous = windowCommandTask
+        windowCommandTask = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, !Task.isCancelled, self.windowSubscription === window,
+                  self.appState?.activeAccountRef == account,
+                  let revision = self.conversationWindow?.revision else { return }
             do {
-                guard let self,
-                      let appState,
-                      appState.canUseRuntimeForLocalForegroundWork
-                else { return }
-                let client = try appState.currentMarmotClient()
-                let page = try await client.timelineMessages(
-                    accountRef: accountRef,
-                    query: TimelineMessageQueryFfi(
-                        groupIdHex: groupIdHex,
-                        search: nil,
-                        before: nil,
-                        beforeMessageId: nil,
-                        after: nil,
-                        afterMessageId: nil,
-                        limit: Self.timelinePageLimit
-                    )
-                )
-                guard !Task.isCancelled else { return }
-                initialTimelineSnapshotTask = nil
-                if timeline.isEmpty {
-                    applyTimelinePage(page, placement: .window)
-                } else {
-                    timelineStore.setLoading(false)
-                }
+                let snapshot = try await operation(window, revision)
+                guard !Task.isCancelled, self.appState?.activeAccountRef == account else { return }
+                self.acceptConversationWindow(snapshot, from: window)
             } catch {
-                guard !Task.isCancelled else { return }
-                guard let self else { return }
-                self.initialTimelineSnapshotTask = nil
-                if self.timeline.isEmpty {
-                    self.timelineStore.setLoading(false)
+                guard !Task.isCancelled, self.windowSubscription === window else { return }
+                switch error {
+                case MarmotKitError.ConversationWindowStale, MarmotKitError.ConversationWindowWrongGeneration,
+                     MarmotKitError.ConversationWindowNotReady, MarmotKitError.ConversationWindowAnchorOutside:
+                    break
+                case MarmotKitError.ConversationWindowMessageNotRetained:
+                    self.error = L10n.string("Message unavailable")
+                case MarmotKitError.ConversationWindowTimedOut:
+                    self.error = L10n.string("The operation may have completed. Refreshing the conversation is required before retrying.")
+                default:
                     self.error = UserFacingError.message(for: error)
                 }
             }
@@ -1354,12 +1484,6 @@ final class ConversationViewModel {
         }
     }
 
-    private func startDeferredReadState() {
-        readStateTask = Task { [weak self] in
-            await self?.initializeReadState()
-        }
-    }
-
     /// Forwarder retained for tests; the watch subsystem lives in `StreamWatcher`.
     static func agentStreamStartIdToWatch(
         from record: AppMessageRecordFfi,
@@ -1382,40 +1506,32 @@ final class ConversationViewModel {
         StreamWatcher.streamPreviewTimestamp(startedAt: startedAt, fallback: fallback)
     }
 
-    /// Reloads the newest timeline page from Marmot. Group system rows (kind
-    /// 1210) are synthesized locally when commits are processed, so a live
-    /// subscription update can race with group-state refresh — especially after
-    /// catch-up on a second device/simulator.
     func refreshTimelineTail() async {
-        guard let request = timelineTailRefreshRequest() else { return }
+        guard !usesConversationWindow, let request = timelineTailRefreshRequest() else { return }
         do {
             let page = try await Self.timelineTailPage(for: request)
             guard !Task.isCancelled else { return }
             applyTimelineTailRefreshPageIfCurrent(page, request: request)
-        } catch {
-            // Timeline subscription remains the primary live path.
-        }
+        } catch { }
     }
 
-    /// Expiration prunes delete records locally without a subscription
-    /// broadcast, so the newest page is reapplied with `.window` placement:
-    /// unlike a tail refresh, that path evicts loaded records that no longer
-    /// exist in storage when the page boundaries confirm the loss.
     func refreshTimelineWindowAfterLocalPrune() async {
+        if usesConversationWindow {
+            // Reopen around the retained viewport after explicit local deletion.
+            openingMessageId = windowAnchorMessageId
+            await start()
+            return
+        }
         guard let request = timelineTailRefreshRequest() else { return }
         do {
             let page = try await Self.timelineTailPage(for: request)
-            guard !Task.isCancelled,
-                  appState?.activeAccountRef == request.accountRef,
-                  group.groupIdHex == request.groupIdHex
-            else { return }
+            guard !Task.isCancelled, appState?.activeAccountRef == request.accountRef else { return }
             applyTimelinePage(page, placement: .window)
-        } catch {
-            // Timeline subscription remains the primary live path.
-        }
+        } catch { }
     }
 
     private func scheduleTimelineTailRefresh() {
+        guard !usesConversationWindow else { return }
         guard let request = timelineTailRefreshRequest() else {
             cancelTimelineTailRefresh()
             return
@@ -1508,48 +1624,23 @@ final class ConversationViewModel {
 #endif
 
     func loadOlderTimelinePage() async {
-        guard hasMoreBefore, !isLoadingOlder, let timelineSubscription else { return }
-
-        let previousOldestMessageId = oldestLoadedTimelineMessageId
+        guard !isLocallyReset, hasMoreBefore, !isLoadingOlder, windowSubscription != nil else { return }
         isLoadingOlder = true
         defer { isLoadingOlder = false }
-        do {
-            let page = try await timelineSubscription.paginateBackwards(count: Self.timelinePageLimit)
-            guard !Task.isCancelled else { return }
-            let movedOlder = ConversationPaginationPolicy.movedOlder(
-                previousOldestMessageId: previousOldestMessageId,
-                nextMessageIds: page.messages.map(\.messageIdHex)
-            )
-            applyTimelinePage(page, placement: .window)
-            if !movedOlder, page.hasMoreBefore {
-                timelineStore.setHasMoreBefore(false)
-            }
-        } catch {
-            search.notePagingFailure()
-            self.error = UserFacingError.message(for: error)
+        enqueueConversationCommand { window, revision in
+            try await window.page(revision: revision, direction: .older, count: Self.timelinePageLimit, timeoutMs: 0)
         }
+        await windowCommandTask?.value
     }
 
     func loadNewerTimelinePage() async {
-        guard hasMoreAfter, !isLoadingNewer, let timelineSubscription else { return }
-
-        let previousNewestMessageId = newestLoadedTimelineMessageId
+        guard !isLocallyReset, hasMoreAfter, !isLoadingNewer, windowSubscription != nil else { return }
         isLoadingNewer = true
         defer { isLoadingNewer = false }
-        do {
-            let page = try await timelineSubscription.paginateForwards(count: Self.timelinePageLimit)
-            guard !Task.isCancelled else { return }
-            let movedNewer = ConversationPaginationPolicy.movedNewer(
-                previousNewestMessageId: previousNewestMessageId,
-                nextMessageIds: page.messages.map(\.messageIdHex)
-            )
-            applyTimelinePage(page, placement: .window)
-            if !movedNewer, page.hasMoreAfter {
-                timelineStore.setHasMoreAfter(false)
-            }
-        } catch {
-            self.error = UserFacingError.message(for: error)
+        enqueueConversationCommand { window, revision in
+            try await window.page(revision: revision, direction: .newer, count: Self.timelinePageLimit, timeoutMs: 0)
         }
+        await windowCommandTask?.value
     }
 
     static func appMessageRecord(from record: TimelineMessageRecordFfi) -> AppMessageRecordFfi {
@@ -2366,12 +2457,14 @@ final class ConversationViewModel {
         }
     }
 
-    func sendPreparedComposerText(_ text: String) async {
-        await composer.send(text)
+    func sendPreparedComposerText(_ text: String, draftRevision: MessageDraftRevisionFfi? = nil,
+        completion: (@MainActor (Bool) async -> Void)? = nil) async {
+        await composer.send(text, draftRevision: draftRevision, completion: completion)
     }
 
-    func sendPreparedMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
-        await composer.sendMedia(attachments, caption: caption)
+    func sendPreparedMedia(_ attachments: [MediaDraftAttachment], caption: String,
+        draftRevision: MessageDraftRevisionFfi? = nil, completion: (@MainActor (Bool) async -> Void)? = nil) async {
+        await composer.sendMedia(attachments, caption: caption, draftRevision: draftRevision, completion: completion)
     }
 
     func forwardDestinations() async throws -> [MessageForwardDestination] {

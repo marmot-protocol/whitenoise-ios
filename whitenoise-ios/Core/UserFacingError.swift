@@ -33,6 +33,7 @@ struct UserFacingError: Equatable {
         }
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
+        if let mediaMessage = mediaMessage(for: error) { return mediaMessage }
         let message = sanitizedText(fallbackMessage ?? raw ?? "")
         return message.isEmpty ? L10n.string("Please try again.") : message
     }
@@ -57,6 +58,9 @@ struct UserFacingError: Equatable {
              .StorageBusy(let details), .StorageClosed(let details),
              .SecretNotFound(let details), .KeystoreUnavailable(let details),
              .EncryptionFailed(let details), .Io(let details):
+            return details
+        case .MediaAttachmentRejected(_, let details), .MediaUnfetchable(let details),
+             .MediaDownloadFailed(let details), .ChatWindowQuery(let details):
             return details
         default:
             return nil
@@ -92,6 +96,14 @@ struct UserFacingError: Equatable {
     private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
+        case .UserBlocked:
+            return L10n.string("Unblock this person before sending a message.")
+        case .BlockListUnavailable:
+            return L10n.string("The block list is unavailable. Please try again.")
+        case .BlockPublicationUncertain:
+            return L10n.string("The block-list update could not be confirmed. Retry the same change to check its status.")
+        case .MessageDraftRevisionConflict:
+            return L10n.string("The saved draft changed. Your text has been preserved.")
         case .GroupSendQueueFull:
             return L10n.string("This chat is still catching up. Wait for it to finish, then resend your message.")
         case .GroupUnrecoverableRepairRequired:
@@ -106,6 +118,22 @@ struct UserFacingError: Equatable {
             return L10n.string("This account is still catching up. Try again in a moment.")
         case .AccountWorkerResponseTimedOut:
             return L10n.string("The operation may have completed. Refreshing the conversation is required before retrying.")
+        default:
+            return nil
+        }
+    }
+
+    private nonisolated static func mediaMessage(for error: Error) -> String? {
+        guard let error = error as? MarmotKitError else { return nil }
+        switch error {
+        case .MediaAttachmentRejected(let kind, _):
+            return kind == .unsupportedFormat
+                ? L10n.string("Unsupported attachment")
+                : L10n.string("Attachment couldn’t be read")
+        case .MediaUnfetchable:
+            return L10n.string("No safe download location is available for this attachment.")
+        case .MediaDownloadFailed:
+            return L10n.string("Attachment download failed. Please try again.")
         default:
             return nil
         }

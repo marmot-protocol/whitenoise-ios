@@ -107,6 +107,13 @@ struct ProfileContentView: View {
             publicProfileSection
             moderationSection
             sharedGroupsSection
+            if npub != IdentityPresentation.canonicalNpub(accountIdHex: appState.activeAccount?.accountIdHex) {
+                Section {
+                    NavigationLink("Block or Unblock User") {
+                        BlockedUsersView(userReference: npub).wnBackButton()
+                    }
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .task(id: npub) {

@@ -25,6 +25,7 @@ final class GroupDetailsViewModel {
     var maintenanceStatusError: String?
     var pendingConfirmation: GroupDetailsConfirmation?
     var membershipActionInFlight = false
+    private var localResetCompleted = false
     var isExportingTranscript = false
     var transcriptExportURL: URL?
     var showTranscriptShareSheet = false
@@ -55,6 +56,8 @@ final class GroupDetailsViewModel {
     @ObservationIgnored var clearGroupImageForTesting: (@MainActor (String, String) async throws -> SendSummaryFfi)?
     @ObservationIgnored var listMediaForTesting: (@MainActor (String, String) async throws -> [MediaRecordFfi])?
     @ObservationIgnored var leaveGroupForTesting: (@MainActor (String, String) async throws -> SendSummaryFfi)?
+    @ObservationIgnored var forgetGroupLocalForTesting: (@MainActor (String, String) async throws -> Bool)?
+    @ObservationIgnored var clearResetMediaForTesting: (@MainActor () async -> Bool)?
     @ObservationIgnored var deleteGroupLocalForTesting: (@MainActor (String, String) async throws -> Bool)?
     @ObservationIgnored var enableGroupDisbandingForTesting: (@MainActor (String, String) async throws -> GroupMutationResultFfi)?
     @ObservationIgnored var disbandGroupForTesting: (@MainActor (String, String) async throws -> DisbandRequestFfi)?
@@ -249,7 +252,8 @@ final class GroupDetailsViewModel {
 
     func loadSharedMedia(using appState: AppState, force: Bool = false) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
-        guard !isLoadingSharedMedia, force || !didLoadSharedMedia else { return }
+        guard !membershipActionInFlight, !localResetCompleted,
+              !isLoadingSharedMedia, force || !didLoadSharedMedia else { return }
         isLoadingSharedMedia = true
         sharedMediaError = nil
         defer { isLoadingSharedMedia = false }
@@ -274,6 +278,7 @@ final class GroupDetailsViewModel {
             )
 #endif
             try Task.checkCancellation()
+            guard !localResetCompleted, !conversation.isLocallyReset else { return }
             sharedMediaRecords = records
             didLoadSharedMedia = true
         } catch is CancellationError {
@@ -634,7 +639,7 @@ final class GroupDetailsViewModel {
     func endGroup(using appState: AppState) async {
         pendingConfirmation = nil
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
-        guard GroupManagementPresentation.canEndGroup(state: conversation.managementState) else {
+        guard conversation.canEndGroup else {
             actionError = GroupManagementPresentation.disbandBlockerMessage(
                 state: conversation.managementState
             ) ?? L10n.string("This group can't be ended right now.")
@@ -762,6 +767,54 @@ final class GroupDetailsViewModel {
         }
     }
 
+    func resetLocal(using appState: AppState, dismiss: () -> Void) async {
+        guard appState.developerMode, !membershipActionInFlight, !localResetCompleted,
+              let conversation, let accountRef = appState.activeAccountRef else { return }
+        membershipActionInFlight = true
+        actionError = nil
+        defer { membershipActionInFlight = false }
+        let groupId = conversation.group.groupIdHex
+        let runtimeGeneration = appState.runtimeGeneration
+        do {
+            let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
+            defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+            await conversation.prepareForLocalGroupReset()
+            await appState.conversationDraftStore.pauseForGroupReset(accountRef: accountRef, groupIdHex: groupId)
+#if DEBUG
+            if let forgetGroupLocalForTesting {
+                _ = try await forgetGroupLocalForTesting(accountRef, groupId)
+            } else {
+                _ = try await lease.client.forgetGroupLocal(accountRef: accountRef, groupIdHex: groupId)
+            }
+#else
+            _ = try await lease.client.forgetGroupLocal(accountRef: accountRef, groupIdHex: groupId)
+#endif
+            localResetCompleted = true
+            appState.conversationDraftStore.finishGroupReset(accountRef: accountRef, groupIdHex: groupId, succeeded: true)
+            sharedMediaRecords = []
+            cleanupTranscriptExportFile()
+            let cacheCleared: Bool
+#if DEBUG
+            if let clearResetMediaForTesting { cacheCleared = await clearResetMediaForTesting() }
+            else { cacheCleared = await MessageMediaCache.purgeAllDecryptedMedia() }
+#else
+            cacheCleared = await MessageMediaCache.purgeAllDecryptedMedia()
+#endif
+            guard appState.activeAccountRef == accountRef, appState.runtimeGeneration == runtimeGeneration else { return }
+            Haptics.warning()
+            dismiss()
+            onGroupDeleted(groupId)
+            if !cacheCleared {
+                appState.present(.warning(L10n.string("Group reset"), message: L10n.string("The group was reset, but some downloaded media could not be cleared.")))
+            }
+        } catch {
+            appState.conversationDraftStore.finishGroupReset(accountRef: accountRef, groupIdHex: groupId, succeeded: false)
+            guard appState.activeAccountRef == accountRef, appState.runtimeGeneration == runtimeGeneration else { return }
+            if conversation.isLocallyReset { await conversation.resumeAfterFailedLocalGroupReset() }
+            handleActionError(error, title: L10n.string("Couldn't reset group"), using: appState)
+        }
+    }
+
     func deleteLocal(using appState: AppState, dismiss: () -> Void) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
         // Only a leave the group has not committed yet blocks the local delete.
@@ -781,7 +834,7 @@ final class GroupDetailsViewModel {
         var preparedForRemoval = false
         defer { membershipActionInFlight = false }
         do {
-            conversation.prepareForLocalGroupRemoval()
+            await conversation.prepareForLocalGroupRemoval()
             preparedForRemoval = true
 #if DEBUG
             if let deleteGroupLocalForTesting {
@@ -925,7 +978,7 @@ final class GroupDetailsViewModel {
     }
 
     func refreshVisibleDebugState(using appState: AppState) async {
-        guard appState.developerMode else {
+        guard appState.developerMode, !membershipActionInFlight, !localResetCompleted else {
             mlsState = nil
             pushDebugInfo = nil
             pushDebugError = nil
@@ -947,16 +1000,22 @@ final class GroupDetailsViewModel {
             accountRef: accountRef,
             groupIdHex: conversation.group.groupIdHex
         )
-        mlsState = try? await mlsResult
+        let mls = try? await mlsResult
+        guard !membershipActionInFlight, !localResetCompleted else { return }
+        mlsState = mls
         do {
-            pushDebugInfo = try await pushResult
+            let push = try await pushResult
+            guard !membershipActionInFlight, !localResetCompleted else { return }
+            pushDebugInfo = push
             pushDebugError = nil
         } catch {
             pushDebugInfo = nil
             pushDebugError = UserFacingError.message(for: error)
         }
         do {
-            maintenanceStatus = try await maintenanceResult
+            let maintenance = try await maintenanceResult
+            guard !membershipActionInFlight, !localResetCompleted else { return }
+            maintenanceStatus = maintenance
             maintenanceStatusError = nil
         } catch {
             maintenanceStatus = nil

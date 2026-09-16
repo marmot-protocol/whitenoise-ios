@@ -153,6 +153,11 @@ before every release tag.
 - [ ] Reopen a long conversation containing multiple wrapped messages and
       media rows: the latest messages are visible immediately at the bottom;
       the timeline never opens blank or requires a scroll gesture to recover.
+- [ ] In a conversation with more than 100 messages, reopening at the bottom
+      does not load older pages offscreen. Scroll to the top to load history,
+      then back down through newer pages; both edges load again after leaving
+      and returning. Images finishing layout keep the bottom pinned unless
+      you have deliberately scrolled away to read older messages.
 - [ ] Open a chat with unread history: the unread divider is aligned at the
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
@@ -582,3 +587,72 @@ the test device.
 Follow [app-store-permissions.md](app-store-permissions.md) for localized system
 prompts, signed-archive validation, native SDK privacy manifests, export
 classification, and the privacy-policy/disclosure checks before distribution.
+
+## MDK master projections and developer reset
+
+Local adoption checkpoint: `dcb3c1c3772ab52187b92932382019231188c814` (matching
+locally generated Swift and binary). A published matching pin is required before
+committing/shipping the binding update.
+
+- [ ] Browse an account with more than 200 chats. Page forward and backward;
+      the visible row keeps its pixel position when earlier rows are discarded.
+      Receive a message that reorders a row and remove/archive the visible anchor.
+      Verify retained/recovered anchors, pull-to-refresh, and Return to newest chats.
+- [ ] Switch Chats, Unread, Archived, and Left; queued departures and active
+      disbands appear in Left. Search finds chats beyond the loaded window.
+      Pin reordering includes the entire pin set, and forwarding and Mark all read
+      include chats outside the current window. Local nicknames remain visible.
+- [ ] Account/app badges count unread messages plus one per manual-only reminder.
+      Pending invitations retain their invitation row indicator and add no badge
+      count. Check an inactive account, temporary read unavailability, sign-out,
+      and repeated background/foreground cycles.
+- [ ] View a message/reply containing accepted and rejected attachment siblings.
+      Keep the caption and accepted attachments; show an inert unsupported/unreadable
+      placeholder at each rejected slot. Downloads and gallery navigation still work.
+- [ ] Developer mode → group info → Chat Developer Tools → Delete Local Group.
+      Cancel preserves the group. Confirm on a broken active group stops its work,
+      removes local history/state and downloaded media caches, and closes the chat.
+      Other members are unaffected. An old invitation cannot restore it; a fresh
+      invitation created after reset can. Verify a failed reset keeps the group,
+      restores the composer/draft, and displays an error.
+
+### MarmotKit 0.10.0 conversation, drafts, and blocking
+
+Use staging and fresh test storage for migration 75; do not downgrade an upgraded
+Marmot root. Automated simulator checks do not replace these device checks.
+
+- [ ] Open an accepted chat with unread messages: position at the prepared first
+      unread row. Open a notification/reply target: position at that message; an
+      unavailable target shows feedback without an endless history-loading loop.
+- [ ] Scroll both directions through more than 200 mixed message rows while new
+      messages arrive. Retained/recovered anchors preserve the visible position;
+      the latest-message button returns directly to the tail. Repeat at 50 and
+      200 retained rows and record replacement/layout timings on a physical device.
+- [ ] Search the retained conversation and continue into older history. Matches
+      removed from the window disappear. Back/foreground/account changes retire
+      the old receive loop; late results must not change the new screen.
+- [ ] Opening and paging alone do not mark offscreen messages read. Visible-message
+      acknowledgements update Unread, profile counts, and the application badge.
+      Pending invitations contribute exactly once. Check muted, archived, left,
+      and blocked cases with both foreground and NSE notification presentation.
+- [ ] Type a second draft during a slow send. After acceptance only the sent
+      revision disappears; the newer draft survives reopening and relaunching.
+      Repeat with media, failed sends, backgrounding, and two editing sessions.
+      A conflict preserves local text; both “Keep my draft” and “Use saved draft”
+      resolve explicitly. Missing attachment bytes show a load error.
+- [ ] Block/unblock from a profile or direct-chat info, then inspect Privacy &
+      Security → Blocked Users. Confirmed changes update both screens. An uncertain
+      publication offers the same operation again and never claims success.
+      Blocking hides the author's messages and prevents direct sending while
+      preserving group participation and stored history. Verify cross-device
+      delivery and notification behavior with a second test identity.
+- [ ] Reactions show the full count and your selected state even when your identity
+      is outside the preview. Overflow/truncated reactor previews are disclosed.
+- [ ] Developer Key Packages shows current and superseded relay events.
+- [ ] Welcome displays the agreement beneath Sign Up/Sign In. The Terms of Service
+      link opens https://whitenoise.chat/terms. Check large text and VoiceOver.
+
+- [ ] In a blocked direct chat, the composer explains “You blocked this user” and
+      offers View Profile. Follow it to the profile, unblock via Block or Unblock
+      User, and return: the notice disappears and sending resumes once MDK confirms
+      availability. An unavailable unblocked chat must not claim the peer is blocked.

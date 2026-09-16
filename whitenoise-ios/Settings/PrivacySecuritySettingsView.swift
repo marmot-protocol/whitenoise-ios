@@ -52,6 +52,9 @@ struct PrivacySecuritySettingsView: View {
                 }
             } header: { Text("Diagnostics") }
             Section {
+                NavigationLink("Blocked Users") { BlockedUsersView().wnBackButton() }
+            }
+            Section {
                 Button("Erase App Data", role: .destructive) { showEraseData = true }
             } header: { Text("Device Data") } footer: {
                 Text("Signs out every profile and permanently removes all White Noise data from this iPhone.")

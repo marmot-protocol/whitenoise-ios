@@ -133,6 +133,7 @@ final class TimelineStore {
     @ObservationIgnored weak var streamWatcher: StreamWatcher?
     /// Resolves a mention entity to a display name (off the profile cache); set by
     /// the view model so this store holds no profile state.
+    @ObservationIgnored var identityNameResolver: ((String) -> String)?
     @ObservationIgnored var mentionResolver: MarkdownMentionResolver = { _ in nil }
 
     init(
@@ -156,7 +157,8 @@ final class TimelineStore {
     private var mentionDisplayNameResolver: MarkdownMentionResolver { mentionResolver }
 
     private func resolvedAccountDisplayName(_ accountIdHex: String) -> String {
-        IdentityPresentation.text(
+        if let identityNameResolver { return identityNameResolver(accountIdHex) }
+        return IdentityPresentation.text(
             accountIdHex: accountIdHex,
             knownName: appState?.knownDisplayName(forAccountIdHex: accountIdHex)
         )
@@ -259,7 +261,7 @@ final class TimelineStore {
             tokenBlockCount: Int,
             tokensTruncated: Bool,
             mediaJson: String?,
-            media: [MediaAttachmentReferenceFfi],
+            media: [MediaAttachmentOutcomeFfi],
             deleted: Bool
         )
         case loadedTarget(record: MessageTimelineSignature, deleted: Bool)
@@ -350,7 +352,7 @@ final class TimelineStore {
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
                 return cached.value
             }
-            let name = appState?.displayName(forAccountIdHex: preview.sender) ?? L10n.string("Unknown")
+            let name = resolvedAccountDisplayName(preview.sender)
             let text = ContentSanitizer.compactSingleLine(
                 MessagePreview.body(
                     preview,
@@ -362,10 +364,12 @@ final class TimelineStore {
             let media = preview.deleted
                 ? nil
                 : MessageMediaAttachment.displayItems(
-                    from: preview.media,
+                    fromOutcomes: preview.media,
                     ownerId: "reply:\(record.messageIdHex):\(targetId)"
                 ).first
-            let value = ConversationReplyPreview(name: name, text: text, media: media)
+            let value = ConversationReplyPreview(
+                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media
+            )
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
         }
@@ -385,7 +389,7 @@ final class TimelineStore {
         if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
             return cached.value
         }
-        let name = appState?.displayName(forAccountIdHex: target.sender) ?? L10n.string("Unknown")
+        let name = resolvedAccountDisplayName(target.sender)
         let text = targetDeleted
             ? L10n.string("This message was deleted")
             : ContentSanitizer.compactSingleLine(displayBody(of: target), maxLength: 120) ?? ""
@@ -520,13 +524,17 @@ final class TimelineStore {
         }
     }
 
-    private func applyTimelineWindowPage(_ page: TimelinePageFfi) {
+    func applyConversationWindowPage(_ page: TimelinePageFfi) {
+        applyTimelineWindowPage(page, completeReplacement: true)
+    }
+
+    private func applyTimelineWindowPage(_ page: TimelinePageFfi, completeReplacement: Bool = false) {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.timelineWindow, since: timing) }
 
         var projectionChanged = false
         var changedReactionTargets: Set<String> = []
-        let shouldEvictAbsentRecords = shouldEvictAbsentTimelineRecords(from: page)
+        let shouldEvictAbsentRecords = completeReplacement || shouldEvictAbsentTimelineRecords(from: page)
         let canUpdateTimelineIncrementally = !shouldEvictAbsentRecords
         // Appending a multi-record page one row at a time re-sorts the whole
         // window per record; consolidate into a single rebuild for a batch.
@@ -535,7 +543,7 @@ final class TimelineStore {
         if shouldEvictAbsentRecords {
             let incomingMessageIds = Set(page.messages.map(\.messageIdHex).filter { !$0.isEmpty })
             for messageId in Array(messageById.keys) where !incomingMessageIds.contains(messageId) {
-                if confirmedPendingTimelineRecordIds.contains(messageId) {
+                if !completeReplacement && confirmedPendingTimelineRecordIds.contains(messageId) {
                     continue
                 }
                 projectionChanged = removeTimelineRecord(
@@ -720,7 +728,7 @@ final class TimelineStore {
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
         // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
         // mirror it instead of re-classifying tags or a separate listMedia pass.
-        mediaProjections.setReferences(record.media, forMessageId: appRecord.messageIdHex)
+        mediaProjections.setOutcomes(record.media, forMessageId: appRecord.messageIdHex)
         if replacedConfirmedPendingRow {
             // `confirmSent` keeps the freshly-picked bytes attached to the real
             // row until Marmot mirrors its authoritative record. At that point

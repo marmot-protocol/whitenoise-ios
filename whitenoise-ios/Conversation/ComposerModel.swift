@@ -137,17 +137,20 @@ final class ComposerModel {
         return true
     }
 
-    func send(_ text: String) async {
-        await send(text, replyTargetId: nil)
+    func send(_ text: String, draftRevision: MessageDraftRevisionFfi? = nil,
+              completion: (@MainActor (Bool) async -> Void)? = nil) async {
+        await send(text, replyTargetId: nil, draftRevision: draftRevision, completion: completion)
     }
 
-    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?) async {
+    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?,
+                      draftRevision: MessageDraftRevisionFfi? = nil,
+                      completion: (@MainActor (Bool) async -> Void)? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !sendInFlight,
               canSendMessages(),
               !trimmed.isEmpty,
               let appState,
-              let accountRef = appState.activeAccountRef else { return }
+              let accountRef = appState.activeAccountRef else { await completion?(false); return }
 
         // Defense-in-depth: clamp to the protocol's max length so an oversized
         // paste can't bypass the composer's cap (#54).
@@ -199,8 +202,10 @@ final class ComposerModel {
                     appState: appState,
                     accountRef: accountRef,
                     replyTargetId: replyTargetId,
-                    text: outgoing
+                    text: outgoing,
+                    draftRevision: draftRevision
                 )
+                await completion?(true)
                 switch SendAcceptancePolicy.action(for: summary) {
                 case .confirmPublished(let messageId):
                     timelineStore.confirmSent(tempId: tempId, record: optimistic, messageId: messageId)
@@ -211,6 +216,7 @@ final class ComposerModel {
                     break
                 }
             } catch {
+                await completion?(false)
                 timelineStore.markFailed(tempId: tempId)
                 onError(UserFacingError.message(for: error))
                 await MainActor.run {
@@ -225,7 +231,8 @@ final class ComposerModel {
         appState: AppState,
         accountRef: String,
         replyTargetId: String?,
-        text: String
+        text: String,
+        draftRevision: MessageDraftRevisionFfi?
     ) async throws -> SendSummaryFfi {
 #if DEBUG
         if let sendTextForTesting {
@@ -233,6 +240,9 @@ final class ComposerModel {
         }
 #endif
         let client = try appState.currentMarmotClient()
+        if let draftRevision {
+            return try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: [])
+        }
         if let replyTargetId {
             return try await client.replyToMessage(
                 accountRef: accountRef,
@@ -248,12 +258,14 @@ final class ComposerModel {
         )
     }
 
-    func sendMedia(_ attachments: [MediaDraftAttachment], caption: String) async {
+    func sendMedia(_ attachments: [MediaDraftAttachment], caption: String,
+                   draftRevision: MessageDraftRevisionFfi? = nil,
+                   completion: (@MainActor (Bool) async -> Void)? = nil) async {
         guard !sendInFlight,
               !attachments.isEmpty,
               canSendMediaAttachments(),
               let appState,
-              let accountRef = appState.activeAccountRef else { return }
+              let accountRef = appState.activeAccountRef else { await completion?(false); return }
 
         let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         let outgoingCaption = trimmedCaption.isEmpty ? "" : ConversationViewModel.cappedOutgoingText(trimmedCaption)
@@ -303,7 +315,7 @@ final class ComposerModel {
                     request: MediaUploadRequestFfi(
                         attachments: attachments.map(\.uploadRequest),
                         caption: captionForRust,
-                        send: true,
+                        send: draftRevision == nil,
                         blossomServer: nil
                     )
                 )
@@ -312,6 +324,11 @@ final class ComposerModel {
                     references: result.attachments.map(\.reference)
                 )
                 let references = verifiedAttachments.map(\.reference)
+                let sent: SendSummaryFfi?
+                if let draftRevision {
+                    sent = try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: references)
+                } else { sent = result.sent }
+                await completion?(true)
                 for attachment in verifiedAttachments {
                     await MessageMediaCache.store(
                         attachment.data,
@@ -331,13 +348,13 @@ final class ComposerModel {
                     recordedAt: now,
                     receivedAt: now
                 )
-                if let sent = result.sent,
+                if let sent,
                    case .awaitDurableProjection = SendAcceptancePolicy.action(for: sent) {
                     // Keep the staged media and optimistic row alive until Marmot's
                     // durable pending projection replaces them.
                 } else {
                     let messageId: String?
-                    if let sent = result.sent,
+                    if let sent,
                        case .confirmPublished(let publishedMessageId) = SendAcceptancePolicy.action(for: sent) {
                         messageId = publishedMessageId
                     } else {
@@ -353,6 +370,7 @@ final class ComposerModel {
                     }
                 }
             } catch {
+                await completion?(false)
                 timelineStore.markFailed(tempId: tempId)
                 onError(UserFacingError.message(for: error))
                 await MainActor.run {

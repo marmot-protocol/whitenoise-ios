@@ -220,7 +220,7 @@ nonisolated final class MarmotClient: Sendable {
     }
 
     /// Reads everything required for all account and application badges in one
-    /// local aggregate call, including manual-only and invitation attention.
+    /// local aggregate call, including manual-only reminders; pending invitations are excluded.
     func accountUnreadSummaries() async throws -> [AccountUnreadFfi] {
         try await Task.detached(priority: .utility) { [marmot] in
             try marmot.accountUnreadSummary()

@@ -46,6 +46,12 @@ final class MediaDownloadInFlightStore {
         return try await task.value
     }
 
+    func cancelAndDrain() async {
+        let pending = Array(tasks.values)
+        pending.forEach { $0.task.cancel() }
+        for entry in pending { _ = try? await entry.task.value }
+    }
+
     private func clearTask(for key: MediaDownloadInFlightKey, id: UUID) {
         guard tasks[key]?.id == id else {
             return
@@ -118,7 +124,17 @@ final class ConversationMediaDownloader {
         self.downloadMedia = downloadMedia
     }
 
+    private var isStopped = false
+
+    func stopAndDrain() async {
+        isStopped = true
+        await inFlight.cancelAndDrain()
+    }
+
+    func resume() { isStopped = false }
+
     func data(for media: MessageMediaAttachment, groupIdHex: String, appState: AppState?) async throws -> Data {
+        guard !isStopped else { throw CancellationError() }
         if let localData = media.localData {
             return localData
         }
@@ -137,6 +153,8 @@ final class ConversationMediaDownloader {
             if let cached = await self.cache.cachedData(for: reference),
                await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256)
             {
+                try Task.checkCancellation()
+                guard !self.isStopped else { throw CancellationError() }
                 return cached
             }
             guard let appState, let accountRef = appState.activeAccountRef else {
@@ -162,6 +180,8 @@ final class ConversationMediaDownloader {
             ) else {
                 throw MediaDataError.plaintextHashMismatch
             }
+            try Task.checkCancellation()
+            guard !self.isStopped else { throw CancellationError() }
             await self.cache.store(result.plaintext, for: reference, producerGeneration: producerEpoch)
             return result.plaintext
         }

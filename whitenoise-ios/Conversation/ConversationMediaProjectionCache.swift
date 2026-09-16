@@ -4,7 +4,7 @@ import MarmotKit
 /// Per-row media display cache for the conversation timeline. Owns three dumb
 /// mirrors and their incremental maintenance:
 ///
-/// - `referencesByMessageId` — resolved, downloadable media references mirrored
+/// - `referencesByMessageId` — accepted and rejected attachment outcomes mirrored
 ///   from each timeline row's `media` projection at ingest (Marmot resolves the
 ///   imeta tags + source_epoch). No iOS-side derivation, no separate `listMedia`
 ///   round-trip.
@@ -25,7 +25,7 @@ import MarmotKit
 /// in per call.
 @MainActor
 final class ConversationMediaProjectionCache {
-    private var referencesByMessageId: [String: [MediaAttachmentReferenceFfi]] = [:]
+    private var referencesByMessageId: [String: [MediaAttachmentOutcomeFfi]] = [:]
     private var pendingByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionsByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
@@ -36,7 +36,7 @@ final class ConversationMediaProjectionCache {
 #endif
 
     private enum ProjectionSourceKey: Equatable {
-        case mirrored([MediaAttachmentReferenceFfi])
+        case mirrored([MediaAttachmentOutcomeFfi])
         case fallback(kind: UInt64, tags: [MessageTagFfi])
     }
 
@@ -48,7 +48,7 @@ final class ConversationMediaProjectionCache {
         init(
             record: AppMessageRecordFfi,
             ownerId: String,
-            mirroredReferences: [MediaAttachmentReferenceFfi]?
+            mirroredReferences: [MediaAttachmentOutcomeFfi]?
         ) {
             self.ownerId = ownerId
             messageIdHex = record.messageIdHex
@@ -70,20 +70,19 @@ final class ConversationMediaProjectionCache {
     }
 
     func build(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
-        // Prefer the row-resolved references (correct source_epoch, drop-bad).
+        // Prefer the row-resolved outcomes, including rejected siblings.
         // A present-but-empty mirror is authoritative: Rust saw the row and chose
         // no media, so do not re-derive media from tags here. Fall back to tag
         // classification only when there is no captured row projection at all
         // (e.g. local/optimistic sends before the confirmed row is mirrored).
-        let references: [MediaAttachmentReferenceFfi]
-        if let rowReferences = referencesByMessageId[record.messageIdHex] {
-            guard !rowReferences.isEmpty else { return [] }
-            references = rowReferences
-        } else if case .media(let classified) = MessageSemantics.classify(record) {
-            references = classified
-        } else {
-            return []
+        if let outcomes = referencesByMessageId[record.messageIdHex] {
+            guard !outcomes.isEmpty else { return [] }
+#if DEBUG
+            buildCountForTesting += 1
+#endif
+            return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId)
         }
+        guard case .media(let references) = MessageSemantics.classify(record) else { return [] }
 #if DEBUG
         buildCountForTesting += 1
 #endif
@@ -93,7 +92,15 @@ final class ConversationMediaProjectionCache {
     // MARK: Resolved references (ingest write-path)
 
     func setReferences(_ references: [MediaAttachmentReferenceFfi], forMessageId messageIdHex: String) {
-        referencesByMessageId[messageIdHex] = references
+        setOutcomes(Self.accepted(references), forMessageId: messageIdHex)
+    }
+
+    func setOutcomes(_ outcomes: [MediaAttachmentOutcomeFfi], forMessageId messageIdHex: String) {
+        referencesByMessageId[messageIdHex] = outcomes
+    }
+
+    private static func accepted(_ references: [MediaAttachmentReferenceFfi]) -> [MediaAttachmentOutcomeFfi] {
+        references.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) }
     }
 
     func removeReferences(forMessageId messageIdHex: String) {
@@ -109,8 +116,9 @@ final class ConversationMediaProjectionCache {
         forMessageId messageIdHex: String,
         itemResolver: (String) -> TimelineItem?
     ) -> Bool {
-        guard referencesByMessageId[messageIdHex] != references else { return false }
-        referencesByMessageId[messageIdHex] = references
+        let outcomes = Self.accepted(references)
+        guard referencesByMessageId[messageIdHex] != outcomes else { return false }
+        referencesByMessageId[messageIdHex] = outcomes
         return updateProjection(forMessageId: messageIdHex, itemResolver: itemResolver)
     }
 

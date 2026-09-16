@@ -130,7 +130,11 @@ struct AccountSummaryRow: View {
             AccountIdentitySummary(account: account, avatarSize: 48)
             Spacer()
             HStack(spacing: 8) {
-                if let unreadCount = appState.accountUnreadBadgeCount(
+                if appState.accountUnreadIsUnavailable(forAccountIdHex: account.accountIdHex) {
+                    Image(systemName: "exclamationmark.circle")
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L10n.string("Unread count unavailable"))
+                } else if let unreadCount = appState.accountUnreadBadgeCount(
                     forAccountIdHex: account.accountIdHex
                 ) {
                     UnreadCountBadge(count: unreadCount)

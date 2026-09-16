@@ -1790,7 +1790,7 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func liveChatListUnreadChangesSynchronizeApplicationBadge() async throws {
+    @Test func accountAttentionChangesSynchronizeApplicationBadge() async throws {
         var appliedBadgeCounts: [Int] = []
         let notifications = AppNotifications(
             requestAuthorizationHandler: { false },
@@ -1808,67 +1808,23 @@ struct AppStateBootstrapTests {
         await notifications.drainApplicationBadgeUpdates()
         appliedBadgeCounts.removeAll()
 
-        appState.updateAccountUnreadSummary(
-            accountIdHex: seeded.accounts[0].accountIdHex,
-            chatListRows: [
-                chatListRow(
-                    groupIdHex: "unread-chat",
-                    title: "Unread chat",
-                    unreadCount: 4
-                ),
-            ]
-        )
-        await notifications.drainApplicationBadgeUpdates()
-        #expect(appliedBadgeCounts.last == 4)
-
-        appState.updateAccountUnreadSummary(
-            accountIdHex: seeded.accounts[0].accountIdHex,
-            chatListRows: [
-                chatListRow(
-                    groupIdHex: "unread-chat",
-                    title: "Unread chat",
-                    unreadCount: 4
-                ),
-                chatListRow(
-                    groupIdHex: "manual-reminder",
-                    title: "Manual reminder",
-                    manuallyMarkedUnread: true
-                ),
-            ]
-        )
-        await notifications.drainApplicationBadgeUpdates()
-        #expect(appliedBadgeCounts.last == 5)
-
-        appState.updateAccountUnreadSummary(
-            accountIdHex: seeded.accounts[0].accountIdHex,
-            chatListRows: [
-                chatListRow(
-                    groupIdHex: "unread-chat",
-                    title: "Unread chat",
-                    unreadCount: 4
-                ),
-                chatListRow(
-                    groupIdHex: "manual-reminder",
-                    title: "Manual reminder",
-                    manuallyMarkedUnread: true
-                ),
-                chatListRow(
-                    groupIdHex: "pending-invite",
-                    pendingConfirmation: true,
-                    title: "Pending invite"
-                ),
-            ]
-        )
-        await notifications.drainApplicationBadgeUpdates()
-        #expect(appliedBadgeCounts.last == 6)
-
-        appState.updateAccountUnreadSummary(
-            accountIdHex: seeded.accounts[0].accountIdHex,
-            chatListRows: []
-        )
-        await notifications.drainApplicationBadgeUpdates()
-        #expect(appliedBadgeCounts.last == 0)
-
+        // Isolate delivery of the host projection from the live native producer.
+        await appState.drainUnreadSummaryRefresh()
+        for (index, counts) in [(4, 0), (4, 1), (0, 0)].enumerated() {
+            appState.applyAccountAttention(AccountAttentionSnapshotFfi(
+                subscriptionGeneration: "test", sequence: UInt64(index), accounts: [
+                    AccountAttentionEntryFfi(accountIdHex: seeded.accounts[0].accountIdHex, state: .ready(
+                        total: AccountAttentionTotalFfi(
+                            unreadCount: UInt64(counts.0), unreadMentionCount: 0,
+                            unreadConversations: counts.0 > 0 ? 1 : 0,
+                            attentionOnlyConversations: UInt64(counts.1)
+                        )
+                    )),
+                ]
+            ))
+            await notifications.drainApplicationBadgeUpdates()
+            #expect(appliedBadgeCounts.last == counts.0 + counts.1)
+        }
         await stopReadyRuntime(appState)
     }
 
@@ -14026,18 +13982,23 @@ struct TimelineBottomTests {
         #expect(TimelineBottom.pinnedStateAfterScrollButtonTap(currentIsPinned: true))
     }
 
-    @Test func paginationTriggerRequestsOnlyOncePerVisibleAppearance() {
-        #expect(TimelinePaginationTrigger.shouldRequestPage(
-            hasMore: true,
-            isTriggerAlreadyVisible: false
-        ))
-        #expect(!TimelinePaginationTrigger.shouldRequestPage(
-            hasMore: true,
-            isTriggerAlreadyVisible: true
-        ))
-        #expect(!TimelinePaginationTrigger.shouldRequestPage(
-            hasMore: false,
-            isTriggerAlreadyVisible: false
+    @Test func programmaticScrollsDoNotImpersonateUserGestures() {
+        #expect(!TimelineBottomScrollCoordinator.isUserDriven(.idle))
+        #expect(!TimelineBottomScrollCoordinator.isUserDriven(.animating))
+        #expect(TimelineBottomScrollCoordinator.isUserDriven(.tracking))
+        #expect(TimelineBottomScrollCoordinator.isUserDriven(.interacting))
+        #expect(TimelineBottomScrollCoordinator.isUserDriven(.decelerating))
+
+        let movedAway = TimelineBottom.userMovedAwayState(
+            previous: false,
+            viewportIsPinned: false,
+            isUserScrolling: TimelineBottomScrollCoordinator.isUserDriven(.animating)
+        )
+        #expect(!movedAway)
+        #expect(TimelineBottomScrollCoordinator.shouldFollowLayoutChange(
+            didFinishInitialPositioning: true,
+            userMovedAwayFromBottom: movedAway,
+            isUserScrolling: TimelineBottomScrollCoordinator.isUserDriven(.animating)
         ))
     }
 
@@ -15062,6 +15023,41 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func boundedReplacementEvictsRowsWithoutDroppingTheOpenDestinationOrChangingBadges() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let account = AccountSummaryFfi(label: "account", accountIdHex: "owner", localSigning: true, signedOut: false, running: true)
+        appState.accountStore.accounts = [account]
+        appState.applyAccountAttention(AccountAttentionSnapshotFfi(
+            subscriptionGeneration: "attention", sequence: 0, accounts: [
+                AccountAttentionEntryFfi(accountIdHex: "owner", state: .ready(total: AccountAttentionTotalFfi(
+                    unreadCount: 500, unreadMentionCount: 0, unreadConversations: 5, attentionOnlyConversations: 1
+                )))
+            ]
+        ))
+        let model = ChatsListViewModel(appState: appState)
+        func snapshot(_ range: Range<Int>, sequence: UInt64, generation: String = "window") -> ChatListWindowSnapshotFfi {
+            ChatListWindowSnapshotFfi(
+                subscriptionGeneration: generation, sequence: sequence, view: .chats,
+                rows: presentedChatSnapshot(range.map { chatListRow(groupIdHex: String($0), title: "Chat \($0)") }).rows,
+                hasMoreBefore: range.lowerBound > 0, hasMoreAfter: true,
+                anchor: .retained(groupIdHex: String(range.lowerBound), index: 0)
+            )
+        }
+        model.attachWindowForTesting(snapshot(0..<200, sequence: 0))
+        model.retainDestination(groupIdHex: "0")
+        model.receiveWindowForTesting(snapshot(50..<250, sequence: 1))
+        #expect(model.items.count == 200)
+        #expect(!model.items.contains { $0.id == "0" })
+        #expect(model.item(groupIdHex: "0")?.title == "Chat 0")
+        #expect(model.item(groupIdHex: "1") == nil)
+        model.receiveWindowForTesting(snapshot(0..<50, sequence: 0))
+        model.receiveWindowForTesting(snapshot(0..<50, sequence: 99, generation: "old-handle"))
+        #expect(model.items.count == 200)
+        #expect(appState.accountUnreadBadgeCount(forAccountIdHex: "owner") == 501)
+        model.removeChatListRow(groupIdHex: "0")
+        #expect(model.item(groupIdHex: "0") == nil)
+    }
+
     @Test func snapshotTimingWaitsForDeferredPresentationAndRequiresConsent() async throws {
         let client = try MarmotClient.testClient()
         let appState = AppState(client: client)

@@ -58,7 +58,7 @@ struct GroupDetailsView: View {
     @State private var memberProjectionCache = GroupMemberListProjectionCache()
 
     private var isAdmin: Bool {
-        viewModel.isSelfAdmin && !viewModel.isGroupDisbandingOrDisbanded
+        viewModel.canEditGroup && !viewModel.isGroupDisbandingOrDisbanded
     }
     private var isDirectMessage: Bool { viewModel.groupDisplay.isDirectMessage }
     private var memberCount: Int {
@@ -91,6 +91,11 @@ struct GroupDetailsView: View {
             }
             technicalDetailsSection
             destructiveActionsSection
+            if isDirectMessage, let peer = viewModel.otherMember {
+                Section {
+                    NavigationLink("Block or Unblock User") { BlockedUsersView(userReference: peer).wnBackButton() }
+                }
+            }
 
             if appState.developerMode {
                 Section {
@@ -737,10 +742,7 @@ struct GroupDetailsView: View {
             isExpanded: membersExpanded
         )
         return Section {
-            if GroupManagementPresentation.canInvite(
-                state: viewModel.managementState,
-                fallbackIsAdmin: isAdmin
-            ) {
+            if viewModel.canInviteMembers {
                 Button {
                     model.showAddMembers = true
                 } label: {
@@ -790,10 +792,7 @@ struct GroupDetailsView: View {
         } header: {
             Text(L10n.plural("%lld members", Int64(memberCount)))
         } footer: {
-            if !GroupManagementPresentation.canInvite(
-                state: viewModel.managementState,
-                fallbackIsAdmin: isAdmin
-            ) {
+            if !viewModel.canInviteMembers {
                 Text("Only admins can add or manage members.")
             }
         }
@@ -917,9 +916,7 @@ struct GroupDetailsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(
-                    !GroupManagementPresentation.canEndGroup(
-                        state: viewModel.managementState
-                    ) || model.membershipActionInFlight
+                    !viewModel.canEndGroup || model.membershipActionInFlight
                 )
             }
 
@@ -943,7 +940,7 @@ struct GroupDetailsView: View {
                         Text(GroupManagementPresentation.leavingGroupComposerMessage)
                             .foregroundStyle(.secondary)
                     }
-                } else if viewModel.canSendMessages {
+                } else if viewModel.isActiveParticipant {
                     Button(role: .destructive) {
                         model.pendingConfirmation = .leave
                     } label: {
@@ -956,10 +953,7 @@ struct GroupDetailsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(
-                        !GroupManagementPresentation.canLeave(
-                            state: viewModel.managementState,
-                            fallbackIsLastAdmin: viewModel.isLastAdmin
-                        ) || model.membershipActionInFlight
+                        !viewModel.canLeaveGroup || model.membershipActionInFlight
                     )
                 } else {
                     Button(role: .destructive) {
@@ -985,7 +979,7 @@ struct GroupDetailsView: View {
                 } else if let leaveFooter = GroupManagementPresentation.leaveFooter(
                     state: viewModel.managementState,
                     fallbackIsLastAdmin: viewModel.isLastAdmin
-                ), viewModel.canSendMessages {
+                ), viewModel.isActiveParticipant {
                     Text(leaveFooter)
                 } else if viewModel.isGroupDisbanded {
                     Text("Deletes this chat's local history from this device.")

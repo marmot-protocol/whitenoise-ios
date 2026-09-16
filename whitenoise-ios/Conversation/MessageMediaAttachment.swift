@@ -243,6 +243,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
+    let rejectionKind: MediaAttachmentRejectionKindFfi?
 
     init(
         id: String,
@@ -253,7 +254,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         localData: Data?,
         thumbnail: UIImage? = nil,
         durationSeconds: Double? = nil,
-        waveformSamples: [CGFloat] = []
+        waveformSamples: [CGFloat] = [],
+        rejectionKind: MediaAttachmentRejectionKindFfi? = nil
     ) {
         self.id = id
         self.reference = reference
@@ -264,6 +266,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         self.thumbnail = thumbnail
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
+        self.rejectionKind = rejectionKind
     }
 
     var isImage: Bool {
@@ -286,29 +289,55 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentKind.classify(mediaType: mediaType, fileName: fileName)
     }
 
+    var rejectionMessage: String? {
+        guard let rejectionKind else { return nil }
+        return rejectionKind == .unsupportedFormat
+            ? L10n.string("Unsupported attachment")
+            : L10n.string("Attachment couldn’t be read")
+    }
+
+    static func displayItems(fromOutcomes outcomes: [MediaAttachmentOutcomeFfi], ownerId: String) -> [MessageMediaAttachment] {
+        outcomes.map { outcome in
+            switch outcome {
+            case .accepted(let index, let reference):
+                return displayItem(reference: reference, index: index, ownerId: ownerId)
+            case .rejected(let index, let rejection):
+                return MessageMediaAttachment(
+                    id: "\(ownerId):rejected:\(index)", reference: nil,
+                    fileName: L10n.string("Attachment"), mediaType: "", dim: nil, localData: nil,
+                    rejectionKind: rejection.kind
+                )
+            }
+        }
+    }
+
     static func displayItems(
         from references: [MediaAttachmentReferenceFfi],
         ownerId: String
     ) -> [MessageMediaAttachment] {
         references.enumerated().map { index, reference in
-            let id = [
-                ownerId,
-                reference.plaintextSha256,
-                String(reference.sourceEpoch),
-                String(index),
-            ].joined(separator: ":")
-            return MessageMediaAttachment(
-                id: id,
-                reference: reference,
-                fileName: displayFileName(reference.fileName),
-                mediaType: reference.mediaType,
-                dim: reference.dim,
-                localData: nil,
-                thumbnail: nil,
-                durationSeconds: nil,
-                waveformSamples: []
-            )
+            displayItem(reference: reference, index: UInt32(clamping: index), ownerId: ownerId)
         }
+    }
+
+    private static func displayItem(reference: MediaAttachmentReferenceFfi, index: UInt32, ownerId: String) -> MessageMediaAttachment {
+        let id = [
+            ownerId,
+            reference.plaintextSha256,
+            String(reference.sourceEpoch),
+            String(index),
+        ].joined(separator: ":")
+        return MessageMediaAttachment(
+            id: id,
+            reference: reference,
+            fileName: displayFileName(reference.fileName),
+            mediaType: reference.mediaType,
+            dim: reference.dim,
+            localData: nil,
+            thumbnail: nil,
+            durationSeconds: nil,
+            waveformSamples: []
+        )
     }
 
     static func displayFileName(_ raw: String) -> String {
@@ -325,6 +354,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             && lhs.localData == rhs.localData
             && lhs.durationSeconds == rhs.durationSeconds
             && lhs.waveformSamples == rhs.waveformSamples
+            && lhs.rejectionKind == rhs.rejectionKind
     }
 
     func hash(into hasher: inout Hasher) {
@@ -336,6 +366,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         hasher.combine(localData)
         hasher.combine(durationSeconds)
         hasher.combine(waveformSamples)
+        hasher.combine(rejectionKind)
     }
 }
 

@@ -527,6 +527,8 @@ final class AppState {
     }
 
     deinit {
+        attentionTask?.cancel()
+        unreadSummaryRefreshTask?.cancel()
         // ProfileStore cancels its own tasks in its deinit.
         // RuntimeLifecycle cancels its own lifecycle tasks in its deinit.
         // NotificationCoordinator cancels its native-push task in its deinit.
@@ -1411,6 +1413,62 @@ final class AppState {
         return try await client.onboardingSnapshot(accountID: accountID)
     }
 
+    @ObservationIgnored private var attentionTask: Task<Void, Never>?
+    @ObservationIgnored private var attentionTaskID: UUID?
+    @ObservationIgnored private var attentionDrainInProgress = false
+    @ObservationIgnored private var latestAccountAttention: AccountAttentionSnapshotFfi?
+
+#if DEBUG
+    @ObservationIgnored var accountAttentionEnabledForTesting = true
+#endif
+
+    private func startAccountAttentionIfNeeded() {
+#if DEBUG
+        guard accountAttentionEnabledForTesting else { return }
+#endif
+        guard !attentionDrainInProgress, attentionTask == nil, canUseRuntimeForForegroundWork, let client else { return }
+        let id = UUID()
+        attentionTaskID = id
+        attentionTask = Task { @MainActor [weak self] in
+            defer {
+                if self?.attentionTaskID == id {
+                    self?.attentionTask = nil
+                    self?.attentionTaskID = nil
+                }
+            }
+            while !Task.isCancelled {
+                do {
+                    let subscription = try await client.subscribeAccountAttention()
+                    guard let initial = await Task.detached(priority: .utility, operation: {
+                        subscription.snapshot()
+                    }).value else { throw CancellationError() }
+                    var cursor = ProjectionSequenceCursor(
+                        generation: initial.subscriptionGeneration, sequence: initial.sequence
+                    )
+                    guard !Task.isCancelled, self?.attentionTaskID == id else { return }
+                    self?.applyAccountAttention(initial)
+                    while let update = try await subscription.nextCancellable() {
+                        guard !Task.isCancelled, self?.attentionTaskID == id else { return }
+                        guard update.subscriptionGeneration == cursor.generation else { break }
+                        guard cursor.accept(generation: update.subscriptionGeneration, sequence: update.sequence) else { continue }
+                        self?.applyAccountAttention(update)
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // Keep the last known totals during a temporary read outage.
+                }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
+        }
+    }
+
+    func applyAccountAttention(_ snapshot: AccountAttentionSnapshotFfi) {
+        latestAccountAttention = snapshot
+        accountUnreadStore.applyAttention(snapshot, accounts: accounts)
+        scheduleApplicationBadgeSynchronization()
+    }
+
     @ObservationIgnored private var unreadSummaryRefreshGeneration = 0
     /// Tracked so suspension can drain an in-flight badge refresh before the
     /// runtime shuts down; an escaping task could otherwise hold the FFI
@@ -1436,6 +1494,13 @@ final class AppState {
     /// refresh FFI read is in flight when suspension releases the runtime.
     @MainActor
     func drainUnreadSummaryRefresh() async {
+        attentionDrainInProgress = true
+        defer { attentionDrainInProgress = false }
+        let attention = attentionTask
+        attentionTaskID = nil
+        attentionTask = nil
+        attention?.cancel()
+        await attention?.value
         let task = unreadSummaryRefreshTask
         unreadSummaryRefreshTask = nil
         await task?.value
@@ -1464,6 +1529,13 @@ final class AppState {
         // have a live `client`; a notification action passes its leased runtime.
         // With neither, degrade to a no-op.
         guard let summaryClient = leasedClient ?? client else { return }
+        if leasedClient == nil {
+            startAccountAttentionIfNeeded()
+            if attentionTask != nil {
+                if let latestAccountAttention { applyAccountAttention(latestAccountAttention) }
+                return
+            }
+        }
         unreadSummaryRefreshGeneration += 1
         let generation = unreadSummaryRefreshGeneration
         let incrementalBaseline = accountUnreadStore.incrementalRevisionSnapshot()
@@ -1493,28 +1565,25 @@ final class AppState {
         accountUnreadStore.badgeCount(forAccountIdHex: accountIdHex)
     }
 
-    @MainActor
-    func updateAccountUnreadSummary(
-        accountIdHex: String,
-        chatListRows: [ChatListRowFfi]
-    ) {
-        accountUnreadStore.update(accountIdHex: accountIdHex, chatListRows: chatListRows, accounts: accounts)
-        scheduleApplicationBadgeSynchronization()
+    func accountUnreadIsUnavailable(forAccountIdHex accountIdHex: String) -> Bool {
+        accountUnreadStore.unavailableAccountIds.contains(accountIdHex)
     }
 
     @MainActor
-    private func applicationBadgeCount() -> Int {
+    private func applicationBadgeCount() -> Int? {
         accountUnreadStore.applicationBadgeCount()
     }
 
     @MainActor
     private func scheduleApplicationBadgeSynchronization() {
-        notifications.scheduleApplicationBadgeCount(applicationBadgeCount())
+        guard let count = applicationBadgeCount() else { return }
+        notifications.scheduleApplicationBadgeCount(count)
     }
 
     @MainActor
     private func synchronizeApplicationBadge() async {
-        await notifications.setApplicationBadgeCount(applicationBadgeCount())
+        guard let count = applicationBadgeCount() else { return }
+        await notifications.setApplicationBadgeCount(count)
     }
 
     // MARK: - Identity management

@@ -176,6 +176,60 @@ struct RuntimeOwnershipTests {
         }
     }
 
+    @Test func windowAttentionAndResetCrossTheNativeBindings() async throws {
+        let client = try MarmotClient.testClient()
+        let watchdog = Task {
+            try await Task.sleep(for: .seconds(20))
+            Issue.record("Native projection operation did not finish")
+            try await client.marmot.shutdownAndClose()
+        }
+        defer { watchdog.cancel() }
+        do {
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+            ).account
+            let first = try await client.createGroupWithOptionsDetailed(
+                accountRef: account.label, name: "First", memberRefs: [],
+                options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
+            )
+            _ = try await client.createGroupWithOptionsDetailed(
+                accountRef: account.label, name: "Second", memberRefs: [],
+                options: CreateGroupOptionsFfi(description: nil, initialImage: nil, disappearingMessageSecs: 0)
+            )
+            let window = try await client.marmot.openChatListWindow(accountRef: account.label, view: .chats, initialRows: 1)
+            let initial = try #require(window.snapshot())
+            #expect(initial.rows.count == 1 && initial.hasMoreAfter)
+            #expect(window.snapshot() == nil)
+            let page = try await window.page(sequence: initial.sequence, direction: .forward, count: 1)
+            #expect(page.rows.count == 2 && !page.hasMoreAfter)
+            let attention = try await client.subscribeAccountAttention()
+            let initialAttention = try #require(attention.snapshot())
+            #expect(initialAttention.accounts.contains { $0.accountIdHex == account.accountIdHex })
+            #expect(attention.snapshot() == nil)
+            for _ in 0..<8 {
+                let listReader = Task.detached {
+                    while try await window.nextCancellable() != nil {}
+                }
+                let attentionReader = Task.detached {
+                    while try await attention.nextCancellable() != nil {}
+                }
+                await Task.yield()
+                listReader.cancel()
+                attentionReader.cancel()
+                await #expect(throws: CancellationError.self) { try await listReader.value }
+                await #expect(throws: CancellationError.self) { try await attentionReader.value }
+            }
+            #expect(try await client.forgetGroupLocal(accountRef: account.label, groupIdHex: first.groupIdHex))
+            #expect(try await !client.forgetGroupLocal(accountRef: account.label, groupIdHex: first.groupIdHex))
+            #expect(try await client.presentedChatListRow(accountRef: account.label, groupIdHex: first.groupIdHex) == nil)
+            try await client.marmot.shutdownAndClose()
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+    }
+
     @Test func publishedPresentationSubscriptionCancelsWithoutAnotherEvent() async throws {
         let client = try MarmotClient.testClient()
         do {

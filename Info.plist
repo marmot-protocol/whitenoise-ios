@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>White Noise saves photos and videos to your photo library only when you choose to save them from the share sheet.</string>
 	<key>AppGroupIdentifier</key>
 	<string>$(APP_GROUP_IDENTIFIER)</string>
 	<key>CFBundleURLTypes</key>
@@ -24,8 +22,6 @@
 	<array>
 		<string>INSendMessageIntent</string>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
 	<key>WNFlavor</key>
 	<string>$(WN_FLAVOR)</string>
 	<key>WNLegacyURLScheme</key>
@@ -36,6 +32,14 @@
 	<string>$(WHITENOISE_AUDIT_LOG_BEARER_TOKEN)</string>
 	<key>WhiteNoiseGiphyAPIKey</key>
 	<string>$(WHITENOISE_GIPHY_API_KEY)</string>
+	<key>WhiteNoiseProductAnalyticsAppKey</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_APP_KEY)</string>
+	<key>WhiteNoiseProductAnalyticsEndpoint</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_ENDPOINT)</string>
+	<key>WhiteNoiseProductAnalyticsOperator</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_OPERATOR)</string>
+	<key>WhiteNoiseProductAnalyticsRetention</key>
+	<string>$(WHITENOISE_PRODUCT_ANALYTICS_RETENTION)</string>
 	<key>WhiteNoisePushRelayHint</key>
 	<string>$(WHITENOISE_PUSH_RELAY_HINT)</string>
 	<key>WhiteNoisePushServerPubkeyHex</key>
@@ -46,13 +50,5 @@
 	<string>$(WHITENOISE_TELEMETRY_ENVIRONMENT)</string>
 	<key>WhiteNoiseTelemetryOTLPEndpoint</key>
 	<string>$(WHITENOISE_OTLP_ENDPOINT)</string>
-	<key>WhiteNoiseProductAnalyticsEndpoint</key>
-	<string>$(WHITENOISE_PRODUCT_ANALYTICS_ENDPOINT)</string>
-	<key>WhiteNoiseProductAnalyticsAppKey</key>
-	<string>$(WHITENOISE_PRODUCT_ANALYTICS_APP_KEY)</string>
-	<key>WhiteNoiseProductAnalyticsOperator</key>
-	<string>$(WHITENOISE_PRODUCT_ANALYTICS_OPERATOR)</string>
-	<key>WhiteNoiseProductAnalyticsRetention</key>
-	<string>$(WHITENOISE_PRODUCT_ANALYTICS_RETENTION)</string>
 </dict>
 </plist>

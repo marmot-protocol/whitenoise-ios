@@ -215,9 +215,12 @@ private struct LongChatScrollHarness: View {
     let appState: AppState
     let onViewportChanged: (TimelineBottomViewport) -> Void
     let onVisibleTargetsChanged: (Set<String>) -> Void
+    let onOlderPageRequested: () -> Void
 
     @State private var didFinishInitialPositioning = false
     @State private var scrollRequestGeneration = 0
+    @State private var isUserScrolling = false
+    @State private var userMovedAway = false
 
     private let mediaLoader = ConversationMediaLoader { item in
         item.localData ?? Data()
@@ -229,6 +232,10 @@ private struct LongChatScrollHarness: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         VStack(alignment: .leading, spacing: 4) {
+                            Color.clear.frame(height: 28)
+                                .modifier(TimelinePaginationVisibility(isEnabled: didFinishInitialPositioning) {
+                                    onOlderPageRequested()
+                                })
                             ForEach(fixture.rows) { row in
                                 MessageBubble(
                                     record: row.record(revealsDeferredContent: model.revealsDeferredContent),
@@ -263,6 +270,9 @@ private struct LongChatScrollHarness: View {
                 .onAppear {
                     scrollRequestGeneration &+= 1
                 }
+                .onScrollPhaseChange { _, phase in
+                    isUserScrolling = TimelineBottomScrollCoordinator.isUserDriven(phase)
+                }
                 .onScrollTargetVisibilityChange(
                     idType: String.self,
                     threshold: TimelineViewportVisibility.minimumVisibleFraction
@@ -281,6 +291,11 @@ private struct LongChatScrollHarness: View {
                     )
                 } action: { _, viewport in
                     onViewportChanged(viewport)
+                    userMovedAway = TimelineBottom.userMovedAwayState(
+                        previous: userMovedAway,
+                        viewportIsPinned: viewport.isPinned,
+                        isUserScrolling: isUserScrolling
+                    )
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     geometry.contentSize.height
@@ -291,8 +306,8 @@ private struct LongChatScrollHarness: View {
                     }
                     guard TimelineBottomScrollCoordinator.shouldFollowLayoutChange(
                         didFinishInitialPositioning: didFinishInitialPositioning,
-                        userMovedAwayFromBottom: false,
-                        isUserScrolling: false
+                        userMovedAwayFromBottom: userMovedAway,
+                        isUserScrolling: isUserScrolling
                     ) else { return }
                     scrollRequestGeneration &+= 1
                 }
@@ -333,13 +348,15 @@ struct ConversationLongChatScrollTests {
         let appState = AppState(client: try MarmotClient.testClient())
         var lastViewport: TimelineBottomViewport?
         var visibleTargets = Set<String>()
+        var olderPageRequests = 0
         let controller = UIHostingController(
             rootView: LongChatScrollHarness(
                 model: model,
                 fixture: fixture,
                 appState: appState,
                 onViewportChanged: { lastViewport = $0 },
-                onVisibleTargetsChanged: { visibleTargets = $0 }
+                onVisibleTargetsChanged: { visibleTargets = $0 },
+                onOlderPageRequested: { olderPageRequests += 1 }
             )
         )
         let windowScene = try #require(
@@ -359,6 +376,7 @@ struct ConversationLongChatScrollTests {
         }
         let initialContentHeight = try #require(lastViewport?.contentHeight)
         #expect(lastViewport?.isPinned == true, "Initial viewport: \(String(describing: lastViewport))")
+        #expect(olderPageRequests == 0)
         #expect(
             visibleTargets.contains(LongChatScrollHarness.bottomID),
             "Initial targets: \(visibleTargets.sorted()) viewport: \(String(describing: lastViewport))"
@@ -376,6 +394,7 @@ struct ConversationLongChatScrollTests {
             "Expected deferred long text and image rows above the viewport to grow the timeline"
         )
         #expect(lastViewport?.isPinned == true, "Final viewport: \(String(describing: lastViewport))")
+        #expect(olderPageRequests == 0)
         #expect(
             visibleTargets.contains(LongChatScrollHarness.bottomID),
             "Final targets: \(visibleTargets.sorted()) viewport: \(String(describing: lastViewport))"

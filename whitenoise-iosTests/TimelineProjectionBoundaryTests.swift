@@ -6,6 +6,24 @@ import Testing
 
 @MainActor
 struct TimelineProjectionBoundaryTests {
+    @Test func rejectedSiblingsKeepTheirSlotAndCannotBecomeDownloadable() {
+        let reference = mediaReference(sourceEpoch: 42)
+        let outcomes: [MediaAttachmentOutcomeFfi] = [
+            .rejected(attachmentIndex: 0, rejection: MediaAttachmentRejectionFfi(kind: .unsupportedFormat, detail: "peer supplied detail")),
+            .accepted(attachmentIndex: 1, reference: reference),
+            .rejected(attachmentIndex: 2, rejection: MediaAttachmentRejectionFfi(kind: .malformedField, detail: "untrusted")),
+        ]
+        let items = MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: "message-a")
+        #expect(items.count == 3)
+        #expect(items[0].reference == nil)
+        #expect(items[0].rejectionMessage == L10n.string("Unsupported attachment"))
+        #expect(items[1].reference == reference)
+        #expect(items[1].id.hasSuffix(":1"))
+        #expect(items[2].rejectionMessage == L10n.string("Attachment couldn’t be read"))
+        let another = MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: "message-b")
+        #expect(Set(items.map(\.id)).isDisjoint(with: another.map(\.id)))
+    }
+
     @Test func mediaCacheTreatsPresentEmptyRowProjectionAsAuthoritative() {
         let cache = ConversationMediaProjectionCache()
         let reference = mediaReference(sourceEpoch: 42)

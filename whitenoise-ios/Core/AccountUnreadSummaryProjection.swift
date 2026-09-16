@@ -6,7 +6,7 @@ enum AccountUnreadSummaryProjection {
         _ summaries: [AccountUnreadFfi],
         accounts: [AccountSummaryFfi]
     ) -> [String: AccountUnreadFfi] {
-        let knownAccountIds = Set(accounts.map(\.accountIdHex))
+        let knownAccountIds = Set(accounts.filter { !$0.signedOut }.map(\.accountIdHex))
         var result: [String: AccountUnreadFfi] = [:]
         for summary in summaries where knownAccountIds.contains(summary.accountIdHex) {
             result[summary.accountIdHex] = summary
@@ -22,17 +22,17 @@ enum AccountUnreadSummaryProjection {
         var unreadConversations: UInt64 = 0
         var attentionOnlyConversations: UInt64 = 0
 
-        for row in rows where !row.archived {
+        for row in rows where !row.archived && !row.pendingConfirmation
+            && row.selfMembership == .member && !row.leaveRequestPending {
             let needsAttention = row.hasUnread
                 || row.manuallyMarkedUnread
-                || row.pendingConfirmation
             guard needsAttention else { continue }
             unreadCount = saturatedSum(unreadCount, row.unreadCount)
             if unreadConversations < UInt64.max {
                 unreadConversations += 1
             }
             if row.unreadCount == 0,
-               row.manuallyMarkedUnread || row.pendingConfirmation,
+               row.manuallyMarkedUnread,
                attentionOnlyConversations < UInt64.max {
                 attentionOnlyConversations += 1
             }
