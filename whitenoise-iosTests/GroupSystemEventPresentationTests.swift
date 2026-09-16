@@ -482,10 +482,7 @@ struct GroupSystemEventPresentationTests {
                     )
                 ) == "Alice added you"
             )
-            #expect(
-                MessagePreview.body(preview)
-                    == "\(IdentityFormatter.short(actor)) added \(IdentityFormatter.short(me))"
-            )
+            #expect(MessagePreview.body(preview) == "npub1424…amrcaj added npub1enx…n2pktz")
         }
     }
 

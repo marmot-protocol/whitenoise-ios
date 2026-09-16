@@ -1105,13 +1105,15 @@ struct GroupDetailsView: View {
 
     private var contactNpub: String? {
         viewModel.directMessageCounterpartNpub
-            ?? contactAccountIdHex.map { appState.npub(forAccountIdHex: $0) }
+            ?? contactAccountIdHex.flatMap { appState.npub(forAccountIdHex: $0) }
     }
 
     private var contactTitle: String {
         guard let contactAccountIdHex else { return viewModel.displayTitle }
-        return appState.knownDisplayName(forAccountIdHex: contactAccountIdHex)
-            ?? appState.shortNpub(forAccountIdHex: contactAccountIdHex)
+        return IdentityPresentation.text(
+            accountIdHex: contactAccountIdHex,
+            knownName: appState.knownDisplayName(forAccountIdHex: contactAccountIdHex)
+        )
     }
 
     private var nickname: String? {

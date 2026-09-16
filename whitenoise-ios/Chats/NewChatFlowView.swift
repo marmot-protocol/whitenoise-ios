@@ -208,9 +208,10 @@ struct NewMessageScreen: View {
                     showsDisclosureIndicator: true,
                     onRetry: { model.messageQuery.queryChanged(using: appState) },
                     onSelect: { resolved in
+                        guard let npub = appState.npub(forAccountIdHex: resolved.accountIdHex) else { return }
                         profilePreview = ProfilePreview(
                             accountIdHex: resolved.accountIdHex,
-                            npub: appState.npub(forAccountIdHex: resolved.accountIdHex),
+                            npub: npub,
                             profile: appState.cachedProfile(forAccountIdHex: resolved.accountIdHex),
                             initialIsFollowing: nil
                         )
@@ -409,7 +410,6 @@ struct NewMessageScreen: View {
         } label: {
             RecipientRow(
                 accountIdHex: candidate.accountIdHex,
-                npub: candidate.npub,
                 profileOverride: candidate.searchProfile,
                 searchContext: RecipientSearch.resultContext(
                     for: candidate,
@@ -656,10 +656,7 @@ struct RecipientResolutionSection: View {
             Button {
                 onSelect(resolved)
             } label: {
-                RecipientRow(
-                    accountIdHex: resolved.accountIdHex,
-                    npub: appState.npub(forAccountIdHex: resolved.accountIdHex)
-                ) {
+                RecipientRow(accountIdHex: resolved.accountIdHex) {
                     HStack(spacing: 8) {
                         if isVerified(resolved) {
                             Label("Verified", systemImage: "checkmark.seal.fill")

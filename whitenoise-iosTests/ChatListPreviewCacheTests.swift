@@ -186,7 +186,7 @@ struct ChatListPreviewCacheTests {
         }
     }
 
-    @Test func groupSystemPreviewFallsBackToShortIdentitiesWithoutAProjection() {
+    @Test func groupSystemPreviewFallsBackToNpubsWithoutAProjection() {
         let actor = hex("aa")
         let subject = hex("bb")
         withAppLanguage(.english) {
@@ -203,7 +203,7 @@ struct ChatListPreviewCacheTests {
                 title: "Room"
             )
 
-            #expect(item.previewText == "\(IdentityFormatter.short(actor)) added \(IdentityFormatter.short(subject))")
+            #expect(item.previewText == "npub1424…amrcaj added npub1hwa…xw04hu")
         }
     }
 

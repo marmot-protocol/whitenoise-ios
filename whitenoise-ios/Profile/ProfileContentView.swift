@@ -127,7 +127,7 @@ struct ProfileContentView: View {
         }
         .task(id: declaredNip05) { await model.verifyDeclaredNip05(declaredNip05) }
         .sheet(isPresented: $showStartGroup) {
-            if let hex = model.hex {
+            if let hex = model.hex, let displayReference {
                 NewChatFlowView(initialGroupMembers: [
                     MemberRefFfi(
                         memberRef: displayReference,
@@ -140,7 +140,7 @@ struct ProfileContentView: View {
         }
         .sheet(isPresented: $showAddToGroup) {
             AddToGroupSheet(
-                contactNpub: displayReference,
+                contactNpub: displayReference ?? npub,
                 contactName: title,
                 groups: model.addableGroups
             )
@@ -411,7 +411,7 @@ struct ProfileContentView: View {
 
     @ViewBuilder
     private var sharedGroupsSection: some View {
-        if let hex = model.hex, canMessage {
+        if let hex = model.hex, canMessage, let displayReference {
             GroupsInCommonSection(
                 contactAccountIdHex: hex,
                 contactNpub: displayReference,
@@ -503,13 +503,15 @@ struct ProfileContentView: View {
     }
 
     private var title: String {
-        nickname
-            ?? AppState.resolvedKnownDisplayName(
-                profile: effectiveProfile,
-                projectedName: projectedDisplayName,
-                localAccountLabel: nil
-            )
-            ?? IdentityFormatter.short(displayReference)
+        IdentityPresentation.text(
+            accountIdHex: resolvedAccountIdHex,
+            knownName: nickname
+                ?? AppState.resolvedKnownDisplayName(
+                    profile: effectiveProfile,
+                    projectedName: projectedDisplayName,
+                    localAccountLabel: nil
+                )
+        )
     }
 
     private var nickname: String? {
@@ -575,17 +577,25 @@ struct ProfileContentView: View {
         )
     }
 
-    private var displayReference: String {
-        if let hex = model.hex { return appState.npub(forAccountIdHex: hex) }
-        return npub
+    /// The account this screen is about, whether it arrived as hex from a
+    /// resolved lookup or as a bech32 reference from a link or QR scan.
+    private var resolvedAccountIdHex: String? {
+        model.hex ?? NostrProfileReference.pubkeyHex(fromBech32: npub)
     }
 
+    private var displayReference: String? {
+        IdentityPresentation.canonicalNpub(accountIdHex: resolvedAccountIdHex)
+    }
+
+    @ViewBuilder
     private var identityChip: some View {
-        CopyableValueChip(
-            display: IdentityFormatter.short(displayReference, head: 12, tail: 10),
-            copyValue: displayReference,
-            copiedToastTitle: L10n.string("npub")
-        )
+        if let displayReference {
+            CopyableValueChip(
+                display: IdentityFormatter.short(displayReference, head: 12, tail: 10),
+                copyValue: displayReference,
+                copiedToastTitle: L10n.string("npub")
+            )
+        }
     }
 
     private var websiteConfirmationPresented: Binding<Bool> {

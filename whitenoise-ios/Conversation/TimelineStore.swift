@@ -156,7 +156,10 @@ final class TimelineStore {
     private var mentionDisplayNameResolver: MarkdownMentionResolver { mentionResolver }
 
     private func resolvedAccountDisplayName(_ accountIdHex: String) -> String {
-        appState?.displayName(forAccountIdHex: accountIdHex) ?? IdentityFormatter.short(accountIdHex)
+        IdentityPresentation.text(
+            accountIdHex: accountIdHex,
+            knownName: appState?.knownDisplayName(forAccountIdHex: accountIdHex)
+        )
     }
 
     private var systemEventNaming: GroupSystemEventNaming {

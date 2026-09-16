@@ -16,12 +16,12 @@ struct ShareAndConnectView: View {
 
     let accountIdHex: String
 
-    private var npub: String {
+    private var npub: String? {
         appState.npub(forAccountIdHex: accountIdHex)
     }
 
-    private var deepLink: String {
-        DeepLink.profile(npub: npub).url.absoluteString
+    private var deepLink: String? {
+        npub.map { DeepLink.profile(npub: $0).url.absoluteString }
     }
 
     var body: some View {
@@ -52,7 +52,7 @@ struct ShareAndConnectView: View {
                 .frame(width: 180)
             }
 
-            if mode == .share {
+            if mode == .share, let deepLink {
                 ToolbarItem(placement: .topBarTrailing) {
                     ShareLink(item: deepLink) {
                         Label("Share Profile", systemImage: "square.and.arrow.up")
@@ -62,7 +62,7 @@ struct ShareAndConnectView: View {
             }
         }
         .task(id: deepLink) {
-            qrImage = QRCode.image(from: deepLink)
+            qrImage = deepLink.flatMap { QRCode.image(from: $0) }
         }
         .navigationDestination(isPresented: scannedProfileIsPresented) {
             if let scannedNpub {
@@ -86,11 +86,13 @@ struct ShareAndConnectView: View {
                         .font(.title2.weight(.bold))
                         .multilineTextAlignment(.center)
 
-                    CopyableValueChip(
-                        display: appState.shortNpub(forAccountIdHex: accountIdHex),
-                        copyValue: npub,
-                        copiedToastTitle: L10n.string("npub")
-                    )
+                    if let npub {
+                        CopyableValueChip(
+                            display: IdentityFormatter.short(npub),
+                            copyValue: npub,
+                            copiedToastTitle: L10n.string("npub")
+                        )
+                    }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
@@ -98,36 +100,44 @@ struct ShareAndConnectView: View {
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
 
-            Section {
-                VStack(spacing: 6) {
-                    if let qrImage {
-                        Image(uiImage: qrImage)
-                            .interpolation(.none)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 225, height: 225)
-                            .padding(16)
-                            .background(.white, in: .rect(cornerRadius: 20))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 20)
-                                    .strokeBorder(.quaternary, lineWidth: 0.5)
-                            }
-                            .accessibilityLabel("Profile QR code")
-                    } else {
-                        ProgressView()
-                            .frame(width: 257, height: 257)
-                    }
-
-                    Text("Scan to connect.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 32)
+            if deepLink != nil {
+                qrSection
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
         }
+    }
+
+    // No npub means no QR to render, so the affordance is withheld rather than
+    // left spinning on a load that can never finish.
+    private var qrSection: some View {
+        Section {
+            VStack(spacing: 6) {
+                if let qrImage {
+                    Image(uiImage: qrImage)
+                        .interpolation(.none)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 225, height: 225)
+                        .padding(16)
+                        .background(.white, in: .rect(cornerRadius: 20))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20)
+                                .strokeBorder(.quaternary, lineWidth: 0.5)
+                        }
+                        .accessibilityLabel("Profile QR code")
+                } else {
+                    ProgressView()
+                        .frame(width: 257, height: 257)
+                }
+
+                Text("Scan to connect.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 32)
+        }
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
     }
 
     private var scannerContent: some View {
