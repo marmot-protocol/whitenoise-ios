@@ -19,6 +19,7 @@ enum WNSwipeActionBadge {
         let tint: Color
         let diameter: CGFloat
         let colorScheme: ColorScheme
+        let displayScale: CGFloat
     }
 
     private static var cache: [Key: UIImage] = [:]
@@ -27,13 +28,15 @@ enum WNSwipeActionBadge {
         systemImage: String,
         tint: Color,
         diameter: CGFloat,
-        colorScheme: ColorScheme
+        colorScheme: ColorScheme,
+        displayScale: CGFloat
     ) -> UIImage? {
         let key = Key(
             systemImage: systemImage,
             tint: tint,
             diameter: diameter,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            displayScale: displayScale
         )
         if let cached = cache[key] {
             return cached
@@ -43,7 +46,7 @@ enum WNSwipeActionBadge {
             content: Badge(systemImage: systemImage, tint: tint, diameter: diameter)
                 .environment(\.colorScheme, colorScheme)
         )
-        renderer.scale = UITraitCollection.current.displayScale
+        renderer.scale = displayScale
         // A template image would be repainted flat white by UIKit, erasing the
         // tint the circle exists to carry.
         guard let image = renderer.uiImage?.withRenderingMode(.alwaysOriginal) else {
