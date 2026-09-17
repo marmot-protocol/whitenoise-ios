@@ -20,6 +20,7 @@ struct WNSwipeActionButton: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
     @ScaledMetric(relativeTo: .body)
     private var diameter: CGFloat = WNSwipeActionBadgeMetrics.diameter
 
@@ -42,7 +43,8 @@ struct WNSwipeActionButton: View {
             systemImage: systemImage,
             tint: tint,
             diameter: diameter,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            displayScale: displayScale
         )
         return Button(action: action) {
             if let badge {

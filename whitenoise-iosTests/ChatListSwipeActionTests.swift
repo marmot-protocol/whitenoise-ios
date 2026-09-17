@@ -220,13 +220,15 @@ struct ChatListSwipeActionOrderTests {
 @MainActor
 struct WNSwipeActionBadgeTests {
     private static let diameter: CGFloat = 40
+    private static let displayScale: CGFloat = 2
 
     private func badge(for action: ChatListSwipeAction) -> UIImage? {
         WNSwipeActionBadge.image(
             systemImage: action.systemImage,
             tint: action.tint,
             diameter: Self.diameter,
-            colorScheme: .light
+            colorScheme: .light,
+            displayScale: Self.displayScale
         )
     }
 
@@ -289,7 +291,8 @@ struct WNSwipeActionBadgeTests {
                 systemImage: ChatListSwipeAction.mute.systemImage,
                 tint: ChatListSwipeAction.mute.tint,
                 diameter: Self.diameter,
-                colorScheme: .light
+                colorScheme: .light,
+                displayScale: Self.displayScale
             )
         )
         let dark = try #require(
@@ -297,10 +300,40 @@ struct WNSwipeActionBadgeTests {
                 systemImage: ChatListSwipeAction.mute.systemImage,
                 tint: ChatListSwipeAction.mute.tint,
                 diameter: Self.diameter,
-                colorScheme: .dark
+                colorScheme: .dark,
+                displayScale: Self.displayScale
             )
         )
         #expect(light !== dark)
+    }
+
+    /// The cache outlives any one window, so a render made for another screen
+    /// would otherwise be handed back at the wrong pixel density.
+    @Test func rendersAtDifferentDisplayScalesAreKeptApart() throws {
+        let twoX = try #require(badge(at: 2))
+        let threeX = try #require(badge(at: 3))
+        #expect(twoX !== threeX)
+    }
+
+    /// Keying on the scale is only half the fix: it also has to reach the
+    /// renderer, or every entry holds the same pixels under a different key.
+    @Test func theRequestedScaleDrivesThePixelsThatAreRendered() throws {
+        for scale in [CGFloat(2), CGFloat(3)] {
+            let image = try #require(badge(at: scale))
+            let cg = try #require(image.cgImage)
+            #expect(abs(image.scale - scale) < 0.01)
+            #expect(abs(CGFloat(cg.width) - Self.diameter * scale) < scale)
+        }
+    }
+
+    private func badge(at displayScale: CGFloat) -> UIImage? {
+        WNSwipeActionBadge.image(
+            systemImage: ChatListSwipeAction.pin.systemImage,
+            tint: ChatListSwipeAction.pin.tint,
+            diameter: Self.diameter,
+            colorScheme: .light,
+            displayScale: displayScale
+        )
     }
 
     private static func alpha(of image: CGImage, atX x: Int, y: Int) -> UInt8? {
