@@ -1490,6 +1490,12 @@ final class ConversationViewModel {
         await windowCommandTask?.value
     }
 
+    /// A queued window command outlives the cancelled task that awaited it, so a
+    /// newly chosen target has to retire it even when that target needs no command.
+    func supersedePendingConversationNavigation() {
+        navigationIntentRevision &+= 1
+    }
+
     func jumpToConversationMessage(_ messageId: String) async {
         navigationFailure = nil
         viewportIntent = .history(messageId)

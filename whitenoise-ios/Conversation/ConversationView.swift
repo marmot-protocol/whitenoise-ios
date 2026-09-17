@@ -3099,6 +3099,7 @@ struct ConversationView: View {
 
     private func navigateToTimelineMessage(_ messageIdHex: String, viewModel: ConversationViewModel) {
         messageNavigationTask?.cancel()
+        viewModel.supersedePendingConversationNavigation()
         messageNavigationGeneration &+= 1
         let generation = messageNavigationGeneration
         messageNavigationTask = Task { @MainActor in
