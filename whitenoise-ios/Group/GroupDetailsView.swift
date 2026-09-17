@@ -539,7 +539,7 @@ struct GroupDetailsView: View {
                     CopyableValueChip(
                         display: IdentityFormatter.short(npub, head: 12, tail: 10),
                         copyValue: npub,
-                        copiedToastTitle: L10n.string("npub")
+                        valueName: L10n.string("npub")
                     )
                 }
             }

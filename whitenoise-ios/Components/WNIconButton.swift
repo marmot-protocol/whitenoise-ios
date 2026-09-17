@@ -21,9 +21,6 @@ struct WNIconButton: View {
         emphasis == .secondary && chrome == .container
     }
 
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.isEnabled) private var isEnabled
-
     /// Also the accessibility label — the glyph carries no text of its own.
     let title: LocalizedStringKey
     let systemImage: String
@@ -32,27 +29,47 @@ struct WNIconButton: View {
     let action: () -> Void
 
     var body: some View {
-        if #available(iOS 26.0, *),
-           Self.inheritsContainerSurface(emphasis: emphasis, chrome: chrome) {
-            Button(action: action) {
-                Label(title, systemImage: systemImage)
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.primary)
-            }
-        } else {
-            Button(action: action) {
-                Label(title, systemImage: systemImage)
-                    .labelStyle(.iconOnly)
-                    .wnButtonContentColor(
-                        emphasis,
-                        size: .compact,
-                        colorScheme: colorScheme,
-                        isEnabled: isEnabled
-                    )
-            }
-            .wnIconButtonStyle(emphasis)
-            .wnButtonChrome(.circle, emphasis: emphasis)
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
         }
+        .wnIconButtonChrome(emphasis: emphasis, chrome: chrome)
+    }
+}
+
+/// The `WNIconButton` surface, applied to a button-like view that cannot be a
+/// `WNIconButton` because it carries its own action — `ShareLink`, for one.
+private struct WNIconButtonChrome: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    let emphasis: WNButton.Emphasis
+    let chrome: WNIconButton.Chrome
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *),
+           WNIconButton.inheritsContainerSurface(emphasis: emphasis, chrome: chrome) {
+            content.foregroundStyle(.primary)
+        } else {
+            content
+                .wnButtonContentColor(
+                    emphasis,
+                    size: .compact,
+                    colorScheme: colorScheme,
+                    isEnabled: isEnabled
+                )
+                .wnIconButtonStyle(emphasis)
+                .wnButtonChrome(.circle, emphasis: emphasis)
+        }
+    }
+}
+
+extension View {
+    func wnIconButtonChrome(
+        emphasis: WNButton.Emphasis = .secondary,
+        chrome: WNIconButton.Chrome = .own
+    ) -> some View {
+        modifier(WNIconButtonChrome(emphasis: emphasis, chrome: chrome))
     }
 }
 
