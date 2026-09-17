@@ -81,6 +81,19 @@ nonisolated enum IdentityPresentation {
         return Resolved(text: unknown.text, source: .unknown)
     }
 
+    /// The abbreviated npub for a row that prints it *beneath* a name. Nil when
+    /// the account has no usable name, because `resolve` already returned the
+    /// npub as the row's title and printing both would show the key twice.
+    static func subtitleNpub(
+        accountIdHex: String?,
+        knownName: String? = nil,
+        abbreviation: Abbreviation = .short
+    ) -> String? {
+        guard resolve(accountIdHex: accountIdHex, knownName: knownName).source == .name,
+              let npub = canonicalNpub(accountIdHex: accountIdHex) else { return nil }
+        return abbreviation.apply(npub)
+    }
+
     static func text(
         accountIdHex: String?,
         knownName: String? = nil,
