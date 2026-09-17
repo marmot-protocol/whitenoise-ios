@@ -44,6 +44,7 @@ struct ChatsListView: View {
     @State private var bulkDeleteInProgress = false
     @State private var isUpdatingPinnedOrder = false
     @State private var isPinMutationInProgress = false
+    @State private var blockedUsers = BlockedUsersModel()
     @State private var isMarkingAllRead = false
 
     private struct LocalDeleteTarget: Equatable {
@@ -253,6 +254,17 @@ struct ChatsListView: View {
                         .wnBackButton()
                 }
                 .appAppearance()
+            }
+            .task(id: subscriptionScope) {
+                // The inbox needs the block list so a direct chat with a
+                // blocked peer can say so instead of previewing their message.
+                await blockedUsers.run(using: appState, target: nil)
+            }
+            .task(id: BlockedAuthorsToken(
+                accountIdHexes: blockedUsers.blockedAccountIds,
+                isViewModelReady: viewModel != nil
+            )) {
+                viewModel?.applyBlockedAccounts(blockedUsers.blockedAccountIds)
             }
             .task(id: subscriptionScope) {
                 // Own both creation and binding here so bind() can't be skipped

@@ -56,6 +56,8 @@ struct GroupDetailsView: View {
     @State private var showAddContactToGroup = false
     @State private var didOpenRequestedAddMembers = false
     @State private var memberProjectionCache = GroupMemberListProjectionCache()
+    @State private var blockedUsers = BlockedUsersModel()
+    @State private var blockReload = 0
 
     private var isAdmin: Bool {
         viewModel.canEditGroup && !viewModel.isGroupDisbandingOrDisbanded
@@ -91,10 +93,8 @@ struct GroupDetailsView: View {
             }
             technicalDetailsSection
             destructiveActionsSection
-            if isDirectMessage, let peer = viewModel.otherMember {
-                Section {
-                    NavigationLink("Block or Unblock User") { BlockedUsersView(userReference: peer).wnBackButton() }
-                }
+            if blockablePeer != nil {
+                BlockUserSection(model: blockedUsers) { blockReload += 1 }
             }
 
             if appState.developerMode {
@@ -289,6 +289,10 @@ struct GroupDetailsView: View {
                 ),
                 onDismiss: { sharedMediaGallery = nil }
             )
+        }
+        .task(id: blockSubscriptionKey) {
+            guard let peer = blockablePeer else { return }
+            await blockedUsers.run(using: appState, target: peer)
         }
         .task(id: appState.developerMode) {
             await model.refreshGroupManagementAndNotify()
@@ -986,6 +990,22 @@ struct GroupDetailsView: View {
                 }
             }
         }
+    }
+
+    /// The direct peer this screen can offer a block action for, or nil when
+    /// the chat is a group or resolves to one of this device's own profiles.
+    private var blockablePeer: String? {
+        guard isDirectMessage, let peer = viewModel.otherMember,
+              BlockedUsersPresentation.canBlock(
+                  targetAccountIdHex: peer,
+                  localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+              )
+        else { return nil }
+        return peer
+    }
+
+    private var blockSubscriptionKey: String {
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(blockablePeer ?? "")/\(blockReload)"
     }
 
     private var hasGroupImage: Bool {

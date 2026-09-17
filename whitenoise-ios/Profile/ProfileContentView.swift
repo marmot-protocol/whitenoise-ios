@@ -86,6 +86,8 @@ struct ProfileContentView: View {
     @State private var showStartGroup = false
     @State private var showAddToGroup = false
     @State private var pendingExternalWebsite: URL?
+    @State private var blockedUsers = BlockedUsersModel()
+    @State private var blockReload = 0
 
     var body: some View {
         List {
@@ -101,18 +103,18 @@ struct ProfileContentView: View {
                 )
             }
 
-            primaryActionSection
+            if isBlockedPeer {
+                BlockedPeerNoticeSection(model: blockedUsers)
+            } else {
+                primaryActionSection
+            }
             aboutSection
             identityValuesSection
             publicProfileSection
             moderationSection
             sharedGroupsSection
-            if npub != IdentityPresentation.canonicalNpub(accountIdHex: appState.activeAccount?.accountIdHex) {
-                Section {
-                    NavigationLink("Block or Unblock User") {
-                        BlockedUsersView(userReference: npub).wnBackButton()
-                    }
-                }
+            if isBlockablePeer, !isBlockedPeer {
+                BlockUserSection(model: blockedUsers) { blockReload += 1 }
             }
         }
         .listStyle(.insetGrouped)
@@ -133,6 +135,10 @@ struct ProfileContentView: View {
             await model.refreshWebsite(using: appState)
         }
         .task(id: declaredNip05) { await model.verifyDeclaredNip05(declaredNip05) }
+        .task(id: blockSubscriptionKey) {
+            guard isBlockablePeer else { return }
+            await blockedUsers.run(using: appState, target: npub)
+        }
         .sheet(isPresented: $showStartGroup) {
             if let hex = model.hex, let displayReference {
                 NewChatFlowView(initialGroupMembers: [
@@ -493,6 +499,25 @@ struct ProfileContentView: View {
                     }
                 }
         }
+    }
+
+    // MARK: - Blocking
+
+    private var isBlockablePeer: Bool {
+        BlockedUsersPresentation.canBlock(
+            targetAccountIdHex: model.hex,
+            localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+        )
+    }
+
+    /// While someone is blocked the interaction actions are withdrawn, so the
+    /// screen never offers a Message that the runtime would reject.
+    private var isBlockedPeer: Bool {
+        isBlockablePeer && blockedUsers.targetIsBlocked
+    }
+
+    private var blockSubscriptionKey: String {
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(npub)/\(isBlockablePeer)/\(blockReload)"
     }
 
     // MARK: - Helpers

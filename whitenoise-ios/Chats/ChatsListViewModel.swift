@@ -103,15 +103,18 @@ final class ChatsListViewModel {
             inviterAccountIdHex: String? = nil,
             isMuted: Bool = false,
             leaveRequestPending: Bool = false,
+            isBlockedDirectPeer: Bool = false,
             draftSummary: MessageDraftSummaryFfi? = nil,
             mentionDisplayName: MarkdownMentionResolver? = nil,
             systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
         ) {
-            let previewText = Self.sanitizedPreview(
-                from: row.lastMessage,
-                mentionDisplayName: mentionDisplayName,
-                systemEventNaming: systemEventNaming
-            )
+            let previewText = isBlockedDirectPeer
+                ? L10n.string("You blocked this user")
+                : Self.sanitizedPreview(
+                    from: row.lastMessage,
+                    mentionDisplayName: mentionDisplayName,
+                    systemEventNaming: systemEventNaming
+                )
             self.row = row
             self.avatarURL = avatarURL
             self.selectedAvatar = selectedAvatar
@@ -956,6 +959,17 @@ final class ChatsListViewModel {
         return changed
     }
 
+    /// Direct peers this account blocks, from the live block-list
+    /// subscription the inbox owns. Held only while the list is on screen.
+    private(set) var blockedAccountIds: Set<String> = []
+
+    func applyBlockedAccounts(_ accountIdHexes: Set<String>) {
+        let normalized = Set(accountIdHexes.map { $0.lowercased() })
+        guard blockedAccountIds != normalized else { return }
+        blockedAccountIds = normalized
+        refreshDisplayProjections()
+    }
+
     func refreshDisplayProjections() {
         guard !rowByGroupId.isEmpty else { return }
         let timing = appState?.productAnalytics.beginTiming()
@@ -1011,6 +1025,12 @@ final class ChatsListViewModel {
                 ChatMuteStore.isMuted(accountIdHex: $0, groupIdHex: row.groupIdHex, in: muteLookup.mutedChatKeys)
             } ?? false,
             leaveRequestPending: row.leaveRequestPending,
+            isBlockedDirectPeer: BlockedUsersPresentation.showsBlockedPeerPreview(
+                isDirectMessage: display.isDirectMessage,
+                directPeerAccountIdHex: display.directPeerAccountIdHex
+                    ?? directPeerAccountIdByGroupId[row.groupIdHex],
+                blockedAccountIds: blockedAccountIds
+            ),
             draftSummary: draftAccountRef.flatMap {
                 draftStore.summary(accountRef: $0, groupIdHex: row.groupIdHex)
             },

@@ -1054,9 +1054,15 @@ struct ConversationView: View {
                 await viewModel?.start()
             }
             .task(id: blockedPeerSubscriptionKey) {
-                guard viewModel?.groupDisplay.isDirectMessage == true,
-                      let peer = viewModel?.otherMember else { return }
-                await blockedUsers.run(using: appState, target: peer)
+                // Groups subscribe too: a blocked member's messages are
+                // withheld from every conversation, not just a direct chat.
+                await blockedUsers.run(using: appState, target: blockedPeerTarget)
+            }
+            .task(id: BlockedAuthorsToken(
+                accountIdHexes: blockedUsers.blockedAccountIds,
+                isViewModelReady: viewModel != nil
+            )) {
+                viewModel?.applyBlockedAuthors(blockedUsers.blockedAccountIds)
             }
             .task(id: ConversationDraftLoadToken(
                 accountRef: draftAccountRef,
@@ -1128,7 +1134,22 @@ struct ConversationView: View {
     }
 
     private var blockedPeerSubscriptionKey: String {
-        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(viewModel?.otherMember ?? "")/\(viewModel?.groupDisplay.isDirectMessage == true)"
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(blockedPeerTarget ?? "")/\(viewModel != nil)"
+    }
+
+    /// Only a direct chat has a peer whose block state gates the composer; a
+    /// group still needs the list, so it subscribes with no resolved target.
+    private var blockedPeerTarget: String? {
+        guard viewModel?.groupDisplay.isDirectMessage == true else { return nil }
+        return viewModel?.otherMember
+    }
+
+    /// The blocked peer is the conversation's own DM partner, so the undo runs
+    /// against the live subscription this screen already owns rather than
+    /// resolving the reference again.
+    private func unblockConversationPeer() {
+        guard let peer = viewModel?.otherMember else { return }
+        Task { await blockedUsers.setBlocked(false, userId: peer, using: appState) }
     }
 
     private var blockedPeerNpub: String? {
@@ -1149,7 +1170,12 @@ struct ConversationView: View {
         } else if let viewModel, viewModel.hasPendingInvite {
             inviteResponseArea(viewModel: viewModel)
         } else if let blockedPeerNpub {
-            BlockedConversationNotice(npub: blockedPeerNpub)
+            BlockedConversationNotice(
+                npub: blockedPeerNpub,
+                canUnblock: blockedUsers.canMutate,
+                isUnblocking: blockedUsers.isSaving,
+                onUnblock: unblockConversationPeer
+            )
         } else {
             VStack(spacing: 0) {
                 if let viewModel, let editSession {
