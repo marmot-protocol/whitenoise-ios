@@ -52,6 +52,9 @@ struct WNSearchBar: View {
     /// Shown in place of the clear control while the field is empty, for
     /// screens where the query is usually pasted rather than typed.
     var onPaste: (() -> Void)?
+    /// Sits beside the paste control on screens whose query can also arrive
+    /// from a scanned profile code.
+    var onScan: (() -> Void)?
     let onClose: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -107,15 +110,21 @@ struct WNSearchBar: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Clear search")
-            } else if let onPaste {
-                Button(action: onPaste) {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Palette.fieldGlyph)
-                        .frame(width: 32, height: 32)
+            } else {
+                if let onPaste {
+                    WNSearchBarGlyphButton(
+                        title: "Paste",
+                        systemImage: "doc.on.clipboard",
+                        action: onPaste
+                    )
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Paste")
+                if let onScan {
+                    WNSearchBarGlyphButton(
+                        title: "Scan QR Code",
+                        systemImage: "qrcode.viewfinder",
+                        action: onScan
+                    )
+                }
             }
         }
         .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
@@ -125,11 +134,44 @@ struct WNSearchBar: View {
     }
 }
 
+/// A bare glyph inside the search field — an affordance for filling the query,
+/// not a control with chrome of its own.
+private struct WNSearchBarGlyphButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(WNSearchBar.Palette.fieldGlyph)
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 #Preview("WNSearchBar — empty") {
     @Previewable @State var query = ""
     VStack {
         Spacer()
         WNSearchBar(query: $query, prompt: "Search Chats") {}
+    }
+    .background(.background)
+}
+
+#Preview("WNSearchBar — paste and scan") {
+    @Previewable @State var query = ""
+    VStack {
+        Spacer()
+        WNSearchBar(
+            query: $query,
+            prompt: "Search People",
+            onPaste: {},
+            onScan: {}
+        ) {}
     }
     .background(.background)
 }

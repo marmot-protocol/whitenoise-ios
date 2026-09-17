@@ -432,3 +432,52 @@ private func notificationUpdate(
         isFromSelf: false
     )
 }
+
+/// The npub a recipient row prints *under* a name. The row also titles itself
+/// through `IdentityPresentation`, so the two have to agree on when the key has
+/// already been shown.
+struct IdentitySubtitleNpubTests {
+
+    @Test func namedAccountGetsAnAbbreviatedNpubBeneathTheName() throws {
+        let subtitle = try #require(
+            IdentityPresentation.subtitleNpub(accountIdHex: Fixture.hex, knownName: "Marmota")
+        )
+
+        #expect(subtitle.hasPrefix("npub1"))
+        #expect(subtitle.contains("…"))
+        #expect(subtitle != Fixture.npub, "the row was printing the whole key")
+        #expect(subtitle.count < Fixture.npub.count)
+        #expect(!containsHex(subtitle, Fixture.hex))
+    }
+
+    /// Without a name the title is already the npub, so a subtitle would print
+    /// the same key twice.
+    @Test func namelessAccountGetsNoSubtitle() {
+        let resolved = IdentityPresentation.resolve(accountIdHex: Fixture.hex)
+
+        #expect(resolved.source == .npub)
+        #expect(IdentityPresentation.subtitleNpub(accountIdHex: Fixture.hex) == nil)
+    }
+
+    @Test func unusableKeyGetsNoSubtitle() {
+        #expect(IdentityPresentation.subtitleNpub(accountIdHex: nil, knownName: "Marmota") == nil)
+        #expect(IdentityPresentation.subtitleNpub(accountIdHex: "not-a-key", knownName: "Marmota") == nil)
+    }
+
+    /// A blank or key-shaped "name" is not a name, so the row falls back to the
+    /// npub as its title and must not repeat it underneath.
+    @Test(arguments: ["", "   ", Fixture.hex])
+    func rejectedNameGetsNoSubtitle(_ name: String) {
+        #expect(IdentityPresentation.subtitleNpub(accountIdHex: Fixture.hex, knownName: name) == nil)
+    }
+
+    @Test func subtitleMatchesTheTitleARowWouldShowForTheSameKey() {
+        let asTitle = IdentityPresentation.text(accountIdHex: Fixture.hex)
+        let asSubtitle = IdentityPresentation.subtitleNpub(
+            accountIdHex: Fixture.hex,
+            knownName: "Marmota"
+        )
+
+        #expect(asTitle == asSubtitle, "one key, one abbreviation")
+    }
+}

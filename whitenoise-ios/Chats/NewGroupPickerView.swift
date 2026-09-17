@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MarmotKit
 
 /// Step one of New Group: searchable multi-select over known people, with a
@@ -14,18 +15,19 @@ struct NewGroupPickerView: View {
     var body: some View {
         @Bindable var query = model.groupQuery
         List {
-            Section {
-                RecipientSearchField(text: $query.text, onScan: onScan)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
-                    .listRowBackground(Color.clear)
-            }
-
             if !model.groupSelection.isEmpty {
                 Section {
                     SelectedRecipientRail(members: model.groupSelection.members) { member in
                         model.groupSelection.remove(accountIdHex: member.accountIdHex)
                     }
                     .listRowInsets(EdgeInsets())
+                    // The rail rides on the page, not in a card: a card would
+                    // read as a third list section between the title and the
+                    // people it was selected from.
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                } header: {
+                    Text("Selected").wnSectionHeader()
                 }
             }
 
@@ -55,27 +57,39 @@ struct NewGroupPickerView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("")
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("New Group")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
+        .wnBackButton(isDisabled: model.isBusy)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel", action: onCancel)
-                    .disabled(model.isBusy)
-            }
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text("New Group")
-                        .font(.headline)
-                    Text(L10n.plural("%lld selected", Int64(model.groupSelection.count)))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Continue", action: onNext)
-                    .disabled(model.isBusy || appState.activeAccountRef == nil)
+                WNButton(
+                    title: "Continue",
+                    emphasis: .secondary,
+                    size: .compact,
+                    action: onNext
+                )
+                .disabled(model.isBusy || appState.activeAccountRef == nil)
             }
+        }
+        // The search sits where it does on New Chat, and its ✕ is the way out
+        // of the flow — the chevron above only steps back to that screen.
+        .safeAreaInset(edge: .bottom) {
+            WNSearchBar(
+                query: $query.text,
+                prompt: "Search People",
+                focusesOnAppear: false,
+                onPaste: {
+                    if let pasted = RecipientPasteboard.profileQuery(
+                        from: UIPasteboard.general.string
+                    ) {
+                        model.groupQuery.text = pasted
+                    }
+                },
+                onScan: onScan,
+                onClose: onCancel
+            )
+            .disabled(model.isBusy)
         }
         .task {
             await model.directory.load(using: appState)
@@ -112,7 +126,6 @@ struct NewGroupPickerView: View {
                 trimmedQuery: model.groupQuery.trimmedText
             ),
             candidates: candidates,
-            header: model.groupQuery.isBlank ? "People" : nil,
             emptyDescription: "Paste an npub or scan a QR code to add someone you haven't chatted with yet.",
             onRetryLoad: {
                 Task { await model.directory.load(using: appState, force: true) }

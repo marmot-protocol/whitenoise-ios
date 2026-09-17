@@ -50,7 +50,6 @@ struct RecipientRow<Trailing: View>: View {
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .truncationMode(.middle)
                 }
             }
             Spacer(minLength: 8)
@@ -61,19 +60,23 @@ struct RecipientRow<Trailing: View>: View {
     }
 
     private var npub: String? {
-        IdentityPresentation.canonicalNpub(accountIdHex: accountIdHex)
+        IdentityPresentation.subtitleNpub(
+            accountIdHex: accountIdHex,
+            knownName: knownName
+        )
     }
 
     private var displayName: String {
-        IdentityPresentation.text(
-            accountIdHex: accountIdHex,
-            knownName: appState.knownDisplayName(forAccountIdHex: accountIdHex)
-                ?? AppState.resolvedKnownDisplayName(
-                    profile: profileOverride,
-                    projectedName: nil,
-                    localAccountLabel: nil
-                )
-        )
+        IdentityPresentation.text(accountIdHex: accountIdHex, knownName: knownName)
+    }
+
+    private var knownName: String? {
+        appState.knownDisplayName(forAccountIdHex: accountIdHex)
+            ?? AppState.resolvedKnownDisplayName(
+                profile: profileOverride,
+                projectedName: nil,
+                localAccountLabel: nil
+            )
     }
 
     private var searchContextLabel: String? {
@@ -118,21 +121,69 @@ struct RecipientUserSearchStatus: View {
     }
 }
 
-/// Selection state for multi-select recipient rows.
+/// Selection state for multi-select recipient rows: a check on the rows that
+/// are in, and nothing on the rows that are not.
 struct RecipientSelectionIndicator: View {
+    @Environment(\.colorScheme) private var colorScheme
     let isSelected: Bool
 
     var body: some View {
-        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(.title3)
-            .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary))
+        Image(systemName: "checkmark")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
+            // Unselected rows keep the slot rather than drop it, so a name does
+            // not reflow the moment the row is tapped.
+            .opacity(isSelected ? 1 : 0)
             .accessibilityHidden(true)
     }
 }
 
 /// Removable horizontal rail of the currently selected people.
 struct SelectedRecipientRail: View {
+    nonisolated enum Metrics {
+        static let avatarSize: CGFloat = 52
+        /// `.headline` renders an SF Symbol at roughly this diameter; the inset
+        /// below is derived from it rather than eyeballed.
+        static let badgeSize: CGFloat = 17
+        static let labelWidth: CGFloat = 64
+
+        /// Nudges the badge until its centre sits on the avatar's edge at 45°.
+        /// The old inset floated it a few points clear of the circle, off in the
+        /// corner of a frame the artwork never reaches.
+        static var badgeInset: CGFloat {
+            let radius = avatarSize / 2
+            return badgeSize / 2 - radius * (1 - 1 / CGFloat(2).squareRoot())
+        }
+
+        /// Where the badge's centre lands, in avatar coordinates, for the inset
+        /// above.
+        static var badgeCentre: CGPoint {
+            CGPoint(
+                x: avatarSize - badgeSize / 2 + badgeInset,
+                y: badgeSize / 2 - badgeInset
+            )
+        }
+    }
+
+    /// The remove badge is the same filled circle as every other WN control:
+    /// accent disc, glyph knocked out of it, so it inverts with the appearance
+    /// instead of staying a black disc on a dark chip.
+    nonisolated enum Palette {
+        static func removeFill(for colorScheme: ColorScheme) -> Color {
+            WNButton.Metrics.accent(for: colorScheme)
+        }
+
+        static func removeGlyph(for colorScheme: ColorScheme) -> Color {
+            WNButton.Metrics.contentColor(
+                emphasis: .primary,
+                colorScheme: colorScheme,
+                isEnabled: true
+            )
+        }
+    }
+
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     let members: [MemberRefFfi]
     let onRemove: (MemberRefFfi) -> Void
 
@@ -163,18 +214,21 @@ struct SelectedRecipientRail: View {
                     title: name,
                     pictureURL: appState.avatarURL(forAccountIdHex: member.accountIdHex)
                 )
-                .frame(width: 52, height: 52)
+                .frame(width: Metrics.avatarSize, height: Metrics.avatarSize)
                 .overlay(alignment: .topTrailing) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.subheadline)
+                        .font(.headline)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(Color(.systemBackground), Color.secondary)
-                        .offset(x: 4, y: -4)
+                        .foregroundStyle(
+                            Palette.removeGlyph(for: colorScheme),
+                            Palette.removeFill(for: colorScheme)
+                        )
+                        .offset(x: Metrics.badgeInset, y: -Metrics.badgeInset)
                 }
                 Text(name)
                     .font(.caption2)
                     .lineLimit(1)
-                    .frame(maxWidth: 64)
+                    .frame(maxWidth: Metrics.labelWidth)
             }
         }
         .buttonStyle(.plain)
