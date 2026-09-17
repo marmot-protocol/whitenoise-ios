@@ -119,6 +119,9 @@ struct MessageBubble: View {
     var onReplyPreviewTap: () -> Void = {}
     var onLoadMedia = ConversationMediaLoader { _ in Data() }
     var mediaForwardingContext: MediaForwardingContext?
+    /// Set when the timeline can scroll to a message; drives "Go to Message"
+    /// in the fullscreen media viewer's More menu.
+    var onGoToMessage: ((String) -> Void)? = nil
     /// Set when the message has viewable edit history; makes the inline "Edited"
     /// label tap to open the history sheet, the same sheet the actions menu opens.
     var onViewEditHistory: (() -> Void)? = nil
@@ -268,7 +271,8 @@ struct MessageBubble: View {
             MessageMediaFullscreenGalleryView(
                 gallery: gallery,
                 onLoadMedia: onLoadMedia,
-                forwardingContext: mediaForwardingContext
+                forwardingContext: mediaForwardingContext,
+                onGoToMessage: onGoToMessage
             ) {
                 mediaGallery = nil
             }
@@ -3470,6 +3474,7 @@ struct MessageMediaFullscreenGalleryView: View {
     let gallery: MessageMediaGallery
     let onLoadMedia: ConversationMediaLoader
     var forwardingContext: MediaForwardingContext?
+    var onGoToMessage: ((String) -> Void)?
     let onDismiss: () -> Void
 
     @State private var selectedItemID: String
@@ -3489,11 +3494,13 @@ struct MessageMediaFullscreenGalleryView: View {
         gallery: MessageMediaGallery,
         onLoadMedia: ConversationMediaLoader,
         forwardingContext: MediaForwardingContext? = nil,
+        onGoToMessage: ((String) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.gallery = gallery
         self.onLoadMedia = onLoadMedia
         self.forwardingContext = forwardingContext
+        self.onGoToMessage = onGoToMessage
         self.onDismiss = onDismiss
         _selectedItemID = State(initialValue: gallery.initialItemID)
     }
@@ -3526,7 +3533,8 @@ struct MessageMediaFullscreenGalleryView: View {
                     onClose: onDismiss,
                     onSave: saveSelectedMedia,
                     onShare: shareSelectedMedia,
-                    onForward: { forwardMedia = preparedMedia }
+                    onForward: { forwardMedia = preparedMedia },
+                    onGoToMessage: goToSelectedMessage
                 )
                 .transition(.opacity)
             }
@@ -3586,8 +3594,25 @@ struct MessageMediaFullscreenGalleryView: View {
     private var controlState: MediaViewerControlState {
         MediaViewerControlState(
             hasPreparedMedia: preparedMedia != nil,
-            hasForwardingContext: forwardingContext != nil
+            hasForwardingContext: forwardingContext != nil,
+            hasSourceMessage: sourceMessageIdHex != nil
         )
+    }
+
+    private var sourceMessageIdHex: String? {
+        guard onGoToMessage != nil else { return nil }
+        return MediaViewerMessageNavigation.sourceMessageIdHex(
+            forItemID: selectedItemID,
+            messageIdByItemID: gallery.messageIdByItemID
+        )
+    }
+
+    /// The viewer closes itself first: the destination may reset the
+    /// navigation path out from under the presenting screen.
+    private func goToSelectedMessage() {
+        guard let sourceMessageIdHex, let onGoToMessage else { return }
+        onDismiss()
+        onGoToMessage(sourceMessageIdHex)
     }
 
     private func toggleChrome() {

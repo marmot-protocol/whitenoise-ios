@@ -7,6 +7,7 @@ struct MessageMediaFullscreenGalleryChrome: View {
     let onSave: () -> Void
     let onShare: () -> Void
     let onForward: () -> Void
+    let onGoToMessage: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +27,12 @@ struct MessageMediaFullscreenGalleryChrome: View {
 
                 Spacer(minLength: 0)
 
-                MessageMediaGalleryMoreMenu(canSave: controlState.canSave, onSave: onSave)
+                MessageMediaGalleryMoreMenu(
+                    canSave: controlState.canSave,
+                    canGoToMessage: controlState.canGoToMessage,
+                    onSave: onSave,
+                    onGoToMessage: onGoToMessage
+                )
             }
 
             Spacer(minLength: 0)
@@ -61,12 +67,18 @@ private struct MessageMediaGalleryMoreMenu: View {
     private var diameter: CGFloat = WNSecondaryButtonStyle.Metrics.circleDiameter
 
     let canSave: Bool
+    let canGoToMessage: Bool
     let onSave: () -> Void
+    let onGoToMessage: () -> Void
 
     var body: some View {
         Menu {
             Button("Save", systemImage: "square.and.arrow.down", action: onSave)
                 .disabled(!canSave)
+
+            if canGoToMessage {
+                Button("Go to Message", systemImage: "bubble.left", action: onGoToMessage)
+            }
         } label: {
             Label("More", systemImage: "ellipsis")
                 .labelStyle(.iconOnly)
@@ -84,11 +96,16 @@ private struct MessageMediaGalleryMoreMenu: View {
 #Preview("Gallery chrome — Light") {
     MessageMediaFullscreenGalleryChrome(
         pageCountLabel: "2 of 5",
-        controlState: MediaViewerControlState(hasPreparedMedia: true, hasForwardingContext: true),
+        controlState: MediaViewerControlState(
+            hasPreparedMedia: true,
+            hasForwardingContext: true,
+            hasSourceMessage: true
+        ),
         onClose: {},
         onSave: {},
         onShare: {},
-        onForward: {}
+        onForward: {},
+        onGoToMessage: {}
     )
     .background { WNMediaSurface().ignoresSafeArea() }
 }
@@ -100,7 +117,8 @@ private struct MessageMediaGalleryMoreMenu: View {
         onClose: {},
         onSave: {},
         onShare: {},
-        onForward: {}
+        onForward: {},
+        onGoToMessage: {}
     )
     .background { WNMediaSurface().ignoresSafeArea() }
     .preferredColorScheme(.dark)
