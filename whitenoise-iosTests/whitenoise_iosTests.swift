@@ -14312,6 +14312,7 @@ private func timelineRecord(
         media: media,
         agentTextStreamJson: agentTextStreamJson,
         reactions: reactions,
+        edit: nil,
         deleted: deleted,
         deletedByMessageIdHex: deletedByMessageIdHex,
         invalidationStatus: invalidationStatus
@@ -14507,6 +14508,7 @@ private func chatListPreview(
     deleted: Bool = false
 ) -> ChatListMessagePreviewFfi {
     ChatListMessagePreviewFfi(
+        groupSystem: nil,
         messageIdHex: messageIdHex,
         sender: sender,
         senderDisplayName: senderDisplayName,
@@ -14527,7 +14529,8 @@ private func presentedChatSnapshot(_ rows: [ChatListRowFfi]) -> PresentedChatLis
                     title: .literal(text: row.title),
                     avatar: .placeholder(stableSeed: row.groupIdHex, source: .groupFallback),
                     titleSource: .group, avatarSource: .groupFallback, peerId: nil, resolution: .lastKnown
-                )
+                ),
+                avatarAsset: nil
             )
         },
         presentationVersion: PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
@@ -14869,6 +14872,27 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func avatarOnlySnapshotRefreshesPixelsWithoutChangingChatState() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "avatar", title: "Selected")
+        var snapshot = presentedChatSnapshot([row])
+        model.applyPresentedSnapshot(snapshot)
+        let original = try #require(model.items.first)
+        snapshot.rows[0].avatarAsset = AvatarAssetFfi(target: "opaque-target", reference: "opaque-reference",
+            availability: .ready, acquisition: nil, contentRevision: 2, byteCount: 40)
+        model.applyPresentedSnapshot(snapshot)
+        let refreshed = try #require(model.items.first)
+        #expect(refreshed.avatarAsset?.contentRevision == 2)
+        #expect(refreshed.row == original.row)
+        #expect(refreshed.title == original.title)
+        #expect(refreshed.unreadCount == original.unreadCount)
+        #expect(refreshed.isPinned == original.isPinned)
+        snapshot.rows[0].avatarAsset = nil
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.avatarAsset == nil)
+    }
+
     @Test func boundedReplacementEvictsRowsWithoutDroppingTheOpenDestinationOrChangingBadges() throws {
         let appState = AppState(client: try MarmotClient.testClient())
         let account = AccountSummaryFfi(label: "account", accountIdHex: "owner", localSigning: true, signedOut: false, running: true)
@@ -14960,7 +14984,7 @@ struct PresentedChatListTests {
         model.presentedRowForTesting = { _, _ in
             model.applyChatListRow(chatListRow(groupIdHex: "unrelated", title: "Other chat"))
             if targetChanges { model.applyChatListRow(chatListRow(groupIdHex: "target", title: "Newer title")) }
-            return PresentedChatRowFfi(row: row, presentation: selected)
+            return PresentedChatRowFfi(row: row, presentation: selected, avatarAsset: nil)
         }
         await model.refreshRow(groupIdHex: row.groupIdHex)
         #expect(model.item(groupIdHex: row.groupIdHex)?.title == (targetChanges ? "Newer title" : "Selected title"))
@@ -14981,7 +15005,7 @@ struct PresentedChatListTests {
         let model = ChatsListViewModel(appState: appState)
         let version = PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
         model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
-            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+            rows: [PresentedChatRowFfi(row: row, presentation: selected, avatarAsset: nil)], presentationVersion: version
         ))
         #expect(model.items.first?.title == "Selected title")
         #expect(model.items.first?.avatarURL == nil)
@@ -14989,7 +15013,7 @@ struct PresentedChatListTests {
         row.unreadCount = 4
         row.hasUnread = true
         model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(
-            rows: [PresentedChatRowFfi(row: row, presentation: selected)], presentationVersion: version
+            rows: [PresentedChatRowFfi(row: row, presentation: selected, avatarAsset: nil)], presentationVersion: version
         ))
         #expect(model.items.first?.unreadCount == 4)
         model.applyPresentedSnapshot(PresentedChatListSnapshotFfi(rows: [], presentationVersion: version))
@@ -15021,7 +15045,7 @@ struct PresentedChatListTests {
             titleSource: .peerProfile, avatarSource: .peerProfile, peerId: peer, resolution: .lastKnown
         )
         let snapshot = PresentedChatListSnapshotFfi(
-            rows: [PresentedChatRowFfi(row: row, presentation: selected)],
+            rows: [PresentedChatRowFfi(row: row, presentation: selected, avatarAsset: nil)],
             presentationVersion: PresentationVersionFfi(accountStoreEpoch: Data([1]), revision: 1)
         )
         model.applyPresentedSnapshot(snapshot)

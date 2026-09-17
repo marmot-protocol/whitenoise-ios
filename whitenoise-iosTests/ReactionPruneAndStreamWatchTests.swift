@@ -441,6 +441,7 @@ struct ReactionTargetTallyTests {
             agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: reactions,
+            edit: nil,
             deleted: false,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil

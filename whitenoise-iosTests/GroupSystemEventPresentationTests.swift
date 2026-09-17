@@ -9,6 +9,9 @@ struct GroupSystemEventPresentationTests {
         let other = hex("bb")
         let record = groupSystemRecord(plaintext: "not json", sender: me)
         let projection = GroupSystemEventFfi(
+            provenance: .authenticatedGroupState,
+            actorDisplayName: nil,
+            subjectDisplayName: nil,
             systemType: "member_added",
             text: "Member added",
             actorAccountIdHex: me,
@@ -33,6 +36,9 @@ struct GroupSystemEventPresentationTests {
     @Test func structuredBindingProjectionUsesActorForGroupIdentityChanges() {
         let actor = hex("aa")
         let renamed = GroupSystemEventFfi(
+            provenance: .authenticatedGroupState,
+            actorDisplayName: nil,
+            subjectDisplayName: nil,
             systemType: "group_renamed",
             text: "Group renamed",
             actorAccountIdHex: actor,
@@ -50,6 +56,19 @@ struct GroupSystemEventPresentationTests {
         )
 
         #expect(text == "Alice changed the group name to Weekend Walks")
+    }
+
+    @Test func projectedActivityRequiresAuthenticatedProvenanceAndUsesPreparedNames() {
+        var event = GroupSystemEventFfi(provenance: .authenticatedGroupState,
+            actorDisplayName: "Prepared Alice", subjectDisplayName: "Prepared Bob",
+            systemType: "member_added", text: "Member added", actorAccountIdHex: hex("aa"),
+            subjectAccountIdHex: hex("bb"), name: nil, oldName: nil,
+            oldRetentionSeconds: nil, newRetentionSeconds: nil)
+        #expect(GroupSystemEventPresentation.displayText(projected: event, sender: hex("aa"),
+            currentAccountIdHex: nil, displayName: { _ in "Stale name" }) == "Prepared Alice added Prepared Bob")
+        event.provenance = .memberAuthored
+        #expect(GroupSystemEventPresentation.displayText(projected: event, sender: hex("aa"),
+            currentAccountIdHex: nil, displayName: { _ in "Stale name" }) == nil)
     }
 
     @Test func oversizedPayloadIsRejectedBeforeParsing() {
@@ -499,6 +518,9 @@ struct GroupSystemEventPresentationTests {
             tags: [MessageTagFfi(values: ["system", "member_added"])],
             timelineAt: 1,
             groupSystem: GroupSystemEventFfi(
+                provenance: .authenticatedGroupState,
+                actorDisplayName: nil,
+                subjectDisplayName: nil,
                 systemType: "member_added",
                 text: "Member added",
                 actorAccountIdHex: nil,
@@ -569,6 +591,9 @@ private func systemDisplayText(
     GroupSystemEventPresentation.displayText(
         for: groupSystemRecord(plaintext: "not json", sender: ""),
         groupSystem: GroupSystemEventFfi(
+            provenance: .authenticatedGroupState,
+            actorDisplayName: nil,
+            subjectDisplayName: nil,
             systemType: systemType,
             text: "System event",
             actorAccountIdHex: actor,
@@ -633,6 +658,7 @@ private func timelineRecord(
         agentTextStreamJson: nil,
         groupSystem: groupSystem,
         reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+        edit: nil,
         deleted: false,
         deletedByMessageIdHex: nil,
         invalidationStatus: nil

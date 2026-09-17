@@ -120,8 +120,9 @@ enum MessagePreview {
         }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
+                guard let event = preview.groupSystem else { return "" }
                 return GroupSystemEventPresentation.displayText(
-                    from: preview.plaintext,
+                    projected: event,
                     sender: preview.sender,
                     currentAccountIdHex: systemEventNaming.currentAccountIdHex,
                     displayName: systemEventNaming.displayName

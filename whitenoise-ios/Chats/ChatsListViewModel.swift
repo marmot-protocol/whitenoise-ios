@@ -79,6 +79,7 @@ final class ChatsListViewModel {
         let row: ChatListRowFfi
         let avatarURL: URL?
         let selectedAvatar: SelectedAvatarFfi?
+        let avatarAsset: AvatarAssetFfi?
         let avatarSeed: String
         let title: String
         let isDirectMessage: Bool?
@@ -96,6 +97,7 @@ final class ChatsListViewModel {
             row: ChatListRowFfi,
             avatarURL: URL?,
             selectedAvatar: SelectedAvatarFfi? = nil,
+            avatarAsset: AvatarAssetFfi? = nil,
             avatarSeed: String? = nil,
             title: String,
             isDirectMessage: Bool? = nil,
@@ -118,6 +120,7 @@ final class ChatsListViewModel {
             self.row = row
             self.avatarURL = avatarURL
             self.selectedAvatar = selectedAvatar
+            self.avatarAsset = avatarAsset
             self.avatarSeed = avatarSeed ?? row.groupIdHex
             self.title = title
             self.isDirectMessage = isDirectMessage
@@ -273,6 +276,7 @@ final class ChatsListViewModel {
     private var rowByGroupId: [String: ChatListRowFfi] = [:]
     private var itemByGroupId: [String: Item] = [:]
     private var pendingChatListRowsByGroupId: [String: ChatListRowFfi] = [:]
+    private var avatarAssetsByGroupId: [String: AvatarAssetFfi] = [:]
     private var selectedPresentationByGroupId: [String: ConversationPresentationFfi] = [:]
     private var presentedCursor = PresentedChatListCursor()
     private var deferredPresentedSnapshot: PresentedChatListSnapshotFfi?
@@ -363,6 +367,7 @@ final class ChatsListViewModel {
             }
             let hadPublishedRows = !items.isEmpty || !archivedItems.isEmpty
             selectedPresentationByGroupId = [:]
+            avatarAssetsByGroupId = [:]
             rowByGroupId = [:]
             itemByGroupId = [:]
             items = []
@@ -631,6 +636,7 @@ final class ChatsListViewModel {
                appState.runtimeGeneration == generation, appState.canUseRuntimeForLocalForegroundWork
             else { return }
             selectedPresentationByGroupId[groupIdHex] = row.presentation
+            avatarAssetsByGroupId[groupIdHex] = row.avatarAsset
             applyChatListRow(row.row)
             destinationItems[groupIdHex] = itemByGroupId[groupIdHex]
         } catch is CancellationError {
@@ -688,6 +694,9 @@ final class ChatsListViewModel {
     }
 
     private func applyPresentedRows(_ rows: [PresentedChatRowFfi]) {
+        avatarAssetsByGroupId = Dictionary(rows.compactMap { row in
+            row.avatarAsset.map { (row.row.groupIdHex, $0) }
+        }, uniquingKeysWith: { _, latest in latest })
         selectedPresentationByGroupId = Dictionary(
             rows.map { ($0.row.groupIdHex, $0.presentation) }, uniquingKeysWith: { _, latest in latest }
         )
@@ -850,6 +859,7 @@ final class ChatsListViewModel {
         destinationItems[groupIdHex] = nil
         pendingChatListRowsByGroupId[groupIdHex] = nil
         selectedPresentationByGroupId[groupIdHex] = nil
+        avatarAssetsByGroupId[groupIdHex] = nil
         let hadPublishedRow = rowByGroupId[groupIdHex] != nil || itemByGroupId[groupIdHex] != nil
         rowByGroupId[groupIdHex] = nil
         itemByGroupId[groupIdHex] = nil
@@ -1011,6 +1021,7 @@ final class ChatsListViewModel {
             row: row,
             avatarURL: display.avatarURL,
             selectedAvatar: selected?.avatar,
+            avatarAsset: avatarAssetsByGroupId[row.groupIdHex],
             avatarSeed: display.avatarSeed,
             title: display.title,
             isDirectMessage: display.isDirectMessage,

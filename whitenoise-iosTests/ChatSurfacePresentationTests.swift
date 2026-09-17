@@ -1,11 +1,38 @@
 import CoreGraphics
 import Foundation
 import Testing
+import SwiftUI
 import UIKit
 @testable import whitenoise_ios
 
 @MainActor
 struct ChatSurfacePresentationTests {
+    @Test func reportActionMenuFitsSmallScreensAndRetainsScrollableActions() {
+        let count = MessageActionsPresentation.actionCount(canRetry: false, canInteract: true,
+            canForward: true, canEdit: true, canViewEditHistory: true, canDelete: true, canReport: true)
+        let height = MessageActionsPresentation.visibleActionHeight(actionCount: count,
+            containerHeight: 568, showsReactions: true)
+        let layout = MessageActionsOverlayLayout.resolve(sourceFrame: CGRect(x: 20, y: 200, width: 200, height: 100),
+            containerHeight: 568, actionMenuHeight: height, showsReactions: true)
+        #expect(height < MessageActionsPresentation.actionMenuHeight(actionCount: count))
+        #expect(layout.groupTop >= 0)
+        #expect(layout.groupTop + layout.groupHeight <= 568)
+    }
+
+    @Test(arguments: [DynamicTypeSize.large, .accessibility3])
+    func confirmationKeepsDeliveryFooterSizeStable(dynamicType: DynamicTypeSize) {
+        func size(_ status: MessageStatus) -> CGSize {
+            let host = UIHostingController(rootView: MessageMetadataFooter(
+                time: "12:34", isEdited: false, status: status, isFromMe: true
+            ).environment(\.dynamicTypeSize, dynamicType))
+            return host.sizeThatFits(in: CGSize(width: 300, height: 100))
+        }
+        let pending = size(.sending)
+        let confirmed = size(.sent)
+        #expect(abs(pending.height - confirmed.height) < 0.1)
+        #expect(abs(pending.width - confirmed.width) < 0.1)
+    }
+
     @Test func deliveryFooterUsesCompactSymbols() {
         #expect(MessageFooterPresentation.value(for: .sent, isFromMe: true).systemImage == "checkmark")
         #expect(MessageFooterPresentation.value(for: .sending, isFromMe: true).systemImage == "clock")

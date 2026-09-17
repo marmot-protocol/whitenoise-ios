@@ -1,14 +1,16 @@
-mdk-sha: 4800db0e2901b5be996f32d095f8aabb6d7ae013
+mdk-sha: fcc6f67609113f9bb1547b7de0ba22c65437ccd3
 mdk-branch: master
-mdk-tag: marmotkit-v0.10.0
-published-at: 2026-09-16T08:04:05Z
+mdk-tag: marmotkit-v0.10.1
+published-at: 2026-09-17T00:21:37Z
 uniffi-version: 0.29.4
 features: otlp-export,product-analytics-export
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
 rust-release-opt-level: 3
 rust-release-codegen-units: 16
-swiftpm-checksum: 753eb0ecdf69b2078d4d40fc3b73dba7ba68ebcccb69036d50f0ff7a0387e531
+swiftpm-checksum: 44c959ffa62aa76307ad8b6ced0342042a0a4d31224e3da46ad0aa1d11ff8e22
+distribution: static-library-and-privacy-v1
+privacy-sha256: 3759ff2493741386342599b39673989a461f491ad1fb207a7133a2b0035140f7
 
 Notes:
 - Refresh from a published immutable artifact with:

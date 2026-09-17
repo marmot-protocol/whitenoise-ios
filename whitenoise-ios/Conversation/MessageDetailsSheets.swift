@@ -184,6 +184,7 @@ struct ReactionDetailsSheet: View {
     let onRemoveOwnReaction: ((String) -> Void)?
     var identityName: ((String) -> String)?
     var identityAvatar: ((String) -> URL?)?
+    var identityAvatarAsset: ((String) -> AvatarAssetFfi?)?
     @State private var selectedEmoji: String?
 
     init(
@@ -191,12 +192,14 @@ struct ReactionDetailsSheet: View {
         initialEmoji: String?,
         onRemoveOwnReaction: ((String) -> Void)? = nil,
         identityName: ((String) -> String)? = nil,
-        identityAvatar: ((String) -> URL?)? = nil
+        identityAvatar: ((String) -> URL?)? = nil,
+        identityAvatarAsset: ((String) -> AvatarAssetFfi?)? = nil
     ) {
         self.details = details
         self.onRemoveOwnReaction = onRemoveOwnReaction
         self.identityName = identityName
         self.identityAvatar = identityAvatar
+        self.identityAvatarAsset = identityAvatarAsset
         _selectedEmoji = State(initialValue: initialEmoji)
     }
 
@@ -319,11 +322,17 @@ struct ReactionDetailsSheet: View {
         let isMe = user.sender == appState.activeAccount?.accountIdHex
 
         return HStack(spacing: 12) {
-            AvatarBubble(
-                seed: user.sender,
-                title: name,
-                pictureURL: identityAvatar != nil ? identityAvatar?(user.sender) : appState.avatarURL(forAccountIdHex: user.sender)
-            )
+            Group {
+                if let identityAvatarAsset {
+                    NativeAvatarBubble(seed: user.sender, title: name, asset: identityAvatarAsset(user.sender))
+                } else {
+                    AvatarBubble(
+                        seed: user.sender,
+                        title: name,
+                        pictureURL: identityAvatar != nil ? identityAvatar?(user.sender) : appState.avatarURL(forAccountIdHex: user.sender)
+                    )
+                }
+            }
             .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 2) {

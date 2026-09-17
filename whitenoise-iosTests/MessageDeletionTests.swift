@@ -126,6 +126,99 @@ struct MessageDeletionTests {
         let theirsCapability = viewModel.deleteCapability(for: theirs)
         #expect(theirsCapability.canDeleteForMe)
         #expect(theirsCapability.canDeleteForEveryone)
+        #expect(viewModel.canModerateReports)
+        #expect(viewModel.canReport(theirs))
+        appState.activeAccountRef = "replacement-account"
+        #expect(!viewModel.canModerateReports)
+        #expect(!viewModel.canReport(theirs))
+    }
+
+    @Test func moderationRefreshSurvivesNavigationAwayFromTheVisibleTimeline() throws {
+        let state = try appState(accountRef: "reports", accountIdHex: hex("11"))
+        state.setPhase(.ready)
+        #expect(state.visibleChat == nil)
+        state.moderationProjectionRoute = AppState.GroupRecoveryUpdate(accountID: hex("11"), groupID: "group")
+        let generation = try #require(state.runtimeEventsGeneration)
+        let update = RuntimeProjectionUpdateFfi(accountIdHex: hex("11"), accountLabel: "reports",
+            update: TimelineProjectionUpdateFfi(groupIdHex: "group", messages: [], changes: [],
+                chatListRow: nil, chatListTrigger: .snapshotRefresh))
+        state.handleRuntimeEvent(.projectionUpdated(update: update), generation: generation)
+        #expect(state.groupProjectionUpdate?.groupID == "group")
+        let token = state.groupProjectionUpdate?.id
+        var unrelated = update
+        unrelated.update.groupIdHex = "other-group"
+        state.handleRuntimeEvent(.projectionUpdated(update: unrelated), generation: generation)
+        #expect(state.groupProjectionUpdate?.id == token)
+        state.handleRuntimeEvent(.projectionUpdated(update: update), generation: generation - 1)
+        #expect(state.groupProjectionUpdate?.id == token)
+    }
+
+    @Test func reportingDoesNotRequireAdminOrMessageOwnership() throws {
+        let me = hex("11")
+        let other = hex("22")
+        let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Reports", admins: [other])
+        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
+        let model = ConversationViewModel(appState: state, group: group)
+        let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
+        let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
+        model.applyTimelinePage(TimelinePageFfi(messages: [
+            timelineRecord(id: mine.messageIdHex, groupId: group.groupIdHex, sender: me, at: 1),
+            timelineRecord(id: theirs.messageIdHex, groupId: group.groupIdHex, sender: other, at: 2)
+        ], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        #expect(model.canReport(mine))
+        #expect(model.canReport(theirs))
+        #expect(!model.canModerateReports)
+        #expect(!model.deleteCapability(for: theirs).canDeleteForEveryone)
+        #expect(!model.canReport(appRecord(id: "", groupId: group.groupIdHex, sender: me, direction: "sent")))
+    }
+
+    @Test func moderationPanelSeparatesDismissalFromDeletionAndHonorsPending() async throws {
+        let me = hex("11")
+        let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Moderation", admins: [me])
+        let state = try appState(accountRef: "moderation-\(UUID())", accountIdHex: me)
+        let conversation = ConversationViewModel(appState: state, group: group)
+        let message = timelineRecord(id: hex("55"), groupId: group.groupIdHex, at: 1)
+        let client = ModerationFixture(message: message)
+        let model = GroupModerationModel(client: client)
+        await model.load(conversation: conversation, appState: state)
+        #expect(model.entries.count == 2)
+        let first = try #require(model.entries.first)
+        await model.act(on: first, deleting: false, conversation: conversation, appState: state)
+        #expect(await client.dismissCalls == 1)
+        #expect(await client.deleteCalls == 0)
+        #expect(model.entries.count == 1)
+        #expect(model.entries.first?.message?.plaintext == message.plaintext)
+        let second = try #require(model.entries.first)
+        await client.setPending()
+        await model.act(on: second, deleting: true, conversation: conversation, appState: state)
+        #expect(model.pendingActions[second.id] == true)
+        #expect(model.entries.first?.message?.deleted == false)
+        await model.act(on: second, deleting: true, conversation: conversation, appState: state)
+        #expect(await client.deleteCalls == 1)
+        await client.finishDeletion()
+        await model.load(conversation: conversation, appState: state)
+        #expect(model.pendingActions.isEmpty)
+        #expect(model.entries.first?.message?.deleted == true)
+        #expect(model.entries.first?.message?.plaintext == "")
+    }
+
+    @Test func moderationPanelRejectsNonAdminsAndKeepsFailedActionsReviewable() async throws {
+        let me = hex("11")
+        var group = groupRecord(id: String(repeating: "ab", count: 16), name: "Moderation", admins: [])
+        let state = try appState(accountRef: "moderation-\(UUID())", accountIdHex: me)
+        let client = ModerationFixture(message: timelineRecord(id: hex("55"), groupId: group.groupIdHex, at: 1))
+        let model = GroupModerationModel(client: client)
+        await model.load(conversation: ConversationViewModel(appState: state, group: group), appState: state)
+        #expect(await client.readCalls == 0)
+        group.admins = [me]
+        let conversation = ConversationViewModel(appState: state, group: group)
+        await model.load(conversation: conversation, appState: state)
+        let entry = try #require(model.entries.first)
+        await client.setFailing()
+        await model.act(on: entry, deleting: false, conversation: conversation, appState: state)
+        #expect(model.error != nil)
+        #expect(model.entries.count == 2)
+        #expect(model.pendingActions.isEmpty)
     }
 
     @Test func viewModelCapabilityRejectsMissingAccountAndMalformedMessageIds() async throws {
@@ -588,6 +681,7 @@ struct MessageDeletionTests {
             agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            edit: nil,
             deleted: deleted,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
@@ -637,5 +731,49 @@ private actor DeleteOperationBarrier {
     func release() {
         releaseWaiter?.resume()
         releaseWaiter = nil
+    }
+}
+
+private actor ModerationFixture: GroupModerationClient {
+    var message: TimelineMessageRecordFfi
+    var dismissed = Set<String>()
+    var pending = false
+    var failing = false
+    private(set) var dismissCalls = 0
+    private(set) var deleteCalls = 0
+    private(set) var readCalls = 0
+
+    init(message: TimelineMessageRecordFfi) { self.message = message }
+    func setPending() { pending = true }
+    func setFailing() { failing = true }
+    func finishDeletion() {
+        message.deleted = true
+        message.plaintext = ""
+        pending = false
+    }
+    func contentReports(accountRef: String, groupID: String, after: String?) async throws -> ContentReportPageFfi {
+        readCalls += 1
+        return ContentReportPageFfi(reports: ["one", "two"].map {
+            ContentReportFfi(reportIdHex: $0, messageIdHex: message.messageIdHex,
+                messageAuthor: message.sender, reporter: message.sender, reason: .spam,
+                explanation: "", reportedAt: 1, dismissed: dismissed.contains($0))
+        }, nextCursor: nil)
+    }
+    func reportedMessage(accountRef: String, groupID: String, messageID: String) async throws -> TimelineMessageRecordFfi? { message }
+    func dismissReport(accountRef: String, groupID: String, reportID: String) async throws -> SendSummaryFfi {
+        dismissCalls += 1
+        if failing { throw URLError(.notConnectedToInternet) }
+        if !pending { dismissed.insert(reportID) }
+        return summary()
+    }
+    func deleteMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {
+        deleteCalls += 1
+        if failing { throw URLError(.notConnectedToInternet) }
+        if !pending { finishDeletion() }
+        return summary()
+    }
+    private func summary() -> SendSummaryFfi {
+        SendSummaryFfi(published: pending ? 0 : 1, messageIds: ["operation"],
+            acceptDisposition: pending ? .acceptedPending : .published, maintenanceDisposition: .ready)
     }
 }

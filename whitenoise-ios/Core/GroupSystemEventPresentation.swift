@@ -57,6 +57,27 @@ nonisolated enum GroupSystemEventPresentation {
         )
     }
 
+    static func displayText(
+        projected event: GroupSystemEventFfi,
+        sender: String,
+        currentAccountIdHex: String?,
+        displayName: DisplayNameResolver
+    ) -> String? {
+        guard event.provenance == .authenticatedGroupState else { return nil }
+        return Payload(event).resolvedText(
+            sender: sender, currentAccountIdHex: currentAccountIdHex,
+            displayName: { id in
+                if id == event.actorAccountIdHex, let name = event.actorDisplayName {
+                    return ContentSanitizer.displayName(name) ?? displayName(id)
+                }
+                if id == event.subjectAccountIdHex, let name = event.subjectDisplayName {
+                    return ContentSanitizer.displayName(name) ?? displayName(id)
+                }
+                return displayName(id)
+            }
+        )
+    }
+
     private static func parsePayload(_ plaintext: String) -> Payload? {
         // Same ceiling as the media-preview parser: a hostile multi-megabyte
         // payload must not force a full synchronous parse on the MainActor.

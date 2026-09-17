@@ -17,7 +17,8 @@ nonisolated enum MessageActionsPresentation {
         canForward: Bool,
         canEdit: Bool,
         canViewEditHistory: Bool,
-        canDelete: Bool
+        canDelete: Bool,
+        canReport: Bool = false
     ) -> Int {
         var count = 3 // Copy, Info, and Select.
         if canRetry { count += 1 }
@@ -26,11 +27,18 @@ nonisolated enum MessageActionsPresentation {
         if canEdit { count += 1 }
         if canViewEditHistory { count += 1 }
         if canDelete { count += 1 }
+        if canReport { count += 1 }
         return count
     }
 
     static func actionMenuHeight(actionCount: Int) -> CGFloat {
         CGFloat(actionCount) * actionHeight + actionVerticalPadding * 2
+    }
+
+    static func visibleActionHeight(actionCount: Int, containerHeight: CGFloat, showsReactions: Bool) -> CGFloat {
+        let reserved = verticalMargin * 2 + minimumPreviewHeight + surfaceGap
+            + (showsReactions ? reactionHeight + surfaceGap : 0)
+        return min(actionMenuHeight(actionCount: actionCount), max(actionHeight, containerHeight - reserved))
     }
 
     static func reactionWidth(itemCount: Int, maximumWidth: CGFloat) -> CGFloat {
@@ -99,11 +107,13 @@ struct MessageActionsMenu: View {
     let canEdit: Bool
     let canViewEditHistory: Bool
     let canDelete: Bool
+    var canReport: Bool = false
     let quickReactions: [String]
     let selectedReaction: String?
     let previewHeight: CGFloat
     let alignsTrailing: Bool
     let surfaceWidth: CGFloat
+    var maximumActionHeight: CGFloat? = nil
     let onRetry: () -> Void
     let onReact: (String) -> Void
     let onReply: () -> Void
@@ -115,6 +125,7 @@ struct MessageActionsMenu: View {
     let onSelect: () -> Void
     let onDelete: () -> Void
     let onMoreEmoji: () -> Void
+    var onReport: () -> Void = {}
 
     var body: some View {
         VStack(
@@ -127,31 +138,42 @@ struct MessageActionsMenu: View {
                 .frame(height: previewHeight)
                 .allowsHitTesting(false)
 
-            VStack(spacing: 0) {
-                if canRetry {
-                    actionRow("Retry send", systemImage: "arrow.clockwise", action: onRetry)
-                }
-                if canInteract {
-                    actionRow("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
-                }
-                if canForward {
-                    actionRow("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
-                }
-                if canEdit {
-                    actionRow("Edit", systemImage: "pencil", action: onEdit)
-                }
-                if canViewEditHistory {
-                    actionRow("View edit history", systemImage: "clock.arrow.circlepath", action: onViewEditHistory)
-                }
-                actionRow("Copy", systemImage: "doc.on.doc", action: onCopy)
-                actionRow("Select", systemImage: "checkmark.circle", action: onSelect)
-                actionRow("Info", systemImage: "info.circle", action: onInfo)
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    if canRetry {
+                        actionRow("Retry send", systemImage: "arrow.clockwise", action: onRetry)
+                    }
+                    if canInteract {
+                        actionRow("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
+                    }
+                    if canForward {
+                        actionRow("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
+                    }
+                    if canEdit {
+                        actionRow("Edit", systemImage: "pencil", action: onEdit)
+                    }
+                    if canViewEditHistory {
+                        actionRow("View edit history", systemImage: "clock.arrow.circlepath", action: onViewEditHistory)
+                    }
+                    actionRow("Copy", systemImage: "doc.on.doc", action: onCopy)
+                    actionRow("Select", systemImage: "checkmark.circle", action: onSelect)
+                    actionRow("Info", systemImage: "info.circle", action: onInfo)
 
-                if canDelete {
-                    actionRow("Delete", systemImage: "trash", role: .destructive, action: onDelete)
+                    if canReport {
+                        actionRow("Report", systemImage: "flag", action: onReport)
+                    }
+                    if canDelete {
+                        actionRow("Delete", systemImage: "trash", role: .destructive, action: onDelete)
+                    }
                 }
+                .padding(.vertical, MessageActionsPresentation.actionVerticalPadding)
             }
-            .padding(.vertical, MessageActionsPresentation.actionVerticalPadding)
+            .frame(height: maximumActionHeight ?? MessageActionsPresentation.actionMenuHeight(
+                actionCount: MessageActionsPresentation.actionCount(canRetry: canRetry, canInteract: canInteract,
+                    canForward: canForward, canEdit: canEdit, canViewEditHistory: canViewEditHistory,
+                    canDelete: canDelete, canReport: canReport)
+            ))
+            .clipShape(.rect(cornerRadius: 32))
             .frame(width: MessageActionsPresentation.menuWidth)
             .background(.regularMaterial, in: .rect(cornerRadius: 32))
             .overlay {

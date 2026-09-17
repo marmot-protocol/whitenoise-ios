@@ -33,6 +33,11 @@ swift=(mdk/'crates/marmot-uniffi/output/MarmotKit.swift').read_text()
 import re
 text=(package/'Package.swift').read_text()
 text=re.sub(r'let marmotKitLocalPath: String\? = .*', 'let marmotKitLocalPath: String? = "Artifacts/MarmotKit.xcframework"',text)
+resources=package/'Sources/MarmotKit/Resources'
+resources.mkdir(exist_ok=True)
+shutil.copy2(mdk/'crates/marmot-uniffi/output/PrivacyInfo.xcprivacy', resources/'PrivacyInfo.xcprivacy')
+if 'resources: [.copy("Resources/PrivacyInfo.xcprivacy")]' not in text:
+    text=text.replace('path: "Sources/MarmotKit",', 'path: "Sources/MarmotKit",\n            resources: [.copy("Resources/PrivacyInfo.xcprivacy")],')
 (package/'Package.swift').write_text(text)
 manifest['installation']='local; immutable snapshot required before merge'
 manifest['xcode']=subprocess.check_output(['xcodebuild','-version'],text=True).strip().splitlines()

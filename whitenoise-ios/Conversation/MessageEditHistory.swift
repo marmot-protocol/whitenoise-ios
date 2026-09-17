@@ -1,10 +1,8 @@
 import SwiftUI
 import MarmotKit
 
-/// Projects a message's durable kind-1009 edit records into the rows shown by
-/// the edit-history sheet. The engine exposes no version-read API; versions
-/// are sourced from the timeline's edit records, which the edit projection
-/// cache already retains per target message.
+/// Legacy raw-timeline edit history formatting. Prepared conversations load
+/// accepted versions directly from MDK in the sheet below.
 nonisolated enum EditHistoryPresentation {
     /// Bounds sanitized row bodies to the plain-text flattener's own budget,
     /// so hostile content is capped once, consistently.
@@ -97,15 +95,34 @@ struct EditHistorySheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let rows: [EditHistoryPresentation.Row]
+    var editCount: UInt64 = 0
+    var loadPage: ((TimelineEditVersionFfi?) async throws -> TimelineEditHistoryPageFfi)?
+    @State private var loadedRows: [EditHistoryPresentation.Row] = []
+    @State private var cursor: TimelineEditVersionFfi?
+    @State private var hasMore = false
+    @State private var isLoading = false
+    @State private var failed = false
+    @State private var loadTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
-            List(rows) { row in
-                versionCard(row)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowSeparator(.hidden)
+            List {
+                ForEach(loadPage == nil ? rows : loadedRows) { row in
+                    versionCard(row)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowSeparator(.hidden)
+                }
+                if isLoading { ProgressView() }
+                if failed || hasMore {
+                    Button(failed ? L10n.string("Retry") : L10n.string("Load more")) {
+                        loadTask = Task { await loadNextPage() }
+                    }
+                    .disabled(isLoading)
+                }
             }
+            .task { if loadPage != nil { await loadNextPage() } }
+            .onDisappear { loadTask?.cancel() }
             .listStyle(.plain)
             .navigationTitle("Edit history")
             .navigationBarTitleDisplayMode(.inline)
@@ -117,6 +134,37 @@ struct EditHistorySheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    @MainActor
+    private func loadNextPage() async {
+        guard let loadPage, !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let page = try await loadPage(cursor)
+            try Task.checkCancellation()
+            let offset = loadedRows.count
+            let known = Set(loadedRows.map(\.id))
+            loadedRows += page.versions.reversed().enumerated().compactMap { index, version in
+                guard !known.contains(version.messageIdHex) else { return nil }
+                return EditHistoryPresentation.Row(
+                    id: version.messageIdHex,
+                    versionNumber: max(1, Int(clamping: editCount) - offset - index),
+                    body: ContentSanitizer.compactSingleLine(version.plaintext,
+                        maxLength: EditHistoryPresentation.maxRowBodyLength) ?? "",
+                    recordedAt: version.editedAt, isCurrent: offset == 0 && index == 0,
+                    isOriginal: false
+                )
+            }
+            hasMore = page.hasMoreBefore && page.versions.first != nil
+            cursor = page.versions.first
+            failed = false
+        } catch is CancellationError {
+            return
+        } catch {
+            failed = true
+        }
     }
 
     private func versionCard(_ row: EditHistoryPresentation.Row) -> some View {

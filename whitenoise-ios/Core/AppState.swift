@@ -425,6 +425,9 @@ final class AppState {
     }
 
     var groupRecoveryUpdate: GroupRecoveryUpdate?
+    var groupProjectionUpdate: GroupRecoveryUpdate?
+    // Review is a separate destination; timeline visibility ends when it is pushed.
+    @ObservationIgnored var moderationProjectionRoute: GroupRecoveryUpdate?
 
     struct GroupRecoveryUpdate: Equatable {
         let accountID: String
@@ -434,6 +437,12 @@ final class AppState {
 
     func handleRuntimeEvent(_ event: MarmotEventFfi, generation: Int) {
         guard runtimeEventsGeneration == generation else { return }
+        if case .projectionUpdated(let update) = event,
+           activeAccount?.accountIdHex == update.accountIdHex,
+           moderationProjectionRoute?.accountID == update.accountIdHex,
+           moderationProjectionRoute?.groupID == update.update.groupIdHex {
+            groupProjectionUpdate = GroupRecoveryUpdate(accountID: update.accountIdHex, groupID: update.update.groupIdHex)
+        }
         if case .groupStateUpdated(let accountID, _, let groupID) = event,
            activeAccount?.accountIdHex == accountID,
            visibleChat?.groupIdHex == groupID {

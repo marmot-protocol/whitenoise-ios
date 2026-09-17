@@ -15,7 +15,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func timelineConversionKeepsContentTokens() {
         let record = TimelineMessageRecordFfi(
-            messageIdHex: "01",
+            hasReports: false, messageIdHex: "01",
             sourceMessageIdHex: "02",
             sourceEpoch: 7,
             retentionSeconds: 300,
@@ -36,6 +36,7 @@ struct MarkdownTokenThreadingTests {
             agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            edit: nil,
             deleted: false,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
@@ -145,6 +146,7 @@ struct MarkdownTokenThreadingTests {
             agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            edit: nil,
             deleted: false,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
@@ -221,7 +223,7 @@ struct MarkdownTokenThreadingTests {
         retentionExpiresAt: UInt64?
     ) -> TimelineMessageRecordFfi {
         TimelineMessageRecordFfi(
-            messageIdHex: "01",
+            hasReports: false, messageIdHex: "01",
             sourceMessageIdHex: "02",
             sourceEpoch: sourceEpoch,
             retentionSeconds: retentionSeconds,
@@ -242,6 +244,7 @@ struct MarkdownTokenThreadingTests {
             agentTextStreamJson: nil,
             groupSystem: nil,
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+            edit: nil,
             deleted: false,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil

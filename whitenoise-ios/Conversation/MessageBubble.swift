@@ -112,6 +112,7 @@ struct MessageBubble: View {
     var projectedReactionTotal: UInt64? = nil
     var identityName: ((String) -> String)? = nil
     var identityAvatar: ((String) -> URL?)? = nil
+    var identityAvatarAsset: ((String) -> AvatarAssetFfi?)? = nil
     var onShowReactionDetails: (String?) -> Void = { _ in }
     var onReplyPreviewTap: () -> Void = {}
     var onLoadMedia = ConversationMediaLoader { _ in Data() }
@@ -222,7 +223,9 @@ struct MessageBubble: View {
                     showsAvatar: clusterPresentation.showsAvatar,
                     projectedName: identityName?(record.sender),
                     projectedAvatar: identityAvatar?(record.sender),
-                    usesProjection: identityAvatar != nil
+                    usesProjection: identityAvatar != nil,
+                    nativeAsset: identityAvatarAsset?(record.sender),
+                    usesNativeAsset: identityAvatarAsset != nil
                 )
             }
 
@@ -918,11 +921,15 @@ private struct GroupMessageIdentityLane: View {
     var projectedName: String? = nil
     var projectedAvatar: URL? = nil
     var usesProjection = false
+    var nativeAsset: AvatarAssetFfi?
+    var usesNativeAsset = false
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
-            if showsAvatar {
+            if showsAvatar, usesNativeAsset {
+                NativeAvatarBubble(seed: accountIdHex, title: projectedName ?? L10n.string("Unknown user"), asset: nativeAsset)
+            } else if showsAvatar {
                 AvatarBubble(
                     seed: accountIdHex,
                     title: projectedName ?? appState.displayName(forAccountIdHex: accountIdHex),

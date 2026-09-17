@@ -566,6 +566,7 @@ struct ChatListPreviewCacheTests {
         deleted: Bool = false
     ) -> ChatListMessagePreviewFfi {
         ChatListMessagePreviewFfi(
+            groupSystem: nil,
             messageIdHex: messageIdHex,
             sender: sender,
             senderDisplayName: senderDisplayName,

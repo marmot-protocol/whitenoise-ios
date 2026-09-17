@@ -666,3 +666,33 @@ Marmot root. Automated simulator checks do not replace these device checks.
       offers View Profile. Follow it to the profile, unblock via Block or Unblock
       User, and return: the notice disappears and sending resumes once MDK confirms
       availability. An unavailable unblocked chat must not claim the peer is blocked.
+
+## MarmotKit 0.10.1 reporting and avatar adoption
+
+- [ ] With two upgraded devices in a group, a non-admin can long-press their own
+      or another member's message and choose **Report**. Check the reason picker,
+      optional explanation, encrypted-group disclosure, send failure and pending
+      delivery feedback. The full actions menu must remain scrollable/reachable
+      on a small iPhone and with accessibility text sizes.
+- [ ] Only active admins see **Group Info → Moderation**. Reports on older or
+      personally blocked senders' messages appear using the current message
+      projection. New reports and other admins' decisions refresh the panel.
+- [ ] **Dismiss Report** removes only that report from the open review list and
+      preserves the message, its attachments, and other reports on the message.
+      **Delete Message** confirms the destructive action and removes the target
+      content on upgraded peers. An unreported message can also be deleted by an
+      admin from its long-press menu. A demoted admin cannot submit either action.
+- [ ] With relays unavailable, accepted moderation remains visibly pending and
+      cannot be repeatedly submitted from the panel. Reconnection applies the
+      actual MDK projection; no report or dismissal creates an ordinary chat row,
+      unread increment, or chat notification. Older peers may retain content.
+- [ ] Scroll chat lists and conversations, open group/contact info and reaction
+      details, then reopen offline: MDK-provided avatars remain available. Change
+      an avatar on another device and check refresh without a title, unread,
+      scroll-position, or pending-message jump. Pending invitations must not load
+      remote avatars. Switch profiles and suspend/resume during acquisition;
+      another profile's pixels must never appear.
+- [ ] Validate the in-place staging upgrade on a physical device with existing
+      accounts and groups. MDK 0.10.1 advances account storage migrations; a
+      subsequent downgrade is unsupported. No reset or re-import is part of the
+      normal upgrade.

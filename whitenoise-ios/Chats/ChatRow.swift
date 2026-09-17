@@ -18,7 +18,9 @@ struct ChatRow: View {
                 seed: item.avatarSeed,
                 title: title,
                 pictureURL: avatarURLForDisplay,
-                loadPriority: .chatList
+                loadPriority: .chatList,
+                nativeAsset: item.row.pendingConfirmation ? nil : item.avatarAsset,
+                usesNativeAsset: item.selectedAvatar != nil
             )
             .frame(width: 56, height: 56)
 
@@ -314,10 +316,20 @@ struct GroupAvatarBubble: View {
     let title: String
     var pictureURL: URL? = nil
     var loadPriority: GroupAvatarLoadPriority = .foreground
+    var nativeAsset: AvatarAssetFfi?
+    var usesNativeAsset = false
 
     @State private var phase = Phase.idle
 
     var body: some View {
+        if usesNativeAsset {
+            NativeAvatarBubble(seed: seed, title: title, asset: nativeAsset)
+        } else {
+            legacyBody
+        }
+    }
+
+    private var legacyBody: some View {
         GeometryReader { proxy in
             let request = request(
                 size: proxy.size,

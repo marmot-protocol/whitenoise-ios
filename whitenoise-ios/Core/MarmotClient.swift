@@ -97,6 +97,17 @@ nonisolated final class MarmotClient: Sendable {
         )
     }
 
+    func messageEditHistory(
+        accountRef: String, groupID: String, messageID: String,
+        before: TimelineEditVersionFfi?
+    ) async throws -> TimelineEditHistoryPageFfi {
+        try await Task.detached { [marmot] in
+            try marmot.messageEditHistory(accountRef: accountRef, groupIdHex: groupID,
+                targetMessageIdHex: messageID, beforeEditedAt: before?.editedAt,
+                beforeMessageIdHex: before?.messageIdHex, limit: 100)
+        }.value
+    }
+
     func freshRuntime() throws -> MarmotClient {
         try MarmotClient(rootPath: rootPath, relayUrls: relayUrls, cursorPersistence: cursorPersistence)
     }
@@ -851,6 +862,29 @@ nonisolated final class MarmotClient: Sendable {
             accountRef: accountRef,
             groupIdHex: groupIdHex
         )
+    }
+
+    func contentReports(accountRef: String, groupID: String, after: String?) async throws -> ContentReportPageFfi {
+        try await Task.detached { [marmot] in
+            try marmot.contentReports(accountRef: accountRef, groupIdHex: groupID, messageId: nil, after: after, limit: 50)
+        }.value
+    }
+
+    func reportedMessage(accountRef: String, groupID: String, messageID: String) async throws -> TimelineMessageRecordFfi? {
+        try await Task.detached { [marmot] in
+            try marmot.reportedMessage(accountRef: accountRef, groupIdHex: groupID, messageId: messageID)
+        }.value
+    }
+
+    func reportMessage(accountRef: String, groupID: String, messageID: String,
+                       reason: ReportReasonFfi, explanation: String) async throws -> SendSummaryFfi {
+        try await marmot.reportMessage(accountRef: accountRef, groupIdHex: groupID,
+                                      messageId: messageID, reason: reason, explanation: explanation)
+    }
+
+    func dismissReport(accountRef: String, groupID: String, reportID: String) async throws -> SendSummaryFfi {
+        try await marmot.dismissReports(accountRef: accountRef, groupIdHex: groupID,
+                                       reportIds: [reportID], explanation: "")
     }
 
     func deleteMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {

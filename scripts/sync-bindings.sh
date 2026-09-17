@@ -37,6 +37,7 @@ BINARY_ASSET="MarmotKitFFI-$RELEASE_ID.xcframework.zip"
 SWIFT_ASSET="MarmotKit-$RELEASE_ID.swift"
 MANIFEST_ASSET="marmotkit-ios-$RELEASE_ID.manifest.json"
 CHECKSUMS_ASSET="marmotkit-ios-$RELEASE_ID.checksums.txt"
+PRIVACY_ASSET="PrivacyInfo-ios-$RELEASE_ID.xcprivacy"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -102,9 +103,56 @@ if [[ -z "$UNIFFI_VERSION" ]]; then
     exit 1
 fi
 
+# Static-library releases carry privacy declarations separately from the binary.
+DISTRIBUTION="$(plutil -extract distribution raw -o - "$TEMP_DIR/$MANIFEST_ASSET" 2>/dev/null || true)"
+if [[ "$DISTRIBUTION" == "static-library-and-privacy-v1" ]]; then
+    download "$PRIVACY_ASSET"
+    download "$PRIVACY_ASSET.sha256"
+    EXPECTED_PRIVACY_SHA="$(awk -v file="$PRIVACY_ASSET" '$1 == "sha256" && $3 == file { print $2 }' "$TEMP_DIR/$CHECKSUMS_ASSET")"
+    COMPUTED_PRIVACY_SHA="$(shasum -a 256 "$TEMP_DIR/$PRIVACY_ASSET" | awk '{ print $1 }')"
+    SIDECAR_PRIVACY_SHA="$(awk '{ print $1 }' "$TEMP_DIR/$PRIVACY_ASSET.sha256")"
+    if [[ ! "$EXPECTED_PRIVACY_SHA" =~ ^[0-9a-f]{64}$ || "$COMPUTED_PRIVACY_SHA" != "$EXPECTED_PRIVACY_SHA" || "$SIDECAR_PRIVACY_SHA" != "$EXPECTED_PRIVACY_SHA" ]]; then
+        echo "error: privacy resource checksum mismatch" >&2
+        exit 1
+    fi
+    plutil -lint "$TEMP_DIR/$PRIVACY_ASSET"
+elif [[ -n "$DISTRIBUTION" ]]; then
+    echo "error: unsupported MarmotKit distribution: $DISTRIBUTION" >&2
+    exit 1
+fi
+
+python3 - "$TEMP_DIR/$MANIFEST_ASSET" "$TEMP_DIR" "$RELEASE_ID" "$RELEASE_TAG" <<'PYVERIFY'
+import hashlib, json, pathlib, sys
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text())
+root = pathlib.Path(sys.argv[2])
+assert manifest['release_identifier'] == sys.argv[3], 'release identifier mismatch'
+assert manifest['release_tag'] == sys.argv[4], 'release tag mismatch'
+for name, metadata in manifest['artifacts'].items():
+    path = root / name
+    if path.is_file():
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == metadata['sha256'], f'{name}: manifest checksum mismatch'
+PYVERIFY
+
 echo "==> Installing generated Swift source"
 cp "$TEMP_DIR/$SWIFT_ASSET" "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
 perl -pi -e 's/[ \t]+$//' "$PACKAGE_DIR/Sources/MarmotKit/MarmotKit.swift"
+
+if [[ "$DISTRIBUTION" == "static-library-and-privacy-v1" ]]; then
+    mkdir -p "$PACKAGE_DIR/Sources/MarmotKit/Resources"
+    cp "$TEMP_DIR/$PRIVACY_ASSET" "$PACKAGE_DIR/Sources/MarmotKit/Resources/PrivacyInfo.xcprivacy"
+    python3 - "$PACKAGE_DIR/Package.swift" <<'PYRESOURCE'
+import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+if 'resources: [.copy("Resources/PrivacyInfo.xcprivacy")]' not in text:
+    text = text.replace('path: "Sources/MarmotKit",', 'path: "Sources/MarmotKit",\n            resources: [.copy("Resources/PrivacyInfo.xcprivacy")],')
+path.write_text(text)
+PYRESOURCE
+else
+    # Older framework releases embed their own SDK manifest.
+    rm -f "$PACKAGE_DIR/Sources/MarmotKit/Resources/PrivacyInfo.xcprivacy"
+    sed -i '' '/resources: \[.copy("Resources\/PrivacyInfo.xcprivacy")\],/d' "$PACKAGE_DIR/Package.swift"
+fi
 
 echo "==> Pinning remote binary target"
 sed -i '' -E 's|^let marmotKitLocalPath: String\? = .*|let marmotKitLocalPath: String? = nil|' "$PACKAGE_DIR/Package.swift"
@@ -131,6 +179,8 @@ ios-deployment-target: 18.0
 rust-release-opt-level: $RUST_OPT_LEVEL
 rust-release-codegen-units: $RUST_CODEGEN_UNITS
 swiftpm-checksum: $EXPECTED_BINARY_CHECKSUM
+distribution: ${DISTRIBUTION:-legacy-framework}
+privacy-sha256: ${EXPECTED_PRIVACY_SHA:-embedded-in-framework}
 
 Notes:
 - Refresh from a published immutable artifact with:

@@ -251,6 +251,7 @@ final class ConversationViewModel {
     var replyTargetMessageIdHex: String? { composer.replyTargetMessageIdHex }
 
     private weak var appState: AppState?
+    private let moderationAccountRef: String?
     private let initialTitle: String?
     private let initialOtherMember: String?
     private let initialMemberCount: Int?
@@ -774,6 +775,19 @@ final class ConversationViewModel {
         timelineStore.hasEditHistory(messageIdHex)
     }
 
+    func loadEditHistory(messageID: String, before: TimelineEditVersionFfi?) async throws -> TimelineEditHistoryPageFfi {
+        guard let appState, let account = appState.activeAccountRef else { throw CancellationError() }
+        let client = try appState.currentMarmotClient()
+        let page = try await client.messageEditHistory(accountRef: account, groupID: group.groupIdHex,
+            messageID: messageID, before: before)
+        guard appState.activeAccountRef == account, appState.client === client else { throw CancellationError() }
+        return page
+    }
+
+    func editCount(for messageID: String) -> UInt64 {
+        timelineStore.editProjections.preparedEditCount(messageID) ?? 0
+    }
+
     func editHistory(for messageIdHex: String) -> [EditHistoryPresentation.Row] {
         timelineStore.editHistory(for: messageIdHex)
     }
@@ -847,6 +861,7 @@ final class ConversationViewModel {
         durableRetryOperations: DurableRetryOperations = .live
     ) {
         self.appState = appState
+        self.moderationAccountRef = appState.activeAccountRef
         self.group = group
         self.leaveRequestPending = leaveRequestPending || group.leaveRequestPending
         self.initialTitle = initialTitle
@@ -1044,6 +1059,18 @@ final class ConversationViewModel {
             if accepted != nil { return record }
         }
         return nil
+    }
+
+    func canReport(_ message: AppMessageRecordFfi) -> Bool {
+        moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
+            && canSendMessages && !groupDisplay.isDirectMessage
+            && canonicalDeleteRecord(for: message) != nil
+            && !isDeleted(message.messageIdHex)
+    }
+
+    var canModerateReports: Bool {
+        moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
+            && canSendMessages && isSelfAdmin && !groupDisplay.isDirectMessage
     }
 
     func deleteCapability(for message: AppMessageRecordFfi) -> MessageDeleteCapability {
@@ -1376,7 +1403,11 @@ final class ConversationViewModel {
     }
 
     func installConversationWindow(_ snapshot: ConversationWindowSnapshotFfi) {
-        if conversationWindow?.messages != snapshot.messages || conversationWindow?.identities != snapshot.identities {
+        let nextIdentities = Dictionary(snapshot.identities.map { ($0.accountIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
+        let changedNames = Set(windowIdentities.keys).union(nextIdentities.keys).filter {
+            windowIdentities[$0]?.displayName != nextIdentities[$0]?.displayName
+        }
+        if conversationWindow?.messages != snapshot.messages || !changedNames.isEmpty {
             windowWillChange?(snapshot)
         }
         if conversationWindow == nil {
@@ -1391,8 +1422,7 @@ final class ConversationViewModel {
         if let accountRef = appState?.activeAccountRef {
             appState?.conversationDraftStore.receiveSelection(snapshot.draft, accountRef: accountRef, groupIdHex: group.groupIdHex)
         }
-        let previousIdentities = windowIdentities
-        windowIdentities = Dictionary(snapshot.identities.map { ($0.accountIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
+        windowIdentities = nextIdentities
         let previousReactions = windowReactions
         windowReactions = Dictionary(snapshot.messages.map { ($0.timeline.messageIdHex, $0.references.reactions) }, uniquingKeysWith: { _, latest in latest })
         for message in snapshot.messages where previousReactions[message.timeline.messageIdHex] != message.references.reactions {
@@ -1405,12 +1435,11 @@ final class ConversationViewModel {
         readMarker.seedFlushedWatermark(messageIdHex: snapshot.readState.lastReadMessageIdHex)
         timelineStore.applyConversationWindowPage(TimelinePageFfi(messages: snapshot.messages.map(\.timeline),
             hasMoreBefore: snapshot.hasMoreBefore, hasMoreAfter: snapshot.hasMoreAfter))
-        if previousIdentities != windowIdentities {
-            let changed = Set(previousIdentities.keys).union(windowIdentities.keys).filter { previousIdentities[$0] != windowIdentities[$0] }
+        if !changedNames.isEmpty {
             let affected = Set(snapshot.messages.compactMap { message -> String? in
                 let references = message.references
                 let identities = Set(references.mentions + references.replyMentions + [references.sender, references.replyAuthor].compactMap { $0 })
-                return references.system != nil || !identities.isDisjoint(with: changed) ? message.timeline.messageIdHex : nil
+                return references.system != nil || !identities.isDisjoint(with: changedNames) ? message.timeline.messageIdHex : nil
             })
             timelineStore.refreshProfileDependentTimelineProjections(affectedMessageIDs: affected)
         }

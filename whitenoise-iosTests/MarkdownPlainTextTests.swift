@@ -200,6 +200,7 @@ struct MarkdownPlainTextTests {
 
     @Test func previewBodyFlattensWhenTokensPresent() {
         let preview = ChatListMessagePreviewFfi(
+            groupSystem: nil,
             messageIdHex: "01",
             sender: "11",
             senderDisplayName: nil,
@@ -221,6 +222,7 @@ struct MarkdownPlainTextTests {
     @Test func previewBodyIsUnchangedWhenTokensEmpty() {
         let raw = "**bold** _text_"
         let preview = ChatListMessagePreviewFfi(
+            groupSystem: nil,
             messageIdHex: "01",
             sender: "11",
             senderDisplayName: nil,

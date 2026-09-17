@@ -131,3 +131,77 @@ Logs from this checkout:
 
 Physical-device recovery of an existing broken group and a fresh cross-device
 reinvite remain manual checks. See `docs/manual-tests.md`.
+
+## Local master build for device exploration (2026-09-16)
+
+The current local package uses MDK `f420c355fb2f52c9edda1ce62620dd21900af56b`,
+with `otlp-export` and `product-analytics-export`. It was built from a clean,
+isolated checkout using `scripts/sync-local-bindings.sh`. `LOCAL_BUILD.json`
+records artifact hashes and toolchain; the XCFramework remains ignored.
+This is an unpublished local override, not a MarmotKit release pin.
+
+Host compatibility changes:
+
+- Copy MDK's separately generated privacy manifest into the Swift package's
+  resource bundle. The new XCFramework contains raw static libraries, not a
+  codeless framework wrapper.
+- Render prepared edited bodies directly, consume their edit summary, and load
+  accepted edit versions through the paged, off-main history query. That query
+  excludes the original body; never label an effective edited body as original.
+- Use authenticated group-system projections and prepared chat-preview names.
+  Member-authored assertions must not become trusted membership/admin notices.
+- Preserve the handwritten native cancellation adapter and local-send display IDs.
+
+Do not publish the local artifact or its generated bindings as a release pin.
+A future published adoption must synchronize Swift, binary, privacy resource,
+checksums and provenance together. Physical-device validation remains separate.
+
+Local validation: both unsigned Release flavors and host privacy checks passed;
+app and NSE SDK resource manifests match the build output, with no framework
+wrapper embedded. The focused integration run passed 77 tests. The additional
+native/lifecycle run passed 45 of 47: two preexisting multi-account setup tests
+still reported SQLCipher “file is not a database”; native conversation and
+presentation-subscription cancellation tests passed. No physical-device or
+TestFlight upload validation is implied.
+
+## Published 0.10.1 adoption
+
+The local override above is superseded by `marmotkit-v0.10.1`, source and builder
+`fcc6f67609113f9bb1547b7de0ba22c65437ccd3`. The immutable SwiftPM binary checksum
+is `44c959ffa62aa76307ad8b6ced0342042a0a4d31224e3da46ad0aa1d11ff8e22`.
+`scripts/sync-bindings.sh` now verifies the separate privacy asset, its sibling
+checksum and manifest metadata before installation, and stages it as a Swift
+wrapper resource consumed by both app and NSE. The generated Swift matches the
+published asset after the installer's existing trailing-whitespace normalization.
+
+Chat rows, conversation headers, sender avatars and reaction details consume
+MDK avatar metadata. Visible views register demand and read protected native
+bytes; only transient decoded pixels remain in those views. Group/contact info
+uses the prepared header title and avatar, while roster/admin operations keep
+using MDK's combined group conversation snapshot. UI draft/send/scroll state and
+localized nickname overrides remain host-owned. Account attention continues to
+own badges independently of filtered chat windows.
+
+Group members can report through the long-press menu. Admin review pages native
+reports and reads `reportedMessage` so personal blocking does not hide review
+content. Dismissal labels and admin deletion are separate operations. Existing
+projection events refresh the review list, and pending acceptances are not shown
+as completed moderation. Native authorization is still decisive. Reports travel
+inside the encrypted group; this does not add centralized developer enforcement.
+
+Validation distinguishes the offline native fixture (report storage and pending
+moderation, not delivery) from deterministic host tests (permissions, dismissal
+versus deletion, pending duplicate prevention, failure retention, avatar-only
+updates). Physical-device, multi-device relay propagation, accessibility and
+upgrade checks remain in `docs/manual-tests.md`.
+
+Automated checks for the published pin passed: the 74-test integration run,
+follow-up native cancellation and notification suites, and the final 47-test
+projection/moderation/menu run. Avatar-only identity updates do not rebuild
+markdown or initiate scroll handling. Report review has a separately scoped
+projection observer, so pushing Group Info does not stop live review updates;
+account switches disable actions on the old conversation. Both final unsigned
+Release builds (Production and Staging), app/NSE privacy checks, SwiftLint and
+`git diff --check` passed. Version/build remain 2026.9.16 (37). These checks do
+not establish physical-device behavior, multi-device report delivery, or Store
+upload success.

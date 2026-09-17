@@ -612,6 +612,7 @@ extension ReceivedMessageFfi {
 
 extension ChatListMessagePreviewFfi {
     init(
+        groupSystem: GroupSystemEventFfi? = nil,
         messageIdHex: String,
         sender: String,
         senderDisplayName: String?,
@@ -622,6 +623,7 @@ extension ChatListMessagePreviewFfi {
         deleted: Bool
     ) {
         self.init(
+            groupSystem: groupSystem,
             messageIdHex: messageIdHex,
             sender: sender,
             senderDisplayName: senderDisplayName,
@@ -637,6 +639,7 @@ extension ChatListMessagePreviewFfi {
     }
 
     init(
+        groupSystem: GroupSystemEventFfi? = nil,
         messageIdHex: String,
         sender: String,
         senderDisplayName: String?,
@@ -646,6 +649,7 @@ extension ChatListMessagePreviewFfi {
         deleted: Bool
     ) {
         self.init(
+            groupSystem: groupSystem,
             messageIdHex: messageIdHex,
             sender: sender,
             senderDisplayName: senderDisplayName,
@@ -681,11 +685,14 @@ extension TimelineMessageRecordFfi {
         agentTextStreamJson: String?,
         groupSystem: GroupSystemEventFfi?,
         reactions: TimelineReactionSummaryFfi,
+        edit: TimelineEditSummaryFfi? = nil,
+        hasReports: Bool = false,
         deleted: Bool,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
         self.init(
+            hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
             sourceEpoch: nil,
@@ -707,6 +714,7 @@ extension TimelineMessageRecordFfi {
             agentTextStreamJson: agentTextStreamJson,
             groupSystem: groupSystem,
             reactions: reactions,
+            edit: edit,
             deleted: deleted,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus
@@ -731,11 +739,14 @@ extension TimelineMessageRecordFfi {
         agentTextStreamJson: String?,
         groupSystem: GroupSystemEventFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
+        edit: TimelineEditSummaryFfi? = nil,
+        hasReports: Bool = false,
         deleted: Bool,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
         self.init(
+            hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
             sourceEpoch: nil,
@@ -757,6 +768,7 @@ extension TimelineMessageRecordFfi {
             agentTextStreamJson: agentTextStreamJson,
             groupSystem: groupSystem,
             reactions: reactions,
+            edit: edit,
             deleted: deleted,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus

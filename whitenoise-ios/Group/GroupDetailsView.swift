@@ -91,6 +91,15 @@ struct GroupDetailsView: View {
                 membersSection
                 relaysSection
             }
+            if viewModel.canModerateReports {
+                Section {
+                    NavigationLink {
+                        GroupModerationView(conversation: viewModel)
+                    } label: {
+                        Label("Moderation", systemImage: "flag")
+                    }
+                }
+            }
             technicalDetailsSection
             destructiveActionsSection
             if blockablePeer != nil {
@@ -469,13 +478,12 @@ struct GroupDetailsView: View {
     private func groupAvatar(groupDisplay: GroupDisplay.Resolved, displayTitle: String) -> some View {
         GroupAvatarBubble(
             groupIdHex: viewModel.group.groupIdHex,
-            imageHashHex: viewModel.group.pendingConfirmation ? nil : viewModel.group.imageHashHex,
-            seed: GroupDisplay.avatarSeed(for: groupDisplay),
+            imageHashHex: viewModel.selectedImageHash,
+            seed: viewModel.selectedAvatarSeed,
             title: displayTitle,
-            pictureURL: viewModel.group.imageHashHex != nil
-                && ContentSanitizer.imageURL(viewModel.group.avatarUrl) == nil
-                ? nil
-                : GroupDisplay.avatarURL(for: groupDisplay, appState: appState)
+            pictureURL: viewModel.selectedAvatarURL,
+            nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
+            usesNativeAsset: viewModel.conversationWindow != nil
         )
         .frame(width: 104, height: 104)
     }
@@ -487,10 +495,10 @@ struct GroupDetailsView: View {
                     showContactProfile = true
                 } label: {
                     VStack(spacing: 10) {
-                        AvatarBubble(
+                        NativeAvatarBubble(
                             seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
                             title: contactTitle,
-                            pictureURL: contactAccountIdHex.flatMap { appState.avatarURL(forAccountIdHex: $0) }
+                            asset: viewModel.conversationWindow?.header.avatarAsset
                         )
                         .frame(width: 104, height: 104)
 
@@ -1116,13 +1124,7 @@ struct GroupDetailsView: View {
             ?? contactAccountIdHex.flatMap { appState.npub(forAccountIdHex: $0) }
     }
 
-    private var contactTitle: String {
-        guard let contactAccountIdHex else { return viewModel.displayTitle }
-        return IdentityPresentation.text(
-            accountIdHex: contactAccountIdHex,
-            knownName: appState.knownDisplayName(forAccountIdHex: contactAccountIdHex)
-        )
-    }
+    private var contactTitle: String { viewModel.displayTitle }
 
     private var nickname: String? {
         contactAccountIdHex.flatMap { appState.contactNickname(forAccountIdHex: $0) }

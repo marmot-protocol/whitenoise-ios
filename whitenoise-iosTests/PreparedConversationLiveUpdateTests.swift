@@ -35,7 +35,7 @@ struct PreparedConversationLiveUpdateTests {
                     contentTokens: .emptyDocument, kind: MessageSemantics.kindChat, tags: [], timelineAt: time,
                     receivedAt: time, replyToMessageIdHex: nil, replyPreview: nil, mediaJson: nil, media: [],
                     agentTextStreamJson: nil, groupSystem: nil,
-                    reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), deleted: false,
+                    reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil, deleted: false,
                     deletedByMessageIdHex: nil, invalidationStatus: nil)
             }
             func install(_ records: [TimelineMessageRecordFfi], reactions: [String: ConversationReactionsFfi] = [:]) {
@@ -48,6 +48,21 @@ struct PreparedConversationLiveUpdateTests {
                 }
                 model.installConversationWindow(snapshot)
             }
+            var edited = record("edited", 90, text: "accepted body")
+            edited.edit = TimelineEditSummaryFfi(editCount: 1, latestEditMessageIdHex: "edit-one", editedAt: 91)
+            install([edited])
+            #expect(model.isEdited("edited"))
+            #expect(model.hasEditHistory("edited"))
+            if case .message(let body, _) = model.timeline.first?.kind {
+                #expect(body.plaintext == "accepted body")
+            } else {
+                Issue.record("Expected accepted edit to retain its message row")
+            }
+            edited.edit = nil
+            edited.plaintext = "original body"
+            install([edited])
+            #expect(!model.isEdited("edited"))
+            #expect(!model.hasEditHistory("edited"))
             let old = record("old", 100)
             let new = record("new", 1) // Protocol order intentionally disagrees with timestamps.
             let pending = ConversationViewModel.appMessageRecord(from: record("", 101))
@@ -89,12 +104,18 @@ struct PreparedConversationLiveUpdateTests {
             #expect(model.reactions(for: "old").isEmpty)
             #expect(model.timelineStore.timelineRebuildCountForTesting == rebuilds)
             snapshot.identities = [.init(accountIdHex: account.accountIdHex, displayName: "New name",
-                avatar: snapshot.header.selected.avatar, hasCachedProfile: true)]
+                avatar: snapshot.header.selected.avatar, hasCachedProfile: true, avatarAsset: nil)]
             install([old, new, second])
             #expect(model.windowDisplayName(for: account.accountIdHex) == "New name")
+            let beforeAvatar = model.timelineStore.markdownProjections.buildCountForTesting
+            snapshot.identities[0].avatarAsset = AvatarAssetFfi(target: "native-target", reference: "native-reference",
+                availability: .ready, acquisition: nil, contentRevision: 1, byteCount: 40)
+            install([old, new, second])
+            #expect(model.windowIdentities[account.accountIdHex]?.avatarAsset?.contentRevision == 1)
+            #expect(model.timelineStore.markdownProjections.buildCountForTesting == beforeAvatar)
             let markdownBuilds = model.timelineStore.markdownProjections.buildCountForTesting
             snapshot.identities.append(.init(accountIdHex: "unreferenced", displayName: "Unused",
-                avatar: snapshot.header.selected.avatar, hasCachedProfile: true))
+                avatar: snapshot.header.selected.avatar, hasCachedProfile: true, avatarAsset: nil))
             install([old, new, second])
             #expect(model.timelineStore.markdownProjections.buildCountForTesting == markdownBuilds)
             // Once observed, a durable row follows bounded-window membership.

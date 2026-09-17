@@ -123,12 +123,26 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.21
 ```
 
-The app now pins the formal MarmotKit 0.10.0 release. For local reproduction only,
+The app now pins the formal MarmotKit 0.10.1 release. For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
 adapter using the released UniFFI native future cancellation API; preserve it on
 binding refresh and run its native cancellation test. Do not patch generated binding files directly or commit an expanded XCFramework. Change Rust/UniFFI, publish an immutable release, install it with the script, then validate the iOS app. The generated Swift source, binary URL, and checksum must always move together.
+
+Avatar metadata from presented rows, conversation headers and identity sidecars
+is authoritative. Request only visible `avatarAsset.target` values and read the
+returned opaque references through MDK. Preserve account/runtime isolation;
+decoded pixels are host presentation state, while acquisition and durable bytes
+belong to MDK. Do not fall back to a host URL fetch for a prepared placeholder.
+
+Group reports use encrypted group transport and are visible to group members.
+Dismissal labels resolve individual reports without deleting their message.
+Admin deletion uses `deleteMessage`; MDK authorizes it against source group state.
+Pending acceptance is not completed moderation. Refresh reports from projection
+updates, and use `reportedMessage` for the current deletion-masked content,
+including targets hidden by personal blocking. Keep report plaintext only in
+transient review state; MDK owns durable storage.
 
 ## Chat presentation and invitation recovery
 

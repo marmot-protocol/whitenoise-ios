@@ -368,6 +368,7 @@ struct GiphyEnvelopePreviewTests {
     private func chatListPreview(_ plaintext: String) -> String {
         MessagePreview.body(
             ChatListMessagePreviewFfi(
+                groupSystem: nil,
                 messageIdHex: "01",
                 sender: "11",
                 senderDisplayName: nil,

@@ -18,11 +18,27 @@ final class ConversationEditProjectionCache {
         let contentTokens: MarkdownDocumentFfi
     }
 
+    private var preparedSummaries: [String: TimelineEditSummaryFfi] = [:]
+    private var preparedIDs: Set<String> = []
+
     private var editsById: [String: StoredEdit] = [:]
     private var editIdsByTarget: [String: Set<String>] = [:]
     private var optimisticByTarget: [String: OptimisticEdit] = [:]
 
     var hasOptimistic: Bool { !optimisticByTarget.isEmpty }
+
+    func setPreparedRecord(_ record: AppMessageRecordFfi, edit: TimelineEditSummaryFfi?, deleted: Bool) {
+        preparedIDs.insert(record.messageIdHex)
+        preparedSummaries[record.messageIdHex] = edit
+        if deleted || optimisticByTarget[record.messageIdHex]?.plaintext == record.plaintext {
+            optimisticByTarget[record.messageIdHex] = nil
+        }
+    }
+
+    func preparedEditCount(_ id: String) -> UInt64? {
+        guard preparedIDs.contains(id) else { return nil }
+        return preparedSummaries[id]?.editCount ?? 0
+    }
 
     /// Mirrors an authoritative timeline row and returns every original message
     /// id whose displayed body may have changed.
@@ -59,7 +75,9 @@ final class ConversationEditProjectionCache {
 
     @discardableResult
     func removeRecord(messageIdHex: String) -> Set<String> {
-        removeStoredEdit(messageIdHex: messageIdHex)
+        preparedIDs.remove(messageIdHex)
+        preparedSummaries[messageIdHex] = nil
+        return removeStoredEdit(messageIdHex: messageIdHex)
     }
 
     func displayRecord(for base: AppMessageRecordFfi) -> AppMessageRecordFfi {
@@ -82,7 +100,7 @@ final class ConversationEditProjectionCache {
     }
 
     func isEdited(_ base: AppMessageRecordFfi) -> Bool {
-        replacement(for: base) != nil
+        (preparedSummaries[base.messageIdHex]?.editCount ?? 0) > 0 || replacement(for: base) != nil
     }
 
     func setOptimistic(
@@ -131,7 +149,8 @@ final class ConversationEditProjectionCache {
             return (optimistic.plaintext, optimistic.contentTokens)
         }
 
-        guard let edit = editRecords(for: base).last else { return nil }
+        guard !preparedIDs.contains(base.messageIdHex),
+              let edit = editRecords(for: base).last else { return nil }
         return (edit.plaintext, edit.contentTokens)
     }
 

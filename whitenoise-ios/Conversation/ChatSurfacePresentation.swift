@@ -507,6 +507,8 @@ struct MessageMetadataFooter: View {
             if showsDeliveryStatus, let systemImage = presentation.systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 10, weight: .semibold))
+                    // Clock and checkmark have different intrinsic widths.
+                    .frame(width: 12, height: 12)
                     .accessibilityLabel(presentation.accessibilityLabel ?? "")
             }
         }

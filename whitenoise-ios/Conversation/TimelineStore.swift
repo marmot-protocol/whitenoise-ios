@@ -533,7 +533,8 @@ final class TimelineStore {
         _ = timelineProjectionGeneration
         guard let record = messageById[messageIdHex] else { return false }
         return EditHistoryPresentation.shouldOffer(
-            editCount: editProjections.editRecords(for: record).count,
+            editCount: editProjections.preparedEditCount(messageIdHex).map { Int(clamping: $0) }
+                ?? editProjections.editRecords(for: record).count,
             isDeleted: deletedProjections.contains(messageIdHex)
         )
     }
@@ -562,6 +563,13 @@ final class TimelineStore {
 
     func groupSystemDisplayText(for record: AppMessageRecordFfi) -> String? {
         _ = timelineProjectionGeneration
+        if preparedOrder != nil {
+            guard let event = groupSystemByMessageId[record.messageIdHex] else { return nil }
+            return GroupSystemEventPresentation.displayText(
+                projected: event, sender: record.sender, currentAccountIdHex: myAccountId,
+                displayName: { self.resolvedAccountDisplayName($0) }
+            )
+        }
         let key = GroupSystemDisplayCacheKey(
             record: MessageTimelineSignature(record),
             profileGeneration: appState?.profileRefreshGeneration ?? 0
@@ -800,6 +808,10 @@ final class TimelineStore {
         if appRecord.direction == "sent" {
             nextDurableRowProjectionRevision &+= 1
             durableRowProjectionRevisionById[appRecord.messageIdHex] = nextDurableRowProjectionRevision
+        }
+        if preparedOrder != nil {
+            editProjections.setPreparedRecord(appRecord, edit: record.edit,
+                deleted: record.deleted || record.invalidationStatus != nil)
         }
         let semantics = MessageSemantics.classify(appRecord)
         let affectedEditTargets = editProjections.setRecord(
@@ -1081,6 +1093,10 @@ final class TimelineStore {
             guard agentEventProjections.display(for: item) != nil else { return nil }
             return item
         case .groupSystem:
+            if preparedOrder != nil,
+               groupSystemByMessageId[record.messageIdHex]?.provenance != .authenticatedGroupState {
+                return nil
+            }
             guard GroupSystemEventPresentation.isDisplayable(
                 record,
                 groupSystem: groupSystemByMessageId[record.messageIdHex]

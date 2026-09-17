@@ -569,6 +569,7 @@ struct ConversationView: View {
     @State private var editSession: ComposerEditSession?
     @State private var editSaveInFlight = false
     @State private var editHistoryTarget: ActionsTarget?
+    @State private var reportTarget: ActionsTarget?
     @State private var deleteTarget: ActionsTarget?
     @State private var failedSendTarget: FailedSendTarget?
     @State private var rowFrames = RowFrameStore()
@@ -859,7 +860,8 @@ struct ConversationView: View {
                             }
                         },
                         identityName: viewModel.windowDisplayName,
-                        identityAvatar: viewModel.windowAvatarURL
+                        identityAvatar: viewModel.windowAvatarURL,
+                        identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset }
                     )
                     .appAppearance()
                 }
@@ -904,9 +906,16 @@ struct ConversationView: View {
                 }
                 Button(L10n.string("Cancel"), role: .cancel) {}
             }
+            .sheet(item: $reportTarget) { target in
+                if let viewModel {
+                    ReportMessageSheet(conversation: viewModel, message: target.record).appAppearance()
+                }
+            }
             .sheet(item: $editHistoryTarget) { target in
                 if let viewModel {
-                    EditHistorySheet(rows: viewModel.editHistory(for: target.record.messageIdHex))
+                    EditHistorySheet(rows: [], editCount: viewModel.editCount(for: target.record.messageIdHex)) { before in
+                        try await viewModel.loadEditHistory(messageID: target.record.messageIdHex, before: before)
+                    }
                         .appAppearance()
                 }
             }
@@ -1496,7 +1505,9 @@ struct ConversationView: View {
                         imageHashHex: viewModel.selectedImageHash,
                         seed: viewModel.selectedAvatarSeed,
                         title: chrome.title,
-                        pictureURL: viewModel.selectedAvatarURL
+                        pictureURL: viewModel.selectedAvatarURL,
+                        nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
+                        usesNativeAsset: viewModel.conversationWindow != nil
                     )
                     .frame(width: 40, height: 40)
                 }
@@ -2064,6 +2075,7 @@ struct ConversationView: View {
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
             identityName: viewModel.windowDisplayName,
             identityAvatar: viewModel.windowAvatarURL,
+            identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset },
             onShowReactionDetails: { emoji in
                 reactionDetailsTarget = ReactionDetailsTarget(
                     record: record,
@@ -3249,6 +3261,7 @@ struct ConversationView: View {
             Text("This message can only be removed from this device.")
         case .moderation:
             Text("As a group admin, you can remove this message for everyone.")
+                + Text(" ") + Text("Older clients may retain this message.")
         }
     }
 
@@ -3314,8 +3327,8 @@ struct ConversationView: View {
                     rowId: rowId,
                     viewModel: viewModel
                 )
-                let actionMenuHeight = MessageActionsPresentation.actionMenuHeight(
-                    actionCount: actionCount
+                let actionMenuHeight = MessageActionsPresentation.visibleActionHeight(
+                    actionCount: actionCount, containerHeight: proxy.size.height, showsReactions: canInteract
                 )
                 let layout = MessageActionsOverlayLayout.resolve(
                     sourceFrame: sourceFrame,
@@ -3373,6 +3386,7 @@ struct ConversationView: View {
                         previewHeight: layout.previewHeight,
                         alignsTrailing: alignsTrailing,
                         surfaceWidth: surfaceWidth,
+                        maximumActionHeight: actionMenuHeight,
                         viewModel: viewModel
                     )
                     .frame(
@@ -3406,7 +3420,8 @@ struct ConversationView: View {
                 canSendMessages: viewModel.canSendMessages
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
-            canDelete: viewModel.deleteCapability(for: record).canDelete
+            canDelete: viewModel.deleteCapability(for: record).canDelete,
+            canReport: viewModel.canReport(record)
         )
     }
 
@@ -3422,6 +3437,7 @@ struct ConversationView: View {
         previewHeight: CGFloat,
         alignsTrailing: Bool,
         surfaceWidth: CGFloat,
+        maximumActionHeight: CGFloat,
         viewModel: ConversationViewModel
     ) -> some View {
         MessageActionsMenu(
@@ -3440,11 +3456,13 @@ struct ConversationView: View {
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
+            canReport: viewModel.canReport(record),
             quickReactions: appState.quickReactions,
             selectedReaction: viewModel.reactions(for: record.messageIdHex).first(where: \.mine)?.emoji,
             previewHeight: previewHeight,
             alignsTrailing: alignsTrailing,
             surfaceWidth: surfaceWidth,
+            maximumActionHeight: maximumActionHeight,
             onRetry: {
                 guard let rowId else { return }
                 dismissActions()
@@ -3496,6 +3514,10 @@ struct ConversationView: View {
                 let target = record
                 dismissActions()
                 emojiPickerTarget = ActionsTarget(record: target, status: status)
+            },
+            onReport: {
+                dismissActions()
+                reportTarget = ActionsTarget(record: record, status: status)
             }
         )
     }

@@ -265,6 +265,7 @@ private func timelineRecord(
         agentTextStreamJson: agentTextStreamJson,
         groupSystem: nil,
         reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
+        edit: nil,
         deleted: false,
         deletedByMessageIdHex: nil,
         invalidationStatus: nil
