@@ -693,6 +693,13 @@ final class ConversationViewModel {
         timelineStore.groupSystemDisplayText(for: record)
     }
 
+    /// Withhold rows authored by people this account blocks. Driven by the
+    /// live block-list subscription the conversation screen owns, so the
+    /// timeline reacts to a block or unblock without a stored copy of the list.
+    func applyBlockedAuthors(_ accountIdHexes: Set<String>) {
+        timelineStore.setBlockedAuthorIds(accountIdHexes)
+    }
+
     func record(for messageIdHex: String) -> AppMessageRecordFfi? {
         timelineStore.record(for: messageIdHex)
     }

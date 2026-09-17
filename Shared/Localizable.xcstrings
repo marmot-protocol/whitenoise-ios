@@ -12582,71 +12582,6 @@
         }
       }
     },
-    "Block or Unblock User" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nutzer blockieren oder entsperren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Block or Unblock User"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bloquear o desbloquear usuario"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bloquer ou débloquer l’utilisateur"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Blocca o sblocca utente"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bloquear ou desbloquear usuário"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Заблокировать или разблокировать пользователя"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kullanıcıyı Engelle veya Engelini Kaldır"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "屏蔽或取消屏蔽用户"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "封鎖或解除封鎖使用者"
-          }
-        }
-      }
-    },
     "Block screenshots" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12962,6 +12897,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "封鎖會隱藏此人的訊息，並阻止你向其傳送私聊訊息。現有歷史紀錄會保留。"
+          }
+        }
+      }
+    },
+    "Blocking user…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzer wird blockiert …"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocking user…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloqueando usuario…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocage de l’utilisateur…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocco dell’utente…"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloqueando usuário…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Блокировка пользователя…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcı engelleniyor…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在屏蔽用户…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在封鎖使用者…"
           }
         }
       }
@@ -83771,6 +83771,71 @@
         }
       }
     },
+    "Their messages will appear again and you'll be able to send to them." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ihre Nachrichten werden wieder angezeigt und du kannst ihnen wieder schreiben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Their messages will appear again and you'll be able to send to them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sus mensajes volverán a aparecer y podrás enviarle mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ses messages réapparaîtront et vous pourrez lui écrire."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I suoi messaggi torneranno a essere visibili e potrai scriverle di nuovo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mensagens dessa pessoa voltarão a aparecer e você poderá enviar mensagens a ela."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сообщения этого человека снова появятся, и вы сможете ему писать."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İletileri yeniden görünecek ve bu kişiye ileti gönderebileceksiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "对方的消息将重新显示，你也可以向其发送消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "對方的訊息將重新顯示，你也可以向其傳送訊息。"
+          }
+        }
+      }
+    },
     "These are installation prompts. Choose your agent, copy its prompt, and paste it into that agent to connect it to White Noise. The prompt includes your npub (a public key, not a secret) and asks the agent to explain how the connector works before requesting your approval to install it. Only use an agent you run and trust; your private key is never included." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -88262,6 +88327,71 @@
         }
       }
     },
+    "Unblock this user?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockierung dieses Nutzers aufheben?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unblock this user?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Desbloquear a este usuario?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Débloquer cet utilisateur ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sbloccare questo utente?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloquear este usuário?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разблокировать этого пользователя?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kullanıcının engeli kaldırılsın mı?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消屏蔽此用户？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要解除封鎖此使用者嗎？"
+          }
+        }
+      }
+    },
     "Unblock User" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -88323,6 +88453,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解除封鎖使用者"
+          }
+        }
+      }
+    },
+    "Unblocking user…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockierung wird aufgehoben …"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unblocking user…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloqueando usuario…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Déblocage de l’utilisateur…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sblocco dell’utente…"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desbloqueando usuário…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разблокировка пользователя…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcının engeli kaldırılıyor…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消屏蔽用户…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在解除封鎖使用者…"
           }
         }
       }
@@ -94794,6 +94989,71 @@
         }
       }
     },
+    "You blocked this user" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast diese Person blockiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You blocked this user"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has bloqueado a este usuario"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez bloqué cet utilisateur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai bloccato questo utente"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você bloqueou este usuário"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы заблокировали этого пользователя"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kullanıcıyı engellediniz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已屏蔽此用户"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已封鎖此使用者"
+          }
+        }
+      }
+    },
     "You blocked this user. Unblock them to send messages." : {
       "localizations" : {
         "de" : {
@@ -97383,6 +97643,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "您是唯一的管理員。在您離開之前讓另一位成員成為管理員。"
+          }
+        }
+      }
+    },
+    "You've blocked this user. You won't be able to send messages until you unblock them." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast diese Person blockiert. Du kannst ihr keine Nachrichten senden, bis du die Blockierung aufhebst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You've blocked this user. You won't be able to send messages until you unblock them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has bloqueado a este usuario. No podrás enviarle mensajes hasta que lo desbloquees."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez bloqué cet utilisateur. Vous ne pourrez pas lui envoyer de messages tant que vous ne l’aurez pas débloqué."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai bloccato questo utente. Non potrai inviargli messaggi finché non lo sbloccherai."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você bloqueou este usuário. Não poderá enviar mensagens até desbloqueá-lo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы заблокировали этого пользователя. Вы не сможете отправлять ему сообщения, пока не разблокируете его."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kullanıcıyı engellediniz. Engelini kaldırana kadar ileti gönderemezsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已屏蔽此用户。解除屏蔽前无法向其发送消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已封鎖此使用者。解除封鎖前無法向其傳送訊息。"
           }
         }
       }

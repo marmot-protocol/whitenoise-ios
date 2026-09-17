@@ -1,165 +1,159 @@
 import SwiftUI
-import MarmotKit
 
-@MainActor
-@Observable
-final class BlockedUsersModel {
-    private(set) var users: [BlockedUserFfi] = []
-    private(set) var isLoaded = false
-    private(set) var isSaving = false
-    private(set) var error: String?
-    private(set) var targetId: String?
-    private(set) var uncertainIntent: (id: String, blocked: Bool)?
-    @ObservationIgnored private var lifetime = UUID()
-    @ObservationIgnored private var revision: UInt64?
-    @ObservationIgnored private var ownerAccount: String?
-
-    func isConfirmedBlocked(_ userId: String, accountRef: String?) -> Bool {
-        isLoaded && ownerAccount == accountRef && users.contains { $0.publicKey == userId }
-    }
-
-    func run(using appState: AppState, target: String?) async {
-        let owner = UUID()
-        lifetime = owner
-        isLoaded = false
-        revision = nil
-        targetId = nil
-        guard appState.canUseRuntimeForForegroundWork, let account = appState.activeAccountRef else { return }
-        if ownerAccount != account {
-            users = []
-            uncertainIntent = nil
-            error = nil
-            ownerAccount = account
-        }
-        do {
-            let client = try appState.currentMarmotClient()
-            if let target {
-                guard let resolved = await Task.detached(priority: .utility, operation: {
-                    client.marmot.accountIdHex(reference: target)
-                }).value else { throw MarmotKitError.InvalidIdentity(details: "Invalid profile reference.") }
-                targetId = resolved
-            }
-            let subscription = try await Task.detached(priority: .utility) {
-                try client.marmot.subscribeBlockedUsers(accountRef: account)
-            }.value
-            guard !Task.isCancelled, lifetime == owner else { return }
-            if let initial = await Task.detached(priority: .utility, operation: { subscription.snapshot() }).value {
-                guard !Task.isCancelled, lifetime == owner, appState.activeAccountRef == account else { return }
-                install(initial)
-            }
-            while let snapshot = try await subscription.nextCancellable() {
-                guard !Task.isCancelled, lifetime == owner, appState.activeAccountRef == account else { return }
-                install(snapshot)
-            }
-            if !Task.isCancelled, lifetime == owner { isLoaded = false }
-        } catch is CancellationError {
-        } catch {
-            guard !Task.isCancelled, lifetime == owner else { return }
-            isLoaded = false
-            self.error = UserFacingError.message(for: error)
-        }
-    }
-
-    private func install(_ snapshot: BlockListSnapshotFfi) {
-        guard revision == nil || snapshot.revision > revision! else { return }
-        revision = snapshot.revision
-        users = snapshot.users
-        isLoaded = true
-        if uncertainIntent == nil { error = nil }
-    }
-
-    func setBlocked(_ blocked: Bool, userId: String, using appState: AppState) async {
-        guard !isSaving, isLoaded, let account = appState.activeAccountRef else { return }
-        if let intent = uncertainIntent, intent.id != userId || intent.blocked != blocked { return }
-        let owner = lifetime
-        isSaving = true
-        defer { isSaving = false }
-        do {
-            let lease = try appState.runtimeLifecycle.beginForegroundRuntimeMutation()
-            defer { appState.runtimeLifecycle.endForegroundRuntimeMutation(lease) }
-            if blocked { try await lease.client.marmot.blockUser(accountRef: account, userAccountIdHex: userId) }
-            else { try await lease.client.marmot.unblockUser(accountRef: account, userAccountIdHex: userId) }
-            let beforeRead = revision
-            let confirmed = try await Task.detached(priority: .utility) {
-                try lease.client.marmot.getBlockedUsers(accountRef: account)
-            }.value
-            guard lifetime == owner, appState.activeAccountRef == account else { return }
-            if revision == beforeRead { users = confirmed }
-            uncertainIntent = nil
-            error = nil
-            appState.scheduleAccountUnreadSummaryRefresh()
-        } catch MarmotKitError.BlockPublicationUncertain {
-            guard lifetime == owner, appState.activeAccountRef == account else { return }
-            uncertainIntent = (userId, blocked)
-            error = L10n.string("The block-list update could not be confirmed. Retry the same change to check its status.")
-        } catch {
-            guard lifetime == owner, appState.activeAccountRef == account else { return }
-            self.error = UserFacingError.message(for: error)
-        }
-    }
-}
-
+/// Device-wide list of the active account's blocked people. Rows open the
+/// contact's profile, which owns the block/unblock control; the swipe action is
+/// the shortcut for undoing one entry without leaving the list.
 struct BlockedUsersView: View {
     @Environment(AppState.self) private var appState
-    var userReference: String? = nil
+
     @State private var model = BlockedUsersModel()
     @State private var reload = 0
-    @State private var confirmingBlock = false
+    @State private var pendingUnblock: BlockedUsersPresentation.Row?
+
+    var body: some View {
+        List {
+            if let error = model.error {
+                Section {
+                    Text(error)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button(L10n.string("Retry")) {
+                        if let intent = model.uncertainIntent {
+                            Task { await model.setBlocked(intent.blocked, userId: intent.id, using: appState) }
+                        } else {
+                            reload += 1
+                        }
+                    }
+                    .disabled(model.isSaving)
+                }
+            }
+
+            if model.isLoaded {
+                Section {
+                    if rows.isEmpty {
+                        Text("No blocked users")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(rows) { row in
+                        rowView(row)
+                    }
+                } footer: {
+                    Text("Blocking hides this person’s messages and prevents sending to them in direct chats. Existing history is retained.")
+                }
+            } else if model.error == nil {
+                Section {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Loading…")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+        .localizedNavigationTitle("Blocked Users")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: subscriptionKey) { await model.run(using: appState, target: nil) }
+        .confirmationDialog(
+            Text("Unblock this user?"),
+            isPresented: unblockConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            if let pendingUnblock {
+                Button(L10n.string("Unblock User")) {
+                    Task { await model.setBlocked(false, userId: pendingUnblock.accountIdHex, using: appState) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Their messages will appear again and you'll be able to send to them.")
+        }
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: BlockedUsersPresentation.Row) -> some View {
+        let isUnblocking = model.publishingDirection(for: row.accountIdHex) != nil
+        if let npub = row.npub {
+            NavigationLink {
+                ProfileContentView(npub: npub).wnBackButton()
+            } label: {
+                BlockedUserRow(row: row, isUnblocking: isUnblocking)
+            }
+            .swipeActions(edge: .trailing) { unblockSwipeAction(row) }
+        } else {
+            BlockedUserRow(row: row, isUnblocking: isUnblocking)
+                .swipeActions(edge: .trailing) { unblockSwipeAction(row) }
+        }
+    }
+
+    @ViewBuilder
+    private func unblockSwipeAction(_ row: BlockedUsersPresentation.Row) -> some View {
+        Button {
+            pendingUnblock = row
+        } label: {
+            Label("Unblock", systemImage: "person.crop.circle.badge.checkmark")
+        }
+        .tint(.accentColor)
+        .disabled(!model.canMutate)
+    }
+
+    private var rows: [BlockedUsersPresentation.Row] {
+        BlockedUsersPresentation.rows(
+            users: model.users,
+            displayName: { appState.displayName(forAccountIdHex: $0) },
+            npub: { IdentityPresentation.canonicalNpub(accountIdHex: $0) }
+        )
+    }
+
+    private var unblockConfirmationPresented: Binding<Bool> {
+        Binding {
+            pendingUnblock != nil
+        } set: { isPresented in
+            if !isPresented { pendingUnblock = nil }
+        }
+    }
 
     private var subscriptionKey: String {
         "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(reload)"
     }
+}
+
+/// Person row for the blocked list: the same avatar + name + npub shape the
+/// group member lists use, so blocked people read as people, not as keys.
+struct BlockedUserRow: View {
+    @Environment(AppState.self) private var appState
+    let row: BlockedUsersPresentation.Row
+    var isUnblocking = false
 
     var body: some View {
-        List {
-            if !model.isLoaded {
-                Section {
-                    if model.error == nil { ProgressView("Loading…") }
-                    Button("Retry") { reload += 1 }
-                }
-            } else if let id = model.targetId {
-                Section {
-                    Text(appState.displayName(forAccountIdHex: id))
-                    let blocked = model.users.contains { $0.publicKey == id }
-                    Button(blocked ? "Unblock User" : "Block User", role: blocked ? nil : .destructive) {
-                        if blocked { Task { await model.setBlocked(false, userId: id, using: appState) } }
-                        else { confirmingBlock = true }
-                    }
-                    .disabled(model.isSaving || model.uncertainIntent != nil)
-                } footer: {
-                    Text("Blocking hides this person’s messages and prevents sending to them in direct chats. Existing history is retained.")
-                }
-            } else {
-                Section {
-                    if model.users.isEmpty { Text("No blocked users") }
-                    ForEach(model.users, id: \.publicKey) { user in
-                        HStack {
-                            Text(appState.displayName(forAccountIdHex: user.publicKey))
-                            Spacer()
-                            Button("Unblock") {
-                                Task { await model.setBlocked(false, userId: user.publicKey, using: appState) }
-                            }
-                            .disabled(model.isSaving || model.uncertainIntent != nil)
-                        }
-                    }
+        HStack(spacing: 12) {
+            AvatarBubble(
+                seed: row.accountIdHex,
+                title: row.displayName,
+                pictureURL: appState.avatarURL(forAccountIdHex: row.accountIdHex)
+            )
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(row.displayName)
+                    .font(.body)
+                // The swipe action is gone by the time the publish starts, so
+                // the row itself has to report what is happening to it.
+                if isUnblocking {
+                    Text("Unblocking user…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(appState.shortNpub(forAccountIdHex: row.accountIdHex))
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
                 }
             }
-            if let error = model.error {
-                Section {
-                    Text(error).foregroundStyle(.secondary)
-                    if let intent = model.uncertainIntent {
-                        Button("Retry") { Task { await model.setBlocked(intent.blocked, userId: intent.id, using: appState) } }
-                            .disabled(model.isSaving)
-                    }
-                }
-            }
+            Spacer(minLength: 8)
         }
-        .navigationTitle("Blocked Users")
-        .task(id: subscriptionKey) { await model.run(using: appState, target: userReference) }
-        .confirmationDialog("Block this user?", isPresented: $confirmingBlock, titleVisibility: .visible) {
-            Button("Block User", role: .destructive) {
-                if let id = model.targetId { Task { await model.setBlocked(true, userId: id, using: appState) } }
-            }
+        .padding(.vertical, 2)
+        .task(id: row.accountIdHex) {
+            appState.warmProfileProjection(forAccountIdHex: row.accountIdHex)
         }
     }
 }

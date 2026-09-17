@@ -165,6 +165,7 @@ final class TimelineStore {
     /// action. Records stay mirrored so reply/edit/reaction projections remain
     /// internally consistent; only the rendered timeline filters them.
     @ObservationIgnored private var hiddenMessageIds: Set<String>
+    @ObservationIgnored private var blockedAuthorIds: Set<String> = []
 
     /// Upper bound on retained streaming-debug rows. Higher than
     /// `maxSystemTimelineItems` because debug events are far higher volume.
@@ -374,7 +375,8 @@ final class TimelineStore {
 
     func record(for messageIdHex: String) -> AppMessageRecordFfi? {
         _ = timelineProjectionGeneration
-        return messageById[messageIdHex].map(editProjections.displayRecord(for:))
+        guard let stored = messageById[messageIdHex], !isBlockedAuthor(stored.sender) else { return nil }
+        return editProjections.displayRecord(for: stored)
     }
 
     func records(forRowFrameKeys rowFrameKeys: Set<String>) -> [AppMessageRecordFfi] {
@@ -390,6 +392,7 @@ final class TimelineStore {
             return nil
         }
         if let preview = replyPreviewsByMessageId[record.messageIdHex] {
+            guard !isBlockedAuthor(preview.sender) else { return nil }
             let key = ReplyPreviewDisplayCacheKey(
                 messageIdHex: record.messageIdHex,
                 targetId: targetId,
@@ -428,7 +431,8 @@ final class TimelineStore {
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
         }
-        guard let storedTarget = messageById[targetId] else {
+        guard let storedTarget = messageById[targetId],
+              !isBlockedAuthor(storedTarget.sender) else {
             return nil
         }
         let target = editProjections.displayRecord(for: storedTarget)
@@ -476,6 +480,30 @@ final class TimelineStore {
     func isDeleted(_ messageIdHex: String) -> Bool {
         _ = timelineProjectionGeneration
         return deletedProjections.contains(messageIdHex)
+    }
+
+    /// Authors whose rows are withheld because the account blocked them.
+    ///
+    /// Held only for the lifetime of the open conversation and driven straight
+    /// from the live block-list subscription — nothing is persisted, so there
+    /// is no second copy of MDK's list to go stale. Filtering happens at the
+    /// display layer, not in storage, so unblocking restores the history
+    /// immediately without refetching it.
+    func isBlockedAuthor(_ sender: String) -> Bool {
+        _ = timelineProjectionGeneration
+        guard !blockedAuthorIds.isEmpty else { return false }
+        return blockedAuthorIds.contains(sender.lowercased())
+    }
+
+    @discardableResult
+    func setBlockedAuthorIds(_ accountIdHexes: Set<String>) -> Bool {
+        let normalized = Set(accountIdHexes.map { $0.lowercased() })
+        guard blockedAuthorIds != normalized else { return false }
+        blockedAuthorIds = normalized
+        let changed = rebuildTimeline()
+        replyPreviewDisplayCache.removeAll()
+        noteProjectionChanged()
+        return changed
     }
 
     func isHidden(_ messageIdHex: String) -> Bool {
@@ -1040,6 +1068,9 @@ final class TimelineStore {
         }
         if let messageId = Hex.normalized32Bytes(record.messageIdHex),
            hiddenMessageIds.contains(messageId) {
+            return nil
+        }
+        if isBlockedAuthor(record.sender) {
             return nil
         }
         switch MessageSemantics.classify(record) {

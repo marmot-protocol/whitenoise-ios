@@ -135,6 +135,41 @@ private struct WNButtonTitle: View {
     }
 }
 
+/// A `NavigationLink` wearing `WNButton`'s chrome, so a push can sit beside a
+/// button without reading as a plain text link. A push has to come from a real
+/// link when the control lives in a safe-area accessory, where a
+/// `navigationDestination(isPresented:)` is not reliably inside the stack's
+/// own view tree.
+struct WNButtonNavigationLink<Destination: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    let title: LocalizedStringKey
+    var systemImage: String?
+    var emphasis = WNButton.Emphasis.primary
+    var size = WNButton.Size.large
+    @ViewBuilder let destination: () -> Destination
+
+    var body: some View {
+        NavigationLink {
+            destination()
+        } label: {
+            WNButtonTitle(title: title, systemImage: systemImage)
+                .wnButtonContentColor(
+                    emphasis,
+                    size: size,
+                    colorScheme: colorScheme,
+                    isEnabled: isEnabled
+                )
+                .wnButtonLabelSizing(size)
+        }
+        .wnButtonStyle(emphasis, size: size)
+        .wnButtonChrome(emphasis: emphasis)
+        .controlSize(WNButton.Metrics.controlSize(for: size))
+        .wnButtonSizing(size)
+    }
+}
+
 private struct WNButtonChrome: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
