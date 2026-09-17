@@ -105,7 +105,8 @@ struct ChatListPreviewCacheTests {
             row: row(lastMessage: preview(
                 sender: "",
                 plaintext: #"{"v":1,"system_type":"member_added","text":"Member added"}"#,
-                kind: MessageSemantics.kindGroupSystem
+                kind: MessageSemantics.kindGroupSystem,
+                groupSystem: memberAdded(actor: nil, subject: nil)
             )),
             avatarURL: nil,
             title: "Room",
@@ -130,7 +131,8 @@ struct ChatListPreviewCacheTests {
                     {"v":1,"system_type":"member_added","text":"Member added",\
                     "data":{"actor":"\(actor)","subject":"\(subject)"}}
                     """,
-                    kind: MessageSemantics.kindGroupSystem
+                    kind: MessageSemantics.kindGroupSystem,
+                    groupSystem: memberAdded(actor: actor, subject: subject)
                 )),
                 avatarURL: nil,
                 title: "Room",
@@ -161,7 +163,8 @@ struct ChatListPreviewCacheTests {
                     {"v":1,"system_type":"member_added","text":"Member added",\
                     "data":{"actor":"\(me)","subject":"\(alice)"}}
                     """,
-                    kind: MessageSemantics.kindGroupSystem
+                    kind: MessageSemantics.kindGroupSystem,
+                    groupSystem: memberAdded(actor: me, subject: alice)
                 )),
                 avatarURL: nil,
                 title: "Room",
@@ -174,7 +177,8 @@ struct ChatListPreviewCacheTests {
                     {"v":1,"system_type":"member_added","text":"Member added",\
                     "data":{"actor":"\(alice)","subject":"\(me)"}}
                     """,
-                    kind: MessageSemantics.kindGroupSystem
+                    kind: MessageSemantics.kindGroupSystem,
+                    groupSystem: memberAdded(actor: alice, subject: me)
                 )),
                 avatarURL: nil,
                 title: "Room",
@@ -197,7 +201,8 @@ struct ChatListPreviewCacheTests {
                     {"v":1,"system_type":"member_added","text":"Member added",\
                     "data":{"actor":"\(actor)","subject":"\(subject)"}}
                     """,
-                    kind: MessageSemantics.kindGroupSystem
+                    kind: MessageSemantics.kindGroupSystem,
+                    groupSystem: memberAdded(actor: actor, subject: subject)
                 )),
                 avatarURL: nil,
                 title: "Room"
@@ -207,7 +212,7 @@ struct ChatListPreviewCacheTests {
         }
     }
 
-    @Test func groupSystemPreviewUsesTheSenderWhenThePayloadOmitsTheActor() {
+    @Test func groupSystemPreviewUsesTheSenderWhenTheProjectionOmitsTheActor() {
         let subject = hex("bb")
         withAppLanguage(.english) {
             let item = ChatsListViewModel.Item(
@@ -217,7 +222,8 @@ struct ChatListPreviewCacheTests {
                     {"v":1,"system_type":"member_added","text":"Member added",\
                     "data":{"subject":"\(subject)"}}
                     """,
-                    kind: MessageSemantics.kindGroupSystem
+                    kind: MessageSemantics.kindGroupSystem,
+                    groupSystem: memberAdded(actor: nil, subject: subject)
                 )),
                 avatarURL: nil,
                 title: "Room",
@@ -555,6 +561,15 @@ struct ChatListPreviewCacheTests {
         )
     }
 
+    private func memberAdded(actor: String?, subject: String?) -> GroupSystemEventFfi {
+        GroupSystemEventFfi(
+            provenance: .authenticatedGroupState, actorDisplayName: nil, subjectDisplayName: nil,
+            systemType: "member_added", text: "Member added", actorAccountIdHex: actor,
+            subjectAccountIdHex: subject, name: nil, oldName: nil,
+            oldRetentionSeconds: nil, newRetentionSeconds: nil
+        )
+    }
+
     private func preview(
         messageIdHex: String = "01",
         sender: String = "sender",
@@ -562,11 +577,12 @@ struct ChatListPreviewCacheTests {
         plaintext: String = "hello",
         contentTokens: MarkdownDocumentFfi = MarkdownDocumentFfi(blocks: [], truncated: false),
         kind: UInt64 = MessageSemantics.kindChat,
+        groupSystem: GroupSystemEventFfi? = nil,
         timelineAt: UInt64 = 1,
         deleted: Bool = false
     ) -> ChatListMessagePreviewFfi {
         ChatListMessagePreviewFfi(
-            groupSystem: nil,
+            groupSystem: groupSystem,
             messageIdHex: messageIdHex,
             sender: sender,
             senderDisplayName: senderDisplayName,

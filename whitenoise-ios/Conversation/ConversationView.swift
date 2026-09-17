@@ -3261,7 +3261,7 @@ struct ConversationView: View {
             Text("This message can only be removed from this device.")
         case .moderation:
             Text("As a group admin, you can remove this message for everyone.")
-                + Text(" ") + Text("Older clients may retain this message.")
+                + Text(verbatim: " ") + Text("Older clients may retain this message.")
         }
     }
 

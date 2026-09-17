@@ -205,3 +205,15 @@ Release builds (Production and Staging), app/NSE privacy checks, SwiftLint and
 `git diff --check` passed. Version/build remain 2026.9.16 (37). These checks do
 not establish physical-device behavior, multi-device report delivery, or Store
 upload success.
+
+## September 17 release checkpoint
+
+Rebased the published 0.10.1 integration onto master through PRs #1009, #1010,
+and #1011 before setting Production/Staging app and NSE to 2026.9.17 (38).
+The full simulator run executed 2,074 tests; its only failures were outdated
+group-system preview fixtures and a localized separator space. Fixtures now
+provide authenticated MDK group-system projections, and the separator uses
+verbatim text. All 31 tests in the two affected suites passed on rerun.
+Unsigned Production/Staging release builds, app/NSE privacy checks, SwiftLint
+and diff checks passed. Physical-device upgrade, visual/accessibility checks,
+and cross-device report delivery remain pending; no Store upload is implied.
