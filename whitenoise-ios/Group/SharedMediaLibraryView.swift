@@ -183,6 +183,7 @@ struct SharedMediaLibraryView: View {
                     viewModel: conversation,
                     destinationProvider: { try await conversation.forwardDestinations() }
                 ),
+                onGoToMessage: { jumpToMessage($0) },
                 onDismiss: { self.gallery = nil }
             )
         }

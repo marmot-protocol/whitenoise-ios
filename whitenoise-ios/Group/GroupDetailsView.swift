@@ -296,6 +296,12 @@ struct GroupDetailsView: View {
                     viewModel: viewModel,
                     destinationProvider: { try await viewModel.forwardDestinations() }
                 ),
+                onGoToMessage: { messageIdHex in
+                    appState.presentChat(
+                        groupIdHex: viewModel.group.groupIdHex,
+                        messageIdHex: messageIdHex
+                    )
+                },
                 onDismiss: { sharedMediaGallery = nil }
             )
         }

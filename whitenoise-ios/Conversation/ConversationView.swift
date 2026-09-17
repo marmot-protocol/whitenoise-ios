@@ -604,9 +604,9 @@ struct ConversationView: View {
     @State private var pendingBottomScrollTask: Task<Void, Never>?
     @State private var lastAutomaticBottomScrollTargetID: String?
     @State private var pendingSearchMatchScrollTask: Task<Void, Never>?
-    @State private var replyNavigationTargetItemId: String?
-    @State private var replyNavigationTask: Task<Void, Never>?
-    @State private var replyNavigationGeneration = 0
+    @State private var messageNavigationTargetItemId: String?
+    @State private var messageNavigationTask: Task<Void, Never>?
+    @State private var messageNavigationGeneration = 0
     @State private var visibleChatRoute: VisibleChatRoute?
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
@@ -1812,12 +1812,12 @@ struct ConversationView: View {
                             guard let request else { return }
                             scheduleSearchMatchScroll(to: request.itemId, proxy: proxy)
                         }
-                        .onChange(of: replyNavigationTargetItemId) { _, itemId in
+                        .onChange(of: messageNavigationTargetItemId) { _, itemId in
                             guard let itemId else { return }
                             isAtTimelineBottom = false
                             userMovedAwayFromTimelineBottom = true
                             scheduleSearchMatchScroll(to: itemId, proxy: proxy)
-                            replyNavigationTargetItemId = nil
+                            messageNavigationTargetItemId = nil
                         }
                         .onAppear {
                             _ = performInitialScrollIfNeeded(viewModel: viewModel)
@@ -2093,7 +2093,7 @@ struct ConversationView: View {
             },
             onReplyPreviewTap: {
                 guard let targetId = viewModel.replyTargetMessageId(for: record) else { return }
-                navigateToReplyTarget(targetId, viewModel: viewModel)
+                navigateToTimelineMessage(targetId, viewModel: viewModel)
             },
             onLoadMedia: ConversationMediaLoader { media in
                 try await viewModel.data(for: media)
@@ -2107,6 +2107,9 @@ struct ConversationView: View {
                     return try await viewModel.forwardDestinations()
                 }
             ),
+            onGoToMessage: { messageIdHex in
+                navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
+            },
             onViewEditHistory: viewModel.hasEditHistory(record.messageIdHex)
                 ? { editHistoryTarget = ActionsTarget(record: record, status: status) }
                 : nil,
@@ -3086,36 +3089,36 @@ struct ConversationView: View {
     }
 
     private func cancelPendingTimelineFollowUpWork() {
-        replyNavigationGeneration &+= 1
-        replyNavigationTask?.cancel()
-        replyNavigationTask = nil
+        messageNavigationGeneration &+= 1
+        messageNavigationTask?.cancel()
+        messageNavigationTask = nil
         cancelPendingBottomScroll()
         cancelPendingSearchMatchScroll()
         cancelActionFrameMeasurement()
     }
 
-    private func navigateToReplyTarget(_ messageIdHex: String, viewModel: ConversationViewModel) {
-        replyNavigationTask?.cancel()
-        replyNavigationGeneration &+= 1
-        let generation = replyNavigationGeneration
-        replyNavigationTask = Task { @MainActor in
+    private func navigateToTimelineMessage(_ messageIdHex: String, viewModel: ConversationViewModel) {
+        messageNavigationTask?.cancel()
+        messageNavigationGeneration &+= 1
+        let generation = messageNavigationGeneration
+        messageNavigationTask = Task { @MainActor in
             let viewportToken = conversationViewport.beginProgrammaticScroll()
             defer {
                 conversationViewport.endProgrammaticScroll(viewportToken)
-                if replyNavigationGeneration == generation {
-                    replyNavigationTask = nil
+                if messageNavigationGeneration == generation {
+                    messageNavigationTask = nil
                 }
             }
 
             if viewModel.record(for: messageIdHex) != nil {
-                replyNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
+                messageNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
                 return
             }
 
             await viewModel.jumpToConversationMessage(messageIdHex)
             guard !Task.isCancelled else { return }
             if viewModel.record(for: messageIdHex) != nil {
-                replyNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
+                messageNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
                 return
             }
 
