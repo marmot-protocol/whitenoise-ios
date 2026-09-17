@@ -247,6 +247,45 @@ struct WNNeutralAccentTests {
     }
 }
 
+struct ShareAndConnectChromeTests {
+    private static let minimumTextContrast = 4.5
+
+    private func barContrast(page: ColorScheme) -> Double {
+        ContrastProbe.ratio(
+            foreground: WNNeutralAccent.color(for: page),
+            background: ShareAndConnectChrome.barBackdrop,
+            style: page == .dark ? .dark : .light
+        )
+    }
+
+    @Test func barItemsStayLegibleInBothAppearances() {
+        for page in [ColorScheme.light, .dark] {
+            #expect(
+                barContrast(page: page) >= Self.minimumTextContrast,
+                "bar items are unreadable on a \(page) page"
+            )
+        }
+    }
+
+    @Test func aFullBleedViewfinderWouldHaveHiddenTheLightModeBarItems() {
+        let ratio = ContrastProbe.ratio(
+            foreground: WNNeutralAccent.color(for: .light),
+            background: ShareAndConnectChrome.viewfinderBackdrop,
+            style: .light
+        )
+
+        #expect(ratio < Self.minimumTextContrast)
+    }
+
+    @Test func theViewfinderIsInsetSoItNeverReachesTheBar() {
+        #expect(ShareAndConnectChrome.viewfinderInset > 0)
+    }
+
+    @Test func theViewfinderMatchesTheShareTabCardShape() {
+        #expect(ShareAndConnectChrome.viewfinderCornerRadius == WNQRCodeCard.Metrics.cornerRadius)
+    }
+}
+
 struct CopyableValueChipFeedbackTests {
     @Test func offersACopyGlyphBeforeCopying() {
         #expect(CopyableValueChip.Feedback.symbolName(isCopied: false) == "doc.on.doc")

@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct ShareAndConnectView: View {
@@ -9,10 +10,14 @@ struct ShareAndConnectView: View {
     }
 
     @Environment(AppState.self) private var appState
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var mode = Mode.share
     @State private var qrImage: UIImage?
     @State private var scannedNpub: String?
-    @State private var scanError: String?
+    @State private var scanHint: String?
+    @State private var cameraFailure: String?
+    @State private var scanSession = UUID()
 
     let accountIdHex: String
 
@@ -42,6 +47,7 @@ struct ShareAndConnectView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ShareAndConnectChrome.pageBackdrop.ignoresSafeArea())
         .animation(.default, value: mode)
         .localizedNavigationTitle("Share & Connect")
         .navigationBarTitleDisplayMode(.inline)
@@ -69,6 +75,12 @@ struct ShareAndConnectView: View {
         .task(id: deepLink) {
             qrImage = deepLink.flatMap { QRCode.image(from: $0) }
         }
+        .onChange(of: mode) { _, newValue in
+            if newValue == .connect { restartScanner() }
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active, mode == .connect, cameraFailure != nil { restartScanner() }
+        }
         .navigationDestination(isPresented: scannedProfileIsPresented) {
             if let scannedNpub {
                 ProfileView(npub: scannedNpub)
@@ -76,29 +88,60 @@ struct ShareAndConnectView: View {
         }
     }
 
+    private var cameraFailureMessage: String? {
+        cameraFailure ?? Self.unavailableReason()
+    }
+
+    private static func unavailableReason() -> String? {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .denied, .restricted:
+            return L10n.string("Camera access denied. Enable it in Settings to scan QR codes.")
+        default:
+            return AVCaptureDevice.default(for: .video) == nil
+                ? L10n.string("No camera available on this device.")
+                : nil
+        }
+    }
+
+    @ViewBuilder
     private var scannerContent: some View {
+        if let cameraFailureMessage {
+            ScannerUnavailableContent(
+                message: cameraFailureMessage,
+                offersSettings: AVCaptureDevice.authorizationStatus(for: .video) == .denied,
+                openSettings: openAppSettings
+            )
+        } else {
+            liveScanner
+        }
+    }
+
+    private var liveScanner: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            ShareAndConnectChrome.viewfinderBackdrop
             QRScannerView(
                 onScan: handleScan,
-                onError: { scanError = ContentSanitizer.displayName($0) ?? L10n.string("Camera unavailable") }
+                onError: { cameraFailure = ContentSanitizer.displayName($0) ?? L10n.string("Camera unavailable") }
             )
-            .ignoresSafeArea()
+            .id(scanSession)
 
-            Text(scanError ?? L10n.string("Point the camera at a White Noise profile QR"))
+            Text(scanHint ?? L10n.string("Point the camera at a White Noise profile QR"))
                 .font(.callout)
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .padding()
+                .padding(12)
                 .background(.black.opacity(0.55), in: Capsule())
-                .padding(.horizontal, 24)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
         }
+        .clipShape(.rect(cornerRadius: ShareAndConnectChrome.viewfinderCornerRadius, style: .continuous))
+        .padding(ShareAndConnectChrome.viewfinderInset)
     }
 
     private func handleScan(_ raw: String) {
         guard case let .profile(scannedNpub) = DeepLink.parse(string: raw) else {
-            scanError = L10n.string("That QR code isn't a White Noise profile.")
+            scanHint = L10n.string("That QR code isn't a White Noise profile.")
+            scanSession = UUID()
             Haptics.error()
             return
         }
@@ -108,11 +151,50 @@ struct ShareAndConnectView: View {
         self.scannedNpub = scannedNpub
     }
 
+    private func restartScanner() {
+        scanHint = nil
+        cameraFailure = nil
+        scanSession = UUID()
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
+    }
+
     private var scannedProfileIsPresented: Binding<Bool> {
         Binding(
             get: { scannedNpub != nil },
             set: { if !$0 { scannedNpub = nil } }
         )
+    }
+}
+
+nonisolated enum ShareAndConnectChrome {
+    static let viewfinderCornerRadius: CGFloat = WNQRCodeCard.Metrics.cornerRadius
+    static let viewfinderInset: CGFloat = 16
+    static let viewfinderBackdrop = Color.black
+
+    static let pageBackdrop = Color(uiColor: .systemGroupedBackground)
+    static let barBackdrop = pageBackdrop
+}
+
+private struct ScannerUnavailableContent: View {
+    let message: String
+    let offersSettings: Bool
+    let openSettings: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("QR Scanning Unavailable", systemImage: "camera.fill")
+        } description: {
+            Text(message)
+        } actions: {
+            if offersSettings {
+                WNButton(title: "Open Settings", size: .standard, action: openSettings)
+                    .frame(maxWidth: 320)
+            }
+        }
     }
 }
 
@@ -194,6 +276,18 @@ private struct ShareProfileQRCode: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 32)
+    }
+}
+
+#Preview("Scanner unavailable") {
+    NavigationStack {
+        ScannerUnavailableContent(
+            message: L10n.string("Camera access denied. Enable it in Settings to scan QR codes."),
+            offersSettings: true,
+            openSettings: {}
+        )
+        .navigationTitle("Share & Connect")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
