@@ -27,8 +27,15 @@ struct ShareAndConnectView: View {
     var body: some View {
         ZStack {
             if mode == .share {
-                shareContent
-                    .transition(.opacity)
+                ShareProfileContent(
+                    accountIdHex: accountIdHex,
+                    displayName: appState.displayName(forAccountIdHex: accountIdHex),
+                    avatarURL: appState.avatarURL(forAccountIdHex: accountIdHex),
+                    npub: npub,
+                    shortNpub: appState.shortNpub(forAccountIdHex: accountIdHex),
+                    qrImage: qrImage
+                )
+                .transition(.opacity)
             } else {
                 scannerContent
                     .transition(.opacity)
@@ -38,7 +45,6 @@ struct ShareAndConnectView: View {
         .animation(.default, value: mode)
         .localizedNavigationTitle("Share & Connect")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(mode == .connect ? .hidden : .automatic, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Picker("Mode", selection: $mode) {
@@ -46,9 +52,7 @@ struct ShareAndConnectView: View {
                         Text(LocalizedStringKey(mode.rawValue)).tag(mode)
                     }
                 }
-                .labelsHidden()
-                .pickerStyle(.palette)
-                .controlSize(.extraLarge)
+                .wnPalettePicker()
                 .frame(width: 180)
             }
 
@@ -58,6 +62,7 @@ struct ShareAndConnectView: View {
                         Label("Share Profile", systemImage: "square.and.arrow.up")
                             .labelStyle(.iconOnly)
                     }
+                    .wnIconButtonChrome(chrome: .container)
                 }
             }
         }
@@ -69,75 +74,6 @@ struct ShareAndConnectView: View {
                 ProfileView(npub: scannedNpub)
             }
         }
-    }
-
-    private var shareContent: some View {
-        Form {
-            Section {
-                VStack(spacing: 8) {
-                    AvatarBubble(
-                        seed: accountIdHex,
-                        title: appState.displayName(forAccountIdHex: accountIdHex),
-                        pictureURL: appState.avatarURL(forAccountIdHex: accountIdHex)
-                    )
-                    .frame(width: 96, height: 96)
-
-                    Text(appState.displayName(forAccountIdHex: accountIdHex))
-                        .font(.title2.weight(.bold))
-                        .multilineTextAlignment(.center)
-
-                    if let npub {
-                        CopyableValueChip(
-                            display: IdentityFormatter.short(npub),
-                            copyValue: npub,
-                            copiedToastTitle: L10n.string("npub")
-                        )
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-
-            if deepLink != nil {
-                qrSection
-            }
-        }
-    }
-
-    // No npub means no QR to render, so the affordance is withheld rather than
-    // left spinning on a load that can never finish.
-    private var qrSection: some View {
-        Section {
-            VStack(spacing: 6) {
-                if let qrImage {
-                    Image(uiImage: qrImage)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 225, height: 225)
-                        .padding(16)
-                        .background(.white, in: .rect(cornerRadius: 20))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 20)
-                                .strokeBorder(.quaternary, lineWidth: 0.5)
-                        }
-                        .accessibilityLabel("Profile QR code")
-                } else {
-                    ProgressView()
-                        .frame(width: 257, height: 257)
-                }
-
-                Text("Scan to connect.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 32)
-        }
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets())
     }
 
     private var scannerContent: some View {
@@ -177,5 +113,101 @@ struct ShareAndConnectView: View {
             get: { scannedNpub != nil },
             set: { if !$0 { scannedNpub = nil } }
         )
+    }
+}
+
+private struct ShareProfileContent: View {
+    let accountIdHex: String
+    let displayName: String
+    let avatarURL: URL?
+    let npub: String?
+    let shortNpub: String
+    let qrImage: UIImage?
+
+    var body: some View {
+        Form {
+            Section {
+                ShareProfileIdentityHeader(
+                    accountIdHex: accountIdHex,
+                    displayName: displayName,
+                    avatarURL: avatarURL,
+                    npub: npub,
+                    shortNpub: shortNpub
+                )
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+
+            // No npub means no QR to render, so the affordance is withheld
+            // rather than left spinning on a load that can never finish.
+            if npub != nil {
+                Section {
+                    ShareProfileQRCode(image: qrImage)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+            }
+        }
+    }
+}
+
+private struct ShareProfileIdentityHeader: View {
+    let accountIdHex: String
+    let displayName: String
+    let avatarURL: URL?
+    let npub: String?
+    let shortNpub: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            AvatarBubble(seed: accountIdHex, title: displayName, pictureURL: avatarURL)
+                .frame(width: 96, height: 96)
+
+            Text(displayName)
+                .font(.title2.weight(.bold))
+                .multilineTextAlignment(.center)
+
+            if let npub {
+                CopyableValueChip(
+                    display: shortNpub,
+                    copyValue: npub,
+                    valueName: L10n.string("npub")
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+}
+
+private struct ShareProfileQRCode: View {
+    let image: UIImage?
+
+    var body: some View {
+        VStack(spacing: 6) {
+            WNQRCodeCard(image: image, accessibilityLabel: "Profile QR code")
+
+            Text("Scan to connect.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 32)
+    }
+}
+
+#Preview("Share profile") {
+    NavigationStack {
+        ShareProfileContent(
+            accountIdHex: "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+            displayName: "Ada Lovelace",
+            avatarURL: nil,
+            npub: "npub1exampleexampleexampleexamplef4k2",
+            shortNpub: "npub1exam…f4k2",
+            qrImage: QRCode.image(from: "marmot://profile/npub1exampleexampleexampleexamplef4k2")
+        )
+        .navigationTitle("Share & Connect")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
