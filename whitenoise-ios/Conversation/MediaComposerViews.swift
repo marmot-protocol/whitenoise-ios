@@ -21,26 +21,13 @@ nonisolated enum ComposerMediaDraftPresentation {
 }
 
 nonisolated enum ComposerMediaDraftLayout {
-    static let previewHeight: CGFloat = 112
-    static let minimumPreviewWidth: CGFloat = 68
-    static let maximumPreviewWidth: CGFloat = 200
+    static let previewSize = CGSize(width: 112, height: 112)
     static let cornerRadius: CGFloat = 14
     static let shelfPadding: CGFloat = 8
     static let itemSpacing: CGFloat = 8
     static let utilityPreviewHeight: CGFloat = 72
     static let minimumUtilityPreviewWidth: CGFloat = 104
     static let maximumUtilityPreviewWidth: CGFloat = 160
-
-    static func previewWidth(dim: String?, thumbnailSize: CGSize?) -> CGFloat {
-        let ratio = aspectRatio(dim: dim) ?? thumbnailSize.flatMap { size in
-            guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {
-                return nil
-            }
-            return size.width / size.height
-        } ?? 1
-        return min(maximumPreviewWidth, max(minimumPreviewWidth, previewHeight * ratio))
-            .rounded(.toNearestOrAwayFromZero)
-    }
 
     static func aspectRatio(dim: String?) -> CGFloat? {
         guard let dim else { return nil }
@@ -122,7 +109,7 @@ struct MediaDraftStrip: View {
             .padding(ComposerMediaDraftLayout.shelfPadding)
         }
         .frame(height: containsVisualMedia
-            ? ComposerMediaDraftLayout.previewHeight + (ComposerMediaDraftLayout.shelfPadding * 2)
+            ? ComposerMediaDraftLayout.previewSize.height + (ComposerMediaDraftLayout.shelfPadding * 2)
             : ComposerMediaDraftLayout.utilityPreviewHeight + (ComposerMediaDraftLayout.shelfPadding * 2))
         .clipShape(.rect(topLeadingRadius: 22, topTrailingRadius: 22))
         .overlay(alignment: .bottom) {
@@ -140,21 +127,18 @@ struct MediaDraftStrip: View {
             Button {
                 onPreviewVisual(attachment.id)
             } label: {
-                let width = ComposerMediaDraftLayout.previewWidth(
-                    dim: attachment.dim,
-                    thumbnailSize: attachment.thumbnail?.size
-                )
                 ZStack {
                     thumbnail(for: attachment)
                     if attachment.kind == .video {
                         VideoPreviewPlayOverlay(
-                            diameter: VideoPreviewOverlayPresentation.diameter(
-                                for: CGSize(width: width, height: ComposerMediaDraftLayout.previewHeight)
-                            )
+                            diameter: VideoPreviewOverlayPresentation.compactDiameter
                         )
                     }
                 }
-                .frame(width: width, height: ComposerMediaDraftLayout.previewHeight)
+                .frame(
+                    width: ComposerMediaDraftLayout.previewSize.width,
+                    height: ComposerMediaDraftLayout.previewSize.height
+                )
                 .clipShape(.rect(cornerRadius: ComposerMediaDraftLayout.cornerRadius))
                 .overlay {
                     RoundedRectangle(cornerRadius: ComposerMediaDraftLayout.cornerRadius)

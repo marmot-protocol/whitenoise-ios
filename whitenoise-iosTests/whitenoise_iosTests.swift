@@ -12812,20 +12812,6 @@ struct MessageAudioBubblePresentationTests {
 }
 
 struct ComposerMediaDraftLayoutTests {
-    @Test func visualPreviewPreservesAspectRatioWithinShelfBounds() {
-        #expect(ComposerMediaDraftLayout.previewWidth(dim: "1600x900", thumbnailSize: nil) == 199)
-        #expect(ComposerMediaDraftLayout.previewWidth(dim: "400x1200", thumbnailSize: nil) == 68)
-        #expect(ComposerMediaDraftLayout.previewWidth(dim: "4000x500", thumbnailSize: nil) == 200)
-    }
-
-    @Test func malformedDimensionsUsePreparedThumbnailOrSquareFallback() {
-        #expect(ComposerMediaDraftLayout.previewWidth(
-            dim: "not-dimensions",
-            thumbnailSize: CGSize(width: 150, height: 100)
-        ) == 168)
-        #expect(ComposerMediaDraftLayout.previewWidth(dim: "0x10", thumbnailSize: nil) == 112)
-    }
-
     @Test func mediaSelectionReviewsOnlyVisualDraftsAndPreservesOtherAttachmentOrder() throws {
         let firstImage = MediaDraftAttachment(
             fileName: "first.jpg",
