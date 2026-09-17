@@ -104,6 +104,8 @@ final class GroupModerationModel {
         var id: String { report.reportIdHex }
         let report: ContentReportFfi
         let message: TimelineMessageRecordFfi?
+        var markdownBlocks: [MarkdownDisplayBlock]?
+        var mediaItems: [MessageMediaAttachment] = []
     }
     private(set) var entries: [Entry] = []
     private(set) var nextCursor: String?
@@ -144,7 +146,13 @@ final class GroupModerationModel {
                 try Task.checkCancellation()
                 let message = try await client.reportedMessage(accountRef: account,
                     groupID: conversation.group.groupIdHex, messageID: report.messageIdHex)
-                rows.append(Entry(report: report, message: message))
+                var entry = Entry(report: report, message: message)
+                if let message, !message.deleted {
+                    entry.markdownBlocks = MarkdownMessageBuilder.displayBlocks(
+                        for: message.contentTokens)
+                    entry.mediaItems = conversation.mediaItems(for: ConversationViewModel.appMessageRecord(from: message))
+                }
+                rows.append(entry)
             }
             try Task.checkCancellation()
             guard requestID == request, appState.activeAccountRef == account,
@@ -200,6 +208,7 @@ final class GroupModerationModel {
 }
 
 struct GroupModerationView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppState.self) private var appState
     let conversation: ConversationViewModel
     @State private var model = GroupModerationModel()
@@ -207,6 +216,17 @@ struct GroupModerationView: View {
     @State private var projectionRoute: AppState.GroupRecoveryUpdate?
     @State private var deleteTarget: GroupModerationModel.Entry?
     @State private var operation: Task<Void, Never>?
+
+    init(conversation: ConversationViewModel, model: GroupModerationModel? = nil) {
+        self.conversation = conversation
+        _model = State(initialValue: model ?? GroupModerationModel())
+    }
+
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
 
     private var refreshKey: String {
         "\(projectionRevision.uuidString):\(appState.activeAccountRef ?? ""):\(appState.runtimeGeneration):\(conversation.canModerateReports)"
@@ -229,25 +249,44 @@ struct GroupModerationView: View {
                 }
                 ForEach(model.entries) { entry in
                     Section {
-                        Text(ReportPresentation.title(entry.report.reason)).font(.headline)
-                        Text(conversation.windowDisplayName(for: entry.report.reporter)).font(.subheadline)
-                        Text(Date(timeIntervalSince1970: TimeInterval(entry.report.reportedAt)), style: .date)
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let message = entry.message {
-                            Text(message.deleted ? L10n.string("Message deleted") : String(message.plaintext.prefix(2000)))
-                        } else {
-                            Text("Message unavailable").foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 16) {
+                            ReportDetailsView(report: entry.report, reporterName: conversation.windowDisplayName(for: entry.report.reporter))
+                            Divider()
+                            if let message = entry.message {
+                                MessageBubble(
+                                    record: ConversationViewModel.appMessageRecord(from: message),
+                                    status: message.direction == "sent" ? .sent : .received,
+                                    isDeleted: message.deleted,
+                                    isEdited: message.edit != nil,
+                                    hasReports: message.hasReports,
+                                    usesReviewLayout: true,
+                                    clusterPresentation: .init(reservesIdentityLane: true, showsSenderName: true, showsAvatar: true),
+                                    mediaItems: entry.mediaItems,
+                                    markdownBlocks: entry.markdownBlocks,
+                                    identityName: conversation.windowDisplayName,
+                                    identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
+                                    onLoadMedia: ConversationMediaLoader { try await conversation.data(for: $0) }
+                                )
+                                Text(Date(timeIntervalSince1970: TimeInterval(message.timelineAt)), format: .dateTime.day().month().year())
+                                    .font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Text("Message unavailable").foregroundStyle(.secondary)
+                            }
+                            if model.pendingActions[entry.id] != nil {
+                                Text("Saved; delivery confirmation is pending.").font(.caption).foregroundStyle(.secondary)
+                            }
+                            actionLayout {
+                                WNButton(title: "Dismiss", systemImage: "checkmark", emphasis: .secondary, size: .standard) {
+                                    act(entry, deleting: false)
+                                }
+                                WNButton(title: "Delete", systemImage: "trash", emphasis: .destructive, size: .standard) {
+                                    deleteTarget = entry
+                                }
+                                .disabled(entry.message == nil || entry.message?.deleted == true)
+                            }
                         }
-                        if !entry.report.explanation.isEmpty {
-                            Text(String(entry.report.explanation.prefix(1000))).foregroundStyle(.secondary)
-                        }
-                        if model.pendingActions[entry.id] != nil {
-                            Text("Saved; delivery confirmation is pending.").foregroundStyle(.secondary)
-                        }
-                        Button("Dismiss Report") { act(entry, deleting: false) }
-                        if let message = entry.message, !message.deleted {
-                            Button("Delete Message", role: .destructive) { deleteTarget = entry }
-                        }
+                        .padding(.vertical, 8)
+
                     }
                     .disabled(model.acting || model.pendingActions[entry.id] != nil)
                 }

@@ -103,6 +103,8 @@ struct MessageBubble: View {
     var debugStyle: MessageDebugStyle? = nil
     var isDeleted: Bool = false
     var isEdited: Bool = false
+    var hasReports: Bool = false
+    var usesReviewLayout: Bool = false
     var clusterPresentation: MessageClusterPresentation = .none
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
@@ -128,7 +130,7 @@ struct MessageBubble: View {
     @State private var isBodyExpanded = false
     @State private var pendingExternalLink: PendingMessageExternalLink?
 
-    private var isFromMe: Bool { record.direction == "sent" }
+    private var isFromMe: Bool { !usesReviewLayout && record.direction == "sent" }
 
     private var bubbleMaxWidth: CGFloat? {
         sizeClass == .regular ? ChatBubbleMetrics.regularMaximumWidth : nil
@@ -879,6 +881,7 @@ struct MessageBubble: View {
             isFromMe: isFromMe,
             showsDeliveryStatus: MessageTombstonePresentation.showsDeliveryStatus(isDeleted: isDeleted),
             showsExpirationTimer: hasExpirationTimer,
+            hasReports: hasReports,
             onViewEditHistory: onViewEditHistory
         )
     }

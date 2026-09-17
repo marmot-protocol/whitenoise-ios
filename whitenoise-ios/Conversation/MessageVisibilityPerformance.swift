@@ -51,6 +51,8 @@ final class MessageVisibilityPerformance {
         }
     }
 
+    func cancel(rowID: String) { pending[rowID] = nil }
+
     func reset() { pending.removeAll() }
 
     private func pruneExpired(at time: UInt64) {

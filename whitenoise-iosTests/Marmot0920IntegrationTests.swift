@@ -56,6 +56,9 @@ struct Marmot0920IntegrationTests {
         #expect(tracker.takeVisible(["durable"]).isEmpty)
         await recorder.recordPerformance(sample.operation, milliseconds: sample.milliseconds, ticket: sample.ticket)?.value
         #expect(durations.withLock { $0 } == [5])
+        tracker.begin(rowID: "already-visible", operation: .outboundMessageVisible, ticket: recorder.ticket())
+        tracker.cancel(rowID: "already-visible")
+        #expect(tracker.takeVisible(["already-visible"]).isEmpty)
         tracker.begin(rowID: "late", operation: .inboundMessageVisible, ticket: recorder.ticket())
         recorder.replaceSink(nil)
         recorder.activateSink(performance: { _, duration in durations.withLock { $0.append(duration) } }) { _ in }

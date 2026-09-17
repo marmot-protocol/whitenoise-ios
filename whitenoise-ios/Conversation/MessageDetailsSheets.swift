@@ -30,6 +30,7 @@ struct MessageInfoSheet: View {
 
     let record: AppMessageRecordFfi
     let status: MessageStatus
+    var conversation: ConversationViewModel?
 
     var body: some View {
         NavigationStack {
@@ -40,6 +41,9 @@ struct MessageInfoSheet: View {
 
                 Section {
                     detailsCard
+                }
+                if let conversation, conversation.canReadReports {
+                    MessageReportsSection(messageID: record.messageIdHex, conversation: conversation)
                 }
             }
             .navigationTitle("Message info")

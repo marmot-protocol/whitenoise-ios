@@ -172,6 +172,46 @@ struct MessageDeletionTests {
         #expect(!model.canReport(appRecord(id: "", groupId: group.groupIdHex, sender: me, direction: "sent")))
     }
 
+    @Test func reportIndicatorFollowsNativeUpdatesAndRemoval() throws {
+        let group = groupRecord(id: hex("ab"), name: "Reports")
+        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: hex("11"))
+        let conversation = ConversationViewModel(appState: state, group: group)
+        var message = timelineRecord(id: hex("55"), groupId: group.groupIdHex, at: 1)
+        func install(_ messages: [TimelineMessageRecordFfi]) {
+            conversation.applyTimelinePage(TimelinePageFfi(messages: messages, hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        }
+        install([message])
+        #expect(!conversation.hasReports(message.messageIdHex))
+        message.hasReports = true
+        install([message])
+        #expect(conversation.hasReports(message.messageIdHex))
+        message.hasReports = false
+        install([message])
+        #expect(!conversation.hasReports(message.messageIdHex))
+        message.hasReports = true
+        install([message])
+        install([])
+        #expect(!conversation.hasReports(message.messageIdHex))
+    }
+
+    @Test func membersCanReadMessageReportsIncludingDismissedAndAccountSwitchClearsThem() async throws {
+        let group = groupRecord(id: hex("ab"), name: "Reports", admins: [])
+        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: hex("11"))
+        let conversation = ConversationViewModel(appState: state, group: group)
+        let message = timelineRecord(id: hex("55"), groupId: group.groupIdHex, at: 1)
+        let client = ModerationFixture(message: message)
+        _ = try await client.dismissReport(accountRef: "fixture", groupID: group.groupIdHex, reportID: "one")
+        let model = MessageReportsModel(client: client)
+        #expect(!conversation.canModerateReports)
+        await model.load(messageID: message.messageIdHex, conversation: conversation, appState: state)
+        #expect(model.reports.count == 2)
+        #expect(model.reports.first?.dismissed == true)
+        #expect(await client.requestedMessageID == message.messageIdHex)
+        state.activeAccountRef = "another-account"
+        await model.load(messageID: message.messageIdHex, conversation: conversation, appState: state)
+        #expect(model.reports.isEmpty)
+    }
+
     @Test func moderationPanelSeparatesDismissalFromDeletionAndHonorsPending() async throws {
         let me = hex("11")
         let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Moderation", admins: [me])
@@ -734,7 +774,12 @@ private actor DeleteOperationBarrier {
     }
 }
 
-private actor ModerationFixture: GroupModerationClient {
+private actor ModerationFixture: GroupModerationClient, MessageReportsClient {
+    private(set) var requestedMessageID: String?
+    func messageReports(accountRef: String, groupID: String, messageID: String, after: String?) async throws -> ContentReportPageFfi {
+        requestedMessageID = messageID
+        return try await contentReports(accountRef: accountRef, groupID: groupID, after: after)
+    }
     var message: TimelineMessageRecordFfi
     var dismissed = Set<String>()
     var pending = false

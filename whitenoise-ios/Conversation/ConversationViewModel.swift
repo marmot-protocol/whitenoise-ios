@@ -1061,6 +1061,15 @@ final class ConversationViewModel {
         return nil
     }
 
+    func hasReports(_ messageID: String) -> Bool {
+        timelineStore.reportedMessageIDs.contains(messageID)
+    }
+
+    var canReadReports: Bool {
+        moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
+            && !groupDisplay.isDirectMessage
+    }
+
     func canReport(_ message: AppMessageRecordFfi) -> Bool {
         moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
             && canSendMessages && !groupDisplay.isDirectMessage

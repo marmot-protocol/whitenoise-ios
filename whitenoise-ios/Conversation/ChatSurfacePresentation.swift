@@ -477,6 +477,7 @@ struct MessageMetadataFooter: View {
     let isFromMe: Bool
     var showsDeliveryStatus: Bool = true
     var showsExpirationTimer: Bool = false
+    var hasReports: Bool = false
     var onViewEditHistory: (() -> Void)?
 
     private var presentation: MessageFooterPresentation {
@@ -490,6 +491,10 @@ struct MessageMetadataFooter: View {
     var body: some View {
         HStack(spacing: 3) {
             Text(time)
+            if hasReports {
+                Image(systemName: "exclamationmark.bubble")
+                    .accessibilityLabel(L10n.string("Reported message"))
+            }
             if isEdited {
                 Text("·")
                 if let onViewEditHistory {

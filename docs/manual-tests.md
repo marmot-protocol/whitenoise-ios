@@ -674,6 +674,14 @@ Marmot root. Automated simulator checks do not replace these device checks.
       optional explanation, encrypted-group disclosure, send failure and pending
       delivery feedback. The full actions menu must remain scrollable/reachable
       on a small iPhone and with accessibility text sizes.
+- [ ] A reported message shows the report symbol beside its timestamp. All group
+      members can open Message Info to see its reports, reporter, report date,
+      reason, optional explanation, and dismissed status. Verify live updates,
+      pagination, and that changing accounts clears the previous report list.
+- [ ] Moderation cards separate report date/reporter from message sender/sent
+      time, reuse the message bubble and avatar, and offer side-by-side Dismiss
+      and Delete buttons. Check long explanations, media, deleted/unavailable
+      targets, large text, dark mode, and VoiceOver on iPhone and iPad.
 - [ ] Only active admins see **Group Info → Moderation**. Reports on older or
       personally blocked senders' messages appear using the current message
       projection. New reports and other admins' decisions refresh the panel.
@@ -696,3 +704,14 @@ Marmot root. Automated simulator checks do not replace these device checks.
       accounts and groups. MDK 0.10.1 advances account storage migrations; a
       subsequent downgrade is unsupported. No reset or re-import is part of the
       normal upgrade.
+
+## Native pending message ownership
+
+- [ ] Send text and replies with slow relays, including identical consecutive
+      messages. Each accepted message appears once under its MDK ID, progresses
+      from pending to sent, and never collapses a second local bubble.
+- [ ] Send media and verify the native attachment projection takes over after
+      upload. Before MDK admission there is no fabricated pending timeline row.
+- [ ] Force a definite pre-admission failure: the failed local attempt remains
+      available for retry/discard. An uncertain completion must not offer a retry
+      that could duplicate a committed message.

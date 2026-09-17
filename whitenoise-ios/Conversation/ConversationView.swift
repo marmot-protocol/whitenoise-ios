@@ -834,7 +834,7 @@ struct ConversationView: View {
                 }
             }
             .sheet(item: $messageInfoTarget) { target in
-                MessageInfoSheet(record: target.record, status: target.status)
+                MessageInfoSheet(record: target.record, status: target.status, conversation: viewModel)
                     .appAppearance()
             }
             .alert("Draft changed", isPresented: Binding(
@@ -2064,6 +2064,7 @@ struct ConversationView: View {
             debugStyle: debugStyle,
             isDeleted: viewModel.isDeleted(record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
+            hasReports: viewModel.hasReports(record.messageIdHex),
             clusterPresentation: showsSenderIdentity
                 ? viewModel.messageClusterPresentation(for: item)
                 : .none,

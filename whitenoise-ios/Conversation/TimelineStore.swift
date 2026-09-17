@@ -68,10 +68,11 @@ final class TimelineStore {
 
     /// Renderable timeline messages we've loaded by id.
     @ObservationIgnored private var messageById: [String: AppMessageRecordFfi] = [:]
-    // Prepared windows own order and membership; local echoes live until an exact ID handoff.
+    // Prepared windows own pending rows too; local attempts are only shown on definite failure.
     enum LocalSendPhase: Equatable {
         case pending, accepted, completionUnknown, published, failed
     }
+    @ObservationIgnored private var nativePendingRowIDs: Set<String> = []
     @ObservationIgnored private var localSendPhases: [String: LocalSendPhase] = [:]
     @ObservationIgnored private var localSendOrder: [String: UInt64] = [:]
     @ObservationIgnored private var nextLocalSendOrder: UInt64 = 0
@@ -107,6 +108,7 @@ final class TimelineStore {
 
     @ObservationIgnored private(set) var outgoingLifetime = UUID()
     @ObservationIgnored private var preparedOrder: [String]?
+    private(set) var reportedMessageIDs: Set<String> = []
     @ObservationIgnored private var preparedRecords: [String: TimelineMessageRecordFfi] = [:]
     @ObservationIgnored private var displayIDByMessageID: [String: String] = [:]
 
@@ -805,6 +807,8 @@ final class TimelineStore {
         var projectionChanged = false
         let appRecord = ConversationViewModel.appMessageRecord(from: record)
         guard !appRecord.messageIdHex.isEmpty else { return false }
+        if record.hasReports { reportedMessageIDs.insert(record.messageIdHex) }
+        else { reportedMessageIDs.remove(record.messageIdHex) }
         if appRecord.direction == "sent" {
             nextDurableRowProjectionRevision &+= 1
             durableRowProjectionRevisionById[appRecord.messageIdHex] = nextDurableRowProjectionRevision
@@ -903,6 +907,7 @@ final class TimelineStore {
 
     @discardableResult
     func removeTimelineRecord(messageIdHex: String, updateTimeline: Bool = true) -> Bool {
+        reportedMessageIDs.remove(messageIdHex)
         let existed = messageById[messageIdHex] != nil
         let affectedEditTargets = editProjections.removeRecord(messageIdHex: messageIdHex)
         messageById[messageIdHex] = nil
@@ -973,7 +978,9 @@ final class TimelineStore {
         var next: [TimelineItem] = messageById.values.compactMap { record in
             visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
         }
-        next.append(contentsOf: transientTimelineItems.values)
+        next.append(contentsOf: transientTimelineItems.values.filter {
+            !nativePendingRowIDs.contains($0.id) || localSendPhases[$0.id] == .failed
+        })
         next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
         next = orderedTimeline(next)
@@ -1292,6 +1299,14 @@ final class TimelineStore {
         }
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
+        if preparedOrder != nil {
+            // MDK commits a pending row before the send call returns its exact ID.
+            // Keep retry data privately; rendering it too creates a second bubble.
+            nativePendingRowIDs.insert(item.id)
+            _ = removeTimelineItem(id: item.id)
+            noteProjectionChanged()
+            return
+        }
         let changed = upsertTimelineItem(item)
         if changed {
             noteProjectionChanged()
@@ -1305,6 +1320,18 @@ final class TimelineStore {
         guard localSendPhases["msg:\(tempId)"] != nil else { return }
         var projectionChanged = false
         let realId = messageId ?? ""
+        if nativePendingRowIDs.contains("msg:\(tempId)") {
+            guard !realId.isEmpty else { return }
+            if messageById[realId] == nil {
+                visibilityPerformance.move(from: "msg:\(tempId)", to: displayID(for: realId))
+            } else {
+                // Its first layout may have happened before we learned the ID.
+                visibilityPerformance.cancel(rowID: "msg:\(tempId)")
+            }
+            discardTransientRow(rowId: "msg:\(tempId)")
+            noteProjectionChanged()
+            return
+        }
         if !realId.isEmpty { displayIDByMessageID[realId] = "msg:\(tempId)" }
         let durableRowAlreadyLoaded = !realId.isEmpty && messageById[realId] != nil
         let confirmed = AppMessageRecordFfi(
@@ -1479,6 +1506,7 @@ final class TimelineStore {
     func discardTransientRow(rowId: String) {
         guard transientTimelineItems[rowId] != nil else { return }
         transientTimelineItems[rowId] = nil
+        nativePendingRowIDs.remove(rowId)
         localSendPhases[rowId] = nil
         localSendOrder[rowId] = nil
         mediaProjections.removePending(forRowId: rowId)
@@ -1614,6 +1642,7 @@ final class TimelineStore {
         editProjections.removeAllOptimistic()
         systemTimelineItems.removeAll()
         transientTimelineItems.removeAll()
+        nativePendingRowIDs.removeAll()
         localSendPhases.removeAll()
         localSendOrder.removeAll()
         for id in Array(confirmedPendingTimelineRecordIds) {

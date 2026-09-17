@@ -864,6 +864,13 @@ nonisolated final class MarmotClient: Sendable {
         )
     }
 
+    func messageReports(accountRef: String, groupID: String, messageID: String, after: String?) async throws -> ContentReportPageFfi {
+        let marmot = self.marmot
+        return try await Task.detached(priority: .utility) {
+            try marmot.contentReports(accountRef: accountRef, groupIdHex: groupID, messageId: messageID, after: after, limit: 50)
+        }.value
+    }
+
     func contentReports(accountRef: String, groupID: String, after: String?) async throws -> ContentReportPageFfi {
         try await Task.detached { [marmot] in
             try marmot.contentReports(accountRef: accountRef, groupIdHex: groupID, messageId: nil, after: after, limit: 50)
