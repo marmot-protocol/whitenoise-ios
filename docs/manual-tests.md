@@ -164,6 +164,15 @@ before every release tag.
 
 ## Conversation back navigation vs. swipe-to-reply
 
+- [ ] Open a long-running agent conversation from Chats while its avatar is
+      already visible. The avatar stays visible while the first timeline
+      window loads, and the chat-list controls retain their normal navigation
+      animation. Repeat with a short chat, Back, completed
+      and cancelled swipe-back gestures, and search results on iPhone and iPad.
+- [ ] Change the peer's avatar, then reopen the conversation. The new native
+      projection wins; a removed avatar stays a placeholder. Switching profiles
+      or erasing app data must not reuse another account's decoded avatar.
+
 UIKit decides the final recognizer and keyboard ordering here, so these checks
 have no XCTest UI coverage. Run them on a notched or Dynamic Island iPhone, on
 both the iOS 18.0 deployment target and the newest installed iOS.

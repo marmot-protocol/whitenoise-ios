@@ -1379,6 +1379,8 @@ private struct ChatDestination: View {
                 chat: item.projectedGroup,
                 accountRef: appState.activeAccountRef,
                 initialTitle: item.title,
+                initialAvatarAsset: item.avatarAsset,
+                initialAvatarSeed: item.selectedAvatar != nil ? item.avatarSeed : nil,
                 initialOtherMember: item.directPeerAccountIdHex,
                 initialMemberCount: item.isDirectMessage == true ? 2 : nil,
                 initialLeaveRequestPending: item.leaveRequestPending,

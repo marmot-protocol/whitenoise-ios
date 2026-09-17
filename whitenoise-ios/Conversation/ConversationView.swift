@@ -529,6 +529,8 @@ struct ConversationView: View {
     let chat: AppGroupRecordFfi
     let draftAccountRef: String?
     let initialTitle: String?
+    let initialAvatarAsset: AvatarAssetFfi?
+    let initialAvatarSeed: String?
     let initialOtherMember: String?
     let initialMemberCount: Int?
     let initialLeaveRequestPending: Bool
@@ -705,6 +707,8 @@ struct ConversationView: View {
         chat: AppGroupRecordFfi,
         accountRef: String? = nil,
         initialTitle: String? = nil,
+        initialAvatarAsset: AvatarAssetFfi? = nil,
+        initialAvatarSeed: String? = nil,
         initialOtherMember: String? = nil,
         initialMemberCount: Int? = nil,
         initialLeaveRequestPending: Bool = false,
@@ -721,6 +725,8 @@ struct ConversationView: View {
         self.chat = chat
         self.draftAccountRef = accountRef ?? initialAppState?.activeAccountRef
         self.initialTitle = initialTitle
+        self.initialAvatarAsset = initialAvatarAsset
+        self.initialAvatarSeed = initialAvatarSeed
         self.initialOtherMember = initialOtherMember
         self.initialMemberCount = initialMemberCount
         self.initialLeaveRequestPending = initialLeaveRequestPending
@@ -1503,11 +1509,13 @@ struct ConversationView: View {
                     GroupAvatarBubble(
                         groupIdHex: viewModel.group.groupIdHex,
                         imageHashHex: viewModel.selectedImageHash,
-                        seed: viewModel.selectedAvatarSeed,
+                        seed: viewModel.conversationWindow != nil ? viewModel.selectedAvatarSeed
+                            : initialAvatarSeed ?? viewModel.selectedAvatarSeed,
                         title: chrome.title,
                         pictureURL: viewModel.selectedAvatarURL,
-                        nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
-                        usesNativeAsset: viewModel.conversationWindow != nil
+                        nativeAsset: viewModel.conversationWindow != nil
+                            ? viewModel.conversationWindow?.header.avatarAsset : initialAvatarAsset,
+                        usesNativeAsset: viewModel.conversationWindow != nil || initialAvatarSeed != nil
                     )
                     .frame(width: 40, height: 40)
                 }

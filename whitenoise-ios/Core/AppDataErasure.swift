@@ -5,7 +5,12 @@ import Foundation
 enum AvatarCacheErasure {
     private static var activeErasures = 0
     static var isInProgress: Bool { activeErasures > 0 }
-    static func begin() { activeErasures += 1 }
+    private(set) static var generation = 0
+    static func begin() {
+        activeErasures += 1
+        generation += 1
+        NativeAvatarImageCache.shared.removeAll()
+    }
     static func end() { activeErasures -= 1 }
 }
 
