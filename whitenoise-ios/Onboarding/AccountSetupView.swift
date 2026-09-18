@@ -48,10 +48,9 @@ struct AccountSetupView: View {
         .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button {
+                WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
                     Task { if await appState.cancelAccountSetup() { onClose() } }
-                } label: { Image(systemName: "xmark") }
-                .accessibilityLabel("Close")
+                }
                 .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }

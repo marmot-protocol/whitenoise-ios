@@ -239,6 +239,7 @@ struct SignedOutProfilesView: View {
 
 struct AddProfileSheet: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
     @State private var content = OnboardingSheetContent.welcome
     @State private var selectedDetent = PresentationDetent.large
 
@@ -254,6 +255,17 @@ struct AddProfileSheet: View {
                     selectedDetent = isExpanded ? .large : .medium
                 }
             )
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    WNButton(
+                        title: "Cancel",
+                        emphasis: .secondary,
+                        size: .compact
+                    ) {
+                        dismiss()
+                    }
+                }
+            }
         }
         .appAppearance()
         .presentationDetents(supportedDetents, selection: $selectedDetent)
