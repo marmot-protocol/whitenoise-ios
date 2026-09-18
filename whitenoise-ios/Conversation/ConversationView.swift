@@ -218,6 +218,20 @@ enum TimelineBottomScrollCoordinator {
         return !isUserScrolling && !userMovedAwayFromBottom && !hasMoreAfter && !isPaging
     }
 
+    static func sizeChangeAnchor(
+        didFinishInitialPositioning: Bool,
+        userMovedAwayFromBottom: Bool,
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool,
+        isPaging: Bool
+    ) -> UnitPoint? {
+        didFinishInitialPositioning && shouldExecute(
+            reason: .layoutChange, isUserScrolling: isUserScrolling,
+            userMovedAwayFromBottom: userMovedAwayFromBottom,
+            hasMoreAfter: hasMoreAfter, isPaging: isPaging
+        ) ? .bottom : nil
+    }
+
     static func shouldFollowLayoutChange(
         didFinishInitialPositioning: Bool,
         userMovedAwayFromBottom: Bool,
@@ -772,7 +786,6 @@ struct ConversationView: View {
                             .ignoresSafeArea(edges: .bottom)
                     }
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             // The identity cluster lives leading-aligned next to the back
             // chevron; an inline system title would double it up.
             .productScreen(.conversation)
@@ -1677,14 +1690,15 @@ struct ConversationView: View {
                                     }
                                     .padding(.bottom, 4)
                                     newerTimelineTrigger(viewModel: viewModel)
+                                    // Keep spacing before the target so it ends at the actual content edge.
                                     ForEach([Self.timelineBottomID], id: \.self) { _ in
                                         timelineBottomSentinel
+                                            .padding(.top, BottomInputChromeLayout.timelineComposerSpacing)
                                     }
                                 }
                                 .scrollTargetLayout()
                             }
                             .padding(.top, 8)
-                            .padding(.bottom, BottomInputChromeLayout.timelineComposerSpacing)
                             // Keep short conversations bottom-aligned by making
                             // their content track the live viewport height as
                             // the keyboard resizes the safe-area bar.
@@ -1709,6 +1723,14 @@ struct ConversationView: View {
                         // semantic initial-position request below still verifies
                         // the bottom sentinel after row layout has completed.
                         .defaultScrollAnchor(.bottom, for: .initialOffset)
+                        // Let native layout carry the tail with the keyboard's own transition.
+                        .defaultScrollAnchor(TimelineBottomScrollCoordinator.sizeChangeAnchor(
+                            didFinishInitialPositioning: isInitialTimelinePositionSettled,
+                            userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                            isUserScrolling: isUserScrollingTimeline,
+                            hasMoreAfter: viewModel.hasMoreAfter,
+                            isPaging: viewModel.isAwaitingPageCompletion
+                        ), for: .sizeChanges)
                         .task(id: initialTimelinePositionRequestGeneration) {
                             await Task.yield()
                             guard !Task.isCancelled,
@@ -1782,18 +1804,7 @@ struct ConversationView: View {
                         } action: { _, _ in
                             if isInitialTimelinePositioning {
                                 maintainInitialTimelinePosition(viewModel: viewModel)
-                                return
                             }
-                            guard TimelineBottomScrollCoordinator.shouldFollowLayoutChange(
-                                didFinishInitialPositioning: isInitialTimelinePositionSettled,
-                                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
-                                isUserScrolling: isUserScrollingTimeline
-                            ) else { return }
-                            scheduleScrollToBottom(
-                                proxy: proxy,
-                                animated: false,
-                                reason: .layoutChange
-                            )
                         }
                         .onChange(of: viewModel.timeline.last?.id) { _, newId in
                             guard newId != nil else { return }

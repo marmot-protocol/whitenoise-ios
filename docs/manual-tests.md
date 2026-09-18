@@ -162,6 +162,20 @@ before every release tag.
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
 
+## Conversation keyboard avoidance
+
+- [ ] Open a conversation at the latest message and tap the composer. The
+      composer and bottom of the timeline stay above the keyboard; the final
+      message remains visible without manually scrolling. Check this immediately
+      after opening the chat, without first nudging the timeline to its bottom.
+      The timeline moves smoothly with the keyboard instead of snapping; check Reduce Motion
+      with the system keyboard transition as well.
+- [ ] Open the attachment menu, dismiss it, and focus the composer again.
+      Repeat with a multiline draft and while reading older messages. Keyboard
+      presentation must preserve the reading position and leave no covered rows.
+- [ ] Dismiss the keyboard interactively and reopen it. Check both portrait and
+      landscape, and iPad with software and hardware keyboards.
+
 ## Conversation back navigation vs. swipe-to-reply
 
 - [ ] Open a long-running agent conversation from Chats while its avatar is

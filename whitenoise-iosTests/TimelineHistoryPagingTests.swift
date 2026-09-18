@@ -1,8 +1,19 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import whitenoise_ios
 
 struct TimelineHistoryPagingTests {
+    @Test func nativeSizeAnchorOnlyFollowsSettledLatestContent() {
+        #expect(TimelineBottomScrollCoordinator.sizeChangeAnchor(
+            didFinishInitialPositioning: true, userMovedAwayFromBottom: false,
+            isUserScrolling: false, hasMoreAfter: false, isPaging: false) == .bottom)
+        for gate in 0..<5 {
+            #expect(TimelineBottomScrollCoordinator.sizeChangeAnchor(
+                didFinishInitialPositioning: gate != 0, userMovedAwayFromBottom: gate == 1,
+                isUserScrolling: gate == 2, hasMoreAfter: gate == 3, isPaging: gate == 4) == nil)
+        }
+    }
     @Test func readingThroughMultiplePagesNeverEnablesAutomaticFollowing() {
         var readingHistory = true
         for page in 1...3 {
