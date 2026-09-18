@@ -290,6 +290,14 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Groups (3+ members)
 
+- [ ] From Group Info, open another member's profile. Message, New Group,
+      and Add to Group retain the three-button row and use matching neutral
+      colors in light/dark mode, including accessibility text sizes.
+- [ ] Add to Group opens even before group loading completes. Verify the
+      loading indicator, retryable load error, and explanatory empty state.
+      Eligible groups require admin membership and must not already contain
+      the person. After adding them, reopening the picker excludes that group.
+
 - [ ] Device A creates a 3-member group (B + C). Roster on A shows
       all 3 members. Group renders by name (not DM-style).
 - [ ] B and C both see the group within a few seconds.
