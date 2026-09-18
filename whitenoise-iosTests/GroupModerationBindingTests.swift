@@ -8,11 +8,8 @@ import MarmotKit
 struct GroupModerationBindingTests {
     @Test func offlineReportsRemainPendingUntilSourceAuthorizedModerationApplies() async throws {
         let client = try MarmotClient.testClient()
-        let watchdog = Task {
-            try await Task.sleep(for: .seconds(60))
-            Issue.record("Moderation fixture exceeded its deadline")
-            try await client.marmot.shutdownAndClose()
-        }
+        let watchdog = MarmotFixtureWatchdog.start(
+            "Moderation fixture exceeded its deadline", breaking: client)
         defer { watchdog.cancel() }
         do {
             try await client.startRuntime()

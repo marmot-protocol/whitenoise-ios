@@ -8,11 +8,8 @@ import MarmotKit
 struct ConversationWindowBindingTests {
     @Test func revisionedDraftsAndWindowCancellationUsePublishedBinary() async throws {
         let client = try MarmotClient.testClient()
-        let watchdog = Task {
-            try await Task.sleep(for: .seconds(45))
-            Issue.record("Conversation window or draft operation did not finish")
-            try await client.marmot.shutdownAndClose()
-        }
+        let watchdog = MarmotFixtureWatchdog.start(
+            "Conversation window or draft operation did not finish", breaking: client)
         defer { watchdog.cancel() }
         do {
             try await client.startRuntime()
@@ -63,11 +60,8 @@ struct ConversationWindowBindingTests {
         let state = AppState(client: client, notifications: .shared, conversationDraftStore: store,
             accountDefaults: defaults, erasureDefaults: defaults)
         state.setPhase(.ready)
-        let watchdog = Task {
-            try await Task.sleep(for: .seconds(45))
-            Issue.record("Draft store send did not complete")
-            try await client.marmot.shutdownAndClose()
-        }
+        let watchdog = MarmotFixtureWatchdog.start(
+            "Draft store send did not complete", breaking: client)
         defer { watchdog.cancel() }
         do {
             try await client.startRuntime()

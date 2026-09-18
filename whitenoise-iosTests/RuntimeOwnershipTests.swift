@@ -178,11 +178,8 @@ struct RuntimeOwnershipTests {
 
     @Test func windowAttentionAndResetCrossTheNativeBindings() async throws {
         let client = try MarmotClient.testClient()
-        let watchdog = Task {
-            try await Task.sleep(for: .seconds(20))
-            Issue.record("Native projection operation did not finish")
-            try await client.marmot.shutdownAndClose()
-        }
+        let watchdog = MarmotFixtureWatchdog.start(
+            "Native projection operation did not finish", breaking: client)
         defer { watchdog.cancel() }
         do {
             try await client.startRuntime()
@@ -242,11 +239,8 @@ struct RuntimeOwnershipTests {
             let initial = await client.presentedChatListSubscriptionSnapshot(subscription)
             #expect(initial?.sequence == 0)
             #expect(await client.presentedChatListSubscriptionSnapshot(subscription) == nil)
-            let watchdog = Task {
-                try await Task.sleep(for: .seconds(10))
-                Issue.record("Cancellation required a runtime shutdown to unblock")
-                try await client.marmot.shutdownAndClose()
-            }
+            let watchdog = MarmotFixtureWatchdog.start(
+                "Cancellation required a runtime shutdown to unblock", breaking: client)
             defer { watchdog.cancel() }
             for _ in 0..<16 {
                 let reader = Task.detached { try await subscription.nextCancellable() }
