@@ -88,11 +88,12 @@ struct WelcomeView: View {
         .tint(accentColor)
         .navigationDestination(isPresented: $showSignIn) {
             ImportIdentityView(
+                isPushed: true,
                 onPreferredSheetExpansionChange: updateSignInExpansion
             )
         }
         .navigationDestination(isPresented: $showSignUp) {
-            CreateIdentityView()
+            CreateIdentityView(isPushed: true)
         }
         .sheet(item: $sheetRoute, onDismiss: {
             appState.cancelProductOnboardingIfAbandoned()
@@ -101,11 +102,10 @@ struct WelcomeView: View {
                 switch route {
                 case .signIn:
                     ImportIdentityView(
-                        showsCloseButton: true,
                         onPreferredSheetExpansionChange: updateSignInExpansion
                     )
                 case .signUp:
-                    CreateIdentityView(showsCloseButton: true)
+                    CreateIdentityView()
                 }
             }
             .tint(accentColor)
