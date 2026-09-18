@@ -39,13 +39,13 @@ extension View {
         modifier(CompatibleInputCapsuleChromeModifier(interactive: interactive))
     }
 
-    func compatibleInputRoundedChrome(cornerRadius: CGFloat, interactive: Bool = true) -> some View {
-        modifier(CompatibleInputRoundedChromeModifier(cornerRadius: cornerRadius, interactive: interactive))
+    func compatibleInputRoundedChrome(cornerRadius: CGFloat, interactive: Bool = true, usesRegularGlass: Bool = false) -> some View {
+        modifier(CompatibleInputRoundedChromeModifier(cornerRadius: cornerRadius, interactive: interactive, usesRegularGlass: usesRegularGlass))
     }
 
     /// Circular companion to `compatibleInputCapsuleChrome()` for side actions.
-    func compatibleInputCircleChrome(interactive: Bool = true) -> some View {
-        modifier(CompatibleInputCircleChromeModifier(interactive: interactive))
+    func compatibleInputCircleChrome(interactive: Bool = true, usesRegularGlass: Bool = false) -> some View {
+        modifier(CompatibleInputCircleChromeModifier(interactive: interactive, usesRegularGlass: usesRegularGlass))
     }
 
     /// Applies Liquid Glass circle button behavior on iOS 26, press scale fallback earlier.
@@ -127,12 +127,13 @@ private struct CompatibleInputRoundedChromeModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     let cornerRadius: CGFloat
     let interactive: Bool
+    let usesRegularGlass: Bool
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         if #available(iOS 26.0, *) {
             content
-                .glassEffect(inputGlass(for: colorScheme, interactive: interactive), in: shape)
+                .glassEffect(inputGlass(for: colorScheme, interactive: interactive, usesRegularGlass: usesRegularGlass), in: shape)
                 .compatibleInputLightStroke(in: shape)
         } else {
             content.background(.regularMaterial, in: shape)
@@ -161,12 +162,13 @@ private struct CompatibleInputCapsuleChromeModifier: ViewModifier {
 private struct CompatibleInputCircleChromeModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     let interactive: Bool
+    let usesRegularGlass: Bool
 
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content
                 .glassEffect(
-                    inputGlass(for: colorScheme, interactive: interactive),
+                    inputGlass(for: colorScheme, interactive: interactive, usesRegularGlass: usesRegularGlass),
                     in: Circle()
                 )
                 .compatibleInputLightStroke(in: Circle())
@@ -204,8 +206,8 @@ private struct CompatibleInputLightStrokeModifier<S: InsettableShape>: ViewModif
 }
 
 @available(iOS 26.0, *)
-private func inputGlass(for colorScheme: ColorScheme, interactive: Bool) -> Glass {
-    let base: Glass = colorScheme == .light ? .regular : .clear
+private func inputGlass(for colorScheme: ColorScheme, interactive: Bool, usesRegularGlass: Bool = false) -> Glass {
+    let base: Glass = usesRegularGlass || colorScheme == .light ? .regular : .clear
     return interactive ? base.interactive() : base
 }
 

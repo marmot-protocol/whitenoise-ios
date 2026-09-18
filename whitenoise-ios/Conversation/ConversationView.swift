@@ -633,9 +633,9 @@ struct ConversationView: View {
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseHitSize = ReplyPreviewLayout.closeHitSize
     @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomIconSize: CGFloat = 18
+    private var scrollToBottomIconSize: CGFloat = 16
     @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomDiameter: CGFloat = 42
+    private var scrollToBottomDiameter: CGFloat = 32
 
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
@@ -781,10 +781,6 @@ struct ConversationView: View {
             .bottomInputChromeAccessory {
                 composerArea
                     .frame(maxWidth: .infinity)
-                    .background {
-                        Color(.systemBackground)
-                            .ignoresSafeArea(edges: .bottom)
-                    }
             }
             // The identity cluster lives leading-aligned next to the back
             // chevron; an inline system title would double it up.
@@ -2217,18 +2213,13 @@ struct ConversationView: View {
                     .font(.system(size: scrollToBottomIconSize, weight: .bold))
                     .foregroundStyle(.primary)
                     .frame(width: scrollToBottomDiameter, height: scrollToBottomDiameter)
-                    .background {
-                        ZStack {
-                            Circle().fill(.regularMaterial)
-                            Circle().fill(Color(.secondarySystemBackground).opacity(0.86))
-                        }
-                    }
-                    .overlay {
-                        Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                    }
-                    .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
+                    .legacyInputCircleChrome()
+                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .compatibleGlassCircleButtonStyle()
+            .controlSize(.small)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Scroll to latest message")
             .padding(.trailing, 9)
             .padding(.bottom, 10)
