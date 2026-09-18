@@ -1854,6 +1854,7 @@ struct ConversationView: View {
                         Task { await viewModel.start() }
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(WNNeutralAccent.foreground)
                 }
             case .connecting:
                 // The local snapshot hasn't landed yet because the runtime is
@@ -1882,6 +1883,7 @@ struct ConversationView: View {
                             Label("Add members", systemImage: "person.badge.plus")
                         }
                         .buttonStyle(.borderedProminent)
+                        .foregroundStyle(WNNeutralAccent.foreground)
                     }
                 } else {
                     ContentUnavailableView(

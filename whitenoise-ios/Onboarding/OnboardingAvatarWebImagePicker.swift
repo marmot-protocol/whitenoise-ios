@@ -235,7 +235,7 @@ struct OnboardingAvatarWebImagePicker: View {
                     if selectedURL == result.imageURL {
                         Image(systemName: "checkmark")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(WNNeutralAccent.foreground)
                             .padding(5)
                             .background(Color.accentColor, in: .circle)
                             .overlay(Circle().stroke(.white, lineWidth: 2))

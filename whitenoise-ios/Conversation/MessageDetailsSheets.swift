@@ -276,7 +276,7 @@ struct ReactionDetailsSheet: View {
                     .font(.caption.weight(.semibold))
             }
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(selected ? Color.white : Color.primary)
+            .foregroundStyle(selected ? WNNeutralAccent.foreground : Color.primary)
             .padding(.horizontal, 12)
             .frame(minHeight: 36)
             .background(
