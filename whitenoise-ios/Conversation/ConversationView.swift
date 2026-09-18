@@ -1223,6 +1223,8 @@ struct ConversationView: View {
                         ? L10n.string("Send")
                         : L10n.string("Save edit"),
                     voiceMessagesEnabled: editSession == nil,
+                    cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
+                    gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
                     onTakePhoto: takePhoto,
                     onPhotoLibrary: openPhotoLibrary,
                     onAttachFile: openFileImporter,
