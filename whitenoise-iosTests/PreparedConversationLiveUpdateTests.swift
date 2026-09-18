@@ -9,11 +9,8 @@ struct PreparedConversationLiveUpdateTests {
     @Test func preparedInstallationKeepsSendIdentityOrderAndUnchangedRowsInert() async throws {
         let client = try MarmotClient.testClient()
         try await client.startRuntime()
-        let watchdog = Task {
-            try await Task.sleep(for: .seconds(45))
-            Issue.record("Prepared-window fixture exceeded its deadline")
-            try await client.marmot.shutdownAndClose()
-        }
+        let watchdog = MarmotFixtureWatchdog.start(
+            "Prepared-window fixture exceeded its deadline", breaking: client)
         defer { watchdog.cancel() }
         do {
             let account = try await client.marmot.createIdentityWithProfile(
