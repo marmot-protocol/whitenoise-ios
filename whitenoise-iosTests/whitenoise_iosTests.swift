@@ -12605,6 +12605,53 @@ struct MessageImageBubblePresentationTests {
         #expect(size.height == 405)
     }
 
+    @Test func captionedPortraitImageFillsTheBubbleMediaWidth() {
+        let size = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "1080x1920",
+            fillsWidth: true
+        )
+
+        #expect(size.width == 300)
+        #expect(size.height == 405)
+    }
+
+    @Test func captionedLandscapeImageKeepsItsUnfilledSize() {
+        let filled = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "640x360",
+            fillsWidth: true
+        )
+
+        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "640x360"))
+    }
+
+    @Test func captionedShallowPortraitImageNeedsNoCrop() {
+        let filled = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "900x1000",
+            fillsWidth: true
+        )
+
+        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "900x1000"))
+        #expect(filled == CGSize(width: 300, height: 333))
+    }
+
+    @Test func captionOrReplyMakesTheSingleVisualFillTheBubble() {
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: false,
+            hasReply: false
+        ) == false)
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: true,
+            hasReply: false
+        ))
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: false,
+            hasReply: true
+        ))
+    }
+
     @Test func missingOrMalformedImageDimensionsUseSquareFallback() {
         #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: nil) == CGSize(width: 300, height: 300))
         #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "bad") == CGSize(width: 300, height: 300))
