@@ -732,3 +732,10 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - [ ] Force a definite pre-admission failure: the failed local attempt remains
       available for retry/discard. An uncertain completion must not offer a retry
       that could duplicate a committed message.
+
+## Profile sharing menu
+
+- On your profile QR screen, open Share: both Share Profile URL and Share Profile Picture are available. URL sharing preserves the existing profile link.
+- Share Profile Picture with and without an avatar, with a long name, and in light/dark appearance. The exported card includes the White Noise logo, current name/avatar, and a clear QR code. Save/send the image and scan it on another device to open the same profile.
+- Check the menu and share sheet on iPhone and iPad, including large text and VoiceOver. Cancel the sheet and share again.
+- With an uncached avatar offline, picture sharing shows a recoverable error; URL sharing remains available. Navigating away or changing profiles during preparation must not present a stale share sheet.
