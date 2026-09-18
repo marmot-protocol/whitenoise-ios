@@ -14,36 +14,6 @@ nonisolated enum ProfilePrimaryActionPresentation {
     }
 }
 
-nonisolated enum ProfileWebsitePresentation {
-    struct Website: Equatable {
-        let url: URL
-        let displayText: String
-    }
-
-    static func website(_ raw: String?) -> Website? {
-        guard let raw else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty,
-              trimmed.utf8.count <= ContentSanitizer.maxImageURLLength,
-              let components = URLComponents(string: trimmed),
-              let scheme = components.scheme?.lowercased(),
-              scheme == "https" || scheme == "http",
-              components.user == nil,
-              components.password == nil,
-              let host = components.host,
-              !host.isEmpty,
-              !ContentSanitizer.isPrivateOrLoopbackAddressLiteral(host),
-              let url = components.url,
-              case .confirmExternal = MessageLinkPolicy.action(for: url),
-              let displayText = ContentSanitizer.relayDisplayLine(
-                url.absoluteString,
-                maxLength: 120
-              )
-        else { return nil }
-        return Website(url: url, displayText: displayText)
-    }
-}
-
 /// Moderation scope handed to the profile surface when it's opened from a
 /// group's member list. Actions come from the live management state; the
 /// mutations run through the details view model so permission enforcement
@@ -57,14 +27,13 @@ struct ProfileModerationContext {
     let onRemove: () -> Void
 }
 
-/// Reusable profile content: identity, copyable npub, Message, private
-/// nickname, About, shared groups, group actions, and contextual moderation.
+/// Reusable profile content: identity, copyable npub, messaging, following,
+/// About, shared groups, group invitations, and contextual moderation.
 /// Presented as a sheet in conversational contexts and pushed or sheeted as
 /// a destination for deep links and QR scans.
 struct ProfileContentView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
 
     let npub: String
     var moderation: ProfileModerationContext?
@@ -72,20 +41,14 @@ struct ProfileContentView: View {
     /// carries their kind:0 metadata directly instead of promoting it into the
     /// local profile directory just to render this screen.
     var profileOverride: UserProfileMetadataFfi?
-    var initialIsFollowing: Bool?
-    var showsNewConversationActions = false
-    /// Supplied by the host once the relationship mutation binding is
-    /// available. Keeping it injected lets the profile UI land independently
-    /// without simulating a successful network publish.
-    var onLoadFollowing: (() async throws -> Bool)?
-    var onSetFollowing: ((Bool) async throws -> Bool)?
+    var isSearchPreview = false
+    var showsMessageAction = true
+    var onFollowChanged: ((Bool) -> Void)?
     var onOpenConversation: ((String) -> Void)?
 
     @State private var model = ProfileViewModel()
     @State private var confirmingRemoval = false
-    @State private var showStartGroup = false
     @State private var showAddToGroup = false
-    @State private var pendingExternalWebsite: URL?
     @State private var blockedUsers = BlockedUsersModel()
     @State private var blockReload = 0
 
@@ -103,59 +66,37 @@ struct ProfileContentView: View {
                 )
             }
 
-            if isBlockedPeer {
-                BlockedPeerNoticeSection(model: blockedUsers)
-            } else {
-                primaryActionSection
-            }
             aboutSection
             identityValuesSection
-            publicProfileSection
+            profileActionsSection
+            messageSection
             moderationSection
-            sharedGroupsSection
-            if isBlockablePeer, !isBlockedPeer {
-                BlockUserSection(model: blockedUsers) { blockReload += 1 }
-            }
         }
         .listStyle(.insetGrouped)
-        .task(id: npub) {
+        .listSectionSpacing(about == nil ? 24 : 8)
+        .navigationTitle("User Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: resolutionKey) {
             await model.resolve(
                 npub: npub,
                 using: appState,
-                refreshProfile: !showsNewConversationActions
+                refreshProfile: !isSearchPreview
             )
-            if showsNewConversationActions {
-                await model.prepareFollowStatus(
-                    initialValue: initialIsFollowing,
-                    load: onLoadFollowing
-                )
-            }
         }
-        .task(id: appState.profileRefreshGeneration) {
-            await model.refreshWebsite(using: appState)
-        }
-        .task(id: declaredNip05) { await model.verifyDeclaredNip05(declaredNip05) }
+        .task(id: "\(model.hex ?? "")/\(declaredNip05 ?? "")") { await model.verifyDeclaredNip05(declaredNip05) }
         .task(id: blockSubscriptionKey) {
             guard isBlockablePeer else { return }
             await blockedUsers.run(using: appState, target: npub)
-        }
-        .sheet(isPresented: $showStartGroup) {
-            if let hex = model.hex, let displayReference {
-                NewChatFlowView(initialGroupMembers: [
-                    MemberRefFfi(
-                        memberRef: displayReference,
-                        accountIdHex: hex,
-                        npub: displayReference
-                    )
-                ])
-                .appAppearance()
-            }
         }
         .sheet(isPresented: $showAddToGroup) {
             AddToGroupSheet(
                 contactNpub: displayReference ?? npub,
                 contactName: title,
-                groups: model.addableGroups
+                groups: model.addableGroups,
+                isLoading: model.directory.isLoading,
+                loadError: model.directory.loadError,
+                onRetry: { Task { await model.reloadGroups(using: appState, force: true) } },
+                onAdded: { await model.reloadGroups(using: appState, force: true) }
             )
             .appAppearance()
         }
@@ -184,161 +125,89 @@ struct ProfileContentView: View {
             .interactiveDismissDisabled(model.starter.isCreating)
             .appAppearance()
         }
-        .alert(L10n.string("Open link?"), isPresented: websiteConfirmationPresented) {
-            Button(L10n.string("Open")) {
-                guard let url = pendingExternalWebsite else { return }
-                pendingExternalWebsite = nil
-                openURL(url)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingExternalWebsite = nil
-            }
-        } message: {
-            if let url = pendingExternalWebsite {
-                Text(MessageExternalLinkConfirmation.displayText(for: url))
-            }
-        }
     }
 
     // MARK: - Identity
 
     private var headerSection: some View {
         Section {
-            VStack(spacing: 10) {
-                if let bannerURL {
-                    AsyncImage(url: bannerURL) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } else {
-                            Color(.secondarySystemFill)
-                                .overlay {
-                                    if phase.error == nil {
-                                        ProgressView()
-                                    }
-                                }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 112)
-                    .clipShape(.rect(cornerRadius: 12))
-                }
-
+            ProfileIdentityHeader(
+                name: title,
+                npub: displayReference,
+                nostrAddress: declaredNip05,
+                isAddressVerified: model.verifiedNip05 == declaredNip05,
+                bottomPadding: 0,
+                showsIdentityValues: about == nil
+            ) { size in
                 AvatarBubble(
                     seed: model.hex ?? npub,
                     title: title,
                     pictureURL: ContentSanitizer.imageURL(effectiveProfile?.picture)
                 )
-                .frame(width: 104, height: 104)
-
-                Text(title)
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-
-                // When a private nickname overrides the header, keep the real
-                // profile name visible as secondary text so the override is
-                // never silently confused for the contact's published name.
-                if nickname != nil, let profileName {
-                    Text(L10n.formatted("Name from profile: %@", profileName))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                if about == nil, let nip05 = declaredNip05 {
-                    HStack(spacing: 5) {
-                        Text(nip05)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        if model.verifiedNip05 == nip05 {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption)
-                                .foregroundStyle(.tint)
-                                .accessibilityLabel("Verified address")
-                        }
-                    }
-                }
-
-                if about == nil {
-                    identityChip
-                }
-
-                if model.hex == nil {
-                    Label("Couldn't read this profile code.", systemImage: "exclamationmark.triangle")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                .frame(width: size, height: size)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .listRowBackground(Color.clear)
+            if model.hex == nil {
+                Label("Couldn't read this profile code.", systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
     }
 
     // MARK: - Actions
 
     @ViewBuilder
-    private var primaryActionSection: some View {
+    private var profileActionsSection: some View {
         if canMessage {
             Section {
-                HStack(spacing: 10) {
-                    DetailsActionButton(
-                        title: showsNewConversationActions ? "Start Conversation" : "Message",
-                        systemImage: "message",
-                        isLoading: model.isPreparingConversationChoices
-                            || model.starter.isCreating
-                    ) {
-                        Task {
-                            await model.message(
-                                npub: npub,
-                                profile: effectiveProfile,
-                                using: appState,
-                                onOpen: openChat
-                            )
-                        }
-                    }
-                    .foregroundStyle(.white)
+                if displayReference != nil {
+                    GroupsInCommonRow(
+                        sharedGroups: model.sharedGroups,
+                        hasLoaded: model.groupsLoadState.hasLoaded,
+                        loadError: model.directory.loadError,
+                        onRetry: { Task { await model.reloadGroups(using: appState, force: true) } },
+                        onOpenChat: openChat,
+                        onAddToGroup: { showAddToGroup = true }
+                    )
+                    .disabled(isBlockedPeer)
+                }
+                if let hex = model.hex {
+                    ProfileFollowButton(accountIdHex: hex, onChanged: onFollowChanged)
+                        .disabled(isBlockedPeer)
+                }
+                BlockUserActions(model: blockedUsers) { blockReload += 1 }
+                    .disabled(!isBlockablePeer)
+            } header: {
+                if moderation != nil { Text("Profile Actions") }
+            }
+        }
+    }
 
-                    if showsNewConversationActions {
-                        DetailsActionButton(
-                            title: model.isFollowing == true ? "Unfollow" : "Follow",
-                            systemImage: model.isFollowing == true
-                                ? "person.badge.minus"
-                                : "person.badge.plus",
-                            isDisabled: onSetFollowing == nil,
-                            isLoading: model.isLoadingFollow || model.isUpdatingFollow
-                        ) {
-                            Task {
-                                await model.toggleFollow(
-                                    using: appState,
-                                    action: onSetFollowing
-                                )
-                            }
-                        }
-                        .foregroundStyle(.white)
-                    } else {
-                        DetailsActionButton(
-                            title: "New Group",
-                            systemImage: "person.2.badge.plus"
-                        ) {
-                            showStartGroup = true
-                        }
-                        .accessibilityLabel(L10n.formatted("Create group with %@", title))
-
-                        DetailsActionButton(
-                            title: "Add to Group",
-                            systemImage: "person.badge.plus",
-                            isDisabled: model.addableGroups.isEmpty
-                        ) {
-                            showAddToGroup = true
-                        }
+    @ViewBuilder
+    private var messageSection: some View {
+        if showsMessageAction, canMessage, !isBlockedPeer {
+            Section {
+                WNButton(
+                    title: "Message",
+                    systemImage: "plus.bubble",
+                    size: .standard,
+                    isLoading: model.isPreparingConversationChoices || model.starter.isCreating
+                ) {
+                    Task {
+                        await model.message(
+                            npub: npub,
+                            profile: effectiveProfile,
+                            using: appState,
+                            onOpen: openChat
+                        )
                     }
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                .padding(.top, about == nil ? 0 : 16)
             }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
         }
     }
 
@@ -364,78 +233,15 @@ struct ProfileContentView: View {
     private var identityValuesSection: some View {
         if about != nil {
             Section {
-                VStack(spacing: 8) {
-                    if let nip05 = declaredNip05 {
-                        HStack(spacing: 5) {
-                            Text(nip05)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                            if model.verifiedNip05 == nip05 {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.tint)
-                                    .accessibilityLabel("Verified address")
-                            }
-                        }
-                    }
-
-                    identityChip
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 8)
+                ProfileIdentityValues(
+                    npub: displayReference,
+                    nostrAddress: declaredNip05,
+                    isAddressVerified: model.verifiedNip05 == declaredNip05
+                )
+                .padding(.bottom, 16)
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
-        }
-    }
-
-    @ViewBuilder
-    private var publicProfileSection: some View {
-        if profileHandle != nil || lightningAddress != nil || website != nil {
-            Section("Profile") {
-                if let profileHandle {
-                    LabeledContent("Name", value: profileHandle)
-                }
-                if let lightningAddress {
-                    LabeledContent("Lightning address", value: lightningAddress)
-                }
-                if let website {
-                    Button {
-                        pendingExternalWebsite = website.url
-                    } label: {
-                        LabeledContent("Website") {
-                            HStack(spacing: 6) {
-                                Text(website.displayText)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Image(systemName: "arrow.up.right.square")
-                            }
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
-    // MARK: - Groups in common
-
-    @ViewBuilder
-    private var sharedGroupsSection: some View {
-        if let hex = model.hex, canMessage, let displayReference {
-            GroupsInCommonSection(
-                contactAccountIdHex: hex,
-                contactNpub: displayReference,
-                contactName: title,
-                sharedGroups: model.sharedGroups,
-                addableGroups: model.addableGroups,
-                onOpenChat: openChat,
-                showsActions: false,
-                onStartGroup: { showStartGroup = true },
-                onAddToGroup: { showAddToGroup = true }
-            )
         }
     }
 
@@ -447,7 +253,7 @@ struct ProfileContentView: View {
             Section {
                 moderationButtons
             } header: {
-                Text("Group Membership")
+                Text("Group Actions")
             } footer: {
                 if moderation?.isAdmin == true {
                     Text("This person is a group admin.")
@@ -459,45 +265,45 @@ struct ProfileContentView: View {
     @ViewBuilder
     private var moderationButtons: some View {
         if let moderation, !moderation.actions.isEmpty {
-                if moderation.actions.contains(.promote) {
-                    Button {
-                        moderation.onPromote()
+            if moderation.actions.contains(.promote) {
+                Button {
+                    moderation.onPromote()
+                    dismiss()
+                } label: {
+                    Label("Make Admin", systemImage: "star")
+                }
+                .disabled(moderation.isBusy)
+            }
+            if moderation.actions.contains(.demote) {
+                Button {
+                    moderation.onDemote()
+                    dismiss()
+                } label: {
+                    Label("Remove Admin", systemImage: "star.slash")
+                }
+                .disabled(moderation.isBusy)
+            }
+            if moderation.actions.contains(.remove) {
+                Button(role: .destructive) {
+                    confirmingRemoval = true
+                } label: {
+                    Label("Remove from Group", systemImage: "person.crop.circle.badge.minus")
+                }
+                .disabled(moderation.isBusy)
+                .confirmationDialog(
+                    "Remove this member?",
+                    isPresented: $confirmingRemoval,
+                    titleVisibility: .visible
+                ) {
+                    Button("Remove from Group", role: .destructive) {
+                        moderation.onRemove()
                         dismiss()
-                    } label: {
-                        Label("Make Admin", systemImage: "star")
                     }
-                    .disabled(moderation.isBusy)
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("They'll stop receiving new messages in this group.")
                 }
-                if moderation.actions.contains(.demote) {
-                    Button {
-                        moderation.onDemote()
-                        dismiss()
-                    } label: {
-                        Label("Remove Admin", systemImage: "star.slash")
-                    }
-                    .disabled(moderation.isBusy)
-                }
-                if moderation.actions.contains(.remove) {
-                    Button(role: .destructive) {
-                        confirmingRemoval = true
-                    } label: {
-                        Label("Remove from Group", systemImage: "person.crop.circle.badge.minus")
-                    }
-                    .disabled(moderation.isBusy)
-                    .confirmationDialog(
-                        "Remove this member?",
-                        isPresented: $confirmingRemoval,
-                        titleVisibility: .visible
-                    ) {
-                        Button("Remove from Group", role: .destructive) {
-                            moderation.onRemove()
-                            dismiss()
-                        }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("They'll stop receiving new messages in this group.")
-                    }
-                }
+            }
         }
     }
 
@@ -510,10 +316,14 @@ struct ProfileContentView: View {
         )
     }
 
-    /// While someone is blocked the interaction actions are withdrawn, so the
-    /// screen never offers a Message that the runtime would reject.
+    /// Keep relationship rows visible but disable interaction while blocked;
+    /// Message remains unavailable until the peer is unblocked.
     private var isBlockedPeer: Bool {
         isBlockablePeer && blockedUsers.targetIsBlocked
+    }
+
+    private var resolutionKey: String {
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(npub)"
     }
 
     private var blockSubscriptionKey: String {
@@ -537,24 +347,11 @@ struct ProfileContentView: View {
     private var title: String {
         IdentityPresentation.text(
             accountIdHex: resolvedAccountIdHex,
-            knownName: nickname
-                ?? AppState.resolvedKnownDisplayName(
-                    profile: effectiveProfile,
-                    projectedName: projectedDisplayName,
-                    localAccountLabel: nil
-                )
-        )
-    }
-
-    private var nickname: String? {
-        model.hex.flatMap { appState.contactNickname(forAccountIdHex: $0) }
-    }
-
-    private var profileName: String? {
-        AppState.resolvedKnownDisplayName(
-            profile: effectiveProfile,
-            projectedName: nil,
-            localAccountLabel: nil
+            knownName: AppState.resolvedKnownDisplayName(
+                profile: effectiveProfile,
+                projectedName: projectedDisplayName,
+                localAccountLabel: nil
+            )
         )
     }
 
@@ -569,26 +366,10 @@ struct ProfileContentView: View {
         )
     }
 
-    private var lightningAddress: String? {
-        ContentSanitizer.profileAddress(effectiveProfile?.lud16)
-    }
-
-    private var website: ProfileWebsitePresentation.Website? {
-        ProfileWebsitePresentation.website(model.website)
-    }
-
-    private var profileHandle: String? {
-        ContentSanitizer.displayName(effectiveProfile?.name)
-    }
-
-    private var bannerURL: URL? {
-        ContentSanitizer.imageURL(effectiveProfile?.banner)
-    }
-
     private var effectiveProfile: UserProfileMetadataFfi? {
         if let profileOverride { return profileOverride }
         guard let hex = model.hex else { return nil }
-        if showsNewConversationActions {
+        if isSearchPreview {
             return appState.cachedProfile(forAccountIdHex: hex)
         }
         return appState.profile(forAccountIdHex: hex)
@@ -596,7 +377,7 @@ struct ProfileContentView: View {
 
     private var projectedDisplayName: String? {
         guard let hex = model.hex else { return nil }
-        if showsNewConversationActions {
+        if isSearchPreview {
             return appState.cachedKnownDisplayName(forAccountIdHex: hex)
         }
         return appState.knownDisplayName(forAccountIdHex: hex)
@@ -617,24 +398,6 @@ struct ProfileContentView: View {
 
     private var displayReference: String? {
         IdentityPresentation.canonicalNpub(accountIdHex: resolvedAccountIdHex)
-    }
-
-    @ViewBuilder
-    private var identityChip: some View {
-        if let displayReference {
-            CopyableValueChip(
-                display: IdentityFormatter.short(displayReference, head: 12, tail: 10),
-                copyValue: displayReference,
-                valueName: L10n.string("npub")
-            )
-        }
-    }
-
-    private var websiteConfirmationPresented: Binding<Bool> {
-        Binding(
-            get: { pendingExternalWebsite != nil },
-            set: { if !$0 { pendingExternalWebsite = nil } }
-        )
     }
 
 }

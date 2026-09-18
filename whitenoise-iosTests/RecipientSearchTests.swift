@@ -169,17 +169,17 @@ struct RecipientSearchTests {
         #expect(result.map(\.accountIdHex) == [bob, alice])
     }
 
-    @Test func matchesPrivateNicknameAndNip05() {
+    @Test func matchesPublishedNameAndNip05() {
         let candidates = [candidate(alice), candidate(bob)]
 
-        let byNickname = RecipientSearch.browse(candidates, query: "boss") { candidate in
-            candidate.accountIdHex == self.alice ? .init(nickname: "The Boss") : .init()
+        let byName = RecipientSearch.browse(candidates, query: "boss") { candidate in
+            candidate.accountIdHex == self.alice ? .init(displayName: "The Boss") : .init()
         }
         let byAddress = RecipientSearch.browse(candidates, query: "example.com") { candidate in
             candidate.accountIdHex == self.bob ? .init(nip05: "bob@example.com") : .init()
         }
 
-        #expect(byNickname.map(\.accountIdHex) == [alice])
+        #expect(byName.map(\.accountIdHex) == [alice])
         #expect(byAddress.map(\.accountIdHex) == [bob])
     }
 
@@ -515,38 +515,4 @@ private func waitForRecipientSearch(
 private enum MembershipReadFailure: Error {
     case page
     case group
-}
-
-@MainActor
-struct ProfileFollowTests {
-    private let peer = String(repeating: "dd", count: 32)
-
-    @Test func profileLoadsFollowStatusFromTheBindingAdapter() async {
-        let model = ProfileViewModel()
-        model.applyResolvedAccount(peer)
-
-        await model.prepareFollowStatus(initialValue: false) {
-            true
-        }
-
-        #expect(model.isFollowing == true)
-        #expect(!model.isLoadingFollow)
-    }
-
-    @Test func profileTogglePublishesTheOppositeStateAndUsesReturnedResult() async throws {
-        let model = ProfileViewModel()
-        let appState = AppState(client: try MarmotClient.testClient())
-        model.applyResolvedAccount(peer)
-        await model.prepareFollowStatus(initialValue: true, load: nil)
-        var requestedState: Bool?
-
-        await model.toggleFollow(using: appState) { desired in
-            requestedState = desired
-            return desired
-        }
-
-        #expect(requestedState == false)
-        #expect(model.isFollowing == false)
-        #expect(!model.isUpdatingFollow)
-    }
 }

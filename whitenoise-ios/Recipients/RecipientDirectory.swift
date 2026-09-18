@@ -269,7 +269,6 @@ final class RecipientDirectory {
                 candidate.accountIdHex,
                 RecipientSearch.MatchFields(
                     displayName: appState.cachedKnownDisplayName(forAccountIdHex: candidate.accountIdHex),
-                    nickname: appState.contactNickname(forAccountIdHex: candidate.accountIdHex),
                     nip05: ContentSanitizer.profileAddress(
                         appState.cachedProfile(forAccountIdHex: candidate.accountIdHex)?.nip05
                     )

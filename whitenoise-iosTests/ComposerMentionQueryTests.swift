@@ -42,12 +42,8 @@ struct ComposerMentionQueryTests {
     }
 
     @MainActor
-    @Test func detailedRosterCandidatePrefersLocalContactNickname() throws {
+    @Test func detailedRosterCandidateUsesPublishedProfileName() throws {
         let appState = AppState(client: try MarmotClient.testClient())
-        let suiteName = "dev.ipf.WhiteNoise.mention-nickname.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-        appState.profileStore.contactNicknameDefaults = defaults
         let ownerHex = String(repeating: "aa", count: 32)
         let peerHex = String(repeating: "bb", count: 32)
         appState.accountStore.accounts = [
@@ -60,7 +56,6 @@ struct ComposerMentionQueryTests {
             )
         ]
         appState.activeAccountRef = "me"
-        appState.setContactNickname("Bestie", forAccountIdHex: peerHex)
         let details = GroupMemberDetailsFfi(
             memberIdHex: peerHex,
             account: peerHex,
@@ -73,8 +68,8 @@ struct ComposerMentionQueryTests {
 
         let candidate = ComposerMentionCandidate(details: details, appState: appState)
 
-        #expect(candidate.displayName == "Bestie")
-        #expect(ComposerMentionQuery.filter([candidate], matching: "best").map(\.npub) == [aliceNpub])
+        #expect(candidate.displayName == "Peer profile name")
+        #expect(ComposerMentionQuery.filter([candidate], matching: "peer profile").map(\.npub) == [aliceNpub])
     }
 
     @Test func filterMatchesMemberIdHexCaseInsensitively() {

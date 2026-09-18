@@ -135,7 +135,6 @@ final class NotificationService: UNNotificationServiceExtension {
                 // in-memory snapshots. A nil mode snapshot means the shared suite
                 // couldn't be resolved, so delivery fails safe (all suppressed).
                 let notifyModeSnapshot = ChatMuteStore.notifyModeSnapshot()
-                let contactNicknames = ContactNicknameStore.nicknamesByKey()
                 let previewMode = NotificationPreviewStore.mode()
                 let accountRefs = Set(result.notifications.map(\.accountRef))
                 let enabledByAccountRef = await NotificationServiceStorageReader
@@ -174,13 +173,6 @@ final class NotificationService: UNNotificationServiceExtension {
                         )
                     },
                     notifyMode: notifyMode,
-                    nickname: { ownerAccountIdHex, contactAccountIdHex in
-                        ContactNicknameStore.nickname(
-                            ownerAccountIdHex: ownerAccountIdHex,
-                            contactAccountIdHex: contactAccountIdHex,
-                            in: contactNicknames
-                        )
-                    },
                     previewMode: previewMode
                 )
                 // An empty wake can't be attributed: the engine drops

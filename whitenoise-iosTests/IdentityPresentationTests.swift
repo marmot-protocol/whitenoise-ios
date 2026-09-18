@@ -36,11 +36,11 @@ struct IdentityPresentationContractTests {
     @Test func resolvesEveryInputShapeWithoutLeakingHex() {
         let cases: [Case] = [
             Case(
-                label: "nickname wins",
+                label: "known profile name wins",
                 accountIdHex: Fixture.hex,
-                knownName: "Nickname",
+                knownName: "Alice",
                 expectedSource: .name,
-                expectedText: "Nickname"
+                expectedText: "Alice"
             ),
             Case(
                 label: "sanitized profile name",
@@ -300,7 +300,7 @@ struct IdentityPresentationAdapterTests {
         #expect(!malformedSender.hasPrefix("npub1"))
     }
 
-    @Test func notificationNicknameAndProfileNameStillWinOverNpub() throws {
+    @Test func notificationProfileNameStillWinsOverNpub() throws {
         let named = try #require(
             LocalNotificationProjection.makePresentation(
                 for: notificationUpdate(senderAccountIdHex: Fixture.hex, senderName: "Alice")
@@ -308,13 +308,6 @@ struct IdentityPresentationAdapterTests {
         )
         #expect(named.senderName == "Alice")
 
-        let nicknamed = try #require(
-            LocalNotificationProjection.makePresentation(
-                for: notificationUpdate(senderAccountIdHex: Fixture.hex, senderName: "Alice"),
-                nickname: { _, _ in "Nickname" }
-            )
-        )
-        #expect(nicknamed.senderName == "Nickname")
     }
 
     @Test func blankNotificationSenderNameDoesNotRenderEmpty() throws {
