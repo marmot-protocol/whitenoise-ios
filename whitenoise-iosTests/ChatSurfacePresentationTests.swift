@@ -218,10 +218,11 @@ struct ChatSurfacePresentationTests {
     }
 
     @Test func multiMessageSelectionUsesSharedForwardLimitAndStrictDeleteCapability() {
-        #expect(MessageSelectionPolicy.canForward(selectedCount: 1, allForwardable: true))
-        #expect(MessageSelectionPolicy.canForward(selectedCount: 30, allForwardable: true))
-        #expect(!MessageSelectionPolicy.canForward(selectedCount: 31, allForwardable: true))
-        #expect(!MessageSelectionPolicy.canForward(selectedCount: 2, allForwardable: false))
+        #expect(MessageSelectionPolicy.canForward(selectedCount: 1, anyForwardable: true))
+        #expect(MessageSelectionPolicy.canForward(selectedCount: 30, anyForwardable: true))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 31, anyForwardable: true))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 2, anyForwardable: false))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 0, anyForwardable: true))
         #expect(MessageSelectionPolicy.canDelete(selectedCount: 2, allDeletable: true))
         #expect(!MessageSelectionPolicy.canDelete(selectedCount: 2, allDeletable: false))
     }
