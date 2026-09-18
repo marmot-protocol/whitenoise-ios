@@ -739,3 +739,9 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - Share Profile Picture with and without an avatar, with a long name, and in light/dark appearance. The exported card includes the White Noise logo, current name/avatar, and a clear QR code. Save/send the image and scan it on another device to open the same profile.
 - Check the menu and share sheet on iPhone and iPad, including large text and VoiceOver. Cancel the sheet and share again.
 - With an uncached avatar offline, picture sharing shows a recoverable error; URL sharing remains available. Navigating away or changing profiles during preparation must not present a stale share sheet.
+
+## Reading unread history across pages
+
+- Open a conversation with more than 100 unread messages at its unread marker. Scroll down across multiple newer-page spinners, pause at each boundary, and verify the same message stays at the same screen offset when the page loads, including the final page.
+- While still reading history, receive a message or let media expand. Neither should jump to the end or mark unseen messages read. At the actual conversation end, new messages should follow normally.
+- Confirm that sending a message and tapping the down arrow still reach the latest message. Check both slow paging and a quick page completion after you lift your finger.

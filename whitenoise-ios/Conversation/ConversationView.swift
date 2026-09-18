@@ -68,9 +68,10 @@ enum TimelineBottom {
     static func userMovedAwayState(
         previous: Bool,
         viewportIsPinned: Bool,
-        isUserScrolling: Bool
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool = false
     ) -> Bool {
-        if viewportIsPinned { return false }
+        if viewportIsPinned, !hasMoreAfter { return false }
         if isUserScrolling { return true }
         return previous
     }
@@ -208,9 +209,13 @@ enum TimelineBottomScrollCoordinator {
 
     static func shouldExecute(
         reason: TimelineBottomScrollReason,
-        isUserScrolling: Bool
+        isUserScrolling: Bool,
+        userMovedAwayFromBottom: Bool = false,
+        hasMoreAfter: Bool = false,
+        isPaging: Bool = false
     ) -> Bool {
-        reason.isUserInitiated || !isUserScrolling
+        if reason.isUserInitiated { return true }
+        return !isUserScrolling && !userMovedAwayFromBottom && !hasMoreAfter && !isPaging
     }
 
     static func shouldFollowLayoutChange(
@@ -590,6 +595,7 @@ struct ConversationView: View {
     /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
     /// carries the request into the reader's scope.
     @State private var composerSendBottomScrollRequest = 0
+    @State private var measuredTimelineTail = TimelineTailMeasurement()
     @State private var isAtTimelineBottom = true
     @State private var isUserScrollingTimeline = false
     @State private var userMovedAwayFromTimelineBottom = false
@@ -1064,6 +1070,10 @@ struct ConversationView: View {
                         viewport.cancelRestoration()
                         return
                     }
+                    // A page replacement must not inherit the previous page's bottom.
+                    isAtTimelineBottom = false
+                    userMovedAwayFromTimelineBottom = true
+                    cancelPendingBottomScroll()
                     viewport.prepare(for: snapshot, displayID: { model.displayID(for: $0) })
                 }
                 await viewModel?.start()
@@ -1628,6 +1638,7 @@ struct ConversationView: View {
                 let dayHeaders = Dictionary(viewModel.timelineDaySections().compactMap { section in
                     section.items.first.map { ($0.id, section.day) }
                 }, uniquingKeysWith: { first, _ in first })
+                let renderedTailID = viewModel.timeline.last?.id
                 ScrollViewReader { proxy in
                     GeometryReader { outer in
                         ScrollView {
@@ -1720,9 +1731,9 @@ struct ConversationView: View {
                                 cancelPendingBottomScroll()
                             }
                             if phase == .idle {
-                                viewModel.reportConversationViewport(atTail: isAtTimelineBottom,
+                                viewModel.reportConversationViewport(atTail: isMeasuredConversationTail(viewModel),
                                     visibleRowID: conversationViewport.visibleAnchor())
-                                if isAtTimelineBottom { userMovedAwayFromTimelineBottom = false }
+                                if isMeasuredConversationTail(viewModel) { userMovedAwayFromTimelineBottom = false }
                             }
                         }
                         .onPreferenceChange(RowFramesKey.self) { preferences in
@@ -1739,27 +1750,32 @@ struct ConversationView: View {
                                 reconcileTimelineTailVisibility(viewModel: viewModel)
                             }
                         }
-                        .onScrollGeometryChange(for: Bool.self) { geometry in
-                            TimelineBottom.distanceToBottom(
-                                contentHeight: geometry.contentSize.height,
-                                visibleBottomY: geometry.visibleRect.maxY,
-                                bottomContentInset: geometry.contentInsets.bottom
-                            ) <= TimelineBottom.pinnedThreshold
-                        } action: { _, isPinned in
-                            if isAtTimelineBottom != isPinned {
-                                isAtTimelineBottom = isPinned
-                                if isPinned, isInitialTimelinePositionSettled {
-                                    viewModel.markConversationReadThroughTail()
+                        .onScrollGeometryChange(for: TimelineTailMeasurement.self) { geometry in
+                            TimelineTailMeasurement(
+                                lastRowID: renderedTailID,
+                                distanceToBottom: TimelineBottom.distanceToBottom(
+                                    contentHeight: geometry.contentSize.height,
+                                    visibleBottomY: geometry.visibleRect.maxY,
+                                    bottomContentInset: geometry.contentInsets.bottom
+                                )
+                            )
+                        } action: { _, measurement in
+                            measuredTimelineTail = measurement
+                            let atTail = isMeasuredConversationTail(viewModel)
+                            isAtTimelineBottom = atTail
+                            if atTail, isInitialTimelinePositionSettled {
+                                viewModel.markConversationReadThroughTail()
+                                if !isUserScrollingTimeline {
+                                    viewModel.reportConversationViewport(atTail: true,
+                                        visibleRowID: conversationViewport.visibleAnchor())
                                 }
                             }
-                            let movedAway = TimelineBottom.userMovedAwayState(
+                            userMovedAwayFromTimelineBottom = TimelineBottom.userMovedAwayState(
                                 previous: userMovedAwayFromTimelineBottom,
-                                viewportIsPinned: isPinned,
-                                isUserScrolling: isUserScrollingTimeline
+                                viewportIsPinned: atTail,
+                                isUserScrolling: isUserScrollingTimeline,
+                                hasMoreAfter: viewModel.hasMoreAfter
                             )
-                            if userMovedAwayFromTimelineBottom != movedAway {
-                                userMovedAwayFromTimelineBottom = movedAway
-                            }
                         }
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
                             geometry.contentSize.height
@@ -1785,9 +1801,8 @@ struct ConversationView: View {
                                 return
                             }
                             guard !isInitialTimelinePositioning else { return }
-                            if !userMovedAwayFromTimelineBottom {
-                                isAtTimelineBottom = true
-                                viewModel.markConversationReadThroughTail()
+                            if !userMovedAwayFromTimelineBottom, !viewModel.hasMoreAfter,
+                               !viewModel.isAwaitingPageCompletion {
                                 scheduleScrollToBottom(
                                     proxy: proxy,
                                     animated: true,
@@ -2240,7 +2255,10 @@ struct ConversationView: View {
         }
         guard TimelineBottomScrollCoordinator.shouldExecute(
             reason: reason,
-            isUserScrolling: isUserScrollingTimeline
+            isUserScrolling: isUserScrollingTimeline,
+            userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+            hasMoreAfter: viewModel?.hasMoreAfter ?? true,
+            isPaging: viewModel?.isAwaitingPageCompletion ?? true
         ) else {
             return
         }
@@ -2271,7 +2289,10 @@ struct ConversationView: View {
             pendingBottomScrollTask = nil
             guard TimelineBottomScrollCoordinator.shouldExecute(
                 reason: request.reason,
-                isUserScrolling: isUserScrollingTimeline
+                isUserScrolling: isUserScrollingTimeline,
+                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                hasMoreAfter: viewModel?.hasMoreAfter ?? true,
+                isPaging: viewModel?.isAwaitingPageCompletion ?? true
             ) else { return }
             scrollToBottom(proxy: proxy, animated: request.animated)
             lastAutomaticBottomScrollTargetID = request.targetID
@@ -2430,8 +2451,16 @@ struct ConversationView: View {
         reconcileTimelineTailVisibility(viewModel: viewModel)
     }
 
+    private func isMeasuredConversationTail(_ viewModel: ConversationViewModel) -> Bool {
+        measuredTimelineTail.isConversationTail(
+            currentLastRowID: viewModel.timeline.last?.id,
+            hasMoreAfter: viewModel.hasMoreAfter,
+            isPaging: viewModel.isAwaitingPageCompletion || viewModel.isLoadingNewer || viewModel.isLoadingOlder
+        )
+    }
+
     private func reconcileTimelineTailVisibility(viewModel: ConversationViewModel) {
-        guard TimelineTailVisibility.isTailOnScreen(
+        guard isMeasuredConversationTail(viewModel), TimelineTailVisibility.isTailOnScreen(
             visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs,
             bottomSentinelID: Self.timelineBottomID,
             hasMoreAfter: viewModel.hasMoreAfter
