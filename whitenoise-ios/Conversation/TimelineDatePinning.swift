@@ -34,4 +34,3 @@ nonisolated enum TimelineDatePinning {
         return Presentation(headerID: orderedHeaderIDs[index], offset: offset)
     }
 }
-
