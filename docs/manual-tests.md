@@ -162,6 +162,16 @@ before every release tag.
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
 
+## Draft conflicts and send recovery
+
+- [ ] With a conversation open, update its draft through another editor sharing
+      the same MDK store. Editing the original composer must offer conflict
+      resolution and preserve both drafts until a choice is made.
+- [ ] Interrupt connectivity during a draft send. A later delivery error must
+      not add a locally retryable duplicate beside the MDK message. Reopen the
+      conversation: an unaccepted draft remains available; an accepted message
+      stays in the timeline without restoring its submitted composer.
+
 ## Conversation keyboard avoidance
 
 - [ ] Open a conversation at the latest message and tap the composer. The
