@@ -239,7 +239,7 @@ nonisolated enum PinBadgePresentation {
 }
 
 /// Circular avatar. Renders the profile picture when a URL is provided,
-/// otherwise falls back to initials over a deterministic color derived from
+/// otherwise falls back to an initial over a deterministic color derived from
 /// the seed string (so a given group/person keeps the same color).
 struct AvatarBubble: View {
     let seed: String
@@ -249,11 +249,7 @@ struct AvatarBubble: View {
 
     var body: some View {
         Circle()
-            .fill(LinearGradient(
-                colors: [color.opacity(0.85), color.opacity(0.5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ))
+            .fill(WNIdentityPalette.avatarBackground(for: seed))
             .overlay {
                 initialsView
                 if let pictureURL {
@@ -275,31 +271,10 @@ struct AvatarBubble: View {
     }
 
     private var initialsView: some View {
-        Text(initials)
-            .font(.headline)
+        Text(WNAvatarMonogram.initial(for: title))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var initials: String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "?" }
-        let parts = trimmed.split(separator: " ", maxSplits: 1)
-        let first = parts.first?.first.map(String.init) ?? ""
-        let second = parts.count > 1 ? (parts[1].first.map(String.init) ?? "") : ""
-        let combined = (first + second).uppercased()
-        return combined.isEmpty ? "?" : combined
-    }
-
-    private var color: Color {
-        let palette: [Color] = [.indigo, .blue, .teal, .green, .orange, .pink, .purple, .red]
-        let hash = seed.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
-        return palette[Self.paletteIndex(forHash: hash, paletteCount: palette.count)]
-    }
-
-    static func paletteIndex(forHash hash: Int, paletteCount: Int) -> Int {
-        precondition(paletteCount > 0)
-        return Int(hash.magnitude % UInt(paletteCount))
     }
 }
 

@@ -6483,21 +6483,6 @@ struct ConversationChromeTests {
 }
 
 @MainActor
-struct AvatarBubbleTests {
-
-    @Test func paletteIndexHandlesMinimumIntegerHash() {
-        let index = AvatarBubble.paletteIndex(forHash: Int.min, paletteCount: 8)
-
-        #expect((0..<8).contains(index))
-    }
-
-    @Test func paletteIndexMatchesAbsoluteRemainderForOrdinaryNegativeHashes() {
-        #expect(AvatarBubble.paletteIndex(forHash: -9, paletteCount: 8) == 1)
-        #expect(AvatarBubble.paletteIndex(forHash: 9, paletteCount: 8) == 1)
-    }
-}
-
-@MainActor
 struct ChatsListProjectionTests {
 
     @Test func directPeerProjectionRequiresExactlySelfAndOneOtherMember() {

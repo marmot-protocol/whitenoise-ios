@@ -4,7 +4,7 @@ import UIKit
 /// The large editable avatar shared by Sign Up and Profile: a circle filled
 /// with the monochrome accent, showing the profile photo when there is one and
 /// a single monogram letter otherwise. Row-sized avatars use `AvatarBubble`,
-/// whose two-letter monogram is sized for a list row rather than a header.
+/// whose monogram is sized for a list row rather than a header.
 struct WNAvatarPreview: View {
     @Environment(\.colorScheme) private var colorScheme
 
