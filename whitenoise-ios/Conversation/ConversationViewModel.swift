@@ -2645,6 +2645,9 @@ final class ConversationViewModel {
     /// Forwards selected text messages in timeline order. Messages and
     /// destinations are processed sequentially so their ordering stays stable
     /// and one destination's failure cannot cancel successful destinations.
+    /// Rows with no forwardable plaintext, such as an uncaptioned image, are
+    /// skipped rather than failing the batch — that is what lets the selection
+    /// bar enable Forward for a mixed selection.
     func forwardMessages(
         _ messages: [AppMessageRecordFfi],
         to groupIds: Set<String>
@@ -2653,8 +2656,7 @@ final class ConversationViewModel {
         let texts = messages.prefix(MessageSelectionPolicy.maximumForwardCount).compactMap {
             MessageForwardingPolicy.forwardableText(for: $0)
         }
-        guard texts.count == messages.count,
-              !texts.isEmpty,
+        guard !texts.isEmpty,
               !destinations.isEmpty,
               let appState,
               let accountRef = appState.activeAccountRef,

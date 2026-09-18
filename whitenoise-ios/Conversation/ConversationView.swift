@@ -544,6 +544,7 @@ enum ConversationInvitePresentation {
 
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
     let chat: AppGroupRecordFfi
     let draftAccountRef: String?
@@ -1273,7 +1274,7 @@ struct ConversationView: View {
         let records = selectedMessageRecords(viewModel: viewModel)
         let canForward = MessageSelectionPolicy.canForward(
             selectedCount: records.count,
-            allForwardable: records.allSatisfy { MessageForwardingPolicy.forwardableText(for: $0) != nil }
+            anyForwardable: records.contains { MessageForwardingPolicy.forwardableText(for: $0) != nil }
         )
         let canDelete = MessageSelectionPolicy.canDelete(
             selectedCount: records.count,
@@ -1292,26 +1293,17 @@ struct ConversationView: View {
         )
 
         return HStack(spacing: 10) {
-            Button(role: .destructive) {
-                guard canDelete else { return }
-                showBatchDeleteConfirmation = true
-            } label: {
-                if batchDeleteInFlight {
-                    ProgressView().frame(width: 44, height: 44)
-                } else {
-                    Image(systemName: "trash")
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
+            if batchDeleteInFlight {
+                ProgressView()
+                    .frame(width: WNSecondaryButtonStyle.Metrics.circleDiameter,
+                           height: WNSecondaryButtonStyle.Metrics.circleDiameter)
+                    .wnLiftedChrome(in: .circle)
+            } else {
+                WNIconButton(title: "Delete selected messages", systemImage: "trash") {
+                    showBatchDeleteConfirmation = true
                 }
+                .disabled(!canDelete)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(canDelete && !batchDeleteInFlight ? Color.red : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
-            .disabled(!canDelete || batchDeleteInFlight)
-            .accessibilityLabel(L10n.string("Delete selected messages"))
 
             Spacer(minLength: 0)
 
@@ -1319,50 +1311,23 @@ struct ConversationView: View {
                 .font(.body.weight(.medium))
                 .contentTransition(.numericText())
                 .padding(.horizontal, 18)
-                .frame(minHeight: 44)
-                .background(.regularMaterial, in: .capsule)
-                .overlay {
-                    Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                }
+                .frame(minHeight: WNSecondaryButtonStyle.Metrics.circleDiameter)
+                .wnLiftedChrome(in: .capsule)
 
             Spacer(minLength: 0)
 
-            Button {
-                guard canCopy else { return }
+            WNIconButton(title: "Copy selected messages", systemImage: "doc.on.doc") {
                 SensitiveClipboard.copyLocalOnly(MessageSelectionPolicy.combinedCopyText(bodies))
                 Haptics.tap()
                 exitMessageSelection()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(canCopy ? Color.accentColor : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
             .disabled(!canCopy)
-            .accessibilityLabel(L10n.string("Copy selected messages"))
 
-            Button {
-                guard canForward else { return }
+            WNIconButton(title: "Forward selected messages", systemImage: "arrowshape.turn.up.right") {
                 forwardSelectionTarget = ForwardSelectionTarget(records: records)
                 exitMessageSelection()
-            } label: {
-                Image(systemName: "arrowshape.turn.up.right")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(canForward ? Color.accentColor : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
             .disabled(!canForward)
-            .accessibilityLabel(L10n.string("Forward selected messages"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -1467,31 +1432,34 @@ struct ConversationView: View {
     /// both direct messages and groups.
     private var conversationHeaderBar: some View {
         HStack(spacing: 16) {
-            Button {
-                navigateBack()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .background {
-                        Circle()
-                            .fill(Color(.secondarySystemBackground))
-                    }
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-                    }
-                    .contentShape(.circle)
+            // Selection owns the header; its only exit is the close button.
+            if !isSelectingMessages {
+                Button {
+                    navigateBack()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .font(.system(size: 20, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .background {
+                            Circle()
+                                .fill(Color(.secondarySystemBackground))
+                        }
+                        .overlay {
+                            Circle()
+                                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+                        }
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.string("Back"))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.string("Back"))
 
             conversationTitle
 
             Spacer(minLength: 0)
 
             if isSelectingMessages {
-                Button(L10n.string("Cancel")) { exitMessageSelection() }
+                WNIconButton(title: "Close", systemImage: "xmark") { exitMessageSelection() }
             }
         }
         .padding(.horizontal, 12)
@@ -2013,7 +1981,11 @@ struct ConversationView: View {
                     Color.clear
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
-                        .foregroundStyle(selected ? Color.accentColor : Color.secondary.opacity(0.55))
+                        .foregroundStyle(
+                            selected
+                                ? WNNeutralAccent.color(for: colorScheme)
+                                : Color.secondary.opacity(0.55)
+                        )
                         .padding(.leading, 8)
                 }
                 .contentShape(.rect)
