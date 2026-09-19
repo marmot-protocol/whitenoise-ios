@@ -36,7 +36,6 @@ jobs:
     env:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
-      WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
 
     steps:
       - name: Checkout
@@ -65,28 +64,10 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-xcode26-
 
-      # Compiler cache keys hash compiler inputs rather than file mtimes, so a
-      # fresh checkout still replays cached objects. Only master writes the
-      # cache; pull requests read master's copy and never evict each other.
-      # To disable, drop WN_TEST_COMPILATION_CACHE from the job env above.
-      - name: Restore compilation cache
-        id: compilation-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
-          restore-keys: |
-            cas-${{ runner.os }}-xcode26-
-
+      # Restoring the compiler CAS exhausts runner disk space during extraction.
+      # Keep dependency caching above and compile from source on each run.
       - name: Run tests
         run: ./scripts/test.sh
-
-      - name: Save compilation cache
-        if: always() && github.ref == 'refs/heads/master'
-        uses: actions/cache/save@v4
-        with:
-          path: build/CompilationCache
-          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
 
       - name: Upload test results
         if: failure()
