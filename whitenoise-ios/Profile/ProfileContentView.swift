@@ -93,9 +93,9 @@ struct ProfileContentView: View {
                 contactNpub: displayReference ?? npub,
                 contactName: title,
                 groups: model.addableGroups,
-                isLoading: model.directory.isLoading,
+                isLoading: model.isLoadingGroups,
                 loadError: model.directory.loadError,
-                onRetry: { Task { await model.reloadGroups(using: appState, force: true) } },
+                onReload: { await model.reloadGroups(using: appState, force: true) },
                 onAdded: { await model.reloadGroups(using: appState, force: true) }
             )
             .appAppearance()

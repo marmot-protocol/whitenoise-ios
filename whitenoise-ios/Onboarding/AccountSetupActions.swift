@@ -60,7 +60,7 @@ struct AccountSetupActions: View {
                 NavigationStack {
                     switch editor {
                     case .profile:
-                        IdentityProfileSetupView(showsCloseButton: true, accountSetup: model)
+                        IdentityProfileSetupView(accountSetup: model)
                     case .discovery:
                         AccountSetupDiscoverySheet(model: model, step: selectedStep)
                     }

@@ -320,9 +320,10 @@ final class TimelineStore {
             tokensTruncated: Bool,
             mediaJson: String?,
             media: [MediaAttachmentOutcomeFfi],
-            deleted: Bool
+            deleted: Bool,
+            deletionSource: DeletionSourceFfi
         )
-        case loadedTarget(record: MessageTimelineSignature, deleted: Bool)
+        case loadedTarget(record: MessageTimelineSignature, deleted: Bool, deletionSource: DeletionSourceFfi)
     }
 
     private struct ReplyPreviewDisplayCacheKey: Equatable {
@@ -406,7 +407,8 @@ final class TimelineStore {
                     tokensTruncated: preview.contentTokens.truncated,
                     mediaJson: preview.mediaJson,
                     media: preview.media,
-                    deleted: preview.deleted
+                    deleted: preview.deleted,
+                    deletionSource: preview.deletionSource
                 )
             )
             if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
@@ -425,7 +427,10 @@ final class TimelineStore {
                 ? nil
                 : MessageMediaAttachment.displayItems(
                     fromOutcomes: preview.media,
-                    ownerId: "reply:\(record.messageIdHex):\(targetId)"
+                    ownerId: "reply:\(record.messageIdHex):\(targetId)",
+                    messageId: preview.messageIdHex,
+                    sourceMessageId: mediaProjections.sourceMessageID(for: preview.messageIdHex),
+                    resolveMissingSource: true
                 ).first
             let value = ConversationReplyPreview(
                 name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media
@@ -444,7 +449,8 @@ final class TimelineStore {
             targetId: targetId,
             source: .loadedTarget(
                 record: MessageTimelineSignature(target),
-                deleted: targetDeleted
+                deleted: targetDeleted,
+                deletionSource: deletedProjections.source(for: targetId)
             )
         )
         if let cached = replyPreviewDisplayCache[record.messageIdHex], cached.key == key {
@@ -452,7 +458,7 @@ final class TimelineStore {
         }
         let name = resolvedAccountDisplayName(target.sender)
         let text = targetDeleted
-            ? L10n.string("This message was deleted")
+            ? MessageDeletionPresentation.text(source: deletedProjections.source(for: targetId))
             : ContentSanitizer.compactSingleLine(displayBody(of: target), maxLength: 120) ?? ""
         let media = targetDeleted
             ? nil
@@ -854,7 +860,8 @@ final class TimelineStore {
         replyPreviewsByMessageId[appRecord.messageIdHex] = record.replyPreview
         // Media now arrives resolved on the row (Marmot resolves imeta + epoch);
         // mirror it instead of re-classifying tags or a separate listMedia pass.
-        mediaProjections.setOutcomes(record.media, forMessageId: appRecord.messageIdHex)
+        mediaProjections.setOutcomes(record.media, forMessageId: appRecord.messageIdHex,
+            sourceMessageId: record.sourceMessageIdHex)
         if replacedConfirmedPendingRow {
             // `confirmSent` keeps the freshly-picked bytes attached to the real
             // row until Marmot mirrors its authoritative record. At that point
@@ -871,7 +878,7 @@ final class TimelineStore {
                 me: myAccountId ?? ""
             )
         }
-        deletedProjections.setProjected(deleted: record.deleted, forMessageId: record.messageIdHex)
+        deletedProjections.setProjected(deleted: record.deleted, source: record.deletionSource, forMessageId: record.messageIdHex)
         let reconciledStatus = preparedOrder == nil ? reconcilePendingOutgoingMessage(
             with: appRecord,
             replyTargetId: record.replyToMessageIdHex

@@ -84,12 +84,16 @@ struct ChatsListView: View {
         let groupIdHex: String
         let messageIdHex: String?
         let unreadMessageIdHex: String?
+        let openedAt = ContinuousClock.now
+        let performanceTicket: ProductAnalyticsRecorder.Ticket?
 
         init(
             groupIdHex: String,
             messageIdHex: String? = nil,
-            unreadMessageIdHex: String? = nil
+            unreadMessageIdHex: String? = nil,
+            performanceTicket: ProductAnalyticsRecorder.Ticket? = nil
         ) {
+            self.performanceTicket = performanceTicket
             self.groupIdHex = groupIdHex
             let messageId = messageIdHex?.trimmingCharacters(in: .whitespacesAndNewlines)
             self.messageIdHex = messageId?.isEmpty == false ? messageId : nil
@@ -365,7 +369,8 @@ struct ChatsListView: View {
                 // Re-read the anchor so a newer jump for the same chat wins.
                 let target = ChatNavigationTarget(
                     groupIdHex: newId,
-                    messageIdHex: appState.pendingChatMessageIdHex
+                    messageIdHex: appState.pendingChatMessageIdHex,
+                    performanceTicket: appState.productAnalytics.ticket()
                 )
                 path = [target]
                 try? await Task.sleep(nanoseconds: 300_000_000)
@@ -865,7 +870,8 @@ struct ChatsListView: View {
             ChatNavigationTarget(
                 groupIdHex: item.id,
                 messageIdHex: item.firstUnreadMessageIdHex,
-                unreadMessageIdHex: item.firstUnreadMessageIdHex
+                unreadMessageIdHex: item.firstUnreadMessageIdHex,
+                performanceTicket: appState.productAnalytics.ticket()
             )
         )
     }
@@ -1387,6 +1393,8 @@ private struct ChatDestination: View {
                 initialTargetMessageIdHex: target.messageIdHex,
                 initialUnreadMessageIdHex: target.unreadMessageIdHex,
                 initialAppState: appState,
+                navigationStartedAt: target.openedAt,
+                performanceTicket: target.performanceTicket,
                 forwardDestinationProvider: {
                     try await viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
                 },

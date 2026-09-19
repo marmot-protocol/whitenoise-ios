@@ -4,10 +4,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct CreateIdentityView: View {
-    var showsCloseButton = false
+    var isPushed = false
 
     var body: some View {
-        IdentityProfileSetupView(showsCloseButton: showsCloseButton)
+        IdentityProfileSetupView(isPushed: isPushed)
     }
 }
 
@@ -33,13 +33,13 @@ struct IdentityProfileSetupView: View {
     @FocusState private var nameFocused: Bool
     @FocusState private var aboutFocused: Bool
 
-    let showsCloseButton: Bool
+    let isPushed: Bool
     let accountSetup: AccountSetupModel?
     @State private var setupSaveError: String?
     @State private var hasSubmittedProfile = false
 
-    init(showsCloseButton: Bool = false, accountSetup: AccountSetupModel? = nil) {
-        self.showsCloseButton = showsCloseButton
+    init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
+        self.isPushed = isPushed
         self.accountSetup = accountSetup
     }
 
@@ -116,16 +116,17 @@ struct IdentityProfileSetupView: View {
         .dismissesKeyboardOnTap()
         .navigationTitle(accountSetup == nil ? "Sign Up" : "Update profile")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(!allowsBackNavigation)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
-            if showsCloseButton && allowsBackNavigation {
+            if allowsBackNavigation {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button {
+                    WNIconButton(
+                        title: isPushed ? "Back" : "Close",
+                        systemImage: isPushed ? "chevron.backward" : "xmark",
+                        chrome: .container
+                    ) {
                         dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
                     }
-                    .accessibilityLabel("Close")
                 }
             }
         }

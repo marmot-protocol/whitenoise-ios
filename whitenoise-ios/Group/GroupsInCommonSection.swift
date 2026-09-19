@@ -155,9 +155,10 @@ struct AddToGroupSheet: View {
     let groups: [SharedGroupsProjection.SharedGroup]
     var isLoading = false
     var loadError: String?
-    var onRetry: () -> Void = {}
+    var onReload: @MainActor () async -> Void
     var onAdded: @MainActor () async -> Void = {}
 
+    @State private var loadedKey: String?
     @State private var busyGroupIdHex: String?
     @State private var error: String?
 
@@ -165,7 +166,7 @@ struct AddToGroupSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(groups) { group in
+                    ForEach(isRefreshing || loadError != nil ? [] : groups) { group in
                         Button {
                             Task { await add(to: group) }
                         } label: {
@@ -181,10 +182,12 @@ struct AddToGroupSheet: View {
                         .disabled(busyGroupIdHex != nil)
                     }
                 } footer: {
-                    Text(L10n.formatted("Adds %@ to the group you pick.", contactName))
+                    if !groups.isEmpty, !isRefreshing, loadError == nil {
+                        Text(L10n.formatted("Adds %@ to the group you pick.", contactName))
+                    }
                 }
 
-                if let error {
+                if let error, !isRefreshing {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -192,22 +195,25 @@ struct AddToGroupSheet: View {
                 }
             }
             .overlay {
-                if groups.isEmpty, error == nil {
-                    if isLoading || busyGroupIdHex != nil {
-                        ProgressView()
-                    } else if let loadError {
-                        ContentUnavailableView {
-                            Label("Couldn't load groups", systemImage: "exclamationmark.triangle")
-                        } description: {
-                            Text(loadError)
-                        } actions: {
-                            Button("Retry", action: onRetry)
-                        }
-                    } else {
-                        ContentUnavailableView("No Available Groups", systemImage: "person.3")
+                if isRefreshing {
+                    ProgressView()
+                } else if let loadError {
+                    ContentUnavailableView {
+                        Label("Couldn't load groups", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(loadError)
+                    } actions: {
+                        Button("Retry") { Task { await reload() } }
+                    }
+                } else if groups.isEmpty, error == nil {
+                    ContentUnavailableView {
+                        Label("No Available Groups", systemImage: "person.3")
+                    } description: {
+                        Text("You can add people to groups you administer that they haven't joined.")
                     }
                 }
             }
+            .task(id: reloadKey) { await reload() }
             .navigationTitle("Add to Group")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -220,8 +226,24 @@ struct AddToGroupSheet: View {
         }
     }
 
+    private var reloadKey: String {
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(contactNpub)"
+    }
+
+    private var isRefreshing: Bool { isLoading || loadedKey != reloadKey }
+
+    private func reload() async {
+        let key = reloadKey
+        loadedKey = nil
+        error = nil
+        await onReload()
+        guard !Task.isCancelled, reloadKey == key else { return }
+        loadedKey = key
+    }
+
     private func add(to group: SharedGroupsProjection.SharedGroup) async {
-        guard busyGroupIdHex == nil, let accountRef = appState.activeAccountRef else { return }
+        guard !isRefreshing, loadError == nil,
+              busyGroupIdHex == nil, let accountRef = appState.activeAccountRef else { return }
         let runtimeGeneration = appState.runtimeGeneration
         busyGroupIdHex = group.groupIdHex
         defer { busyGroupIdHex = nil }

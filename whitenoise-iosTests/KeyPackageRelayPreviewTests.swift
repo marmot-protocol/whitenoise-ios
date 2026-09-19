@@ -162,3 +162,16 @@ struct KeyPackageRelayPreviewTests {
         )
     }
 }
+
+extension KeyPackageRelayPreviewTests {
+    @Test func typedInventoryDoesNotElectTheNewestRelayPackageAsCurrent() {
+        let local = package(eventId: "local", publishedAt: 1, local: true, relay: false)
+        let remote = package(eventId: "remote", publishedAt: 100, local: false, relay: true)
+        let presentation = KeyPackagesPresentation(inventory: [
+            AccountKeyPackageInventoryEntryFfi(record: remote, localState: .notLocal),
+            AccountKeyPackageInventoryEntryFfi(record: local, localState: .current),
+        ])
+        #expect(presentation.current?.identifier == "local")
+        #expect(presentation.otherRelayPackages.map(\.eventIdHex) == ["remote"])
+    }
+}

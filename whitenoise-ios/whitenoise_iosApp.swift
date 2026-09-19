@@ -128,6 +128,12 @@ struct whitenoise_iosApp: App {
                     )
                     await appState.bootstrap()
                 }
+                .task(id: "\(appState.runtimeGeneration)/\(appState.canUseRuntimeForLocalForegroundWork)/\(appState.accounts.map(\.accountIdHex).joined())/\(MediaAutoDownloadStore.shared.attachmentPolicyRevision)") {
+                    guard appState.canUseRuntimeForLocalForegroundWork,
+                          let client = try? appState.currentMarmotClient() else { return }
+                    do { try await AttachmentPolicyBridge.synchronize(client) }
+                    catch { appState.present(UserFacingError.toast(title: L10n.string("Couldn't update download settings"), error: error)) }
+                }
                 .onOpenURL { url in
                     appState.handle(url: url)
                 }

@@ -18,14 +18,14 @@ struct ImportIdentityView: View {
     @State private var isKeyFocused = false
     @State private var showScanner = false
 
-    let showsCloseButton: Bool
+    let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
 
     init(
-        showsCloseButton: Bool = false,
+        isPushed: Bool = false,
         onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in }
     ) {
-        self.showsCloseButton = showsCloseButton
+        self.isPushed = isPushed
         self.onPreferredSheetExpansionChange = onPreferredSheetExpansionChange
     }
 
@@ -122,17 +122,17 @@ struct ImportIdentityView: View {
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
-            if showsCloseButton {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("Close")
-                    .disabled(model.isImporting)
+            ToolbarItem(placement: .cancellationAction) {
+                WNIconButton(
+                    title: isPushed ? "Back" : "Close",
+                    systemImage: isPushed ? "chevron.backward" : "xmark",
+                    chrome: .container
+                ) {
+                    dismiss()
                 }
+                .disabled(model.isImporting)
             }
         }
         .safeAreaInset(edge: .bottom) {

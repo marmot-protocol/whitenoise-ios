@@ -14,6 +14,8 @@ final class ProfileViewModel {
     var conversationChooser: ConversationChooserPresentation?
     private(set) var isPreparingConversationChoices = false
     private(set) var sharedGroups: [SharedGroupsProjection.SharedGroup] = []
+    private(set) var isLoadingGroups = false
+    private var groupLoadGeneration: UInt64 = 0
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
     private(set) var groupsLoadState = SharedGroupsLoadState()
     var verifiedNip05: String? { addressVerification.verifiedNip05 }
@@ -57,11 +59,18 @@ final class ProfileViewModel {
 
     func reloadGroups(using appState: AppState, force: Bool = false) async {
         guard let resolvedHex = hex else { return }
+        groupLoadGeneration &+= 1
+        let loadGeneration = groupLoadGeneration
         let generation = resolutionGeneration
         let accountRef = appState.activeAccountRef
         let runtimeGeneration = appState.runtimeGeneration
+        isLoadingGroups = true
+        defer {
+            if groupLoadGeneration == loadGeneration { isLoadingGroups = false }
+        }
         await directory.load(using: appState, force: force, includeAdminMetadata: true)
         guard !Task.isCancelled,
+              groupLoadGeneration == loadGeneration,
               generation == resolutionGeneration,
               hex == resolvedHex,
               appState.activeAccountRef == accountRef,

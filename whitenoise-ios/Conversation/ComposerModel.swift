@@ -42,6 +42,14 @@ nonisolated enum SendAcceptancePolicy {
     }
 }
 
+nonisolated enum SendFailurePolicy {
+    static func awaitsDurableState(error: Error, submittedDraft: Bool) -> Bool {
+        // Revision tokens are opaque; an error cannot prove the draft was not consumed.
+        submittedDraft || error is CancellationError
+            || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+    }
+}
+
 /// Owns the conversation composer's send pipeline: the in-flight send guard, the
 /// reply target, and the text/media send FFI orchestration. Optimistic rows are
 /// handed to `TimelineStore` (the overlay is timeline-mirror state, not composer
@@ -217,8 +225,8 @@ final class ComposerModel {
                 guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
                 timelineStore.acceptSend(tempId: tempId, record: optimistic, summary: summary)
             } catch {
-                let ambiguous = error is CancellationError
-                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+                let ambiguous = SendFailurePolicy.awaitsDurableState(
+                    error: error, submittedDraft: draftRevision != nil)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
@@ -327,6 +335,7 @@ final class ComposerModel {
                 await completion?(false)
                 return
             }
+            var submittedDraft = false
             do {
                 let client = try appState.currentMarmotClient()
                 let result = try await client.uploadMedia(
@@ -350,6 +359,7 @@ final class ComposerModel {
                 }
                 let sent: SendSummaryFfi?
                 if let draftRevision {
+                    submittedDraft = true
                     sent = try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: references)
                 } else { sent = result.sent }
                 await completion?(true)
@@ -384,8 +394,8 @@ final class ComposerModel {
                     timelineStore.markSendCompletionUnknown(tempId: tempId)
                 }
             } catch {
-                let ambiguous = error is CancellationError
-                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+                let ambiguous = SendFailurePolicy.awaitsDurableState(
+                    error: error, submittedDraft: submittedDraft)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }

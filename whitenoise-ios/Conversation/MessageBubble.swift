@@ -34,8 +34,10 @@ final class ConversationMediaLoader {
         self.load = load
     }
 
-    func data(for media: MessageMediaAttachment) async throws -> Data {
-        try await load(media)
+    func data(for media: MessageMediaAttachment, explicit: Bool = true) async throws -> Data {
+        var requested = media
+        requested.downloadExplicitly = explicit
+        return try await load(requested)
     }
 }
 
@@ -102,6 +104,7 @@ struct MessageBubble: View {
     let status: MessageStatus
     var debugStyle: MessageDebugStyle? = nil
     var isDeleted: Bool = false
+    var deletionSource: DeletionSourceFfi = .unknown
     var isEdited: Bool = false
     var hasReports: Bool = false
     var usesReviewLayout: Bool = false
@@ -349,9 +352,11 @@ struct MessageBubble: View {
         HStack(spacing: 6) {
             Image(systemName: "trash")
             Text(
-                isFromMe
-                    ? L10n.string("You deleted this message.")
-                    : L10n.string("This message was deleted.")
+                deletionSource == .admin
+                    ? L10n.string("This message was deleted by an admin.")
+                    : deletionSource == .author && isFromMe
+                        ? L10n.string("You deleted this message.")
+                        : L10n.string("This message was deleted.")
             )
         }
         .font(.subheadline)
@@ -2023,7 +2028,7 @@ private struct MessageMediaTile: View {
         didFail = false
         defer { isLoading = false }
         do {
-            let data = try await onLoadMedia.data(for: item)
+            let data = try await onLoadMedia.data(for: item, explicit: force)
             guard !Task.isCancelled else { return nil }
             guard let decoded = await MessageMediaThumbnailDecoder.image(
                 data: data,
@@ -2035,6 +2040,7 @@ private struct MessageMediaTile: View {
                 didFail = true
                 return nil
             }
+            guard !Task.isCancelled else { return nil }
             image = decoded
             loadedImageID = item.id
             MessageMediaThumbnailDecoder.store(
@@ -2219,7 +2225,7 @@ private struct MessageReplyMediaThumbnail: View {
 
     private func mediaData() async -> Data? {
         if let localData = item.localData { return localData }
-        return try? await onLoadMedia.data(for: item)
+        return try? await onLoadMedia.data(for: item, explicit: false)
     }
 }
 
@@ -2463,7 +2469,7 @@ private struct MessageVideoAttachmentView: View {
                   MediaPrefetchRegistry.claim(item.id)
             else { return }
             do {
-                let url = try await playbackFileURL()
+                let url = try await playbackFileURL(explicit: false)
                 await loadPreviewThumbnail(from: url, scale: displayScale)
             } catch {
                 MediaPrefetchRegistry.release(item.id)
@@ -2548,12 +2554,12 @@ private struct MessageVideoAttachmentView: View {
         }
     }
 
-    private func playbackFileURL() async throws -> URL {
+    private func playbackFileURL(explicit: Bool = true) async throws -> URL {
         if let playbackURL {
             return playbackURL
         }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item)
+        let data = try await onLoadMedia.data(for: item, explicit: explicit)
         guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
@@ -2832,7 +2838,7 @@ private struct MessageAudioAttachmentView: View {
             matrixAllows: MediaAutoDownloadStore.shared.shouldAutoDownload(.audio)
         ) else { return }
         guard MediaPrefetchRegistry.claim(metadataCacheKey) else { return }
-        guard let data = try? await onLoadMedia.data(for: item) else {
+        guard let data = try? await onLoadMedia.data(for: item, explicit: false) else {
             MediaPrefetchRegistry.release(metadataCacheKey)
             return
         }
@@ -3185,6 +3191,7 @@ private struct MessageDocumentShareSheet: UIViewControllerRepresentable {
 }
 
 enum MessageVideoThumbnailDecoder {
+    static func clear() { cache.removeAllObjects() }
     private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.totalCostLimit = 50 * 1024 * 1024
@@ -3228,6 +3235,7 @@ enum MessageVideoThumbnailDecoder {
 }
 
 enum MessageMediaThumbnailDecoder {
+    static func clear() { cache.removeAllObjects() }
     private final class CachedThumbnail: NSObject {
         let image: UIImage
         let sourceData: Data

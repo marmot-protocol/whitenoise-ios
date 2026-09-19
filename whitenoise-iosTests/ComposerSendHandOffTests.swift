@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -9,6 +10,14 @@ private final class SendOrderRecorder {
 
 @MainActor
 struct ComposerSendHandOffTests {
+    @Test func uploadFailureBeforeDraftSubmissionRemainsRetryable() {
+        let failure = MarmotKitError.Runtime(details: "upload failed")
+        #expect(!SendFailurePolicy.awaitsDurableState(error: failure, submittedDraft: false))
+        #expect(SendFailurePolicy.awaitsDurableState(error: failure, submittedDraft: true))
+        #expect(SendFailurePolicy.awaitsDurableState(error: CancellationError(), submittedDraft: false))
+        #expect(SendFailurePolicy.awaitsDurableState(error: MarmotKitError.AccountWorkerResponseTimedOut, submittedDraft: false))
+    }
+
     @Test func admittedTimeoutKeepsAnUnresolvedBubbleWithoutFreshSendRetry() async throws {
         let client = try MarmotClient.testClient()
         let state = AppState(client: client)

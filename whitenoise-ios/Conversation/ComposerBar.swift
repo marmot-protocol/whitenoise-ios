@@ -139,19 +139,6 @@ nonisolated struct ComposerAttachmentButtonAppearance: Equatable {
     }
 }
 
-private enum ComposerAttachmentAction {
-    case camera
-    case photos
-    case document
-    case location
-    case contact
-    case gifs
-}
-
-enum ComposerAccessoryPanel: Equatable {
-    case attachments
-}
-
 nonisolated enum AudioDurationLabel {
     private static let maximumDisplaySeconds = Int.max / 2
 
@@ -214,6 +201,8 @@ struct ComposerBar: View {
     var submissionEnabled = true
     var submissionAccessibilityLabel = L10n.string("Send")
     var voiceMessagesEnabled = true
+    var cameraAvailable = true
+    var gifsAvailable = true
     let onTakePhoto: () -> Void
     let onPhotoLibrary: () -> Void
     let onAttachFile: () -> Void
@@ -234,10 +223,6 @@ struct ComposerBar: View {
     let onSend: () -> Void
     @State private var isTextInputFocused = false
     @State private var showAttachmentUnavailableTooltip = false
-    @State private var activeAccessoryPanel: ComposerAccessoryPanel?
-    @State private var isRestoringKeyboard = false
-    @State private var reservedPaneHeight: CGFloat = 0
-    @State private var rememberedKeyboardPaneHeight: CGFloat = 300
     @State private var showExpandedEditor = false
     @State private var localFocusRequest = 0
 
@@ -283,7 +268,8 @@ struct ComposerBar: View {
                             .frame(maxWidth: .infinity)
                             .compatibleInputRoundedChrome(
                                 cornerRadius: controlSize / 2,
-                                interactive: false
+                                interactive: false,
+                                usesRegularGlass: true
                             )
                         }
                     }
@@ -293,8 +279,6 @@ struct ComposerBar: View {
             }
             .padding(.horizontal, ComposerInputChrome.horizontalInset)
             .padding(.vertical, ComposerInputChrome.verticalInset)
-
-            reservedBottomPane
         }
         .fixedSize(horizontal: false, vertical: true)
         .fullScreenCover(isPresented: $showExpandedEditor) {
@@ -309,18 +293,6 @@ struct ComposerBar: View {
             )
             .appAppearance()
         }
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification),
-            perform: handleKeyboardFrameChange
-        )
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification),
-            perform: handleKeyboardDidShow
-        )
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification),
-            perform: handleKeyboardDidHide
-        )
         .onChange(of: isTextInputFocused) { _, focused in
             onInputFocusChange(focused)
         }
@@ -328,34 +300,13 @@ struct ComposerBar: View {
             showSystemKeyboard()
         }
         .onChange(of: dismissRequest) { _, _ in
-            dismissInputChrome()
+            isTextInputFocused = false
         }
         .onChange(of: inputEnabled) { _, enabled in
             guard !enabled else { return }
             showAttachmentUnavailableTooltip = false
-            dismissInputChrome(animated: false)
+            isTextInputFocused = false
         }
-    }
-
-    @ViewBuilder
-    private var reservedBottomPane: some View {
-        ZStack(alignment: .top) {
-            Color.clear
-            if let activeAccessoryPanel {
-                accessoryPanel(activeAccessoryPanel)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, BottomInputChromeLayout.composerPaneSpacing)
-                if isRestoringKeyboard {
-                    Color(.systemBackground)
-                        .padding(.top, BottomInputChromeLayout.composerPaneSpacing)
-                        .transition(.identity)
-                }
-                Divider()
-                    .padding(.top, BottomInputChromeLayout.composerPaneSpacing)
-            }
-        }
-        .frame(height: reservedPaneHeight)
-        .clipped()
     }
 
     private func inactiveComposerMessage(_ message: String) -> some View {
@@ -373,42 +324,65 @@ struct ComposerBar: View {
         .padding(.bottom, 2)
     }
 
+    @ViewBuilder
     private var attachmentButton: some View {
-        let attachmentEnabled = inputEnabled && mediaEnabled
-        let appearance = ComposerAttachmentButtonAppearance.mediaAvailability(attachmentEnabled)
+        let appearance = ComposerAttachmentButtonAppearance
+            .mediaAvailability(inputEnabled && mediaEnabled)
 
-        return Button {
-            handleAttachmentTap(appearance.tapBehavior)
-        } label: {
-            sideCircleIcon(
-                attachmentButtonSystemImage,
-                weight: .medium,
-                size: sideControlIconSize,
-                tone: appearance.iconTone,
-                interactive: appearance.chromeInteractive
-            )
+        switch appearance.tapBehavior {
+        case .showOptions:
+            WNDropdown(
+                items: ComposerAttachmentOption.dropdownItems(
+                    cameraAvailable: cameraAvailable,
+                    gifsAvailable: gifsAvailable
+                ),
+                onSelect: selectAttachmentOption
+            ) {
+                attachmentIcon(appearance)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Circle())
+            .opacity(appearance.controlOpacity)
+            // A staged audio draft owns the composer until it is sent or removed.
+            .disabled(audioDraft != nil)
+            .accessibilityLabel(L10n.string("Add attachment"))
+            .accessibilityHint(attachmentAccessibilityHint)
+        case .showUnavailableTooltip:
+            Button {
+                showAttachmentUnavailableTooltip = true
+            } label: {
+                attachmentIcon(appearance)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Circle())
+            .opacity(appearance.controlOpacity)
+            .accessibilityLabel(L10n.string("Add attachment"))
+            .accessibilityHint(attachmentAccessibilityHint)
+            .popover(
+                isPresented: $showAttachmentUnavailableTooltip,
+                attachmentAnchor: .rect(.rect(CGRect(
+                    x: controlSize / 2,
+                    y: -BottomInputChromeLayout.attachmentMenuAnchorLift,
+                    width: 0,
+                    height: 0
+                ))),
+                arrowEdge: .bottom
+            ) {
+                ComposerAttachmentUnavailableTooltip()
+            }
         }
-        .buttonStyle(.plain)
-        .contentShape(Circle())
-        .opacity(appearance.controlOpacity)
-        .accessibilityLabel(
-            activeAccessoryPanel == .attachments
-                ? L10n.string("Show keyboard")
-                : L10n.string("Add attachment")
+    }
+
+    private func attachmentIcon(
+        _ appearance: ComposerAttachmentButtonAppearance
+    ) -> some View {
+        sideCircleIcon(
+            "plus",
+            weight: .medium,
+            size: sideControlIconSize,
+            tone: appearance.iconTone,
+            interactive: appearance.chromeInteractive
         )
-        .accessibilityHint(attachmentAccessibilityHint)
-        .popover(
-            isPresented: $showAttachmentUnavailableTooltip,
-            attachmentAnchor: .rect(.rect(CGRect(
-                x: controlSize / 2,
-                y: -BottomInputChromeLayout.attachmentMenuAnchorLift,
-                width: 0,
-                height: 0
-            ))),
-            arrowEdge: .bottom
-        ) {
-            ComposerAttachmentUnavailableTooltip()
-        }
     }
 
     private var inputCapsule: some View {
@@ -454,8 +428,7 @@ struct ComposerBar: View {
                     isFocused: $isTextInputFocused,
                     fontSize: fieldFontSize,
                     focusRequest: focusRequest &* 1_000 &+ localFocusRequest,
-                    onPasteImage: onPasteImage,
-                    onBeginEditing: restoreKeyboardAfterTextInputTap
+                    onPasteImage: onPasteImage
                 )
             }
             .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
@@ -508,12 +481,6 @@ struct ComposerBar: View {
         .buttonStyle(.plain)
         .contentShape(Circle())
         .accessibilityLabel("Cancel recording")
-    }
-
-    private var attachmentButtonSystemImage: String {
-        activeAccessoryPanel == .attachments
-            ? "keyboard"
-            : "plus"
     }
 
     private var sendButton: some View {
@@ -591,7 +558,7 @@ struct ComposerBar: View {
             .font(.system(size: size, weight: weight))
             .foregroundStyle(tone.color)
             .frame(width: controlSize, height: controlSize)
-            .compatibleInputCircleChrome(interactive: interactive)
+            .compatibleInputCircleChrome(interactive: interactive, usesRegularGlass: true)
     }
 
     private var hasSendableContent: Bool {
@@ -636,145 +603,38 @@ struct ComposerBar: View {
         return mediaEnabled ? "" : L10n.string("Media is not available in this group")
     }
 
-    private func handleAttachmentTap(_ behavior: ComposerAttachmentButtonTapBehavior) {
-        switch behavior {
-        case .showOptions:
-            if activeAccessoryPanel == .attachments {
-                restoreKeyboardFromAccessoryPanel()
-            } else {
-                presentAccessoryPanel(.attachments)
-            }
-        case .showUnavailableTooltip:
-            showAttachmentUnavailableTooltip = true
-        }
-    }
-
-    private func selectAttachmentAction(_ action: ComposerAttachmentAction) {
-        activeAccessoryPanel = nil
-        isRestoringKeyboard = false
+    private func selectAttachmentOption(_ option: ComposerAttachmentOption) {
         isTextInputFocused = false
-        withAnimation(.easeOut(duration: 0.2)) {
-            reservedPaneHeight = 0
-        }
         Task { @MainActor in
+            // Let the menu finish dismissing before a system-owned picker
+            // starts presenting over the same window.
             await Task.yield()
-            performAttachmentAction(action)
+            performAttachmentOption(option)
         }
     }
 
-    private func performAttachmentAction(_ action: ComposerAttachmentAction) {
-        switch action {
+    private func performAttachmentOption(_ option: ComposerAttachmentOption) {
+        switch option {
         case .camera:
             onTakePhoto()
-        case .photos:
+        case .photosAndVideos:
             onPhotoLibrary()
-        case .document:
+        case .files:
             onAttachFile()
+        case .gifs:
+            onSearchGIFs()
         case .location:
             onShareLocation()
         case .contact:
             onShareContact()
-        case .gifs:
-            onSearchGIFs()
-        }
-    }
-
-    @ViewBuilder
-    private func accessoryPanel(_ panel: ComposerAccessoryPanel) -> some View {
-        switch panel {
-        case .attachments:
-            ComposerAttachmentMenu(
-                onPhotoLibrary: { selectAttachmentAction(.photos) },
-                onTakePhoto: { selectAttachmentAction(.camera) },
-                onAttachFile: { selectAttachmentAction(.document) },
-                onShareLocation: { selectAttachmentAction(.location) },
-                onShareContact: { selectAttachmentAction(.contact) },
-                onSearchGIFs: { selectAttachmentAction(.gifs) }
-            )
-        }
-    }
-
-    private func presentAccessoryPanel(_ panel: ComposerAccessoryPanel) {
-        guard inputEnabled, audioDraft == nil else { return }
-        showAttachmentUnavailableTooltip = false
-        isRestoringKeyboard = false
-        isTextInputFocused = false
-        activeAccessoryPanel = panel
-        if reservedPaneHeight < 0.5 {
-            withAnimation(.easeOut(duration: 0.22)) {
-                reservedPaneHeight = reservedHeight(for: rememberedKeyboardPaneHeight)
-            }
-        }
-    }
-
-    private func restoreKeyboardFromAccessoryPanel() {
-        guard activeAccessoryPanel != nil else {
-            showSystemKeyboard()
-            return
-        }
-        isRestoringKeyboard = true
-        isTextInputFocused = true
-    }
-
-    private func restoreKeyboardAfterTextInputTap() {
-        guard activeAccessoryPanel != nil else { return }
-        isRestoringKeyboard = true
-    }
-
-    private func handleKeyboardFrameChange(_ notification: Notification) {
-        let keyboardVisible = KeyboardFrameChange.isVisible(from: notification)
-        if keyboardVisible, let measuredHeight = KeyboardFrameChange.accessoryPanelHeight(from: notification) {
-            let paneHeight = min(420, max(240, measuredHeight))
-            rememberedKeyboardPaneHeight = paneHeight
-            if reservedPaneHeight < 0.5 || activeAccessoryPanel == nil {
-                withAnimation(KeyboardFrameChange.animation(from: notification)) {
-                    reservedPaneHeight = reservedHeight(for: paneHeight)
-                }
-            }
-        } else if activeAccessoryPanel == nil, !isRestoringKeyboard {
-            withAnimation(KeyboardFrameChange.animation(from: notification)) {
-                reservedPaneHeight = 0
-            }
-        }
-
-    }
-
-    private func handleKeyboardDidShow(_: Notification) {
-        guard isRestoringKeyboard, isTextInputFocused else { return }
-        activeAccessoryPanel = nil
-        isRestoringKeyboard = false
-    }
-
-    private func handleKeyboardDidHide(_: Notification) {
-        guard activeAccessoryPanel == nil, !isRestoringKeyboard else { return }
-        reservedPaneHeight = 0
-    }
-
-    private func dismissInputChrome(animated: Bool = true) {
-        activeAccessoryPanel = nil
-        isRestoringKeyboard = false
-        isTextInputFocused = false
-        if animated {
-            withAnimation(.easeOut(duration: 0.2)) {
-                reservedPaneHeight = 0
-            }
-        } else {
-            reservedPaneHeight = 0
         }
     }
 
     private func showSystemKeyboard() {
         guard inputEnabled else { return }
         guard audioDraft == nil else { return }
-        if activeAccessoryPanel != nil {
-            isRestoringKeyboard = true
-        }
         isTextInputFocused = true
         localFocusRequest &+= 1
-    }
-
-    private func reservedHeight(for paneHeight: CGFloat) -> CGFloat {
-        paneHeight + BottomInputChromeLayout.composerPaneSpacing
     }
 }
 
@@ -1039,57 +899,6 @@ private struct ComposerAttachmentUnavailableTooltip: View {
             .frame(maxWidth: 220)
             .fixedSize(horizontal: false, vertical: true)
             .presentationCompactAdaptation(.popover)
-    }
-}
-
-private struct ComposerAttachmentMenu: View {
-    let onPhotoLibrary: () -> Void
-    let onTakePhoto: () -> Void
-    let onAttachFile: () -> Void
-    let onShareLocation: () -> Void
-    let onShareContact: () -> Void
-    let onSearchGIFs: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 22) {
-                actionTile("Camera", systemImage: "camera.fill", tint: .blue, action: onTakePhoto)
-                actionTile("Photos", systemImage: "photo.on.rectangle.angled", tint: .purple, action: onPhotoLibrary)
-                actionTile("Document", systemImage: "doc.fill", tint: .cyan, action: onAttachFile)
-                actionTile("Location", systemImage: "location.fill", tint: .green, action: onShareLocation)
-                actionTile("Contact", systemImage: "person.crop.circle.fill", tint: .indigo, action: onShareContact)
-                actionTile("GIF", systemImage: "rectangle.stack.badge.play.fill", tint: .pink, action: onSearchGIFs)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
-    }
-
-    private func actionTile(
-        _ title: LocalizedStringKey,
-        systemImage: String,
-        tint: Color,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 58, height: 58)
-                    .background(tint.gradient, in: Circle())
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
     }
 }
 

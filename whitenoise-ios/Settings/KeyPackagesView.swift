@@ -91,7 +91,7 @@ struct KeyPackagesView: View {
             }
         }
         .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
-        .refreshable { await model.reload(using: appState) }
+        .refreshable { await model.reload(using: appState, refresh: true) }
     }
 
     private func packageDetails(identifier: String, publishedAt: UInt64?, bytes: UInt64?) -> some View {
@@ -123,6 +123,10 @@ struct KeyPackagesView: View {
                 publishedAt: package.publishedAt,
                 bytes: package.keyPackageBytes
             )
+            if let state = model.inventory.first(where: { $0.record.eventIdHex == package.eventIdHex })?.localState {
+                Text(KeyPackagesPresentation.ownershipLabel(state))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if !package.sourceRelays.isEmpty {
                 Text(Self.sanitizedRelays(package.sourceRelays))
                     .font(.caption2.monospaced())

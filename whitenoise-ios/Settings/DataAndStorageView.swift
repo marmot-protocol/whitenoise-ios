@@ -37,6 +37,12 @@ struct DataAndStorageView: View {
             }
 
             Section {
+                NavigationLink("Download Storage") {
+                    AttachmentStorageSettingsView().wnBackButton()
+                }
+            }
+
+            Section {
                 Toggle(
                     "Automatically Load Remote GIFs",
                     isOn: Binding(

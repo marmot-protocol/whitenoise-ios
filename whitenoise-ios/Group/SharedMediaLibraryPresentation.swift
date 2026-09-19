@@ -26,11 +26,10 @@ nonisolated enum SharedMediaLibraryPresentation {
     struct MonthSection: Identifiable, Equatable {
         let id: String
         let title: String
-        let items: [GroupSharedMediaItem]
+        var items: [GroupSharedMediaItem]
     }
 
-    /// Groups newest-first items into month sections, preserving order.
-    /// Items without a timestamp collect under a single trailing section.
+    /// Contiguous month sections preserve MDK order even when display dates move backward.
     static func monthSections(
         _ items: [GroupSharedMediaItem],
         calendar: Calendar = .current,
@@ -42,9 +41,8 @@ nonisolated enum SharedMediaLibraryPresentation {
         formatter.locale = locale
         formatter.setLocalizedDateFormatFromTemplate("MMMM y")
 
-        var order: [String] = []
-        var titles: [String: String] = [:]
-        var grouped: [String: [GroupSharedMediaItem]] = [:]
+        var sections: [MonthSection] = []
+        var previousKey: String?
         for item in items {
             let key: String
             let title: String
@@ -57,15 +55,14 @@ nonisolated enum SharedMediaLibraryPresentation {
                 key = "undated"
                 title = L10n.string("Recent")
             }
-            if grouped[key] == nil {
-                order.append(key)
-                titles[key] = title
+            if previousKey == key, !sections.isEmpty {
+                sections[sections.count - 1].items.append(item)
+            } else {
+                sections.append(MonthSection(id: "\(key):\(item.id)", title: title, items: [item]))
+                previousKey = key
             }
-            grouped[key, default: []].append(item)
         }
-        return order.map { key in
-            MonthSection(id: key, title: titles[key] ?? "", items: grouped[key] ?? [])
-        }
+        return sections
     }
 
     // MARK: - Links
