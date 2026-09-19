@@ -45,7 +45,7 @@ struct Marmot0920IntegrationTests {
         let recorder = ProductAnalyticsRecorder()
         tracker.begin(rowID: "before-consent", operation: .outboundMessageVisible, ticket: recorder.ticket())
         let durations = Mutex<[UInt64]>([])
-        recorder.activateSink(performance: { _, duration in durations.withLock { $0.append(duration) } }) { _ in }
+        recorder.activateSink(performance: { _, duration, _ in durations.withLock { $0.append(duration) } }) { _ in }
         #expect(tracker.takeVisible(["before-consent", "history"]).isEmpty)
         tracker.begin(rowID: "local", operation: .outboundMessageVisible, ticket: recorder.ticket())
         now += 5_000_000
@@ -61,7 +61,7 @@ struct Marmot0920IntegrationTests {
         #expect(tracker.takeVisible(["already-visible"]).isEmpty)
         tracker.begin(rowID: "late", operation: .inboundMessageVisible, ticket: recorder.ticket())
         recorder.replaceSink(nil)
-        recorder.activateSink(performance: { _, duration in durations.withLock { $0.append(duration) } }) { _ in }
+        recorder.activateSink(performance: { _, duration, _ in durations.withLock { $0.append(duration) } }) { _ in }
         let stale = try #require(tracker.takeVisible(["late"]).first)
         #expect(recorder.recordPerformance(stale.operation, milliseconds: stale.milliseconds, ticket: stale.ticket) == nil)
         #expect(durations.withLock { $0 } == [5])

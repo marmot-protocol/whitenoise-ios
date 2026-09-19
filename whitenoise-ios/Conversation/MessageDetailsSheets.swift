@@ -42,6 +42,10 @@ struct MessageInfoSheet: View {
                 Section {
                     detailsCard
                 }
+                if let conversation, !conversation.mediaItems(for: record).isEmpty {
+                    AttachmentTransfersView(groupID: conversation.group.groupIdHex,
+                        items: conversation.mediaItems(for: record))
+                }
                 if let conversation, conversation.canReadReports {
                     MessageReportsSection(messageID: record.messageIdHex, conversation: conversation)
                 }

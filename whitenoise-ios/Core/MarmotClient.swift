@@ -84,10 +84,12 @@ nonisolated final class MarmotClient: Sendable {
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
         self.productConfig = .current()
-        self.marmot = try Marmot.newWithCursorPersistence(
+        self.marmot = try Marmot.newWithClientName(
             rootPath: rootPath,
             relayUrls: relayUrls,
-            cursorPersistence: cursorPersistence
+            clientName: "whitenoise",
+            cursorPersistence: cursorPersistence,
+            secretStore: nil
         )
         _ = try marmot.setAuditLogTrackerConfig(
             config: telemetryConfig.auditTrackerConfig()
@@ -1039,6 +1041,7 @@ nonisolated final class MarmotClient: Sendable {
         // Optional exporters cannot turn missing consent/configuration into a startup failure.
         try? await configureTelemetryRuntime()
         try? await configureProductAnalytics()
+        try await AttachmentPolicyBridge.synchronize(self, beforeStart: true)
         try await marmot.start()
     }
 

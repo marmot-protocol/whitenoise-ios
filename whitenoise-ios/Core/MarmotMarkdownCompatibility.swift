@@ -620,7 +620,8 @@ extension ChatListMessagePreviewFfi {
         contentTokens: MarkdownDocumentFfi,
         kind: UInt64,
         timelineAt: UInt64,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             groupSystem: groupSystem,
@@ -632,6 +633,7 @@ extension ChatListMessagePreviewFfi {
             kind: kind,
             timelineAt: timelineAt,
             deleted: deleted,
+            deletionSource: deletionSource,
             attachmentKind: nil,
             attachmentCount: 0,
             deliveryState: .notApplicable
@@ -646,7 +648,8 @@ extension ChatListMessagePreviewFfi {
         plaintext: String,
         kind: UInt64,
         timelineAt: UInt64,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             groupSystem: groupSystem,
@@ -658,6 +661,7 @@ extension ChatListMessagePreviewFfi {
             kind: kind,
             timelineAt: timelineAt,
             deleted: deleted,
+            deletionSource: deletionSource,
             attachmentKind: nil,
             attachmentCount: 0,
             deliveryState: .notApplicable
@@ -688,6 +692,7 @@ extension TimelineMessageRecordFfi {
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
         deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
@@ -716,6 +721,7 @@ extension TimelineMessageRecordFfi {
             reactions: reactions,
             edit: edit,
             deleted: deleted,
+            deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus
         )
@@ -742,6 +748,7 @@ extension TimelineMessageRecordFfi {
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
         deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
@@ -770,6 +777,7 @@ extension TimelineMessageRecordFfi {
             reactions: reactions,
             edit: edit,
             deleted: deleted,
+            deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus
         )
@@ -785,7 +793,8 @@ extension TimelineReplyPreviewFfi {
         mediaJson: String?,
         media: [MediaAttachmentReferenceFfi] = [],
         agentTextStreamJson: String?,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             messageIdHex: messageIdHex,
@@ -797,6 +806,7 @@ extension TimelineReplyPreviewFfi {
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
             agentTextStreamJson: agentTextStreamJson,
             deleted: deleted,
+            deletionSource: deletionSource,
             invalidationStatus: nil
         )
     }

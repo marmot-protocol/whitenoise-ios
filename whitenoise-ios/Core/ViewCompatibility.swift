@@ -200,6 +200,7 @@ private struct CompatibleInputLightStrokeModifier<S: InsettableShape>: ViewModif
                     Color.primary.opacity(BottomInputChromeLayout.lightModeInputStrokeOpacity),
                     lineWidth: 1
                 )
+                .allowsHitTesting(false)
             }
         }
     }

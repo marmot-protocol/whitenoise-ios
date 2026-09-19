@@ -316,14 +316,18 @@ struct GroupDetailsView: View {
         .task(id: viewModel.groupMlsRefreshGeneration) {
             await model.refreshVisibleDebugState(using: appState)
         }
-        .task(id: viewModel.group.groupIdHex) {
+        .task(id: "\(viewModel.group.groupIdHex)/\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)") {
             if openAddMembersOnAppear, !didOpenRequestedAddMembers, isAdmin, !isDirectMessage {
                 didOpenRequestedAddMembers = true
                 model.showAddMembers = true
             }
             model.loadMuteState(using: appState)
-            await model.loadSharedMedia(using: appState)
+            await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                await model.refreshSharedMediaVersion(using: appState)
+            }
         }
         .refreshable {
             await model.loadSharedMedia(using: appState, force: true)
@@ -617,7 +621,7 @@ struct GroupDetailsView: View {
 
     private var sharedMediaSection: some View {
         GroupSharedMediaSection(
-            records: model.sharedMediaRecords,
+            items: model.sharedMediaItems,
             isLoading: model.isLoadingSharedMedia,
             error: model.sharedMediaError,
             onRetry: {

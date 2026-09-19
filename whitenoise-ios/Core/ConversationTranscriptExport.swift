@@ -47,6 +47,7 @@ nonisolated enum ConversationTranscriptExport {
         var mediaJson: String?
         var agentTextStreamJson: String?
         var deleted: Bool
+        var deletionSource: String
         var deletedByMessageIdHex: String?
         var invalidationStatus: String?
 
@@ -65,6 +66,7 @@ nonisolated enum ConversationTranscriptExport {
             case mediaJson = "media_json"
             case agentTextStreamJson = "agent_text_stream_json"
             case deleted
+            case deletionSource = "deletion_source"
             case deletedByMessageIdHex = "deleted_by_message_id_hex"
             case invalidationStatus = "invalidation_status"
         }
@@ -150,6 +152,7 @@ nonisolated enum ConversationTranscriptExport {
                 mediaJson: record.mediaJson,
                 agentTextStreamJson: record.agentTextStreamJson,
                 deleted: record.deleted,
+                deletionSource: String(describing: record.deletionSource),
                 deletedByMessageIdHex: record.deletedByMessageIdHex,
                 invalidationStatus: record.invalidationStatus
             )

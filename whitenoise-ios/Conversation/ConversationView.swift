@@ -602,6 +602,7 @@ struct ConversationView: View {
     @State private var measuredActionRowFrameKey: String?
     @State private var pendingActionsPresentation: PendingActionsPresentation?
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
+    @State private var openPerformance: ConversationOpenPerformance
     @State private var composerFocusRequest = 0
     @State private var composerDismissRequest = 0
     @State private var popTransition = InteractivePopTransitionState()
@@ -736,6 +737,8 @@ struct ConversationView: View {
         initialTargetMessageIdHex: String? = nil,
         initialUnreadMessageIdHex: String? = nil,
         initialAppState: AppState? = nil,
+        navigationStartedAt: ContinuousClock.Instant = .now,
+        performanceTicket: ProductAnalyticsRecorder.Ticket? = nil,
         forwardDestinationProvider: (() async throws -> [MessageForwardDestination])? = nil,
         onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil,
         onGroupChanged: ((AppGroupRecordFfi) -> Void)? = nil,
@@ -743,6 +746,7 @@ struct ConversationView: View {
         onGroupDeleted: ((String) -> Void)? = nil,
         onDraftChanged: (() -> Void)? = nil
     ) {
+        _openPerformance = State(initialValue: ConversationOpenPerformance(start: navigationStartedAt, ticket: performanceTicket))
         self.chat = chat
         self.draftAccountRef = accountRef ?? initialAppState?.activeAccountRef
         self.initialTitle = initialTitle
@@ -781,6 +785,14 @@ struct ConversationView: View {
             .safeAreaInset(edge: .top, spacing: 0) { searchBarInset }
             .bottomInputChromeAccessory {
                 composerArea
+                    .onGeometryChange(for: Bool?.self) { geometry in
+                        guard geometry.size.height > 0, let header = viewModel?.conversationWindow?.header else { return nil }
+                        if !header.capabilities.canSend || blockedPeerNpub != nil { return false }
+                        guard !isSelectingMessages, viewModel?.search.isActive != true else { return nil }
+                        return viewModel?.canSendMessages == true ? true : nil
+                    } action: { value in
+                        openPerformance.rendered(local: false, composer: value, recorder: appState.productAnalytics)
+                    }
                     .frame(maxWidth: .infinity)
             }
             // The identity cluster lives leading-aligned next to the back
@@ -1142,10 +1154,18 @@ struct ConversationView: View {
                     persistCurrentDraft()
                 }
             }
+            .task {
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                openPerformance.finish(.timeout, recorder: appState.productAnalytics)
+            }
+            .onChange(of: viewModel?.error) { _, error in
+                if error != nil { openPerformance.finish(.failure, recorder: appState.productAnalytics) }
+            }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
             }
             .onDisappear {
+                openPerformance.finish(.cancelled, recorder: appState.productAnalytics)
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
@@ -1609,6 +1629,11 @@ struct ConversationView: View {
                     .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             } else if viewModel.timeline.isEmpty {
                 emptyTimeline(viewModel: viewModel)
+                    .onGeometryChange(for: Bool.self) { geometry in
+                        geometry.size.height > 0 && viewModel.conversationWindow != nil && !viewModel.isLoading
+                    } action: { visible in
+                        openPerformance.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                    }
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
@@ -1707,6 +1732,11 @@ struct ConversationView: View {
                         // Only scroll/bounce when the messages actually exceed
                         // the viewport; with a few messages the timeline stays put.
                         .scrollBounceBehavior(.basedOnSize)
+                        .onGeometryChange(for: Bool.self) { geometry in
+                            geometry.size.height > 0 && isInitialTimelinePositionSettled && viewModel.conversationWindow != nil
+                        } action: { visible in
+                            openPerformance.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                        }
                         .compatibleBottomScrollEdgeEffectHidden()
                         .scrollDismissesKeyboard(.interactively)
                         .onScrollPhaseChange { _, phase in
@@ -2067,6 +2097,7 @@ struct ConversationView: View {
             status: status,
             debugStyle: debugStyle,
             isDeleted: viewModel.isDeleted(record.messageIdHex),
+            deletionSource: viewModel.timelineStore.deletedProjections.source(for: record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
             clusterPresentation: showsSenderIdentity
@@ -2113,6 +2144,7 @@ struct ConversationView: View {
                 ? { failedSendTarget = FailedSendTarget(rowId: item.id) }
                 : nil
         )
+        .id(AttachmentPresentationState.shared.revision)
     }
 
     private var timelineBottomSentinel: some View {

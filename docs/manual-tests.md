@@ -769,3 +769,38 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - Open a conversation with more than 100 unread messages at its unread marker. Scroll down across multiple newer-page spinners, pause at each boundary, and verify the same message stays at the same screen offset when the page loads, including the final page.
 - While still reading history, receive a message or let media expand. Neither should jump to the end or mark unseen messages read. At the actual conversation end, new messages should follow normally.
 - Confirm that sending a message and tapping the down arrow still reach the latest message. Check both slow paging and a quick page completion after you lift your finger.
+
+## MarmotKit 0.10.2 attachments and diagnostics
+
+- [ ] Upgrade an existing staging installation without erasing it. Verify long
+      conversations, drafts, reactions, unread positioning, avatars and notifications.
+      Database migrations 81–86 make downgrading unsupported; use a pre-upgrade
+      backup/export for rollback, never an older binary against migrated storage.
+- [ ] Open Shared Media in a long conversation. Each request reads at most 100
+      original slots. Load more across sparse categories and rejected attachments;
+      no false final empty state, duplicated item, fabricated total or reordered album.
+      New additions offer Refresh; deletion/blocking/expiry removes stale pages.
+      Switch account and suspend/resume while a page is loading.
+- [ ] Receive attachments, then reopen offline. Verified retained bytes load without
+      another HTTP download. Test zero-byte files and an interrupted/resumed transfer.
+      Message info shows current-attempt progress and Cancel download, Remove download,
+      and Download again. Cancel/removal survives navigation and restart; automatic
+      thumbnails do not undo it. Reply previews use the original attachment's identity.
+- [ ] Set different automatic-download preferences for photos, audio, video and files.
+      Check Wi-Fi, cellular, constrained, offline and network transitions. MDK's
+      background gate is enabled only when all categories are allowed; selective
+      visible loads retain the existing downloader until MDK has a per-category API.
+      Pending invitations must never start automatic attachment acquisition.
+- [ ] In Data Usage → Download Storage, save quota/reserve/size limits, reload and
+      check persistence for each profile. Full storage pauses new work without evicting
+      existing retained files. These MDK limits do not replace the temporary legacy
+      display cache's limits. Check save failure and account switching during saving.
+- [ ] Compare author and admin deletions in the timeline, replies, chat previews,
+      moderation and transcript export. Historical unknown provenance stays generic.
+- [ ] Key Packages shows locally available inventory before relay refresh. Pull to
+      refresh merges relay observations without calling them owned by this device.
+- [ ] With diagnostics consent enabled, open a populated, empty, unavailable and slow
+      conversation. Developer diagnostics include runtime counters and conversation
+      visible/composer-ready outcomes. Revoking consent invalidates pending host timings.
+- [ ] Review the new download screens on iPhone/iPad, large text, light/dark appearance
+      and VoiceOver. Check translations and button reachability.

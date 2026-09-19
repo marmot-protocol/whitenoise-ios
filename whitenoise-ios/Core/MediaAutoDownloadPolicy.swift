@@ -233,6 +233,18 @@ final class MediaAutoDownloadStore {
         defaults.removeObject(forKey: Self.storageKey(accountIdHex: accountIdHex))
     }
 
+    var attachmentPolicyRevision: String {
+        "\(matrix.toPreference())/\(activeNetworks.map(\.rawValue).sorted().joined(separator: ","))"
+    }
+
+    func allowsBackgroundAttachments(accountID: String) -> Bool {
+        let preference = MediaAutoDownloadMatrix.fromPreference(
+            defaults.string(forKey: Self.storageKey(accountIdHex: accountID))) ?? .defaultMatrix
+        return MediaAutoDownloadType.allCases.allSatisfy {
+            preference.shouldAutoDownload($0, activeNetworks: activeNetworks)
+        }
+    }
+
     func shouldAutoDownload(_ type: MediaAutoDownloadType) -> Bool {
         matrix.shouldAutoDownload(type, activeNetworks: activeNetworks)
     }

@@ -81,7 +81,7 @@ enum MessagePreview {
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         if preview.deleted {
-            return L10n.string("This message was deleted")
+            return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
@@ -116,7 +116,7 @@ enum MessagePreview {
         systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
     ) -> String {
         if preview.deleted {
-            return L10n.string("This message was deleted")
+            return MessageDeletionPresentation.text(source: preview.deletionSource)
         }
         if !preview.plaintext.isEmpty {
             if preview.kind == MessageSemantics.kindGroupSystem {
@@ -201,5 +201,13 @@ enum MessagePreview {
             }
         }
         return fileNames
+    }
+}
+
+nonisolated enum MessageDeletionPresentation {
+    static func text(source: DeletionSourceFfi) -> String {
+        source == .admin
+            ? L10n.string("This message was deleted by an admin.")
+            : L10n.string("This message was deleted")
     }
 }

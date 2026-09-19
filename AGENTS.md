@@ -123,7 +123,7 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.21
 ```
 
-The app now pins the formal MarmotKit 0.10.1 release. For local reproduction only,
+The app now pins the formal MarmotKit 0.10.2 release. For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
@@ -135,6 +135,17 @@ is authoritative. Request only visible `avatarAsset.target` values and read the
 returned opaque references through MDK. Preserve account/runtime isolation;
 decoded pixels are host presentation state, while acquisition and durable bytes
 belong to MDK. Do not fall back to a host URL fetch for a prepared placeholder.
+
+Attachment libraries use bounded MDK attachment-history pages and preserve the original
+message/slot identity and collection baseline. Deletions and scope changes discard
+pages; additions keep existing cursors valid. Read retained bytes through opaque
+MDK references, discarding partial bytes on revocation. Never silently retry a
+removed/cancelled attachment from an automatic UI load. AttachmentPolicyBridge
+serializes the per-account automatic gate with iOS media/network preferences;
+partial policies retain the legacy visible-media download path until MDK exposes
+per-category automatic requests. Do not escalate automatic loads to explicit jobs.
+Conversation-open performance ends at rendered layout, uses the navigation consent
+ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
 Group reports use encrypted group transport and are visible to group members.
 Dismissal labels resolve individual reports without deleting their message.

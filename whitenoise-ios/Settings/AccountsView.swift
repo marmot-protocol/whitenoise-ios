@@ -29,20 +29,20 @@ struct AccountsView: View {
                     .disabled(appState.isAccountExitInProgress)
                 }
             }
+            Section {
+                WNButton(
+                    title: "Add Profile",
+                    systemImage: "person.crop.circle.badge.plus"
+                ) {
+                    showAdd = true
+                }
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            WNButton(
-                title: "Add Profile",
-                systemImage: "person.crop.circle.badge.plus"
-            ) {
-                showAdd = true
-            }
-            .padding()
-            .background(.bar)
-        }
         .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Switch Profile")
         .navigationBarTitleDisplayMode(.inline)

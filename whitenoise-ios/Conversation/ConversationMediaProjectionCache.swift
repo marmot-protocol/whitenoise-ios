@@ -25,6 +25,7 @@ import MarmotKit
 /// in per call.
 @MainActor
 final class ConversationMediaProjectionCache {
+    private var sourceIDs: [String: String] = [:]
     private var referencesByMessageId: [String: [MediaAttachmentOutcomeFfi]] = [:]
     private var pendingByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionsByRowId: [String: [MessageMediaAttachment]] = [:]
@@ -44,12 +45,15 @@ final class ConversationMediaProjectionCache {
         let ownerId: String
         let messageIdHex: String
         let source: ProjectionSourceKey
+        let sourceMessageID: String?
 
         init(
             record: AppMessageRecordFfi,
             ownerId: String,
-            mirroredReferences: [MediaAttachmentOutcomeFfi]?
+            mirroredReferences: [MediaAttachmentOutcomeFfi]?,
+            sourceMessageID: String?
         ) {
+            self.sourceMessageID = sourceMessageID
             self.ownerId = ownerId
             messageIdHex = record.messageIdHex
             if let mirroredReferences {
@@ -61,6 +65,8 @@ final class ConversationMediaProjectionCache {
     }
 
     // MARK: Reads
+
+    func sourceMessageID(for messageID: String) -> String? { sourceIDs[messageID] }
 
     func items(for item: TimelineItem) -> [MessageMediaAttachment] {
         if let pending = pendingByRowId[item.id] {
@@ -80,7 +86,8 @@ final class ConversationMediaProjectionCache {
 #if DEBUG
             buildCountForTesting += 1
 #endif
-            return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId)
+            return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId,
+                messageId: record.messageIdHex, sourceMessageId: sourceIDs[record.messageIdHex])
         }
         guard case .media(let references) = MessageSemantics.classify(record) else { return [] }
 #if DEBUG
@@ -95,7 +102,8 @@ final class ConversationMediaProjectionCache {
         setOutcomes(Self.accepted(references), forMessageId: messageIdHex)
     }
 
-    func setOutcomes(_ outcomes: [MediaAttachmentOutcomeFfi], forMessageId messageIdHex: String) {
+    func setOutcomes(_ outcomes: [MediaAttachmentOutcomeFfi], forMessageId messageIdHex: String, sourceMessageId: String? = nil) {
+        sourceIDs[messageIdHex] = sourceMessageId
         referencesByMessageId[messageIdHex] = outcomes
     }
 
@@ -105,6 +113,7 @@ final class ConversationMediaProjectionCache {
 
     func removeReferences(forMessageId messageIdHex: String) {
         referencesByMessageId[messageIdHex] = nil
+        sourceIDs[messageIdHex] = nil
     }
 
     /// Mirrors the resolved references for one message (from the timeline row, or
@@ -156,7 +165,8 @@ final class ConversationMediaProjectionCache {
         let key = ProjectionKey(
             record: record,
             ownerId: item.id,
-            mirroredReferences: referencesByMessageId[record.messageIdHex]
+            mirroredReferences: referencesByMessageId[record.messageIdHex],
+            sourceMessageID: sourceIDs[record.messageIdHex]
         )
         guard projectionKeysByRowId[item.id] != key else { return false }
         let next = build(for: record, ownerId: item.id)

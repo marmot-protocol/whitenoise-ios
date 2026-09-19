@@ -19,6 +19,12 @@ final class SharedMediaLibraryViewModel {
     private(set) var linksTruncated = false
     var loadError: String?
     var linksError: String?
+    private var cursor: AttachmentHistoryCursor?
+    private var version: AttachmentHistoryVersion?
+    private(set) var hasMore = false
+    private(set) var hasNewAttachments = false
+    private var scope: String?
+    private var generation = 0
     private var didLoad = false
     private var didLoadLinks = false
 
@@ -32,25 +38,104 @@ final class SharedMediaLibraryViewModel {
     static let linkScanMessageLimit = 2000
     static let linkScanPageLimit: UInt32 = 200
 
-    func load(groupIdHex: String, using appState: AppState, force: Bool = false) async {
-        guard let accountRef = appState.activeAccountRef else { return }
-        guard !isLoading, force || !didLoad else { return }
+    func load(groupIdHex: String, using appState: AppState, force: Bool = false, nextPage: Bool = false) async {
+        guard let accountRef = appState.activeAccountRef else {
+            generation += 1
+            scope = nil
+            resetPages()
+            links = []
+            isLoading = false
+            isLoadingLinks = false
+            return
+        }
+        let newScope = "\(accountRef)/\(appState.runtimeGeneration)/\(groupIdHex)"
+        if scope != newScope {
+            generation += 1
+            scope = newScope
+            isLoading = false
+            resetPages()
+            didLoadLinks = false
+            isLoadingLinks = false
+            links = []
+        }
+        guard !isLoading || force, force || nextPage || !didLoad else { return }
+        guard !nextPage || hasMore else { return }
+        if force { generation += 1; resetPages() }
+        let requestGeneration = generation
         isLoading = true
         loadError = nil
-        defer { isLoading = false }
+        defer { if generation == requestGeneration { isLoading = false } }
         do {
             let client = try appState.currentMarmotClient()
-            let records = try await client.listMedia(accountRef: accountRef, groupIdHex: groupIdHex)
+            var result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
+                groupIdHex: groupIdHex, limit: 100, cursor: cursor)
             try Task.checkCancellation()
-            items = GroupSharedMediaPresentation.items(from: records)
-            visualItems = GroupSharedMediaPresentation.visualItems(from: items)
-            rebuildMonthSections()
-            didLoad = true
+            guard generation == requestGeneration, appState.activeAccountRef == accountRef,
+                  appState.client === client else { return }
+            let mustRestart: Bool
+            switch result {
+            case .restartRequired, .cursorMismatch: mustRestart = true
+            case .page(let page): mustRestart = version.map { page.version.changeSince(previous: $0) == .restartRequired } ?? false
+            case .invalidLimit: mustRestart = false
+            }
+            if mustRestart {
+                resetPages()
+                result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
+                    groupIdHex: groupIdHex, limit: 100, cursor: nil)
+                try Task.checkCancellation()
+                guard generation == requestGeneration, appState.activeAccountRef == accountRef,
+                      appState.client === client else { return }
+            }
+            switch result {
+            case .page(let page):
+                var ids = Set(items.map(\.id))
+                items.append(contentsOf: GroupSharedMediaPresentation.items(entries: page.entries)
+                    .filter { ids.insert($0.id).inserted })
+                if version == nil { version = page.version }
+                cursor = page.nextCursor
+                hasMore = page.hasMore
+                visualItems = GroupSharedMediaPresentation.visualItems(from: items)
+                rebuildMonthSections()
+                didLoad = true
+            case .restartRequired, .cursorMismatch:
+                resetPages()
+                throw AttachmentReadError.stale
+            case .invalidLimit:
+                throw AttachmentReadError.unavailable
+            }
         } catch is CancellationError {
             return
         } catch {
+            guard generation == requestGeneration else { return }
             loadError = L10n.string("Couldn't load shared media.")
         }
+    }
+
+    func refreshVersion(groupIdHex: String, using appState: AppState) async {
+        guard !isLoading, let previous = version, let account = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return }
+        do {
+            let current = try await client.marmot.attachmentHistoryVersion(accountRef: account, groupIdHex: groupIdHex)
+            guard !Task.isCancelled, appState.activeAccountRef == account, appState.client === client else { return }
+            switch current.changeSince(previous: previous) {
+            case .unchanged: break
+            case .restartRequired:
+                await load(groupIdHex: groupIdHex, using: appState, force: true)
+            case .additions:
+                hasNewAttachments = true
+            }
+        } catch { /* The explicit refresh action surfaces read failures. */ }
+    }
+
+    private func resetPages() {
+        cursor = nil
+        version = nil
+        items = []
+        visualItems = []
+        visualMonthSections = []
+        hasMore = false
+        hasNewAttachments = false
+        didLoad = false
     }
 
     /// Pages message history newest-first and extracts links. The scan is
@@ -58,9 +143,10 @@ final class SharedMediaLibraryViewModel {
     func loadLinks(groupIdHex: String, using appState: AppState, force: Bool = false) async {
         guard let accountRef = appState.activeAccountRef else { return }
         guard !isLoadingLinks, force || !didLoadLinks else { return }
+        let requestGeneration = generation
         isLoadingLinks = true
         linksError = nil
-        defer { isLoadingLinks = false }
+        defer { if generation == requestGeneration { isLoadingLinks = false } }
         do {
             let client = try appState.currentMarmotClient()
             var scanned: [SharedMediaLibraryPresentation.LinkScanRecord] = []
@@ -101,6 +187,8 @@ final class SharedMediaLibraryViewModel {
                 beforeMessageId = nextBeforeMessageId
             }
             try Task.checkCancellation()
+            guard generation == requestGeneration, appState.activeAccountRef == accountRef,
+                  appState.client === client else { return }
             links = SharedMediaLibraryPresentation.linkItems(from: scanned)
             linksTruncated = truncated
             didLoadLinks = true
@@ -153,12 +241,31 @@ struct SharedMediaLibraryView: View {
 
             Divider()
             categoryContent
+                .id(AttachmentPresentationState.shared.revision)
+            if category != .links, model.hasNewAttachments {
+                Button("Refresh") { Task { await refresh() } }
+                    .disabled(model.isLoading)
+            }
+            if category != .links, model.hasMore {
+                Button("Load more") {
+                    Task { await model.load(groupIdHex: conversation.group.groupIdHex,
+                        using: appState, nextPage: model.hasMore) }
+                }
+                .disabled(model.isLoading)
+                .padding(12)
+            }
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Shared Media")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarRole(.editor)
-        .task { await model.load(groupIdHex: conversation.group.groupIdHex, using: appState) }
+        .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)") {
+            await model.load(groupIdHex: conversation.group.groupIdHex, using: appState)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                await model.refreshVersion(groupIdHex: conversation.group.groupIdHex, using: appState)
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppLanguage.didChangeNotification)) { _ in
             model.rebuildMonthSections()
         }
@@ -270,10 +377,10 @@ struct SharedMediaLibraryView: View {
                 Button("Retry") { Task { await refresh() } }
             }
         } else if visual.isEmpty {
-            ContentUnavailableView(
-                "No photos or videos",
-                systemImage: "photo.on.rectangle.angled"
-            )
+            ContentUnavailableView {
+                Label(model.hasMore ? L10n.string("No photos or videos in loaded messages") : L10n.string("No photos or videos"),
+                      systemImage: "photo.on.rectangle.angled")
+            }
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
@@ -339,7 +446,7 @@ struct SharedMediaLibraryView: View {
                 Task { await model.load(groupIdHex: conversation.group.groupIdHex, using: appState, force: true) }
             }
         } else if voice.isEmpty {
-            emptyRow(title: "No voice messages", systemImage: "waveform")
+            emptyRow(title: model.hasMore ? "No audio in loaded messages" : "No voice messages", systemImage: "waveform")
         } else {
             Section {
                 ForEach(voice) { item in
@@ -365,7 +472,7 @@ struct SharedMediaLibraryView: View {
                 Task { await model.load(groupIdHex: conversation.group.groupIdHex, using: appState, force: true) }
             }
         } else if files.isEmpty {
-            emptyRow(title: "No files", systemImage: "doc")
+            emptyRow(title: model.hasMore ? "No files in loaded messages" : "No files", systemImage: "doc")
         } else {
             Section {
                 ForEach(files) { item in
