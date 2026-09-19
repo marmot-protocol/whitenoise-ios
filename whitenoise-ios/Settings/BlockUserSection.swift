@@ -58,12 +58,9 @@ struct BlockUserActions: View {
             Label {
                 Text(isBlocked ? L10n.string("Unblock") : L10n.string("Block"))
             } icon: {
-                // A destructive role reddens the title but leaves the symbol on
-                // the tint, which reads as a blue icon on a red row before
-                // iOS 26 colors it.
                 Image(systemName: isBlocked ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.xmark")
-                    .foregroundStyle(isBlocked ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.red))
             }
+            .foregroundStyle(isBlocked ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.red))
         }
         .disabled(!isEnabled)
         .confirmationDialog(
