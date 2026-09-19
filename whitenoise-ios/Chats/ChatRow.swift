@@ -271,10 +271,8 @@ struct AvatarBubble: View {
     }
 
     private var initialsView: some View {
-        Text(WNAvatarMonogram.initial(for: title))
-            .font(.subheadline.weight(.semibold))
+        WNAvatarMonogramView(name: title)
             .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
