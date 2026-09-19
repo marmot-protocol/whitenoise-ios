@@ -162,6 +162,30 @@ before every release tag.
       top. Open a fully-read chat: the latest-message sentinel is aligned at
       the bottom. Neither entry path flashes or later jumps to another anchor.
 
+## Draft conflicts and send recovery
+
+- [ ] With a conversation open, update its draft through another editor sharing
+      the same MDK store. Editing the original composer must offer conflict
+      resolution and preserve both drafts until a choice is made.
+- [ ] Interrupt connectivity during a draft send. A later delivery error must
+      not add a locally retryable duplicate beside the MDK message. Reopen the
+      conversation: an unaccepted draft remains available; an accepted message
+      stays in the timeline without restoring its submitted composer.
+
+## Conversation keyboard avoidance
+
+- [ ] Open a conversation at the latest message and tap the composer. The
+      composer and bottom of the timeline stay above the keyboard; the final
+      message remains visible without manually scrolling. Check this immediately
+      after opening the chat, without first nudging the timeline to its bottom.
+      The timeline moves smoothly with the keyboard instead of snapping; check Reduce Motion
+      with the system keyboard transition as well.
+- [ ] Open the attachment menu, dismiss it, and focus the composer again.
+      Repeat with a multiline draft and while reading older messages. Keyboard
+      presentation must preserve the reading position and leave no covered rows.
+- [ ] Dismiss the keyboard interactively and reopen it. Check both portrait and
+      landscape, and iPad with software and hardware keyboards.
+
 ## Conversation back navigation vs. swipe-to-reply
 
 - [ ] Open a long-running agent conversation from Chats while its avatar is
@@ -289,6 +313,14 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       mentions, not the npub.
 
 ## Groups (3+ members)
+
+- [ ] From Group Info, open another member's profile. Message, New Group,
+      and Add to Group retain the three-button row and use matching neutral
+      colors in light/dark mode, including accessibility text sizes.
+- [ ] Add to Group opens even before group loading completes. Verify the
+      loading indicator, retryable load error, and explanatory empty state.
+      Eligible groups require admin membership and must not already contain
+      the person. After adding them, reopening the picker excludes that group.
 
 - [ ] Device A creates a 3-member group (B + C). Roster on A shows
       all 3 members. Group renders by name (not DM-style).
@@ -724,3 +756,51 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - [ ] Force a definite pre-admission failure: the failed local attempt remains
       available for retry/discard. An uncertain completion must not offer a retry
       that could duplicate a committed message.
+
+## Profile sharing menu
+
+- On your profile QR screen, open Share: both Share Profile URL and Share Profile Picture are available. URL sharing preserves the existing profile link.
+- Share Profile Picture with and without an avatar, with a long name, and in light/dark appearance. The exported card includes the White Noise logo, current name/avatar, and a clear QR code. Save/send the image and scan it on another device to open the same profile.
+- Check the menu and share sheet on iPhone and iPad, including large text and VoiceOver. Cancel the sheet and share again.
+- With an uncached avatar offline, picture sharing shows a recoverable error; URL sharing remains available. Navigating away or changing profiles during preparation must not present a stale share sheet.
+
+## Reading unread history across pages
+
+- Open a conversation with more than 100 unread messages at its unread marker. Scroll down across multiple newer-page spinners, pause at each boundary, and verify the same message stays at the same screen offset when the page loads, including the final page.
+- While still reading history, receive a message or let media expand. Neither should jump to the end or mark unseen messages read. At the actual conversation end, new messages should follow normally.
+- Confirm that sending a message and tapping the down arrow still reach the latest message. Check both slow paging and a quick page completion after you lift your finger.
+
+## MarmotKit 0.10.2 attachments and diagnostics
+
+- [ ] Upgrade an existing staging installation without erasing it. Verify long
+      conversations, drafts, reactions, unread positioning, avatars and notifications.
+      Database migrations 81–86 make downgrading unsupported; use a pre-upgrade
+      backup/export for rollback, never an older binary against migrated storage.
+- [ ] Open Shared Media in a long conversation. Each request reads at most 100
+      original slots. Load more across sparse categories and rejected attachments;
+      no false final empty state, duplicated item, fabricated total or reordered album.
+      New additions offer Refresh; deletion/blocking/expiry removes stale pages.
+      Switch account and suspend/resume while a page is loading.
+- [ ] Receive attachments, then reopen offline. Verified retained bytes load without
+      another HTTP download. Test zero-byte files and an interrupted/resumed transfer.
+      Message info shows current-attempt progress and Cancel download, Remove download,
+      and Download again. Cancel/removal survives navigation and restart; automatic
+      thumbnails do not undo it. Reply previews use the original attachment's identity.
+- [ ] Set different automatic-download preferences for photos, audio, video and files.
+      Check Wi-Fi, cellular, constrained, offline and network transitions. MDK's
+      background gate is enabled only when all categories are allowed; selective
+      visible loads retain the existing downloader until MDK has a per-category API.
+      Pending invitations must never start automatic attachment acquisition.
+- [ ] In Data Usage → Download Storage, save quota/reserve/size limits, reload and
+      check persistence for each profile. Full storage pauses new work without evicting
+      existing retained files. These MDK limits do not replace the temporary legacy
+      display cache's limits. Check save failure and account switching during saving.
+- [ ] Compare author and admin deletions in the timeline, replies, chat previews,
+      moderation and transcript export. Historical unknown provenance stays generic.
+- [ ] Key Packages shows locally available inventory before relay refresh. Pull to
+      refresh merges relay observations without calling them owned by this device.
+- [ ] With diagnostics consent enabled, open a populated, empty, unavailable and slow
+      conversation. Developer diagnostics include runtime counters and conversation
+      visible/composer-ready outcomes. Revoking consent invalidates pending host timings.
+- [ ] Review the new download screens on iPhone/iPad, large text, light/dark appearance
+      and VoiceOver. Check translations and button reachability.

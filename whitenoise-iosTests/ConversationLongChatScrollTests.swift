@@ -9,6 +9,7 @@ import UIKit
 @MainActor
 private final class LongChatStressModel: ObservableObject {
     @Published var revealsDeferredContent = false
+    @Published var keyboardHeight: CGFloat = 0
 }
 
 private struct LongChatStressRow: Identifiable {
@@ -216,6 +217,8 @@ private struct LongChatScrollHarness: View {
     let onViewportChanged: (TimelineBottomViewport) -> Void
     let onVisibleTargetsChanged: (Set<String>) -> Void
     let onOlderPageRequested: () -> Void
+    let onViewportHeightChanged: (CGFloat) -> Void
+    let usesNativeSizeAnchor: Bool
 
     @State private var didFinishInitialPositioning = false
     @State private var scrollRequestGeneration = 0
@@ -253,15 +256,20 @@ private struct LongChatScrollHarness: View {
                                 Color.clear
                                     .frame(height: 2)
                                     .id(Self.bottomID)
+                                    .padding(.top, BottomInputChromeLayout.timelineComposerSpacing)
                             }
                         }
                         .scrollTargetLayout()
                     }
                     .padding(.top, 8)
-                    .padding(.bottom, BottomInputChromeLayout.timelineComposerSpacing)
                     .frame(minHeight: max(0, outer.size.height), alignment: .bottom)
                 }
-                .defaultScrollAnchor(.bottom, for: .initialOffset)
+                .defaultScrollAnchor(usesNativeSizeAnchor ? .bottom : .top, for: .initialOffset)
+                .defaultScrollAnchor(TimelineBottomScrollCoordinator.sizeChangeAnchor(
+                    didFinishInitialPositioning: didFinishInitialPositioning && usesNativeSizeAnchor,
+                    userMovedAwayFromBottom: userMovedAway, isUserScrolling: isUserScrolling,
+                    hasMoreAfter: false, isPaging: false
+                ), for: .sizeChanges)
                 .task(id: scrollRequestGeneration) {
                     await Task.yield()
                     guard !Task.isCancelled else { return }
@@ -298,20 +306,15 @@ private struct LongChatScrollHarness: View {
                     )
                 }
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    geometry.contentSize.height
-                } action: { _, _ in
-                    if !didFinishInitialPositioning {
-                        scrollRequestGeneration &+= 1
-                        return
-                    }
-                    guard TimelineBottomScrollCoordinator.shouldFollowLayoutChange(
-                        didFinishInitialPositioning: didFinishInitialPositioning,
-                        userMovedAwayFromBottom: userMovedAway,
-                        isUserScrolling: isUserScrolling
-                    ) else { return }
-                    scrollRequestGeneration &+= 1
+                    geometry.containerSize.height
+                } action: { _, height in
+                    onViewportHeightChanged(height)
                 }
+
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: model.keyboardHeight)
         }
         .environment(\.displayScale, 1)
         .environment(appState)
@@ -333,7 +336,8 @@ struct ConversationLongChatScrollTests {
         }
     }
 
-    @Test func heterogeneousHundredMessageChatStaysAtBottomAsRowsExpand() async throws {
+    @Test(arguments: [false, true])
+    func heterogeneousHundredMessageChatStaysAtBottomAsRowsExpand(nativeAnchoring: Bool) async throws {
         let fixture = LongChatStressFixture()
         #expect(fixture.rows.count == LongChatStressFixture.messageCount)
         #expect(fixture.initialImageCount >= 4)
@@ -349,6 +353,7 @@ struct ConversationLongChatScrollTests {
         var lastViewport: TimelineBottomViewport?
         var visibleTargets = Set<String>()
         var olderPageRequests = 0
+        var viewportHeight: CGFloat = 0
         let controller = UIHostingController(
             rootView: LongChatScrollHarness(
                 model: model,
@@ -356,7 +361,9 @@ struct ConversationLongChatScrollTests {
                 appState: appState,
                 onViewportChanged: { lastViewport = $0 },
                 onVisibleTargetsChanged: { visibleTargets = $0 },
-                onOlderPageRequested: { olderPageRequests += 1 }
+                onOlderPageRequested: { olderPageRequests += 1 },
+                onViewportHeightChanged: { viewportHeight = $0 },
+                usesNativeSizeAnchor: nativeAnchoring
             )
         )
         let windowScene = try #require(
@@ -381,6 +388,23 @@ struct ConversationLongChatScrollTests {
             visibleTargets.contains(LongChatScrollHarness.bottomID),
             "Initial targets: \(visibleTargets.sorted()) viewport: \(String(describing: lastViewport))"
         )
+
+        // Initial positioning must hit the exact bottom even before native anchoring takes over.
+        #expect(try #require(lastViewport).distanceToBottom <= 1)
+        guard nativeAnchoring else { return }
+
+        // Exercise viewport-only resizing: long content does not change height.
+        for keyboardHeight: CGFloat in [300, 0, 350] {
+            let previousHeight = viewportHeight
+            model.keyboardHeight = keyboardHeight
+            try await settle(window) {
+                viewportHeight != previousHeight && lastViewport?.isPinned == true
+                    && visibleTargets.contains(LongChatScrollHarness.bottomID)
+            }
+            #expect(viewportHeight != previousHeight)
+            #expect(lastViewport?.isPinned == true, "Keyboard height: \(keyboardHeight)")
+            #expect(lastViewport?.contentHeight == initialContentHeight)
+        }
 
         model.revealsDeferredContent = true
         try await settle(window) {

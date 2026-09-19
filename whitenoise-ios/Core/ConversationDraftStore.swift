@@ -186,7 +186,9 @@ final class ConversationDraftStore {
 
     func receiveSelection(_ selection: SelectedMessageDraftFfi, accountRef: String, groupIdHex: String) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
-        guard pendingWrites[key] == nil, activeWrites[key, default: 0] == 0,
+        // Live metadata must not advance the write token behind an unchanged composer.
+        // Hydration, successful writes and explicit conflict resolution adopt revisions.
+        guard selections[key] == nil, pendingWrites[key] == nil, activeWrites[key, default: 0] == 0,
               !sendingKeys.contains(key), !conflictedKeys.contains(key) else { return }
         selections[key] = selection
     }

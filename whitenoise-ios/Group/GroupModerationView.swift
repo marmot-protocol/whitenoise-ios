@@ -150,7 +150,9 @@ final class GroupModerationModel {
                 if let message, !message.deleted {
                     entry.markdownBlocks = MarkdownMessageBuilder.displayBlocks(
                         for: message.contentTokens)
-                    entry.mediaItems = conversation.mediaItems(for: ConversationViewModel.appMessageRecord(from: message))
+                    // Review projections can include personally blocked targets absent from the normal window.
+                    entry.mediaItems = MessageMediaAttachment.displayItems(fromOutcomes: message.media,
+                        ownerId: "report:\(report.reportIdHex):\(message.messageIdHex)")
                 }
                 rows.append(entry)
             }
@@ -257,6 +259,7 @@ struct GroupModerationView: View {
                                     record: ConversationViewModel.appMessageRecord(from: message),
                                     status: message.direction == "sent" ? .sent : .received,
                                     isDeleted: message.deleted,
+                                    deletionSource: message.deletionSource,
                                     isEdited: message.edit != nil,
                                     hasReports: message.hasReports,
                                     usesReviewLayout: true,

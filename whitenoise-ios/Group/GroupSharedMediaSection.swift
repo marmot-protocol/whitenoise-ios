@@ -14,6 +14,21 @@ nonisolated struct GroupSharedMediaItem: Identifiable, Equatable {
 }
 
 nonisolated enum GroupSharedMediaPresentation {
+    static func items(entries: [AttachmentEntryFfi]) -> [GroupSharedMediaItem] {
+        entries.flatMap { entry in
+            MessageMediaAttachment.displayItems(fromOutcomes: [entry.attachment],
+                ownerId: "shared-media:\(entry.messageIdHex)", messageId: entry.messageIdHex,
+                sourceMessageId: entry.sourceMessageIdHex).map { attachment in
+                let index: UInt32
+                switch entry.attachment {
+                case .accepted(let slot, _), .rejected(let slot, _): index = slot
+                }
+                return GroupSharedMediaItem(id: "\(entry.messageIdHex):\(index)", attachment: attachment,
+                    timestamp: entry.timelineAt, messageIdHex: entry.messageIdHex)
+            }
+        }
+    }
+
     static func items(from records: [MediaRecordFfi]) -> [GroupSharedMediaItem] {
         var duplicateCountByOwnerID: [String: Int] = [:]
         return records.map { record in
@@ -71,7 +86,7 @@ nonisolated enum GroupSharedMediaPresentation {
 /// Details-page preview: a horizontal strip of the most recent photos and
 /// videos plus the entry point into the full library (voice, files, links).
 struct GroupSharedMediaSection: View {
-    let records: [MediaRecordFfi]
+    let items: [GroupSharedMediaItem]
     let isLoading: Bool
     let error: String?
     let onRetry: () -> Void
@@ -84,14 +99,14 @@ struct GroupSharedMediaSection: View {
 
     var body: some View {
         Section {
-            if isLoading && records.isEmpty {
+            if isLoading && items.isEmpty {
                 HStack {
                     Spacer()
                     ProgressView()
                     Spacer()
                 }
                 .padding(.vertical, 20)
-            } else if let error, records.isEmpty {
+            } else if let error, items.isEmpty {
                 ContentUnavailableView {
                     Label("Shared media unavailable", systemImage: "exclamationmark.triangle")
                 } description: {
@@ -100,7 +115,6 @@ struct GroupSharedMediaSection: View {
                     Button("Retry", action: onRetry)
                 }
             } else {
-                let items = GroupSharedMediaPresentation.items(from: records)
                 let visualItems = GroupSharedMediaPresentation.visualItems(from: items)
 
                 if !visualItems.isEmpty {
@@ -124,6 +138,7 @@ struct GroupSharedMediaSection: View {
         } header: {
             Text("Shared Media")
         }
+        .id(AttachmentPresentationState.shared.revision)
     }
 
     private func previewStrip(visualItems: [GroupSharedMediaItem]) -> some View {

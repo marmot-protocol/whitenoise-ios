@@ -37,9 +37,8 @@ nonisolated enum MessageRetentionSweep {
     }
 
     /// One sweep pass delegates expiry eligibility to Marmot so unread-message,
-    /// clock-skew, and bounded-scan deferrals stay engine-owned. Media references
-    /// are captured before pruning because the cache is keyed by plaintext hash
-    /// while Marmot intentionally reports only ciphertext hashes.
+    /// clock-skew, and bounded-scan deferrals stay engine-owned. MDK owns retained
+    /// bytes; a media expiry also clears legacy host caches without scanning history.
     static func run(
         client: MarmotClient,
         groupsByAccountRef: [String: [AppGroupRecordFfi]],
@@ -48,26 +47,6 @@ nonisolated enum MessageRetentionSweep {
         var outcome = Outcome()
         for accountRef in groupsByAccountRef.keys.sorted() {
             guard !Task.isCancelled else { break }
-            let groups = groupsByAccountRef[accountRef] ?? []
-            var plaintextHashByGroupAndCiphertextHash: [String: [String: String]] = [:]
-            for groupIdHex in MessageRetentionSweepPolicy.sweepGroupIds(from: groups) {
-                guard !Task.isCancelled else { break }
-                guard let mediaRecords = try? await client.listMedia(
-                    accountRef: accountRef,
-                    groupIdHex: groupIdHex
-                ) else {
-                    continue
-                }
-                plaintextHashByGroupAndCiphertextHash[groupIdHex] = Dictionary(
-                    mediaRecords.map {
-                        (
-                            $0.reference.ciphertextSha256.lowercased(),
-                            $0.reference.plaintextSha256.lowercased()
-                        )
-                    },
-                    uniquingKeysWith: { first, _ in first }
-                )
-            }
             guard !Task.isCancelled,
                   let report = try? await client.sweepExpiredRetention(
                     accountRef: accountRef,
@@ -80,20 +59,7 @@ nonisolated enum MessageRetentionSweep {
                     outcome.prunedGroupIds.insert(group.groupIdHex)
                     outcome.prunedMessageCount &+= group.prunedMessages
                 }
-                guard !ciphertextHashes.isEmpty else { continue }
-                guard let plaintextByCiphertext =
-                    plaintextHashByGroupAndCiphertextHash[group.groupIdHex]
-                else {
-                    outcome.requiresFullMediaPurge = true
-                    continue
-                }
-                for ciphertextHash in ciphertextHashes {
-                    guard let plaintextHash = plaintextByCiphertext[ciphertextHash] else {
-                        outcome.requiresFullMediaPurge = true
-                        continue
-                    }
-                    outcome.mediaPlaintextHashes.insert(plaintextHash)
-                }
+                if !ciphertextHashes.isEmpty { outcome.requiresFullMediaPurge = true }
             }
         }
         return outcome

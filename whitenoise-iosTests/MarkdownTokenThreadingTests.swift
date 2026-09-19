@@ -38,6 +38,7 @@ struct MarkdownTokenThreadingTests {
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,
             deleted: false,
+            deletionSource: .unknown,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
         )
@@ -148,6 +149,7 @@ struct MarkdownTokenThreadingTests {
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,
             deleted: false,
+            deletionSource: .unknown,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
         )
@@ -246,6 +248,7 @@ struct MarkdownTokenThreadingTests {
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []),
             edit: nil,
             deleted: false,
+            deletionSource: .unknown,
             deletedByMessageIdHex: nil,
             invalidationStatus: nil
         )

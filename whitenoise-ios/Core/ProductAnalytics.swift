@@ -90,7 +90,7 @@ nonisolated enum ProductEvent: Sendable {
 
 /// Tickets admit only work begun under this runtime/context's existing consent.
 nonisolated final class ProductAnalyticsRecorder: Sendable {
-    struct Ticket: Equatable, Sendable { fileprivate let generation: UUID }
+    struct Ticket: Hashable, Sendable { fileprivate let generation: UUID }
     struct Timing: Sendable {
         fileprivate let ticket: Ticket
         fileprivate let startedAt: ContinuousClock.Instant
@@ -98,7 +98,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     private struct State: Sendable {
         var generation = UUID()
         var sink: (@Sendable (ProductEvent) -> Void)?
-        var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)?
+        var performanceSink: (@Sendable (HostPerformanceOperationFfi, UInt64, HostPerformanceOutcomeFfi) -> Void)?
         var timingSink: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)?
         var pending = 0
     }
@@ -109,7 +109,7 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     }
 
     func activateSink(
-        performance: (@Sendable (HostPerformanceOperationFfi, UInt64) -> Void)? = nil,
+        performance: (@Sendable (HostPerformanceOperationFfi, UInt64, HostPerformanceOutcomeFfi) -> Void)? = nil,
         timing: (@Sendable (ProductTimingStage, UInt64, HostPerformanceOutcomeFfi) throws -> Void)? = nil,
         _ sink: @escaping @Sendable (ProductEvent) -> Void
     ) {
@@ -126,8 +126,8 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     }
 
     @discardableResult
-    func recordPerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64, ticket: Ticket?) -> Task<Void, Never>? {
-        enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds) }
+    func recordPerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64, ticket: Ticket?, outcome: HostPerformanceOutcomeFfi = .success) -> Task<Void, Never>? {
+        enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds, outcome) }
     }
 
     private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) throws -> Void) -> Task<Void, Never>? {

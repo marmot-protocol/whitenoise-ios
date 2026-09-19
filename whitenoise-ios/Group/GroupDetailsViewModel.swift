@@ -30,7 +30,8 @@ final class GroupDetailsViewModel {
     var transcriptExportURL: URL?
     var showTranscriptShareSheet = false
     var transcriptExportError: String?
-    var sharedMediaRecords: [MediaRecordFfi] = []
+    private var sharedMediaVersion: AttachmentHistoryVersion?
+    var sharedMediaItems: [GroupSharedMediaItem] = []
     var isLoadingSharedMedia = false
     var sharedMediaError: String?
     var notifyMode: ChatNotifyMode = .all
@@ -250,6 +251,21 @@ final class GroupDetailsViewModel {
         }
     }
 
+    func refreshSharedMediaVersion(using appState: AppState) async {
+        guard !isLoadingSharedMedia, !localResetCompleted, let conversation,
+              let previous = sharedMediaVersion, let account = appState.activeAccountRef,
+              let client = try? appState.currentMarmotClient() else { return }
+        do {
+            let current = try await client.marmot.attachmentHistoryVersion(accountRef: account,
+                groupIdHex: conversation.group.groupIdHex)
+            guard !Task.isCancelled, appState.activeAccountRef == account, appState.client === client else { return }
+            if current.changeSince(previous: previous) != .unchanged {
+                sharedMediaItems = []
+                await loadSharedMedia(using: appState, force: true)
+            }
+        } catch { /* Explicit refresh exposes failures. */ }
+    }
+
     func loadSharedMedia(using appState: AppState, force: Bool = false) async {
         guard let conversation, let accountRef = appState.activeAccountRef else { return }
         guard !membershipActionInFlight, !localResetCompleted,
@@ -259,27 +275,27 @@ final class GroupDetailsViewModel {
         defer { isLoadingSharedMedia = false }
 
         do {
-            let records: [MediaRecordFfi]
+            let client = try appState.currentMarmotClient()
+            let items: [GroupSharedMediaItem]
+            var pageVersion: AttachmentHistoryVersion?
 #if DEBUG
             if let listMediaForTesting {
-                records = try await listMediaForTesting(accountRef, conversation.group.groupIdHex)
+                items = GroupSharedMediaPresentation.items(from: try await listMediaForTesting(accountRef, conversation.group.groupIdHex))
             } else {
-                let client = try appState.currentMarmotClient()
-                records = try await client.listMedia(
-                    accountRef: accountRef,
-                    groupIdHex: conversation.group.groupIdHex
-                )
+                let page = try await client.attachmentPreview(accountRef: accountRef, groupID: conversation.group.groupIdHex)
+                items = GroupSharedMediaPresentation.items(entries: page.entries)
+                pageVersion = page.version
             }
 #else
-            let client = try appState.currentMarmotClient()
-            records = try await client.listMedia(
-                accountRef: accountRef,
-                groupIdHex: conversation.group.groupIdHex
-            )
+            let page = try await client.attachmentPreview(accountRef: accountRef, groupID: conversation.group.groupIdHex)
+            items = GroupSharedMediaPresentation.items(entries: page.entries)
+            pageVersion = page.version
 #endif
             try Task.checkCancellation()
-            guard !localResetCompleted, !conversation.isLocallyReset else { return }
-            sharedMediaRecords = records
+            guard appState.activeAccountRef == accountRef, appState.client === client,
+                  !localResetCompleted, !conversation.isLocallyReset else { return }
+            sharedMediaVersion = pageVersion
+            sharedMediaItems = items
             didLoadSharedMedia = true
         } catch is CancellationError {
             return
@@ -791,7 +807,7 @@ final class GroupDetailsViewModel {
 #endif
             localResetCompleted = true
             appState.conversationDraftStore.finishGroupReset(accountRef: accountRef, groupIdHex: groupId, succeeded: true)
-            sharedMediaRecords = []
+            sharedMediaItems = []
             cleanupTranscriptExportFile()
             let cacheCleared: Bool
 #if DEBUG

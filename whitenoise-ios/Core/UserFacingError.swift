@@ -96,6 +96,8 @@ struct UserFacingError: Equatable {
     private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
+        case .MissingKeyPackage:
+            return L10n.string("This person has no compatible invitation key available. Ask them to open White Noise and try again.")
         case .UserBlocked:
             return L10n.string("Unblock this person before sending a message.")
         case .BlockListUnavailable:

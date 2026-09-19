@@ -59,12 +59,23 @@ struct WNSearchBar: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isFieldFocused: Bool
+    @State private var fieldHeight = Metrics.fieldHeight
 
     var body: some View {
         bottomInputGlassContainer(spacing: Metrics.rowSpacing) {
             HStack(spacing: Metrics.rowSpacing) {
                 field
-                WNIconButton(title: "Close search", systemImage: "xmark", action: onClose)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fieldHeight = $0 }
+                Button(action: onClose) {
+                    Label("Close search", systemImage: "xmark")
+                        .labelStyle(.iconOnly)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .frame(width: fieldHeight, height: fieldHeight)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .compatibleInputCircleChrome(usesRegularGlass: true)
             }
         }
         // No bar behind the row: the glass has to sample the list scrolling
@@ -106,9 +117,11 @@ struct WNSearchBar: View {
                             Palette.clearGlyph(for: colorScheme),
                             Palette.clearFill(for: colorScheme)
                         )
-                        .frame(width: 32, height: 32)
+                        .frame(width: Metrics.fieldHeight, height: Metrics.fieldHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .accessibilityLabel("Clear search")
             } else {
                 if let onPaste {
@@ -130,7 +143,7 @@ struct WNSearchBar: View {
         .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
         .padding(.trailing, BottomInputChromeLayout.fieldTrailingPadding)
         .frame(minHeight: Metrics.fieldHeight)
-        .compatibleInputCapsuleChrome()
+        .compatibleInputCapsuleChrome(interactive: false)
     }
 }
 
