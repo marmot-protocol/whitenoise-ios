@@ -84,11 +84,14 @@ nonisolated enum MediaPlaintextHash {
 
 @MainActor
 protocol ConversationMediaCacheAccessing {
+    var producerGeneration: Int { get }
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data?
     func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, producerGeneration: Int?) async
 }
 
 struct DefaultConversationMediaCache: ConversationMediaCacheAccessing {
+    var producerGeneration: Int { MessageMediaCache.currentProducerEpoch() }
+
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
         await MessageMediaCache.cachedData(for: reference)
     }
@@ -181,12 +184,12 @@ final class ConversationMediaDownloader {
             }
             // Captured before any async gap — cache read or download — so a
             // wipe completing mid-operation invalidates this producer's store.
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
+            let producerEpoch = self.cache.producerGeneration
             if let cached = await self.cache.cachedData(for: reference),
                await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256)
             {
                 try Task.checkCancellation()
-                guard !self.isStopped, MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
+                guard !self.isStopped, self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
                 if let scope = nativeScope, let target {
                     guard appState?.activeAccountRef == scope.account, appState?.client === scope.client else { throw CancellationError() }
                     let state = try await scope.client.marmot.attachmentTransferSnapshot(accountRef: scope.account,
@@ -239,7 +242,7 @@ final class ConversationMediaDownloader {
                 }
             }
             await self.cache.store(result.plaintext, for: reference, producerGeneration: producerEpoch)
-            guard MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
+            guard self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
             return result.plaintext
         }
     }
