@@ -1,6 +1,9 @@
 import SwiftUI
 
 nonisolated enum WNNeutralAccent {
+    /// Labels on an accent-filled surface must invert with its appearance.
+    static let foreground = Color(uiColor: .systemBackground)
+
     static func color(for colorScheme: ColorScheme) -> Color {
         WNButton.Metrics.accent(for: colorScheme)
     }

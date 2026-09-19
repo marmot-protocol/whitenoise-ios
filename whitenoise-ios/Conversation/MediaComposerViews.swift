@@ -364,6 +364,7 @@ struct ComposerMediaPreviewView: View {
                             .labelStyle(.iconOnly)
                     }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(WNNeutralAccent.foreground)
                     .accessibilityLabel(L10n.string("Apply"))
                 }
             }
@@ -431,7 +432,7 @@ struct ComposerMediaPreviewView: View {
                 if isIncluded {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WNNeutralAccent.foreground)
                 }
             }
             .frame(width: Layout.inclusionControlSize, height: Layout.inclusionControlSize)
@@ -695,13 +696,13 @@ struct MediaApprovalView: View {
                     Group {
                         if isSending {
                             ProgressView()
-                                .tint(.white)
+                                .tint(WNNeutralAccent.foreground)
                         } else {
                             Image(systemName: "arrow.up")
                                 .font(.body.weight(.bold))
                         }
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(WNNeutralAccent.foreground)
                     .frame(width: 44, height: 44)
                     .background(Color.accentColor, in: Circle())
                 }
@@ -1042,6 +1043,7 @@ struct CameraCaptureView: View {
             if offersSettings {
                 Button("Open Settings", action: openSettings)
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(WNNeutralAccent.foreground)
             }
         }
         .foregroundStyle(.white)

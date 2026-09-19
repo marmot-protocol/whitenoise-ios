@@ -106,6 +106,7 @@ private struct BootstrapFailureView: View {
                 Task { await appState.bootstrap() }
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(WNNeutralAccent.foreground)
         }
         .padding()
     }

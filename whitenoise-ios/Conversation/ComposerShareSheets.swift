@@ -110,6 +110,7 @@ struct LocationPickerView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(WNNeutralAccent.foreground)
             .disabled(location.selectedCoordinate == nil)
         }
         .padding()
