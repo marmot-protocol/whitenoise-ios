@@ -1031,7 +1031,7 @@ struct ConversationView: View {
             )
     }
 
-    var body: some View {
+    private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let viewModel {
@@ -1091,6 +1091,10 @@ struct ConversationView: View {
                       update.accountID == appState.activeAccount?.accountIdHex else { return }
                 await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
+    }
+
+    private var conversationStateObservers: some View {
+        conversationRuntimeTasks
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
             }
@@ -1107,6 +1111,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.canSendMessages ?? true) { _, canSendMessages in
                 handleComposerAvailabilityChange(canSendMessages: canSendMessages)
             }
+    }
+
+    var body: some View {
+        conversationStateObservers
             .onChange(of: draft) { _, draft in
                 if editSession == nil {
                     persistCurrentDraft(text: draft)
