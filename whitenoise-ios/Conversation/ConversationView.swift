@@ -1059,7 +1059,7 @@ struct ConversationView: View {
             )
     }
 
-    var body: some View {
+    private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let viewModel {
@@ -1123,6 +1123,10 @@ struct ConversationView: View {
                       update.accountID == appState.activeAccount?.accountIdHex else { return }
                 await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
+    }
+
+    private var conversationStateObservers: some View {
+        conversationRuntimeTasks
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
             }
@@ -1139,6 +1143,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.canSendMessages ?? true) { _, canSendMessages in
                 handleComposerAvailabilityChange(canSendMessages: canSendMessages)
             }
+    }
+
+    var body: some View {
+        conversationStateObservers
             .onChange(of: draft) { _, draft in
                 if editSession == nil {
                     persistCurrentDraft(text: draft)
@@ -1637,9 +1645,11 @@ struct ConversationView: View {
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
-                let dayHeaders = Dictionary(viewModel.timelineDaySections().compactMap { section in
-                    section.items.first.map { ($0.id, section.day) }
-                }, uniquingKeysWith: { first, _ in first })
+                let dateHeadings = viewModel.timelineDaySections().compactMap { section in
+                    section.items.first.map { TimelineDateHeading(id: $0.id, day: section.day) }
+                }
+                let dayHeaders = Dictionary(dateHeadings.map { ($0.id, $0) },
+                                            uniquingKeysWith: { first, _ in first })
                 let renderedTailID = viewModel.timeline.last?.id
                 ScrollViewReader { proxy in
                     GeometryReader { outer in
@@ -1648,7 +1658,9 @@ struct ConversationView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     olderTimelineTrigger(viewModel: viewModel)
                                     ForEach(viewModel.timeline) { item in
-                                        if let day = dayHeaders[item.id] { timelineDateHeader(day) }
+                                        if let heading = dayHeaders[item.id] {
+                                            TimelineInlineDateHeader(heading: heading)
+                                        }
                                         if TimelineUnreadDivider.shouldShow(
                                             before: item,
                                             firstUnreadMessageIdHex: suppressesInitialUnreadDivider
@@ -1697,6 +1709,7 @@ struct ConversationView: View {
                                     .frame(width: 0, height: 0)
                             }
                         }
+                        .modifier(TimelinePinnedDateModifier(headings: dateHeadings))
                         .overlay(alignment: .bottomTrailing) {
                             scrollToBottomButton(proxy: proxy, viewModel: viewModel)
                         }
@@ -1915,21 +1928,6 @@ struct ConversationView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(.rect)
         .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
-    }
-
-    private func timelineDateHeader(_ day: Date) -> some View {
-        Text(ConversationDateHeader.label(timestamp: UInt64(max(0, day.timeIntervalSince1970))))
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 5)
-            .background(.regularMaterial, in: Capsule())
-            .overlay {
-                Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 5)
-            .accessibilityAddTraits(.isHeader)
     }
 
     @ViewBuilder
