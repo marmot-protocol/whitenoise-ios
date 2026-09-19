@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import MarmotKit
 
 struct ChatsListView: View {
@@ -14,7 +15,7 @@ struct ChatsListView: View {
     private var canPresentDiagnostics: Bool {
         appState.diagnosticsConsent.canPresent(
             chatsVisible: chatsVisible && path.isEmpty,
-            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible
+            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible || showBulkLeaveConfirmation
                 || appState.erasureState.shouldPresentRecovery(
                     activeAccountRef: appState.activeAccountRef,
                     runtimeReady: appState.canUseRuntimeForLocalForegroundWork
@@ -26,6 +27,9 @@ struct ChatsListView: View {
     }
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title3) private var selectionIndicatorWidth = 24.0
+    @ScaledMetric(relativeTo: .body) private var selectionActionDiameter = 44.0
     @Environment(AppState.self) private var appState
     @State private var viewModel: ChatsListViewModel?
     @State private var showNewChat = false
@@ -41,15 +45,34 @@ struct ChatsListView: View {
     @State private var deletingChatIds = Set<String>()
     @State private var updatingChatIds = Set<String>()
     @State private var leaveActionState = ChatListLeaveActionState()
+    @State private var leaveConfirmationContext: ChatLeaveOperation.Context?
     @State private var bulkDeleteInProgress = false
+    @State private var bulkLeave = ChatListBulkLeaveState()
+    @State private var showBulkLeaveConfirmation = false
+    @State private var bulkLeaveRequest: BulkLeaveRequest?
+    @State private var pendingMute: MuteTarget?
+    @State private var isUpdatingMutes = false
     @State private var isUpdatingPinnedOrder = false
     @State private var isPinMutationInProgress = false
     @State private var blockedUsers = BlockedUsersModel()
     @State private var isMarkingAllRead = false
 
+    private struct BulkLeaveRequest {
+        let context: ChatLeaveOperation.Context
+        let targets: [ChatListLeavePresentation.Target]
+    }
+
     private struct LocalDeleteTarget: Equatable {
         let id: String
         let title: String
+    }
+
+    private struct MuteTarget {
+        let id = UUID()
+        let accountRef: String
+        let runtimeGeneration: Int
+        let groupIds: [String]
+        let fromSelection: Bool
     }
 
     private struct VisibleRowsKey: Equatable {
@@ -124,6 +147,7 @@ struct ChatsListView: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
             .scrollDismissesKeyboard(.interactively)
+            .sensoryFeedback(.selection, trigger: selectionMode) { _, isSelecting in isSelecting }
             .safeAreaInset(edge: .bottom) {
                 if selectionMode, viewModel != nil {
                     chatSelectionBar(visibleRows: visibleRows)
@@ -151,25 +175,44 @@ struct ChatsListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbar {
-                if #available(iOS 26.0, *) {
+                if selectionMode {
                     ToolbarItem(placement: .topBarLeading) {
-                        settingsButton
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .topBarLeading) {
-                        settingsButton
-                    }
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    filterMenu
+                        Button(ChatListSelection.allSelected(selectedChatIds, visibleIds: visibleRowIds)
+                               ? L10n.string("Deselect All") : L10n.string("Select All")) {
+                            withAnimation(selectionAnimation) {
+                                selectedChatIds = ChatListSelection.togglingAll(selectedChatIds, visibleIds: visibleRowIds)
+                            }
+                        }
                         .tint(.primary)
-                    if !search.isActive {
-                        searchButton
+                        .disabled(selectionMutationInProgress || visibleRows.isEmpty)
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Close", systemImage: "xmark") { endSelectionMode() }
+                            .labelStyle(.iconOnly)
+                            .tint(.primary)
+                            .disabled(selectionMutationInProgress)
+                    }
+                } else {
+                    if #available(iOS 26.0, *) {
+                        ToolbarItem(placement: .topBarLeading) {
+                            settingsButton
+                        }
+                        .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .topBarLeading) {
+                            settingsButton
+                        }
+                    }
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        filterMenu
+                            .tint(.primary)
+                        if !search.isActive {
+                            searchButton
+                                .tint(.primary)
+                        }
+                        newChatButton
                             .tint(.primary)
                     }
-                    newChatButton
-                        .tint(.primary)
                 }
             }
             .compatibleTopSafeAreaBar(spacing: 0) {
@@ -294,6 +337,14 @@ struct ChatsListView: View {
             // survive into the next one's list.
             .onChange(of: appState.activeAccountRef) { _, _ in
                 exitSearch()
+                pendingMute = nil
+                endSelectionMode()
+            }
+            .onChange(of: appState.runtimeGeneration) { _, _ in
+                pendingMute = nil
+                bulkLeave.cancelConfirmation()
+                showBulkLeaveConfirmation = false
+                bulkLeaveRequest = nil
             }
             .onChange(of: path.count) { oldCount, count in
                 if count > 0 || (oldCount > 0 && count == 0) {
@@ -489,11 +540,11 @@ struct ChatsListView: View {
                 description: Text(error)
             )
         } else {
-            let canReorderPinnedRows = selectionMode
-                && scope == .active
-                && !search.isFiltering
-            let pinnedRows = canReorderPinnedRows ? rows.filter(\.isPinned) : []
-            let otherRows = canReorderPinnedRows ? rows.filter { !$0.isPinned } : []
+            // Keep row identity stable when selection controls appear.
+            let groupsPinnedRows = scope == .active && !search.isFiltering
+            let canReorderPinnedRows = selectionMode && groupsPinnedRows
+            let pinnedRows = groupsPinnedRows ? rows.filter(\.isPinned) : []
+            let otherRows = groupsPinnedRows ? rows.filter { !$0.isPinned } : []
 
             List {
                 if viewModel.windowSnapshot?.hasMoreBefore == true {
@@ -503,11 +554,13 @@ struct ChatsListView: View {
                         Task { await viewModel.returnWindowToTop() }
                     }
                 }
-                if canReorderPinnedRows {
+                if groupsPinnedRows {
                     ForEach(pinnedRows) { item in
                         chatListRow(item)
+                            .moveDisabled(!canReorderPinnedRows)
                     }
                     .onMove { source, destination in
+                        guard canReorderPinnedRows else { return }
                         movePinnedRows(pinnedRows, from: source, to: destination)
                     }
 
@@ -577,18 +630,15 @@ struct ChatsListView: View {
         let isUpdating = updatingChatIds.contains(item.id)
         let isPreparingLeave = leaveActionState.preparingGroupIds.contains(item.id)
         let isLeaving = leaveActionState.leavingGroupIds.contains(item.id)
-        let rowActionInProgress = isDeleting || isUpdating || isPreparingLeave || isLeaving
+        let rowActionInProgress = isDeleting || isUpdating || isPreparingLeave || isLeaving || isUpdatingMutes || bulkLeave.isBusy
 
         return HStack(spacing: 12) {
             if selectionMode {
                 Image(systemName: selectedChatIds.contains(item.id) ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(selectedChatIds.contains(item.id) ? Color.accentColor : .secondary)
-                    .imageScale(.large)
-                    .accessibilityLabel(
-                        selectedChatIds.contains(item.id)
-                            ? L10n.string("Deselect chat")
-                            : L10n.string("Select chat")
-                    )
+                    .font(.title3)
+                    .frame(width: selectionIndicatorWidth)
+                    .accessibilityHidden(true)
             }
             ChatRow(item: item)
             if isDeleting {
@@ -603,6 +653,8 @@ struct ChatsListView: View {
                 }
             } else if isPreparingLeave {
                 ProgressView()
+            } else if isUpdating {
+                ProgressView()
             }
         }
         .background {
@@ -614,19 +666,27 @@ struct ChatsListView: View {
         .onTapGesture {
             guard !rowActionInProgress else { return }
             if selectionMode {
-                selectedChatIds = ChatListSelection.toggling(selectedChatIds, id: item.id)
+                withAnimation(selectionAnimation) {
+                    selectedChatIds = ChatListSelection.toggling(selectedChatIds, id: item.id)
+                }
+                Haptics.selection()
             } else {
                 navigate(to: item)
             }
         }
-        .onLongPressGesture {
+        .modifier(ChatListSelectionPress(isEnabled: !selectionMode && !rowActionInProgress) {
+            beginSelectionMode(id: item.id)
+        })
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(selectionMode && selectedChatIds.contains(item.id) ? .isSelected : [])
+        .accessibilityActions {
             if !selectionMode, !rowActionInProgress {
-                Haptics.selection()
-                selectedChatIds = [item.id]
-                chatListEditMode = .active
+                Button("Select chat") {
+                    beginSelectionMode(id: item.id)
+                }
             }
         }
-        .accessibilityAddTraits(.isButton)
         .swipeActions(edge: .leading) {
             if !selectionMode, !rowActionInProgress {
                 leadingSwipeActions(for: item)
@@ -639,6 +699,14 @@ struct ChatsListView: View {
         }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .background(alignment: .trailing) {
+            if let target = pendingMute, !target.fromSelection, target.groupIds == [item.id] {
+                mutePicker(target: target, item: item)
+                    .id(target.id)
+                    .frame(width: 1)
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     @ViewBuilder
@@ -678,9 +746,29 @@ struct ChatsListView: View {
 
     private var selectionMode: Bool { chatListEditMode.isEditing }
 
+    private var selectionMutationInProgress: Bool {
+        bulkDeleteInProgress || isUpdatingMutes || bulkLeave.isBusy
+    }
+
+    private var selectionAnimation: Animation? {
+        reduceMotion ? nil : .default
+    }
+
+    private func beginSelectionMode(id: String) {
+        withAnimation(selectionAnimation) {
+            selectedChatIds = [id]
+            chatListEditMode = .active
+        }
+    }
+
     private func endSelectionMode() {
-        selectedChatIds = []
-        chatListEditMode = .inactive
+        showBulkLeaveConfirmation = false
+        bulkLeaveRequest = nil
+        bulkLeave.clearSelection()
+        withAnimation(selectionAnimation) {
+            selectedChatIds = []
+            chatListEditMode = .inactive
+        }
     }
 
     private var singleDeleteConfirmationPresented: Binding<Bool> {
@@ -718,54 +806,35 @@ struct ChatsListView: View {
     private func chatSelectionBar(visibleRows: [ChatsListViewModel.Item]) -> some View {
         let items = visibleRows.filter { selectedChatIds.contains($0.id) }
         let archiveAction = ChatListSelection.bulkArchiveAction(archivedFlags: items.map(\.isArchived))
-        let willMute = ChatListSelection.bulkMuteMutes(mutedFlags: items.map(\.isMuted))
         let departureActions = items.map(\.departureAction)
         let canDeleteLocally = ChatListSelection.canDeleteLocally(departureActions)
 
-        return VStack(spacing: 8) {
-            HStack {
-                Button("Done") { endSelectionMode() }
-                    .disabled(bulkDeleteInProgress)
-                Spacer()
-                Text(L10n.plural("%lld selected", Int64(items.count)))
-                    .font(.headline)
-                Spacer()
-                Button("Select All") { selectedChatIds = ChatListSelection.selectAll(visibleRows.map(\.id)) }
-                    .disabled(bulkDeleteInProgress)
+        return ChatListSelectionBar(count: items.count) {
+            selectionAction(
+                archiveAction == .unarchive ? "Unarchive" : "Archive",
+                systemImage: archiveAction == .unarchive ? "tray.and.arrow.up" : "archivebox"
+            ) {
+                let archived = archiveAction == .archive
+                for id in items.map(\.id) {
+                    await setArchived(groupIdHex: id, archived: archived)
+                }
+                endSelectionMode()
             }
-
-            HStack(spacing: 24) {
-                selectionAction(
-                    archiveAction == .unarchive ? "Unarchive" : "Archive",
-                    systemImage: archiveAction == .unarchive ? "tray.and.arrow.up" : "archivebox"
-                ) {
-                    let archived = archiveAction == .archive
-                    for id in items.map(\.id) {
-                        await setArchived(groupIdHex: id, archived: archived)
-                    }
-                    endSelectionMode()
-                }
-                .disabled(bulkDeleteInProgress)
-
-                selectionAction(
-                    willMute ? "Mute" : "Unmute",
-                    systemImage: willMute ? "bell.slash" : "bell"
-                ) {
-                    for id in items.map(\.id) { setMuted(groupIdHex: id, muted: willMute) }
-                    endSelectionMode()
-                }
-                .disabled(bulkDeleteInProgress || departureActions.contains(nil))
+            .disabled(selectionMutationInProgress)
+        } trailing: {
+            HStack(spacing: 12) {
+                selectionMoreMenu(items)
 
                 if bulkDeleteInProgress {
-                    VStack(spacing: 3) {
-                        ProgressView()
-                        Text("Deleting…").font(.caption2)
-                    }
-                    .frame(maxWidth: .infinity)
+                    ProgressView()
+                        .frame(width: selectionActionDiameter, height: selectionActionDiameter)
+                        .wnLiftedChrome(in: .circle)
+                        .accessibilityLabel("Deleting…")
                 } else if canDeleteLocally {
                     selectionAction("Delete", systemImage: "trash", role: .destructive) {
                         showBulkDeleteConfirmation = true
                     }
+                    .disabled(isUpdatingMutes || bulkLeave.isBusy)
                     .confirmationDialog(
                         L10n.plural("Delete %lld chats from this device?", Int64(items.count)),
                         isPresented: $showBulkDeleteConfirmation,
@@ -781,27 +850,73 @@ struct ChatsListView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 6)
-        .background(.regularMaterial)
+        .sheet(isPresented: $showBulkLeaveConfirmation, onDismiss: {
+            bulkLeaveRequest = nil
+            bulkLeave.cancelConfirmation()
+        }) {
+            if let request = bulkLeaveRequest {
+                ChatListLeaveConfirmationSheet(count: request.targets.count) {
+                    await confirmBulkLeave(request)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionMoreMenu(_ items: [ChatsListViewModel.Item]) -> some View {
+        let canMute = !items.isEmpty && !items.contains { $0.departureAction == nil }
+        let targets = items.filter { $0.departureAction == .leave }.map {
+            ChatListLeavePresentation.Target(groupIdHex: $0.id, title: $0.title)
+        }
+        ChatSelectionButton(title: L10n.string("More"), systemImage: "ellipsis", menu: {
+            var actions: [UIMenuElement] = []
+            if canMute,
+               let target = muteTarget(groupIds: items.map(\.id), fromSelection: true) {
+                if ChatListSelection.bulkMuteMutes(mutedFlags: items.map(\.isMuted)) {
+                    actions.append(UIMenu(title: L10n.string("Mute"), image: UIImage(systemName: "bell.slash"), children:
+                        ChatMuteDuration.allCases.map { duration in
+                            UIAction(title: duration.title) { _ in
+                                Task { await updateMute(.mute(duration), target: target) }
+                            }
+                        }
+                    ))
+                } else {
+                    actions.append(UIAction(title: L10n.string("Unmute"), image: UIImage(systemName: "bell")) { _ in
+                        Task { await updateMute(.unmute, target: target) }
+                    })
+                }
+            }
+            if !targets.isEmpty, let accountRef = appState.activeAccountRef {
+                let context = ChatLeaveOperation.Context(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration)
+                actions.append(UIAction(
+                    title: targets.count == 1 ? L10n.string("Leave Chat") : L10n.string("Leave Chats"),
+                    image: UIImage(systemName: "rectangle.portrait.and.arrow.right"),
+                    attributes: .destructive
+                ) { _ in
+                    guard selectionMode, leaveContextIsCurrent(context) else { return }
+                    bulkLeaveRequest = BulkLeaveRequest(context: context, targets: targets)
+                    showBulkLeaveConfirmation = true
+                })
+            }
+            return actions
+        })
+        .id([appState.activeAccountRef ?? "", String(appState.runtimeGeneration)] + items.map(\.id).sorted())
+        .disabled((!canMute && targets.isEmpty) || selectionMutationInProgress
+                  || !appState.canUseRuntimeForLocalForegroundWork)
     }
 
     private func selectionAction(
-        _ title: LocalizedStringKey,
+        _ title: String.LocalizationValue,
         systemImage: String,
         role: ButtonRole? = nil,
         perform: @escaping () async -> Void
     ) -> some View {
-        Button(role: role) {
-            Task { await perform() }
-        } label: {
-            VStack(spacing: 3) {
-                Image(systemName: systemImage).imageScale(.large)
-                Text(title).font(.caption2)
-            }
-            .frame(maxWidth: .infinity)
-        }
+        ChatSelectionButton(
+            title: L10n.string(title),
+            systemImage: systemImage,
+            isDestructive: role == .destructive,
+            action: { Task { await perform() } }
+        )
         .disabled(selectedChatIds.isEmpty)
     }
 
@@ -820,7 +935,11 @@ struct ChatsListView: View {
         case .left:
             base = (viewModel.items + viewModel.archivedItems).filter(\.belongsToLeft)
         }
-        return base.filter {
+        let baseIDs = Set(base.map(\.id))
+        let retained = selectionMode ? (viewModel.items + viewModel.archivedItems).filter {
+            bulkLeave.retainedIDs.contains($0.id) && !baseIDs.contains($0.id)
+        } : []
+        return (base + retained).filter {
             ChatListSearch.matches(query: search.query, in: $0.searchHaystack)
         }
     }
@@ -930,9 +1049,11 @@ struct ChatsListView: View {
         case .unpin:
             Task { await setPinned(item, pinned: false) }
         case .mute:
-            setMuted(groupIdHex: item.id, muted: true)
+            pendingMute = muteTarget(groupIds: [item.id], fromSelection: false)
         case .unmute:
-            setMuted(groupIdHex: item.id, muted: false)
+            if let target = muteTarget(groupIds: [item.id], fromSelection: false) {
+                Task { await updateMute(.unmute, target: target) }
+            }
         case .archive:
             Task { await setArchived(groupIdHex: item.id, archived: true) }
         case .unarchive:
@@ -1194,130 +1315,171 @@ struct ChatsListView: View {
         }
     }
 
+    private struct BulkLeaveBlocked: Error {
+        let title: String
+        let message: String
+    }
+
+    private func leaveContextIsCurrent(_ context: ChatLeaveOperation.Context) -> Bool {
+        appState.activeAccountRef == context.accountRef
+            && appState.runtimeGeneration == context.runtimeGeneration
+            && appState.canUseRuntimeForLocalForegroundWork
+    }
+
+    private func confirmBulkLeave(_ request: BulkLeaveRequest) async -> String? {
+        let context = request.context
+        guard !selectionMutationInProgress, leaveContextIsCurrent(context) else { return nil }
+        do {
+            try await bulkLeave.prepare(context: context, targets: request.targets, isCurrent: {
+                leaveContextIsCurrent(context)
+            }) { target in
+                let state = try await readLeaveState(groupIdHex: target.groupIdHex, context: context)
+                if state.settledResult != nil { return false }
+                guard state.canLeave else {
+                    throw BulkLeaveBlocked(
+                        title: L10n.formatted("Couldn't leave “%@”", target.title),
+                        message: state.blockedMessage
+                    )
+                }
+                return state.requiresSelfDemotion
+            }
+        } catch {
+            guard !Task.isCancelled, leaveContextIsCurrent(context) else { return nil }
+            Haptics.error()
+            if let blocked = error as? BulkLeaveBlocked {
+                return blocked.title + "\n" + blocked.message
+            }
+            return ChatListLeavePresentation.failureMessage
+        }
+        guard !Task.isCancelled,
+              let confirmation = bulkLeave.confirmation,
+              confirmation.context == context,
+              confirmation.targets == request.targets,
+              bulkLeave.approve(confirmation, isCurrent: leaveContextIsCurrent(context))
+        else { return nil }
+        guard let result = await bulkLeave.runApproved(isCurrent: {
+            leaveContextIsCurrent(context)
+        }, leave: { target in
+            await performChatLeave(groupIdHex: target.groupIdHex, context: context)
+        }) else { return nil }
+        guard result.failedIDs.isEmpty else {
+            Haptics.error()
+            return L10n.plural("Couldn't leave %lld chats. Try again.", Int64(result.failedIDs.count))
+        }
+        Haptics.warning()
+        return nil
+    }
+
+    private func readLeaveState(
+        groupIdHex: String,
+        context: ChatLeaveOperation.Context
+    ) async throws -> ChatLeaveOperation.State {
+        guard leaveContextIsCurrent(context), !Task.isCancelled else { throw CancellationError() }
+        let client = try appState.currentMarmotClient()
+        guard let row = try await client.chatListRow(accountRef: context.accountRef, groupIdHex: groupIdHex) else {
+            throw CancellationError()
+        }
+        guard leaveContextIsCurrent(context), !Task.isCancelled else { throw CancellationError() }
+        if !GroupManagementPresentation.isActiveChatListMember(row.selfMembership) {
+            return .init(membershipEnded: true)
+        }
+        if row.leaveRequestPending { return .init(leaveRequestPending: true) }
+        let state = try await client.groupManagementState(accountRef: context.accountRef, groupIdHex: groupIdHex)
+        guard leaveContextIsCurrent(context), !Task.isCancelled else { throw CancellationError() }
+        return .init(
+            leaveRequestPending: state.leaveRequestPending,
+            canLeave: GroupManagementPresentation.canLeave(state: state, fallbackIsLastAdmin: false),
+            requiresSelfDemotion: GroupManagementPresentation.shouldSelfDemoteBeforeLeave(state: state),
+            blockedMessage: GroupManagementPresentation.leaveHelpMessage(state: state, fallbackIsLastAdmin: false)
+        )
+    }
+
+    private func performChatLeave(
+        groupIdHex: String,
+        context: ChatLeaveOperation.Context
+    ) async -> ChatLeaveOperation.Result {
+        var didLeave = false
+        let result = await ChatLeaveOperation.perform(isCurrent: {
+            leaveContextIsCurrent(context)
+        }, readState: {
+            try await readLeaveState(groupIdHex: groupIdHex, context: context)
+        }, selfDemote: {
+            _ = try await appState.currentMarmotClient().selfDemoteAdminDetailed(
+                accountRef: context.accountRef, groupIdHex: groupIdHex
+            )
+        }, leave: {
+            _ = try await appState.currentMarmotClient().leaveGroup(
+                accountRef: context.accountRef, groupIdHex: groupIdHex
+            )
+            didLeave = true
+        })
+        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        switch result {
+        case .left:
+            if didLeave { viewModel?.markGroupLeft(groupIdHex: groupIdHex) }
+            await viewModel?.refreshRow(groupIdHex: groupIdHex)
+        case .pending:
+            viewModel?.markGroupLeavePending(groupIdHex: groupIdHex)
+            await viewModel?.refreshRow(groupIdHex: groupIdHex)
+        case .failed, .blocked, .cancelled: break
+        }
+        guard leaveContextIsCurrent(context), !Task.isCancelled else { return .cancelled }
+        return result
+    }
+
     @MainActor
     private func prepareLeave(_ target: ChatListLeavePresentation.Target) async {
-        guard let ref = appState.activeAccountRef,
+        guard let accountRef = appState.activeAccountRef,
               leaveActionState.beginPreparation(for: target)
         else { return }
+        let context = ChatLeaveOperation.Context(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration)
+        leaveConfirmationContext = nil
+        var canConfirm = false
+        defer { leaveActionState.finishPreparation(for: target, canPresentConfirmation: canConfirm) }
         do {
-            let managementState = try await appState.currentMarmotClient().groupManagementState(
-                accountRef: ref,
-                groupIdHex: target.groupIdHex
-            )
-            guard viewModel?.item(groupIdHex: target.groupIdHex)?.isActiveMember == true else {
-                leaveActionState.finishPreparation(for: target, canPresentConfirmation: false)
+            let state = try await readLeaveState(groupIdHex: target.groupIdHex, context: context)
+            guard leaveContextIsCurrent(context), !Task.isCancelled else { return }
+            if let result = state.settledResult {
+                if result == .pending { viewModel?.markGroupLeavePending(groupIdHex: target.groupIdHex) }
+                await viewModel?.refreshRow(groupIdHex: target.groupIdHex)
                 return
             }
-            if managementState.leaveRequestPending {
-                viewModel?.markGroupLeft(groupIdHex: target.groupIdHex)
-                leaveActionState.finishPreparation(for: target, canPresentConfirmation: false)
+            guard state.canLeave else {
+                Haptics.error()
+                appState.present(.error(ChatListLeavePresentation.failureTitle, message: state.blockedMessage))
                 return
             }
-            guard GroupManagementPresentation.canLeave(
-                state: managementState,
-                fallbackIsLastAdmin: false
-            ) else {
-                leaveActionState.finishPreparation(for: target, canPresentConfirmation: false)
-                presentCannotLeave(managementState)
-                return
-            }
-            leaveActionState.finishPreparation(for: target, canPresentConfirmation: true)
+            leaveConfirmationContext = context
+            canConfirm = true
         } catch {
-            leaveActionState.finishPreparation(for: target, canPresentConfirmation: false)
+            guard leaveContextIsCurrent(context), !Task.isCancelled else { return }
             presentLeaveFailure()
         }
     }
 
     @MainActor
     private func startConfirmedLeave(_ target: ChatListLeavePresentation.Target) {
-        guard leaveActionState.beginConfirmedLeave(for: target) else { return }
-        Task { @MainActor in
-            await leaveConfirmed(groupIdHex: target.groupIdHex)
-            leaveActionState.finishLeave(groupIdHex: target.groupIdHex)
-        }
-    }
-
-    @MainActor
-    private func leaveConfirmed(groupIdHex: String) async {
-        guard let ref = appState.activeAccountRef else {
-            presentLeaveFailure()
+        guard let context = leaveConfirmationContext, leaveContextIsCurrent(context) else {
+            leaveActionState.cancelConfirmation()
+            leaveConfirmationContext = nil
             return
         }
-        do {
-            let client = try appState.currentMarmotClient()
-            let managementState = try await client.groupManagementState(
-                accountRef: ref,
-                groupIdHex: groupIdHex
-            )
-            if managementState.leaveRequestPending {
-                viewModel?.markGroupLeft(groupIdHex: groupIdHex)
-                return
-            }
-            guard GroupManagementPresentation.canLeave(
-                state: managementState,
-                fallbackIsLastAdmin: false
-            ) else {
-                presentCannotLeave(managementState)
-                return
-            }
-            if GroupManagementPresentation.shouldSelfDemoteBeforeLeave(state: managementState) {
-                _ = try await client.selfDemoteAdminDetailed(
-                    accountRef: ref,
-                    groupIdHex: groupIdHex
-                )
-            }
-            _ = try await client.leaveGroup(
-                accountRef: ref,
-                groupIdHex: groupIdHex
-            )
-            // The chats subscription only fires on transport events, not local
-            // projection writes, so reflect the inactive local-history state.
-            viewModel?.markGroupLeft(groupIdHex: groupIdHex)
-            Haptics.warning()
-        } catch {
-            let leaveIsPending = isLeaveAlreadyRequested(error)
-                ? true
-                : await refreshPendingLeave(groupIdHex: groupIdHex, accountRef: ref)
-            if leaveIsPending {
-                viewModel?.markGroupLeft(groupIdHex: groupIdHex)
+        guard leaveActionState.beginConfirmedLeave(for: target) else { return }
+        leaveConfirmationContext = nil
+        Task { @MainActor in
+            defer { leaveActionState.finishLeave(groupIdHex: target.groupIdHex) }
+            switch await performChatLeave(groupIdHex: target.groupIdHex, context: context) {
+            case .left, .pending:
                 Haptics.warning()
-                return
+            case .blocked(let message):
+                Haptics.error()
+                appState.present(.error(ChatListLeavePresentation.failureTitle, message: message))
+            case .failed:
+                presentLeaveFailure()
+            case .cancelled:
+                break
             }
-            presentLeaveFailure()
         }
-    }
-
-    @MainActor
-    private func refreshPendingLeave(groupIdHex: String, accountRef: String) async -> Bool {
-        do {
-            let state = try await appState.currentMarmotClient().groupManagementState(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex
-            )
-            return state.leaveRequestPending
-        } catch {
-            return false
-        }
-    }
-
-    private func isLeaveAlreadyRequested(_ error: Error) -> Bool {
-        guard let error = error as? MarmotKitError else { return false }
-        if case .LeaveAlreadyRequested = error { return true }
-        return false
-    }
-
-    private func presentCannotLeave(_ managementState: GroupManagementStateFfi) {
-        Haptics.error()
-        appState.present(.error(
-            ChatListLeavePresentation.failureTitle,
-            message: GroupManagementPresentation.leaveFooter(
-                state: managementState,
-                fallbackIsLastAdmin: false
-            ) ?? GroupManagementPresentation.leaveHelpMessage(
-                state: managementState,
-                fallbackIsLastAdmin: false
-            )
-        ))
     }
 
     private func presentLeaveFailure() {
@@ -1328,17 +1490,77 @@ struct ChatsListView: View {
         ))
     }
 
-    /// Mute is a local, per-device preference: no Marmot publish, so the row
-    /// projection is refreshed directly instead of via a group record change.
+    private func mutePicker(target: MuteTarget, item: ChatsListViewModel.Item) -> some View {
+        ChatMutePicker(
+            isPresented: Binding(
+                get: { pendingMute?.id == target.id },
+                set: { presented in
+                    guard !presented, pendingMute?.id == target.id else { return }
+                    pendingMute = nil
+                }
+            ),
+            message: L10n.formatted("Choose how long to mute %@.", item.title)
+        ) { duration in
+            guard pendingMute?.id == target.id else { return }
+            pendingMute = nil
+            Task { await updateMute(.mute(duration), target: target) }
+        }
+    }
+
+    private func muteTarget(groupIds: [String], fromSelection: Bool) -> MuteTarget? {
+        guard !groupIds.isEmpty, !isUpdatingMutes,
+              let accountRef = appState.activeAccountRef,
+              appState.canUseRuntimeForLocalForegroundWork else { return nil }
+        return MuteTarget(
+            accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration,
+            groupIds: groupIds, fromSelection: fromSelection
+        )
+    }
+
+    private func muteTargetIsCurrent(_ target: MuteTarget) -> Bool {
+        appState.activeAccountRef == target.accountRef
+            && appState.runtimeGeneration == target.runtimeGeneration
+            && appState.canUseRuntimeForLocalForegroundWork
+    }
+
     @MainActor
-    private func setMuted(groupIdHex: String, muted: Bool) {
-        guard let accountIdHex = appState.activeAccount?.accountIdHex else { return }
-        // Write the tri-state mode, not just the legacy set — an explicit mode
-        // outranks the legacy mute on reads, so a bare setMuted would be
-        // ignored for any chat the details picker ever touched.
-        ChatMuteStore.setNotifyMode(muted ? .nothing : .all, accountIdHex: accountIdHex, groupIdHex: groupIdHex)
-        viewModel?.refreshDisplayProjections()
-        Haptics.success()
+    private func updateMute(_ action: ChatMuteAction, target: MuteTarget) async {
+        guard !isUpdatingMutes, muteTargetIsCurrent(target) else { return }
+        isUpdatingMutes = true
+        updatingChatIds.formUnion(target.groupIds)
+        defer {
+            isUpdatingMutes = false
+            updatingChatIds.subtract(target.groupIds)
+        }
+        var failedIds = Set(target.groupIds)
+        let now = Date.now
+        do {
+            let client = try appState.currentMarmotClient()
+            for id in target.groupIds {
+                guard !Task.isCancelled, muteTargetIsCurrent(target) else { return }
+                do {
+                    try await client.updateChatMute(action, accountRef: target.accountRef, groupIdHex: id, now: now)
+                    failedIds.remove(id)
+                } catch {
+                    // Keep failed chats selected so the action can be retried.
+                }
+                guard muteTargetIsCurrent(target) else { return }
+                await viewModel?.refreshRow(groupIdHex: id)
+            }
+        } catch { }
+        guard !Task.isCancelled, muteTargetIsCurrent(target) else { return }
+        if target.fromSelection {
+            if failedIds.isEmpty {
+                endSelectionMode()
+            } else {
+                selectedChatIds = failedIds
+            }
+        }
+        if failedIds.isEmpty {
+            Haptics.success()
+        } else {
+            presentChatMutationFailure(title: L10n.string("Couldn't update notifications"))
+        }
     }
 
     @MainActor

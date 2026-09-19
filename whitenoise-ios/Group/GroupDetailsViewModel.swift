@@ -35,6 +35,11 @@ final class GroupDetailsViewModel {
     var isLoadingSharedMedia = false
     var sharedMediaError: String?
     var notifyMode: ChatNotifyMode = .all
+    var isUpdatingNotifyMode = false
+    var isMuteStateLoaded = false
+    var notifyModeError: String?
+    var muteExpiresAt: Date?
+    @ObservationIgnored private var muteRevision = 0
     var isMuted: Bool { notifyMode == .nothing }
     private(set) var sharedGroups: [SharedGroupsProjection.SharedGroup] = []
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
@@ -507,36 +512,74 @@ final class GroupDetailsViewModel {
         )
     }
 
-    func loadMuteState(using appState: AppState) {
+    func loadMuteState(using appState: AppState) async {
         guard let conversation,
+              appState.canUseRuntimeForLocalForegroundWork,
+              let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex
         else { return }
-        notifyMode = ChatMuteStore.notifyMode(
-            accountIdHex: accountIdHex,
-            groupIdHex: conversation.group.groupIdHex
-        )
+        let groupId = conversation.group.groupIdHex
+        let generation = appState.runtimeGeneration
+        let revision = muteRevision
+        do {
+            let client = try appState.currentMarmotClient()
+            let settings = try await client.chatNotificationSettings(accountRef: accountRef, groupIdHex: groupId)
+            guard !Task.isCancelled, !isUpdatingNotifyMode, muteRevision == revision,
+                  appState.activeAccountRef == accountRef, appState.runtimeGeneration == generation,
+                  self.conversation?.group.groupIdHex == groupId else { return }
+            notifyMode = settings.muted ? .nothing : ChatMuteStore.notifyMode(
+                accountIdHex: accountIdHex, groupIdHex: groupId
+            )
+            isMuteStateLoaded = true
+            notifyModeError = nil
+            muteExpiresAt = settings.muted ? settings.mutedUntilMs.map {
+                Date(timeIntervalSince1970: Double($0) / 1_000)
+            } : nil
+        } catch {
+            guard !Task.isCancelled, muteRevision == revision, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation else { return }
+            notifyModeError = L10n.string("Couldn't load notification settings")
+        }
     }
 
-    /// The notify mode is a local, per-device preference; unlike archive it
-    /// publishes nothing and doesn't touch the group record.
-    func setNotifyMode(_ mode: ChatNotifyMode, using appState: AppState) {
+    @discardableResult
+    func setNotifyMode(_ mode: ChatNotifyMode, using appState: AppState) async -> Bool {
+        guard !isUpdatingNotifyMode,
+              appState.canUseRuntimeForLocalForegroundWork,
+              let conversation, let accountRef = appState.activeAccountRef else { return false }
+        let groupId = conversation.group.groupIdHex
+        let generation = appState.runtimeGeneration
+        isUpdatingNotifyMode = true
+        muteRevision += 1
+        defer { isUpdatingNotifyMode = false }
+        do {
+            let client = try appState.currentMarmotClient()
+            try await client.updateChatNotifyMode(mode, accountRef: accountRef, groupIdHex: groupId)
+            guard !Task.isCancelled, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation,
+                  self.conversation?.group.groupIdHex == groupId else { return false }
+            notifyMode = mode
+            muteExpiresAt = nil
+            isMuteStateLoaded = true
+            notifyModeError = nil
+            Haptics.success()
+            return true
+        } catch {
+            guard !Task.isCancelled, appState.activeAccountRef == accountRef,
+                  appState.runtimeGeneration == generation else { return false }
+            notifyModeError = L10n.string("Couldn't update notifications")
+            appState.present(.error(L10n.string("Couldn't update notifications")))
+            Haptics.error()
+            return false
+        }
+    }
+
+    /// Unmute clears MDK's timed or indefinite mute as well as legacy state.
+    func setMuted(_ muted: Bool, using appState: AppState) async {
+        guard await setNotifyMode(muted ? .nothing : .all, using: appState) else { return }
         guard let conversation,
-              let accountIdHex = appState.activeAccount?.accountIdHex
+              appState.activeAccountRef != nil
         else { return }
-        ChatMuteStore.setNotifyMode(
-            mode,
-            accountIdHex: accountIdHex,
-            groupIdHex: conversation.group.groupIdHex
-        )
-        notifyMode = mode
-        Haptics.success()
-    }
-
-    /// The quick-action Mute button toggles between the tri-state's ends; a
-    /// mentions-only chat mutes from here and unmutes back to all messages.
-    func setMuted(_ muted: Bool, using appState: AppState) {
-        setNotifyMode(muted ? .nothing : .all, using: appState)
-        guard let conversation else { return }
         let isDirectMessage = conversation.groupDisplay.isDirectMessage
         let mutedTitle = isDirectMessage ? L10n.string("Chat muted") : L10n.string("Group muted")
         let unmutedTitle = isDirectMessage ? L10n.string("Chat unmuted") : L10n.string("Group unmuted")

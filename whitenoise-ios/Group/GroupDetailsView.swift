@@ -116,7 +116,7 @@ struct GroupDetailsView: View {
                 }
             }
 
-            if let actionError = model.actionError {
+            if let actionError = model.actionError ?? model.notifyModeError {
                 Section {
                     Label(actionError, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -321,7 +321,6 @@ struct GroupDetailsView: View {
                 didOpenRequestedAddMembers = true
                 model.showAddMembers = true
             }
-            model.loadMuteState(using: appState)
             await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState)
             while !Task.isCancelled {
@@ -329,7 +328,19 @@ struct GroupDetailsView: View {
                 await model.refreshSharedMediaVersion(using: appState)
             }
         }
+        .task(id: muteStateKey) {
+            await model.loadMuteState(using: appState)
+        }
+        .task(id: model.muteExpiresAt) {
+            guard let deadline = model.muteExpiresAt else { return }
+            do {
+                try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+                try Task.checkCancellation()
+                await model.loadMuteState(using: appState)
+            } catch { }
+        }
         .refreshable {
+            await model.loadMuteState(using: appState)
             await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState, force: true)
         }
@@ -570,8 +581,9 @@ struct GroupDetailsView: View {
                 DetailsActionButton(
                     title: model.isMuted ? "Unmute" : "Mute",
                     systemImage: model.isMuted ? "bell.fill" : "bell.slash",
+                    isDisabled: !model.isMuteStateLoaded || model.isUpdatingNotifyMode,
                     appearance: .circular,
-                    action: { model.setMuted(!model.isMuted, using: appState) }
+                    action: { Task { await model.setMuted(!model.isMuted, using: appState) } }
                 )
                 DetailsActionButton(
                     title: "Disappearing",
@@ -1020,6 +1032,10 @@ struct GroupDetailsView: View {
               )
         else { return nil }
         return peer
+    }
+
+    private var muteStateKey: String {
+        "\(appState.activeAccountRef ?? ""):\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork):\(viewModel.group.groupIdHex)"
     }
 
     private var blockSubscriptionKey: String {
