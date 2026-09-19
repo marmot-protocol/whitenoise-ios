@@ -18,7 +18,6 @@ struct WNBadge: View {
 
     nonisolated enum Metrics {
         static let verticalPadding: CGFloat = 2
-        static let dotDiameter: CGFloat = 10
         static let minimumHeight: CGFloat = 20
 
         static func horizontalPadding(for content: Content) -> CGFloat {

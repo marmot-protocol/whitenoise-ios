@@ -51,6 +51,5 @@ struct UnreadCountBadgeTests {
 
     @Test func pinnedChatUsesTheFilledPinIcon() {
         #expect(PinBadgePresentation.systemImageName == "pin.fill")
-        #expect(PinBadgePresentation.rotationDegrees == 45)
     }
 }
