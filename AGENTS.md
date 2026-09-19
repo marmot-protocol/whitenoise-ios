@@ -158,8 +158,7 @@ transient review state; MDK owns durable storage.
 ## Chat presentation and invitation recovery
 
 Render titles/avatars from MDK's presented chat-list snapshots; do not reselect
-from profiles or rosters. Layer the active account's cached local nickname over
-direct-peer titles; preserve MDK's avatar and avoid profile hydration for this override.
+from profiles or rosters. Use MDK's direct-peer titles without local nickname overrides.
 Take the attached snapshot once, then consume complete
 updates in generation/sequence order. Presentation revision alone cannot suppress
 unread/pin updates. Reopen when the account-store epoch changes. Cancel native
@@ -266,7 +265,7 @@ Do not add a second storage path for data Marmot already owns.
 - Normalize optional group metadata before handing it to Marmot. Group names and descriptions go through `ContentSanitizer`; blank descriptions pass `nil`, unnamed group creates use MarmotKit's empty-string sentinel, and blank renames are rejected.
 - Sanitize peer-controlled group names with `ContentSanitizer.groupName` before storing or rendering timeline/system-event display strings, and use static `L10n.formatted` keys for dynamic text.
 - Name Nostr accounts in ordinary UI through `IdentityPresentation` only. It
-  prefers a sanitized nickname/known profile name, otherwise encodes a valid
+  prefers a sanitized known profile name, otherwise encodes a valid
   32-byte key to a lowercase bech32 npub, otherwise returns localized generic
   copy; raw hex is not a possible output, so a pre-hydration first frame cannot
   leak one. `IdentityFormatter.short` is for opaque non-identity values (group

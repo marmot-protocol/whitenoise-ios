@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 @preconcurrency import MarmotKit
 
-struct TimelineReadMarkResult {
+nonisolated struct TimelineReadMarkResult: Sendable {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool
@@ -967,12 +967,6 @@ nonisolated final class MarmotClient: Sendable {
             accountIdHex: accountIdHex,
             relays: relays
         )
-    }
-
-    func userProfileWebsite(accountIdHex: String) async throws -> String? {
-        try await Task.detached(priority: .utility) { [marmot, accountIdHex] in
-            try marmot.userProfileWebsite(accountIdHex: accountIdHex)
-        }.value
     }
 
     func accountKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws -> [AccountKeyPackageFfi] {

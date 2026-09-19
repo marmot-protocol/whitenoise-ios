@@ -343,6 +343,56 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Settings & profile
 
+- [ ] Compare public profiles from New Chat search, Chat Info → About, group
+      members, blocked users, and QR/profile links with the prototype: one-third
+      width avatar, name, centered bio card, verified address and compact npub,
+      then grouped Groups in Common/Add to Group, Add/Remove Contact, and Block.
+      Message is a full-width primary action below, omitted in Chat Info → About.
+      No banner, duplicate name row, Create Group, website, Lightning address,
+      or nickname controls appear. The own-profile edit form stays unchanged.
+- [ ] Groups in Common shows overlapping avatars and opens a separate group list
+      with names/member counts and Add to Another Group. Direct-message chats do
+      not appear here. Invite a peer and verify the shared/available lists refresh.
+      With no eligible groups, Add to Group explains the empty state.
+- [ ] On first profile/Chat Info load, the groups row shows progress until the
+      result is known; a failed lookup offers Retry. Refresh or background and
+      foreground the same profile: Groups in Common keeps its previous result
+      while loading. Switch account or peer: the previous result is cleared.
+- [ ] Chat Info stays separate: shared identity header, About/Mute/Disappearing/
+      Search controls, grouped relationship actions, Shared in Chat category links,
+      and Chat Actions. Mute's menu retains Notifications. Verify categories,
+      archive, leave confirmations, and group moderation still operate normally.
+- [ ] Review on iPhone and iPad in light/dark and large Dynamic Type: no clipping,
+      readable names/bio, copyable npub, and reachable actions. Check VoiceOver
+      order, action names, verified-address badge, and copy confirmation.
+- [ ] Add/remove a contact from each entry and from Chat Info. The action reflects
+      the saved follow relationship after reopening; failed loads offer Retry and
+      failed publishes retain the previous state. Other accounts stored on this
+      device still show the contact and Block rows, disabled under the current
+      eligibility rules. Developer integration must enable these cases only after
+      resolving that policy; UI visibility must not imply a successful mutation.
+- [ ] From a fresh account with no published follow list, try Add Contact and
+      reopen the profile to verify persistence. If MDK returns
+      `FollowListUnavailable`, the alert explains that the relay contact list is
+      unavailable and suggests checking connection/relay settings; the previous
+      relationship remains unchanged. Escalate a persistent fresh-account failure
+      to MDK integration rather than treating the UI error copy as a backend fix.
+- [ ] A blocked peer retains the full action card: group/contact rows are disabled,
+      Unblock remains available, and Message stays hidden until unblocked.
+- [ ] Switch accounts or suspend/resume while follow state is loading or saving;
+      an old completion must not change the new account's displayed relationship.
+- [ ] Leave and reopen a profile while its Nostr address is being verified; a
+      cancelled lookup retries. Removing/changing the address or switching the
+      target account never restores a stale verified badge.
+      Repeat in direct Chat Info, including scrolling its identity section offscreen.
+- [ ] Switch accounts during an invitation, group lookup, Message action, or
+      Block confirmation. Old work must not navigate, announce success, or act
+      on the replacement account. Invitation failures remain visible even if
+      the eligible-group list becomes empty.
+- [ ] On an upgraded installation with saved nicknames, chat titles, search,
+      mentions, profiles, and sender-revealing notifications use published names.
+      Generic notifications still hide the sender. Blocked-peer actions remain gated.
+
 - [ ] Settings → AI Agents shows the introduction, Hermes, OpenClaw, OpenCode,
       Codex, and manual setup. Expand/collapse each prompt and copy it; pasted
       text matches the preview and contains the active profile's public npub.
@@ -642,7 +692,7 @@ committing/shipping the binding update.
 - [ ] Switch Chats, Unread, Archived, and Left; queued departures and active
       disbands appear in Left. Search finds chats beyond the loaded window.
       Pin reordering includes the entire pin set, and forwarding and Mark all read
-      include chats outside the current window. Local nicknames remain visible.
+      include chats outside the current window. Published profile names remain visible.
 - [ ] Account/app badges count unread messages plus one per manual-only reminder.
       Pending invitations retain their invitation row indicator and add no badge
       count. Check an inactive account, temporary read unavailability, sign-out,

@@ -41,7 +41,6 @@ struct ShareAndConnectView: View {
                     displayName: appState.displayName(forAccountIdHex: accountIdHex),
                     avatarURL: appState.avatarURL(forAccountIdHex: accountIdHex),
                     npub: npub,
-                    shortNpub: appState.shortNpub(forAccountIdHex: accountIdHex),
                     qrImage: qrImage
                 )
                 .transition(.opacity)
@@ -292,19 +291,15 @@ private struct ShareProfileContent: View {
     let displayName: String
     let avatarURL: URL?
     let npub: String?
-    let shortNpub: String
     let qrImage: UIImage?
 
     var body: some View {
         Form {
             Section {
-                ShareProfileIdentityHeader(
-                    accountIdHex: accountIdHex,
-                    displayName: displayName,
-                    avatarURL: avatarURL,
-                    npub: npub,
-                    shortNpub: shortNpub
-                )
+                ProfileIdentityHeader(name: displayName, npub: npub) { size in
+                    AvatarBubble(seed: accountIdHex, title: displayName, pictureURL: avatarURL)
+                        .frame(width: size, height: size)
+                }
             }
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
@@ -319,35 +314,6 @@ private struct ShareProfileContent: View {
                 .listRowInsets(EdgeInsets())
             }
         }
-    }
-}
-
-private struct ShareProfileIdentityHeader: View {
-    let accountIdHex: String
-    let displayName: String
-    let avatarURL: URL?
-    let npub: String?
-    let shortNpub: String
-
-    var body: some View {
-        VStack(spacing: 8) {
-            AvatarBubble(seed: accountIdHex, title: displayName, pictureURL: avatarURL)
-                .frame(width: 96, height: 96)
-
-            Text(displayName)
-                .font(.title2.weight(.bold))
-                .multilineTextAlignment(.center)
-
-            if let npub {
-                CopyableValueChip(
-                    display: shortNpub,
-                    copyValue: npub,
-                    valueName: L10n.string("npub")
-                )
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
     }
 }
 
@@ -387,7 +353,6 @@ private struct ShareProfileQRCode: View {
             displayName: "Ada Lovelace",
             avatarURL: nil,
             npub: "npub1exampleexampleexampleexamplef4k2",
-            shortNpub: "npub1exam…f4k2",
             qrImage: QRCode.image(from: "marmot://profile/npub1exampleexampleexampleexamplef4k2")
         )
         .navigationTitle("Share & Connect")

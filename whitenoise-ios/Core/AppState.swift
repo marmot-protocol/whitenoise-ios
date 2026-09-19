@@ -498,7 +498,7 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
-        erasureDefaults: UserDefaults = AppDataErasureState.persistentDefaults,
+        erasureDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -517,7 +517,10 @@ final class AppState {
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
-        self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
+        self.erasureState = AppDataErasureState(
+            defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
+            legacyDefaults: accountDefaults
+        )
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
@@ -856,12 +859,8 @@ final class AppState {
             await conversationDraftStore.flush()
             MessageHideStore.clearAll(accountRef: removedRef)
 
-            // Drop the wiped account's private contact nicknames so they don't
-            // outlive the identity on this device. Only on a destructive wipe —
-            // a normal sign-out retains the account (and its local state,
-            // including nicknames) for reactivation.
             if let removedAccountIdHex {
-                profileStore.clearContactNicknames(ownerAccountIdHex: removedAccountIdHex)
+                ContactNicknameStore.clearAll(ownerAccountIdHex: removedAccountIdHex)
                 // The wiped identity's per-chat mute and notify-mode entries
                 // live in the shared suite for the NSE; they must not outlive
                 // the account either.
@@ -1058,7 +1057,7 @@ final class AppState {
                 try await erasingClient.marmot.removeAccount(accountRef: account.label)
                 ChatMuteStore.clearAll(accountIdHex: account.accountIdHex)
                 MessageHideStore.clearAll(accountRef: account.label)
-                profileStore.clearContactNicknames(ownerAccountIdHex: account.accountIdHex)
+                ContactNicknameStore.clearAll(ownerAccountIdHex: account.accountIdHex)
             }
             guard try await erasingClient.listAccounts().isEmpty else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable

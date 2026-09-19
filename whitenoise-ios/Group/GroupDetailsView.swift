@@ -50,14 +50,12 @@ struct GroupDetailsView: View {
     @State private var showMediaLibrary = false
     @State private var showRelays = false
     @State private var showContactProfile = false
-    @State private var editingNickname = false
-    @State private var nicknameDraft = ""
-    @State private var showStartGroupWithContact = false
     @State private var showAddContactToGroup = false
     @State private var didOpenRequestedAddMembers = false
     @State private var memberProjectionCache = GroupMemberListProjectionCache()
     @State private var blockedUsers = BlockedUsersModel()
     @State private var blockReload = 0
+    @State private var contactIdentity = ProfileAddressVerificationModel()
 
     private var isAdmin: Bool {
         viewModel.canEditGroup && !viewModel.isGroupDisbandingOrDisbanded
@@ -82,12 +80,14 @@ struct GroupDetailsView: View {
                 groupIdentitySection
             }
             groupLifecycleSection
-            actionsRowSection
-            sharedMediaSection
-            settingsSection
             if isDirectMessage {
-                sharedGroupsSection
+                contactProfileActionsSection
+                contactSharedContentSection
+                contactChatActionsSection
             } else {
+                actionsRowSection
+                sharedMediaSection
+                settingsSection
                 membersSection
                 relaysSection
             }
@@ -100,13 +100,12 @@ struct GroupDetailsView: View {
                     }
                 }
             }
-            technicalDetailsSection
-            destructiveActionsSection
-            if blockablePeer != nil {
-                BlockUserSection(model: blockedUsers) { blockReload += 1 }
+            if !isDirectMessage {
+                technicalDetailsSection
+                destructiveActionsSection
             }
 
-            if appState.developerMode {
+            if appState.developerMode, !isDirectMessage {
                 Section {
                     NavigationLink {
                         ChatDeveloperToolsView(model: model, conversation: viewModel)
@@ -140,19 +139,8 @@ struct GroupDetailsView: View {
         }
         .navigationDestination(isPresented: $showContactProfile) {
             if let contactNpub {
-                profileDestination(npub: contactNpub, moderation: nil)
-            }
-        }
-        .sheet(isPresented: $showStartGroupWithContact) {
-            if let contactAccountIdHex, let contactNpub {
-                NewChatFlowView(initialGroupMembers: [
-                    MemberRefFfi(
-                        memberRef: contactNpub,
-                        accountIdHex: contactAccountIdHex,
-                        npub: contactNpub
-                    )
-                ])
-                .appAppearance()
+                ProfileContentView(npub: contactNpub, showsMessageAction: false)
+                    .toolbarRole(.editor)
             }
         }
         .sheet(isPresented: $showAddContactToGroup) {
@@ -161,6 +149,9 @@ struct GroupDetailsView: View {
                     contactNpub: contactNpub,
                     contactName: contactTitle,
                     groups: model.addableGroups,
+                    isLoading: model.isLoadingSharedGroups,
+                    loadError: model.sharedGroupsLoadError,
+                    onReload: { await model.loadSharedGroups(using: appState, force: true) },
                     onAdded: {
                         await model.loadSharedGroups(using: appState, force: true)
                     }
@@ -177,7 +168,6 @@ struct GroupDetailsView: View {
                 showMediaLibrary = false
                 showRelays = false
                 memberProfileTarget = nil
-                showStartGroupWithContact = false
                 showAddContactToGroup = false
             }
         }
@@ -196,13 +186,6 @@ struct GroupDetailsView: View {
                     editMenu
                 }
             }
-        }
-        .alert(nicknameAlertTitle, isPresented: $editingNickname) {
-            TextField(L10n.string("Nickname"), text: $nicknameDraft)
-            Button(L10n.string("Save"), action: saveNickname)
-            Button(L10n.string("Cancel"), role: .cancel) {}
-        } message: {
-            Text("Only you see this on this device. Clearing it restores their profile name.")
         }
         .sheet(isPresented: $model.showAddMembers) {
             AddMembersSheet(
@@ -304,6 +287,14 @@ struct GroupDetailsView: View {
                 },
                 onDismiss: { sharedMediaGallery = nil }
             )
+        }
+        .task(id: "\(isDirectMessage)/\(contactAccountIdHex ?? "")/\(contactNip05 ?? "")") {
+            guard isDirectMessage else {
+                contactIdentity.applyResolvedAccount(nil)
+                return
+            }
+            contactIdentity.applyResolvedAccount(contactAccountIdHex)
+            await contactIdentity.verifyDeclaredNip05(contactNip05)
         }
         .task(id: blockSubscriptionKey) {
             guard let peer = blockablePeer else { return }
@@ -501,55 +492,118 @@ struct GroupDetailsView: View {
     private var contactIdentitySection: some View {
         Section {
             VStack(spacing: 10) {
-                Button {
-                    showContactProfile = true
-                } label: {
-                    VStack(spacing: 10) {
-                        NativeAvatarBubble(
-                            seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
-                            title: contactTitle,
-                            asset: viewModel.conversationWindow?.header.avatarAsset
-                        )
-                        .frame(width: 104, height: 104)
-
-                        Text(contactTitle)
-                            .font(.title2.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .disabled(contactNpub == nil)
-                .accessibilityLabel(L10n.formatted("Show profile for %@", contactTitle))
-
-                // When a private nickname overrides the header, keep the real
-                // profile name visible so the override is never confused for
-                // the contact's published name.
-                if nickname != nil, let profileName {
-                    Text(L10n.formatted("Name from profile: %@", profileName))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-
-                if let contactNip05 {
-                    Text(contactNip05)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                if let npub = contactNpub {
-                    CopyableValueChip(
-                        display: IdentityFormatter.short(npub, head: 12, tail: 10),
-                        copyValue: npub,
-                        valueName: L10n.string("npub")
+                ProfileIdentityHeader(
+                    name: contactTitle,
+                    npub: contactNpub,
+                    nostrAddress: contactNip05,
+                    isAddressVerified: contactIdentity.verifiedNip05 == contactNip05
+                ) { size in
+                    NativeAvatarBubble(
+                        seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
+                        title: contactTitle,
+                        asset: viewModel.conversationWindow?.header.avatarAsset
                     )
+                    .frame(width: size, height: size)
+                }
+                HStack(spacing: 12) {
+                    DetailsQuickAction(title: "About") {
+                        Button { showContactProfile = true } label: {
+                            Image(systemName: "person.crop.circle")
+                        }
+                        .disabled(contactNpub == nil)
+                    }
+                    DetailsQuickAction(title: model.isMuted ? "Unmute" : "Mute") {
+                        Menu {
+                            Button(model.isMuted ? "Unmute" : "Mute") {
+                                model.setMuted(!model.isMuted, using: appState)
+                            }
+                            Button("Notifications") { showNotifications = true }
+                        } label: {
+                            Image(systemName: model.isMuted ? "bell" : "bell.slash")
+                        }
+                    }
+                    DetailsQuickAction(title: "Disappearing") {
+                        Button { model.showRetentionEditor = true } label: {
+                            Image(systemName: "timer")
+                        }
+                        .disabled(!isAdmin || model.membershipActionInFlight)
+                    }
+                    DetailsQuickAction(title: "Search") {
+                        Button(action: openConversationSearch) {
+                            Image(systemName: "magnifyingglass")
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .listRowBackground(Color.clear)
+        }
+        .listRowInsets(.init(top: 24, leading: 16, bottom: 0, trailing: 16))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+
+    }
+
+    private var contactProfileActionsSection: some View {
+        Section {
+            if contactNpub != nil {
+                GroupsInCommonRow(
+                    sharedGroups: model.sharedGroups,
+                    hasLoaded: model.groupsLoadState.hasLoaded,
+                    loadError: model.sharedGroupsLoadError,
+                    onRetry: { Task { await model.loadSharedGroups(using: appState, force: true) } },
+                    onOpenChat: openChat,
+                    onAddToGroup: { showAddContactToGroup = true }
+                )
+                .disabled(blockedUsers.targetIsBlocked)
+            }
+            if let contactAccountIdHex {
+                ProfileFollowButton(accountIdHex: contactAccountIdHex)
+                    .disabled(blockedUsers.targetIsBlocked)
+                BlockUserActions(model: blockedUsers) { blockReload += 1 }
+                    .disabled(blockablePeer == nil)
+            }
+        }
+    }
+
+    private var contactSharedContentSection: some View {
+        Section("Shared in Chat") {
+            NavigationLink {
+                SharedMediaLibraryView(conversation: viewModel, initialCategory: .media)
+            } label: {
+                Label("Photos & Videos", systemImage: "photo.on.rectangle.angled")
+            }
+            NavigationLink {
+                SharedMediaLibraryView(conversation: viewModel, initialCategory: .links)
+            } label: {
+                Label("Links", systemImage: "link")
+            }
+            NavigationLink {
+                SharedMediaLibraryView(conversation: viewModel, initialCategory: .files)
+            } label: {
+                Label("Documents", systemImage: "doc")
+            }
+        }
+    }
+
+    private var contactChatActionsSection: some View {
+        Section("Chat Actions") {
+            NavigationLink {
+                GroupRelaysView(relays: viewModel.group.relays)
+            } label: {
+                Label("Relays", systemImage: "network")
+            }
+            if appState.developerMode {
+                NavigationLink {
+                    ChatDeveloperToolsView(model: model, conversation: viewModel)
+                } label: {
+                    Label("Developer Tools", systemImage: "wrench.and.screwdriver")
+                }
+            }
+            Button(viewModel.group.archived ? "Unarchive" : "Archive", systemImage: "archivebox") {
+                Task { await model.setArchived(!viewModel.group.archived, using: appState) }
+            }
+            .disabled(model.membershipActionInFlight)
+            destructiveActionRows
         }
     }
 
@@ -678,21 +732,6 @@ struct GroupDetailsView: View {
             }
             .buttonStyle(.plain)
 
-            if isDirectMessage {
-                Button(action: beginEditingNickname) {
-                    settingsRow(title: "Nickname", systemImage: "pencil") {
-                        HStack(spacing: 6) {
-                            Text(nickname ?? L10n.string("None"))
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(!canEditNickname)
-            }
-
             Button {
                 Task { await model.setArchived(!viewModel.group.archived, using: appState) }
             } label: {
@@ -726,22 +765,6 @@ struct GroupDetailsView: View {
     }
 
     // MARK: - People
-
-    @ViewBuilder
-    private var sharedGroupsSection: some View {
-        if let contactAccountIdHex, let contactNpub {
-            GroupsInCommonSection(
-                contactAccountIdHex: contactAccountIdHex,
-                contactNpub: contactNpub,
-                contactName: contactTitle,
-                sharedGroups: model.sharedGroups,
-                addableGroups: model.addableGroups,
-                onOpenChat: openChat,
-                onStartGroup: { showStartGroupWithContact = true },
-                onAddToGroup: { showAddContactToGroup = true }
-            )
-        }
-    }
 
     private var membersSection: some View {
         let details = viewModel.groupMemberDetails
@@ -926,69 +949,7 @@ struct GroupDetailsView: View {
 
     private var destructiveActionsSection: some View {
         Section {
-            if GroupManagementPresentation.shouldShowEndGroup(
-                state: viewModel.managementState
-            ) {
-                Button(role: .destructive) {
-                    model.pendingConfirmation = .disband
-                } label: {
-                    Label("End Group", systemImage: "xmark.circle")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .disabled(
-                    !viewModel.canEndGroup || model.membershipActionInFlight
-                )
-            }
-
-            if !isDirectMessage, shouldShowSelfDemoteAction {
-                Button(role: .destructive) {
-                    model.pendingConfirmation = .selfDemote
-                } label: {
-                    Label("Step Down as Admin", systemImage: "star.slash")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-                .disabled(!canSelfDemoteAction || model.membershipActionInFlight)
-            }
-
-            if !viewModel.isGroupDisbanding {
-                if viewModel.departureStatus == .leaving {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(GroupManagementPresentation.leavingGroupComposerMessage)
-                            .foregroundStyle(.secondary)
-                    }
-                } else if viewModel.isActiveParticipant {
-                    Button(role: .destructive) {
-                        model.pendingConfirmation = .leave
-                    } label: {
-                        Label(
-                            isDirectMessage ? L10n.string("Leave Chat") : L10n.string("Leave Group"),
-                            systemImage: "rectangle.portrait.and.arrow.right"
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(
-                        !viewModel.canLeaveGroup || model.membershipActionInFlight
-                    )
-                } else {
-                    Button(role: .destructive) {
-                        model.pendingConfirmation = .deleteLocal
-                    } label: {
-                        Label("Delete Local Copy", systemImage: "trash")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(model.membershipActionInFlight)
-                }
-            }
+            destructiveActionRows
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 if let blocker = GroupManagementPresentation.disbandBlockerMessage(
@@ -1008,6 +969,74 @@ struct GroupDetailsView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var destructiveActionRows: some View {
+        if GroupManagementPresentation.shouldShowEndGroup(
+            state: viewModel.managementState
+        ) {
+            Button(role: .destructive) {
+                model.pendingConfirmation = .disband
+            } label: {
+                Label("End Group", systemImage: "xmark.circle")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(
+                !viewModel.canEndGroup || model.membershipActionInFlight
+            )
+        }
+
+        if !isDirectMessage, shouldShowSelfDemoteAction {
+            Button(role: .destructive) {
+                model.pendingConfirmation = .selfDemote
+            } label: {
+                Label("Step Down as Admin", systemImage: "star.slash")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSelfDemoteAction || model.membershipActionInFlight)
+        }
+
+        if !viewModel.isGroupDisbanding {
+            if viewModel.departureStatus == .leaving {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(GroupManagementPresentation.leavingGroupComposerMessage)
+                        .foregroundStyle(.secondary)
+                }
+            } else if viewModel.isActiveParticipant {
+                Button(role: .destructive) {
+                    model.pendingConfirmation = .leave
+                } label: {
+                    Label(
+                        isDirectMessage ? L10n.string("Leave Chat") : L10n.string("Leave Group"),
+                        systemImage: "rectangle.portrait.and.arrow.right"
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .disabled(
+                    !viewModel.canLeaveGroup || model.membershipActionInFlight
+                )
+            } else {
+                Button(role: .destructive) {
+                    model.pendingConfirmation = .deleteLocal
+                } label: {
+                    Label("Delete Local Copy", systemImage: "trash")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.membershipActionInFlight)
+            }
+        }
+
     }
 
     /// The direct peer this screen can offer a block action for, or nil when
@@ -1066,7 +1095,6 @@ struct GroupDetailsView: View {
 
     private func profileDestination(npub: String, moderation: ProfileModerationContext?) -> some View {
         ProfileContentView(npub: npub, moderation: moderation)
-            .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarRole(.editor)
     }
@@ -1136,26 +1164,10 @@ struct GroupDetailsView: View {
 
     private var contactTitle: String { viewModel.displayTitle }
 
-    private var nickname: String? {
-        contactAccountIdHex.flatMap { appState.contactNickname(forAccountIdHex: $0) }
-    }
-
-    private var profileName: String? {
-        contactAccountIdHex.flatMap { appState.knownProfileDisplayName(forAccountIdHex: $0) }
-    }
-
     private var contactNip05: String? {
         contactAccountIdHex.flatMap {
             ContentSanitizer.profileAddress(appState.profile(forAccountIdHex: $0)?.nip05)
         }
-    }
-
-    private var canEditNickname: Bool {
-        contactAccountIdHex != nil && appState.activeAccountRef != nil
-    }
-
-    private var nicknameAlertTitle: String {
-        nickname == nil ? L10n.string("Set nickname") : L10n.string("Edit nickname")
     }
 
     private var notifyModeSummary: String {
@@ -1164,17 +1176,6 @@ struct GroupDetailsView: View {
         case .mentionsOnly: L10n.string("Mentions")
         case .nothing: L10n.string("Muted")
         }
-    }
-
-    private func beginEditingNickname() {
-        nicknameDraft = nickname ?? ""
-        editingNickname = true
-    }
-
-    private func saveNickname() {
-        guard let contactAccountIdHex else { return }
-        appState.setContactNickname(nicknameDraft, forAccountIdHex: contactAccountIdHex)
-        Haptics.selection()
     }
 
     /// A group rename must publish a non-empty sanitized name; an empty value

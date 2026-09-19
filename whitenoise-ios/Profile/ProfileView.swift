@@ -26,7 +26,6 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             ProfileContentView(npub: npub)
-                .navigationTitle("Profile")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {

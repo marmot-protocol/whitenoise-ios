@@ -31,6 +31,9 @@ struct UserFacingError: Equatable {
         if isDuplicateIdentity(error, diagnostic: raw ?? "") {
             return capitalizingFirstLetter(L10n.string("Identity already signed in on this device"))
         }
+        if let marmotError = error as? MarmotKitError, case .FollowListUnavailable = marmotError {
+            return L10n.string("Your contact list is unavailable from relays. Check your connection and relay settings, then try again. No contacts were changed.")
+        }
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
         if let mediaMessage = mediaMessage(for: error) { return mediaMessage }

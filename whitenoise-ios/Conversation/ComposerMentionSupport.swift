@@ -22,8 +22,7 @@ struct ComposerMentionCandidate: Identifiable, Equatable {
         let accountIdHex = GroupMemberDetailsPresentation.profileAccountIdHex(for: details)
         displayName = IdentityPresentation.text(
             accountIdHex: accountIdHex,
-            knownName: appState.contactNickname(forAccountIdHex: accountIdHex)
-                ?? ContentSanitizer.displayName(details.displayName)
+            knownName: ContentSanitizer.displayName(details.displayName)
                 ?? appState.knownDisplayName(forAccountIdHex: accountIdHex)
         )
         avatarPictureURL = appState.avatarURL(forAccountIdHex: accountIdHex)

@@ -148,6 +148,67 @@ struct Nip05ResolverTests {
         #expect(model.verifiedNip05 == "alice@example.com")
     }
 
+    @MainActor
+    @Test func cancelledVerificationCanRetryBeforeOldTransportFinishes() async {
+        let model = ProfileViewModel()
+        model.applyResolvedAccount(hex)
+        let gate = Nip05TransportGate()
+        let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
+        let oldLookup = Task {
+            await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
+                await gate.suspendUntilReleased()
+                return try await response(request, maximumBytes)
+            }
+        }
+        await gate.waitUntilStarted()
+        oldLookup.cancel()
+        await model.verifyDeclaredNip05("alice@example.com", transport: response)
+        #expect(model.verifiedNip05 == "alice@example.com")
+        await gate.release()
+        await oldLookup.value
+        #expect(model.verifiedNip05 == "alice@example.com")
+    }
+
+    @MainActor
+    @Test func removingDeclarationInvalidatesAnInFlightVerification() async {
+        let model = ProfileViewModel()
+        model.applyResolvedAccount(hex)
+        let gate = Nip05TransportGate()
+        let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
+        let oldLookup = Task {
+            await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
+                await gate.suspendUntilReleased()
+                return try await response(request, maximumBytes)
+            }
+        }
+        await gate.waitUntilStarted()
+        await model.verifyDeclaredNip05(nil, transport: response)
+        await gate.release()
+        await oldLookup.value
+        #expect(model.verifiedNip05 == nil)
+    }
+
+    @MainActor
+    @Test func returningToAnAccountDoesNotAcceptItsOlderVerification() async {
+        let model = ProfileViewModel()
+        model.applyResolvedAccount(hex)
+        let gate = Nip05TransportGate()
+        let response = stub(returning: "{\"names\":{\"alice\":\"\(hex)\"}}")
+        let oldLookup = Task {
+            await model.verifyDeclaredNip05("alice@example.com") { request, maximumBytes in
+                await gate.suspendUntilReleased()
+                return try await response(request, maximumBytes)
+            }
+        }
+        await gate.waitUntilStarted()
+        model.applyResolvedAccount(String(repeating: "f", count: 64))
+        model.applyResolvedAccount(hex)
+        await model.verifyDeclaredNip05("alice@example.com", transport: stub(returning: "{\"names\":{}}"))
+        await gate.release()
+        await oldLookup.value
+        #expect(model.verifiedNip05 == nil)
+    }
+
     @Test func malformedDocumentsAndTransportFailuresFail() async {
         let malformed = await Nip05Resolver.resolve(
             name: "alice",

@@ -164,7 +164,6 @@ struct NewMessageScreen: View {
         let accountIdHex: String
         let npub: String
         let profile: UserProfileMetadataFfi?
-        let initialIsFollowing: Bool?
 
         var id: String { accountIdHex }
     }
@@ -203,8 +202,7 @@ struct NewMessageScreen: View {
                         profilePreview = ProfilePreview(
                             accountIdHex: resolved.accountIdHex,
                             npub: npub,
-                            profile: appState.cachedProfile(forAccountIdHex: resolved.accountIdHex),
-                            initialIsFollowing: nil
+                            profile: appState.cachedProfile(forAccountIdHex: resolved.accountIdHex)
                         )
                     }
                 )
@@ -263,20 +261,15 @@ struct NewMessageScreen: View {
             ProfileContentView(
                 npub: preview.npub,
                 profileOverride: preview.profile,
-                initialIsFollowing: preview.initialIsFollowing,
-                showsNewConversationActions: true,
-                onLoadFollowing: {
-                    try await loadFollowStatus(accountIdHex: preview.accountIdHex)
-                },
-                onSetFollowing: { isFollowing in
-                    try await setFollowStatus(
-                        isFollowing,
-                        accountIdHex: preview.accountIdHex
+                isSearchPreview: true,
+                onFollowChanged: { isFollowing in
+                    model.messageUserSearch.setFollowStatus(
+                        accountIdHex: preview.accountIdHex,
+                        isFollowing: isFollowing
                     )
                 },
                 onOpenConversation: onOpen
             )
-            .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -301,35 +294,6 @@ struct NewMessageScreen: View {
             isIdentifierQuery: model.messageQuery.isIdentifierQuery,
             using: appState
         )
-    }
-
-    private func loadFollowStatus(accountIdHex: String) async throws -> Bool {
-        guard let accountRef = appState.activeAccountRef else {
-            throw ProfileFollowActionError.noActiveAccount
-        }
-        return try await appState.currentMarmotClient().isFollowing(
-            accountRef: accountRef,
-            userRef: accountIdHex
-        )
-    }
-
-    private func setFollowStatus(
-        _ isFollowing: Bool,
-        accountIdHex: String
-    ) async throws -> Bool {
-        guard let accountRef = appState.activeAccountRef else {
-            throw ProfileFollowActionError.noActiveAccount
-        }
-        let updated = try await appState.currentMarmotClient().setFollowing(
-            accountRef: accountRef,
-            accountIdHex: accountIdHex,
-            isFollowing: isFollowing
-        )
-        model.messageUserSearch.setFollowStatus(
-            accountIdHex: accountIdHex,
-            isFollowing: updated
-        )
-        return updated
     }
 
     private var quickActionsSection: some View {
@@ -377,10 +341,7 @@ struct NewMessageScreen: View {
                 accountIdHex: candidate.accountIdHex,
                 npub: candidate.npub,
                 profile: candidate.searchProfile
-                    ?? appState.cachedProfile(forAccountIdHex: candidate.accountIdHex),
-                initialIsFollowing: candidate.searchRadius == nil
-                    ? nil
-                    : candidate.isFollowedBySearcher
+                    ?? appState.cachedProfile(forAccountIdHex: candidate.accountIdHex)
             )
         } label: {
             RecipientRow(
@@ -405,17 +366,6 @@ struct NewMessageScreen: View {
         }
         .buttonStyle(.plain)
         .disabled(model.isBusy)
-    }
-}
-
-private enum ProfileFollowActionError: LocalizedError {
-    case noActiveAccount
-
-    var errorDescription: String? {
-        switch self {
-        case .noActiveAccount:
-            L10n.string("No active account is selected.")
-        }
     }
 }
 

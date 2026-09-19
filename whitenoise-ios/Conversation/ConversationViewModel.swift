@@ -427,8 +427,7 @@ final class ConversationViewModel {
         if let selected = conversationWindow?.header.selected {
             switch selected.title {
             case .literal(let title):
-                return selected.peerId.flatMap { appState?.contactNickname(forAccountIdHex: $0) }
-                    ?? ContentSanitizer.groupName(title) ?? L10n.string("Unnamed group")
+                return ContentSanitizer.groupName(title) ?? L10n.string("Unnamed group")
             case .unnamedGroup: return L10n.string("Unnamed group")
             case .unavailableConversation: return L10n.string("Conversation unavailable")
             }
