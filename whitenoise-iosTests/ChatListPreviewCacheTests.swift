@@ -6,6 +6,41 @@ import Testing
 @MainActor
 struct ChatListPreviewCacheTests {
 
+    @Test func pendingLeaveKeepsMembershipAndWithholdsDelete() throws {
+        let model = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let activeRow = row()
+        model.applyChatListSnapshot([activeRow])
+        model.markGroupLeavePending(groupIdHex: activeRow.groupIdHex)
+
+        let item = try #require(model.item(groupIdHex: activeRow.groupIdHex))
+        #expect(item.selfMembership == .member)
+        #expect(item.departureStatus == .leaving)
+        #expect(item.departureAction == nil)
+    }
+
+    @Test func latePendingResultDoesNotOverwriteEndedMembership() throws {
+        let model = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let removedRow = row(selfMembership: .removed)
+        model.applyChatListSnapshot([removedRow])
+        model.markGroupLeavePending(groupIdHex: removedRow.groupIdHex)
+
+        let item = try #require(model.item(groupIdHex: removedRow.groupIdHex))
+        #expect(item.selfMembership == .removed)
+        #expect(item.departureAction == .deleteLocally)
+    }
+
+    @Test func nativeMuteAndLegacyMuteBothSuppressRowNotifications() {
+        var nativeRow = row()
+        nativeRow.muted = true
+        nativeRow.mutedUntilMs = 1_800_003_600_000
+        #expect(ChatsListViewModel.Item(row: nativeRow, avatarURL: nil, title: "Room").isMuted)
+        #expect(ChatsListViewModel.Item(row: row(), avatarURL: nil, title: "Room", isMuted: true).isMuted)
+
+        nativeRow.muted = false
+        nativeRow.mutedUntilMs = nil
+        #expect(!ChatsListViewModel.Item(row: nativeRow, avatarURL: nil, title: "Room").isMuted)
+    }
+
     @Test func itemCachesSanitizedPreviewAndLowercaseSearchHaystackAtConstruction() {
         let bech32 = "npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
         let tokens = MarkdownDocumentFfi(blocks: [

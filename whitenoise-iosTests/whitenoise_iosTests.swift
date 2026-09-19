@@ -3572,6 +3572,28 @@ struct LocalizationCatalogTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func localizedLeavesReadBothPluralFormats(usesSubstitution: Bool) throws {
+        let key = "%lld items"
+        let forms: [String: Any] = [
+            "one": ["stringUnit": ["state": "translated", "value": "%lld item"]],
+            "other": ["stringUnit": ["state": "needs_review", "value": "%lld items"]]
+        ]
+        let variations: [String: Any] = ["plural": forms]
+        let localeEntry: [String: Any] = usesSubstitution ? [
+            "stringUnit": ["state": "translated", "value": "%#@count@"],
+            "substitutions": ["count": ["variations": variations]]
+        ] : ["variations": variations]
+        let strings: [String: Any] = [key: ["localizations": ["en": localeEntry]]]
+
+        let leaves = try localizedLeaves(key, locale: "en", in: strings)
+        let pluralLeaves = leaves.filter { !$0.isSubstitutionShell }
+        #expect(pluralLeaves.count == 2)
+        #expect(Set(pluralLeaves.map(\.value)) == ["%lld item", "%lld items"])
+        #expect(Set(pluralLeaves.map(\.state)) == ["translated", "needs_review"])
+        #expect(leaves.filter(\.isSubstitutionShell).count == (usesSubstitution ? 1 : 0))
+    }
+
     @Test func sharedCatalogHasNoMissingLocalizedValuesAndKeepsPlaceholders() throws {
         let catalog = try readCatalog("Shared/Localizable.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
@@ -3819,10 +3841,16 @@ struct LocalizationCatalogTests {
             )
         }
 
+        var pluralVariations: [[String: Any]] = []
+        if let variations = localeEntry["variations"] as? [String: Any] {
+            pluralVariations.append(try #require(variations["plural"] as? [String: Any]))
+        }
         for rawSubstitution in substitutions.values {
             let substitution = try #require(rawSubstitution as? [String: Any])
             let variations = try #require(substitution["variations"] as? [String: Any])
-            let plural = try #require(variations["plural"] as? [String: Any])
+            pluralVariations.append(try #require(variations["plural"] as? [String: Any]))
+        }
+        for plural in pluralVariations {
             for rawForm in plural.values {
                 let form = try #require(rawForm as? [String: Any])
                 let stringUnit = try #require(form["stringUnit"] as? [String: Any])

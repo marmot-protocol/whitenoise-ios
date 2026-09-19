@@ -2,7 +2,7 @@ import Foundation
 
 /// Per-chat notification delivery mode, mirroring the tri-state control the
 /// details screens expose. Raw values are persisted; do not rename cases.
-nonisolated enum ChatNotifyMode: String, CaseIterable {
+nonisolated enum ChatNotifyMode: String, CaseIterable, Sendable {
     case all
     case mentionsOnly
     case nothing
@@ -10,11 +10,9 @@ nonisolated enum ChatNotifyMode: String, CaseIterable {
 
 /// Per-device chat mute preference, keyed by (accountIdHex, groupIdHex).
 ///
-/// Mute is app-side presentation state, not Marmot data, so it lives in the
-/// shared App Group defaults — the same suite `AppLanguage` uses — where both
-/// the main app and the Notification Service Extension read one source of
-/// truth. Writes happen only from the main app's UI; the extension reads a
-/// snapshot once per wake.
+/// Stores mentions-only delivery and legacy indefinite mutes in the shared
+/// App Group defaults. New mutes and their expiry belong to MDK; these host
+/// preferences apply in addition to MDK's notification suppression.
 nonisolated enum ChatMuteStore {
     static let storageKey = "chats.mutedChatKeys"
 

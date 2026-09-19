@@ -126,7 +126,7 @@ final class ChatsListViewModel {
             self.isDirectMessage = isDirectMessage
             self.directPeerAccountIdHex = directPeerAccountIdHex
             self.inviterAccountIdHex = inviterAccountIdHex
-            self.isMuted = isMuted
+            self.isMuted = row.muted || isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
             self.draftPreview = ConversationDraftPreview.text(
@@ -877,6 +877,12 @@ final class ChatsListViewModel {
         if hadPublishedRow {
             publishItems()
         }
+    }
+
+    func markGroupLeavePending(groupIdHex: String) {
+        guard var row = rowByGroupId[groupIdHex], row.selfMembership == .member else { return }
+        row.leaveRequestPending = true
+        if storeRow(row) { publishItems() }
     }
 
     func markGroupLeft(groupIdHex: String) {

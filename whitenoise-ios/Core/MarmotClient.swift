@@ -320,6 +320,57 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    func chatNotificationSettings(accountRef: String, groupIdHex: String) async throws -> ChatNotificationSettingsFfi {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            try marmot.chatNotificationSettings(accountRef: accountRef, groupIdHex: groupIdHex)
+        }.value
+    }
+
+    func updateChatMute(
+        _ action: ChatMuteAction,
+        accountRef: String,
+        groupIdHex: String,
+        now: Date = .now
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            guard let defaults = ChatMuteStore.defaults else {
+                throw AppContainerError.appGroupContainerUnavailable
+            }
+            try action.perform(groupIdHex: groupIdHex, defaults: defaults) {
+                let settings: ChatNotificationSettingsFfi
+                switch action {
+                case .mute(let duration):
+                    settings = try marmot.setChatMuted(
+                        accountRef: accountRef, groupIdHex: groupIdHex,
+                        mutedUntilMs: duration.deadlineMilliseconds(from: now)
+                    )
+                case .unmute:
+                    settings = try marmot.clearChatMuted(accountRef: accountRef, groupIdHex: groupIdHex)
+                }
+                return settings.accountIdHex
+            }
+        }.value
+    }
+
+    func updateChatNotifyMode(
+        _ mode: ChatNotifyMode,
+        accountRef: String,
+        groupIdHex: String
+    ) async throws {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            guard let defaults = ChatMuteStore.defaults else {
+                throw AppContainerError.appGroupContainerUnavailable
+            }
+            let settings = try mode == .nothing
+                ? marmot.setChatMuted(accountRef: accountRef, groupIdHex: groupIdHex, mutedUntilMs: nil)
+                : marmot.clearChatMuted(accountRef: accountRef, groupIdHex: groupIdHex)
+            ChatMuteStore.setNotifyMode(
+                mode == .nothing ? .all : mode,
+                accountIdHex: settings.accountIdHex, groupIdHex: groupIdHex, defaults: defaults
+            )
+        }.value
+    }
+
     /// Reads the native-push registration off the main actor. The generated
     /// Marmot binding is synchronous storage FFI.
     func pushRegistration(accountRef: String) async throws -> PushRegistrationFfi? {
