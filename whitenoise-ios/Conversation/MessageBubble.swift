@@ -3440,19 +3440,14 @@ private enum FullscreenMediaPreparationError: Error {
 }
 
 enum MessageMediaFullscreenPresentation {
-    /// Pixel budget for a fullscreen decode derived from the longest native
-    /// screen edge. The fullscreen view only ever renders the image
-    /// `scaledToFit` within the screen, so a screen-sized decode is visually
-    /// lossless for presentation while capping the worst-case bitmap
-    /// allocation. Pure helper kept separate from `UIScreen` so it stays
-    /// testable and free of MainActor isolation.
+    /// Leave detail for zooming, with a hard ceiling on peer-controlled bitmap allocation.
     static func fullscreenMaxPixelSize(forLongestScreenEdge longestEdge: CGFloat) -> Int {
         guard longestEdge.isFinite, longestEdge >= 1 else { return 1 }
-        return max(1, Int(longestEdge.rounded(.up)))
+        return Int(min(4096, longestEdge * 2).rounded(.up))
     }
 
-    /// Decodes attacker-controlled image bytes off the MainActor, bounded to a
-    /// screen-sized pixel budget. Mirrors the thumbnail/grid hardening
+    /// Decodes attacker-controlled image bytes off the MainActor, bounded to the
+    /// fullscreen pixel budget. Mirrors the thumbnail/grid hardening
     /// (`MessageMediaThumbnailDecoder`) so the fullscreen path never performs a
     /// full-resolution decode on the MainActor, and a crafted high-megapixel
     /// image cannot allocate an unbounded bitmap on the UI actor.
@@ -3503,6 +3498,7 @@ struct MessageMediaFullscreenGalleryView: View {
     let onDismiss: () -> Void
 
     @State private var selectedItemID: String
+    @State private var zoomedItemID: String?
     @State private var dismissDragOffset: CGFloat = 0
     @State private var preparedMedia: FullscreenMediaPrepared?
     @State private var mediaShare: FullscreenMediaShare?
@@ -3541,7 +3537,11 @@ struct MessageMediaFullscreenGalleryView: View {
                         isSelected: item.id == selectedItemID,
                         initialImageData: gallery.initialData(for: item),
                         onLoadMedia: onLoadMedia,
-                        onToggleChrome: toggleChrome
+                        onToggleChrome: toggleChrome,
+                        onZoomChanged: { zoomed in
+                            if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
+                            else if zoomedItemID == item.id { zoomedItemID = nil }
+                        }
                     )
                     .tag(item.id)
                 }
@@ -3566,7 +3566,11 @@ struct MessageMediaFullscreenGalleryView: View {
         }
         .offset(y: dismissDragOffset)
         .opacity(1 - min(dismissDragOffset / 420, 0.35))
-        .simultaneousGesture(swipeDownToDismissGesture)
+        .simultaneousGesture(swipeDownToDismissGesture, including: zoomedItemID == nil ? .all : .subviews)
+        .onChange(of: selectedItemID) { _, _ in
+            zoomedItemID = nil
+            dismissDragOffset = 0
+        }
         .task(id: selectedItemID) { await prepareSelectedMedia() }
         .sheet(item: $mediaShare) { share in
             ActivityShareSheet(items: [share.url])
@@ -3724,6 +3728,7 @@ private struct MessageMediaFullscreenPage: View {
     let initialImageData: Data?
     let onLoadMedia: ConversationMediaLoader
     let onToggleChrome: () -> Void
+    let onZoomChanged: (Bool) -> Void
 
     var body: some View {
         if item.isVideo {
@@ -3738,7 +3743,8 @@ private struct MessageMediaFullscreenPage: View {
                 isSelected: isSelected,
                 initialImageData: initialImageData,
                 onLoadMedia: onLoadMedia,
-                onToggleChrome: onToggleChrome
+                onToggleChrome: onToggleChrome,
+                onZoomChanged: onZoomChanged
             )
         }
     }
@@ -3875,6 +3881,7 @@ private struct MessageMediaFullscreenImagePage: View {
     let item: MessageMediaAttachment
     let isSelected: Bool
     let onLoadMedia: ConversationMediaLoader
+    let onZoomChanged: (Bool) -> Void
 
     @State private var imageData: Data?
     @State private var image: UIImage?
@@ -3890,12 +3897,14 @@ private struct MessageMediaFullscreenImagePage: View {
         isSelected: Bool,
         initialImageData: Data?,
         onLoadMedia: ConversationMediaLoader,
-        onToggleChrome: @escaping () -> Void
+        onToggleChrome: @escaping () -> Void,
+        onZoomChanged: @escaping (Bool) -> Void
     ) {
         self.item = item
         self.isSelected = isSelected
         self.onLoadMedia = onLoadMedia
         self.onToggleChrome = onToggleChrome
+        self.onZoomChanged = onZoomChanged
         // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
         // `loadImageIfNeeded`, which runs the decode off the MainActor and
         // bounded to a screen-sized pixel budget. Stash the raw initial bytes
@@ -3915,11 +3924,8 @@ private struct MessageMediaFullscreenImagePage: View {
                 WNMediaSurface().ignoresSafeArea()
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .simultaneousGesture(TapGesture().onEnded { onToggleChrome() })
+                    ZoomableMediaImage(image: image, isSelected: isSelected,
+                        onTap: onToggleChrome, onZoomChanged: onZoomChanged)
                 } else if isLoading {
                     ProgressView()
                 } else if didFail {

@@ -41,6 +41,11 @@ before every release tag.
 - [ ] Set Documents to Wi-Fi Only, then Never. Visible PDF/document bubbles
       automatically acquire only when permitted, without opening a share sheet.
       Removed/exhausted files stay unavailable until explicitly opened or retried.
+- [ ] Pinch and double-tap fullscreen images to zoom, then pan in all directions.
+      Panning while zoomed must neither change pages nor dismiss the viewer.
+      Zoom back to fit, then verify paging, single-tap controls and swipe down to
+      dismiss. Repeat on iPad, after rotation, with Reduce Motion and VoiceOver's
+      adjustable zoom actions. Save/Share/Forward must still use original bytes.
 - [ ] Leave Chats visible until its latest disappearing-message preview expires.
       Content and sender disappear without an incoming event; search no longer
       matches the preview. Repeat with the app backgrounded across expiry.

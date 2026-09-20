@@ -12963,12 +12963,12 @@ struct MessageMediaGalleryTests {
         #expect((decoded?.size.width ?? 0) > 0)
     }
 
-    @Test func fullscreenMaxPixelSizeIsScreenBoundedAndPositive() {
-        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 2532) == 2532)
+    @Test func fullscreenMaxPixelSizeAllowsZoomButCapsDecodedPixels() {
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 2532) == 4096)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 0) == 1)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: -10) == 1)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: .infinity) == 1)
-        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 100.4) == 101)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 100.4) == 201)
     }
 
     @Test func thumbnailCacheRetainsSourceDataForFullscreenReuse() async throws {
