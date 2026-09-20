@@ -821,23 +821,8 @@ struct GroupDetailsView: View {
     }
 
     private var memberSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search members", text: $memberSearchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !memberSearchText.isEmpty {
-                Button {
-                    memberSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear member search")
-            }
-        }
+        WNSearchField(query: $memberSearchText, prompt: "Search members")
+            .wnInputRow()
     }
 
     // MARK: - Technical details

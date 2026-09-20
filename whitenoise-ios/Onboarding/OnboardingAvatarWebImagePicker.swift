@@ -90,16 +90,7 @@ struct OnboardingAvatarWebImagePicker: View {
                 }
 
                 searchCard {
-                    TextField("Search Images", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .background(
-                            Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: .rect(cornerRadius: 10)
-                        )
+                    WNSearchField(query: $query, prompt: "Search Images")
                 }
 
                 if isSearching {

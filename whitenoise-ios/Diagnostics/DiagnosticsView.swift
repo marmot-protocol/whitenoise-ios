@@ -15,7 +15,8 @@ struct DiagnosticsView: View {
                 } label: {
                     Label("Send to self", systemImage: "paperplane.fill")
                 }
-                .buttonStyle(.bordered)
+                .wnSecondaryButtonStyle()
+                .controlSize(.large)
                 .disabled(model.sendingToSelf || appState.activeAccountRef == nil)
 
                 Button {
@@ -23,7 +24,8 @@ struct DiagnosticsView: View {
                 } label: {
                     Label("Clear", systemImage: "trash")
                 }
-                .buttonStyle(.bordered)
+                .wnSecondaryButtonStyle()
+                .controlSize(.large)
                 .tint(.red)
 
                 Spacer()

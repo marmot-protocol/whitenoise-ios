@@ -549,7 +549,7 @@ struct GroupImageURLSheet: View {
                         Image(systemName: "magnifyingglass")
                     }
                 }
-                .buttonStyle(.bordered)
+                .wnIconButtonChrome()
                 .disabled(searchButtonDisabled)
                 .accessibilityLabel("Search the web")
             }

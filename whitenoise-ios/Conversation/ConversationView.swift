@@ -633,10 +633,6 @@ struct ConversationView: View {
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseHitSize = ReplyPreviewLayout.closeHitSize
-    @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomIconSize: CGFloat = 16
-    @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomDiameter: CGFloat = 32
 
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
@@ -1456,24 +1452,7 @@ struct ConversationView: View {
         HStack(spacing: 16) {
             // Selection owns the header; its only exit is the close button.
             if !isSelectingMessages {
-                Button {
-                    navigateBack()
-                } label: {
-                    Image(systemName: "chevron.backward")
-                        .font(.system(size: 20, weight: .semibold))
-                        .frame(width: 44, height: 44)
-                        .background {
-                            Circle()
-                                .fill(Color(.secondarySystemBackground))
-                        }
-                        .overlay {
-                            Circle()
-                                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-                        }
-                        .contentShape(.circle)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.string("Back"))
+                WNIconButton(title: "Back", systemImage: "chevron.backward", action: navigateBack)
             }
 
             conversationTitle
@@ -1884,7 +1863,8 @@ struct ConversationView: View {
                     Button("Retry") {
                         Task { await viewModel.start() }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .wnPrimaryButtonStyle()
+                    .controlSize(.large)
                 }
             case .connecting:
                 // The local snapshot hasn't landed yet because the runtime is
@@ -1912,7 +1892,8 @@ struct ConversationView: View {
                         } label: {
                             Label("Add members", systemImage: "person.badge.plus")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .wnPrimaryButtonStyle()
+                        .controlSize(.large)
                     }
                 } else {
                     ContentUnavailableView(
@@ -2218,23 +2199,12 @@ struct ConversationView: View {
             hasMoreAfter: viewModel.hasMoreAfter,
             isAtBottom: isAtTimelineBottom
         ) {
-            Button {
+            WNIconButton(title: "Scroll to latest message", systemImage: "arrow.down") {
                 Haptics.tap()
                 isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
                     currentIsPinned: isAtTimelineBottom)
                 jumpToBottom(proxy: proxy)
-            } label: {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: scrollToBottomIconSize, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .frame(width: scrollToBottomDiameter, height: scrollToBottomDiameter)
-                    .legacyInputCircleChrome()
-                    .contentShape(Circle())
             }
-            .compatibleGlassCircleButtonStyle()
-            .controlSize(.small)
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
             .accessibilityLabel("Scroll to latest message")
             .padding(.trailing, 9)
             .padding(.bottom, 10)

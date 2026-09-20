@@ -175,11 +175,7 @@ struct MessageActionsMenu: View {
             ))
             .clipShape(.rect(cornerRadius: 32))
             .frame(width: MessageActionsPresentation.menuWidth)
-            .background(.regularMaterial, in: .rect(cornerRadius: 32))
-            .overlay {
-                RoundedRectangle(cornerRadius: 32)
-                    .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
+            .compatibleInputRoundedChrome(cornerRadius: 32, interactive: false)
             .shadow(color: .black.opacity(0.16), radius: 18, y: 7)
         }
         .frame(width: surfaceWidth)
@@ -222,10 +218,7 @@ struct MessageActionsMenu: View {
         }
         .padding(6)
         .frame(width: reactionWidth)
-        .background(.regularMaterial, in: .capsule)
-        .overlay {
-            Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .compatibleInputCapsuleChrome(interactive: false)
         .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
     }
 

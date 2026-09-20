@@ -268,8 +268,7 @@ struct ComposerBar: View {
                             .frame(maxWidth: .infinity)
                             .compatibleInputRoundedChrome(
                                 cornerRadius: controlSize / 2,
-                                interactive: false,
-                                usesRegularGlass: true
+                                interactive: false
                             )
                         }
                     }
@@ -559,7 +558,7 @@ struct ComposerBar: View {
             .font(.system(size: size, weight: weight))
             .foregroundStyle(tone.color)
             .frame(width: controlSize, height: controlSize)
-            .compatibleInputCircleChrome(interactive: interactive, usesRegularGlass: true)
+            .compatibleInputCircleChrome(interactive: interactive)
     }
 
     private var hasSendableContent: Bool {

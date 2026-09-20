@@ -44,7 +44,7 @@ struct EraseAppDataView: View {
                             Text(busy ? "Erasing…" : isRecovery ? "Retry" : "Erase").frame(maxWidth: .infinity)
                         }
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large).tint(.red)
+                    .wnPrimaryButtonStyle().controlSize(.large).tint(.red)
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
                     .disabled(busy || (!isRecovery && !ProfileExitConfirmation.matches(confirmation, expected: phrase)))
                 }

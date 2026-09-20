@@ -10,7 +10,7 @@ extension View {
         fallbackMaterial: Material = .regularMaterial
     ) -> some View {
         if #available(iOS 26.0, *) {
-            glassEffect(.clear.interactive(), in: .rect(cornerRadius: cornerRadius))
+            glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
         } else {
             background(
                 fallbackMaterial,
@@ -34,18 +34,29 @@ extension View {
         }
     }
 
-    /// Bottom input pill chrome shared by the chat list search field and composer-style controls.
+    /// Regular glass is the app's control material in both appearances.
+    @ViewBuilder
+    func compatibleControlChrome<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            glassEffect(interactive ? .regular.interactive() : .regular, in: shape)
+        } else {
+            background(.regularMaterial, in: shape)
+        }
+    }
+
     func compatibleInputCapsuleChrome(interactive: Bool = true) -> some View {
-        modifier(CompatibleInputCapsuleChromeModifier(interactive: interactive))
+        compatibleControlChrome(in: Capsule(), interactive: interactive)
     }
 
-    func compatibleInputRoundedChrome(cornerRadius: CGFloat, interactive: Bool = true, usesRegularGlass: Bool = false) -> some View {
-        modifier(CompatibleInputRoundedChromeModifier(cornerRadius: cornerRadius, interactive: interactive, usesRegularGlass: usesRegularGlass))
+    func compatibleInputRoundedChrome(cornerRadius: CGFloat, interactive: Bool = true) -> some View {
+        compatibleControlChrome(
+            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous),
+            interactive: interactive
+        )
     }
 
-    /// Circular companion to `compatibleInputCapsuleChrome()` for side actions.
-    func compatibleInputCircleChrome(interactive: Bool = true, usesRegularGlass: Bool = false) -> some View {
-        modifier(CompatibleInputCircleChromeModifier(interactive: interactive, usesRegularGlass: usesRegularGlass))
+    func compatibleInputCircleChrome(interactive: Bool = true) -> some View {
+        compatibleControlChrome(in: Circle(), interactive: interactive)
     }
 
     /// Applies Liquid Glass circle button behavior on iOS 26, press scale fallback earlier.
@@ -123,99 +134,12 @@ extension View {
     }
 }
 
-private struct CompatibleInputRoundedChromeModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let cornerRadius: CGFloat
-    let interactive: Bool
-    let usesRegularGlass: Bool
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(inputGlass(for: colorScheme, interactive: interactive, usesRegularGlass: usesRegularGlass), in: shape)
-                .compatibleInputLightStroke(in: shape)
-        } else {
-            content.background(.regularMaterial, in: shape)
-        }
-    }
-}
-
-private struct CompatibleInputCapsuleChromeModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let interactive: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(
-                    inputGlass(for: colorScheme, interactive: interactive),
-                    in: Capsule(style: .continuous)
-                )
-                .compatibleInputLightStroke(in: Capsule(style: .continuous))
-        } else {
-            content.background(.regularMaterial, in: Capsule(style: .continuous))
-        }
-    }
-}
-
-private struct CompatibleInputCircleChromeModifier: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let interactive: Bool
-    let usesRegularGlass: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(
-                    inputGlass(for: colorScheme, interactive: interactive, usesRegularGlass: usesRegularGlass),
-                    in: Circle()
-                )
-                .compatibleInputLightStroke(in: Circle())
-        } else {
-            content.background(.regularMaterial, in: Circle())
-        }
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func compatibleInputLightStroke<S: InsettableShape>(in shape: S) -> some View {
-        if #available(iOS 26.0, *) {
-            modifier(CompatibleInputLightStrokeModifier(shape: shape))
-        } else {
-            self
-        }
-    }
-}
-
-private struct CompatibleInputLightStrokeModifier<S: InsettableShape>: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    let shape: S
-
-    func body(content: Content) -> some View {
-        content.overlay {
-            if colorScheme == .light {
-                shape.strokeBorder(
-                    Color.primary.opacity(BottomInputChromeLayout.lightModeInputStrokeOpacity),
-                    lineWidth: 1
-                )
-                .allowsHitTesting(false)
-            }
-        }
-    }
-}
-
-@available(iOS 26.0, *)
-private func inputGlass(for colorScheme: ColorScheme, interactive: Bool, usesRegularGlass: Bool = false) -> Glass {
-    let base: Glass = usesRegularGlass || colorScheme == .light ? .regular : .clear
-    return interactive ? base.interactive() : base
-}
-
 struct InputCirclePressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 1.08 : 1.0)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 1.08 : 1.0)
             .animation(.spring(response: 0.28, dampingFraction: 0.62), value: configuration.isPressed)
     }
 }
@@ -270,22 +194,21 @@ struct FullScreenConfirmationDialog: View {
                     Button(role: .destructive, action: onConfirm) {
                         Text(destructiveTitle)
                             .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
+                            .wnButtonLabelSizing(.large)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white)
-                    .background(Color.red, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .wnPrimaryButtonStyle()
+                    .wnButtonChrome(emphasis: .destructive)
+                    .controlSize(.extraLarge)
+                    .wnButtonSizing(.large)
 
                     Button(role: .cancel, action: onCancel) {
                         Text(cancelTitle)
                             .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
+                            .wnButtonLabelSizing(.large)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.primary)
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .wnSecondaryButtonStyle()
+                    .controlSize(.extraLarge)
+                    .wnButtonSizing(.large)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)

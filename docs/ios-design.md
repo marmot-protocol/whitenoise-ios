@@ -57,6 +57,18 @@ behavior there; a separate screen specification is unnecessary.
   Reduce Motion. Use haptics sparingly with visible feedback. See
   [Motion](https://developer.apple.com/design/human-interface-guidelines/motion).
 
+## Shared control styling
+
+Use [regular Liquid Glass](https://developer.apple.com/documentation/swiftui/glass/regular)
+in both light and dark appearance for custom floating
+controls and input surfaces on iOS 26+, through the compatibility helpers. Do not
+switch dark-mode controls to clear glass or add a second surface inside a native
+toolbar. Keep prominent and destructive actions distinguishable, and preserve the
+iOS 18 fallbacks. Reuse `WNSearchField`/`WNSearchBar` for custom search and
+`WNIconButton` for standalone icon actions. Interactive glyphs need at least a
+44-point target; small artwork inside a larger target is fine. Native form rows,
+content cards, and media thumbnails retain their own presentation.
+
 ## Write for the person using the app
 
 Keep copy calm, direct, and useful, following Apple's

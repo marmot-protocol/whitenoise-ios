@@ -282,7 +282,7 @@ struct ReactionDetailsSheet: View {
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(selected ? Color.white : Color.primary)
             .padding(.horizontal, 12)
-            .frame(minHeight: 36)
+            .frame(minHeight: 44)
             .background(
                 selected ? Color.accentColor : Color(.tertiarySystemFill),
                 in: Capsule()

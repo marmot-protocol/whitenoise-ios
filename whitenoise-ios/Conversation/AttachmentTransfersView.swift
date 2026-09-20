@@ -49,7 +49,8 @@ struct AttachmentTransfersView: View {
                                 Button("Download again") { perform(item, control: .retry) }
                             }
                         }
-                        .buttonStyle(.bordered)
+                        .wnSecondaryButtonStyle()
+                        .controlSize(.large)
                         .disabled(busy)
                     } else { ProgressView().controlSize(.small) }
                 }
