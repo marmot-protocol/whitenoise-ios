@@ -587,6 +587,8 @@ struct GroupDetailsView: View {
                     action: openConversationSearch
                 )
             }
+            // Form cells clip overflow; leave room for the glass press expansion.
+            .padding(.vertical, 12)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         }
