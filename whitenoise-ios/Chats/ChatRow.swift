@@ -157,20 +157,20 @@ struct ChatRow: View {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You left this chat."))
         case .membershipEnded:
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You were removed from this chat."))
-        case .pendingInvite:
+        case .pendingInvite where item.selectedPreview == nil || item.selectedPreview == .invitation:
             return ChatRowPreviewPresentation(
                 prefix: nil,
                 body: ConversationInvitePresentation.invitationText(
                     inviterName: item.inviterAccountIdHex.map(senderName)
                 )
             )
-        case nil:
+        case .pendingInvite, nil:
             break
         }
         if let draftPreview = item.draftPreview {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.formatted("Draft: %@", draftPreview))
         }
-        guard let latest = item.lastMessage else {
+        guard item.selectedPreview != .empty, let latest = item.lastMessage else {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("No messages yet"))
         }
         let body = item.previewText ?? ""

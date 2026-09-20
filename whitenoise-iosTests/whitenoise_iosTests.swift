@@ -14872,6 +14872,45 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func preparedDraftChangesRefreshWithoutIdentityRevisionOrUnreadChanges() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "draft", title: "Chat", lastMessage: chatListPreview(messageIdHex: "last"), unreadCount: 3)
+        var snapshot = presentedChatSnapshot([row])
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.draftPreview == nil)
+        snapshot.rows[0].preview = .draft(draft: ChatListDraftPreviewFfi(
+            text: "Unsent text", textTruncated: false, attachmentCount: 0, attachmentKind: nil))
+        model.applyPresentedSnapshot(snapshot)
+        let draft = try #require(model.items.first)
+        #expect(draft.draftPreview == "Unsent text")
+        #expect(draft.row == row)
+        #expect(draft.searchHaystack.contains("unsent text"))
+        #expect(ChatRow.previewPresentation(for: draft, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == L10n.formatted("Draft: %@", "Unsent text"))
+        snapshot.rows[0].preview = .message
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(read: true, leave: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.draftPreview == nil)
+        #expect(model.items.first?.actions?.canMarkRead == true)
+        #expect(model.items.first?.departureAction == .leave)
+        #expect(model.items.first?.unreadCount == 3)
+    }
+
+    @Test func invitationCanShowSelectedMessageWithoutLosingInviteState() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "invite", pendingConfirmation: true, title: "Chat", lastMessage: chatListPreview(messageIdHex: "last", plaintext: "Invitation message"))
+        model.applyPresentedSnapshot(presentedChatSnapshot([row]))
+        let item = try #require(model.items.first)
+        #expect(item.row.pendingConfirmation)
+        #expect(ChatRow.previewPresentation(for: item, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == "Invitation message")
+        var empty = presentedChatSnapshot([row])
+        empty.rows[0].preview = .empty
+        model.applyPresentedSnapshot(empty)
+        let emptyItem = try #require(model.items.first)
+        #expect(ChatRow.previewPresentation(for: emptyItem, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == L10n.string("No messages yet"))
+    }
+
     @Test func avatarOnlySnapshotRefreshesPixelsWithoutChangingChatState() throws {
         let state = AppState(client: try MarmotClient.testClient())
         let model = ChatsListViewModel(appState: state)

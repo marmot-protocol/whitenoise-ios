@@ -5,6 +5,26 @@ import MarmotKit
 /// Order is part of the policy: the first entry sits nearest the swiped edge
 /// and is what a full swipe triggers.
 nonisolated enum ChatListSwipeActionsPresentation {
+    static func leadingActions(_ hints: ChatListRowActionsFfi) -> [ChatListSwipeAction] {
+        var actions: [ChatListSwipeAction] = []
+        if hints.canMarkRead { actions.append(.read) }
+        if hints.canMarkUnread { actions.append(.unread) }
+        if hints.canPin { actions.append(.pin) }
+        if hints.canUnpin { actions.append(.unpin) }
+        return actions
+    }
+
+    static func trailingActions(_ hints: ChatListRowActionsFfi, isMuted: Bool) -> [ChatListSwipeAction] {
+        var actions: [ChatListSwipeAction] = []
+        if hints.canRestore { actions.append(.unarchive) }
+        // iOS notification mode is device-local; MDK supplies availability.
+        if hints.canMute || hints.canUnmute { actions.append(isMuted ? .unmute : .mute) }
+        if hints.canStartLeave { actions.append(.leave) }
+        if hints.canDeleteLocal { actions.append(.delete) }
+        if hints.canArchive { actions.append(.archive) }
+        return actions
+    }
+
     static func leadingActions(
         hasUnread: Bool,
         isPinned: Bool,

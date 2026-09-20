@@ -123,7 +123,7 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.21
 ```
 
-The app now pins the formal MarmotKit 0.10.2 release. For local reproduction only,
+The app now pins the formal MarmotKit 0.10.3 release. For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten

@@ -18,6 +18,7 @@ struct ComposerTextInput: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ImagePasteTextView {
         let textView = ImagePasteTextView()
+        textView.maximumComposerHeight = maximumHeight
         textView.delegate = context.coordinator
         textView.onPasteImage = onPasteImage
         textView.backgroundColor = .clear
@@ -85,11 +86,7 @@ struct ComposerTextInput: UIViewRepresentable {
         context: Context
     ) -> CGSize? {
         guard let width = proposal.width else { return nil }
-        let fittingHeight = uiView.updateScrollability(
-            maximumHeight: maximumHeight,
-            fittingWidth: width,
-            revealSelection: false
-        )
+        let fittingHeight = uiView.naturalContentHeight(fittingWidth: width)
         let height = min(maximumHeight, max(minimumHeight, fittingHeight))
         return CGSize(width: width, height: height)
     }
@@ -141,6 +138,10 @@ struct ComposerTextInput: UIViewRepresentable {
             )
         }
 
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            (textView as? ImagePasteTextView)?.revealSelectionAfterLayout()
+        }
+
         func textViewDidBeginEditing(_ textView: UITextView) {
             parent.isFocused = true
             parent.onBeginEditing()
@@ -154,6 +155,29 @@ struct ComposerTextInput: UIViewRepresentable {
 
 final class ImagePasteTextView: UITextView {
     var onPasteImage: ((UIImage) -> Void)?
+    var maximumComposerHeight: CGFloat = 112
+    private var needsSelectionReveal = false
+
+    func naturalContentHeight(fittingWidth: CGFloat) -> CGFloat {
+        guard fittingWidth.isFinite, fittingWidth > 0 else { return contentSize.height }
+        return sizeThatFits(CGSize(width: fittingWidth, height: .greatestFiniteMagnitude)).height
+    }
+
+    func revealSelectionAfterLayout() {
+        needsSelectionReveal = true
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // SwiftUI probes several widths; only the installed viewport decides scrolling.
+        updateScrollability(maximumHeight: maximumComposerHeight, fittingWidth: bounds.width, revealSelection: false)
+        guard needsSelectionReveal else { return }
+        needsSelectionReveal = false
+        guard isScrollEnabled, let selection = selectedTextRange else { return }
+        let caret = caretRect(for: selection.end).insetBy(dx: 0, dy: -textContainerInset.bottom)
+        scrollRectToVisible(caret, animated: false)
+    }
 
     @discardableResult
     func updateScrollability(
@@ -161,17 +185,14 @@ final class ImagePasteTextView: UITextView {
         fittingWidth: CGFloat,
         revealSelection: Bool
     ) -> CGFloat {
-        guard fittingWidth > 0 else { return contentSize.height }
-        let fittingHeight = sizeThatFits(
-            CGSize(width: fittingWidth, height: .greatestFiniteMagnitude)
-        ).height
+        maximumComposerHeight = maximumHeight
+        guard fittingWidth.isFinite, fittingWidth > 0 else { return contentSize.height }
+        let fittingHeight = naturalContentHeight(fittingWidth: fittingWidth)
         let shouldScroll = fittingHeight > maximumHeight
         if isScrollEnabled != shouldScroll {
             isScrollEnabled = shouldScroll
         }
-        if shouldScroll, revealSelection {
-            scrollRangeToVisible(selectedRange)
-        }
+        if revealSelection { revealSelectionAfterLayout() }
         return fittingHeight
     }
 

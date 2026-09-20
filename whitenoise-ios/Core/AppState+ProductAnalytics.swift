@@ -12,6 +12,7 @@ extension AppState: DeviceDiagnosticsDataSource {
     func saveUsageDiagnosticsConsent(_ enabled: Bool) async throws -> DeviceDiagnosticsSnapshot {
         let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        conversationOpenPerformance?.discardForConsentChange()
         invalidateProductAnalytics()
         let revision = productContextRevision
         productConsentMutationInProgress = true
@@ -63,7 +64,9 @@ extension AppState: DeviceDiagnosticsDataSource {
             }) { [activeClient] event in
                 _ = try? activeClient.marmot.recordProductEvent(event: event.ffi)
             }
+            conversationOpenPerformance?.accountContextReady(ticket: productAnalytics.ticket(), recorder: productAnalytics)
         } else {
+            conversationOpenPerformance?.discardForConsentChange()
             productAnalytics.replaceSink(nil)
         }
     }
@@ -93,6 +96,7 @@ extension AppState: DeviceDiagnosticsDataSource {
     }
 
     func productAccountChanged() {
+        conversationOpenPerformance?.accountContextWillChange()
         invalidateProductAnalytics()
         let revision = productContextRevision
         guard let client, canUseRuntimeForLocalForegroundWork else { return }

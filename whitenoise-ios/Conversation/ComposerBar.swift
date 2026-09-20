@@ -442,7 +442,8 @@ struct ComposerBar: View {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 30, height: controlSize)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.string("Expand editor"))
@@ -904,11 +905,10 @@ private struct ComposerAttachmentUnavailableTooltip: View {
 
 nonisolated enum ComposerExpandedEditorPresentation {
     static let minimumExpandCharacterCount = 180
-    static let minimumExpandLineCount = 4
 
     static func shouldShowExpandButton(for text: String) -> Bool {
         text.count >= minimumExpandCharacterCount
-            || text.split(separator: "\n", omittingEmptySubsequences: false).count >= minimumExpandLineCount
+            || text.contains(where: \.isNewline)
     }
 }
 

@@ -175,7 +175,8 @@ struct DiagnosticsView: View {
         }
         lines.append(contentsOf: snapshot.runtimeOperations.compactMap { operation in
             guard operation.started > 0 || operation.inFlight > 0 else { return nil }
-            return "[runtime] \(operation.operation): \(operation.started) started, \(operation.completed) completed, \(operation.successes) succeeded, \(operation.failures) failed, \(operation.cancelled) cancelled, \(operation.timeouts) timed out, \(operation.notReady) not ready; \(operation.inFlight) in flight, oldest \(operation.oldestTrackedInFlightMs) ms, \(operation.untrackedInFlight) untracked; p50 \(percentileText(operation.durationMs, percentile: 0.50)), p95 \(percentileText(operation.durationMs, percentile: 0.95))"
+            let buckets = operation.durationMs.buckets.map { "\($0.upperBoundMs):\($0.count)" }.joined(separator: ",")
+            return "[runtime] \(operation.operation): \(operation.started) started, \(operation.completed) completed, \(operation.successes) succeeded, \(operation.failures) failed, \(operation.cancelled) cancelled, \(operation.timeouts) timed out, \(operation.notReady) not ready; \(operation.inFlight) in flight, oldest \(operation.oldestTrackedInFlightMs) ms, \(operation.untrackedInFlight) untracked; p50 \(percentileText(operation.durationMs, percentile: 0.50)), p95 \(percentileText(operation.durationMs, percentile: 0.95)); duration sum \(operation.durationMs.sumMs) ms, buckets [\(buckets)], overflow \(operation.durationMs.overflowCount)"
         })
         if snapshot.sqlcipherMigrationProbeRuns > 0 || snapshot.sqlcipherMigrationProbeSkips > 0 {
             lines.append(

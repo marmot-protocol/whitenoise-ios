@@ -165,6 +165,7 @@ final class AppState {
     var productOnboardingPath: ProductOnboardingPath?
     var productOnboardingTicket: ProductAnalyticsRecorder.Ticket?
     let productAnalytics = ProductAnalyticsRecorder()
+    @ObservationIgnored var conversationOpenPerformance: ConversationOpenPerformance?
     var pendingProductActivity: ProductAnalyticsActivityFfi = .foreground
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
@@ -790,6 +791,7 @@ final class AppState {
         // the flag on every exit path, including the early wipe failure return
         // below.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: signingOut)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't sign out")))
@@ -973,6 +975,7 @@ final class AppState {
         // push reschedule for the whole teardown; cleared before routing so a
         // reschedule for the *new* active account is not suppressed.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't wipe profile")))
@@ -1074,6 +1077,7 @@ final class AppState {
             guard await NotificationCommunicationDecorator.deleteAllDonatedInteractions() else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
+            notifications.cancelForegroundBatches()
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
             URLCache.shared.removeAllCachedResponses()

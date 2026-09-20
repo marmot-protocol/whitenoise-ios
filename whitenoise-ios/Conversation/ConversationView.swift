@@ -602,7 +602,7 @@ struct ConversationView: View {
     @State private var measuredActionRowFrameKey: String?
     @State private var pendingActionsPresentation: PendingActionsPresentation?
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
-    @State private var openPerformance: ConversationOpenPerformance
+    private let openPerformance: ConversationOpenPerformance?
     @State private var composerFocusRequest = 0
     @State private var composerDismissRequest = 0
     @State private var popTransition = InteractivePopTransitionState()
@@ -737,8 +737,7 @@ struct ConversationView: View {
         initialTargetMessageIdHex: String? = nil,
         initialUnreadMessageIdHex: String? = nil,
         initialAppState: AppState? = nil,
-        navigationStartedAt: ContinuousClock.Instant = .now,
-        performanceTicket: ProductAnalyticsRecorder.Ticket? = nil,
+        openPerformance: ConversationOpenPerformance? = nil,
         forwardDestinationProvider: (() async throws -> [MessageForwardDestination])? = nil,
         onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil,
         onGroupChanged: ((AppGroupRecordFfi) -> Void)? = nil,
@@ -746,7 +745,7 @@ struct ConversationView: View {
         onGroupDeleted: ((String) -> Void)? = nil,
         onDraftChanged: (() -> Void)? = nil
     ) {
-        _openPerformance = State(initialValue: ConversationOpenPerformance(start: navigationStartedAt, ticket: performanceTicket))
+        self.openPerformance = openPerformance
         self.chat = chat
         self.draftAccountRef = accountRef ?? initialAppState?.activeAccountRef
         self.initialTitle = initialTitle
@@ -786,12 +785,16 @@ struct ConversationView: View {
             .bottomInputChromeAccessory {
                 composerArea
                     .onGeometryChange(for: Bool?.self) { geometry in
-                        guard geometry.size.height > 0, let header = viewModel?.conversationWindow?.header else { return nil }
-                        if !header.capabilities.canSend || blockedPeerNpub != nil { return false }
-                        guard !isSelectingMessages, viewModel?.search.isActive != true else { return nil }
-                        return viewModel?.canSendMessages == true ? true : nil
+                        ConversationOpenPerformance.composerOutcome(
+                            epoch: viewModel?.conversationWindow?.header.epoch,
+                            canSend: viewModel?.conversationWindow?.header.capabilities.canSend,
+                            blocked: blockedPeerNpub != nil,
+                            composerPresented: geometry.size.height > 0 && !isSelectingMessages
+                                && viewModel?.search.isActive != true,
+                            enabled: viewModel?.canSendMessages == true
+                        )
                     } action: { value in
-                        openPerformance.rendered(local: false, composer: value, recorder: appState.productAnalytics)
+                        openPerformance?.rendered(local: false, composer: value, recorder: appState.productAnalytics)
                     }
                     .frame(maxWidth: .infinity)
             }
@@ -1154,18 +1157,10 @@ struct ConversationView: View {
                     persistCurrentDraft()
                 }
             }
-            .task {
-                do { try await Task.sleep(for: .seconds(30)) } catch { return }
-                openPerformance.finish(.timeout, recorder: appState.productAnalytics)
-            }
-            .onChange(of: viewModel?.error) { _, error in
-                if error != nil { openPerformance.finish(.failure, recorder: appState.productAnalytics) }
-            }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
             }
             .onDisappear {
-                openPerformance.finish(.cancelled, recorder: appState.productAnalytics)
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
@@ -1630,9 +1625,11 @@ struct ConversationView: View {
             } else if viewModel.timeline.isEmpty {
                 emptyTimeline(viewModel: viewModel)
                     .onGeometryChange(for: Bool.self) { geometry in
-                        geometry.size.height > 0 && viewModel.conversationWindow != nil && !viewModel.isLoading
+                        ConversationOpenPerformance.localContentVisible(
+                            height: geometry.size.height, hasWindow: viewModel.conversationWindow != nil,
+                            loading: viewModel.isLoading, empty: true, positionSettled: false)
                     } action: { visible in
-                        openPerformance.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                        openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
                     }
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
@@ -1733,9 +1730,12 @@ struct ConversationView: View {
                         // the viewport; with a few messages the timeline stays put.
                         .scrollBounceBehavior(.basedOnSize)
                         .onGeometryChange(for: Bool.self) { geometry in
-                            geometry.size.height > 0 && isInitialTimelinePositionSettled && viewModel.conversationWindow != nil
+                            ConversationOpenPerformance.localContentVisible(
+                                height: geometry.size.height, hasWindow: viewModel.conversationWindow != nil,
+                                loading: viewModel.isLoading, empty: false,
+                                positionSettled: isInitialTimelinePositionSettled)
                         } action: { visible in
-                            openPerformance.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                            openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
                         }
                         .compatibleBottomScrollEdgeEffectHidden()
                         .scrollDismissesKeyboard(.interactively)

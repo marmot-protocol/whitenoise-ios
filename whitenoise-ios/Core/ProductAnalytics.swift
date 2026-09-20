@@ -130,6 +130,17 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
         enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds, outcome) }
     }
 
+    // Two terminal samples per conversation attempt. The native recorder is memory-only;
+    // finish before lifecycle invalidation closes this consent generation.
+    func recordImmediatePerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64,
+                                    ticket: Ticket?, outcome: HostPerformanceOutcomeFfi) {
+        guard let ticket else { return }
+        state.withLock { state in
+            guard state.generation == ticket.generation, state.sink != nil else { return }
+            state.performanceSink?(operation, milliseconds, outcome)
+        }
+    }
+
     private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) throws -> Void) -> Task<Void, Never>? {
         guard let ticket else { return nil }
         let admitted = state.withLock { state in

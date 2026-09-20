@@ -585,6 +585,11 @@ final class RuntimeLifecycle {
     }
 
     private func shutdownAndReleaseCurrentClient() async {
+        if let appState {
+            appState.conversationOpenPerformance?.finish(.cancelled, recorder: appState.productAnalytics)
+            appState.conversationOpenPerformance?.accountContextReady(
+                ticket: appState.productAnalytics.ticket(), recorder: appState.productAnalytics)
+        }
         appState?.invalidateProductAnalytics()
         let clientToRelease = client
         client = nil
@@ -659,6 +664,11 @@ final class RuntimeLifecycle {
 
     @discardableResult
     func startRuntimeSuspension() -> Task<Void, Never> {
+        if let appState {
+            appState.conversationOpenPerformance?.finish(.cancelled, recorder: appState.productAnalytics)
+            appState.conversationOpenPerformance?.accountContextReady(
+                ticket: appState.productAnalytics.ticket(), recorder: appState.productAnalytics)
+        }
         appState?.invalidateProductAnalytics()
         appState?.isAppSceneActive = false
         appState?.sceneHasReportedPhase = true

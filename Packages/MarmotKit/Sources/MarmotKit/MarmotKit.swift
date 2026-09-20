@@ -15998,6 +15998,92 @@ public func FfiConverterTypeChatListAvatarFfi_lower(_ value: ChatListAvatarFfi) 
 }
 
 
+public struct ChatListDraftPreviewFfi {
+    public var text: String
+    public var textTruncated: Bool
+    public var attachmentCount: UInt64
+    public var attachmentKind: ChatListAttachmentKindFfi?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(text: String, textTruncated: Bool, attachmentCount: UInt64, attachmentKind: ChatListAttachmentKindFfi?) {
+        self.text = text
+        self.textTruncated = textTruncated
+        self.attachmentCount = attachmentCount
+        self.attachmentKind = attachmentKind
+    }
+}
+
+#if compiler(>=6)
+extension ChatListDraftPreviewFfi: Sendable {}
+#endif
+
+
+extension ChatListDraftPreviewFfi: Equatable, Hashable {
+    public static func ==(lhs: ChatListDraftPreviewFfi, rhs: ChatListDraftPreviewFfi) -> Bool {
+        if lhs.text != rhs.text {
+            return false
+        }
+        if lhs.textTruncated != rhs.textTruncated {
+            return false
+        }
+        if lhs.attachmentCount != rhs.attachmentCount {
+            return false
+        }
+        if lhs.attachmentKind != rhs.attachmentKind {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(text)
+        hasher.combine(textTruncated)
+        hasher.combine(attachmentCount)
+        hasher.combine(attachmentKind)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListDraftPreviewFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListDraftPreviewFfi {
+        return
+            try ChatListDraftPreviewFfi(
+                text: FfiConverterString.read(from: &buf),
+                textTruncated: FfiConverterBool.read(from: &buf),
+                attachmentCount: FfiConverterUInt64.read(from: &buf),
+                attachmentKind: FfiConverterOptionTypeChatListAttachmentKindFfi.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChatListDraftPreviewFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterBool.write(value.textTruncated, into: &buf)
+        FfiConverterUInt64.write(value.attachmentCount, into: &buf)
+        FfiConverterOptionTypeChatListAttachmentKindFfi.write(value.attachmentKind, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListDraftPreviewFfi_lift(_ buf: RustBuffer) throws -> ChatListDraftPreviewFfi {
+    return try FfiConverterTypeChatListDraftPreviewFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListDraftPreviewFfi_lower(_ value: ChatListDraftPreviewFfi) -> RustBuffer {
+    return FfiConverterTypeChatListDraftPreviewFfi.lower(value)
+}
+
+
 public struct ChatListMessagePreviewFfi {
     public var groupSystem: GroupSystemEventFfi?
     public var messageIdHex: String
@@ -16153,6 +16239,144 @@ public func FfiConverterTypeChatListMessagePreviewFfi_lift(_ buf: RustBuffer) th
 #endif
 public func FfiConverterTypeChatListMessagePreviewFfi_lower(_ value: ChatListMessagePreviewFfi) -> RustBuffer {
     return FfiConverterTypeChatListMessagePreviewFfi.lower(value)
+}
+
+
+/**
+ * Advisory row gestures. Starting leave still requires authoritative preflight,
+ * including admin demotion/disband decisions; this is not permission to send SelfRemove.
+ */
+public struct ChatListRowActionsFfi {
+    public var canMarkRead: Bool
+    public var canMarkUnread: Bool
+    public var canPin: Bool
+    public var canUnpin: Bool
+    public var canMute: Bool
+    public var canUnmute: Bool
+    public var canArchive: Bool
+    public var canRestore: Bool
+    public var canStartLeave: Bool
+    public var canDeleteLocal: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(canMarkRead: Bool, canMarkUnread: Bool, canPin: Bool, canUnpin: Bool, canMute: Bool, canUnmute: Bool, canArchive: Bool, canRestore: Bool, canStartLeave: Bool, canDeleteLocal: Bool) {
+        self.canMarkRead = canMarkRead
+        self.canMarkUnread = canMarkUnread
+        self.canPin = canPin
+        self.canUnpin = canUnpin
+        self.canMute = canMute
+        self.canUnmute = canUnmute
+        self.canArchive = canArchive
+        self.canRestore = canRestore
+        self.canStartLeave = canStartLeave
+        self.canDeleteLocal = canDeleteLocal
+    }
+}
+
+#if compiler(>=6)
+extension ChatListRowActionsFfi: Sendable {}
+#endif
+
+
+extension ChatListRowActionsFfi: Equatable, Hashable {
+    public static func ==(lhs: ChatListRowActionsFfi, rhs: ChatListRowActionsFfi) -> Bool {
+        if lhs.canMarkRead != rhs.canMarkRead {
+            return false
+        }
+        if lhs.canMarkUnread != rhs.canMarkUnread {
+            return false
+        }
+        if lhs.canPin != rhs.canPin {
+            return false
+        }
+        if lhs.canUnpin != rhs.canUnpin {
+            return false
+        }
+        if lhs.canMute != rhs.canMute {
+            return false
+        }
+        if lhs.canUnmute != rhs.canUnmute {
+            return false
+        }
+        if lhs.canArchive != rhs.canArchive {
+            return false
+        }
+        if lhs.canRestore != rhs.canRestore {
+            return false
+        }
+        if lhs.canStartLeave != rhs.canStartLeave {
+            return false
+        }
+        if lhs.canDeleteLocal != rhs.canDeleteLocal {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(canMarkRead)
+        hasher.combine(canMarkUnread)
+        hasher.combine(canPin)
+        hasher.combine(canUnpin)
+        hasher.combine(canMute)
+        hasher.combine(canUnmute)
+        hasher.combine(canArchive)
+        hasher.combine(canRestore)
+        hasher.combine(canStartLeave)
+        hasher.combine(canDeleteLocal)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeChatListRowActionsFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ChatListRowActionsFfi {
+        return
+            try ChatListRowActionsFfi(
+                canMarkRead: FfiConverterBool.read(from: &buf),
+                canMarkUnread: FfiConverterBool.read(from: &buf),
+                canPin: FfiConverterBool.read(from: &buf),
+                canUnpin: FfiConverterBool.read(from: &buf),
+                canMute: FfiConverterBool.read(from: &buf),
+                canUnmute: FfiConverterBool.read(from: &buf),
+                canArchive: FfiConverterBool.read(from: &buf),
+                canRestore: FfiConverterBool.read(from: &buf),
+                canStartLeave: FfiConverterBool.read(from: &buf),
+                canDeleteLocal: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ChatListRowActionsFfi, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.canMarkRead, into: &buf)
+        FfiConverterBool.write(value.canMarkUnread, into: &buf)
+        FfiConverterBool.write(value.canPin, into: &buf)
+        FfiConverterBool.write(value.canUnpin, into: &buf)
+        FfiConverterBool.write(value.canMute, into: &buf)
+        FfiConverterBool.write(value.canUnmute, into: &buf)
+        FfiConverterBool.write(value.canArchive, into: &buf)
+        FfiConverterBool.write(value.canRestore, into: &buf)
+        FfiConverterBool.write(value.canStartLeave, into: &buf)
+        FfiConverterBool.write(value.canDeleteLocal, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListRowActionsFfi_lift(_ buf: RustBuffer) throws -> ChatListRowActionsFfi {
+    return try FfiConverterTypeChatListRowActionsFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeChatListRowActionsFfi_lower(_ value: ChatListRowActionsFfi) -> RustBuffer {
+    return FfiConverterTypeChatListRowActionsFfi.lower(value)
 }
 
 
@@ -24504,13 +24728,17 @@ public func FfiConverterTypePresentedChatListUpdateFfi_lower(_ value: PresentedC
 
 
 public struct PresentedChatRowFfi {
+    public var preview: SelectedChatPreviewFfi
+    public var actions: ChatListRowActionsFfi
     public var row: ChatListRowFfi
     public var presentation: ConversationPresentationFfi
     public var avatarAsset: AvatarAssetFfi?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(row: ChatListRowFfi, presentation: ConversationPresentationFfi, avatarAsset: AvatarAssetFfi?) {
+    public init(preview: SelectedChatPreviewFfi, actions: ChatListRowActionsFfi, row: ChatListRowFfi, presentation: ConversationPresentationFfi, avatarAsset: AvatarAssetFfi?) {
+        self.preview = preview
+        self.actions = actions
         self.row = row
         self.presentation = presentation
         self.avatarAsset = avatarAsset
@@ -24524,6 +24752,12 @@ extension PresentedChatRowFfi: Sendable {}
 
 extension PresentedChatRowFfi: Equatable, Hashable {
     public static func ==(lhs: PresentedChatRowFfi, rhs: PresentedChatRowFfi) -> Bool {
+        if lhs.preview != rhs.preview {
+            return false
+        }
+        if lhs.actions != rhs.actions {
+            return false
+        }
         if lhs.row != rhs.row {
             return false
         }
@@ -24537,6 +24771,8 @@ extension PresentedChatRowFfi: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(preview)
+        hasher.combine(actions)
         hasher.combine(row)
         hasher.combine(presentation)
         hasher.combine(avatarAsset)
@@ -24552,6 +24788,8 @@ public struct FfiConverterTypePresentedChatRowFfi: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PresentedChatRowFfi {
         return
             try PresentedChatRowFfi(
+                preview: FfiConverterTypeSelectedChatPreviewFfi.read(from: &buf),
+                actions: FfiConverterTypeChatListRowActionsFfi.read(from: &buf),
                 row: FfiConverterTypeChatListRowFfi.read(from: &buf),
                 presentation: FfiConverterTypeConversationPresentationFfi.read(from: &buf),
                 avatarAsset: FfiConverterOptionTypeAvatarAssetFfi.read(from: &buf)
@@ -24559,6 +24797,8 @@ public struct FfiConverterTypePresentedChatRowFfi: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: PresentedChatRowFfi, into buf: inout [UInt8]) {
+        FfiConverterTypeSelectedChatPreviewFfi.write(value.preview, into: &buf)
+        FfiConverterTypeChatListRowActionsFfi.write(value.actions, into: &buf)
         FfiConverterTypeChatListRowFfi.write(value.row, into: &buf)
         FfiConverterTypeConversationPresentationFfi.write(value.presentation, into: &buf)
         FfiConverterOptionTypeAvatarAssetFfi.write(value.avatarAsset, into: &buf)
@@ -31349,6 +31589,9 @@ public enum ChatListMessageDeliveryStateFfi {
 
     case notApplicable
     case pending
+    /**
+     * Locally source-backed publication state, not a recipient delivery/read receipt.
+     */
     case delivered
     case failed
 }
@@ -38768,6 +39011,97 @@ public func FfiConverterTypeSelectedAvatarFfi_lower(_ value: SelectedAvatarFfi) 
 
 
 extension SelectedAvatarFfi: Equatable, Hashable {}
+
+
+
+
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Selected preview; Message refers to `row.last_message` on this same row.
+ * Hosts localize Invitation/Empty and the Draft label; no extra lookup is needed.
+ */
+
+public enum SelectedChatPreviewFfi {
+
+    case draft(draft: ChatListDraftPreviewFfi
+    )
+    case message
+    case invitation
+    case empty
+}
+
+
+#if compiler(>=6)
+extension SelectedChatPreviewFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSelectedChatPreviewFfi: FfiConverterRustBuffer {
+    typealias SwiftType = SelectedChatPreviewFfi
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SelectedChatPreviewFfi {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        case 1: return .draft(draft: try FfiConverterTypeChatListDraftPreviewFfi.read(from: &buf)
+        )
+
+        case 2: return .message
+
+        case 3: return .invitation
+
+        case 4: return .empty
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SelectedChatPreviewFfi, into buf: inout [UInt8]) {
+        switch value {
+
+
+        case let .draft(draft):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeChatListDraftPreviewFfi.write(draft, into: &buf)
+
+
+        case .message:
+            writeInt(&buf, Int32(2))
+
+
+        case .invitation:
+            writeInt(&buf, Int32(3))
+
+
+        case .empty:
+            writeInt(&buf, Int32(4))
+
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSelectedChatPreviewFfi_lift(_ buf: RustBuffer) throws -> SelectedChatPreviewFfi {
+    return try FfiConverterTypeSelectedChatPreviewFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSelectedChatPreviewFfi_lower(_ value: SelectedChatPreviewFfi) -> RustBuffer {
+    return FfiConverterTypeSelectedChatPreviewFfi.lower(value)
+}
+
+
+extension SelectedChatPreviewFfi: Equatable, Hashable {}
 
 
 

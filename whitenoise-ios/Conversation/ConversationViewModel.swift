@@ -1408,6 +1408,18 @@ final class ConversationViewModel {
     private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: ConversationWindowSubscription) {
         guard windowSubscription === window,
               windowCursor?.accept(generation: snapshot.revision.generation, sequence: snapshot.revision.sequence) == true else { return }
+        if let previous = conversationWindow, previous.revision.generation == snapshot.revision.generation {
+            let appended = ConversationLiveAppend.ids(
+                previous: previous.messages.map { $0.timeline.messageIdHex },
+                next: snapshot.messages.map { $0.timeline.messageIdHex },
+                wasAtTail: !previous.hasMoreAfter, isAtTail: !snapshot.hasMoreAfter)
+            for message in snapshot.messages where appended.contains(message.timeline.messageIdHex) {
+                let record = Self.appMessageRecord(from: message.timeline)
+                if record.direction == "received", record.kind == MessageSemantics.kindChat {
+                    timelineStore.beginMessageVisibility(rowID: "msg:\(record.messageIdHex)", operation: .inboundMessageVisible)
+                }
+            }
+        }
         installConversationWindow(snapshot)
     }
 

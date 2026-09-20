@@ -90,6 +90,8 @@ final class ChatsListViewModel {
         let isMuted: Bool
         let previewText: String?
         let draftPreview: String?
+        let selectedPreview: SelectedChatPreviewFfi?
+        let actions: ChatListRowActionsFfi?
         let searchHaystack: String
         let leaveRequestPending: Bool
 
@@ -107,6 +109,7 @@ final class ChatsListViewModel {
             leaveRequestPending: Bool = false,
             isBlockedDirectPeer: Bool = false,
             draftSummary: MessageDraftSummaryFfi? = nil,
+            prepared: PresentedChatRowFfi? = nil,
             mentionDisplayName: MarkdownMentionResolver? = nil,
             systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
         ) {
@@ -129,10 +132,17 @@ final class ChatsListViewModel {
             self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
-            self.draftPreview = ConversationDraftPreview.text(
-                from: draftSummary,
-                mentionDisplayName: mentionDisplayName
-            )
+            self.selectedPreview = prepared?.preview
+            self.actions = prepared?.actions
+            if let prepared {
+                if case .draft(let draft) = prepared.preview {
+                    self.draftPreview = ConversationDraftPreview.preparedText(draft, mentionDisplayName: mentionDisplayName)
+                } else {
+                    self.draftPreview = nil
+                }
+            } else {
+                self.draftPreview = ConversationDraftPreview.text(from: draftSummary, mentionDisplayName: mentionDisplayName)
+            }
             self.searchHaystack = Self.makeSearchHaystack(
                 title: title,
                 previewText: previewText,
@@ -162,7 +172,12 @@ final class ChatsListViewModel {
             )
         }
         var departureAction: ChatDepartureAction? {
-            ChatDepartureAction.action(
+            if let actions {
+                if actions.canStartLeave { return .leave }
+                if actions.canDeleteLocal { return .deleteLocally }
+                return nil
+            }
+            return ChatDepartureAction.action(
                 membership: selfMembership,
                 leaveRequestPending: leaveRequestPending
             )
@@ -277,6 +292,7 @@ final class ChatsListViewModel {
     private var itemByGroupId: [String: Item] = [:]
     private var pendingChatListRowsByGroupId: [String: ChatListRowFfi] = [:]
     private var avatarAssetsByGroupId: [String: AvatarAssetFfi] = [:]
+    private var preparedRowsByGroupId: [String: PresentedChatRowFfi] = [:]
     private var selectedPresentationByGroupId: [String: ConversationPresentationFfi] = [:]
     private var presentedCursor = PresentedChatListCursor()
     private var deferredPresentedSnapshot: PresentedChatListSnapshotFfi?
@@ -367,6 +383,7 @@ final class ChatsListViewModel {
             }
             let hadPublishedRows = !items.isEmpty || !archivedItems.isEmpty
             selectedPresentationByGroupId = [:]
+            preparedRowsByGroupId = [:]
             avatarAssetsByGroupId = [:]
             rowByGroupId = [:]
             itemByGroupId = [:]
@@ -393,7 +410,6 @@ final class ChatsListViewModel {
             currentAccount = nil
             return
         }
-        await draftStore.loadIfNeeded(accountRef: accountRef)
         guard !Task.isCancelled else { return }
         guard let appState, appState.canUseRuntimeForForegroundWork else { return }
         currentAccount = accountRef
@@ -580,7 +596,7 @@ final class ChatsListViewModel {
             !$0.row.pendingConfirmation && $0.row.selfMembership == .member
                 && !$0.row.leaveRequestPending && !$0.row.disbanding && $0.row.lifecycleState != .disbanded
                 && ($0.row.hasUnread || $0.row.manuallyMarkedUnread)
-        }.map { makeItem(for: $0.row, muteLookup: muteLookup, selected: $0.presentation) }
+        }.map { makeItem(for: $0.row, muteLookup: muteLookup, selected: $0.presentation, prepared: $0) }
     }
 
     /// Re-pull the durable rows from local storage. This keeps pull-to-refresh
@@ -590,7 +606,6 @@ final class ChatsListViewModel {
               let appState,
               appState.canUseRuntimeForForegroundWork
         else { return }
-        await draftStore.loadIfNeeded(accountRef: accountRef)
         if case .window = listMode {
             // Keep the current viewport when returning from a conversation.
             return
@@ -613,7 +628,7 @@ final class ChatsListViewModel {
     /// Resolves one just-created or deep-linked destination directly from the
     /// durable keyed projection instead of waiting for a broad subscription
     /// update to happen to deliver it.
-    func refreshRow(groupIdHex: String) async {
+    func refreshRow(groupIdHex: String, retainAsDestination: Bool = true) async {
         guard let accountRef = currentAccount, let appState else { return }
         guard
               appState.canUseRuntimeForLocalForegroundWork
@@ -621,11 +636,11 @@ final class ChatsListViewModel {
         if rowByGroupId[groupIdHex] == nil,
            let created = appState.createdChatListRow(accountRef: accountRef, groupIdHex: groupIdHex) {
             applyChatListRow(created)
-            destinationItems[groupIdHex] = itemByGroupId[groupIdHex]
+            if retainAsDestination { destinationItems[groupIdHex] = itemByGroupId[groupIdHex] }
         }
         do {
             let previousItem = item(groupIdHex: groupIdHex)
-            destinationItems[groupIdHex] = previousItem
+            if retainAsDestination { destinationItems[groupIdHex] = previousItem }
             let taskID = chatListTaskID
             let generation = appState.runtimeGeneration
             guard let row = try await readPresentedRow(
@@ -635,10 +650,11 @@ final class ChatsListViewModel {
                item(groupIdHex: groupIdHex) == previousItem,
                appState.runtimeGeneration == generation, appState.canUseRuntimeForLocalForegroundWork
             else { return }
+            preparedRowsByGroupId[groupIdHex] = row
             selectedPresentationByGroupId[groupIdHex] = row.presentation
             avatarAssetsByGroupId[groupIdHex] = row.avatarAsset
             applyChatListRow(row.row)
-            destinationItems[groupIdHex] = itemByGroupId[groupIdHex]
+            if retainAsDestination { destinationItems[groupIdHex] = itemByGroupId[groupIdHex] }
         } catch is CancellationError {
             return
         } catch {
@@ -677,7 +693,7 @@ final class ChatsListViewModel {
         guard self.currentAccount == currentAccount, generation == appState.runtimeGeneration else { throw CancellationError() }
         let muteLookup = currentMuteLookup()
         return MessageForwardDestinationPresentation.destinations(
-            from: snapshot.rows.map { makeItem(for: $0.row, muteLookup: muteLookup, selected: $0.presentation) },
+            from: snapshot.rows.map { makeItem(for: $0.row, muteLookup: muteLookup, selected: $0.presentation, prepared: $0) },
             excludingGroupIdHex: currentGroupIdHex
         )
     }
@@ -694,6 +710,7 @@ final class ChatsListViewModel {
     }
 
     private func applyPresentedRows(_ rows: [PresentedChatRowFfi]) {
+        preparedRowsByGroupId = Dictionary(rows.map { ($0.row.groupIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
         avatarAssetsByGroupId = Dictionary(rows.compactMap { row in
             row.avatarAsset.map { (row.row.groupIdHex, $0) }
         }, uniquingKeysWith: { _, latest in latest })
@@ -859,6 +876,7 @@ final class ChatsListViewModel {
         destinationItems[groupIdHex] = nil
         pendingChatListRowsByGroupId[groupIdHex] = nil
         selectedPresentationByGroupId[groupIdHex] = nil
+        preparedRowsByGroupId[groupIdHex] = nil
         avatarAssetsByGroupId[groupIdHex] = nil
         let hadPublishedRow = rowByGroupId[groupIdHex] != nil || itemByGroupId[groupIdHex] != nil
         rowByGroupId[groupIdHex] = nil
@@ -918,6 +936,13 @@ final class ChatsListViewModel {
         updateCachedGroupDetails(with: record)
         if storeRow(row) {
             publishItems()
+        }
+        // The command returns a group record, not the new prepared action hints.
+        let account = currentAccount
+        let generation = appState?.runtimeGeneration
+        Task { [weak self] in
+            guard let self, currentAccount == account, appState?.runtimeGeneration == generation else { return }
+            await refreshRow(groupIdHex: record.groupIdHex, retainAsDestination: false)
         }
     }
 
@@ -1011,11 +1036,11 @@ final class ChatsListViewModel {
     }
 
     private func makeItem(
-        for row: ChatListRowFfi, muteLookup: MuteLookup? = nil, selected: ConversationPresentationFfi? = nil
+        for row: ChatListRowFfi, muteLookup: MuteLookup? = nil, selected: ConversationPresentationFfi? = nil,
+        prepared: PresentedChatRowFfi? = nil
     ) -> Item {
         let selected = selected ?? selectedPresentationByGroupId[row.groupIdHex]
         let display = display(for: row, details: groupDetailsCache[row.groupIdHex], selected: selected)
-        let draftAccountRef = currentAccount ?? appState?.activeAccountRef
         let muteLookup = muteLookup ?? currentMuteLookup()
         return Item(
             row: row,
@@ -1042,9 +1067,7 @@ final class ChatsListViewModel {
                     ?? directPeerAccountIdByGroupId[row.groupIdHex],
                 blockedAccountIds: blockedAccountIds
             ),
-            draftSummary: draftAccountRef.flatMap {
-                draftStore.summary(accountRef: $0, groupIdHex: row.groupIdHex)
-            },
+            prepared: prepared ?? preparedRowsByGroupId[row.groupIdHex],
             mentionDisplayName: { [weak appState] entity in
                 #if DEBUG
                 if let name = self.mentionDisplayNameForTesting?(entity) {

@@ -283,6 +283,10 @@ struct ChatSurfacePresentationTests {
 
     @Test func composerShowsExpandedEditorForLongOrMultilineDrafts() {
         #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short"))
+        #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(for: ""))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short\n"))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "\n"))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short\r\nsecond line"))
         #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(
             for: String(repeating: "a", count: ComposerExpandedEditorPresentation.minimumExpandCharacterCount)
         ))
