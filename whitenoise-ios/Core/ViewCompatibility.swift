@@ -100,6 +100,16 @@ extension View {
         }
     }
 
+    /// Custom fading headers supply their own scroll-edge treatment.
+    @ViewBuilder
+    func compatibleTopScrollEdgeEffectHidden() -> some View {
+        if #available(iOS 26.0, *) {
+            scrollEdgeEffectHidden(true, for: .top)
+        } else {
+            self
+        }
+    }
+
     /// Uses the platform's context-sensitive treatment beneath top navigation chrome.
     @ViewBuilder
     func compatibleAutomaticTopScrollEdgeEffect() -> some View {

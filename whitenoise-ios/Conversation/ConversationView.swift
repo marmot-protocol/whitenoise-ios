@@ -776,6 +776,7 @@ struct ConversationView: View {
 
     private var conversationChromeView: some View {
         timeline
+            .compatibleTopScrollEdgeEffectHidden()
             .safeAreaInset(edge: .top, spacing: 0) { searchBarInset }
             .bottomInputChromeAccessory {
                 // `onGeometryChange`'s transform is nonisolated and @Sendable, so
@@ -1466,19 +1467,7 @@ struct ConversationView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(.systemBackground), location: 0),
-                    .init(color: Color(.systemBackground).opacity(0.94), location: 0.58),
-                    .init(color: Color(.systemBackground).opacity(0.68), location: 0.82),
-                    .init(color: Color(.systemBackground).opacity(0), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .top)
-        }
+        .wnFadingHeader()
     }
 
     @ViewBuilder

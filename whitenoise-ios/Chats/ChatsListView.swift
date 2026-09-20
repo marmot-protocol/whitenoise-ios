@@ -171,7 +171,7 @@ struct ChatsListView: View {
                         .tint(.primary)
                 }
             }
-            .compatibleTopSafeAreaBar(spacing: 0) {
+            .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     if appState.isConnectivityCatchUpInProgress {
                         HStack(spacing: 8) {
@@ -183,13 +183,13 @@ struct ChatsListView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(.bar)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
                     Color.clear
                         .frame(height: 6)
                 }
+                .wnFadingHeader()
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
             // Registered at a stable level so navigation works even when the
@@ -546,7 +546,7 @@ struct ChatsListView: View {
             }
             .environment(\.editMode, $chatListEditMode)
             .listStyle(.plain)
-            .compatibleAutomaticTopScrollEdgeEffect()
+            .compatibleTopScrollEdgeEffectHidden()
             .compatibleBottomScrollEdgeEffect()
             .overlay {
                 if rows.isEmpty { emptyState }
