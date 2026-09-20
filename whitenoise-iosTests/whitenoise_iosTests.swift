@@ -8161,7 +8161,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8171,6 +8171,8 @@ struct ConversationTimelineProjectionTests {
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
+        projected.clientToken = "pending-1"
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: "pending-1")
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8643,7 +8645,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8663,6 +8665,8 @@ struct ConversationTimelineProjectionTests {
         #expect(failedMessages[0].0 == "")
         #expect(failedMessages[0].1 == .failed)
 
+        projected.clientToken = tempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: tempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8697,7 +8701,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8708,6 +8712,8 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
         viewModel.confirmSent(tempId: "pending-1", record: pending, messageId: nil)
+        projected.clientToken = "pending-1"
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: "pending-1")
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8833,7 +8839,7 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.mediaItems(for: mediaRow).map(\.fileName) == ["canonical.jpg"])
     }
 
-    @Test func projectedOutgoingMessageReconcilesClosestPendingBubbleWhenContentMatches() throws {
+    @Test func projectedOutgoingMessageUsesExactTokenForIdenticalContent() throws {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
@@ -8866,7 +8872,7 @@ struct ConversationTimelineProjectionTests {
         let tempIds = try #require(
             tempIdsWhereTransientTimelinePrefersNewerPendingFirst(older: olderPending, newer: newerPending)
         )
-        let projectedOlder = timelineRecord(
+        var projectedOlder = timelineRecord(
             messageIdHex: hex("c3"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8877,6 +8883,8 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.older, record: olderPending)
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.newer, record: newerPending)
+        projectedOlder.clientToken = tempIds.older
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: tempIds.older)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedOlder], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8949,7 +8957,7 @@ struct ConversationTimelineProjectionTests {
 
         // The incoming confirmation is the plain text send (no `imeta` tags).
         // It must reconcile the text pending and leave the media bubble alone.
-        let projectedText = timelineRecord(
+        var projectedText = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8957,6 +8965,8 @@ struct ConversationTimelineProjectionTests {
             plaintext: caption,
             timelineAt: 20
         )
+        projectedText.clientToken = textTempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: textTempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedText], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -9028,7 +9038,7 @@ struct ConversationTimelineProjectionTests {
         // The incoming confirmation is the media send: kind-9 with an `imeta`
         // tag. It must reconcile the media pending, not the text pending.
         let reference = encryptedMediaReference(sourceEpoch: 0)
-        let projectedMedia = timelineRecord(
+        var projectedMedia = timelineRecord(
             messageIdHex: hex("b3"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -9037,6 +9047,8 @@ struct ConversationTimelineProjectionTests {
             tags: [MessageSemantics.imetaTag(for: reference)],
             timelineAt: 20
         )
+        projectedMedia.clientToken = mediaTempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: mediaTempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedMedia], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -11749,34 +11761,9 @@ struct ConversationInviteActionTests {
 }
 
 struct MarmotKitMasterIntegrationTests {
-    @Test func sendAcceptancePolicyDistinguishesPublishedFromDurablyPending() {
-        let published = SendSummaryFfi(
-            published: 1,
-            messageIds: ["message-id"],
-            acceptDisposition: .published,
-            maintenanceDisposition: .ready
-        )
-        let pending = SendSummaryFfi(
-            published: 0,
-            messageIds: [],
-            acceptDisposition: .acceptedPending,
-            maintenanceDisposition: .postJoinRotationPendingRetryable
-        )
-        let completionUnknown = SendSummaryFfi(
-            published: 0,
-            messageIds: [],
-            acceptDisposition: .completionUnknown,
-            maintenanceDisposition: .ready
-        )
-
-        #expect(SendAcceptancePolicy.action(for: published) == .confirmPublished(messageId: "message-id"))
-        #expect(SendAcceptancePolicy.action(for: pending) == .awaitDurableProjection)
-        #expect(SendAcceptancePolicy.action(for: completionUnknown) == .awaitDurableProjection)
-    }
-
     @MainActor
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
-        for disposition in [SendAcceptDispositionFfi.acceptedPending, .completionUnknown] {
+        do {
             let appState = AppState(client: try MarmotClient.testClient())
             appState.activeAccountRef = "account-ref"
             let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
@@ -11788,13 +11775,8 @@ struct MarmotKitMasterIntegrationTests {
             composer.canSendMessages = { true }
             var surfacedErrors: [String] = []
             composer.onError = { surfacedErrors.append($0) }
-            composer.sendTextForTesting = { _, _, _, _ in
-                SendSummaryFfi(
-                    published: 0,
-                    messageIds: [],
-                    acceptDisposition: disposition,
-                    maintenanceDisposition: .ready
-                )
+            composer.sendTextForTesting = { _, _, _, _, token in
+                LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "local")
             }
 
             await composer.send("durably retained")
@@ -11822,7 +11804,8 @@ struct MarmotKitMasterIntegrationTests {
         composer.canSendMessages = { true }
         var surfacedErrors: [String] = []
         composer.onError = { surfacedErrors.append($0) }
-        composer.sendTextForTesting = { _, _, _, _ in
+        composer.localSendStatusForTesting = { _ in nil }
+        composer.sendTextForTesting = { _, _, _, _, _ in
             throw NSError(domain: "ComposerSendTests", code: 1)
         }
 

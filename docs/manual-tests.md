@@ -20,6 +20,12 @@ before every release tag.
 - [ ] Back up the app's shared data before opening an existing installation with
       0.10.4. Migrations 87–89 are forward-only; do not run an older MDK against
       the upgraded store or remove migration records to attempt a downgrade.
+- [ ] Send text, replies, voice notes and an album while relays are slow/offline.
+      Each tap appears immediately once; local acceptance keeps the sending
+      indicator until the timeline reports delivery. Resume/relaunch and verify
+      retained submissions appear once, with newer composer typing intact.
+- [ ] Interrupt a media send. Reopening must recover MDK's durable timeline;
+      uncertain submissions must not offer a fresh upload as an automatic retry.
 - [ ] On a signed staging build, repeat Native Push off/on after optimization,
       foreground/background receipt, and Notification Service Extension checks.
 

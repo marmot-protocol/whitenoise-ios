@@ -26,43 +26,19 @@ nonisolated enum MediaUploadIntegrity {
     }
 }
 
-nonisolated enum SendAcceptanceAction: Equatable {
-    case confirmPublished(messageId: String?)
-    case awaitDurableProjection
-}
-
-nonisolated enum SendAcceptancePolicy {
-    static func action(for summary: SendSummaryFfi) -> SendAcceptanceAction {
-        switch summary.acceptDisposition {
-        case .published:
-            return .confirmPublished(messageId: summary.messageIds.first)
-        case .acceptedPending, .completionUnknown:
-            return .awaitDurableProjection
-        }
-    }
-}
-
-nonisolated enum SendFailurePolicy {
-    static func awaitsDurableState(error: Error, submittedDraft: Bool) -> Bool {
-        // Revision tokens are opaque; an error cannot prove the draft was not consumed.
-        submittedDraft || error is CancellationError
-            || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
-    }
-}
-
 /// One outgoing message already parked in the timeline, waiting for its draft
 /// revision and its trip to MDK. Everything the send publishes is captured at
 /// the Send tap, so a composer edit afterwards belongs to the next message.
 @MainActor
 struct StagedOutgoingSend {
     let tempId: String
+    let clientToken: String
     let accountRef: String
     let lifetime: UUID
     let replyTargetId: String?
     let text: String
     let attachments: [MediaDraftAttachment]
     let uploadEpoch: Int
-    fileprivate let record: AppMessageRecordFfi
     fileprivate let contentTokens: Task<MarkdownDocumentFfi, Never>
 }
 
@@ -101,8 +77,9 @@ final class ComposerModel {
     /// Surfaces a send failure to the view model (sets its observable `error`).
     @ObservationIgnored var onError: (String) -> Void = { _ in }
 #if DEBUG
+    @ObservationIgnored var localSendStatusForTesting: ((String) async throws -> LocalSendStatusFfi?)?
     @ObservationIgnored var sendTextForTesting:
-        ((String, String, String?, String) async throws -> SendSummaryFfi)?
+        ((String, String, String?, String, String) async throws -> LocalSendAcceptanceFfi)?
 #endif
 
     init(appState: AppState?, groupIdHex: String, timelineStore: TimelineStore) {
@@ -184,7 +161,8 @@ final class ComposerModel {
             guard canSendMediaAttachments() else { return nil }
         }
 
-        let tempId = retryTempId ?? UUID().uuidString
+        let clientToken = UUID().uuidString
+        let tempId = retryTempId ?? clientToken
         let rowID = "msg:\(tempId)"
         // A media send carries its caption, never a reply target.
         let replyTargetId = attachments.isEmpty ? (overrideReplyTargetId ?? replyTargetMessageId()) : nil
@@ -218,7 +196,7 @@ final class ComposerModel {
         if !attachments.isEmpty {
             timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: rowID)
         }
-        timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: record)
+        timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: record, clientToken: clientToken)
         replyingTo = nil
 
         let contentTokens = Task { @MainActor [weak timelineStore] () -> MarkdownDocumentFfi in
@@ -229,6 +207,7 @@ final class ComposerModel {
         }
         return StagedOutgoingSend(
             tempId: tempId,
+            clientToken: clientToken,
             accountRef: accountRef,
             lifetime: timelineStore.outgoingLifetime,
             replyTargetId: replyTargetId,
@@ -237,13 +216,11 @@ final class ComposerModel {
             // Captured before the upload round-trip: a wipe completing while the
             // send is in flight must invalidate the post-upload cache store.
             uploadEpoch: MessageMediaCache.currentProducerEpoch(),
-            record: record,
             contentTokens: contentTokens
         )
     }
 
-    /// Publishes an already-staged send. Runs behind `sendQueue`, so back-to-back
-    /// sends reach the relays in the order Send was pressed.
+    /// Admits staged sends in tap order; MDK owns publication after acceptance.
     func submit(
         _ staged: StagedOutgoingSend,
         draftRevision: MessageDraftRevisionFfi? = nil,
@@ -286,8 +263,7 @@ final class ComposerModel {
                 await completion?(false)
                 return
             }
-            var optimistic = staged.record
-            optimistic.contentTokens = await staged.contentTokens.value
+            _ = await staged.contentTokens.value
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
@@ -301,17 +277,17 @@ final class ComposerModel {
                     accountRef: staged.accountRef,
                     replyTargetId: staged.replyTargetId,
                     text: staged.text,
-                    draftRevision: draftRevision
+                    draftRevision: draftRevision,
+                    clientToken: staged.clientToken
                 )
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
                 await completion?(true)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
                       appState.activeAccountRef == staged.accountRef else { return }
-                timelineStore.acceptSend(tempId: staged.tempId, record: optimistic, summary: summary)
+                timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: summary.clientToken)
             } catch {
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
-                let ambiguous = SendFailurePolicy.awaitsDurableState(
-                    error: error, submittedDraft: draftRevision != nil)
+                let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
@@ -334,29 +310,32 @@ final class ComposerModel {
         accountRef: String,
         replyTargetId: String?,
         text: String,
-        draftRevision: MessageDraftRevisionFfi?
-    ) async throws -> SendSummaryFfi {
+        draftRevision: MessageDraftRevisionFfi?,
+        clientToken: String
+    ) async throws -> LocalSendAcceptanceFfi {
 #if DEBUG
         if let sendTextForTesting {
-            return try await sendTextForTesting(accountRef, groupIdHex, replyTargetId, text)
+            return try await sendTextForTesting(accountRef, groupIdHex, replyTargetId, text, clientToken)
         }
 #endif
         let client = try appState.currentMarmotClient()
         if let draftRevision {
-            return try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: [])
+            return try await client.sendDraftWithClientToken(accountRef: accountRef, revision: draftRevision, attachments: [], clientToken: clientToken)
         }
         if let replyTargetId {
-            return try await client.replyToMessage(
+            return try await client.replyWithClientToken(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
                 targetMessageId: replyTargetId,
-                text: text
+                text: text,
+                clientToken: clientToken
             )
         }
-        return try await client.sendText(
+        return try await client.sendTextWithClientToken(
             accountRef: accountRef,
             groupIdHex: groupIdHex,
-            text: text
+            text: text,
+            clientToken: clientToken
         )
     }
 
@@ -382,15 +361,13 @@ final class ComposerModel {
                 await completion?(false)
                 return
             }
-            let captionTokens = await staged.contentTokens.value
-            var submittedDraft = false
+            _ = await staged.contentTokens.value
             let submission = appState.productAnalytics.beginTiming()
             do {
                 let client = try appState.currentMarmotClient()
-                // An unsent-draft upload publishes the message itself, so MDK can
-                // project this row before the call returns: claim from here on.
+                // MDK may project its retained row before admission returns.
                 timelineStore.markLocalSendSubmitted(tempId: staged.tempId)
-                let result = try await client.uploadMedia(
+                let submitted = try await client.uploadWithClientToken(
                     accountRef: staged.accountRef,
                     groupIdHex: groupIdHex,
                     request: MediaUploadRequestFfi(
@@ -398,8 +375,10 @@ final class ComposerModel {
                         caption: staged.text.isEmpty ? nil : staged.text,
                         send: draftRevision == nil,
                         blossomServer: nil
-                    )
+                    ),
+                    clientToken: staged.clientToken
                 )
+                let result = submitted.upload
                 let verifiedAttachments = await MediaUploadIntegrity.verifiedAttachments(
                     plaintexts: staged.attachments.map(\.data),
                     references: result.attachments.map(\.reference)
@@ -410,13 +389,12 @@ final class ComposerModel {
                     await completion?(false)
                     return
                 }
-                let sent: SendSummaryFfi?
+                let sent: LocalSendAcceptanceFfi?
                 if let draftRevision {
-                    submittedDraft = true
-                    sent = try await client.sendMessageDraft(accountRef: staged.accountRef, revision: draftRevision, attachments: references)
+                    sent = try await client.sendDraftWithClientToken(accountRef: staged.accountRef, revision: draftRevision, attachments: references, clientToken: staged.clientToken)
                 } else {
-                    // The upload itself published when `send` was set.
-                    sent = result.sent
+                    // The upload admits the message when `send` is set.
+                    sent = submitted.acceptance
                 }
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
                 await completion?(true)
@@ -431,21 +409,10 @@ final class ComposerModel {
                 }
                 guard timelineStore.outgoingLifetime == staged.lifetime,
                       appState.activeAccountRef == staged.accountRef else { return }
-                let confirmed = AppMessageRecordFfi(
-                    messageIdHex: "",
-                    direction: "sent",
-                    groupIdHex: groupIdHex,
-                    sender: staged.record.sender,
-                    plaintext: staged.text,
-                    contentTokens: captionTokens,
-                    kind: MessageSemantics.kindChat,
-                    tags: references.map(MessageSemantics.imetaTag(for:)),
-                    recordedAt: staged.record.recordedAt,
-                    receivedAt: staged.record.receivedAt
-                )
                 if let sent {
-                    timelineStore.acceptSend(tempId: staged.tempId, record: confirmed, summary: sent)
-                    if let id = sent.messageIds.first, !id.isEmpty,
+                    timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: sent.clientToken)
+                    let id = sent.messageIdHex
+                    if !id.isEmpty,
                        timelineStore.replaceMediaReferences(references, forMessageId: id) {
                         timelineStore.noteProjectionChanged()
                     }
@@ -454,8 +421,7 @@ final class ComposerModel {
                 }
             } catch {
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
-                let ambiguous = SendFailurePolicy.awaitsDurableState(
-                    error: error, submittedDraft: submittedDraft)
+                let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
@@ -471,6 +437,39 @@ final class ComposerModel {
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
             }
         }.value
+    }
+
+    private func recoverSubmission(_ staged: StagedOutgoingSend, appState: AppState, error: Error) async -> Bool {
+        do {
+            let status: LocalSendStatusFfi?
+            #if DEBUG
+            if let localSendStatusForTesting {
+                status = try await localSendStatusForTesting(staged.clientToken)
+            } else {
+                let client = try appState.currentMarmotClient()
+                status = try await client.localSendStatus(accountRef: staged.accountRef,
+                    groupIdHex: groupIdHex, clientToken: staged.clientToken)
+            }
+            #else
+            let client = try appState.currentMarmotClient()
+            status = try await client.localSendStatus(accountRef: staged.accountRef,
+                groupIdHex: groupIdHex, clientToken: staged.clientToken)
+            #endif
+            guard timelineStore.outgoingLifetime == staged.lifetime,
+                  appState.activeAccountRef == staged.accountRef else { return true }
+            switch status {
+            case .queued, .engineOwned, .completed:
+                timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: staged.clientToken)
+                return true
+            case .rejected: return false
+            case nil:
+                return error is CancellationError
+                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+            }
+        } catch {
+            // A failed status read is not evidence that admission failed.
+            return true
+        }
     }
 
     private func replyTargetMessageId() -> String? {

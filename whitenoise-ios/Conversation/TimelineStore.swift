@@ -77,7 +77,7 @@ final class TimelineStore {
     /// which commits before `sendMessageDraft` returns its id — has to be bound
     /// to that row rather than rendering a second bubble.
     private struct LocalSendCorrelation {
-        let fingerprint: LocalSendFingerprint
+        let clientToken: String
         /// Monotonic start for the tap -> MDK-window-update phase; consumed once.
         var stagedAt: ProductAnalyticsRecorder.Timing?
         /// Only a send already handed to MDK can have a durable row.
@@ -102,8 +102,16 @@ final class TimelineStore {
 
     func localSendPhase(rowID: String) -> LocalSendPhase? { localSendPhases[rowID] }
 
+    func acceptLocalSend(tempId: String, clientToken: String) {
+        let rowID = "msg:\(tempId)"
+        guard localSendCorrelations[rowID]?.clientToken == clientToken,
+              localSendPhases[rowID] != .published else { return }
+        localSendPhases[rowID] = .accepted
+    }
+
     func markSendCompletionUnknown(tempId: String) {
-        guard localSendPhases["msg:\(tempId)"] != nil else { return }
+        guard let phase = localSendPhases["msg:\(tempId)"],
+              phase == .pending || phase == .completionUnknown else { return }
         localSendPhases["msg:\(tempId)"] = .completionUnknown
     }
 
@@ -647,6 +655,7 @@ final class TimelineStore {
     // MARK: - Page application (driven by the view model's IO)
 
     func applyTimelinePage(_ page: TimelinePageFfi, placement: ConversationViewModel.TimelinePagePlacement) {
+        claimProjectedLocalSends(in: page.messages)
         switch placement {
         case .window:
             applyTimelineWindowPage(page)
@@ -862,6 +871,7 @@ final class TimelineStore {
         updateTimeline: Bool = false,
         trigger: TimelineUpdateTriggerFfi? = nil
     ) -> Bool {
+        claimProjectedLocalSends(in: [record])
         var projectionChanged = false
         let appRecord = ConversationViewModel.appMessageRecord(from: record)
         guard !appRecord.messageIdHex.isEmpty else { return false }
@@ -901,6 +911,10 @@ final class TimelineStore {
             publishedOutgoingMessageIdsAwaitingProjection.remove(appRecord.messageIdHex)
         }
         recordLocalSendProjectionTiming(messageID: appRecord.messageIdHex)
+        if let rowID = claimedRowID(forMessageID: appRecord.messageIdHex) {
+            transientTimelineItems[rowID] = nil
+            mediaProjections.removePending(forRowId: rowID)
+        }
         let replacedConfirmedPendingRow = confirmedPendingTimelineRecordIds.remove(appRecord.messageIdHex) != nil
         replyProjectionKnownMessageIds.insert(appRecord.messageIdHex)
         if let projectedReplyTarget = record.replyToMessageIdHex, !projectedReplyTarget.isEmpty {
@@ -1350,7 +1364,7 @@ final class TimelineStore {
 
     // MARK: - Optimistic send overlay
 
-    func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi) {
+    func applyPendingOutgoingMessage(tempId: String, record: AppMessageRecordFfi, clientToken: String? = nil) {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.outgoingProjection, since: timing) }
 
@@ -1364,10 +1378,7 @@ final class TimelineStore {
         // only the attempt now in flight may claim a projected row.
         releaseLocalSendCorrelation(rowID: rowID)
         localSendCorrelations[rowID] = LocalSendCorrelation(
-            fingerprint: LocalSendFingerprint(
-                optimistic: record,
-                hasStagedMedia: mediaProjections.pending(forRowId: rowID)?.isEmpty == false
-            ),
+            clientToken: clientToken ?? tempId,
             stagedAt: appState?.productAnalytics.beginTiming()
         )
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
@@ -1433,23 +1444,11 @@ final class TimelineStore {
                   messageById[messageID] == nil,
                   displayIDByMessageID[messageID] == nil,
                   claimedRowID(forMessageID: messageID) == nil else { continue }
-            let fingerprint = LocalSendFingerprint(
-                projected: ConversationViewModel.appMessageRecord(from: record),
-                replyTargetId: record.replyToMessageIdHex
-            )
-            let candidates = localSendCorrelations.compactMap { rowID, correlation -> LocalSendCandidate? in
-                guard correlation.submitted, correlation.claimedMessageId == nil,
-                      localSendPhases[rowID] == .pending || localSendPhases[rowID] == .accepted
-                        || localSendPhases[rowID] == .completionUnknown,
-                      transientTimelineItems[rowID] != nil else { return nil }
-                return LocalSendCandidate(
-                    rowID: rowID,
-                    order: localSendOrder[rowID] ?? .max,
-                    fingerprint: correlation.fingerprint
-                )
-            }
-            guard let rowID = OutgoingSendCorrelation.claimant(for: fingerprint, candidates: candidates) else { continue }
-            bindLocalSend(rowID: rowID, toMessageID: messageID, authoritative: false)
+            guard let token = record.clientToken,
+                  let rowID = localSendCorrelations.first(where: { _, correlation in
+                      correlation.submitted && correlation.clientToken == token
+                  })?.key else { continue }
+            bindLocalSend(rowID: rowID, toMessageID: messageID, authoritative: true)
             // The row's first layout may already have been measured under this
             // id; the observation stays put because the id does not move.
             localSendPhases[rowID] = .accepted
@@ -1681,7 +1680,8 @@ final class TimelineStore {
         guard record.direction == "sent" else { return nil }
         let projectedReplyTarget = replyTargetId ?? ConversationViewModel.replyTargetMessageId(in: record)
         let matchingPendingMessages = transientTimelineItems.filter { key, item in
-            ConversationViewModel.pendingOutgoingMessage(
+            guard localSendCorrelations[key] == nil else { return false }
+            return ConversationViewModel.pendingOutgoingMessage(
                 item,
                 matches: record,
                 replyTargetId: projectedReplyTarget,

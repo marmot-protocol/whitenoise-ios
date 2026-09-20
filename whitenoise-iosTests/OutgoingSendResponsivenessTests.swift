@@ -9,30 +9,6 @@ import Testing
 @MainActor
 struct OutgoingSendResponsivenessTests {
 
-    // MARK: - Correlation policy (pure)
-
-    @Test func identicalConsecutiveSendsClaimProjectedRowsInSendOrder() {
-        let shared = fingerprint(text: "same")
-        let candidates = [
-            LocalSendCandidate(rowID: "msg:b", order: 2, fingerprint: shared),
-            LocalSendCandidate(rowID: "msg:a", order: 1, fingerprint: shared),
-        ]
-        #expect(OutgoingSendCorrelation.claimant(for: shared, candidates: candidates) == "msg:a")
-        #expect(OutgoingSendCorrelation.claimant(
-            for: shared,
-            candidates: candidates.filter { $0.rowID != "msg:a" }
-        ) == "msg:b")
-    }
-
-    @Test func aRowNoLocalSendMatchesIsLeftAlone() {
-        let candidates = [LocalSendCandidate(rowID: "msg:a", order: 1, fingerprint: fingerprint(text: "mine"))]
-        #expect(OutgoingSendCorrelation.claimant(for: fingerprint(text: "other device"), candidates: candidates) == nil)
-        #expect(OutgoingSendCorrelation.claimant(
-            for: fingerprint(text: "mine", replyTargetId: "parent"), candidates: candidates) == nil)
-        #expect(OutgoingSendCorrelation.claimant(
-            for: fingerprint(text: "mine", isMedia: true), candidates: candidates) == nil)
-    }
-
     // MARK: - Follow-latest command suppression
 
     @Test func stayingOnTheLiveTailNeedsNoReturnToLatestCommand() {
@@ -117,9 +93,9 @@ struct OutgoingSendResponsivenessTests {
         let harness = try SendHarness()
         harness.installWindow([])
         let gate = AsyncGate()
-        harness.composer.sendTextForTesting = { _, _, _, _ in
+        harness.composer.sendTextForTesting = { _, _, _, _, token in
             await gate.wait()
-            return published(["a"])
+            return accepted("a", token: token)
         }
 
         let send = Task { @MainActor in await harness.composer.send("still publishing") }
@@ -138,11 +114,11 @@ struct OutgoingSendResponsivenessTests {
         let harness = try SendHarness()
         harness.installWindow([])
         let gate = AsyncGate()
-        harness.composer.sendTextForTesting = { _, _, _, _ in
+        harness.composer.sendTextForTesting = { _, _, _, _, token in
             // MDK commits its pending row before this call returns.
-            harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: false)])
+            harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: false, token: token)])
             await gate.wait()
-            return published([hexId(1)])
+            return accepted(hexId(1), token: token)
         }
 
         let send = Task { @MainActor in await harness.composer.send("hi") }
@@ -157,22 +133,23 @@ struct OutgoingSendResponsivenessTests {
         gate.open()
         await send.value
         #expect(harness.rowIDs == [rowID])
-        harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: true)])
+        harness.installWindow([harness.ownRecord(id: hexId(1), text: "hi", timelineAt: 10, delivered: true, token: String(rowID.dropFirst(4)))])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.statuses == [.sent])
         try await harness.shutdown()
     }
 
-    @Test func aProjectionArrivingAfterTheSendResponseReusesTheSameRow() async throws {
+    @Test func aProjectionArrivingAfterAcceptanceReusesTheSameRow() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in published([hexId(2)]) }
-
-        await harness.composer.send("hi")
+        harness.composer.sendTextForTesting = { _, _, _, _, token in accepted(hexId(2), token: token) }
+        let staged = try #require(harness.composer.stage(text: "hi"))
+        await harness.composer.submit(staged)
         let rowID = try #require(harness.rowIDs.first)
-        #expect(harness.store.protocolID(forDisplayID: rowID) == hexId(2))
-
-        harness.installWindow([harness.ownRecord(id: hexId(2), text: "hi", timelineAt: 11, delivered: true)])
+        #expect(harness.store.protocolID(forDisplayID: rowID) == nil)
+        #expect(harness.statuses == [.sending])
+        harness.installWindow([harness.ownRecord(id: hexId(2), text: "hi", timelineAt: 11,
+            delivered: true, token: staged.clientToken)])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.statuses == [.sent])
         try await harness.shutdown()
@@ -181,7 +158,7 @@ struct OutgoingSendResponsivenessTests {
     @Test func identicalBackToBackSendsProduceOneRowEach() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in published([]) }
+        harness.composer.sendTextForTesting = { _, _, _, _, token in accepted("unused", token: token) }
 
         let first = try #require(harness.composer.stage(text: "same"))
         let second = try #require(harness.composer.stage(text: "same"))
@@ -189,8 +166,8 @@ struct OutgoingSendResponsivenessTests {
         harness.store.markLocalSendSubmitted(tempId: second.tempId)
 
         harness.installWindow([
-            harness.ownRecord(id: hexId(3), text: "same", timelineAt: 20, delivered: false),
-            harness.ownRecord(id: hexId(4), text: "same", timelineAt: 21, delivered: false),
+            harness.ownRecord(id: hexId(3), text: "same", timelineAt: 20, delivered: false, token: first.clientToken),
+            harness.ownRecord(id: hexId(4), text: "same", timelineAt: 21, delivered: false, token: second.clientToken),
         ])
 
         #expect(harness.rowIDs == ["msg:\(first.tempId)", "msg:\(second.tempId)"])
@@ -199,32 +176,26 @@ struct OutgoingSendResponsivenessTests {
         try await harness.shutdown()
     }
 
-    @Test func anExactSendIdRebindsASpeculativeClaimWithoutDuplicating() async throws {
+    @Test func exactTokensDisambiguateIdenticalSendsInReverseOrder() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
         let first = try #require(harness.composer.stage(text: "same"))
         let second = try #require(harness.composer.stage(text: "same"))
         harness.store.markLocalSendSubmitted(tempId: first.tempId)
         harness.store.markLocalSendSubmitted(tempId: second.tempId)
-        harness.installWindow([harness.ownRecord(id: hexId(5), text: "same", timelineAt: 20, delivered: false)])
-        #expect(harness.store.protocolID(forDisplayID: "msg:\(first.tempId)") == hexId(5))
-
-        // MDK committed the rows in the other order: the exact id wins.
-        harness.store.confirmSent(tempId: second.tempId, record: first.recordForTesting, messageId: hexId(5))
-
+        harness.installWindow([harness.ownRecord(id: hexId(5), text: "same", timelineAt: 20,
+            delivered: false, token: second.clientToken)])
         #expect(harness.store.protocolID(forDisplayID: "msg:\(second.tempId)") == hexId(5))
         #expect(harness.store.protocolID(forDisplayID: "msg:\(first.tempId)") == nil)
-        // Neither bubble is duplicated or dropped: the durable row moved to the
-        // id the send response named, and the other keeps its own local row.
-        #expect(Set(harness.rowIDs) == ["msg:\(first.tempId)", "msg:\(second.tempId)"])
         #expect(harness.rowIDs.count == 2)
         try await harness.shutdown()
     }
 
-    @Test func anUnsubmittedBubbleNeverClaimsAnotherDevicesRow() async throws {
+    @Test func aSubmittedBubbleNeverClaimsAnotherDevicesTokenlessRow() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
         let staged = try #require(harness.composer.stage(text: "same"))
+        harness.store.markLocalSendSubmitted(tempId: staged.tempId)
 
         harness.installWindow([harness.ownRecord(id: hexId(6), text: "same", timelineAt: 30, delivered: true)])
 
@@ -247,6 +218,7 @@ struct OutgoingSendResponsivenessTests {
 
         var reply = harness.ownRecord(id: hexId(9), text: "answer", timelineAt: 41, delivered: false)
         reply.replyToMessageIdHex = parent
+        reply.clientToken = staged.clientToken
         harness.installWindow([unrelated, reply])
         #expect(harness.store.protocolID(forDisplayID: "msg:\(staged.tempId)") == hexId(9))
         try await harness.shutdown()
@@ -273,14 +245,14 @@ struct OutgoingSendResponsivenessTests {
     @Test func anAmbiguousCompletionKeepsTheBubbleClaimableRatherThanFailed() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in throw MarmotKitError.AccountWorkerResponseTimedOut }
+        harness.composer.sendTextForTesting = { _, _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
 
         await harness.composer.send("maybe landed")
         let rowID = try #require(harness.rowIDs.first)
         #expect(harness.store.localSendPhase(rowID: rowID) == .completionUnknown)
         #expect(harness.store.failedTransientRecord(rowId: rowID) == nil)
 
-        harness.installWindow([harness.ownRecord(id: hexId(11), text: "maybe landed", timelineAt: 60, delivered: true)])
+        harness.installWindow([harness.ownRecord(id: hexId(11), text: "maybe landed", timelineAt: 60, delivered: true, token: String(rowID.dropFirst(4)))])
         #expect(harness.rowIDs == [rowID])
         #expect(harness.store.protocolID(forDisplayID: rowID) == hexId(11))
         try await harness.shutdown()
@@ -289,8 +261,8 @@ struct OutgoingSendResponsivenessTests {
     @Test func aDefinitiveFailureCannotPaintOverAnAlreadyProjectedRow() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in
-            harness.installWindow([harness.ownRecord(id: hexId(12), text: "landed", timelineAt: 70, delivered: false)])
+        harness.composer.sendTextForTesting = { _, _, _, _, token in
+            harness.installWindow([harness.ownRecord(id: hexId(12), text: "landed", timelineAt: 70, delivered: false, token: token)])
             throw MarmotKitError.Runtime(details: "relay disconnected")
         }
 
@@ -306,9 +278,9 @@ struct OutgoingSendResponsivenessTests {
     @Test func aConversationResetDuringPreparationRetiresTheStagedSend() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in
+        harness.composer.sendTextForTesting = { _, _, _, _, token in
             Issue.record("A retired conversation must not reach the SDK")
-            return published([])
+            return accepted("unused", token: token)
         }
         let staged = try #require(harness.composer.stage(text: "leaving"))
         #expect(harness.rowIDs.count == 1)
@@ -323,9 +295,9 @@ struct OutgoingSendResponsivenessTests {
     @Test func anAccountSwitchDuringPreparationRetiresTheStagedSend() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
-        harness.composer.sendTextForTesting = { _, _, _, _ in
+        harness.composer.sendTextForTesting = { _, _, _, _, token in
             Issue.record("A retired account must not reach the SDK")
-            return published([])
+            return accepted("unused", token: token)
         }
         let staged = try #require(harness.composer.stage(text: "switching"))
 
@@ -356,6 +328,7 @@ private final class SendHarness {
         store = viewModel.timelineStore
         composer = viewModel.composer
         composer.canSendMessages = { true }
+        composer.localSendStatusForTesting = { _ in nil }
         composer.canSendMediaAttachments = { true }
     }
 
@@ -376,8 +349,8 @@ private final class SendHarness {
         )
     }
 
-    func ownRecord(id: String, text: String, timelineAt: UInt64, delivered: Bool) -> TimelineMessageRecordFfi {
-        TimelineMessageRecordFfi(
+    func ownRecord(id: String, text: String, timelineAt: UInt64, delivered: Bool, token: String? = nil) -> TimelineMessageRecordFfi {
+        var record = TimelineMessageRecordFfi(
             messageIdHex: id, sourceMessageIdHex: delivered ? id : nil, direction: "sent",
             groupIdHex: harnessGroupId, sender: "", plaintext: text,
             contentTokens: .emptyDocument, kind: MessageSemantics.kindChat, tags: [],
@@ -386,6 +359,8 @@ private final class SendHarness {
             reactions: TimelineReactionSummaryFfi(byEmoji: [], userReactions: []), edit: nil,
             deleted: false, deletedByMessageIdHex: nil, invalidationStatus: nil
         )
+        record.clientToken = token
+        return record
     }
 
     func optimisticRecord(text: String) -> AppMessageRecordFfi {
@@ -410,6 +385,8 @@ private extension StagedOutgoingSend {
 }
 
 /// A latch a test can hold a send behind.
+// NSLock guards all mutable state; the compiler cannot verify that synchronization.
+// swiftlint:disable:next no_unchecked_sendable
 private final class AsyncGate: @unchecked Sendable {
     private var continuations: [CheckedContinuation<Void, Never>] = []
     private var opened = false
@@ -434,15 +411,8 @@ private final class AsyncGate: @unchecked Sendable {
     }
 }
 
-private func published(_ ids: [String]) -> SendSummaryFfi {
-    SendSummaryFfi(published: 1, messageIds: ids, acceptDisposition: .published, maintenanceDisposition: .ready)
-}
-
-private func fingerprint(text: String, replyTargetId: String? = nil, isMedia: Bool = false) -> LocalSendFingerprint {
-    LocalSendFingerprint(
-        groupIdHex: harnessGroupId, sender: "me", plaintext: text,
-        kind: MessageSemantics.kindChat, replyTargetId: replyTargetId, isMedia: isMedia
-    )
+private func accepted(_ id: String, token: String) -> LocalSendAcceptanceFfi {
+    LocalSendAcceptanceFfi(clientToken: token, messageIdHex: id)
 }
 
 private func hexId(_ n: Int) -> String { String(format: "%064x", n) }
