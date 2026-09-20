@@ -14855,6 +14855,25 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func expiringPreviewDisappearsWithoutAnMDKUpdate() async throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        var preview = chatListPreview(messageIdHex: "expiring", plaintext: "Secret preview")
+        preview.retentionSeconds = 60
+        preview.retentionExpiresAt = UInt64(Date().timeIntervalSince1970) + 1
+        let row = chatListRow(groupIdHex: "expiry", title: "Chat", lastMessage: preview)
+        model.applyPresentedSnapshot(presentedChatSnapshot([row]))
+        #expect(model.items.first?.searchHaystack.contains("secret preview") == true)
+        try await Task.sleep(for: .milliseconds(1200))
+        let expired = try #require(model.items.first)
+        #expect(expired.previewExpired)
+        #expect(expired.lastMessage == nil)
+        #expect(!expired.searchHaystack.contains("secret preview"))
+        #expect(ChatRow.previewPresentation(for: expired, activeAccountIdHex: nil,
+            senderName: { _ in "Sender" }).body == L10n.string("Message expired"))
+        try await state.client?.marmot.shutdownAndClose()
+    }
+
     @Test func preparedDraftChangesRefreshWithoutIdentityRevisionOrUnreadChanges() throws {
         let state = AppState(client: try MarmotClient.testClient())
         let model = ChatsListViewModel(appState: state)

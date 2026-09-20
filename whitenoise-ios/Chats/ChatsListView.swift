@@ -282,6 +282,7 @@ struct ChatsListView: View {
                 // this one, leaving the list permanently empty and unbound.
                 let vm = viewModel ?? ChatsListViewModel(appState: appState)
                 if viewModel == nil { viewModel = vm }
+                vm.refreshExpiredPreviews()
                 listViewport.reset()
                 let viewport = listViewport
                 vm.windowWillChange = { [weak viewport] snapshot in viewport?.prepare(for: snapshot) }

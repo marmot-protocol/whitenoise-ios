@@ -89,6 +89,7 @@ final class ChatsListViewModel {
         let inviterAccountIdHex: String?
         let isMuted: Bool
         let previewText: String?
+        let previewExpired: Bool
         let draftPreview: String?
         let selectedPreview: SelectedChatPreviewFfi?
         let actions: ChatListRowActionsFfi?
@@ -111,11 +112,13 @@ final class ChatsListViewModel {
             draftSummary: MessageDraftSummaryFfi? = nil,
             prepared: PresentedChatRowFfi? = nil,
             mentionDisplayName: MarkdownMentionResolver? = nil,
-            systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities
+            systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities,
+            now: Date = Date()
         ) {
+            let previewExpired = ChatPreviewRetention.isExpired(row.lastMessage, at: now)
             let previewText = isBlockedDirectPeer
                 ? L10n.string("You blocked this user")
-                : Self.sanitizedPreview(
+                : previewExpired ? nil : Self.sanitizedPreview(
                     from: row.lastMessage,
                     mentionDisplayName: mentionDisplayName,
                     systemEventNaming: systemEventNaming
@@ -132,6 +135,7 @@ final class ChatsListViewModel {
             self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
+            self.previewExpired = previewExpired
             self.selectedPreview = prepared?.preview
             self.actions = prepared?.actions
             if let prepared {
@@ -184,7 +188,7 @@ final class ChatsListViewModel {
         }
         var belongsToLeft: Bool { !isActiveMember || isDisbanding || isDisbanded }
         var firstUnreadMessageIdHex: String? { row.firstUnreadMessageIdHex }
-        var lastMessage: ChatListMessagePreviewFfi? { row.lastMessage }
+        var lastMessage: ChatListMessagePreviewFfi? { previewExpired ? nil : row.lastMessage }
         var projectedGroup: AppGroupRecordFfi {
             AppGroupRecordFfi(
                 groupIdHex: row.groupIdHex,
@@ -283,6 +287,7 @@ final class ChatsListViewModel {
     private weak var appState: AppState?
     @ObservationIgnored private let draftStore: ConversationDraftStore
     private var chatListTask: Task<Void, Never>?
+    @ObservationIgnored private var previewExpiryTask: Task<Void, Never>?
     private var chatListTaskID: UUID?
     private var avatarURLTask: Task<Void, Never>?
     private var avatarEnrichmentTaskID: UUID?
@@ -327,6 +332,7 @@ final class ChatsListViewModel {
     }
 
     isolated deinit {
+        previewExpiryTask?.cancel()
         chatListTask?.cancel()
         windowCommandTask?.cancel()
         avatarURLTask?.cancel()
@@ -1338,6 +1344,7 @@ final class ChatsListViewModel {
 
     @discardableResult
     private func publishItems() -> Bool {
+        defer { schedulePreviewExpiry() }
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.inboxPublish, since: timing) }
 
@@ -1355,6 +1362,32 @@ final class ChatsListViewModel {
         publishedItemsMutationCountForTesting += 1
         #endif
         return true
+    }
+
+    func refreshExpiredPreviews() {
+        let now = Date()
+        for (id, item) in itemByGroupId where !item.previewExpired
+            && ChatPreviewRetention.isExpired(item.row.lastMessage, at: now) {
+            itemByGroupId[id] = makeItem(for: item.row)
+        }
+        for (id, item) in destinationItems where !item.previewExpired
+            && ChatPreviewRetention.isExpired(item.row.lastMessage, at: now) {
+            destinationItems[id] = makeItem(for: item.row)
+        }
+        publishItems()
+    }
+
+    private func schedulePreviewExpiry() {
+        previewExpiryTask?.cancel()
+        let pending = itemByGroupId.values.filter { !$0.previewExpired }
+        guard let next = pending.compactMap({ ChatPreviewRetention.expiry($0.row.lastMessage) }).min()
+        else { previewExpiryTask = nil; return }
+        let delay = max(0.01, min(next.timeIntervalSinceNow, 86_400))
+        previewExpiryTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            self?.refreshExpiredPreviews()
+        }
     }
 
     private func scheduleRowEnrichment(for rows: [ChatListRowFfi]) {

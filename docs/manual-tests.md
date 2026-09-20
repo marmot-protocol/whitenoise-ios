@@ -41,6 +41,9 @@ before every release tag.
 - [ ] Set Documents to Wi-Fi Only, then Never. Visible PDF/document bubbles
       automatically acquire only when permitted, without opening a share sheet.
       Removed/exhausted files stay unavailable until explicitly opened or retried.
+- [ ] Leave Chats visible until its latest disappearing-message preview expires.
+      Content and sender disappear without an incoming event; search no longer
+      matches the preview. Repeat with the app backgrounded across expiry.
 - [ ] On a signed staging build, repeat Native Push off/on after optimization,
       foreground/background receipt, and Notification Service Extension checks.
 

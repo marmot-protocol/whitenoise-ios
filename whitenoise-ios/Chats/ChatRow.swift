@@ -170,6 +170,9 @@ struct ChatRow: View {
         if let draftPreview = item.draftPreview {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.formatted("Draft: %@", draftPreview))
         }
+        if item.previewExpired {
+            return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("Message expired"))
+        }
         guard item.selectedPreview != .empty, let latest = item.lastMessage else {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("No messages yet"))
         }
