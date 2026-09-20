@@ -596,7 +596,6 @@ struct ConversationView: View {
     @State private var failedSendTarget: FailedSendTarget?
     @State private var rowFrames = RowFrameStore()
     @State private var conversationViewport = ChatListViewport()
-    @State private var preparingDraftSend = false
     @State private var blockedUsers = BlockedUsersModel()
     @State private var timelineVisibility = TimelineVisibilityStore()
     @State private var measuredActionRowFrameKey: String?
@@ -1236,7 +1235,7 @@ struct ConversationView: View {
                 let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: mediaDrafts)
                 ComposerBar(
                     draft: $draft,
-                    isSending: (viewModel?.sendInFlight ?? false) || editSaveInFlight || preparingDraftSend,
+                    isSending: editSaveInFlight,
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
@@ -2599,41 +2598,67 @@ struct ConversationView: View {
             }
             return
         }
-        guard !preparingDraftSend, let viewModel, let accountRef = draftAccountRef else { return }
-        let originalText = draft
+        guard let viewModel, let accountRef = draftAccountRef, viewModel.canSendMessages else { return }
         let originalAttachments = mediaDrafts
         let originalReply = viewModel.replyTargetMessageIdHex
-        let canonical = viewModel.composerMentionDraftState(for: draft).canonicalText
-        let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(canonical.trimmingCharacters(in: .whitespacesAndNewlines)),
+        let mentionState = viewModel.composerMentionDraftState(for: draft)
+        let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)),
             replyToMessageIdHex: originalReply, mediaAttachments: originalAttachments)
         guard !saved.canonicalText.isEmpty || !originalAttachments.isEmpty else { return }
-        preparingDraftSend = true
-        Task {
-            defer { preparingDraftSend = false }
+
+        // Everything up to the staged bubble is synchronous: the draft round-trip
+        // and MDK are not on the path to the user's first visual acknowledgment.
+        // The store is told first so clearing the composer below can't delete the
+        // draft the queued submission still has to claim by revision.
+        let tapped = appState.productAnalytics.beginTiming()
+        let composerState = (draft: draft, mediaDrafts: mediaDrafts)
+        guard let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel),
+              let staged = viewModel.stagePreparedSend(
+                  text: payload.text,
+                  attachments: payload.attachments,
+                  replyTargetMessageIdHex: originalReply
+              ) else {
+            // Nothing left the composer: put it back exactly as it was. This is
+            // still the tap's own runloop turn, so no newer edit can be lost.
+            viewModel.restoreComposerMentionDraftState(mentionState)
+            draft = composerState.draft
+            mediaDrafts = composerState.mediaDrafts
+            return
+        }
+        appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        // The bubble is already in the timeline above. Everything below is
+        // viewport follow-up: it never gates the local row, and when the window
+        // is already on the live tail it issues no window command at all — a
+        // redundant `returnToLatest` here delays MDK's pending-row projection.
+        isAtTimelineBottom = true
+        userMovedAwayFromTimelineBottom = false
+        viewModel.followConversationLatest()
+        composerSendBottomScrollRequest &+= 1
+
+        // `ConversationDraftStore` admits one revision-checked submission at a
+        // time, so queued sends serialize here while their bubbles are already up.
+        viewModel.enqueueStagedSubmission {
+            let store = appState.conversationDraftStore
             do {
-                let revision = try await appState.conversationDraftStore.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
-                let completion: @MainActor (Bool) async -> Void = { accepted in
-                    await appState.conversationDraftStore.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
-                }
-                guard !Task.isCancelled, draft == originalText, mediaDrafts.map(\.id) == originalAttachments.map(\.id),
-                      viewModel.replyTargetMessageIdHex == originalReply,
-                      viewModel.canSendMessages,
-                      appState.activeAccountRef == accountRef,
-                      let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel) else {
-                    await completion(false)
-                    return
-                }
-                isAtTimelineBottom = true
-                userMovedAwayFromTimelineBottom = false
-                payload.viewModel.followConversationLatest()
-                composerSendBottomScrollRequest &+= 1
-                if payload.attachments.isEmpty {
-                    await payload.viewModel.sendPreparedComposerText(payload.text, draftRevision: revision, completion: completion)
-                } else {
-                    await payload.viewModel.sendPreparedMedia(payload.attachments, caption: payload.text, draftRevision: revision, completion: completion)
+                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
+                appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped)
+                await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
+                    await store.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
                 }
             } catch {
+                // The draft never reached a revision, so the submission was
+                // never admitted. Leave the message in its bubble as a failed
+                // send rather than publishing outside the revision-checked flow
+                // or clobbering whatever the composer holds by now.
+                appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped, outcome: .failure)
+                viewModel.failStagedSend(staged)
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+            }
+            // A newer draft typed while this send was queued may have been
+            // overwritten by its submitted snapshot; re-persist what's in the
+            // composer now.
+            if editSession == nil, !draft.isEmpty || !mediaDrafts.isEmpty {
+                persistCurrentDraft()
             }
         }
     }

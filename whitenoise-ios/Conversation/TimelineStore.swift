@@ -72,7 +72,23 @@ final class TimelineStore {
     enum LocalSendPhase: Equatable {
         case pending, accepted, completionUnknown, published, failed
     }
-    @ObservationIgnored private var nativePendingRowIDs: Set<String> = []
+    /// Correlation state for one locally staged send. The optimistic row is
+    /// rendered the moment Send is tapped, so MDK's own pending projection —
+    /// which commits before `sendMessageDraft` returns its id — has to be bound
+    /// to that row rather than rendering a second bubble.
+    private struct LocalSendCorrelation {
+        let fingerprint: LocalSendFingerprint
+        /// Monotonic start for the tap -> MDK-window-update phase; consumed once.
+        var stagedAt: ProductAnalyticsRecorder.Timing?
+        /// Only a send already handed to MDK can have a durable row.
+        var submitted = false
+        var claimedMessageId: String?
+        /// True once the send response named the id; a speculative claim can be
+        /// rebound by that answer, an authoritative one never is.
+        var claimIsAuthoritative = false
+    }
+    @ObservationIgnored private var localSendCorrelations: [String: LocalSendCorrelation] = [:]
+    @ObservationIgnored private var localSendRowIDByClaimedMessageID: [String: String] = [:]
     @ObservationIgnored private var localSendPhases: [String: LocalSendPhase] = [:]
     @ObservationIgnored private var localSendOrder: [String: UInt64] = [:]
     @ObservationIgnored private var nextLocalSendOrder: UInt64 = 0
@@ -89,6 +105,31 @@ final class TimelineStore {
     func markSendCompletionUnknown(tempId: String) {
         guard localSendPhases["msg:\(tempId)"] != nil else { return }
         localSendPhases["msg:\(tempId)"] = .completionUnknown
+    }
+
+    /// Marks a staged row as handed to MDK. Only submitted sends are eligible
+    /// to claim an unrecognized own row, so a bubble staged at Send tap cannot
+    /// steal a projection that arrived before it reached the SDK.
+    func markLocalSendSubmitted(tempId: String) {
+        localSendCorrelations["msg:\(tempId)"]?.submitted = true
+    }
+
+    /// Replaces a staged row's markdown tokens once the off-MainActor parse
+    /// lands. The bubble renders from plaintext until then, so nothing waits on
+    /// the parse to become visible.
+    func upgradePendingOutgoingTokens(tempId: String, contentTokens: MarkdownDocumentFfi) {
+        let rowID = "msg:\(tempId)"
+        guard localSendCorrelations[rowID]?.claimedMessageId == nil,
+              let item = transientTimelineItems[rowID],
+              case .message(let record, let status) = item.kind,
+              record.contentTokens != contentTokens else { return }
+        var upgraded = record
+        upgraded.contentTokens = contentTokens
+        let next = TimelineItem(id: rowID, kind: .message(record: upgraded, status: status), timestamp: item.timestamp)
+        transientTimelineItems[rowID] = next
+        if upsertTimelineItem(next) {
+            noteProjectionChanged()
+        }
     }
 
     func acceptSend(tempId: String, record: AppMessageRecordFfi, summary: SendSummaryFfi) {
@@ -633,11 +674,22 @@ final class TimelineStore {
         for id in Array(messageById.keys) where incoming[id] == nil && !confirmedPendingTimelineRecordIds.contains(id) {
             changed = removeTimelineRecord(messageIdHex: id, updateTimeline: false) || changed
             preparedRecords[id] = nil
-            localSendOrder.removeValue(forKey: displayID(for: id))
-            localSendPhases.removeValue(forKey: displayID(for: id))
+            let evictedRowID = displayID(for: id)
+            localSendOrder.removeValue(forKey: evictedRowID)
+            localSendPhases.removeValue(forKey: evictedRowID)
+            // The send reached MDK; the bounded window simply no longer holds
+            // its row, so the optimistic copy goes with it rather than
+            // reappearing as an unclaimed bubble.
+            if localSendCorrelations[evictedRowID]?.claimedMessageId == id {
+                transientTimelineItems[evictedRowID] = nil
+                mediaProjections.removePending(forRowId: evictedRowID)
+                changed = removeTimelineItem(id: evictedRowID) || changed
+            }
+            releaseLocalSendCorrelation(rowID: evictedRowID, clearDisplayID: false)
             displayIDByMessageID[id] = nil
             targets.insert(id)
         }
+        claimProjectedLocalSends(in: page.messages)
         let changedRecords = page.messages.filter { preparedRecords[$0.messageIdHex] != $0 }
         streamWatcher?.recordFinalizedStreams(in: changedRecords)
         for record in changedRecords {
@@ -848,6 +900,7 @@ final class TimelineStore {
             undeliveredOwnMessageIds.remove(appRecord.messageIdHex)
             publishedOutgoingMessageIdsAwaitingProjection.remove(appRecord.messageIdHex)
         }
+        recordLocalSendProjectionTiming(messageID: appRecord.messageIdHex)
         let replacedConfirmedPendingRow = confirmedPendingTimelineRecordIds.remove(appRecord.messageIdHex) != nil
         replyProjectionKnownMessageIds.insert(appRecord.messageIdHex)
         if let projectedReplyTarget = record.replyToMessageIdHex, !projectedReplyTarget.isEmpty {
@@ -985,8 +1038,10 @@ final class TimelineStore {
         var next: [TimelineItem] = messageById.values.compactMap { record in
             visibleTimelineItem(for: record, status: messageStatusById[record.messageIdHex])
         }
+        // A claimed row is already on screen as its durable record under the
+        // same display id; rendering the transient too would duplicate it.
         next.append(contentsOf: transientTimelineItems.values.filter {
-            !nativePendingRowIDs.contains($0.id) || localSendPhases[$0.id] == .failed
+            localSendCorrelations[$0.id]?.claimedMessageId == nil || localSendPhases[$0.id] == .failed
         })
         next.append(contentsOf: streamDebugTimelineItems.values)
         next.append(contentsOf: systemTimelineItems)
@@ -1299,24 +1354,105 @@ final class TimelineStore {
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.outgoingProjection, since: timing) }
 
-        localSendPhases["msg:\(tempId)"] = .pending
-        if localSendOrder["msg:\(tempId)"] == nil {
+        let rowID = "msg:\(tempId)"
+        localSendPhases[rowID] = .pending
+        if localSendOrder[rowID] == nil {
             nextLocalSendOrder &+= 1
-            localSendOrder["msg:\(tempId)"] = nextLocalSendOrder
+            localSendOrder[rowID] = nextLocalSendOrder
         }
+        // A fresh staging (including a retry reusing this row) starts unsubmitted:
+        // only the attempt now in flight may claim a projected row.
+        releaseLocalSendCorrelation(rowID: rowID)
+        localSendCorrelations[rowID] = LocalSendCorrelation(
+            fingerprint: LocalSendFingerprint(
+                optimistic: record,
+                hasStagedMedia: mediaProjections.pending(forRowId: rowID)?.isEmpty == false
+            ),
+            stagedAt: appState?.productAnalytics.beginTiming()
+        )
         let item = TimelineItem.pendingMessage(tempId: tempId, record: record)
         transientTimelineItems[item.id] = item
-        if preparedOrder != nil {
-            // MDK commits a pending row before the send call returns its exact ID.
-            // Keep retry data privately; rendering it too creates a second bubble.
-            nativePendingRowIDs.insert(item.id)
-            _ = removeTimelineItem(id: item.id)
-            noteProjectionChanged()
-            return
-        }
         let changed = upsertTimelineItem(item)
         if changed {
             noteProjectionChanged()
+        }
+    }
+
+    // MARK: - Local send / durable row correlation
+
+    private func claimedRowID(forMessageID messageID: String) -> String? {
+        localSendRowIDByClaimedMessageID[messageID]
+    }
+
+    /// Points `messageID`'s durable row at the optimistic row that produced it.
+    /// The display id never changes, so the bubble keeps its SwiftUI identity
+    /// (and its pending visibility observation) straight through the handover.
+    private func bindLocalSend(rowID: String, toMessageID messageID: String, authoritative: Bool) {
+        guard localSendCorrelations[rowID] != nil else { return }
+        // A send response already named this row's owner; a fingerprint guess
+        // never overrides it.
+        if let previousRow = claimedRowID(forMessageID: messageID), previousRow != rowID,
+           localSendCorrelations[previousRow]?.claimIsAuthoritative == true, !authoritative { return }
+        if let previous = localSendCorrelations[rowID]?.claimedMessageId, previous != messageID {
+            displayIDByMessageID[previous] = nil
+            localSendRowIDByClaimedMessageID[previous] = nil
+        }
+        if let previousRow = claimedRowID(forMessageID: messageID), previousRow != rowID {
+            localSendCorrelations[previousRow]?.claimedMessageId = nil
+            localSendCorrelations[previousRow]?.claimIsAuthoritative = false
+        }
+        localSendCorrelations[rowID]?.claimedMessageId = messageID
+        localSendCorrelations[rowID]?.claimIsAuthoritative = authoritative
+        localSendRowIDByClaimedMessageID[messageID] = rowID
+        displayIDByMessageID[messageID] = rowID
+    }
+
+    /// Closes the tap -> MDK-window-update phase for the bubble this durable row
+    /// belongs to. Aggregate elapsed/outcome only — no ids, no content.
+    private func recordLocalSendProjectionTiming(messageID: String) {
+        guard let rowID = claimedRowID(forMessageID: messageID),
+              let timing = localSendCorrelations[rowID]?.stagedAt else { return }
+        localSendCorrelations[rowID]?.stagedAt = nil
+        appState?.productAnalytics.recordTiming(.sendProjection, since: timing)
+    }
+
+    private func releaseLocalSendCorrelation(rowID: String, clearDisplayID: Bool = true) {
+        guard let correlation = localSendCorrelations.removeValue(forKey: rowID) else { return }
+        guard let messageID = correlation.claimedMessageId else { return }
+        localSendRowIDByClaimedMessageID[messageID] = nil
+        if clearDisplayID { displayIDByMessageID[messageID] = nil }
+    }
+
+    /// Binds MDK's own pending rows to the bubbles already on screen, before the
+    /// records are applied, so `displayID(for:)` resolves to the optimistic row.
+    private func claimProjectedLocalSends(in messages: [TimelineMessageRecordFfi]) {
+        guard localSendCorrelations.values.contains(where: { $0.submitted && $0.claimedMessageId == nil }) else { return }
+        for record in messages where record.direction == "sent" {
+            let messageID = record.messageIdHex
+            guard !messageID.isEmpty,
+                  messageById[messageID] == nil,
+                  displayIDByMessageID[messageID] == nil,
+                  claimedRowID(forMessageID: messageID) == nil else { continue }
+            let fingerprint = LocalSendFingerprint(
+                projected: ConversationViewModel.appMessageRecord(from: record),
+                replyTargetId: record.replyToMessageIdHex
+            )
+            let candidates = localSendCorrelations.compactMap { rowID, correlation -> LocalSendCandidate? in
+                guard correlation.submitted, correlation.claimedMessageId == nil,
+                      localSendPhases[rowID] == .pending || localSendPhases[rowID] == .accepted
+                        || localSendPhases[rowID] == .completionUnknown,
+                      transientTimelineItems[rowID] != nil else { return nil }
+                return LocalSendCandidate(
+                    rowID: rowID,
+                    order: localSendOrder[rowID] ?? .max,
+                    fingerprint: correlation.fingerprint
+                )
+            }
+            guard let rowID = OutgoingSendCorrelation.claimant(for: fingerprint, candidates: candidates) else { continue }
+            bindLocalSend(rowID: rowID, toMessageID: messageID, authoritative: false)
+            // The row's first layout may already have been measured under this
+            // id; the observation stays put because the id does not move.
+            localSendPhases[rowID] = .accepted
         }
     }
 
@@ -1327,19 +1463,16 @@ final class TimelineStore {
         guard localSendPhases["msg:\(tempId)"] != nil else { return }
         var projectionChanged = false
         let realId = messageId ?? ""
-        if nativePendingRowIDs.contains("msg:\(tempId)") {
-            guard !realId.isEmpty else { return }
-            if messageById[realId] == nil {
-                visibilityPerformance.move(from: "msg:\(tempId)", to: displayID(for: realId))
-            } else {
-                // Its first layout may have happened before we learned the ID.
-                visibilityPerformance.cancel(rowID: "msg:\(tempId)")
-            }
-            discardTransientRow(rowId: "msg:\(tempId)")
-            noteProjectionChanged()
-            return
+        // An id-less confirmation carries no more truth than the durable row a
+        // projection already bound to this bubble; re-staging the transient
+        // would replace that row with a stale local copy.
+        guard !realId.isEmpty || localSendCorrelations["msg:\(tempId)"]?.claimedMessageId == nil else { return }
+        // The send response is the authoritative answer to "which durable row is
+        // this bubble?". It may confirm a speculative claim, or correct it —
+        // both rows matched the same fingerprint, so a correction is invisible.
+        if !realId.isEmpty {
+            bindLocalSend(rowID: "msg:\(tempId)", toMessageID: realId, authoritative: true)
         }
-        if !realId.isEmpty { displayIDByMessageID[realId] = "msg:\(tempId)" }
         let durableRowAlreadyLoaded = !realId.isEmpty && messageById[realId] != nil
         let confirmed = AppMessageRecordFfi(
             messageIdHex: realId,
@@ -1513,7 +1646,7 @@ final class TimelineStore {
     func discardTransientRow(rowId: String) {
         guard transientTimelineItems[rowId] != nil else { return }
         transientTimelineItems[rowId] = nil
-        nativePendingRowIDs.remove(rowId)
+        releaseLocalSendCorrelation(rowID: rowId)
         localSendPhases[rowId] = nil
         localSendOrder[rowId] = nil
         mediaProjections.removePending(forRowId: rowId)
@@ -1649,7 +1782,7 @@ final class TimelineStore {
         editProjections.removeAllOptimistic()
         systemTimelineItems.removeAll()
         transientTimelineItems.removeAll()
-        nativePendingRowIDs.removeAll()
+        for rowID in Array(localSendCorrelations.keys) { releaseLocalSendCorrelation(rowID: rowID) }
         localSendPhases.removeAll()
         localSendOrder.removeAll()
         for id in Array(confirmedPendingTimelineRecordIds) {

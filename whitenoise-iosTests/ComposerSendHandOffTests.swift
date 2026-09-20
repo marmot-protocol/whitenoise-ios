@@ -68,7 +68,6 @@ struct ComposerSendHandOffTests {
         #expect(inlineError == "Relay disconnected")
         #expect(appState.activeToast?.title == "Send failed")
         #expect(appState.activeToast?.message == "Relay disconnected")
-        #expect(!composer.sendInFlight)
         try await client.marmot.shutdownAndClose()
     }
 
@@ -110,7 +109,7 @@ struct ComposerSendHandOffTests {
         #expect(recorder.entries == ["failed", "delivered"])
     }
 
-    @Test func composerIsFreeToSendAgainWhileTheRelayRoundTripIsStillRunning() async throws {
+    @Test func composerIsFreeToStageAgainWhileTheRelayRoundTripIsStillRunning() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
@@ -120,12 +119,17 @@ struct ComposerSendHandOffTests {
             timelineStore: timelineStore
         )
         composer.canSendMessages = { true }
-        var sendInFlightDuringPublish: [Bool] = []
-        composer.sendTextForTesting = { _, _, _, _ in
-            sendInFlightDuringPublish.append(composer.sendInFlight)
+        var stagedRowsDuringPublish: [Int] = []
+        composer.sendTextForTesting = { _, _, _, text in
+            if text == "first" {
+                // A second Send lands mid round-trip: it must park its own
+                // bubble rather than wait behind the first message's publish.
+                #expect(composer.stage(text: "second") != nil)
+                stagedRowsDuringPublish.append(timelineStore.timeline.count)
+            }
             return SendSummaryFfi(
                 published: 1,
-                messageIds: ["a"],
+                messageIds: [text],
                 acceptDisposition: .published,
                 maintenanceDisposition: .ready
             )
@@ -133,8 +137,7 @@ struct ComposerSendHandOffTests {
 
         await composer.send("first")
 
-        #expect(sendInFlightDuringPublish == [false])
-        #expect(!composer.sendInFlight)
+        #expect(stagedRowsDuringPublish == [2])
     }
 }
 

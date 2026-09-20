@@ -228,6 +228,16 @@ final class ConversationDraftStore {
         }
     }
 
+    /// Claims the conversation's send slot synchronously, at the Send tap.
+    ///
+    /// The composer clears immediately so its bubble can be staged, and that
+    /// empty write must not delete the draft the queued submission still has to
+    /// claim by revision. Everything the user types afterwards goes through the
+    /// ordinary edited-while-sending path and is restored by `finishSend`.
+    func beginQueuedSend(accountRef: String, groupIdHex: String) {
+        suppressEmptyAfterSendKeys.insert(ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex))
+    }
+
     func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         guard !sendingKeys.contains(key), !conflictedKeys.contains(key) else { throw MarmotKitError.MessageDraftRevisionConflict }

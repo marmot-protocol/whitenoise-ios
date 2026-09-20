@@ -1,9 +1,34 @@
 import MarmotKit
 
 /// Pixel offsets belong to SwiftUI; these intents change MDK's retained window.
-enum ConversationViewportIntent: Equatable {
+nonisolated enum ConversationViewportIntent: Equatable {
     case followingLatest
     case history(String?)
+}
+
+/// Whether a "follow the live tail" request still needs a `.latest` window
+/// command, or the window is already pinned there.
+///
+/// `returnToLatest` runs on the same handle the window subscription delivers
+/// through, so a redundant one competes with the update that carries a
+/// just-staged outgoing row (reproduced in MDK testing as a delayed pending
+/// row when Send immediately follows a follow-latest command). Skipping it when
+/// nothing would change is both cheaper and the fix on this side.
+nonisolated enum ConversationLatestIntent {
+    static func needsLatestCommand(
+        hasWindow: Bool,
+        intent: ConversationViewportIntent,
+        hasMoreAfter: Bool,
+        pendingAnchorIntent: String?,
+        navigationFailed: Bool
+    ) -> Bool {
+        // No window yet: the intent still has to be recorded and issued.
+        guard hasWindow else { return true }
+        guard intent == .followingLatest else { return true }
+        // Newer messages outside the loaded window, an anchor still waiting to
+        // run, or a failed latest/jump all mean "not actually at the tail".
+        return hasMoreAfter || pendingAnchorIntent != nil || navigationFailed
+    }
 }
 
 enum ConversationWindowCommand: Equatable {
