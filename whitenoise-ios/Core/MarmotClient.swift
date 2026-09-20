@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 @preconcurrency import MarmotKit
 
-struct TimelineReadMarkResult {
+nonisolated struct TimelineReadMarkResult {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool

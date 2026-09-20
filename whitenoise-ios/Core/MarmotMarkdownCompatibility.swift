@@ -2,7 +2,7 @@ import Foundation
 import MarmotKit
 
 extension MarkdownDocumentFfi {
-    init(blocks: [MarkdownBlockFfi], truncated: Bool) {
+    nonisolated init(blocks: [MarkdownBlockFfi], truncated: Bool) {
         self.init(
             blocks: blocks,
             truncated: truncated,
@@ -10,7 +10,7 @@ extension MarkdownDocumentFfi {
         )
     }
 
-    static var emptyDocument: MarkdownDocumentFfi {
+    nonisolated static var emptyDocument: MarkdownDocumentFfi {
         MarkdownDocumentFfi(blocks: [], truncated: false)
     }
 }

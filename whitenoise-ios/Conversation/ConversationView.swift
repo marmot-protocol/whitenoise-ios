@@ -782,15 +782,23 @@ struct ConversationView: View {
         timeline
             .safeAreaInset(edge: .top, spacing: 0) { searchBarInset }
             .bottomInputChromeAccessory {
+                // `onGeometryChange`'s transform is nonisolated and @Sendable, so
+                // the observable reads happen here in `body` — which also makes
+                // them tracked dependencies rather than untracked layout-time reads.
+                let windowEpoch = viewModel?.conversationWindow?.header.epoch
+                let windowCanSend = viewModel?.conversationWindow?.header.capabilities.canSend
+                let peerBlocked = blockedPeerNpub != nil
+                let searching = viewModel?.search.isActive == true
+                let sendEnabled = viewModel?.canSendMessages == true
                 composerArea
                     .onGeometryChange(for: Bool?.self) { geometry in
                         ConversationOpenPerformance.composerOutcome(
-                            epoch: viewModel?.conversationWindow?.header.epoch,
-                            canSend: viewModel?.conversationWindow?.header.capabilities.canSend,
-                            blocked: blockedPeerNpub != nil,
+                            epoch: windowEpoch,
+                            canSend: windowCanSend,
+                            blocked: peerBlocked,
                             composerPresented: geometry.size.height > 0 && !isSelectingMessages
-                                && viewModel?.search.isActive != true,
-                            enabled: viewModel?.canSendMessages == true
+                                && !searching,
+                            enabled: sendEnabled
                         )
                     } action: { value in
                         openPerformance?.rendered(local: false, composer: value, recorder: appState.productAnalytics)
@@ -1622,11 +1630,13 @@ struct ConversationView: View {
                     .contentShape(.rect)
                     .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             } else if viewModel.timeline.isEmpty {
+                let hasWindow = viewModel.conversationWindow != nil
+                let loading = viewModel.isLoading
                 emptyTimeline(viewModel: viewModel)
                     .onGeometryChange(for: Bool.self) { geometry in
                         ConversationOpenPerformance.localContentVisible(
-                            height: geometry.size.height, hasWindow: viewModel.conversationWindow != nil,
-                            loading: viewModel.isLoading, empty: true, positionSettled: false)
+                            height: geometry.size.height, hasWindow: hasWindow,
+                            loading: loading, empty: true, positionSettled: false)
                     } action: { visible in
                         openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
                     }
@@ -1637,6 +1647,8 @@ struct ConversationView: View {
                     section.items.first.map { ($0.id, section.day) }
                 }, uniquingKeysWith: { first, _ in first })
                 let renderedTailID = viewModel.timeline.last?.id
+                let hasWindow = viewModel.conversationWindow != nil
+                let loading = viewModel.isLoading
                 ScrollViewReader { proxy in
                     GeometryReader { outer in
                         ScrollView {
@@ -1730,8 +1742,8 @@ struct ConversationView: View {
                         .scrollBounceBehavior(.basedOnSize)
                         .onGeometryChange(for: Bool.self) { geometry in
                             ConversationOpenPerformance.localContentVisible(
-                                height: geometry.size.height, hasWindow: viewModel.conversationWindow != nil,
-                                loading: viewModel.isLoading, empty: false,
+                                height: geometry.size.height, hasWindow: hasWindow,
+                                loading: loading, empty: false,
                                 positionSettled: isInitialTimelinePositionSettled)
                         } action: { visible in
                             openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)

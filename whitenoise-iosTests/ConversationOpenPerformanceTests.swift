@@ -14,13 +14,17 @@ struct ConversationOpenPerformanceTests {
 
     private nonisolated final class Samples: Sendable {
         private let values = Mutex<[Sample]>([])
-        func withLock<T>(_ body: (inout [Sample]) -> T) -> T { values.withLock(body) }
+        // Concrete accessors rather than a forwarded generic closure: `Mutex`
+        // takes `(inout sending Value) -> sending Result`, which a generic
+        // closure value cannot be converted to.
+        func append(_ sample: Sample) { values.withLock { $0.append(sample) } }
+        var snapshot: [Sample] { values.withLock { $0 } }
     }
 
     private func recorder(_ samples: Samples) -> ProductAnalyticsRecorder {
         let recorder = ProductAnalyticsRecorder()
         recorder.activateSink(performance: { operation, milliseconds, outcome in
-            samples.withLock { $0.append(Sample(operation: operation, milliseconds: milliseconds, outcome: outcome)) }
+            samples.append(Sample(operation: operation, milliseconds: milliseconds, outcome: outcome))
         }) { _ in }
         return recorder
     }
@@ -39,7 +43,7 @@ struct ConversationOpenPerformanceTests {
             blocked: false, composerPresented: true, enabled: true)
         attempt.rendered(local: true, composer: ready, recorder: recorder)
         attempt.rendered(local: true, composer: ready, recorder: recorder)
-        #expect(samples.withLock { $0 } == [
+        #expect(samples.snapshot == [
             Sample(operation: .conversationLocalVisible, milliseconds: 450, outcome: .success),
             Sample(operation: .conversationComposerReady, milliseconds: 45000, outcome: .success)
         ])
@@ -66,7 +70,7 @@ struct ConversationOpenPerformanceTests {
         let attempt = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())
         attempt.rendered(local: false, composer: false, recorder: recorder)
         attempt.rendered(local: true, composer: true, recorder: recorder)
-        #expect(samples.withLock { $0.filter { $0.operation == .conversationComposerReady }.map(\.outcome) } == [.unavailable])
+        #expect(samples.snapshot.filter { $0.operation == .conversationComposerReady }.map(\.outcome) == [.unavailable])
     }
 
     @Test(arguments: [HostPerformanceOutcomeFfi.failure, .cancelled, .timeout])
@@ -78,20 +82,20 @@ struct ConversationOpenPerformanceTests {
         attempt.finish(outcome, recorder: recorder)
         attempt.finish(.cancelled, recorder: recorder)
         attempt.rendered(local: true, composer: true, recorder: recorder)
-        #expect(samples.withLock { $0.map(\.outcome) } == [.success, outcome])
+        #expect(samples.snapshot.map(\.outcome) == [.success, outcome])
     }
 
     @Test func replacementAndLateCallbacksCannotCompleteNewAttempt() {
         let state = AppState(client: nil, notifications: .shared)
         let samples = Samples()
         state.productAnalytics.activateSink(performance: { op, ms, outcome in
-            samples.withLock { $0.append(Sample(operation: op, milliseconds: ms, outcome: outcome)) }
+            samples.append(Sample(operation: op, milliseconds: ms, outcome: outcome))
         }) { _ in }
         let old = state.beginConversationOpenPerformance()
         let next = state.beginConversationOpenPerformance()
         old.rendered(local: true, composer: true, recorder: state.productAnalytics)
         next.rendered(local: true, composer: true, recorder: state.productAnalytics)
-        #expect(samples.withLock { $0.map(\.outcome) } == [.cancelled, .cancelled, .success, .success])
+        #expect(samples.snapshot.map(\.outcome) == [.cancelled, .cancelled, .success, .success])
     }
 
     @Test func navigationRetriesReuseAttemptAndExplicitRetryGetsNewOne() {
@@ -116,10 +120,10 @@ struct ConversationOpenPerformanceTests {
         attempt.finish(.cancelled, recorder: recorder)
         recorder.replaceSink(nil)
         recorder.activateSink(performance: { op, ms, outcome in
-            samples.withLock { $0.append(Sample(operation: op, milliseconds: ms, outcome: outcome)) }
+            samples.append(Sample(operation: op, milliseconds: ms, outcome: outcome))
         }) { _ in }
         attempt.rendered(local: true, composer: true, recorder: recorder)
-        #expect(samples.withLock { $0.map(\.outcome) } == [.cancelled, .cancelled])
+        #expect(samples.snapshot.map(\.outcome) == [.cancelled, .cancelled])
     }
 
     @Test func disabledOrRevokedConsentNeverReports() {
@@ -127,13 +131,13 @@ struct ConversationOpenPerformanceTests {
         let recorder = ProductAnalyticsRecorder()
         let disabled = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())
         recorder.activateSink(performance: { op, ms, outcome in
-            samples.withLock { $0.append(Sample(operation: op, milliseconds: ms, outcome: outcome)) }
+            samples.append(Sample(operation: op, milliseconds: ms, outcome: outcome))
         }) { _ in }
         disabled.rendered(local: true, composer: true, recorder: recorder)
         let revoked = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())
         recorder.replaceSink(nil)
         revoked.finish(.cancelled, recorder: recorder)
-        #expect(samples.withLock { $0.isEmpty })
+        #expect(samples.snapshot.isEmpty)
     }
     @Test func accountContextRotationKeepsElapsedTimeAndDoesNotDuplicate() {
         let samples = Samples()
@@ -144,13 +148,13 @@ struct ConversationOpenPerformanceTests {
         attempt.accountContextWillChange()
         recorder.replaceSink(nil)
         attempt.rendered(local: true, composer: true, recorder: recorder)
-        #expect(samples.withLock { $0.isEmpty })
+        #expect(samples.snapshot.isEmpty)
         recorder.activateSink(performance: { op, ms, outcome in
-            samples.withLock { $0.append(Sample(operation: op, milliseconds: ms, outcome: outcome)) }
+            samples.append(Sample(operation: op, milliseconds: ms, outcome: outcome))
         }) { _ in }
         attempt.accountContextReady(ticket: recorder.ticket(), recorder: recorder)
         attempt.accountContextReady(ticket: recorder.ticket(), recorder: recorder)
-        #expect(samples.withLock { $0.map(\.milliseconds) } == [900, 900])
+        #expect(samples.snapshot.map(\.milliseconds) == [900, 900])
     }
 
     @Test func consentChangeDiscardsDeferredSamples() {
@@ -161,7 +165,7 @@ struct ConversationOpenPerformanceTests {
         attempt.rendered(local: true, composer: true, recorder: recorder)
         attempt.discardForConsentChange()
         attempt.accountContextReady(ticket: recorder.ticket(), recorder: recorder)
-        #expect(samples.withLock { $0.isEmpty })
+        #expect(samples.snapshot.isEmpty)
     }
 
     @Test func inboundAppendExcludesHistoryReplacementAndOlderPaging() {

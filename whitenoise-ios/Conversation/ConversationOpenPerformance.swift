@@ -76,13 +76,13 @@ final class ConversationOpenPerformance: Hashable {
 
 // A local-only window deliberately has canSend=false until epoch/authority arrives.
 extension ConversationOpenPerformance {
-    static func localContentVisible(height: CGFloat, hasWindow: Bool, loading: Bool,
-                                    empty: Bool, positionSettled: Bool) -> Bool {
+    nonisolated static func localContentVisible(height: CGFloat, hasWindow: Bool, loading: Bool,
+                                                empty: Bool, positionSettled: Bool) -> Bool {
         height > 0 && hasWindow && (empty ? !loading : positionSettled)
     }
 
-    static func composerOutcome(epoch: UInt64?, canSend: Bool?, blocked: Bool,
-                                composerPresented: Bool, enabled: Bool) -> Bool? {
+    nonisolated static func composerOutcome(epoch: UInt64?, canSend: Bool?, blocked: Bool,
+                                            composerPresented: Bool, enabled: Bool) -> Bool? {
         guard composerPresented, let canSend else { return nil }
         if blocked { return false }
         guard epoch != nil else { return nil }

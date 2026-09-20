@@ -499,7 +499,9 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
-        erasureDefaults: UserDefaults = AppDataErasureState.persistentDefaults,
+        // Default arguments evaluate in a nonisolated context and `UserDefaults`
+        // is not Sendable, so the MainActor store is resolved in the body.
+        erasureDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -518,7 +520,9 @@ final class AppState {
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
-        self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
+        self.erasureState = AppDataErasureState(
+            defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
+            legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
