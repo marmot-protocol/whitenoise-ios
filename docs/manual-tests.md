@@ -26,6 +26,21 @@ before every release tag.
       retained submissions appear once, with newer composer typing intact.
 - [ ] Interrupt a media send. Reopening must recover MDK's durable timeline;
       uncertain submissions must not offer a fresh upload as an automatic retry.
+- [ ] Set Audio to Never: received voice notes and other audio both wait for a
+      deliberate tap. Test independent image/video/document preferences too.
+- [ ] Change Wi-Fi/cellular/Low Data Mode during automatic attachment acquisition,
+      then background/resume and sign out/in. Old permission callbacks must not
+      restart network work; a new runtime evaluates current settings afresh.
+- [ ] Remove/cancel an attachment, evict presentation caches, and reopen the chat.
+      Automatic loads must not reacquire it. Test an explicit Download again.
+      Verify exhausted and completed-but-unretained transfers remain terminal
+      until deliberate retry, including across relaunch.
+- [ ] Open an album with removed or never-downloaded neighbouring images. Only
+      selecting a page may request an explicit download; adjacent page creation
+      must not fetch. Revisit ready pages offline and verify retained bytes work.
+- [ ] Set Documents to Wi-Fi Only, then Never. Visible PDF/document bubbles
+      automatically acquire only when permitted, without opening a share sheet.
+      Removed/exhausted files stay unavailable until explicitly opened or retried.
 - [ ] On a signed staging build, repeat Native Push off/on after optimization,
       foreground/background receipt, and Notification Service Extension checks.
 

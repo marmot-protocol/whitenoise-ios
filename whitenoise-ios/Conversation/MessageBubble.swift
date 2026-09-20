@@ -20,6 +20,7 @@ extension EnvironmentValues {
 struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
+    var policyRevision: String = ""
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -38,6 +39,17 @@ final class ConversationMediaLoader {
         var requested = media
         requested.downloadExplicitly = explicit
         return try await load(requested)
+    }
+
+    func selectedPageData(for media: MessageMediaAttachment, isSelected: Bool) async throws -> Data? {
+        guard isSelected else { return nil }
+        return try await data(for: media, explicit: true)
+    }
+
+    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async {
+        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return }
+        // MDK retains bytes and acquisition history; a miss never becomes an explicit retry.
+        _ = try? await data(for: media, explicit: false)
     }
 }
 
@@ -1938,7 +1950,8 @@ private struct MessageMediaTile: View {
         .frame(width: size.width, height: size.height)
         .clipped()
         .contentShape(Rectangle())
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             // The auto-download policy gates only the automatic fetch: a
             // cached thumbnail always renders, and a tap always downloads.
@@ -2145,7 +2158,8 @@ private struct MessageReplyMediaThumbnail: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             await loadThumbnailIfAllowed()
         }
@@ -2459,7 +2473,8 @@ private struct MessageVideoAttachmentView: View {
         .onTapGesture {
             Task { await loadAndPlay(scale: displayScale) }
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             // Auto-download per the Videos matrix row: fetch, cache, and
             // render the poster so the bubble shows the download happened;
@@ -2817,7 +2832,8 @@ private struct MessageAudioAttachmentView: View {
         }
         .task(id: TimelineMediaTaskID(
             contentID: metadataCacheKey,
-            isVisible: isTimelineRowVisible
+            isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
         )) {
             guard isTimelineRowVisible else { return }
             await loadMetadataIfNeeded()
@@ -2828,15 +2844,10 @@ private struct MessageAudioAttachmentView: View {
         }
     }
 
-    /// Downloads the payload ahead of the first play tap when policy allows —
-    /// voice messages always, other audio per the auto-download matrix.
+    /// Prefetches audio only when the Audio auto-download preference allows it.
     private func prefetchIfNeeded() async {
         guard player == nil, !isLoading else { return }
-        let isVoice = AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: item.durationSeconds)
-        guard AudioAutoDownloadPolicy.shouldPrefetch(
-            isVoiceMessage: isVoice,
-            matrixAllows: MediaAutoDownloadStore.shared.shouldAutoDownload(.audio)
-        ) else { return }
+        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.audio) else { return }
         guard MediaPrefetchRegistry.claim(metadataCacheKey) else { return }
         guard let data = try? await onLoadMedia.data(for: item, explicit: false) else {
             MediaPrefetchRegistry.release(metadataCacheKey)
@@ -3086,6 +3097,7 @@ private enum MessageAudioMetadataCache {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let width: CGFloat
@@ -3140,6 +3152,11 @@ private struct MessageDocumentAttachmentView: View {
         .accessibilityLabel("Open attachment")
         .sheet(item: $shareItem) { shareItem in
             MessageDocumentShareSheet(url: shareItem.url)
+        }
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+            await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
+                allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document))
         }
     }
 
@@ -3718,6 +3735,7 @@ private struct MessageMediaFullscreenPage: View {
         } else {
             MessageMediaFullscreenImagePage(
                 item: item,
+                isSelected: isSelected,
                 initialImageData: initialImageData,
                 onLoadMedia: onLoadMedia,
                 onToggleChrome: onToggleChrome
@@ -3855,6 +3873,7 @@ private struct MessageMediaFullscreenVideoPage: View {
 private struct MessageMediaFullscreenImagePage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
+    let isSelected: Bool
     let onLoadMedia: ConversationMediaLoader
 
     @State private var imageData: Data?
@@ -3868,11 +3887,13 @@ private struct MessageMediaFullscreenImagePage: View {
 
     init(
         item: MessageMediaAttachment,
+        isSelected: Bool,
         initialImageData: Data?,
         onLoadMedia: ConversationMediaLoader,
         onToggleChrome: @escaping () -> Void
     ) {
         self.item = item
+        self.isSelected = isSelected
         self.onLoadMedia = onLoadMedia
         self.onToggleChrome = onToggleChrome
         // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
@@ -3910,13 +3931,15 @@ private struct MessageMediaFullscreenImagePage: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task(id: item.id) {
+            .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isSelected)) {
+                guard isSelected else { return }
                 await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale)
             }
         }
     }
 
     private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, force: Bool = false) async {
+        guard isSelected else { return }
         guard image == nil || force else { return }
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
@@ -3944,7 +3967,7 @@ private struct MessageMediaFullscreenImagePage: View {
         didFail = false
         defer { isLoading = false }
         do {
-            let data = try await onLoadMedia.data(for: item)
+            guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected) else { return }
             guard !Task.isCancelled else { return }
             guard let decoded = await MessageMediaFullscreenPresentation.decodedImage(
                 from: data,

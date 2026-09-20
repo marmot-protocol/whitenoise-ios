@@ -53,4 +53,41 @@ struct Marmot0104BindingTests {
         }
     }
 
+    @Test func attachmentGenerationsRejectStaleAndConsumedPermissions() async throws {
+        let client = try MarmotClient.testClient()
+        let watchdog = MarmotFixtureWatchdog.start("Attachment permission test stalled", breaking: client)
+        defer { watchdog.cancel() }
+        do {
+            try await client.startRuntime()
+            let account = try await client.marmot.createIdentityWithProfile(
+                defaultRelays: client.relayUrls, bootstrapRelays: client.relayUrls).account
+            let first = try await client.marmot.beginAttachmentPermissionUpdate(accountRef: account.label)
+            let second = try await client.marmot.beginAttachmentPermissionUpdate(accountRef: account.label)
+            let permission = AttachmentAutomaticPermissionFfi(images: true, videos: false, audio: false, files: false)
+            #expect(try await !client.marmot.setAttachmentAutomaticPermission(accountRef: account.label,
+                generation: first, permission: permission))
+            #expect(try await client.marmot.setAttachmentAutomaticPermission(accountRef: account.label,
+                generation: second, permission: permission))
+            #expect(try await !client.marmot.setAttachmentAutomaticPermission(accountRef: account.label,
+                generation: second, permission: permission))
+            _ = try await client.signOut(accountRef: account.label, deleteKeyPackages: false)
+            await #expect(throws: MarmotKitError.AttachmentAccountSignedOut) {
+                _ = try await client.marmot.beginAttachmentPermissionUpdate(accountRef: account.label)
+            }
+            try await client.marmot.shutdownAndClose()
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+    }
+
+    @Test func terminalAttachmentStatesDoNotWaitOrRetryAutomatically() {
+        for state in [AttachmentTransferStateFfi.previouslyAcquiredUnavailable, .completedUnretained,
+                      .retryExhausted, .removed, .cancelled, .failed, .policyBlocked, .paused, .unavailable] {
+            #expect(!AttachmentAcquisitionPresentation.canAwait(state))
+        }
+        for state in [AttachmentTransferStateFfi.queued, .downloading, .ready, .retryScheduled] {
+            #expect(AttachmentAcquisitionPresentation.canAwait(state))
+        }
+    }
 }
