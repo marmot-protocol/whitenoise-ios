@@ -632,6 +632,8 @@ extension ChatListMessagePreviewFfi {
             contentTokens: contentTokens,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
             deletionSource: deletionSource,
             attachmentKind: nil,
@@ -660,6 +662,8 @@ extension ChatListMessagePreviewFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
             deletionSource: deletionSource,
             attachmentKind: nil,
@@ -697,6 +701,7 @@ extension TimelineMessageRecordFfi {
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
@@ -753,6 +758,7 @@ extension TimelineMessageRecordFfi {
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,

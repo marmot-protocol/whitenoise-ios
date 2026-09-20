@@ -15,6 +15,14 @@ before every release tag.
   for both targets.
 - Clean install on each: `xcrun simctl erase <udid>` between runs.
 
+## MarmotKit 0.10.4 upgrade
+
+- [ ] Back up the app's shared data before opening an existing installation with
+      0.10.4. Migrations 87–89 are forward-only; do not run an older MDK against
+      the upgraded store or remove migration records to attempt a downgrade.
+- [ ] On a signed staging build, repeat Native Push off/on after optimization,
+      foreground/background receipt, and Notification Service Extension checks.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.

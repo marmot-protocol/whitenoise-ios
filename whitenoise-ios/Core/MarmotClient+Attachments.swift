@@ -58,7 +58,8 @@ extension MarmotClient {
                     guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
                     else { throw AttachmentReadError.stale }
                     return data
-                case .unavailable, .cancelled, .removed, .failed, .policyBlocked, .paused:
+                case .unavailable, .cancelled, .removed, .failed, .policyBlocked, .paused,
+                     .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted:
                     throw AttachmentReadError.unavailable
                 default: break
                 }
