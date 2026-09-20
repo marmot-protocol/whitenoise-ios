@@ -493,6 +493,9 @@ the test device.
       system notification permission and persists the enabled state.
 - [ ] Settings → Notifications: enabling Native push requests an APNS token,
       syncs a redacted token fingerprint, and does not expose the raw token.
+- [ ] On an optimized device build, turn Native push off and back on. Both
+      operations complete without a cancellation error, registration returns,
+      and the enabled setting survives leaving Settings and relaunching the app.
 - [ ] Settings → Notifications → Preview starts on Generic on a fresh install
       and on upgrade, and the example row matches the selected option.
 - [ ] With Preview set to Sender and Message, a message from device A while
