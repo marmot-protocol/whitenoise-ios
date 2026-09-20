@@ -12,7 +12,7 @@ struct MessageMediaFullscreenGalleryChrome: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                WNIconButton(title: "Close", systemImage: "xmark", action: onClose)
+                MessageMediaGalleryButton(title: "Close", systemImage: "xmark", action: onClose)
 
                 Spacer(minLength: 0)
 
@@ -38,7 +38,7 @@ struct MessageMediaFullscreenGalleryChrome: View {
             Spacer(minLength: 0)
 
             HStack {
-                WNIconButton(
+                MessageMediaGalleryButton(
                     title: "Share",
                     systemImage: "square.and.arrow.up",
                     action: onShare
@@ -47,7 +47,7 @@ struct MessageMediaFullscreenGalleryChrome: View {
 
                 Spacer(minLength: 0)
 
-                WNIconButton(
+                MessageMediaGalleryButton(
                     title: "Forward",
                     systemImage: "arrowshape.turn.up.right",
                     action: onForward
@@ -62,9 +62,39 @@ struct MessageMediaFullscreenGalleryChrome: View {
 
 /// A `Menu` label inherits the accent tint, which is why an unstyled ellipsis
 /// renders blue; the glyph colour has to be pinned on both the label and the menu.
-private struct MessageMediaGalleryMoreMenu: View {
+private struct MessageMediaGalleryControlLabel: View {
     @ScaledMetric(relativeTo: .body)
     private var diameter: CGFloat = WNSecondaryButtonStyle.Metrics.circleDiameter
+    @Environment(\.isEnabled) private var isEnabled
+
+    let title: LocalizedStringKey
+    let systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.iconOnly)
+            .imageScale(.large)
+            .foregroundStyle(isEnabled ? .primary : .secondary)
+            .frame(width: diameter, height: diameter)
+            .contentShape(.circle)
+            .wnLiftedChrome(in: .circle)
+    }
+}
+
+private struct MessageMediaGalleryButton: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            MessageMediaGalleryControlLabel(title: title, systemImage: systemImage)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct MessageMediaGalleryMoreMenu: View {
 
     let canSave: Bool
     let canGoToMessage: Bool
@@ -80,14 +110,9 @@ private struct MessageMediaGalleryMoreMenu: View {
                 Button("Go to Message", systemImage: "bubble.left", action: onGoToMessage)
             }
         } label: {
-            Label("More", systemImage: "ellipsis")
-                .labelStyle(.iconOnly)
-                .imageScale(.large)
-                .foregroundStyle(.primary)
-                .frame(width: diameter, height: diameter)
-                .contentShape(.circle)
-                .wnLiftedChrome(in: .circle)
+            MessageMediaGalleryControlLabel(title: "More", systemImage: "ellipsis")
         }
+        .buttonStyle(.plain)
         .tint(Color.primary)
         .accessibilityLabel("More")
     }
