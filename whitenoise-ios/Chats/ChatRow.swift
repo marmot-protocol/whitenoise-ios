@@ -24,6 +24,9 @@ struct ChatRow: View {
                 usesNativeAsset: item.selectedAvatar != nil
             )
             .frame(width: 56, height: 56)
+            .overlay(alignment: .bottomTrailing) {
+                if item.isPinned { PinnedChatAvatarBadge() }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
@@ -80,13 +83,6 @@ struct ChatRow: View {
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    if item.isPinned {
-                        Image(systemName: PinBadgePresentation.systemImageName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(PinBadgePresentation.rotationDegrees))
-                            .accessibilityLabel(Text(L10n.string("Pinned")))
-                    }
                     switch status {
                     case .invitation:
                         ChatInviteBadge()
@@ -100,6 +96,7 @@ struct ChatRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(item.isPinned ? L10n.string("Pinned") : "")
     }
 
     private var status: ChatRowStatusPresentation.Status {
@@ -243,7 +240,23 @@ nonisolated enum MuteBadgePresentation {
 
 nonisolated enum PinBadgePresentation {
     static let systemImageName = "pin.fill"
-    static let rotationDegrees = 45.0
+}
+
+private struct PinnedChatAvatarBadge: View {
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    var body: some View {
+        Image(systemName: PinBadgePresentation.systemImageName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(4)
+            .background(Color(uiColor: .systemBackground), in: Circle())
+            .overlay {
+                Circle().strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+            }
+            .offset(x: layoutDirection == .rightToLeft ? -2 : 2, y: 2)
+            .accessibilityHidden(true)
+    }
 }
 
 /// Circular avatar. Renders the profile picture when a URL is provided,
