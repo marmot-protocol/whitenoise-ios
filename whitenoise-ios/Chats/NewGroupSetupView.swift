@@ -19,25 +19,19 @@ struct NewGroupSetupView: View {
     var body: some View {
         Form {
             Section {
-                VStack(spacing: 12) {
+                VStack(spacing: 0) {
                     Button {
                         showGroupImagePicker = true
                     } label: {
-                        AvatarBubble(
-                            seed: "new-group",
-                            title: name,
-                            pictureImage: groupImage?.thumbnail
+                        WNAvatarPreview(
+                            name: name,
+                            image: groupImage?.thumbnail,
+                            emptySystemImage: "person.2"
                         )
-                        .overlay {
-                            if groupImage == nil {
-                                Image(systemName: "camera")
-                                    .foregroundStyle(.white)
-                                    .shadow(radius: 2)
-                            }
-                        }
+                        .accessibilityHidden(true)
                     }
                     .buttonStyle(.plain)
-                    .frame(width: 104, height: 104)
+                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
                     .disabled(model.isCreatingGroup)
                     .accessibilityLabel("Set group image")
 
@@ -45,6 +39,7 @@ struct NewGroupSetupView: View {
                         showGroupImagePicker = true
                     }
                     .wnAvatarActionButtonStyle()
+                    .padding(.top)
                     .disabled(model.isCreatingGroup)
                 }
                 .frame(maxWidth: .infinity)

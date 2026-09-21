@@ -11,12 +11,20 @@ struct WNAvatarPreview: View {
     let name: String
     var image: UIImage?
     var pictureURL: URL?
+    var emptySystemImage: String?
+
+    private var showsEmptySymbol: Bool {
+        image == nil && pictureURL == nil && emptySystemImage != nil
+            && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 Circle()
-                    .fill(WNButton.Metrics.accent(for: colorScheme))
+                    .fill(showsEmptySymbol
+                          ? Color(uiColor: .secondarySystemFill)
+                          : WNButton.Metrics.accent(for: colorScheme))
 
                 if let image {
                     Image(uiImage: image)
@@ -24,8 +32,14 @@ struct WNAvatarPreview: View {
                         .scaledToFill()
                         .frame(width: geometry.size.width, height: geometry.size.height)
                 } else {
-                    WNAvatarMonogramView(name: name)
-                        .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+                    if showsEmptySymbol, let emptySystemImage {
+                        Image(systemName: emptySystemImage)
+                            .font(.largeTitle)
+                            .foregroundStyle(.primary)
+                    } else {
+                        WNAvatarMonogramView(name: name)
+                            .foregroundStyle(colorScheme == .dark ? Color.black : Color.white)
+                    }
 
                     // Painted over the monogram, so a slow remote avatar shows
                     // the letter rather than an empty circle.
@@ -122,4 +136,13 @@ nonisolated enum WNAvatarMonogram {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.background)
         .preferredColorScheme(.dark)
+}
+
+#Preview("WNAvatarPreview — Group setup") {
+    HStack(spacing: 24) {
+        WNAvatarPreview(name: "", emptySystemImage: "person.2")
+        WNAvatarPreview(name: "Weekend Walks", emptySystemImage: "person.2")
+    }
+    .frame(height: 131)
+    .padding()
 }
