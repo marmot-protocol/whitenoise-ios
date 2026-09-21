@@ -53,6 +53,7 @@ struct SettingsView: View {
     @State private var showAccounts = false
     @State private var showAddProfile = false
     @State private var showAccountActions = false
+    @State private var showDeleteProfile = false
 
     var body: some View {
         Form {
@@ -85,6 +86,18 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(appState.activeAccount == nil)
+
+                Button(role: .destructive) {
+                    showDeleteProfile = true
+                } label: {
+                    Label("Delete Profile", systemImage: "trash")
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .disabled(appState.activeAccount == nil)
+                .accessibilityIdentifier("settings.deleteProfile")
             } footer: {
                 Text("White Noise · \(appVersion)")
                     .frame(maxWidth: .infinity)
@@ -108,6 +121,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAccountActions) {
             AccountActionsSheet().appAppearance()
+        }
+        .sheet(isPresented: $showDeleteProfile) {
+            DeleteProfileSheet().appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
@@ -318,41 +334,18 @@ nonisolated enum MarmotKitBuildLabel {
 private struct AccountActionsSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var shouldWipeData = true
-    @State private var confirmation = ""
     @State private var isBusy = false
     @State private var profileRef: String?
     @State private var profileName = ""
     @State private var error: String?
-    @FocusState private var confirmationFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     profileSummaryRow
-                    Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
-                        .wnNeutralToggleTint()
                 } footer: {
-                    Text(shouldWipeData
-                         ? "This profile and all local data will be permanently removed. Previous chats won’t return."
-                         : "This profile and its local data will stay on this device.")
-                }
-                if shouldWipeData {
-                    Section {
-                        WNInput(
-                            placeholder: L10n.string("Profile name"),
-                            text: $confirmation,
-                            fill: WNInputMetrics.groupedFill,
-                            submitLabel: .done,
-                            focus: $confirmationFocused
-                        )
-                        .wnInputRow()
-                    } header: {
-                        Text("Enter Profile Name").wnSectionHeader()
-                    } footer: {
-                        Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
-                    }
+                    Text("This profile and its local data will stay on this device.")
                 }
                 if let error { Text(error).foregroundStyle(.orange) }
                 Section {
@@ -364,10 +357,7 @@ private struct AccountActionsSheet: View {
                         action: signOut
                     )
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                    .disabled(!ProfileExitConfirmation.canSignOut(
-                        wiping: shouldWipeData, input: confirmation, profileName: profileName,
-                        busy: isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef
-                    ))
+                    .disabled(isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef)
                 }
             }
             .disabled(isBusy)
@@ -388,13 +378,6 @@ private struct AccountActionsSheet: View {
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(isBusy)
-        .onChange(of: shouldWipeData) { _, wiping in
-            guard !wiping else { return }
-            // The field is removed from the hierarchy here, so focus has to be
-            // surrendered explicitly or the keyboard outlives its input.
-            confirmationFocused = false
-            confirmation = ""
-        }
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
@@ -407,7 +390,7 @@ private struct AccountActionsSheet: View {
     /// VoiceOver, so the busy wording still has to be accurate.
     private var busyTitle: LocalizedStringKey {
         guard isBusy else { return "Sign Out" }
-        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
+        return "Signing out…"
     }
 
     @ViewBuilder
@@ -421,15 +404,143 @@ private struct AccountActionsSheet: View {
 
     private func signOut() {
         guard profileRef == appState.activeAccountRef,
-              ProfileExitConfirmation.canSignOut(wiping: shouldWipeData, input: confirmation,
-                                                profileName: profileName, busy: isBusy || appState.isAccountExitInProgress) else { return }
+              !isBusy, !appState.isAccountExitInProgress else { return }
         isBusy = true
         error = nil
-        let wiping = shouldWipeData
         Task {
-            let success = wiping ? await appState.signOutAndWipeActiveAccount() : await appState.signOut()
+            let success = await appState.signOut()
             isBusy = false
             if success { dismiss() } else { error = L10n.string("Couldn’t sign out. Try again.") }
+        }
+    }
+}
+
+private struct DeleteProfileSheet: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirmation = ""
+    @State private var isBusy = false
+    @State private var profileRef: String?
+    @State private var profileName = ""
+    @State private var error: String?
+    @FocusState private var confirmationFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    profileSummaryRow
+                    Text("This permanently removes this profile from this device.")
+                }
+
+                Section {
+                    deletionRow("The local message database and MLS group state for this profile.")
+                    deletionRow("This profile's key material stored on this device.")
+                    deletionRow("Outstanding key packages published for this profile on relays.")
+                } header: {
+                    Text("What gets destroyed").wnSectionHeader()
+                } footer: {
+                    Text("Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups.")
+                }
+
+                Section {
+                    Text("White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays.")
+                }
+
+                Section {
+                    WNInput(
+                        placeholder: L10n.string("Profile name"),
+                        text: $confirmation,
+                        fill: WNInputMetrics.groupedFill,
+                        submitLabel: .done,
+                        focus: $confirmationFocused
+                    )
+                    .wnInputRow()
+                } header: {
+                    Text("Enter Profile Name").wnSectionHeader()
+                } footer: {
+                    Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
+                }
+
+                if let error {
+                    Text(error).foregroundStyle(.orange)
+                }
+
+                Section {
+                    WNButton(
+                        title: isBusy ? "Deleting…" : "Delete Profile",
+                        emphasis: .destructive,
+                        size: .standard,
+                        isLoading: isBusy,
+                        action: deleteProfile
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .disabled(!ProfileExitConfirmation.matches(confirmation, expected: profileName)
+                              || isBusy
+                              || appState.isAccountExitInProgress
+                              || profileRef != appState.activeAccountRef)
+                }
+            }
+            .disabled(isBusy)
+            .navigationTitle("Delete Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    WNIconButton(
+                        title: "Close",
+                        systemImage: "xmark",
+                        chrome: .container
+                    ) {
+                        dismiss()
+                    }
+                    .disabled(isBusy)
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .interactiveDismissDisabled(isBusy)
+        .onAppear {
+            profileRef = appState.activeAccountRef
+            if let account = appState.activeAccount {
+                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var profileSummaryRow: some View {
+        if let active = appState.activeAccount, active.label == profileRef {
+            AccountIdentitySummary(account: active, avatarSize: 48)
+        } else {
+            Text(profileName).font(.headline)
+        }
+    }
+
+    private func deletionRow(_ text: LocalizedStringKey) -> some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: "minus.circle.fill")
+                .foregroundStyle(.red)
+        }
+    }
+
+    private func deleteProfile() {
+        guard profileRef == appState.activeAccountRef,
+              ProfileExitConfirmation.matches(confirmation, expected: profileName),
+              !isBusy, !appState.isAccountExitInProgress else { return }
+        confirmationFocused = false
+        isBusy = true
+        error = nil
+        Task {
+            let success = await appState.signOutAndWipeActiveAccount()
+            isBusy = false
+            if success {
+                dismiss()
+            } else {
+                error = L10n.string("Couldn't wipe profile")
+            }
         }
     }
 }

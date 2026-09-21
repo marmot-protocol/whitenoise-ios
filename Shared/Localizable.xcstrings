@@ -27231,6 +27231,65 @@
         }
       }
     },
+    "Delete Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profili Sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除個人檔案"
+          }
+        }
+      }
+    },
     "Delete selected messages" : {
       "comment" : "Label for a button that deletes the selected messages.",
       "extractionState" : "manual",
@@ -98623,6 +98682,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise"
+          }
+        }
+      }
+    },
+    "White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise kann verschlüsselte Nachrichten, die bereits an andere Mitglieder zugestellt wurden, oder Kopien, die von unabhängigen Relays gespeichert werden, nicht löschen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise no puede eliminar los mensajes cifrados que ya se hayan entregado a otros miembros ni las copias que conserven relés independientes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise ne peut pas supprimer les messages chiffrés déjà remis à d’autres membres ni les copies conservées par des relais indépendants."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise non può eliminare i messaggi crittografati già consegnati ad altri membri o le copie conservate da relay indipendenti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O White Noise não pode eliminar mensagens encriptadas já entregues a outros membros nem cópias mantidas por relays independentes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise не может удалить зашифрованные сообщения, уже доставленные другим участникам, или копии, сохранённые независимыми ретрансляторами."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise, diğer üyelere zaten teslim edilmiş şifreli mesajları veya bağımsız aktarıcıların sakladığı kopyaları silemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 无法删除已送达其他成员的加密消息，也无法删除独立中继保存的副本。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 無法刪除已傳送給其他成員的加密訊息，也無法刪除獨立中繼站保留的副本。"
           }
         }
       }

@@ -34,6 +34,24 @@ before every release tag.
       and opens the same thread. Clear Saved Demo Setup removes only the resume
       record; it must not delete either profile or published conversation data.
 
+## Profile deletion
+
+- [ ] With two profiles on the device, open Settings and verify **Delete Profile**
+      is plainly visible immediately below **Sign Out**.
+- [ ] Open **Sign Out** and confirm it keeps the profile and its local data on
+      the device. Sign back in and verify the profile's chats are still present.
+- [ ] Open **Delete Profile**, verify the disclosure names the local data and key
+      material that will be destroyed and explains the limits of deleting copies
+      held by members or independent relays. The destructive action must remain
+      disabled until the displayed profile name is entered exactly.
+- [ ] Delete one profile. Verify the app leaves its groups, removes its published
+      KeyPackages where reachable, clears its local chats, drafts, media, settings,
+      push registration, and device key material, then shows the remaining profile
+      chooser. If no profile remains, verify the app returns to Welcome.
+- [ ] Interrupt relay access during deletion and verify local removal still
+      completes while the post-delete report identifies any relay-side work that
+      could not be completed.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with
