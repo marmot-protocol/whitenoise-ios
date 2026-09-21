@@ -253,7 +253,7 @@ struct MessageBubble: View {
                 if !isFromMe, clusterPresentation.showsSenderName {
                     Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(WNIdentityPalette.color(for: record.sender))
                         .padding(.leading, 12)
                 }
 

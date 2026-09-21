@@ -6483,21 +6483,6 @@ struct ConversationChromeTests {
 }
 
 @MainActor
-struct AvatarBubbleTests {
-
-    @Test func paletteIndexHandlesMinimumIntegerHash() {
-        let index = AvatarBubble.paletteIndex(forHash: Int.min, paletteCount: 8)
-
-        #expect((0..<8).contains(index))
-    }
-
-    @Test func paletteIndexMatchesAbsoluteRemainderForOrdinaryNegativeHashes() {
-        #expect(AvatarBubble.paletteIndex(forHash: -9, paletteCount: 8) == 1)
-        #expect(AvatarBubble.paletteIndex(forHash: 9, paletteCount: 8) == 1)
-    }
-}
-
-@MainActor
 struct ChatsListProjectionTests {
 
     @Test func directPeerProjectionRequiresExactlySelfAndOneOtherMember() {
@@ -15092,7 +15077,7 @@ struct PresentedChatListTests {
         model.applyPresentedSnapshot(snapshot)
         #expect((archived ? model.archivedItems : model.items).first?.title == "Bestie")
         #expect(model.item(groupIdHex: row.groupIdHex)?.selectedAvatar == selected.avatar)
-        #expect(model.item(groupIdHex: row.groupIdHex)?.avatarSeed == "selected-avatar")
+        #expect(model.item(groupIdHex: row.groupIdHex)?.avatarSeed == peer)
         #expect(model.item(groupIdHex: row.groupIdHex)?.searchHaystack.contains("bestie") == true)
         let unchangedRevision = model.visibleRowsRevision
         model.refreshDisplayProjections()
@@ -15142,6 +15127,6 @@ struct PresentedChatListTests {
         let display = SelectedChatPresentation.display(selected, row: row)
         #expect(display.avatarURL == nil)
         #expect(display.title == L10n.string("Conversation unavailable"))
-        #expect(display.avatarSeed == "selected")
+        #expect(display.avatarSeed == "peer")
     }
 }

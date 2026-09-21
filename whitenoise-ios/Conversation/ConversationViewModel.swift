@@ -654,10 +654,10 @@ final class ConversationViewModel {
     }
 
     var selectedAvatarSeed: String {
-        switch conversationWindow?.header.selected.avatar {
-        case .remoteImage(_, let seed), .encryptedGroupImage(_, let seed), .placeholder(let seed, _): return seed
-        case nil: return GroupDisplay.avatarSeed(for: groupDisplay)
+        if let selected = conversationWindow?.header.selected {
+            return SelectedChatPresentation.avatarSeed(for: selected)
         }
+        return GroupDisplay.avatarSeed(for: groupDisplay)
     }
 
     var selectedAvatarURL: URL? {
