@@ -11524,6 +11524,61 @@ struct MediaComposerAvailabilityTests {
             disabledMessage: GroupManagementPresentation.leftGroupComposerMessage
         ))
     }
+
+    @Test func openingConversationWindowAwaitsLiveState() {
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false
+        ))
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+    }
+
+    @Test func attachedConversationWindowReportsLiveState() {
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasWindowSubscription: true,
+            isLocallyReset: false
+        ))
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: false,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+    }
+
+    @Test func locallyResetConversationDoesNotAwaitLiveState() {
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: true
+        ))
+    }
+
+    @Test func freshConversationReportsGroupDerivedComposerMessages() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let disbanded = ConversationViewModel(appState: appState, group: group(name: "ended", disbanded: true))
+        let left = ConversationViewModel(appState: appState, group: group(name: "gone", selfMembership: .left))
+
+        #expect(!disbanded.isAwaitingLiveConversationState)
+        #expect(disbanded.inactiveGroupMessage == GroupManagementPresentation.disbandedComposerMessage)
+        #expect(left.inactiveGroupMessage == GroupManagementPresentation.leftGroupComposerMessage)
+    }
 }
 
 struct ConversationInvitePresentationTests {
