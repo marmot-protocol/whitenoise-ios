@@ -11,6 +11,7 @@ struct DeveloperToolsSettingsView: View {
     @State private var showExport = false
     @State private var exporting = false
     @State private var exportError: String?
+    @State private var showDemoConfirmation = false
     @State private var quarantinedGroupsModel = QuarantinedGroupsViewModel()
 
     var body: some View {
@@ -28,6 +29,58 @@ struct DeveloperToolsSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("App Review Demo", systemImage: "person.2.fill")
+                        .font(.headline)
+                    Text("Create Johnny Appleseed as a second profile, build a real encrypted conversation, and add sample messages, replies, and reactions.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if case .running(let stage) = appState.appReviewDemo.status {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text(stage.title)
+                                .font(.subheadline)
+                        }
+                        .padding(.top, 4)
+                    } else if case .failed(let message) = appState.appReviewDemo.status {
+                        Label(message, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
+                            .padding(.top, 4)
+                    } else if case .ready = appState.appReviewDemo.status {
+                        Label("The real encrypted demo conversation is ready.", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline)
+                            .foregroundStyle(.green)
+                            .padding(.top, 4)
+                    }
+                }
+
+                WNButton(
+                    title: demoButtonTitle,
+                    systemImage: "person.2.wave.2"
+                ) {
+                    if appState.appReviewDemo.hasSavedSetup {
+                        appState.appReviewDemo.startOrOpen()
+                    } else {
+                        showDemoConfirmation = true
+                    }
+                }
+                .disabled(appState.appReviewDemo.isRunning || appState.activeAccount == nil)
+
+                if case .failed = appState.appReviewDemo.status {
+                    if appState.appReviewDemo.hasSavedSetup {
+                        Button("Clear Saved Demo Setup", role: .destructive) {
+                            appState.appReviewDemo.clearSavedSetup()
+                        }
+                    }
+                }
+            } header: {
+                Text("Review Environment")
+            } footer: {
+                Text("Setup uses the configured relays and may take a minute. It publishes real profile, KeyPackage, group, and message events. Clearing the saved setup record does not delete profiles or published events.")
             }
 
             Section {
@@ -179,6 +232,31 @@ struct DeveloperToolsSettingsView: View {
         .alert("Couldn’t Export Diagnostic Logs", isPresented: Binding(
             get: { exportError != nil }, set: { if !$0 { exportError = nil } }
         )) { Button("OK", role: .cancel) {} } message: { Text(exportError ?? "") }
+        .confirmationDialog(
+            "Create a real demo environment?",
+            isPresented: $showDemoConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Create Demo Environment") {
+                appState.appReviewDemo.startOrOpen()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This creates Johnny Appleseed on this device and publishes real encrypted setup and conversation events through the configured relays.")
+        }
+    }
+
+    private var demoButtonTitle: LocalizedStringKey {
+        switch appState.appReviewDemo.status {
+        case .ready:
+            "Open Demo Conversation"
+        case .failed:
+            "Resume Demo Setup"
+        case .idle where appState.appReviewDemo.hasSavedSetup:
+            "Resume Demo Setup"
+        case .idle, .running:
+            "Create Demo Environment"
+        }
     }
 
     private func exportLogs(path: String? = nil) {

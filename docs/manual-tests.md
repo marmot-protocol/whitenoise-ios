@@ -15,6 +15,25 @@ before every release tag.
   for both targets.
 - Clean install on each: `xcrun simctl erase <udid>` between runs.
 
+## App Review demo environment
+
+- [ ] Sign in or create a fresh reviewer profile, then open Settings →
+      Developer Tools → Create Demo Environment. Confirm the disclosure and
+      leave the app in the foreground while setup runs.
+- [ ] Verify setup creates exactly one additional local profile named Johnny
+      Appleseed, completes its KeyPackage publication, and returns to the
+      original profile without showing the normal onboarding flow.
+- [ ] Verify the app opens a direct conversation with Johnny containing real
+      messages from both profiles, a reply from each profile, and reactions from
+      both profiles. Switch profiles and confirm both sides can read the thread.
+- [ ] Interrupt once after Johnny is created and once after the conversation is
+      created. Reopen Developer Tools and Resume Demo Setup; it must reuse the
+      same profile, conversation, messages, replies, and reactions rather than
+      duplicating them.
+- [ ] After completion, Open Demo Conversation returns to the original profile
+      and opens the same thread. Clear Saved Demo Setup removes only the resume
+      record; it must not delete either profile or published conversation data.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with

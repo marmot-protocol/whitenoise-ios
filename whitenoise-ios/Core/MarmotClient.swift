@@ -130,6 +130,15 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    /// Reads the durable generated-identity setup state off MainActor. Demo
+    /// setup uses this local milestone instead of guessing when its KeyPackage
+    /// publication has finished.
+    func accountSetupReadiness(accountRef: String) async throws -> AccountSetupReadinessFfi {
+        try await Task.detached { [marmot, accountRef] in
+            try marmot.accountSetupReadiness(accountRef: accountRef)
+        }.value
+    }
+
     /// Reads the active account's locally cached kind-3 follow list without
     /// blocking SwiftUI on the generated synchronous FFI call.
     func accountFollows(accountRef: String) async throws -> Set<String> {

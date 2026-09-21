@@ -354,6 +354,7 @@ final class AppState {
     var client: MarmotClient? { runtimeLifecycle.client }
     let notifications: AppNotifications
     @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
+    let appReviewDemo = AppReviewDemoCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
     /// Optional local-auth gate and app-switcher privacy shield. UI-only:
@@ -534,6 +535,7 @@ final class AppState {
         self.profileStore.appState = self
         self.runtimeLifecycle.configure(appState: self)
         self.conversationDraftStore.configure(persistence: self)
+        self.appReviewDemo.configure(appState: self, defaults: accountDefaults)
     }
 
     convenience init(client: MarmotClient) {
@@ -1658,6 +1660,29 @@ final class AppState {
                 L10n.string("Account created"),
                 message: L10n.string("Secure setup is finishing in the background.")
             ))
+        }
+    }
+
+    /// Finishes a generated secondary identity without changing which profile
+    /// the app is presenting. The App Review demo uses this after MDK reports
+    /// that Johnny's initial KeyPackage publication is network-ready.
+    @MainActor
+    func completeSecondaryIdentityProfileSetup(_ summary: AccountSummaryFfi) async {
+        await productAnalytics.record(
+            .onboarding(.complete, .create, .success),
+            ticket: productOnboardingTicket
+        )?.value
+        productOnboardingTicket = nil
+        productOnboardingPath = nil
+        pendingAccountSetupReadiness.removeValue(forKey: summary.label)
+        cacheActivatedAccountSummaryIfNeeded(summary)
+        updateProfileProjectionLocalAccountLabels()
+        warmProfileProjection(forAccountIdHex: summary.accountIdHex)
+        restartReadyForegroundMaintenanceIfStopped()
+        do {
+            try await refreshAccounts(refreshUnreadSummaries: false)
+        } catch {
+            scheduleAccountUnreadSummaryRefresh()
         }
     }
 

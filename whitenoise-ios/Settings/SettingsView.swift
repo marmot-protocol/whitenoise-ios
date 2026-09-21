@@ -110,7 +110,7 @@ struct SettingsView: View {
             AccountActionsSheet().appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
-            if oldValue != nil, oldValue != newValue {
+            if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
                 dismiss()
             }
         }
