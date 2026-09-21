@@ -463,6 +463,73 @@ struct TimelineProjectionBoundaryTests {
         #expect(downloaded.referenceHashes == [reference.plaintextSha256])
     }
 
+    @Test(arguments: [false, true])
+    func mediaDownloaderUsesTheInjectedCachesPurgeGeneration(purgeInjectedCache: Bool) async throws {
+        let data = Data([0x01, 0x02])
+        let reference = mediaReference(sourceEpoch: 7, plaintext: data)
+        var media = MessageMediaAttachment(
+            id: "cache-generation-test",
+            reference: reference,
+            fileName: reference.fileName,
+            mediaType: reference.mediaType,
+            dim: nil,
+            localData: nil
+        )
+        media.downloadExplicitly = true
+        let cached = CountingConversationMediaCache()
+        cached.cachedDataToReturn = data
+        cached.blocksCachedDataRead = true
+        let downloader = ConversationMediaDownloader(cache: cached)
+        let request = Task { try await downloader.data(for: media, groupIdHex: testGroupId, appState: nil) }
+        await cached.waitForCachedDataRead()
+
+        if purgeInjectedCache {
+            cached.producerGeneration += 1
+        } else {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            #expect(MessageMediaCache.purgeAllDecryptedMedia(cachesDirectory: root))
+        }
+        cached.releaseCachedDataRead()
+
+        if purgeInjectedCache {
+            await #expect(throws: CancellationError.self) { try await request.value }
+        } else {
+            #expect(try await request.value == data)
+        }
+        #expect(cached.storedPayloads.isEmpty)
+    }
+
+    @Test func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
+        let data = Data([0x03, 0x04])
+        let reference = mediaReference(sourceEpoch: 7, plaintext: data)
+        var media = MessageMediaAttachment(
+            id: "download-purge-test",
+            reference: reference,
+            fileName: reference.fileName,
+            mediaType: reference.mediaType,
+            dim: nil,
+            localData: nil
+        )
+        media.downloadExplicitly = true
+        let cached = CountingConversationMediaCache()
+        cached.invalidatesDuringStore = true
+        let downloaded = DownloadMediaSpy(data: data)
+        let downloader = ConversationMediaDownloader(
+            cache: cached,
+            locatorResolver: { _ in ["93.184.216.34"] },
+            downloadMedia: downloaded.download
+        )
+        let appState = AppState(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-a"
+
+        await #expect(throws: CancellationError.self) {
+            try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
+        }
+        #expect(cached.storedPayloads.isEmpty)
+        #expect(downloaded.referenceHashes == [reference.plaintextSha256])
+    }
+
     @Test func mediaDownloaderCoalescesConcurrentCacheVerification() async throws {
         let cachedData = Data(repeating: 0x5a, count: 512 * 1024)
         let reference = mediaReference(sourceEpoch: 7, plaintext: cachedData)
@@ -615,6 +682,8 @@ struct TimelineProjectionBoundaryTests {
 
 @MainActor
 private final class CountingConversationMediaCache: ConversationMediaCacheAccessing {
+    var producerGeneration = 0
+    var invalidatesDuringStore = false
     private(set) var cachedDataCalls = 0
     private(set) var storedPayloads: [Data] = []
     private(set) var storedReferenceHashes: [String] = []
@@ -642,6 +711,8 @@ private final class CountingConversationMediaCache: ConversationMediaCacheAccess
     }
 
     func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, producerGeneration: Int?) async {
+        if invalidatesDuringStore { self.producerGeneration += 1 }
+        guard producerGeneration == self.producerGeneration else { return }
         storedPayloads.append(data)
         storedReferenceHashes.append(reference.plaintextSha256)
         storedSourceEpochs.append(reference.sourceEpoch)

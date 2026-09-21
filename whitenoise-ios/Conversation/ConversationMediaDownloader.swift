@@ -84,11 +84,14 @@ nonisolated enum MediaPlaintextHash {
 
 @MainActor
 protocol ConversationMediaCacheAccessing {
+    var producerGeneration: Int { get }
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data?
     func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, producerGeneration: Int?) async
 }
 
 struct DefaultConversationMediaCache: ConversationMediaCacheAccessing {
+    var producerGeneration: Int { MessageMediaCache.currentProducerEpoch() }
+
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
         await MessageMediaCache.cachedData(for: reference)
     }
@@ -180,11 +183,11 @@ final class ConversationMediaDownloader {
             // A cache miss never grants new automatic network work. Source-scoped
             // MDK reads above own expiry, removal and acquisition history.
             guard media.downloadExplicitly else { throw AttachmentReadError.unavailable }
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
+            let producerEpoch = self.cache.producerGeneration
             if let cached = await self.cache.cachedData(for: reference),
                await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256) {
                 try Task.checkCancellation()
-                guard !self.isStopped, MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
+                guard !self.isStopped, self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
                 return cached
             }
             guard let appState, let accountRef = appState.activeAccountRef else {
@@ -221,7 +224,7 @@ final class ConversationMediaDownloader {
                 }
             }
             await self.cache.store(result.plaintext, for: reference, producerGeneration: producerEpoch)
-            guard MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
+            guard self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
             return result.plaintext
         }
     }

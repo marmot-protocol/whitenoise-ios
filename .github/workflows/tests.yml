@@ -31,7 +31,8 @@ concurrency:
 jobs:
   test:
     runs-on: macos-15
-    timeout-minutes: 30
+    # Cold compilation can take 18 minutes before the test suite starts.
+    timeout-minutes: 45
 
     env:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
@@ -67,6 +68,8 @@ jobs:
       # Restoring the compiler CAS exhausts runner disk space during extraction.
       # Keep dependency caching above and compile from source on each run.
       - name: Run tests
+        # End the step before the job deadline so failure artifacts can upload.
+        timeout-minutes: 40
         run: ./scripts/test.sh
 
       - name: Upload test results
