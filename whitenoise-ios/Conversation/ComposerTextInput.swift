@@ -24,7 +24,7 @@ struct ComposerTextInput: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.font = .systemFont(ofSize: fontSize)
         textView.textColor = .label
-        textView.tintColor = .tintColor
+        textView.tintColor = UIColor(named: "AccentColor")
         textView.textContainerInset = UIEdgeInsets(
             top: BottomInputChromeLayout.fieldVerticalPadding,
             left: 0,

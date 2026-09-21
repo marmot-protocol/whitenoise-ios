@@ -432,7 +432,7 @@ struct ComposerMediaPreviewView: View {
                 if isIncluded {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WNNeutralAccent.foreground)
                 }
             }
             .frame(width: Layout.inclusionControlSize, height: Layout.inclusionControlSize)
@@ -696,7 +696,7 @@ struct MediaApprovalView: View {
                     Group {
                         if isSending {
                             ProgressView()
-                                .tint(.black)
+                                .tint(WNNeutralAccent.foreground)
                         } else {
                             Image(systemName: "arrow.up")
                                 .font(.body.weight(.bold))
