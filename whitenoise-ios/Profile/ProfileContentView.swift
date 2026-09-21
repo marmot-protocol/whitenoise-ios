@@ -155,7 +155,11 @@ struct ProfileContentView: View {
             AddToGroupSheet(
                 contactNpub: displayReference ?? npub,
                 contactName: title,
-                groups: model.addableGroups
+                groups: model.addableGroups,
+                onAdded: { await model.refreshGroups(using: appState, force: true) },
+                isLoading: model.isLoadingGroups,
+                loadError: model.directory.loadError,
+                onReload: { await model.refreshGroups(using: appState, force: true) }
             )
             .appAppearance()
         }
@@ -283,62 +287,52 @@ struct ProfileContentView: View {
     private var primaryActionSection: some View {
         if canMessage {
             Section {
-                HStack(spacing: 10) {
-                    DetailsActionButton(
-                        title: showsNewConversationActions ? "Start Conversation" : "Message",
-                        systemImage: "message",
-                        isLoading: model.isPreparingConversationChoices
-                            || model.starter.isCreating
-                    ) {
-                        Task {
-                            await model.message(
-                                npub: npub,
-                                profile: effectiveProfile,
-                                using: appState,
-                                onOpen: openChat
-                            )
-                        }
-                    }
-                    .foregroundStyle(.white)
-
+                Group {
                     if showsNewConversationActions {
-                        DetailsActionButton(
-                            title: model.isFollowing == true ? "Unfollow" : "Follow",
-                            systemImage: model.isFollowing == true
-                                ? "person.badge.minus"
-                                : "person.badge.plus",
-                            isDisabled: onSetFollowing == nil,
-                            isLoading: model.isLoadingFollow || model.isUpdatingFollow
-                        ) {
-                            Task {
-                                await model.toggleFollow(
-                                    using: appState,
-                                    action: onSetFollowing
-                                )
+                        HStack(spacing: 10) {
+                            DetailsActionButton(
+                                title: "Start Conversation",
+                                systemImage: "message",
+                                isLoading: model.isPreparingConversationChoices || model.starter.isCreating,
+                                action: messageContact
+                            )
+                            .foregroundStyle(.white)
+                            DetailsActionButton(
+                                title: model.isFollowing == true ? "Unfollow" : "Follow",
+                                systemImage: model.isFollowing == true
+                                    ? "person.badge.minus"
+                                    : "person.badge.plus",
+                                isDisabled: onSetFollowing == nil,
+                                isLoading: model.isLoadingFollow || model.isUpdatingFollow
+                            ) {
+                                Task {
+                                    await model.toggleFollow(
+                                        using: appState,
+                                        action: onSetFollowing
+                                    )
+                                }
                             }
+                            .foregroundStyle(.white)
                         }
-                        .foregroundStyle(.white)
                     } else {
-                        DetailsActionButton(
-                            title: "New Group",
-                            systemImage: "person.2.badge.plus"
-                        ) {
-                            showStartGroup = true
-                        }
-                        .accessibilityLabel(L10n.formatted("Create group with %@", title))
-
-                        DetailsActionButton(
-                            title: "Add to Group",
-                            systemImage: "person.badge.plus",
-                            isDisabled: model.addableGroups.isEmpty
-                        ) {
-                            showAddToGroup = true
-                        }
+                        ProfileContactActions(
+                            contactName: title,
+                            isMessaging: model.isPreparingConversationChoices || model.starter.isCreating,
+                            onMessage: messageContact,
+                            onNewGroup: { showStartGroup = true },
+                            onAddToGroup: { showAddToGroup = true }
+                        )
                     }
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
             }
+        }
+    }
+
+    private func messageContact() {
+        Task {
+            await model.message(npub: npub, profile: effectiveProfile, using: appState, onOpen: openChat)
         }
     }
 

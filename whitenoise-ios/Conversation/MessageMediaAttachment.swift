@@ -244,6 +244,9 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
     let rejectionKind: MediaAttachmentRejectionKindFfi?
+    var localTarget: AttachmentLocalTargetFfi?
+    var sourceHint: AttachmentSourceHint?
+    var downloadExplicitly = false
 
     init(
         id: String,
@@ -255,7 +258,8 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         thumbnail: UIImage? = nil,
         durationSeconds: Double? = nil,
         waveformSamples: [CGFloat] = [],
-        rejectionKind: MediaAttachmentRejectionKindFfi? = nil
+        rejectionKind: MediaAttachmentRejectionKindFfi? = nil,
+        localTarget: AttachmentLocalTargetFfi? = nil
     ) {
         self.id = id
         self.reference = reference
@@ -267,6 +271,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         self.durationSeconds = durationSeconds
         self.waveformSamples = waveformSamples
         self.rejectionKind = rejectionKind
+        self.localTarget = localTarget
     }
 
     var isImage: Bool {
@@ -296,11 +301,19 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
             : L10n.string("Attachment couldn’t be read")
     }
 
-    static func displayItems(fromOutcomes outcomes: [MediaAttachmentOutcomeFfi], ownerId: String) -> [MessageMediaAttachment] {
+    static func displayItems(fromOutcomes outcomes: [MediaAttachmentOutcomeFfi], ownerId: String, messageId: String? = nil, sourceMessageId: String? = nil, resolveMissingSource: Bool = false) -> [MessageMediaAttachment] {
         outcomes.map { outcome in
             switch outcome {
             case .accepted(let index, let reference):
-                return displayItem(reference: reference, index: index, ownerId: ownerId)
+                var item = displayItem(reference: reference, index: index, ownerId: ownerId)
+                if let messageId, !messageId.isEmpty, sourceMessageId != nil || resolveMissingSource {
+                    item.sourceHint = AttachmentSourceHint(messageID: messageId, slot: index)
+                }
+                if let messageId, let sourceMessageId, !messageId.isEmpty, !sourceMessageId.isEmpty {
+                    item.localTarget = AttachmentLocalTargetFfi(messageIdHex: messageId,
+                        sourceMessageIdHex: sourceMessageId, attachmentIndex: index)
+                }
+                return item
             case .rejected(let index, let rejection):
                 return MessageMediaAttachment(
                     id: "\(ownerId):rejected:\(index)", reference: nil,
@@ -1675,4 +1688,9 @@ nonisolated enum MessageMediaCache {
     private static var defaultCachesDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
     }
+}
+
+nonisolated struct AttachmentSourceHint: Hashable, Sendable {
+    let messageID: String
+    let slot: UInt32
 }

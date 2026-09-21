@@ -164,3 +164,21 @@ private func libraryMediaRecord(
         receivedAt: timestamp
     )
 }
+
+extension SharedMediaLibraryPresentationTests {
+    @Test func monthSectionsDoNotReorderNonMonotonicDisplayDates() {
+        let june = GroupSharedMediaPresentation.items(from: [
+            libraryMediaRecord("june", mediaType: "image/jpeg", fileName: "june.jpg", timestamp: 1781740800)
+        ])[0]
+        let may = GroupSharedMediaPresentation.items(from: [
+            libraryMediaRecord("may", mediaType: "image/jpeg", fileName: "may.jpg", timestamp: 1779580800)
+        ])[0]
+        let laterJune = GroupSharedMediaPresentation.items(from: [
+            libraryMediaRecord("later-june", mediaType: "image/jpeg", fileName: "later.jpg", timestamp: 1780531200)
+        ])[0]
+        let canonical = [june, may, laterJune]
+        let sections = SharedMediaLibraryPresentation.monthSections(canonical)
+        #expect(sections.flatMap(\.items).map(\.id) == canonical.map(\.id))
+        #expect(Set(sections.map(\.id)).count == sections.count)
+    }
+}

@@ -1,3 +1,4 @@
+import Foundation
 import MarmotKit
 
 struct KeyPackagesPresentation {
@@ -10,7 +11,25 @@ struct KeyPackagesPresentation {
     var current: CurrentPackage?
     var otherRelayPackages: [AccountKeyPackageFfi] = []
 
+    static func ownershipLabel(_ state: AccountKeyPackageLocalStateFfi) -> String {
+        switch state {
+        case .notLocal: L10n.string("Observed on relays")
+        case .current: L10n.string("Current on this device")
+        case .pendingReplacement: L10n.string("Pending replacement on this device")
+        case .retainedPrivateMaterial: L10n.string("Retained on this device")
+        case .otherOwned: L10n.string("Owned by this device")
+        }
+    }
+
     init() {}
+
+    init(inventory: [AccountKeyPackageInventoryEntryFfi], status: KeyPackageMaintenanceStatusFfi? = nil) {
+        let current = inventory.first { $0.localState == .current }?.record
+        self.init(packages: inventory.map(\.record),
+                  currentReference: current?.keyPackageRefHex ?? status?.currentKeyPackageRefHex,
+                  currentEventID: current?.eventIdHex ?? status?.authoredEventIdHex,
+                  publishedAt: current?.publishedAt ?? status?.authoredEventCreatedAt)
+    }
 
     init(packages: [AccountKeyPackageFfi], status: KeyPackageMaintenanceStatusFfi?) {
         self.init(

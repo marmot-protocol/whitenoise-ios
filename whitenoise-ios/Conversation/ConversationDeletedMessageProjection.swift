@@ -1,4 +1,5 @@
 import Foundation
+import MarmotKit
 
 /// Tombstone projection for the conversation timeline: folds the authoritative
 /// projected deletes (mirrored from timeline rows at ingest) and the local
@@ -13,6 +14,8 @@ import Foundation
 @MainActor
 final class ConversationDeletedMessageProjection {
     private var projected: Set<String> = []
+    private var sources: [String: DeletionSourceFfi] = [:]
+    private var publishedSources: [String: DeletionSourceFfi] = [:]
     private var optimistic: Set<String> = []
     private(set) var deletedMessageIds: Set<String> = []
 
@@ -20,9 +23,14 @@ final class ConversationDeletedMessageProjection {
         deletedMessageIds.contains(messageIdHex)
     }
 
+    func source(for messageIdHex: String) -> DeletionSourceFfi {
+        publishedSources[messageIdHex] ?? .unknown
+    }
+
     // MARK: Projected deletes (ingest write-path)
 
-    func setProjected(deleted: Bool, forMessageId messageIdHex: String) {
+    func setProjected(deleted: Bool, source: DeletionSourceFfi = .unknown, forMessageId messageIdHex: String) {
+        sources[messageIdHex] = deleted ? source : nil
         if deleted {
             projected.insert(messageIdHex)
         } else {
@@ -32,6 +40,7 @@ final class ConversationDeletedMessageProjection {
 
     func removeProjected(forMessageId messageIdHex: String) {
         projected.remove(messageIdHex)
+        sources[messageIdHex] = nil
     }
 
     // MARK: Optimistic deletes
@@ -55,7 +64,8 @@ final class ConversationDeletedMessageProjection {
     @discardableResult
     func rebuild() -> Bool {
         let next = projected.union(optimistic)
-        guard deletedMessageIds != next else { return false }
+        guard deletedMessageIds != next || publishedSources != sources else { return false }
+        publishedSources = sources
         deletedMessageIds = next
         return true
     }

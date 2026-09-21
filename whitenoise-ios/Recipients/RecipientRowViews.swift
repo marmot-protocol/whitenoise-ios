@@ -269,69 +269,16 @@ struct RecipientQuickActionRow: View {
 /// affordance while empty (a clear button once text is present). Pasting
 /// feeds the same query pipeline as typing.
 struct RecipientSearchField: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Binding var text: String
     var placeholder: LocalizedStringKey = "Search people or paste a profile"
-    /// Optional QR-scan affordance rendered beside the paste icon.
     var onScan: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(placeholder, text: $text)
-                .font(.body)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(minWidth: 0, maxWidth: .infinity)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .clipped()
-            if text.isEmpty {
-                Button {
-                    if let pasted = RecipientPasteboard.profileQuery(
-                        from: UIPasteboard.general.string
-                    ) {
-                        text = pasted
-                    }
-                } label: {
-                    Image(systemName: "doc.on.clipboard")
-                        .font(.callout)
-                        .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Paste")
-                if let onScan {
-                    Button(action: onScan) {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.callout)
-                            .foregroundStyle(WNButton.Metrics.accent(for: colorScheme))
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Scan QR Code")
-                }
-            } else {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 28, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
+        WNSearchField(query: $text, prompt: placeholder, onPaste: {
+            if let pasted = RecipientPasteboard.profileQuery(from: UIPasteboard.general.string) {
+                text = pasted
             }
-        }
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Color(.tertiarySystemFill), in: .rect(cornerRadius: 10))
+        }, onScan: onScan)
     }
 }
 

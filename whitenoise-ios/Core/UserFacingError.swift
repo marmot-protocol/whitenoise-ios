@@ -96,6 +96,8 @@ struct UserFacingError: Equatable {
     private nonisolated static func sendMessage(for error: Error) -> String? {
         guard let marmotError = error as? MarmotKitError else { return nil }
         switch marmotError {
+        case .MissingKeyPackage:
+            return L10n.string("This person has no compatible invitation key available. Ask them to open White Noise and try again.")
         case .UserBlocked:
             return L10n.string("Unblock this person before sending a message.")
         case .BlockListUnavailable:
@@ -130,6 +132,10 @@ struct UserFacingError: Equatable {
             return kind == .unsupportedFormat
                 ? L10n.string("Unsupported attachment")
                 : L10n.string("Attachment couldn’t be read")
+        case .AttachmentModeRequired:
+            return L10n.string("Download settings need to be refreshed. Reopen the app and try again.")
+        case .AttachmentAccountSignedOut:
+            return L10n.string("Sign in to download attachments.")
         case .MediaUnfetchable:
             return L10n.string("No safe download location is available for this attachment.")
         case .MediaDownloadFailed:

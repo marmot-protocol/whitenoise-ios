@@ -10,8 +10,16 @@ struct MediaDownloadInFlightKey: Hashable {
     let plaintextSha256: String
     let ciphertextSha256: String
     let nonceHex: String
+    let target: AttachmentLocalTargetFfi?
+    let explicit: Bool
+    let sourceHint: AttachmentSourceHint?
+    let scope: String
 
-    init(reference: MediaAttachmentReferenceFfi) {
+    init(reference: MediaAttachmentReferenceFfi, target: AttachmentLocalTargetFfi? = nil, explicit: Bool = false, sourceHint: AttachmentSourceHint? = nil, scope: String = "") {
+        self.sourceHint = sourceHint
+        self.scope = scope
+        self.target = target
+        self.explicit = explicit
         self.version = reference.version
         self.plaintextSha256 = reference.plaintextSha256.lowercased()
         self.ciphertextSha256 = reference.ciphertextSha256.lowercased()
@@ -145,16 +153,38 @@ final class ConversationMediaDownloader {
             throw MediaDataError.unsafeLocator
         }
         return try await inFlight.data(
-            for: MediaDownloadInFlightKey(reference: reference)
+            for: MediaDownloadInFlightKey(reference: reference, target: media.localTarget, explicit: media.downloadExplicitly,
+                sourceHint: media.sourceHint, scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)")
         ) {
-            // Captured before any async gap — cache read or download — so a
-            // wipe completing mid-operation invalidates this producer's store.
+            var target = media.localTarget
+            if target == nil, let hint = media.sourceHint,
+               let appState, let account = appState.activeAccountRef {
+                let client = try appState.currentMarmotClient()
+                target = try await client.resolveAttachmentTarget(accountRef: account, groupID: groupIdHex, hint: hint)
+            }
+            if let target {
+                guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
+                let client = try appState.currentMarmotClient()
+                if let data = try await client.acquireAttachmentData(accountRef: account, groupID: groupIdHex,
+                    target: target, explicit: media.downloadExplicitly) {
+                    try Task.checkCancellation()
+                    guard !self.isStopped, appState.activeAccountRef == account, appState.client === client else {
+                        throw CancellationError()
+                    }
+                    guard await MediaPlaintextHash.matches(data, expectedSha256: reference.plaintextSha256) else {
+                        throw MediaDataError.plaintextHashMismatch
+                    }
+                    return data
+                }
+            }
+            // A cache miss never grants new automatic network work. Source-scoped
+            // MDK reads above own expiry, removal and acquisition history.
+            guard media.downloadExplicitly else { throw AttachmentReadError.unavailable }
             let producerEpoch = MessageMediaCache.currentProducerEpoch()
             if let cached = await self.cache.cachedData(for: reference),
-               await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256)
-            {
+               await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256) {
                 try Task.checkCancellation()
-                guard !self.isStopped else { throw CancellationError() }
+                guard !self.isStopped, MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
                 return cached
             }
             guard let appState, let accountRef = appState.activeAccountRef else {
@@ -182,7 +212,16 @@ final class ConversationMediaDownloader {
             }
             try Task.checkCancellation()
             guard !self.isStopped else { throw CancellationError() }
+            guard appState.activeAccountRef == accountRef, appState.client === client else { throw CancellationError() }
+            if let target {
+                let state = try await client.marmot.attachmentTransferSnapshot(accountRef: accountRef,
+                    groupIdHex: groupIdHex, targets: [target]).items.first?.state
+                guard let state, ![.unavailable, .removed, .cancelled].contains(state) else {
+                    throw AttachmentReadError.stale
+                }
+            }
             await self.cache.store(result.plaintext, for: reference, producerGeneration: producerEpoch)
+            guard MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
             return result.plaintext
         }
     }

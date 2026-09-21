@@ -86,7 +86,18 @@ extension View {
     }
 }
 
-/// The app's text input: a rounded filled field with an optional leading icon,
+private extension View {
+    @ViewBuilder
+    func wnInputSurface(fill: Color, shape: AnyShape) -> some View {
+        if #available(iOS 26.0, *) {
+            compatibleControlChrome(in: shape)
+        } else {
+            background(fill, in: shape)
+        }
+    }
+}
+
+/// The app's text input: a rounded field with an optional leading icon,
 /// a built-in clear button and a trailing accessory slot.
 struct WNInput<Trailing: View>: View {
     let placeholder: String
@@ -103,9 +114,12 @@ struct WNInput<Trailing: View>: View {
     var onSubmit: (() -> Void)?
     @ViewBuilder let trailing: () -> Trailing
 
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var localFocus: Bool
 
     @ScaledMetric(relativeTo: .body) private var height = WNInputMetrics.height
+
+    @ScaledMetric(relativeTo: .body) private var accessorySize = WNInputMetrics.accessoryTarget
 
     private var activeFocus: FocusState<Bool>.Binding { focus ?? $localFocus }
 
@@ -115,7 +129,7 @@ struct WNInput<Trailing: View>: View {
         return HStack(spacing: WNInputMetrics.contentSpacing) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.subheadline.weight(.medium))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.secondary)
             }
 
@@ -131,16 +145,19 @@ struct WNInput<Trailing: View>: View {
             )
 
             if showsClear, !text.isEmpty {
-                Button(clearLabel, systemImage: "xmark.circle.fill") { text = "" }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(.secondary)
-                    .frame(
-                        width: WNInputMetrics.accessoryTarget,
-                        height: WNInputMetrics.accessoryTarget
-                    )
-                    .transition(.opacity)
+                Button { text = "" } label: {
+                    Label(clearLabel, systemImage: "xmark.circle.fill")
+                        .labelStyle(.iconOnly)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(
+                            WNSearchBar.Palette.clearGlyph(for: colorScheme),
+                            WNSearchBar.Palette.clearFill(for: colorScheme)
+                        )
+                        .frame(width: accessorySize, height: accessorySize)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
             }
 
             trailing()
@@ -149,7 +166,7 @@ struct WNInput<Trailing: View>: View {
         .padding(.trailing, WNInputMetrics.trailingInset)
         .padding(.vertical, WNInputMetrics.verticalInset(for: kind))
         .frame(minHeight: WNInputMetrics.fixesHeight(for: kind) ? height : nil)
-        .background(fill, in: shape)
+        .wnInputSurface(fill: fill, shape: shape)
         .contentShape(shape)
         // Tapping the chrome, not just the glyphs, has to focus the field.
         .onTapGesture { activeFocus.wrappedValue = true }

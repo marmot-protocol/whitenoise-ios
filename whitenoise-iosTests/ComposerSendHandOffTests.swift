@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import whitenoise_ios
 @testable import MarmotKit
@@ -16,7 +17,8 @@ struct ComposerSendHandOffTests {
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
         composer.canSendMessages = { true }
-        composer.sendTextForTesting = { _, _, _, _ in throw MarmotKitError.AccountWorkerResponseTimedOut }
+        composer.localSendStatusForTesting = { _ in nil }
+        composer.sendTextForTesting = { _, _, _, _, token in throw MarmotKitError.AccountWorkerResponseTimedOut }
         await composer.send("uncertain send")
         let row = try #require(store.timeline.first)
         #expect(store.localSendPhase(rowID: row.id) == .completionUnknown)
@@ -32,9 +34,10 @@ struct ComposerSendHandOffTests {
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
         composer.canSendMessages = { true }
-        composer.sendTextForTesting = { _, _, _, _ in
+        composer.localSendStatusForTesting = { _ in nil }
+        composer.sendTextForTesting = { _, _, _, _, token in
             store.resetOptimisticState()
-            return SendSummaryFfi(published: 1, messageIds: ["late"], acceptDisposition: .published, maintenanceDisposition: .ready)
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "late")
         }
         await composer.send("retired send")
         #expect(store.timeline.isEmpty)
@@ -48,9 +51,10 @@ struct ComposerSendHandOffTests {
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: appState, groupIdHex: hex("aa"), timelineStore: timelineStore)
         composer.canSendMessages = { true }
+        composer.localSendStatusForTesting = { _ in nil }
         var inlineError: String?
         composer.onError = { inlineError = $0 }
-        composer.sendTextForTesting = { _, _, _, _ in
+        composer.sendTextForTesting = { _, _, _, _, token in
             throw MarmotKitError.Runtime(details: "relay disconnected")
         }
 
@@ -59,7 +63,6 @@ struct ComposerSendHandOffTests {
         #expect(inlineError == "Relay disconnected")
         #expect(appState.activeToast?.title == "Send failed")
         #expect(appState.activeToast?.message == "Relay disconnected")
-        #expect(!composer.sendInFlight)
         try await client.marmot.shutdownAndClose()
     }
 
@@ -101,7 +104,7 @@ struct ComposerSendHandOffTests {
         #expect(recorder.entries == ["failed", "delivered"])
     }
 
-    @Test func composerIsFreeToSendAgainWhileTheRelayRoundTripIsStillRunning() async throws {
+    @Test func composerIsFreeToStageAgainWhileTheRelayRoundTripIsStillRunning() async throws {
         let appState = AppState(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
@@ -111,21 +114,21 @@ struct ComposerSendHandOffTests {
             timelineStore: timelineStore
         )
         composer.canSendMessages = { true }
-        var sendInFlightDuringPublish: [Bool] = []
-        composer.sendTextForTesting = { _, _, _, _ in
-            sendInFlightDuringPublish.append(composer.sendInFlight)
-            return SendSummaryFfi(
-                published: 1,
-                messageIds: ["a"],
-                acceptDisposition: .published,
-                maintenanceDisposition: .ready
-            )
+        composer.localSendStatusForTesting = { _ in nil }
+        var stagedRowsDuringPublish: [Int] = []
+        composer.sendTextForTesting = { _, _, _, text, token in
+            if text == "first" {
+                // A second Send lands mid round-trip: it must park its own
+                // bubble rather than wait behind the first message's publish.
+                #expect(composer.stage(text: "second") != nil)
+                stagedRowsDuringPublish.append(timelineStore.timeline.count)
+            }
+            return LocalSendAcceptanceFfi(clientToken: token, messageIdHex: text)
         }
 
         await composer.send("first")
 
-        #expect(sendInFlightDuringPublish == [false])
-        #expect(!composer.sendInFlight)
+        #expect(stagedRowsDuringPublish == [2])
     }
 }
 

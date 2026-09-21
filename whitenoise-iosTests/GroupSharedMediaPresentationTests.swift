@@ -107,3 +107,32 @@ private func mediaRecord(
         receivedAt: timestamp
     )
 }
+
+extension GroupSharedMediaPresentationTests {
+    @Test func nativeHistoryKeepsCanonicalOrderAndOriginalSlots() {
+        let reference = mediaRecord(messageID: "message", index: 2, mediaType: "image/jpeg",
+                                    fileName: "photo.jpg", timestamp: 1).reference
+        let pending = MessageMediaAttachment.displayItems(fromOutcomes: [.accepted(attachmentIndex: 2, reference: reference)],
+            ownerId: "pending", messageId: "pending-local-id")
+        #expect(pending.first?.localTarget == nil && pending.first?.sourceHint == nil)
+        let reply = MessageMediaAttachment.displayItems(fromOutcomes: [.accepted(attachmentIndex: 2, reference: reference)],
+            ownerId: "reply", messageId: "original-message", resolveMissingSource: true)
+        #expect(reply.first?.sourceHint == AttachmentSourceHint(messageID: "original-message", slot: 2))
+        let newest = AttachmentEntryFfi(messageIdHex: "newest", sourceMessageIdHex: "original-source",
+            sender: "sender", timelineAt: 1, receivedAt: 90, sourceEpoch: nil, category: .image,
+            attachment: .accepted(attachmentIndex: 2, reference: reference))
+        let older = AttachmentEntryFfi(messageIdHex: "older", sourceMessageIdHex: "older-source",
+            sender: "sender", timelineAt: 50, receivedAt: 2, sourceEpoch: 1, category: .image,
+            attachment: .accepted(attachmentIndex: 7, reference: reference))
+        let items = GroupSharedMediaPresentation.items(entries: [newest, older])
+        #expect(items.map(\.id) == ["newest:2", "older:7"])
+        #expect(items.map(\.timestamp) == [1, 50])
+        #expect(items[0].attachment.localTarget == AttachmentLocalTargetFfi(
+            messageIdHex: "newest", sourceMessageIdHex: "original-source", attachmentIndex: 2))
+        var replacement = newest
+        replacement.attachment = .accepted(attachmentIndex: 2,
+            reference: mediaRecord(messageID: "different-content", index: 2, mediaType: "image/jpeg",
+                                   fileName: "updated.jpg", timestamp: 99).reference)
+        #expect(GroupSharedMediaPresentation.items(entries: [replacement]).first?.id == items[0].id)
+    }
+}

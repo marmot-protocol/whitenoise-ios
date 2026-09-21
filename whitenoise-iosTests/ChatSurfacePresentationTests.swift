@@ -218,10 +218,11 @@ struct ChatSurfacePresentationTests {
     }
 
     @Test func multiMessageSelectionUsesSharedForwardLimitAndStrictDeleteCapability() {
-        #expect(MessageSelectionPolicy.canForward(selectedCount: 1, allForwardable: true))
-        #expect(MessageSelectionPolicy.canForward(selectedCount: 30, allForwardable: true))
-        #expect(!MessageSelectionPolicy.canForward(selectedCount: 31, allForwardable: true))
-        #expect(!MessageSelectionPolicy.canForward(selectedCount: 2, allForwardable: false))
+        #expect(MessageSelectionPolicy.canForward(selectedCount: 1, anyForwardable: true))
+        #expect(MessageSelectionPolicy.canForward(selectedCount: 30, anyForwardable: true))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 31, anyForwardable: true))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 2, anyForwardable: false))
+        #expect(!MessageSelectionPolicy.canForward(selectedCount: 0, anyForwardable: true))
         #expect(MessageSelectionPolicy.canDelete(selectedCount: 2, allDeletable: true))
         #expect(!MessageSelectionPolicy.canDelete(selectedCount: 2, allDeletable: false))
     }
@@ -282,6 +283,10 @@ struct ChatSurfacePresentationTests {
 
     @Test func composerShowsExpandedEditorForLongOrMultilineDrafts() {
         #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short"))
+        #expect(!ComposerExpandedEditorPresentation.shouldShowExpandButton(for: ""))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short\n"))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "\n"))
+        #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(for: "Short\r\nsecond line"))
         #expect(ComposerExpandedEditorPresentation.shouldShowExpandButton(
             for: String(repeating: "a", count: ComposerExpandedEditorPresentation.minimumExpandCharacterCount)
         ))

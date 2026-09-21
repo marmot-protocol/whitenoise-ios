@@ -94,6 +94,25 @@ struct ChatListViewportTests {
         #expect(abs(newOffset - oldOffset) < 0.5, "Retained row moved \(newOffset - oldOffset)pt")
     }
 
+    @Test func forwardPagesPreserveTheReadersOffsetAtEachLoadedEdge() throws {
+        let viewport = ChatListViewport()
+        let (window, scroll) = try makeList(ids: (0..<100).map(String.init), viewport: viewport)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        for page in 1...3 {
+            scroll.contentOffset.y = scroll.contentSize.height - viewportHeight
+            scroll.layoutIfNeeded()
+            let anchor = try #require(viewport.visibleAnchor())
+            let oldOffset = try offset(of: anchor, in: scroll)
+            viewport.prepare(for: snapshot(sequence: UInt64(page),
+                anchor: .retained(groupIdHex: anchor, index: 0)))
+            // Forward paging may evict older rows as well as append newer ones.
+            layout(ids: (page * 50..<(page * 50 + 100)).map(String.init),
+                in: scroll, viewport: viewport, sequence: UInt64(page))
+            #expect(abs(try offset(of: anchor, in: scroll) - oldOffset) < 0.5)
+            #expect(scroll.contentOffset.y < scroll.contentSize.height - viewportHeight - rowHeight)
+        }
+    }
+
     @Test func recoveredRowTakesTheDeletedAnchorsOffset() throws {
         let viewport = ChatListViewport()
         var ids = (0..<200).map(String.init)

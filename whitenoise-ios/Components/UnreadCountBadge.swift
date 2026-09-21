@@ -21,6 +21,7 @@ struct UnreadCountBadge: View {
     }
 
     @Environment(\.colorScheme) private var colorScheme
+    @ScaledMetric(relativeTo: .caption2) private var diameter = WNBadge.Metrics.minimumHeight
 
     let count: UInt64
 
@@ -30,10 +31,7 @@ struct UnreadCountBadge: View {
         case .dot:
             Circle()
                 .fill(WNBadge.Metrics.accent(for: colorScheme))
-                .frame(
-                    width: WNBadge.Metrics.dotDiameter,
-                    height: WNBadge.Metrics.dotDiameter
-                )
+                .frame(width: diameter, height: diameter)
                 .accessibilityLabel(L10n.string("Unread"))
         case .count(let label):
             WNBadge(text: label)

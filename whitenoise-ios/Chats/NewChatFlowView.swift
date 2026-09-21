@@ -545,6 +545,8 @@ struct StartChatPromptSection: View {
                 case .invite:
                     Label("Invite to White Noise", systemImage: "person.crop.circle.badge.plus")
                         .font(.headline)
+                        .padding(.trailing, 44)
+                        .frame(minHeight: 44)
                     Text(StartChatFailurePresentation.inviteDetail(recipientName: prompt.recipientName))
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -552,19 +554,24 @@ struct StartChatPromptSection: View {
                         ShareLink(item: StartChatFailurePresentation.inviteMessage()) {
                             Label("Share Invite", systemImage: "square.and.arrow.up")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .wnPrimaryButtonStyle()
+                        .controlSize(.large)
                         Button("Retry", action: onRetry)
-                            .buttonStyle(.bordered)
+                            .wnSecondaryButtonStyle()
+                            .controlSize(.large)
                     }
                 case .error(let message):
                     Label("Couldn't start chat", systemImage: "exclamationmark.triangle.fill")
                         .font(.headline)
+                        .padding(.trailing, 44)
+                        .frame(minHeight: 44)
                         .foregroundStyle(.red)
                     Text(message)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button("Retry", action: onRetry)
-                        .buttonStyle(.bordered)
+                        .wnSecondaryButtonStyle()
+                        .controlSize(.large)
                 }
             }
             .padding(.vertical, 4)
@@ -574,7 +581,9 @@ struct StartChatPromptSection: View {
                     onDismiss()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Dismiss")

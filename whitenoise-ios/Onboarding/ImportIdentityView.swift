@@ -204,7 +204,7 @@ struct ImportIdentityView: View {
         }
         .padding(.leading)
         .frame(height: 50)
-        .background(Color(uiColor: .secondarySystemFill), in: .capsule)
+        .compatibleInputCapsuleChrome(interactive: false)
         .disabled(model.isImporting)
         .contentShape(.capsule)
         .onTapGesture {

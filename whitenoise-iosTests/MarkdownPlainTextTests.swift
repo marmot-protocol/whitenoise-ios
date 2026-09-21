@@ -250,6 +250,7 @@ struct MarkdownPlainTextTests {
             media: [],
             agentTextStreamJson: nil,
             deleted: false,
+            deletionSource: .unknown,
             invalidationStatus: nil
         )
         #expect(MessagePreview.body(preview) == "code reply")

@@ -90,7 +90,7 @@ struct GroupDetailsArchiveActionTests {
         let second = Task { @MainActor in
             await model.updateProfile(using: appState)
         }
-        await second.value
+        _ = await second.value
 
         #expect(publisher.requests == [
             GroupProfilePublishProbe.Request(
@@ -102,7 +102,7 @@ struct GroupDetailsArchiveActionTests {
         ])
 
         publisher.completeFirst()
-        await first.value
+        _ = await first.value
 
         #expect(!model.membershipActionInFlight)
     }

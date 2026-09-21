@@ -42,6 +42,10 @@ struct MessageInfoSheet: View {
                 Section {
                     detailsCard
                 }
+                if let conversation, !conversation.mediaItems(for: record).isEmpty {
+                    AttachmentTransfersView(groupID: conversation.group.groupIdHex,
+                        items: conversation.mediaItems(for: record))
+                }
                 if let conversation, conversation.canReadReports {
                     MessageReportsSection(messageID: record.messageIdHex, conversation: conversation)
                 }
@@ -278,7 +282,7 @@ struct ReactionDetailsSheet: View {
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(selected ? Color.white : Color.primary)
             .padding(.horizontal, 12)
-            .frame(minHeight: 36)
+            .frame(minHeight: 44)
             .background(
                 selected ? Color.accentColor : Color(.tertiarySystemFill),
                 in: Capsule()

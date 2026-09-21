@@ -2,7 +2,7 @@ import Foundation
 import MarmotKit
 
 extension MarkdownDocumentFfi {
-    init(blocks: [MarkdownBlockFfi], truncated: Bool) {
+    nonisolated init(blocks: [MarkdownBlockFfi], truncated: Bool) {
         self.init(
             blocks: blocks,
             truncated: truncated,
@@ -10,7 +10,7 @@ extension MarkdownDocumentFfi {
         )
     }
 
-    static var emptyDocument: MarkdownDocumentFfi {
+    nonisolated static var emptyDocument: MarkdownDocumentFfi {
         MarkdownDocumentFfi(blocks: [], truncated: false)
     }
 }
@@ -620,7 +620,8 @@ extension ChatListMessagePreviewFfi {
         contentTokens: MarkdownDocumentFfi,
         kind: UInt64,
         timelineAt: UInt64,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             groupSystem: groupSystem,
@@ -631,7 +632,10 @@ extension ChatListMessagePreviewFfi {
             contentTokens: contentTokens,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
+            deletionSource: deletionSource,
             attachmentKind: nil,
             attachmentCount: 0,
             deliveryState: .notApplicable
@@ -646,7 +650,8 @@ extension ChatListMessagePreviewFfi {
         plaintext: String,
         kind: UInt64,
         timelineAt: UInt64,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             groupSystem: groupSystem,
@@ -657,7 +662,10 @@ extension ChatListMessagePreviewFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
+            deletionSource: deletionSource,
             attachmentKind: nil,
             attachmentCount: 0,
             deliveryState: .notApplicable
@@ -688,10 +696,12 @@ extension TimelineMessageRecordFfi {
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
         deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
@@ -716,6 +726,7 @@ extension TimelineMessageRecordFfi {
             reactions: reactions,
             edit: edit,
             deleted: deleted,
+            deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus
         )
@@ -742,10 +753,12 @@ extension TimelineMessageRecordFfi {
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
         deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown,
         deletedByMessageIdHex: String?,
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
@@ -770,6 +783,7 @@ extension TimelineMessageRecordFfi {
             reactions: reactions,
             edit: edit,
             deleted: deleted,
+            deletionSource: deletionSource,
             deletedByMessageIdHex: deletedByMessageIdHex,
             invalidationStatus: invalidationStatus
         )
@@ -785,7 +799,8 @@ extension TimelineReplyPreviewFfi {
         mediaJson: String?,
         media: [MediaAttachmentReferenceFfi] = [],
         agentTextStreamJson: String?,
-        deleted: Bool
+        deleted: Bool,
+        deletionSource: DeletionSourceFfi = .unknown
     ) {
         self.init(
             messageIdHex: messageIdHex,
@@ -797,6 +812,7 @@ extension TimelineReplyPreviewFfi {
             media: media.enumerated().map { .accepted(attachmentIndex: UInt32(clamping: $0.offset), reference: $0.element) },
             agentTextStreamJson: agentTextStreamJson,
             deleted: deleted,
+            deletionSource: deletionSource,
             invalidationStatus: nil
         )
     }

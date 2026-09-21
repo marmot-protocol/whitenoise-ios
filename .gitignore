@@ -3,6 +3,9 @@ xcuserdata/
 *.xcuserstate
 build/
 
+# Swift Package Manager build cache
+/.build/
+
 ## Local build secrets
 Config/TelemetrySecrets.xcconfig
 trees/

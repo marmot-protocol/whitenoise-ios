@@ -259,7 +259,7 @@ struct ProductAnalyticsTests {
         let root = URL(fileURLWithPath: original.rootPath)
         let expected: UsageDiagnosticsDecisionFfi = granted ? .granted : .declined
         _ = try await original.setUsageDiagnosticsConsent(granted)
-        try await original.marmot.setAuditLogSettings(settings: .init(enabled: true))
+        _ = try await original.marmot.setAuditLogSettings(settings: .init(enabled: true))
         try await original.marmot.shutdownAndClose()
 
         let reopened = try MarmotClient(rootPath: root.path, relayUrls: [])

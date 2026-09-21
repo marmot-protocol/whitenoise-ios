@@ -9,6 +9,7 @@ import MarmotKit
 @MainActor
 @Observable
 final class KeyPackagesViewModel {
+    var inventory: [AccountKeyPackageInventoryEntryFfi] = []
     var packages: [AccountKeyPackageFfi] = []
     var relayHistory: [AccountKeyPackageRelayEventFfi] = []
     var relayHistoryError: String?
@@ -29,12 +30,13 @@ final class KeyPackagesViewModel {
         lists.map(RelaySettings.bootstrapRelays(from:)) ?? MarmotClient.seedRelays
     }
 
-    func reload(using appState: AppState) async {
+    func reload(using appState: AppState, refresh: Bool = false) async {
         guard let ref = appState.activeAccountRef else {
             reloadTicket += 1
             isLoading = false
             loadedRef = nil
             loadError = nil
+            inventory = []
             packages = []
             relayHistory = []
             relayHistoryError = nil
@@ -58,6 +60,7 @@ final class KeyPackagesViewModel {
         // The model persists across account changes; never show one
         // account's data while another's loads.
         if loadedRef != ref {
+            inventory = []
             packages = []
             relayHistory = []
             relayHistoryError = nil
@@ -69,6 +72,15 @@ final class KeyPackagesViewModel {
 
         do {
             let client = try appState.currentMarmotClient()
+            let local = try await Task.detached { [client] in
+                try client.marmot.localAccountKeyPackages(accountRef: ref)
+            }.value
+            guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
+            inventory = local
+            packages = local.map(\.record)
+            presentation = KeyPackagesPresentation(inventory: local)
+            hasLoaded = true
+            loadedRef = ref
             let loadedLists = try await client.accountRelayLists(accountRef: ref)
             // The screen's task restarts on account change, but the cancelled
             // body still runs to completion — a straggling load must not
@@ -77,10 +89,11 @@ final class KeyPackagesViewModel {
             // guard so a failed or cancelled package load can't leave
             // mixed-account state.
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
-            let loadedPackages = try await client.accountKeyPackages(
-                accountRef: ref,
-                bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists)
-            )
+            let loadedInventory = refresh
+                ? try await client.marmot.refreshAccountKeyPackages(
+                    accountRef: ref, bootstrapRelays: RelaySettings.bootstrapRelays(from: loadedLists))
+                : local
+            let loadedPackages = loadedInventory.map(\.record)
             guard !Task.isCancelled, reloadTicket == ticket, appState.activeAccountRef == ref else { return }
             let loadedMaintenanceStatus: KeyPackageMaintenanceStatusFfi?
             let loadedMaintenanceError: String?
@@ -108,8 +121,9 @@ final class KeyPackagesViewModel {
             relayHistory = history
             relayHistoryError = historyError
             lists = loadedLists
+            inventory = loadedInventory
             packages = loadedPackages
-            presentation = KeyPackagesPresentation(packages: loadedPackages, status: loadedMaintenanceStatus)
+            presentation = KeyPackagesPresentation(inventory: loadedInventory, status: loadedMaintenanceStatus)
             hasLoaded = true
             maintenanceLoadError = loadedMaintenanceError
             loadedRef = ref
@@ -129,7 +143,7 @@ final class KeyPackagesViewModel {
             _ = try await client.publishNewKeyPackage(accountRef: ref)
             Haptics.success()
             appState.present(.success(L10n.string("New key package published")))
-            await reload(using: appState)
+            await reload(using: appState, refresh: true)
         } catch {
             Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Publish failed"), error: error))
@@ -152,7 +166,7 @@ final class KeyPackagesViewModel {
             )
             Haptics.success()
             appState.present(.success(L10n.string("Key package deleted")))
-            await reload(using: appState)
+            await reload(using: appState, refresh: true)
         } catch {
             Haptics.error()
             appState.present(UserFacingError.toast(title: L10n.string("Delete failed"), error: error))
