@@ -38,7 +38,10 @@ struct NotificationSettingsView: View {
             NotificationPreviewSection(
                 mode: model.previewMode,
                 isEnabled: previewControlsEnabled,
-                setMode: { model.setPreviewMode($0) }
+                setMode: {
+                    model.setPreviewMode($0)
+                    appState.notifications.cancelForegroundBatches()
+                }
             )
 
             statusSection

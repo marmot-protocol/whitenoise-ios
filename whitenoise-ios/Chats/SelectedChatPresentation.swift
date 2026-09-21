@@ -46,22 +46,27 @@ enum SelectedChatPresentation {
             title = L10n.string("Conversation unavailable")
         }
         let avatarURL: URL?
-        let seed: String
-        switch selected.avatar {
-        case .remoteImage(let url, let cacheKey):
+        if case .remoteImage(let url, _) = selected.avatar {
             avatarURL = ContentSanitizer.imageURL(url)
-            seed = cacheKey
-        case .encryptedGroupImage(_, let cacheKey):
+        } else {
             avatarURL = nil
-            seed = cacheKey
-        case .placeholder(let stableSeed, _):
-            avatarURL = nil
-            seed = stableSeed
         }
         return ChatsListViewModel.Display(
-            title: title, avatarURL: avatarURL, avatarSeed: seed,
+            title: title, avatarURL: avatarURL, avatarSeed: avatarSeed(for: selected),
             isDirectMessage: row.conversationKind == .direct,
             directPeerAccountIdHex: selected.peerId
         )
+    }
+
+    static func avatarSeed(for selected: ConversationPresentationFfi) -> String {
+        // Match profile/member colors without replacing MDK's selected avatar or cache key.
+        if selected.avatarSource == .peerProfile || selected.avatarSource == .peerFallback,
+           let peerId = selected.peerId {
+            return peerId
+        }
+        switch selected.avatar {
+        case .remoteImage(_, let seed), .encryptedGroupImage(_, let seed), .placeholder(let seed, _):
+            return seed
+        }
     }
 }

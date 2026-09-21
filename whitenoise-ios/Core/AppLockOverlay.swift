@@ -74,7 +74,8 @@ struct AppLockShieldView: View {
                             .font(.body.weight(.semibold))
                             .padding(.horizontal, 24)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .wnPrimaryButtonStyle()
+                    .controlSize(.large)
                     .padding(.top, 12)
                     .padding(.bottom, 48)
                 }

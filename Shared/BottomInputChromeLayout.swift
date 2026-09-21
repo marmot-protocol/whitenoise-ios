@@ -34,7 +34,4 @@ enum BottomInputChromeLayout {
     static let inlineAccessoryIconSize: CGFloat = 18
     static let trailingActionIconSize: CGFloat = 19
     static let inlineEmojiIconSize: CGFloat = 22
-
-    /// Hairline stroke for bottom-input glass in light mode.
-    static let lightModeInputStrokeOpacity: CGFloat = 0.12
 }

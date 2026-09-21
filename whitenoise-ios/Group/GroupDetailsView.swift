@@ -316,14 +316,18 @@ struct GroupDetailsView: View {
         .task(id: viewModel.groupMlsRefreshGeneration) {
             await model.refreshVisibleDebugState(using: appState)
         }
-        .task(id: viewModel.group.groupIdHex) {
+        .task(id: "\(viewModel.group.groupIdHex)/\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)") {
             if openAddMembersOnAppear, !didOpenRequestedAddMembers, isAdmin, !isDirectMessage {
                 didOpenRequestedAddMembers = true
                 model.showAddMembers = true
             }
             model.loadMuteState(using: appState)
-            await model.loadSharedMedia(using: appState)
+            await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState)
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                await model.refreshSharedMediaVersion(using: appState)
+            }
         }
         .refreshable {
             await model.loadSharedMedia(using: appState, force: true)
@@ -583,6 +587,8 @@ struct GroupDetailsView: View {
                     action: openConversationSearch
                 )
             }
+            // Form cells clip overflow; leave room for the glass press expansion.
+            .padding(.vertical, 12)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         }
@@ -617,7 +623,7 @@ struct GroupDetailsView: View {
 
     private var sharedMediaSection: some View {
         GroupSharedMediaSection(
-            records: model.sharedMediaRecords,
+            items: model.sharedMediaItems,
             isLoading: model.isLoadingSharedMedia,
             error: model.sharedMediaError,
             onRetry: {
@@ -817,23 +823,8 @@ struct GroupDetailsView: View {
     }
 
     private var memberSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search members", text: $memberSearchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !memberSearchText.isEmpty {
-                Button {
-                    memberSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear member search")
-            }
-        }
+        WNSearchField(query: $memberSearchText, prompt: "Search members")
+            .wnInputRow()
     }
 
     // MARK: - Technical details

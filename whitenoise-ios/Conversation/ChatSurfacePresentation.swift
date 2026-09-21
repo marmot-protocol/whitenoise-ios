@@ -33,10 +33,12 @@ enum ConversationDateHeader {
 nonisolated enum MessageSelectionPolicy {
     static let maximumForwardCount = 30
 
-    static func canForward(selectedCount: Int, allForwardable: Bool) -> Bool {
+    /// Forwarding sends the forwardable text in the selection and drops the
+    /// rest, so one uncaptioned image must not disable the whole action.
+    static func canForward(selectedCount: Int, anyForwardable: Bool) -> Bool {
         selectedCount > 0
             && selectedCount <= maximumForwardCount
-            && allForwardable
+            && anyForwardable
     }
 
     static func canDelete(selectedCount: Int, allDeletable: Bool) -> Bool {

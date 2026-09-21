@@ -123,6 +123,10 @@ struct AddToGroupSheet: View {
     let contactName: String
     let groups: [SharedGroupsProjection.SharedGroup]
     var onAdded: @MainActor () async -> Void = {}
+    var isLoading = false
+    var loadError: String?
+    var onReload: (@MainActor () async -> Void)?
+    @State private var hasLoaded = false
 
     @State private var busyGroupIdHex: String?
     @State private var error: String?
@@ -162,7 +166,10 @@ struct AddToGroupSheet: View {
                         .disabled(busyGroupIdHex != nil)
                     }
                 } footer: {
-                    Text(L10n.formatted("Adds %@ to the group you pick.", contactName))
+                    if !groups.isEmpty, !isLoading, loadError == nil,
+                       onReload == nil || hasLoaded {
+                        Text(L10n.formatted("Adds %@ to the group you pick.", contactName))
+                    }
                 }
 
                 if let error {
@@ -171,6 +178,30 @@ struct AddToGroupSheet: View {
                             .foregroundStyle(.red)
                     }
                 }
+            }
+            .overlay {
+                if isLoading || (onReload != nil && !hasLoaded) {
+                    ProgressView()
+                } else if let loadError {
+                    ContentUnavailableView {
+                        Label("Couldn't load groups", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(loadError)
+                    } actions: {
+                        Button("Try Again") { Task { await onReload?() } }
+                    }
+                } else if groups.isEmpty {
+                    ContentUnavailableView {
+                        Label("No Available Groups", systemImage: "person.3")
+                    } description: {
+                        Text("You can add people to groups you administer that they haven't joined.")
+                    }
+                }
+            }
+            .task(id: appState.activeAccountRef) {
+                hasLoaded = false
+                await onReload?()
+                hasLoaded = true
             }
             .navigationTitle("Add to group")
             .navigationBarTitleDisplayMode(.inline)

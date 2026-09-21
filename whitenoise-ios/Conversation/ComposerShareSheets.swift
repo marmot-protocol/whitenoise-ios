@@ -109,8 +109,8 @@ struct LocationPickerView: View {
                 Label(L10n.string("Send this location"), systemImage: "location.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .foregroundStyle(WNNeutralAccent.foreground)
+            .wnPrimaryButtonStyle()
+            .controlSize(.large)
             .disabled(location.selectedCoordinate == nil)
         }
         .padding()

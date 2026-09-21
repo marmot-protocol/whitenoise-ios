@@ -105,8 +105,8 @@ private struct BootstrapFailureView: View {
             Button("Retry") {
                 Task { await appState.bootstrap() }
             }
-            .buttonStyle(.borderedProminent)
-            .foregroundStyle(WNNeutralAccent.foreground)
+            .wnPrimaryButtonStyle()
+            .controlSize(.large)
         }
         .padding()
     }

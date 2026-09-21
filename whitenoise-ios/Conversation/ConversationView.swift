@@ -68,9 +68,10 @@ enum TimelineBottom {
     static func userMovedAwayState(
         previous: Bool,
         viewportIsPinned: Bool,
-        isUserScrolling: Bool
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool = false
     ) -> Bool {
-        if viewportIsPinned { return false }
+        if viewportIsPinned, !hasMoreAfter { return false }
         if isUserScrolling { return true }
         return previous
     }
@@ -208,9 +209,27 @@ enum TimelineBottomScrollCoordinator {
 
     static func shouldExecute(
         reason: TimelineBottomScrollReason,
-        isUserScrolling: Bool
+        isUserScrolling: Bool,
+        userMovedAwayFromBottom: Bool = false,
+        hasMoreAfter: Bool = false,
+        isPaging: Bool = false
     ) -> Bool {
-        reason.isUserInitiated || !isUserScrolling
+        if reason.isUserInitiated { return true }
+        return !isUserScrolling && !userMovedAwayFromBottom && !hasMoreAfter && !isPaging
+    }
+
+    static func sizeChangeAnchor(
+        didFinishInitialPositioning: Bool,
+        userMovedAwayFromBottom: Bool,
+        isUserScrolling: Bool,
+        hasMoreAfter: Bool,
+        isPaging: Bool
+    ) -> UnitPoint? {
+        didFinishInitialPositioning && shouldExecute(
+            reason: .layoutChange, isUserScrolling: isUserScrolling,
+            userMovedAwayFromBottom: userMovedAwayFromBottom,
+            hasMoreAfter: hasMoreAfter, isPaging: isPaging
+        ) ? .bottom : nil
     }
 
     static func shouldFollowLayoutChange(
@@ -525,6 +544,7 @@ enum ConversationInvitePresentation {
 
 struct ConversationView: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
     let chat: AppGroupRecordFfi
     let draftAccountRef: String?
@@ -576,12 +596,12 @@ struct ConversationView: View {
     @State private var failedSendTarget: FailedSendTarget?
     @State private var rowFrames = RowFrameStore()
     @State private var conversationViewport = ChatListViewport()
-    @State private var preparingDraftSend = false
     @State private var blockedUsers = BlockedUsersModel()
     @State private var timelineVisibility = TimelineVisibilityStore()
     @State private var measuredActionRowFrameKey: String?
     @State private var pendingActionsPresentation: PendingActionsPresentation?
     @State private var pendingActionFrameMeasurementClearTask: Task<Void, Never>?
+    private let openPerformance: ConversationOpenPerformance?
     @State private var composerFocusRequest = 0
     @State private var composerDismissRequest = 0
     @State private var popTransition = InteractivePopTransitionState()
@@ -590,6 +610,7 @@ struct ConversationView: View {
     /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
     /// carries the request into the reader's scope.
     @State private var composerSendBottomScrollRequest = 0
+    @State private var measuredTimelineTail = TimelineTailMeasurement()
     @State private var isAtTimelineBottom = true
     @State private var isUserScrollingTimeline = false
     @State private var userMovedAwayFromTimelineBottom = false
@@ -612,10 +633,6 @@ struct ConversationView: View {
     private var replyCloseIconSize = ReplyPreviewLayout.closeIconSize
     @ScaledMetric(relativeTo: .caption)
     private var replyCloseHitSize = ReplyPreviewLayout.closeHitSize
-    @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomIconSize: CGFloat = 18
-    @ScaledMetric(relativeTo: .body)
-    private var scrollToBottomDiameter: CGFloat = 42
 
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
@@ -715,6 +732,7 @@ struct ConversationView: View {
         initialTargetMessageIdHex: String? = nil,
         initialUnreadMessageIdHex: String? = nil,
         initialAppState: AppState? = nil,
+        openPerformance: ConversationOpenPerformance? = nil,
         forwardDestinationProvider: (() async throws -> [MessageForwardDestination])? = nil,
         onChatListRowUpdated: ((ChatListRowFfi) -> Void)? = nil,
         onGroupChanged: ((AppGroupRecordFfi) -> Void)? = nil,
@@ -722,6 +740,7 @@ struct ConversationView: View {
         onGroupDeleted: ((String) -> Void)? = nil,
         onDraftChanged: (() -> Void)? = nil
     ) {
+        self.openPerformance = openPerformance
         self.chat = chat
         self.draftAccountRef = accountRef ?? initialAppState?.activeAccountRef
         self.initialTitle = initialTitle
@@ -757,16 +776,32 @@ struct ConversationView: View {
 
     private var conversationChromeView: some View {
         timeline
+            .compatibleTopScrollEdgeEffectHidden()
             .safeAreaInset(edge: .top, spacing: 0) { searchBarInset }
             .bottomInputChromeAccessory {
+                // `onGeometryChange`'s transform is nonisolated and @Sendable, so
+                // the observable reads happen here in `body` — which also makes
+                // them tracked dependencies rather than untracked layout-time reads.
+                let windowEpoch = viewModel?.conversationWindow?.header.epoch
+                let windowCanSend = viewModel?.conversationWindow?.header.capabilities.canSend
+                let peerBlocked = blockedPeerNpub != nil
+                let searching = viewModel?.search.isActive == true
+                let sendEnabled = viewModel?.canSendMessages == true
                 composerArea
-                    .frame(maxWidth: .infinity)
-                    .background {
-                        Color(.systemBackground)
-                            .ignoresSafeArea(edges: .bottom)
+                    .onGeometryChange(for: Bool?.self) { geometry in
+                        ConversationOpenPerformance.composerOutcome(
+                            epoch: windowEpoch,
+                            canSend: windowCanSend,
+                            blocked: peerBlocked,
+                            composerPresented: geometry.size.height > 0 && !isSelectingMessages
+                                && !searching,
+                            enabled: sendEnabled
+                        )
+                    } action: { value in
+                        openPerformance?.rendered(local: false, composer: value, recorder: appState.productAnalytics)
                     }
+                    .frame(maxWidth: .infinity)
             }
-            .ignoresSafeArea(.keyboard, edges: .bottom)
             // The identity cluster lives leading-aligned next to the back
             // chevron; an inline system title would double it up.
             .productScreen(.conversation)
@@ -1031,7 +1066,7 @@ struct ConversationView: View {
             )
     }
 
-    var body: some View {
+    private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
             .safeAreaInset(edge: .top, spacing: 0) {
                 if let viewModel {
@@ -1064,6 +1099,10 @@ struct ConversationView: View {
                         viewport.cancelRestoration()
                         return
                     }
+                    // A page replacement must not inherit the previous page's bottom.
+                    isAtTimelineBottom = false
+                    userMovedAwayFromTimelineBottom = true
+                    cancelPendingBottomScroll()
                     viewport.prepare(for: snapshot, displayID: { model.displayID(for: $0) })
                 }
                 await viewModel?.start()
@@ -1091,6 +1130,10 @@ struct ConversationView: View {
                       update.accountID == appState.activeAccount?.accountIdHex else { return }
                 await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
+    }
+
+    private var conversationStateObservers: some View {
+        conversationRuntimeTasks
             .onChange(of: appState.streamingDebugEnabled) { _, _ in
                 viewModel?.refreshStreamingDebugPresentation()
             }
@@ -1107,6 +1150,10 @@ struct ConversationView: View {
             .onChange(of: viewModel?.canSendMessages ?? true) { _, canSendMessages in
                 handleComposerAvailabilityChange(canSendMessages: canSendMessages)
             }
+    }
+
+    var body: some View {
+        conversationStateObservers
             .onChange(of: draft) { _, draft in
                 if editSession == nil {
                     persistCurrentDraft(text: draft)
@@ -1201,7 +1248,7 @@ struct ConversationView: View {
                 let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: mediaDrafts)
                 ComposerBar(
                     draft: $draft,
-                    isSending: (viewModel?.sendInFlight ?? false) || editSaveInFlight || preparingDraftSend,
+                    isSending: editSaveInFlight,
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
@@ -1254,7 +1301,7 @@ struct ConversationView: View {
         let records = selectedMessageRecords(viewModel: viewModel)
         let canForward = MessageSelectionPolicy.canForward(
             selectedCount: records.count,
-            allForwardable: records.allSatisfy { MessageForwardingPolicy.forwardableText(for: $0) != nil }
+            anyForwardable: records.contains { MessageForwardingPolicy.forwardableText(for: $0) != nil }
         )
         let canDelete = MessageSelectionPolicy.canDelete(
             selectedCount: records.count,
@@ -1273,26 +1320,17 @@ struct ConversationView: View {
         )
 
         return HStack(spacing: 10) {
-            Button(role: .destructive) {
-                guard canDelete else { return }
-                showBatchDeleteConfirmation = true
-            } label: {
-                if batchDeleteInFlight {
-                    ProgressView().frame(width: 44, height: 44)
-                } else {
-                    Image(systemName: "trash")
-                        .font(.title3)
-                        .frame(width: 44, height: 44)
+            if batchDeleteInFlight {
+                ProgressView()
+                    .frame(width: WNSecondaryButtonStyle.Metrics.circleDiameter,
+                           height: WNSecondaryButtonStyle.Metrics.circleDiameter)
+                    .wnLiftedChrome(in: .circle)
+            } else {
+                WNIconButton(title: "Delete selected messages", systemImage: "trash") {
+                    showBatchDeleteConfirmation = true
                 }
+                .disabled(!canDelete)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(canDelete && !batchDeleteInFlight ? Color.red : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
-            .disabled(!canDelete || batchDeleteInFlight)
-            .accessibilityLabel(L10n.string("Delete selected messages"))
 
             Spacer(minLength: 0)
 
@@ -1300,50 +1338,23 @@ struct ConversationView: View {
                 .font(.body.weight(.medium))
                 .contentTransition(.numericText())
                 .padding(.horizontal, 18)
-                .frame(minHeight: 44)
-                .background(.regularMaterial, in: .capsule)
-                .overlay {
-                    Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                }
+                .frame(minHeight: WNSecondaryButtonStyle.Metrics.circleDiameter)
+                .wnLiftedChrome(in: .capsule)
 
             Spacer(minLength: 0)
 
-            Button {
-                guard canCopy else { return }
+            WNIconButton(title: "Copy selected messages", systemImage: "doc.on.doc") {
                 SensitiveClipboard.copyLocalOnly(MessageSelectionPolicy.combinedCopyText(bodies))
                 Haptics.tap()
                 exitMessageSelection()
-            } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(canCopy ? Color.accentColor : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
             .disabled(!canCopy)
-            .accessibilityLabel(L10n.string("Copy selected messages"))
 
-            Button {
-                guard canForward else { return }
+            WNIconButton(title: "Forward selected messages", systemImage: "arrowshape.turn.up.right") {
                 forwardSelectionTarget = ForwardSelectionTarget(records: records)
                 exitMessageSelection()
-            } label: {
-                Image(systemName: "arrowshape.turn.up.right")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(canForward ? Color.accentColor : Color.secondary.opacity(0.4))
-            .background(.regularMaterial, in: .circle)
-            .overlay {
-                Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
             }
             .disabled(!canForward)
-            .accessibilityLabel(L10n.string("Forward selected messages"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 6)
@@ -1448,49 +1459,23 @@ struct ConversationView: View {
     /// both direct messages and groups.
     private var conversationHeaderBar: some View {
         HStack(spacing: 16) {
-            Button {
-                navigateBack()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(width: 44, height: 44)
-                    .background {
-                        Circle()
-                            .fill(Color(.secondarySystemBackground))
-                    }
-                    .overlay {
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-                    }
-                    .contentShape(.circle)
+            // Selection owns the header; its only exit is the close button.
+            if !isSelectingMessages {
+                WNIconButton(title: "Back", systemImage: "chevron.backward", action: navigateBack)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.string("Back"))
 
             conversationTitle
 
             Spacer(minLength: 0)
 
             if isSelectingMessages {
-                Button(L10n.string("Cancel")) { exitMessageSelection() }
+                WNIconButton(title: "Close", systemImage: "xmark") { exitMessageSelection() }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(.systemBackground), location: 0),
-                    .init(color: Color(.systemBackground).opacity(0.94), location: 0.58),
-                    .init(color: Color(.systemBackground).opacity(0.68), location: 0.82),
-                    .init(color: Color(.systemBackground).opacity(0), location: 1)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .top)
-        }
+        .wnFadingHeader()
     }
 
     @ViewBuilder
@@ -1621,13 +1606,25 @@ struct ConversationView: View {
                     .contentShape(.rect)
                     .simultaneousGesture(TapGesture().onEnded { dismissKeyboard() })
             } else if viewModel.timeline.isEmpty {
+                let hasWindow = viewModel.conversationWindow != nil
+                let loading = viewModel.isLoading
                 emptyTimeline(viewModel: viewModel)
+                    .onGeometryChange(for: Bool.self) { geometry in
+                        ConversationOpenPerformance.localContentVisible(
+                            height: geometry.size.height, hasWindow: hasWindow,
+                            loading: loading, empty: true, positionSettled: false)
+                    } action: { visible in
+                        openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                    }
             } else {
                 let concealInitialTimeline = shouldConcealInitialTimelineContent(viewModel: viewModel)
                 let showsSenderIdentity = !viewModel.groupDisplay.isDirectMessage
                 let dayHeaders = Dictionary(viewModel.timelineDaySections().compactMap { section in
                     section.items.first.map { ($0.id, section.day) }
                 }, uniquingKeysWith: { first, _ in first })
+                let renderedTailID = viewModel.timeline.last?.id
+                let hasWindow = viewModel.conversationWindow != nil
+                let loading = viewModel.isLoading
                 ScrollViewReader { proxy in
                     GeometryReader { outer in
                         ScrollView {
@@ -1666,14 +1663,15 @@ struct ConversationView: View {
                                     }
                                     .padding(.bottom, 4)
                                     newerTimelineTrigger(viewModel: viewModel)
+                                    // Keep spacing before the target so it ends at the actual content edge.
                                     ForEach([Self.timelineBottomID], id: \.self) { _ in
                                         timelineBottomSentinel
+                                            .padding(.top, BottomInputChromeLayout.timelineComposerSpacing)
                                     }
                                 }
                                 .scrollTargetLayout()
                             }
                             .padding(.top, 8)
-                            .padding(.bottom, BottomInputChromeLayout.timelineComposerSpacing)
                             // Keep short conversations bottom-aligned by making
                             // their content track the live viewport height as
                             // the keyboard resizes the safe-area bar.
@@ -1698,6 +1696,14 @@ struct ConversationView: View {
                         // semantic initial-position request below still verifies
                         // the bottom sentinel after row layout has completed.
                         .defaultScrollAnchor(.bottom, for: .initialOffset)
+                        // Let native layout carry the tail with the keyboard's own transition.
+                        .defaultScrollAnchor(TimelineBottomScrollCoordinator.sizeChangeAnchor(
+                            didFinishInitialPositioning: isInitialTimelinePositionSettled,
+                            userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                            isUserScrolling: isUserScrollingTimeline,
+                            hasMoreAfter: viewModel.hasMoreAfter,
+                            isPaging: viewModel.isAwaitingPageCompletion
+                        ), for: .sizeChanges)
                         .task(id: initialTimelinePositionRequestGeneration) {
                             await Task.yield()
                             guard !Task.isCancelled,
@@ -1710,6 +1716,14 @@ struct ConversationView: View {
                         // Only scroll/bounce when the messages actually exceed
                         // the viewport; with a few messages the timeline stays put.
                         .scrollBounceBehavior(.basedOnSize)
+                        .onGeometryChange(for: Bool.self) { geometry in
+                            ConversationOpenPerformance.localContentVisible(
+                                height: geometry.size.height, hasWindow: hasWindow,
+                                loading: loading, empty: false,
+                                positionSettled: isInitialTimelinePositionSettled)
+                        } action: { visible in
+                            openPerformance?.rendered(local: visible, composer: nil, recorder: appState.productAnalytics)
+                        }
                         .compatibleBottomScrollEdgeEffectHidden()
                         .scrollDismissesKeyboard(.interactively)
                         .onScrollPhaseChange { _, phase in
@@ -1720,9 +1734,9 @@ struct ConversationView: View {
                                 cancelPendingBottomScroll()
                             }
                             if phase == .idle {
-                                viewModel.reportConversationViewport(atTail: isAtTimelineBottom,
+                                viewModel.reportConversationViewport(atTail: isMeasuredConversationTail(viewModel),
                                     visibleRowID: conversationViewport.visibleAnchor())
-                                if isAtTimelineBottom { userMovedAwayFromTimelineBottom = false }
+                                if isMeasuredConversationTail(viewModel) { userMovedAwayFromTimelineBottom = false }
                             }
                         }
                         .onPreferenceChange(RowFramesKey.self) { preferences in
@@ -1739,45 +1753,39 @@ struct ConversationView: View {
                                 reconcileTimelineTailVisibility(viewModel: viewModel)
                             }
                         }
-                        .onScrollGeometryChange(for: Bool.self) { geometry in
-                            TimelineBottom.distanceToBottom(
-                                contentHeight: geometry.contentSize.height,
-                                visibleBottomY: geometry.visibleRect.maxY,
-                                bottomContentInset: geometry.contentInsets.bottom
-                            ) <= TimelineBottom.pinnedThreshold
-                        } action: { _, isPinned in
-                            if isAtTimelineBottom != isPinned {
-                                isAtTimelineBottom = isPinned
-                                if isPinned, isInitialTimelinePositionSettled {
-                                    viewModel.markConversationReadThroughTail()
+                        .onScrollGeometryChange(for: TimelineTailMeasurement.self) { geometry in
+                            TimelineTailMeasurement(
+                                lastRowID: renderedTailID,
+                                distanceToBottom: TimelineBottom.distanceToBottom(
+                                    contentHeight: geometry.contentSize.height,
+                                    visibleBottomY: geometry.visibleRect.maxY,
+                                    bottomContentInset: geometry.contentInsets.bottom
+                                )
+                            )
+                        } action: { _, measurement in
+                            measuredTimelineTail = measurement
+                            let atTail = isMeasuredConversationTail(viewModel)
+                            isAtTimelineBottom = atTail
+                            if atTail, isInitialTimelinePositionSettled {
+                                viewModel.markConversationReadThroughTail()
+                                if !isUserScrollingTimeline {
+                                    viewModel.reportConversationViewport(atTail: true,
+                                        visibleRowID: conversationViewport.visibleAnchor())
                                 }
                             }
-                            let movedAway = TimelineBottom.userMovedAwayState(
+                            userMovedAwayFromTimelineBottom = TimelineBottom.userMovedAwayState(
                                 previous: userMovedAwayFromTimelineBottom,
-                                viewportIsPinned: isPinned,
-                                isUserScrolling: isUserScrollingTimeline
+                                viewportIsPinned: atTail,
+                                isUserScrolling: isUserScrollingTimeline,
+                                hasMoreAfter: viewModel.hasMoreAfter
                             )
-                            if userMovedAwayFromTimelineBottom != movedAway {
-                                userMovedAwayFromTimelineBottom = movedAway
-                            }
                         }
                         .onScrollGeometryChange(for: CGFloat.self) { geometry in
                             geometry.contentSize.height
                         } action: { _, _ in
                             if isInitialTimelinePositioning {
                                 maintainInitialTimelinePosition(viewModel: viewModel)
-                                return
                             }
-                            guard TimelineBottomScrollCoordinator.shouldFollowLayoutChange(
-                                didFinishInitialPositioning: isInitialTimelinePositionSettled,
-                                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
-                                isUserScrolling: isUserScrollingTimeline
-                            ) else { return }
-                            scheduleScrollToBottom(
-                                proxy: proxy,
-                                animated: false,
-                                reason: .layoutChange
-                            )
                         }
                         .onChange(of: viewModel.timeline.last?.id) { _, newId in
                             guard newId != nil else { return }
@@ -1785,9 +1793,8 @@ struct ConversationView: View {
                                 return
                             }
                             guard !isInitialTimelinePositioning else { return }
-                            if !userMovedAwayFromTimelineBottom {
-                                isAtTimelineBottom = true
-                                viewModel.markConversationReadThroughTail()
+                            if !userMovedAwayFromTimelineBottom, !viewModel.hasMoreAfter,
+                               !viewModel.isAwaitingPageCompletion {
                                 scheduleScrollToBottom(
                                     proxy: proxy,
                                     animated: true,
@@ -1853,8 +1860,8 @@ struct ConversationView: View {
                     Button("Retry") {
                         Task { await viewModel.start() }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .foregroundStyle(WNNeutralAccent.foreground)
+                    .wnPrimaryButtonStyle()
+                    .controlSize(.large)
                 }
             case .connecting:
                 // The local snapshot hasn't landed yet because the runtime is
@@ -1882,8 +1889,8 @@ struct ConversationView: View {
                         } label: {
                             Label("Add members", systemImage: "person.badge.plus")
                         }
-                        .buttonStyle(.borderedProminent)
-                        .foregroundStyle(WNNeutralAccent.foreground)
+                        .wnPrimaryButtonStyle()
+                        .controlSize(.large)
                     }
                 } else {
                     ContentUnavailableView(
@@ -1993,7 +2000,11 @@ struct ConversationView: View {
                     Color.clear
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .font(.title2)
-                        .foregroundStyle(selected ? Color.accentColor : Color.secondary.opacity(0.55))
+                        .foregroundStyle(
+                            selected
+                                ? WNNeutralAccent.color(for: colorScheme)
+                                : Color.secondary.opacity(0.55)
+                        )
                         .padding(.leading, 8)
                 }
                 .contentShape(.rect)
@@ -2075,6 +2086,7 @@ struct ConversationView: View {
             status: status,
             debugStyle: debugStyle,
             isDeleted: viewModel.isDeleted(record.messageIdHex),
+            deletionSource: viewModel.timelineStore.deletedProjections.source(for: record.messageIdHex),
             isEdited: viewModel.isEdited(record.messageIdHex),
             hasReports: viewModel.hasReports(record.messageIdHex),
             clusterPresentation: showsSenderIdentity
@@ -2121,6 +2133,7 @@ struct ConversationView: View {
                 ? { failedSendTarget = FailedSendTarget(rowId: item.id) }
                 : nil
         )
+        .id(AttachmentPresentationState.shared.revision)
     }
 
     private var timelineBottomSentinel: some View {
@@ -2183,28 +2196,12 @@ struct ConversationView: View {
             hasMoreAfter: viewModel.hasMoreAfter,
             isAtBottom: isAtTimelineBottom
         ) {
-            Button {
+            WNIconButton(title: "Scroll to latest message", systemImage: "arrow.down") {
                 Haptics.tap()
                 isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
                     currentIsPinned: isAtTimelineBottom)
                 jumpToBottom(proxy: proxy)
-            } label: {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: scrollToBottomIconSize, weight: .bold))
-                    .foregroundStyle(.primary)
-                    .frame(width: scrollToBottomDiameter, height: scrollToBottomDiameter)
-                    .background {
-                        ZStack {
-                            Circle().fill(.regularMaterial)
-                            Circle().fill(Color(.secondarySystemBackground).opacity(0.86))
-                        }
-                    }
-                    .overlay {
-                        Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                    }
-                    .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("Scroll to latest message")
             .padding(.trailing, 9)
             .padding(.bottom, 10)
@@ -2242,7 +2239,10 @@ struct ConversationView: View {
         }
         guard TimelineBottomScrollCoordinator.shouldExecute(
             reason: reason,
-            isUserScrolling: isUserScrollingTimeline
+            isUserScrolling: isUserScrollingTimeline,
+            userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+            hasMoreAfter: viewModel?.hasMoreAfter ?? true,
+            isPaging: viewModel?.isAwaitingPageCompletion ?? true
         ) else {
             return
         }
@@ -2273,7 +2273,10 @@ struct ConversationView: View {
             pendingBottomScrollTask = nil
             guard TimelineBottomScrollCoordinator.shouldExecute(
                 reason: request.reason,
-                isUserScrolling: isUserScrollingTimeline
+                isUserScrolling: isUserScrollingTimeline,
+                userMovedAwayFromBottom: userMovedAwayFromTimelineBottom,
+                hasMoreAfter: viewModel?.hasMoreAfter ?? true,
+                isPaging: viewModel?.isAwaitingPageCompletion ?? true
             ) else { return }
             scrollToBottom(proxy: proxy, animated: request.animated)
             lastAutomaticBottomScrollTargetID = request.targetID
@@ -2432,8 +2435,16 @@ struct ConversationView: View {
         reconcileTimelineTailVisibility(viewModel: viewModel)
     }
 
+    private func isMeasuredConversationTail(_ viewModel: ConversationViewModel) -> Bool {
+        measuredTimelineTail.isConversationTail(
+            currentLastRowID: viewModel.timeline.last?.id,
+            hasMoreAfter: viewModel.hasMoreAfter,
+            isPaging: viewModel.isAwaitingPageCompletion || viewModel.isLoadingNewer || viewModel.isLoadingOlder
+        )
+    }
+
     private func reconcileTimelineTailVisibility(viewModel: ConversationViewModel) {
-        guard TimelineTailVisibility.isTailOnScreen(
+        guard isMeasuredConversationTail(viewModel), TimelineTailVisibility.isTailOnScreen(
             visibleTargetIDs: timelineTargetVisibility.visibleTargetIDs,
             bottomSentinelID: Self.timelineBottomID,
             hasMoreAfter: viewModel.hasMoreAfter
@@ -2566,41 +2577,67 @@ struct ConversationView: View {
             }
             return
         }
-        guard !preparingDraftSend, let viewModel, let accountRef = draftAccountRef else { return }
-        let originalText = draft
+        guard let viewModel, let accountRef = draftAccountRef, viewModel.canSendMessages else { return }
         let originalAttachments = mediaDrafts
         let originalReply = viewModel.replyTargetMessageIdHex
-        let canonical = viewModel.composerMentionDraftState(for: draft).canonicalText
-        let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(canonical.trimmingCharacters(in: .whitespacesAndNewlines)),
+        let mentionState = viewModel.composerMentionDraftState(for: draft)
+        let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)),
             replyToMessageIdHex: originalReply, mediaAttachments: originalAttachments)
         guard !saved.canonicalText.isEmpty || !originalAttachments.isEmpty else { return }
-        preparingDraftSend = true
-        Task {
-            defer { preparingDraftSend = false }
+
+        // Everything up to the staged bubble is synchronous: the draft round-trip
+        // and MDK are not on the path to the user's first visual acknowledgment.
+        // The store is told first so clearing the composer below can't delete the
+        // draft the queued submission still has to claim by revision.
+        let tapped = appState.productAnalytics.beginTiming()
+        let composerState = (draft: draft, mediaDrafts: mediaDrafts)
+        guard let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel),
+              let staged = viewModel.stagePreparedSend(
+                  text: payload.text,
+                  attachments: payload.attachments,
+                  replyTargetMessageIdHex: originalReply
+              ) else {
+            // Nothing left the composer: put it back exactly as it was. This is
+            // still the tap's own runloop turn, so no newer edit can be lost.
+            viewModel.restoreComposerMentionDraftState(mentionState)
+            draft = composerState.draft
+            mediaDrafts = composerState.mediaDrafts
+            return
+        }
+        appState.conversationDraftStore.beginQueuedSend(accountRef: accountRef, groupIdHex: chat.groupIdHex)
+        // The bubble is already in the timeline above. Everything below is
+        // viewport follow-up: it never gates the local row, and when the window
+        // is already on the live tail it issues no window command at all — a
+        // redundant `returnToLatest` here delays MDK's pending-row projection.
+        isAtTimelineBottom = true
+        userMovedAwayFromTimelineBottom = false
+        viewModel.followConversationLatest()
+        composerSendBottomScrollRequest &+= 1
+
+        // `ConversationDraftStore` admits one revision-checked submission at a
+        // time, so queued sends serialize here while their bubbles are already up.
+        viewModel.enqueueStagedSubmission {
+            let store = appState.conversationDraftStore
             do {
-                let revision = try await appState.conversationDraftStore.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
-                let completion: @MainActor (Bool) async -> Void = { accepted in
-                    await appState.conversationDraftStore.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
-                }
-                guard !Task.isCancelled, draft == originalText, mediaDrafts.map(\.id) == originalAttachments.map(\.id),
-                      viewModel.replyTargetMessageIdHex == originalReply,
-                      viewModel.canSendMessages,
-                      appState.activeAccountRef == accountRef,
-                      let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel) else {
-                    await completion(false)
-                    return
-                }
-                isAtTimelineBottom = true
-                userMovedAwayFromTimelineBottom = false
-                payload.viewModel.followConversationLatest()
-                composerSendBottomScrollRequest &+= 1
-                if payload.attachments.isEmpty {
-                    await payload.viewModel.sendPreparedComposerText(payload.text, draftRevision: revision, completion: completion)
-                } else {
-                    await payload.viewModel.sendPreparedMedia(payload.attachments, caption: payload.text, draftRevision: revision, completion: completion)
+                let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
+                appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped)
+                await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
+                    await store.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
                 }
             } catch {
+                // The draft never reached a revision, so the submission was
+                // never admitted. Leave the message in its bubble as a failed
+                // send rather than publishing outside the revision-checked flow
+                // or clobbering whatever the composer holds by now.
+                appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped, outcome: .failure)
+                viewModel.failStagedSend(staged)
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+            }
+            // A newer draft typed while this send was queued may have been
+            // overwritten by its submitted snapshot; re-persist what's in the
+            // composer now.
+            if editSession == nil, !draft.isEmpty || !mediaDrafts.isEmpty {
+                persistCurrentDraft()
             }
         }
     }

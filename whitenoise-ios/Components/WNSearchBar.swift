@@ -49,6 +49,7 @@ struct WNSearchBar: View {
     /// A screen that *is* the search (New Chat) shows the bar on arrival and
     /// must not seize the keyboard; one that mounts it on demand should.
     var focusesOnAppear = true
+    var dismissesKeyboardOnSubmit = true
     /// Shown in place of the clear control while the field is empty, for
     /// screens where the query is usually pasted rather than typed.
     var onPaste: (() -> Void)?
@@ -57,13 +58,15 @@ struct WNSearchBar: View {
     var onScan: (() -> Void)?
     let onClose: () -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
         bottomInputGlassContainer(spacing: Metrics.rowSpacing) {
             HStack(spacing: Metrics.rowSpacing) {
-                field
+                WNSearchField(query: $query, prompt: prompt, focus: $isFieldFocused,
+                              onPaste: onPaste, onScan: onScan, onSubmit: {
+                                  if dismissesKeyboardOnSubmit { isFieldFocused = false }
+                              })
                 WNIconButton(title: "Close search", systemImage: "xmark", action: onClose)
             }
         }
@@ -81,34 +84,54 @@ struct WNSearchBar: View {
             }
         }
     }
+}
 
-    private var field: some View {
+/// Shared by chat, message, recipient, member and emoji search.
+struct WNSearchField: View {
+    @Binding var query: String
+    let prompt: LocalizedStringKey
+    var focus: FocusState<Bool>.Binding?
+    var onPaste: (() -> Void)?
+    var onScan: (() -> Void)?
+    var onSubmit: (() -> Void)?
+
+    @Environment(\.colorScheme) private var colorScheme
+    @FocusState private var localFocus: Bool
+    @ScaledMetric(relativeTo: .body) private var height = WNSearchBar.Metrics.fieldHeight
+
+    private var activeFocus: FocusState<Bool>.Binding { focus ?? $localFocus }
+
+    var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Palette.fieldGlyph)
+                .font(.body.weight(.medium))
+                .foregroundStyle(WNSearchBar.Palette.fieldGlyph)
             TextField("", text: $query, prompt: Text(prompt))
                 .textFieldStyle(.plain)
                 .font(.body)
+                .lineLimit(1)
+                .frame(minWidth: 0, maxWidth: .infinity)
                 .submitLabel(.search)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .focused($isFieldFocused)
-                .onSubmit { isFieldFocused = false }
+                .focused(activeFocus)
+                .onSubmit { onSubmit?() }
             if !query.isEmpty {
                 Button {
                     query = ""
-                    isFieldFocused = true
+                    activeFocus.wrappedValue = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(
-                            Palette.clearGlyph(for: colorScheme),
-                            Palette.clearFill(for: colorScheme)
+                            WNSearchBar.Palette.clearGlyph(for: colorScheme),
+                            WNSearchBar.Palette.clearFill(for: colorScheme)
                         )
-                        .frame(width: 32, height: 32)
+                        .frame(width: height, height: height)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
                 .accessibilityLabel("Clear search")
             } else {
                 if let onPaste {
@@ -129,8 +152,8 @@ struct WNSearchBar: View {
         }
         .padding(.leading, BottomInputChromeLayout.fieldLeadingPadding)
         .padding(.trailing, BottomInputChromeLayout.fieldTrailingPadding)
-        .frame(minHeight: Metrics.fieldHeight)
-        .compatibleInputCapsuleChrome()
+        .frame(minHeight: height)
+        .compatibleInputCapsuleChrome(interactive: false)
     }
 }
 
@@ -141,13 +164,16 @@ private struct WNSearchBarGlyphButton: View {
     let systemImage: String
     let action: () -> Void
 
+    @ScaledMetric(relativeTo: .body) private var diameter = WNSearchBar.Metrics.fieldHeight
+
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
                 .labelStyle(.iconOnly)
-                .font(.subheadline.weight(.medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(WNSearchBar.Palette.fieldGlyph)
-                .frame(width: 32, height: 32)
+                .frame(width: diameter, height: diameter)
+                .contentShape(.rect)
         }
         .buttonStyle(.plain)
     }

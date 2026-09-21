@@ -29,7 +29,7 @@ struct WNIconButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button(role: WNButton.Metrics.role(for: emphasis), action: action) {
             Label(title, systemImage: systemImage)
                 .labelStyle(.iconOnly)
         }
@@ -40,9 +40,6 @@ struct WNIconButton: View {
 /// The `WNIconButton` surface, applied to a button-like view that cannot be a
 /// `WNIconButton` because it carries its own action — `ShareLink`, for one.
 private struct WNIconButtonChrome: ViewModifier {
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.isEnabled) private var isEnabled
-
     let emphasis: WNButton.Emphasis
     let chrome: WNIconButton.Chrome
 
@@ -51,15 +48,7 @@ private struct WNIconButtonChrome: ViewModifier {
            WNIconButton.inheritsContainerSurface(emphasis: emphasis, chrome: chrome) {
             content.foregroundStyle(.primary)
         } else {
-            content
-                .wnButtonContentColor(
-                    emphasis,
-                    size: .compact,
-                    colorScheme: colorScheme,
-                    isEnabled: isEnabled
-                )
-                .wnIconButtonStyle(emphasis)
-                .wnButtonChrome(.circle, emphasis: emphasis)
+            content.buttonStyle(WNStandaloneIconButtonStyle(emphasis: emphasis))
         }
     }
 }
@@ -73,14 +62,40 @@ extension View {
     }
 }
 
-private extension View {
-    @ViewBuilder
-    func wnIconButtonStyle(_ emphasis: WNButton.Emphasis) -> some View {
-        switch emphasis {
-        case .primary, .destructive:
-            wnPrimaryButtonStyle()
-        case .secondary:
-            wnSecondaryButtonStyle(.circle)
+private struct WNStandaloneIconButtonStyle: ButtonStyle {
+    let emphasis: WNButton.Emphasis
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+    @ScaledMetric(relativeTo: .body) private var diameter = WNSecondaryButtonStyle.Metrics.circleDiameter
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.medium))
+            .imageScale(.large)
+            .foregroundStyle(WNButton.Metrics.contentColor(
+                emphasis: emphasis, colorScheme: colorScheme, isEnabled: isEnabled))
+            .frame(width: diameter, height: diameter)
+            .contentShape(.circle)
+            .modifier(WNIconSurface(emphasis: emphasis, colorScheme: colorScheme))
+            .opacity(configuration.isPressed ? 0.7 : 1)
+    }
+}
+
+private struct WNIconSurface: ViewModifier {
+    let emphasis: WNButton.Emphasis
+    let colorScheme: ColorScheme
+
+    func body(content: Content) -> some View {
+        if emphasis == .secondary {
+            if #available(iOS 26.0, *) {
+                content.compatibleInputCircleChrome()
+            } else {
+                content.wnLiftedChrome(in: Circle())
+            }
+        } else {
+            content
+                .background(WNButton.Metrics.tint(for: emphasis, colorScheme: colorScheme), in: Circle())
+                .wnProminentIconGlass()
         }
     }
 }
@@ -106,4 +121,15 @@ private extension View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(.background)
     .preferredColorScheme(.dark)
+}
+
+private extension View {
+    @ViewBuilder
+    func wnProminentIconGlass() -> some View {
+        if #available(iOS 26.0, *) {
+            compatibleInputCircleChrome()
+        } else {
+            self
+        }
+    }
 }

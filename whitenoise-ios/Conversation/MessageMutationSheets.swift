@@ -163,7 +163,7 @@ struct ForwardMessageSheet: View {
                 .frame(maxWidth: .infinity, minHeight: 24)
                 .foregroundStyle(WNNeutralAccent.foreground)
             }
-            .buttonStyle(.borderedProminent)
+            .wnPrimaryButtonStyle()
             .controlSize(.large)
             .buttonBorderShape(.capsule)
             .disabled(selectedGroupIds.isEmpty || isSending || isLoading)

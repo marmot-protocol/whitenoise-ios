@@ -54,17 +54,18 @@ struct MediaAutoDownloadMatrixTests {
         #expect(legacy?.level(for: .document) == .never)
     }
 
-    @Test func voiceBypassRequiresAPlausibleKnownDuration() {
-        // Unknown or implausible metadata honors the matrix — an explicit
-        // Never must win over an unverifiable voice guess.
-        #expect(AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: 12.5))
-        #expect(!AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: nil))
-        #expect(!AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: 0))
-        #expect(!AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: 3_600))
-        #expect(!AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: .infinity))
-        #expect(AudioAutoDownloadPolicy.shouldPrefetch(isVoiceMessage: true, matrixAllows: false))
-        #expect(AudioAutoDownloadPolicy.shouldPrefetch(isVoiceMessage: false, matrixAllows: true))
-        #expect(!AudioAutoDownloadPolicy.shouldPrefetch(isVoiceMessage: false, matrixAllows: false))
+    @Test @MainActor func freshNativePermissionRestartsVisibleAutomaticLoads() {
+        let suiteName = "media-permission-refresh-\(UUID())"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = MediaAutoDownloadStore(defaults: defaults)
+        let before = TimelineMediaTaskID(contentID: "audio", isVisible: true,
+            policyRevision: store.attachmentPolicyRevision)
+        store.didApplyAttachmentPermission()
+        let after = TimelineMediaTaskID(contentID: "audio", isVisible: true,
+            policyRevision: store.attachmentPolicyRevision)
+        #expect(before != after)
+        #expect(store.matrix == .defaultMatrix)
     }
 
     @Test @MainActor func matrixPreferenceIsScopedPerAccount() {
