@@ -302,10 +302,10 @@ struct OutgoingSendResponsivenessTests {
         let staged = try #require(harness.composer.stage(text: "switching"))
 
         harness.appState.activeAccountRef = "another-account"
-        var accepted: Bool?
-        await harness.composer.submit(staged) { accepted = $0 }
+        var submitAccepted: Bool?
+        await harness.composer.submit(staged) { submitAccepted = $0 }
 
-        #expect(accepted == false)
+        #expect(submitAccepted == false)
         try await harness.shutdown()
     }
 }
