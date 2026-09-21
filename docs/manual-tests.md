@@ -15,6 +15,43 @@ before every release tag.
   for both targets.
 - Clean install on each: `xcrun simctl erase <udid>` between runs.
 
+## MarmotKit 0.10.4 upgrade
+
+- [ ] Back up the app's shared data before opening an existing installation with
+      0.10.4. Migrations 87–89 are forward-only; do not run an older MDK against
+      the upgraded store or remove migration records to attempt a downgrade.
+- [ ] Send text, replies, voice notes and an album while relays are slow/offline.
+      Each tap appears immediately once; local acceptance keeps the sending
+      indicator until the timeline reports delivery. Resume/relaunch and verify
+      retained submissions appear once, with newer composer typing intact.
+- [ ] Interrupt a media send. Reopening must recover MDK's durable timeline;
+      uncertain submissions must not offer a fresh upload as an automatic retry.
+- [ ] Set Audio to Never: received voice notes and other audio both wait for a
+      deliberate tap. Test independent image/video/document preferences too.
+- [ ] Change Wi-Fi/cellular/Low Data Mode during automatic attachment acquisition,
+      then background/resume and sign out/in. Old permission callbacks must not
+      restart network work; a new runtime evaluates current settings afresh.
+- [ ] Remove/cancel an attachment, evict presentation caches, and reopen the chat.
+      Automatic loads must not reacquire it. Test an explicit Download again.
+      Verify exhausted and completed-but-unretained transfers remain terminal
+      until deliberate retry, including across relaunch.
+- [ ] Open an album with removed or never-downloaded neighbouring images. Only
+      selecting a page may request an explicit download; adjacent page creation
+      must not fetch. Revisit ready pages offline and verify retained bytes work.
+- [ ] Set Documents to Wi-Fi Only, then Never. Visible PDF/document bubbles
+      automatically acquire only when permitted, without opening a share sheet.
+      Removed/exhausted files stay unavailable until explicitly opened or retried.
+- [ ] Pinch and double-tap fullscreen images to zoom, then pan in all directions.
+      Panning while zoomed must neither change pages nor dismiss the viewer.
+      Zoom back to fit, then verify paging, single-tap controls and swipe down to
+      dismiss. Repeat on iPad, after rotation, with Reduce Motion and VoiceOver's
+      adjustable zoom actions. Save/Share/Forward must still use original bytes.
+- [ ] Leave Chats visible until its latest disappearing-message preview expires.
+      Content and sender disappear without an incoming event; search no longer
+      matches the preview. Repeat with the app backgrounded across expiry.
+- [ ] On a signed staging build, repeat Native Push off/on after optimization,
+      foreground/background receipt, and Notification Service Extension checks.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.
@@ -493,6 +530,9 @@ the test device.
       system notification permission and persists the enabled state.
 - [ ] Settings → Notifications: enabling Native push requests an APNS token,
       syncs a redacted token fingerprint, and does not expose the raw token.
+- [ ] On an optimized device build, turn Native push off and back on. Both
+      operations complete without a cancellation error, registration returns,
+      and the enabled setting survives leaving Settings and relaunching the app.
 - [ ] Settings → Notifications → Preview starts on Generic on a fresh install
       and on upgrade, and the example row matches the selected option.
 - [ ] With Preview set to Sender and Message, a message from device A while
@@ -804,3 +844,80 @@ Marmot root. Automated simulator checks do not replace these device checks.
       visible/composer-ready outcomes. Revoking consent invalidates pending host timings.
 - [ ] Review the new download screens on iPhone/iPad, large text, light/dark appearance
       and VoiceOver. Check translations and button reachability.
+
+## Conversation-open telemetry boundaries
+
+- Start is the navigation intent in `AppState.presentChat` or a chat-list tap,
+  before asynchronous row lookup and dismissal retries. Retries of that navigation
+  retain one attempt; the unavailable screen's explicit Retry starts a new one.
+- The UI boundary is SwiftUI's geometry callback after content is laid out and
+  initial timeline positioning settles. This is a layout approximation, not proof
+  of an exact frame reaching the display. A loaded empty view counts as local content.
+- Composer timing waits for an epoch-backed authoritative header. Temporary local
+  placeholders, recoverable subscription errors and syncing do not terminate it.
+  An empty draft does not prevent readiness. There is no telemetry-only deadline;
+  the existing destination-resolution timeout reports Timeout. Leaving/replacing
+  the destination or suspending the runtime cancels unfinished milestones. Resume
+  does not restart an attempt without another user navigation action.
+- Device-wide diagnostics consent still gates every sample. Account-context rotation
+  holds at most two completed samples until consent is rechecked; an explicit consent
+  change discards them. An intent begun without an enabled recorder is not exported
+  retroactively when consent/export becomes available (including cold-start routing).
+- Host reports are completed-only, not live gauges. Runtime counters retain their
+  own in-flight/age semantics. Debug output includes runtime histogram buckets.
+- Inbound visibility includes only appended rows at an already loaded live tail;
+  historical pages and replaced windows are excluded. Outbound timing still starts
+  at Send. If a native pending row rendered before its returned message ID can be
+  correlated, the existing host code drops that sample rather than using SDK
+  completion as render time. Full outbound coverage requires earlier correlation.
+- [ ] On device, compare a cold/slow open, empty chat, restricted chat, deep link,
+      notification (including another profile), rapid Back/open, and background/resume.
+      Check both host series and runtime series at the OTLP collector, grouped by
+      iOS and exact app version/build. Collector delivery and physical display timing
+      are not established by the automated tests.
+
+## MarmotKit 0.10.3 prepared chat rows
+
+- Verify text, attachment-only, mixed, whitespace-only, and reply-only drafts in
+  Chats. Clear/send a draft, receive a message while drafting, and return from
+  the composer: the preview should follow MDK without changing unread counts,
+  pins, or chat order. Exact composer text must survive a shortened list preview.
+- Page away from a draft and back; switch profiles and background/foreground.
+  Confirm previews remain scoped to the current account/window and retain the
+  scroll anchor. Invitations with a message preview must keep their invite badge.
+- Check row gestures in active, archived, Left, and pending-departure views.
+  Leave still uses admin preflight; local deletion still asks for confirmation;
+  restoring departed history must not rejoin it. Mute/unmute follows this device's
+  notification mode, including timed mute expiry.
+- Search public profiles (for example `jack` and `jeffg`) on a real device and
+  check offline/error behavior. Optional relay AUTH is handled by the native
+  0.10.3 release; genuinely auth-required relays are not guaranteed accessible.
+- Signed-device checks and App Store archive acceptance remain separate from
+  automated simulator tests and unsigned release/privacy validation.
+
+## Foreground notification batching
+
+- With Chats or another conversation open, deliver 15 new messages to one chat
+  within two seconds. Expect one banner/sound and one Notification Center entry.
+  The deadline starts at the first message, rather than moving with each arrival.
+- Deliver a later burst: it should replace that chat's previous foreground entry.
+  Another chat or signed-in account must have its own independent batch.
+- Verify a single-message preview, a multi-message count, sender-only previews,
+  and generic mode (no sender, content, or count). Invites/admin notices remain
+  immediate. Unread badges remain MDK-owned.
+- Open/read the receiving chat, mute it, or disable notifications during the
+  window; no foreground alert should bypass the existing delivery-time checks.
+  Sign out during the window: its pending batch should be cancelled.
+- Background during the window: the already-scheduled local request should still
+  deliver once. This change does not batch subsequent APNS/NSE notifications.
+- Use Reply/Mark Read on a batch and confirm the latest represented message is
+  targeted. An older action must not remove a newer unread batch.
+
+## Capped composer scrolling
+
+- Type or paste more than four lines. The composer should stop growing at its
+  existing height limit, scroll internally, and keep the insertion point visible.
+- Drag within the long draft to read earlier lines; it must stay where you scroll
+  until typing or moving the insertion point requires a caret reveal.
+- Delete back to one line and clear/send the draft. The composer should shrink,
+  reset its scroll offset, and preserve the full text when sending.

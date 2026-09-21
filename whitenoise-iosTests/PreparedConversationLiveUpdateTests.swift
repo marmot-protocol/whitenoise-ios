@@ -68,25 +68,29 @@ struct PreparedConversationLiveUpdateTests {
             model.applyPendingOutgoingMessage(tempId: "two", record: pending)
             install([old])
             install([old])
-            #expect(model.timeline.map(\.id) == ["msg:old"])
-            // MDK's pending projection can arrive before the send callback.
+            // Staged sends are rendered immediately, after retained history.
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
+            // Neither staged send reached MDK, so an own row arriving now belongs
+            // to something else and renders under its own id.
             var nativePending = new
             nativePending.sourceMessageIdHex = nil
             install([old, nativePending])
-            #expect(model.timeline.map(\.id) == ["msg:old", "msg:new"])
-            if case .message(_, let status) = model.timeline.last?.kind { #expect(status == .sending) }
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:new", "msg:one", "msg:two"])
+            if case .message(_, let status) = model.timeline[1].kind { #expect(status == .sending) }
             install([old, new])
-            if case .message(_, let status) = model.timeline.last?.kind { #expect(status == .sent) }
+            if case .message(_, let status) = model.timeline[1].kind { #expect(status == .sent) }
+            // The send response is authoritative: the durable row adopts the
+            // bubble's display id so the row keeps its SwiftUI identity.
             model.confirmSent(tempId: "one", record: pending, messageId: "new")
-            #expect(model.timeline.map(\.id) == ["msg:old", "msg:new"])
-            #expect(model.protocolID(forDisplayID: "msg:new") == "new")
-            // Callback first: wait for the authoritative row, without adding another echo.
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
+            #expect(model.protocolID(forDisplayID: "msg:one") == "new")
+            // Callback first: the local echo holds the row until MDK mirrors it.
             model.confirmSent(tempId: "two", record: pending, messageId: "second")
             install([old, new])
-            #expect(model.timeline.map(\.id) == ["msg:old", "msg:new"])
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
             let second = record("second", 0)
             install([old, new, second])
-            #expect(model.timeline.map(\.id) == ["msg:old", "msg:new", "msg:second"])
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:one", "msg:two"])
             let generation = model.timelineStore.timelineProjectionGeneration
             let rebuilds = model.timelineStore.timelineRebuildCountForTesting
             snapshot.header.selected.title = .literal(text: "Header changed")
@@ -120,16 +124,16 @@ struct PreparedConversationLiveUpdateTests {
             #expect(model.timelineStore.markdownProjections.buildCountForTesting == markdownBuilds)
             // Once observed, a durable row follows bounded-window membership.
             install([old, second])
-            #expect(model.timeline.map(\.id) == ["msg:old", "msg:second"])
+            #expect(model.timeline.map(\.id) == ["msg:old", "msg:two"])
             model.applyPendingOutgoingMessage(tempId: "accepted", record: pending)
             model.timelineStore.confirmSent(tempId: "accepted", record: pending, messageId: "accepted-id", published: false)
-            #expect(model.timelineStore.undeliveredDurableMessageId(rowId: "msg:accepted-id") == nil)
+            #expect(model.timelineStore.undeliveredDurableMessageId(rowId: "msg:accepted") == "accepted-id")
             install([old, second])
-            #expect(!model.timeline.contains { $0.id == "msg:accepted" })
+            #expect(model.timeline.contains { $0.id == "msg:accepted" })
             var accepted = record("accepted-id", 3)
             accepted.sourceMessageIdHex = nil
             install([old, second, accepted])
-            #expect(model.timeline.last?.id == "msg:accepted-id")
+            #expect(model.timeline.last?.id == "msg:accepted")
             if case .message(_, let status) = model.timeline.last?.kind { #expect(status == .sending) }
             accepted.sourceMessageIdHex = "source"
             install([old, second, accepted])
@@ -151,9 +155,11 @@ struct PreparedConversationLiveUpdateTests {
             #expect(model.timelineStore.failedTransientRecord(rowId: "msg:failure") != nil)
             #expect(model.timeline.contains { $0.id == "msg:failure" })
             model.applyPendingOutgoingMessage(tempId: "failure", record: pending)
-            #expect(!model.timeline.contains { $0.id == "msg:failure" })
+            #expect(model.timeline.contains { $0.id == "msg:failure" })
             install([old, second, accepted])
-            #expect(!model.timeline.contains { $0.id == "msg:unknown" || $0.id == "msg:failure" })
+            // Unresolved local sends keep their bubbles across window updates.
+            #expect(model.timeline.contains { $0.id == "msg:unknown" })
+            #expect(model.timeline.contains { $0.id == "msg:failure" })
             model.timelineStore.discardTransientRow(rowId: "msg:failure")
             let media = MessageMediaAttachment(id: "local", reference: nil, fileName: "local.jpg",
                 mediaType: "image/jpeg", dim: nil, localData: Data([1, 2, 3]))
@@ -161,7 +167,8 @@ struct PreparedConversationLiveUpdateTests {
             model.applyPendingOutgoingMessage(tempId: "photo", record: pending)
             model.confirmSent(tempId: "photo", record: pending, messageId: "photo-id")
             install([old, second, accepted])
-            #expect(model.pendingMediaForTesting(rowId: "msg:photo") == nil)
+            // Locally picked bytes stay on the row until MDK mirrors the record.
+            #expect(model.pendingMediaForTesting(rowId: "msg:photo")?.count == 1)
             var photo = record("photo-id", 4, text: "")
             let reference = MediaAttachmentReferenceFfi(locators: [], ciphertextSha256: String(repeating: "a", count: 64),
                 plaintextSha256: String(repeating: "b", count: 64), nonceHex: String(repeating: "c", count: 24),
@@ -169,12 +176,12 @@ struct PreparedConversationLiveUpdateTests {
             photo.media = [.accepted(attachmentIndex: 0, reference: reference)]
             install([old, second, accepted, photo])
             #expect(model.pendingMediaForTesting(rowId: "msg:photo") == nil)
-            let photoRow = try #require(model.timeline.first { $0.id == "msg:photo-id" })
+            let photoRow = try #require(model.timeline.first { $0.id == "msg:photo" })
             #expect(model.mediaItems(for: photoRow).first?.fileName == "canonical.jpg")
             #expect(photo.tags.isEmpty)
             snapshot.hasMoreAfter = true
             install([old, second, accepted])
-            model.reportConversationViewport(atTail: true, visibleRowID: "msg:second")
+            model.reportConversationViewport(atTail: true, visibleRowID: "msg:two")
             #expect(model.viewportIntent == .history("second"))
             await model.returnConversationToLatest()
             #expect(model.viewportIntent == .followingLatest)
@@ -183,7 +190,7 @@ struct PreparedConversationLiveUpdateTests {
             snapshot.hasMoreAfter = false
             install([old, second, accepted])
             await model.returnConversationToLatest()
-            model.reportConversationViewport(atTail: true, visibleRowID: "msg:second")
+            model.reportConversationViewport(atTail: true, visibleRowID: "msg:two")
             #expect(model.viewportIntent == .followingLatest)
             model.resetOptimisticStateForTesting()
             let fullWindow = (0..<200).map { record("retained-\($0)", UInt64($0)) }
@@ -198,7 +205,7 @@ struct PreparedConversationLiveUpdateTests {
             model.confirmSent(tempId: "tail-send", record: pending, messageId: "tail-durable")
             install(Array(fullWindow.dropFirst(2)) + [record("incoming", 200), record("tail-durable", 201)])
             #expect(model.timeline.count == 200)
-            #expect(model.timeline.last?.id == "msg:tail-durable")
+            #expect(model.timeline.last?.id == "msg:tail-send")
             model.resetOptimisticStateForTesting()
             model.confirmSent(tempId: "unknown", record: pending, messageId: "late")
             #expect(!model.timeline.contains { $0.id == "msg:unknown" })

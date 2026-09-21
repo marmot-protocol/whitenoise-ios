@@ -57,10 +57,6 @@ struct Marmot0102IntegrationTests {
         tracker.rendered(local: true, composer: nil, recorder: recorder)
         tracker.rendered(local: true, composer: false, recorder: recorder)
         tracker.finish(.cancelled, recorder: recorder)
-        // The recorder's queue is intentionally asynchronous and bounded.
-        for _ in 0..<100 where samples.withLock({ $0.count }) < 2 {
-            try await Task.sleep(for: .milliseconds(10))
-        }
         #expect(samples.withLock { $0.count } == 2)
         #expect(samples.withLock { $0.contains { $0.0 == .conversationComposerReady && $0.1 == .unavailable } })
         let revoked = ConversationOpenPerformance(start: .now, ticket: recorder.ticket())

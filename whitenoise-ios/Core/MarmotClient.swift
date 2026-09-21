@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 @preconcurrency import MarmotKit
 
-struct TimelineReadMarkResult {
+nonisolated struct TimelineReadMarkResult {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool
@@ -84,12 +84,11 @@ nonisolated final class MarmotClient: Sendable {
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
         self.productConfig = .current()
-        self.marmot = try Marmot.newWithClientName(
+        self.marmot = try Marmot.newWithConfiguration(
             rootPath: rootPath,
             relayUrls: relayUrls,
-            clientName: "whitenoise",
-            cursorPersistence: cursorPersistence,
-            secretStore: nil
+            options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
+                attachmentAcquisitionMode: .hostManaged)
         )
         _ = try marmot.setAuditLogTrackerConfig(
             config: telemetryConfig.auditTrackerConfig()

@@ -2,7 +2,7 @@ import Foundation
 import MarmotKit
 
 extension MarkdownDocumentFfi {
-    init(blocks: [MarkdownBlockFfi], truncated: Bool) {
+    nonisolated init(blocks: [MarkdownBlockFfi], truncated: Bool) {
         self.init(
             blocks: blocks,
             truncated: truncated,
@@ -10,7 +10,7 @@ extension MarkdownDocumentFfi {
         )
     }
 
-    static var emptyDocument: MarkdownDocumentFfi {
+    nonisolated static var emptyDocument: MarkdownDocumentFfi {
         MarkdownDocumentFfi(blocks: [], truncated: false)
     }
 }
@@ -632,6 +632,8 @@ extension ChatListMessagePreviewFfi {
             contentTokens: contentTokens,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
             deletionSource: deletionSource,
             attachmentKind: nil,
@@ -660,6 +662,8 @@ extension ChatListMessagePreviewFfi {
             contentTokens: .emptyDocument,
             kind: kind,
             timelineAt: timelineAt,
+            retentionSeconds: nil,
+            retentionExpiresAt: nil,
             deleted: deleted,
             deletionSource: deletionSource,
             attachmentKind: nil,
@@ -697,6 +701,7 @@ extension TimelineMessageRecordFfi {
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
@@ -753,6 +758,7 @@ extension TimelineMessageRecordFfi {
         invalidationStatus: String?
     ) {
         self.init(
+            clientToken: nil,
             hasReports: hasReports,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,

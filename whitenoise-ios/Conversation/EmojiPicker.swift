@@ -205,10 +205,7 @@ private struct QuickReactionEditorView: View {
             }
             .padding(6)
             .frame(maxWidth: 360)
-            .background(.regularMaterial, in: .capsule)
-            .overlay {
-                Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
+            .compatibleInputCapsuleChrome(interactive: false)
 
             Text("Tap a reaction to replace it. These six reactions appear first when you open message actions.")
                 .font(.body)
@@ -289,7 +286,7 @@ private struct EmojiPickerContent: View {
                             Button(action: onConfigure) {
                                 Image(systemName: "gearshape")
                                     .frame(width: 44, height: 44)
-                                    .background(.regularMaterial, in: .circle)
+                                    .compatibleInputCircleChrome()
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Customize reactions")
@@ -307,26 +304,7 @@ private struct EmojiPickerContent: View {
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField(L10n.string("Search emoji"), text: $query)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.string("Clear search"))
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(Color(.secondarySystemBackground), in: Capsule())
+        WNSearchField(query: $query, prompt: "Search emoji")
     }
 
     private var columns: [GridItem] {
@@ -441,7 +419,7 @@ private struct EmojiPickerContent: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: .capsule)
+        .compatibleInputCapsuleChrome(interactive: false)
         .padding(.horizontal, 8)
     }
 
@@ -454,7 +432,7 @@ private struct EmojiPickerContent: View {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(selected ? Color.primary : Color.secondary)
-                .frame(width: 38, height: 36)
+                .frame(width: 44, height: 44)
                 .background(selected ? Color(.tertiarySystemFill) : .clear, in: .circle)
         }
         .buttonStyle(.plain)

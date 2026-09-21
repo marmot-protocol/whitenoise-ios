@@ -17,6 +17,25 @@ nonisolated struct ConversationDraftSnapshot: Equatable {
 nonisolated enum ConversationDraftPreview {
     static let maximumLength = 140
 
+    static func preparedText(
+        _ draft: ChatListDraftPreviewFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> String {
+        let displayed = CanonicalMentionDisplayProjection.project(draft.text) { npub in
+            mentionDisplayName?(MarkdownNostrEntityFfi(hrp: .npub, bech32: npub))
+        }.text
+        if let text = ContentSanitizer.singleLine(displayed, maxLength: maximumLength) { return text }
+        if draft.attachmentCount > 1 {
+            return L10n.plural("📎 %lld attachments", Int64(clamping: draft.attachmentCount))
+        }
+        switch draft.attachmentKind {
+        case .photo: return L10n.string("Photo")
+        case .video: return L10n.string("Video")
+        case .audio: return L10n.string("Audio")
+        case .file, .mixed, nil: return L10n.string("Attachment")
+        }
+    }
+
     static func text(
         from summary: MessageDraftSummaryFfi?,
         mentionDisplayName: MarkdownMentionResolver? = nil
@@ -207,6 +226,16 @@ final class ConversationDraftStore {
             summaries[key] = Self.summary(for: fresh)
             generation &+= 1
         }
+    }
+
+    /// Claims the conversation's send slot synchronously, at the Send tap.
+    ///
+    /// The composer clears immediately so its bubble can be staged, and that
+    /// empty write must not delete the draft the queued submission still has to
+    /// claim by revision. Everything the user types afterwards goes through the
+    /// ordinary edited-while-sending path and is restored by `finishSend`.
+    func beginQueuedSend(accountRef: String, groupIdHex: String) {
+        suppressEmptyAfterSendKeys.insert(ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex))
     }
 
     func prepareSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async throws -> MessageDraftRevisionFfi {

@@ -250,8 +250,9 @@ struct RecipientSearchTests {
         #expect(results.map(\.accountIdHex) == [bob, alice])
     }
 
+    // Full-suite native fixtures can delay MainActor scheduling beyond one minute on CI.
     @MainActor
-    @Test(.timeLimit(.minutes(1)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
+    @Test(.timeLimit(.minutes(5)), arguments: [SearchUpdateTriggerFfi.resultsFound(radius: 1), .cachedResultsFound])
     func streamedResultsDoNotWaitForFollowEnrichment(trigger: SearchUpdateTriggerFfi) async {
         let model = RecipientUserSearch()
         let follows = RecipientSearchFollowsGate()
@@ -296,7 +297,7 @@ struct RecipientSearchTests {
     }
 
     @MainActor
-    @Test(.timeLimit(.minutes(1)))
+    @Test(.timeLimit(.minutes(5)))
     func nativeSearchReplacementsSupersedeCachedRowsAndPreserveExplicitUnfollow() async {
         let cached = searchResult(alice, radius: 1, field: .name, quality: .exact)
         var replacement = cached

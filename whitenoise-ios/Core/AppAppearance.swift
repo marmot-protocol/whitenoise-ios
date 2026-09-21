@@ -76,6 +76,7 @@ private struct AppAppearanceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            .tint(.accentColor)
             .environment(\.locale, selection.locale)
             .onAppear {
                 languageRawValue = AppLanguage.currentRawValue
@@ -110,6 +111,7 @@ enum AppAppearanceRuntime {
             // A window override includes all presented content. Keeping the
             // override here avoids stale SwiftUI sheet preferences.
             window.overrideUserInterfaceStyle = style
+            window.tintColor = UIColor(named: "AccentColor")
         }
     }
 }

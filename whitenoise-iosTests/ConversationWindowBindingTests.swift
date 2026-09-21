@@ -105,7 +105,7 @@ struct ConversationWindowBindingTests {
     }
 
     @Test(arguments: [false, true])
-    func draftSendErrorReloadsDurableStateWithoutOfferingFreshRetry(accepted: Bool) async throws {
+    func draftSendStatusDistinguishesAcceptedFromRejectedAdmission(accepted: Bool) async throws {
         let client = try MarmotClient.testClient()
         let defaults = try #require(UserDefaults(suiteName: "DraftSendFailureTests.\(UUID())"))
         let drafts = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
@@ -128,19 +128,19 @@ struct ConversationWindowBindingTests {
             composer.canSendMessages = { true }
             let snapshot = ConversationDraftSnapshot(canonicalText: "send once", replyToMessageIdHex: nil, mediaAttachments: [])
             let revision = try await drafts.prepareSend(snapshot, accountRef: account.label, groupIdHex: group.groupIdHex)
-            composer.sendTextForTesting = { _, _, _, _ in
+            composer.sendTextForTesting = { _, _, _, _, token in
                 if accepted {
-                    _ = try await client.sendMessageDraft(accountRef: account.label, revision: revision, attachments: [])
+                    _ = try await client.sendDraftWithClientToken(accountRef: account.label, revision: revision, attachments: [], clientToken: token)
                 }
                 throw MarmotKitError.Runtime(details: "delivery failed")
             }
             await composer.send("send once", draftRevision: revision) { refresh in
-                #expect(refresh)
+                #expect(refresh == accepted)
                 await drafts.finishSend(accountRef: account.label, groupIdHex: group.groupIdHex, accepted: refresh)
             }
             let row = try #require(timeline.timeline.first)
-            #expect(timeline.localSendPhase(rowID: row.id) == .completionUnknown)
-            #expect(timeline.failedTransientRecord(rowId: row.id) == nil)
+            #expect(timeline.localSendPhase(rowID: row.id) == (accepted ? .accepted : .failed))
+            #expect((timeline.failedTransientRecord(rowId: row.id) == nil) == accepted)
             let recovered = await drafts.snapshot(accountRef: account.label, groupIdHex: group.groupIdHex)
             #expect(recovered?.canonicalText == (accepted ? nil : "send once"))
             try await client.marmot.shutdownAndClose()

@@ -165,6 +165,7 @@ final class AppState {
     var productOnboardingPath: ProductOnboardingPath?
     var productOnboardingTicket: ProductAnalyticsRecorder.Ticket?
     let productAnalytics = ProductAnalyticsRecorder()
+    @ObservationIgnored var conversationOpenPerformance: ConversationOpenPerformance?
     var pendingProductActivity: ProductAnalyticsActivityFfi = .foreground
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
@@ -498,7 +499,9 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
-        erasureDefaults: UserDefaults = AppDataErasureState.persistentDefaults,
+        // Default arguments evaluate in a nonisolated context and `UserDefaults`
+        // is not Sendable, so the MainActor store is resolved in the body.
+        erasureDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
             RuntimeLifecycle.defaultRuntimeClientFactory,
@@ -517,7 +520,9 @@ final class AppState {
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
-        self.erasureState = AppDataErasureState(defaults: erasureDefaults, legacyDefaults: accountDefaults)
+        self.erasureState = AppDataErasureState(
+            defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
+            legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
@@ -790,6 +795,7 @@ final class AppState {
         // the flag on every exit path, including the early wipe failure return
         // below.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: signingOut)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't sign out")))
@@ -973,6 +979,7 @@ final class AppState {
         // push reschedule for the whole teardown; cleared before routing so a
         // reschedule for the *new* active account is not suppressed.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't wipe profile")))
@@ -1074,6 +1081,7 @@ final class AppState {
             guard await NotificationCommunicationDecorator.deleteAllDonatedInteractions() else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
+            notifications.cancelForegroundBatches()
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
             URLCache.shared.removeAllCachedResponses()

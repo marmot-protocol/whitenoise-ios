@@ -84,16 +84,15 @@ struct ChatsListView: View {
         let groupIdHex: String
         let messageIdHex: String?
         let unreadMessageIdHex: String?
-        let openedAt = ContinuousClock.now
-        let performanceTicket: ProductAnalyticsRecorder.Ticket?
+        let performance: ConversationOpenPerformance?
 
         init(
             groupIdHex: String,
             messageIdHex: String? = nil,
             unreadMessageIdHex: String? = nil,
-            performanceTicket: ProductAnalyticsRecorder.Ticket? = nil
+            performance: ConversationOpenPerformance? = nil
         ) {
-            self.performanceTicket = performanceTicket
+            self.performance = performance
             self.groupIdHex = groupIdHex
             let messageId = messageIdHex?.trimmingCharacters(in: .whitespacesAndNewlines)
             self.messageIdHex = messageId?.isEmpty == false ? messageId : nil
@@ -172,7 +171,7 @@ struct ChatsListView: View {
                         .tint(.primary)
                 }
             }
-            .compatibleTopSafeAreaBar(spacing: 0) {
+            .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
                     if appState.isConnectivityCatchUpInProgress {
                         HStack(spacing: 8) {
@@ -184,13 +183,13 @@ struct ChatsListView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
-                        .background(.bar)
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
                     Color.clear
                         .frame(height: 6)
                 }
+                .wnFadingHeader()
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
             // Registered at a stable level so navigation works even when the
@@ -222,6 +221,13 @@ struct ChatsListView: View {
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
             }
             .onDisappear { chatsVisible = false }
+            .onChange(of: path) { oldPath, newPath in
+                for target in oldPath where !newPath.contains(target) {
+                    if appState.navigation.pendingChatPerformance !== target.performance {
+                        target.performance?.finish(.cancelled, recorder: appState.productAnalytics)
+                    }
+                }
+            }
             .onChange(of: appState.openSettingsAfterProfileSelection) {
                 if appState.openSettingsAfterProfileSelection {
                     appState.openSettingsAfterProfileSelection = false
@@ -276,6 +282,7 @@ struct ChatsListView: View {
                 // this one, leaving the list permanently empty and unbound.
                 let vm = viewModel ?? ChatsListViewModel(appState: appState)
                 if viewModel == nil { viewModel = vm }
+                vm.refreshExpiredPreviews()
                 listViewport.reset()
                 let viewport = listViewport
                 vm.windowWillChange = { [weak viewport] snapshot in viewport?.prepare(for: snapshot) }
@@ -336,7 +343,9 @@ struct ChatsListView: View {
             }
         }
         // Warm path: a chat created / deep-linked while the list is on screen.
-        .onChange(of: appState.pendingChatId) { _, _ in consumePendingChat() }
+        .onChange(of: appState.navigation.pendingChatPerformance?.id) { _, _ in
+            if appState.pendingChatId != nil { consumePendingChat() }
+        }
         // Cold path: a deep link that set pendingChatId before this appeared.
         .task { consumePendingChat() }
     }
@@ -353,6 +362,7 @@ struct ChatsListView: View {
     /// observers are guaranteed to see it.
     private func consumePendingChat() {
         guard let newId = appState.pendingChatId else { return }
+        let performance = appState.navigation.pendingChatPerformance
         showNewChat = false
         showSettings = false
         exitSearch()
@@ -365,22 +375,25 @@ struct ChatsListView: View {
             // whether the stack kept it, and retry until it sticks.
             for attempt in 0..<8 {
                 try? await Task.sleep(nanoseconds: attempt == 0 ? 350_000_000 : 450_000_000)
-                guard appState.pendingChatId == newId else { return }
+                guard appState.pendingChatId == newId,
+                      appState.navigation.pendingChatPerformance === performance else { return }
                 // Re-read the anchor so a newer jump for the same chat wins.
                 let target = ChatNavigationTarget(
                     groupIdHex: newId,
                     messageIdHex: appState.pendingChatMessageIdHex,
-                    performanceTicket: appState.productAnalytics.ticket()
+                    performance: performance
                 )
                 path = [target]
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                guard appState.pendingChatId == newId else { return }
+                guard appState.pendingChatId == newId,
+                      appState.navigation.pendingChatPerformance === performance else { return }
                 if path == [target] {
                     appState.clearPendingChat()
                     return
                 }
                 path = []
             }
+            performance?.finish(.cancelled, recorder: appState.productAnalytics)
             appState.clearPendingChat()
         }
     }
@@ -533,7 +546,7 @@ struct ChatsListView: View {
             }
             .environment(\.editMode, $chatListEditMode)
             .listStyle(.plain)
-            .compatibleAutomaticTopScrollEdgeEffect()
+            .compatibleTopScrollEdgeEffectHidden()
             .compatibleBottomScrollEdgeEffect()
             .overlay {
                 if rows.isEmpty { emptyState }
@@ -745,7 +758,10 @@ struct ChatsListView: View {
                     }
                     endSelectionMode()
                 }
-                .disabled(bulkDeleteInProgress)
+                .disabled(bulkDeleteInProgress || items.contains {
+                    guard let actions = $0.actions else { return false }
+                    return archiveAction == .unarchive ? !actions.canRestore : !actions.canArchive
+                })
 
                 selectionAction(
                     willMute ? "Mute" : "Unmute",
@@ -754,7 +770,10 @@ struct ChatsListView: View {
                     for id in items.map(\.id) { setMuted(groupIdHex: id, muted: willMute) }
                     endSelectionMode()
                 }
-                .disabled(bulkDeleteInProgress || departureActions.contains(nil))
+                .disabled(bulkDeleteInProgress || items.contains {
+                    guard let actions = $0.actions else { return $0.departureAction == nil }
+                    return !actions.canMute && !actions.canUnmute
+                })
 
                 if bulkDeleteInProgress {
                     VStack(spacing: 3) {
@@ -864,6 +883,7 @@ struct ChatsListView: View {
     }
 
     private func navigate(to item: ChatsListViewModel.Item) {
+        let performance = appState.beginConversationOpenPerformance()
         viewModel?.retainDestination(groupIdHex: item.id)
         exitSearch()
         path.append(
@@ -871,14 +891,15 @@ struct ChatsListView: View {
                 groupIdHex: item.id,
                 messageIdHex: item.firstUnreadMessageIdHex,
                 unreadMessageIdHex: item.firstUnreadMessageIdHex,
-                performanceTicket: appState.productAnalytics.ticket()
+                performance: performance
             )
         )
     }
 
     @ViewBuilder
     private func leadingSwipeActions(for item: ChatsListViewModel.Item) -> some View {
-        let actions = ChatListSwipeActionsPresentation.leadingActions(
+        let actions = item.actions.map { ChatListSwipeActionsPresentation.leadingActions($0) }
+            ?? ChatListSwipeActionsPresentation.leadingActions(
             hasUnread: item.hasUnread,
             isPinned: item.isPinned,
             isArchived: item.isArchived
@@ -897,7 +918,8 @@ struct ChatsListView: View {
 
     @ViewBuilder
     private func swipeActions(for item: ChatsListViewModel.Item) -> some View {
-        let actions = ChatListSwipeActionsPresentation.trailingActions(
+        let actions = item.actions.map { ChatListSwipeActionsPresentation.trailingActions($0, isMuted: item.isMuted) }
+            ?? ChatListSwipeActionsPresentation.trailingActions(
             isArchived: item.isArchived,
             selfMembership: item.selfMembership,
             leaveRequestPending: item.leaveRequestPending,
@@ -1013,9 +1035,8 @@ struct ChatsListView: View {
                 manuallyUnread: manuallyUnread
             ) {
                 viewModel?.applyChatListRow(row)
-            } else {
-                await viewModel?.refreshRows()
             }
+            await viewModel?.refreshRow(groupIdHex: item.id, retainAsDestination: false)
             return true
         } catch {
             return false
@@ -1054,6 +1075,7 @@ struct ChatsListView: View {
                     orderedGroupIds: state.orderedGroupIds
                 )
             }
+            await viewModel.refreshRow(groupIdHex: item.id, retainAsDestination: false)
         } catch {
             await swipeDrawerCloseTask.value
             var appliedDeferredSnapshot = false
@@ -1114,9 +1136,8 @@ struct ChatsListView: View {
             }
             if let row = result.row {
                 viewModel?.applyChatListRow(row)
-            } else {
-                await viewModel?.refreshRows()
             }
+            await viewModel?.refreshRow(groupIdHex: groupIdHex, retainAsDestination: false)
             await appState.notifications.reconcileDeliveredNotificationsAfterRead(
                 accountRef: ref,
                 groupIdHex: groupIdHex,
@@ -1374,12 +1395,24 @@ private struct ChatDestination: View {
     let onGroupLeft: (String) -> Void
     let onGroupDeleted: (String) -> Void
     @State private var timedOut = false
+    @State private var retryPerformance: ConversationOpenPerformance?
+
+    private var performance: ConversationOpenPerformance? { retryPerformance ?? target.performance }
 
     private var item: ChatsListViewModel.Item? {
         viewModel.item(groupIdHex: target.groupIdHex)
     }
 
     var body: some View {
+        destination
+            .onDisappear {
+                if appState.navigation.pendingChatPerformance !== performance {
+                    performance?.finish(.cancelled, recorder: appState.productAnalytics)
+                }
+            }
+    }
+
+    @ViewBuilder private var destination: some View {
         if let item {
             ConversationView(
                 chat: item.projectedGroup,
@@ -1393,8 +1426,7 @@ private struct ChatDestination: View {
                 initialTargetMessageIdHex: target.messageIdHex,
                 initialUnreadMessageIdHex: target.unreadMessageIdHex,
                 initialAppState: appState,
-                navigationStartedAt: target.openedAt,
-                performanceTicket: target.performanceTicket,
+                openPerformance: performance,
                 forwardDestinationProvider: {
                     try await viewModel.forwardDestinations(excludingGroupIdHex: target.groupIdHex)
                 },
@@ -1417,7 +1449,10 @@ private struct ChatDestination: View {
             } description: {
                 Text("It may still be syncing. Try again in a moment.")
             } actions: {
-                Button("Retry") { timedOut = false }
+                Button("Retry") {
+                    retryPerformance = appState.beginConversationOpenPerformance()
+                    timedOut = false
+                }
             }
         } else {
             ProgressView()
@@ -1425,7 +1460,9 @@ private struct ChatDestination: View {
                 .task {
                     await viewModel.refreshRow(groupIdHex: target.groupIdHex)
                     guard viewModel.item(groupIdHex: target.groupIdHex) == nil else { return }
-                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    do { try await Task.sleep(nanoseconds: 5_000_000_000) } catch { return }
+                    guard viewModel.item(groupIdHex: target.groupIdHex) == nil else { return }
+                    performance?.finish(.timeout, recorder: appState.productAnalytics)
                     timedOut = true
                 }
         }

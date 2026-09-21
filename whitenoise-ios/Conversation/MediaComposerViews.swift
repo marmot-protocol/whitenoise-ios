@@ -363,7 +363,8 @@ struct ComposerMediaPreviewView: View {
                         Label(L10n.string("Apply"), systemImage: "checkmark")
                             .labelStyle(.iconOnly)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .wnPrimaryButtonStyle()
+                    .controlSize(.large)
                     .accessibilityLabel(L10n.string("Apply"))
                 }
             }
@@ -431,7 +432,7 @@ struct ComposerMediaPreviewView: View {
                 if isIncluded {
                     Image(systemName: "checkmark")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(WNNeutralAccent.foreground)
                 }
             }
             .frame(width: Layout.inclusionControlSize, height: Layout.inclusionControlSize)
@@ -689,23 +690,20 @@ struct MediaApprovalView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 15)
                     .padding(.vertical, 11)
-                    .background(Color.white.opacity(0.12), in: .rect(cornerRadius: 22))
+                    .compatibleInputRoundedChrome(cornerRadius: 22, interactive: false)
 
                 Button(action: onSend) {
                     Group {
                         if isSending {
                             ProgressView()
-                                .tint(.white)
+                                .tint(WNNeutralAccent.foreground)
                         } else {
                             Image(systemName: "arrow.up")
                                 .font(.body.weight(.bold))
                         }
                     }
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(Color.accentColor, in: Circle())
                 }
-                .buttonStyle(.plain)
+                .wnIconButtonChrome(emphasis: .primary)
                 .disabled(attachments.isEmpty || isSending)
                 .accessibilityLabel(L10n.string("Send"))
             }
@@ -943,7 +941,7 @@ struct CameraCaptureView: View {
                             .font(.title3.weight(.semibold))
                             .foregroundStyle(.white)
                             .frame(width: 48, height: 48)
-                            .background(.ultraThinMaterial, in: Circle())
+                            .compatibleInputCircleChrome()
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Switch Camera")
@@ -956,7 +954,7 @@ struct CameraCaptureView: View {
                         .foregroundStyle(.red)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .compatibleInputCapsuleChrome(interactive: false)
                         .accessibilityLabel("Recording video, \(camera.durationLabel)")
                 } else if !camera.recordsVideoSound {
                     Button(action: openSettings) {
@@ -965,7 +963,8 @@ struct CameraCaptureView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .background(.ultraThinMaterial, in: Capsule())
+                            .frame(minHeight: 44)
+                            .compatibleInputCapsuleChrome()
                     }
                     .buttonStyle(.plain)
                     .accessibilityHint("Opens Settings to allow microphone access.")
@@ -1023,7 +1022,7 @@ struct CameraCaptureView: View {
                 .font(.body.weight(.bold))
                 .foregroundStyle(.white)
                 .frame(width: 48, height: 48)
-                .background(.ultraThinMaterial, in: Circle())
+                .compatibleInputCircleChrome()
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Close Camera")
@@ -1041,7 +1040,8 @@ struct CameraCaptureView: View {
         } actions: {
             if offersSettings {
                 Button("Open Settings", action: openSettings)
-                    .buttonStyle(.borderedProminent)
+                    .wnPrimaryButtonStyle()
+                    .controlSize(.large)
             }
         }
         .foregroundStyle(.white)

@@ -23,6 +23,12 @@ nonisolated enum ProductTimingStage: String, CaseIterable, Sendable {
     case timelineProfiles = "app_timeline_profiles"
     case outgoingProjection = "app_outgoing_projection"
     case outgoingConfirmation = "app_outgoing_confirmation"
+    // Send-path phases, all measured from the Send tap on a monotonic clock:
+    // tap -> draft ready -> SDK submission -> MDK window update carrying the row.
+    // Tap -> first visible layout stays on `outboundMessageVisible`.
+    case sendDraftReady = "app_send_draft_ready"
+    case sendSubmission = "app_send_submission"
+    case sendProjection = "app_send_projection"
     case markdownRebuild = "app_markdown_rebuild"
     case mediaRebuild = "app_media_rebuild"
     case inboxSnapshot = "app_inbox_snapshot"
@@ -128,6 +134,17 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
     @discardableResult
     func recordPerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64, ticket: Ticket?, outcome: HostPerformanceOutcomeFfi = .success) -> Task<Void, Never>? {
         enqueue(ticket: ticket) { $0.performanceSink?(operation, milliseconds, outcome) }
+    }
+
+    // Two terminal samples per conversation attempt. The native recorder is memory-only;
+    // finish before lifecycle invalidation closes this consent generation.
+    func recordImmediatePerformance(_ operation: HostPerformanceOperationFfi, milliseconds: UInt64,
+                                    ticket: Ticket?, outcome: HostPerformanceOutcomeFfi) {
+        guard let ticket else { return }
+        state.withLock { state in
+            guard state.generation == ticket.generation, state.sink != nil else { return }
+            state.performanceSink?(operation, milliseconds, outcome)
+        }
     }
 
     private func enqueue(ticket: Ticket?, deliver: @escaping @Sendable (State) throws -> Void) -> Task<Void, Never>? {

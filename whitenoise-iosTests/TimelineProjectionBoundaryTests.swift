@@ -243,10 +243,28 @@ struct TimelineProjectionBoundaryTests {
         #expect(viewModel.reactionTargetCollectionCountForTesting == 1)
     }
 
+    @Test func automaticReadWithoutASourceNeverUsesLegacyCacheOrDownloader() async throws {
+        let reference = mediaReference(sourceEpoch: 7, plaintext: Data([1]))
+        let media = MessageMediaAttachment(id: "unresolved", reference: reference,
+            fileName: reference.fileName, mediaType: reference.mediaType, dim: nil, localData: nil)
+        let cache = CountingConversationMediaCache()
+        cache.cachedDataToReturn = Data([1])
+        var downloads = 0
+        let downloader = ConversationMediaDownloader(cache: cache, downloadMedia: { _, _, _, _ in
+            downloads += 1
+            throw AttachmentReadError.unavailable
+        })
+        await #expect(throws: AttachmentReadError.unavailable) {
+            _ = try await downloader.data(for: media, groupIdHex: testGroupId, appState: nil)
+        }
+        #expect(downloads == 0)
+        #expect(cache.cachedDataCalls == 0)
+    }
+
     @Test func mediaDownloaderProbesDecryptedCacheOnlyOnceBeforeDownload() async throws {
         let downloadedData = Data([0x09, 0x0a, 0x0b])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -254,6 +272,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: downloadedData)
         let downloader = ConversationMediaDownloader(
@@ -286,7 +305,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mediaDownloaderRejectsPlaintextHashMismatchBeforeCaching() async throws {
         let reference = mediaReference(sourceEpoch: 7, plaintext: Data([0x01]))
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -294,6 +313,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0xff]))
         let downloader = ConversationMediaDownloader(
@@ -322,7 +342,7 @@ struct TimelineProjectionBoundaryTests {
             sourceEpoch: 7,
             locatorValue: "http://media.example/a.png"
         )
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -330,6 +350,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0x01]))
         let downloader = ConversationMediaDownloader(
@@ -356,7 +377,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mediaDownloaderRejectsPrivateDnsBeforeNativeDownload() async throws {
         let reference = mediaReference(sourceEpoch: 7)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -364,6 +385,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0x01]))
         let downloader = ConversationMediaDownloader(
@@ -406,7 +428,7 @@ struct TimelineProjectionBoundaryTests {
     @Test func mediaDownloaderIgnoresHashMismatchedCacheHit() async throws {
         let downloadedData = Data([0x0c, 0x0d, 0x0e])
         let reference = mediaReference(sourceEpoch: 7, plaintext: downloadedData)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -414,6 +436,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = Data([0xff])
         let downloaded = DownloadMediaSpy(data: downloadedData)
@@ -444,7 +467,7 @@ struct TimelineProjectionBoundaryTests {
     func mediaDownloaderUsesTheInjectedCachesPurgeGeneration(purgeInjectedCache: Bool) async throws {
         let data = Data([0x01, 0x02])
         let reference = mediaReference(sourceEpoch: 7, plaintext: data)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "cache-generation-test",
             reference: reference,
             fileName: reference.fileName,
@@ -452,6 +475,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = data
         cached.blocksCachedDataRead = true
@@ -479,7 +503,7 @@ struct TimelineProjectionBoundaryTests {
     @Test func mediaDownloaderRejectsDownloadWhenCacheIsPurgedDuringStore() async throws {
         let data = Data([0x03, 0x04])
         let reference = mediaReference(sourceEpoch: 7, plaintext: data)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "download-purge-test",
             reference: reference,
             fileName: reference.fileName,
@@ -487,6 +511,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         cached.invalidatesDuringStore = true
         let downloaded = DownloadMediaSpy(data: data)
@@ -508,7 +533,7 @@ struct TimelineProjectionBoundaryTests {
     @Test func mediaDownloaderCoalescesConcurrentCacheVerification() async throws {
         let cachedData = Data(repeating: 0x5a, count: 512 * 1024)
         let reference = mediaReference(sourceEpoch: 7, plaintext: cachedData)
-        let media = MessageMediaAttachment(
+        var media = MessageMediaAttachment(
             id: "message-a:\(reference.plaintextSha256):0:0",
             reference: reference,
             fileName: reference.fileName,
@@ -516,6 +541,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
+        media.downloadExplicitly = true
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = cachedData
         cached.blocksCachedDataRead = true
