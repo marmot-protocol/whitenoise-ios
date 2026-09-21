@@ -8,10 +8,11 @@ import UIKit
 /// relative timestamp.
 struct ChatRow: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: ChatsListViewModel.Item
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
             GroupAvatarBubble(
                 groupIdHex: item.id,
                 imageHashHex: encryptedImageHashHex,
@@ -28,7 +29,8 @@ struct ChatRow: View {
                 HStack(spacing: 5) {
                     Text(title)
                         .font(.headline)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if item.isMuted {
                         Image(systemName: MuteBadgePresentation.systemImageName)
                             .font(.caption)
@@ -66,6 +68,8 @@ struct ChatRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -73,7 +77,8 @@ struct ChatRow: View {
                     previewText
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     if item.isPinned {
                         Image(systemName: PinBadgePresentation.systemImageName)
