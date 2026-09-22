@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 @MainActor
 @Observable
@@ -6,47 +7,28 @@ final class DonateViewModel {
     var cadence: DonationCadence = .oneTime
     var amountSelection: DonationAmountSelection = .preset(DonatePresentation.defaultAmountCents)
     var customAmountText = ""
-    var isProcessing = false
-    var errorMessage: String?
-    var paymentSucceeded = false
-    var receiptStatus: DonationReceiptStatus?
-    var receiptURL: URL?
-    var receiptCheckFailed = false
-    var isCheckingReceipt = false
+    private var rejectedAmountInput: CustomDonationAmountValidation?
+    private(set) var availability: DonationApplePayAvailability = .notConfigured
+    var isProcessing: Bool { activePaymentID != nil }
+    private(set) var errorMessage: String?
+    private(set) var successfulPayment: DonationPayment?
+    var paymentSucceeded: Bool { successfulPayment != nil }
+    private(set) var completedPayments: [DonationPayment] = []
     private(set) var isApplePayPrepared = false
     private(set) var isPreparingApplePay = false
     private(set) var applePayPreparationFailed = false
-    private(set) var availability: DonationApplePayAvailability = .notConfigured
     let managementURL: URL?
 
     private let client: (any DonationClient)?
     private let coordinator: (any DonationPaymentCoordinating)?
     private let locale: Locale
     private var paymentTask: Task<Void, Never>?
-    private var receiptTask: Task<Void, Never>?
-    private var receiptToken: String?
+    private var activePaymentID: UUID?
+    private var preparationID: UUID?
 
     init(
-        config: DonationBuildConfig? = DonationBuildConfig.current(),
-        locale: Locale = .autoupdatingCurrent
-    ) {
-        self.locale = locale
-        guard let config else {
-            client = nil
-            coordinator = nil
-            managementURL = nil
-            return
-        }
-        let client = URLSessionDonationClient(baseURL: config.serviceURL)
-        self.client = client
-        coordinator = ApplePayDonationCoordinator(config: config, client: client)
-        managementURL = config.managementURL
-        isPreparingApplePay = true
-    }
-
-    init(
-        client: any DonationClient,
-        coordinator: any DonationPaymentCoordinating,
+        client: (any DonationClient)?,
+        coordinator: (any DonationPaymentCoordinating)?,
         managementURL: URL? = nil,
         locale: Locale = .autoupdatingCurrent,
         isApplePayPrepared: Bool = true
@@ -55,8 +37,8 @@ final class DonateViewModel {
         self.coordinator = coordinator
         self.managementURL = managementURL
         self.locale = locale
-        self.isApplePayPrepared = isApplePayPrepared
-        isPreparingApplePay = !isApplePayPrepared
+        self.isApplePayPrepared = coordinator != nil && isApplePayPrepared
+        isPreparingApplePay = coordinator != nil && !isApplePayPrepared
         refreshApplePayAvailability()
     }
 
@@ -76,11 +58,13 @@ final class DonateViewModel {
 
     var customAmountErrorMessage: String? {
         guard amountSelection == .custom else { return nil }
-        switch customAmountValidation {
+        switch rejectedAmountInput ?? customAmountValidation {
         case .empty:
             return nil
         case .invalid:
-            return L10n.string("Enter a valid USD amount with no more than two decimal places.")
+            return L10n.string("Enter a valid USD amount.")
+        case .tooPrecise:
+            return L10n.string("Use up to two decimal places.")
         case .belowMinimum:
             return L10n.string("The minimum donation is $1.")
         case .aboveMaximum:
@@ -100,7 +84,7 @@ final class DonateViewModel {
             availability = .notConfigured
             return
         }
-        let availabilityDraft = draft ?? DonationDraft(
+        let availabilityDraft = DonationDraft(
             amountCents: DonatePresentation.defaultAmountCents,
             cadence: cadence
         )
@@ -108,26 +92,30 @@ final class DonateViewModel {
     }
 
     var canDonate: Bool {
-        draft != nil && availability == .ready && !isProcessing
-    }
-
-    var canCheckReceipt: Bool {
-        paymentSucceeded && receiptToken != nil && !isProcessing && !isCheckingReceipt
+        draft != nil && rejectedAmountInput == nil && availability == .ready && !isProcessing
     }
 
     func prepareApplePay() async {
         guard !isApplePayPrepared, let coordinator else { return }
-        isPreparingApplePay = true
+        let id = UUID()
+        preparationID = id
         applePayPreparationFailed = false
-        defer { isPreparingApplePay = false }
+        isPreparingApplePay = true
+        defer {
+            if preparationID == id {
+                preparationID = nil
+                isPreparingApplePay = false
+                refreshApplePayAvailability()
+            }
+        }
         do {
             try await coordinator.prepare()
             try Task.checkCancellation()
+            guard preparationID == id else { return }
             isApplePayPrepared = true
-            refreshApplePayAvailability()
         } catch {
+            guard preparationID == id else { return }
             isApplePayPrepared = false
-            refreshApplePayAvailability()
             applePayPreparationFailed = !(error is CancellationError) && !Task.isCancelled
         }
     }
@@ -135,124 +123,125 @@ final class DonateViewModel {
     func selectPreset(_ cents: Int) {
         guard !isProcessing else { return }
         amountSelection = .preset(cents)
+        customAmountText = ""
+        rejectedAmountInput = nil
         resetResult()
-        refreshApplePayAvailability()
-    }
-
-    func selectCustom() {
-        guard !isProcessing else { return }
-        amountSelection = .custom
-        resetResult()
-        refreshApplePayAvailability()
     }
 
     func cadenceChanged() {
         guard !isProcessing else { return }
-        resetResult()
         refreshApplePayAvailability()
+        resetResult()
     }
 
-    func customAmountChanged() {
-        guard amountSelection == .custom, !isProcessing else { return }
+    func decideAmountEdit(current: String, range: NSRange, replacement: String, isPaste: Bool) -> DonationAmountEdit {
+        guard !isProcessing else { return .reject(nil) }
+        let decision = DonatePresentation.amountEdit(
+            current: current, range: range, replacement: replacement, isPaste: isPaste, locale: locale
+        )
+        if case let .reject(error?) = decision {
+            amountSelection = .custom
+            rejectedAmountInput = error
+        }
+        return decision
+    }
+
+    func updateCustomAmount(_ text: String) {
+        guard !isProcessing else { return }
+        customAmountText = text
+        amountSelection = .custom
+        rejectedAmountInput = nil
         resetResult()
-        refreshApplePayAvailability()
     }
 
     func startDonation() {
-        guard paymentTask == nil,
+        guard paymentTask == nil, canDonate,
               let draft,
               let coordinator
         else { return }
 
         errorMessage = nil
-        paymentSucceeded = false
-        receiptStatus = nil
-        receiptURL = nil
-        receiptCheckFailed = false
-        receiptToken = nil
-        isProcessing = true
+        successfulPayment = nil
+        let paymentID = UUID()
+        activePaymentID = paymentID
 
         paymentTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer {
-                isProcessing = false
-                paymentTask = nil
+                if activePaymentID == paymentID {
+                    activePaymentID = nil
+                    paymentTask = nil
+                }
             }
             do {
+                try Task.checkCancellation()
                 let success = try await coordinator.donate(draft)
                 try Task.checkCancellation()
-                receiptToken = success.receiptToken
-                paymentSucceeded = true
-                await loadReceipt(token: success.receiptToken)
+                guard activePaymentID == paymentID else { return }
+                let payment = DonationPayment(
+                    id: UUID().uuidString,
+                    amountCents: draft.amountCents,
+                    date: .now,
+                    cadence: draft.cadence,
+                    invoice: .receiptToken(success.receiptToken)
+                )
+                completedPayments.insert(payment, at: 0)
+                successfulPayment = payment
             } catch is CancellationError {
                 return
             } catch let error as DonationPaymentCoordinatorError {
+                guard !Task.isCancelled, activePaymentID == paymentID else { return }
                 errorMessage = Self.message(for: error)
             } catch {
+                guard !Task.isCancelled, activePaymentID == paymentID else { return }
                 errorMessage = L10n.string("The donation couldn't be completed. Please try again.")
             }
         }
     }
 
-    func openPaymentSetup() {
-        coordinator?.openPaymentSetup()
+    func receipt(for token: String) async throws -> DonationReceiptResponse {
+        guard let client else { throw DonationClientError.serviceUnavailable }
+        do {
+            let response = try await client.receipt(for: token)
+            try Task.checkCancellation()
+            if let index = completedPayments.firstIndex(where: { $0.invoice == .receiptToken(token) }) {
+                completedPayments[index].receipt = response
+                completedPayments[index].receiptFailed = false
+            }
+            return response
+        } catch {
+            try Task.checkCancellation()
+            if !(error is CancellationError),
+               let index = completedPayments.firstIndex(where: { $0.invoice == .receiptToken(token) }) {
+                completedPayments[index].receiptFailed = true
+            }
+            throw error
+        }
     }
 
-    func checkReceipt() {
-        guard receiptTask == nil,
-              let receiptToken
-        else { return }
-
-        receiptCheckFailed = false
-        isCheckingReceipt = true
-        receiptTask = Task { @MainActor [weak self] in
-            guard let self else { return }
-            defer {
-                receiptTask = nil
-                isCheckingReceipt = false
-            }
-            await loadReceipt(token: receiptToken)
-        }
+    func openPaymentSetup() {
+        guard availability == .setupRequired else { return }
+        coordinator?.openPaymentSetup()
+        refreshApplePayAvailability()
     }
 
     func cancel() {
         paymentTask?.cancel()
-        receiptTask?.cancel()
         paymentTask = nil
-        receiptTask = nil
+        activePaymentID = nil
         coordinator?.cancel()
-        isProcessing = false
-        isCheckingReceipt = false
-    }
-
-    private func loadReceipt(token: String) async {
-        guard let client else { return }
-        do {
-            let response = try await client.receipt(for: token)
-            try Task.checkCancellation()
-            receiptStatus = response.status
-            receiptURL = response.status == .available ? response.url : nil
-            receiptCheckFailed = false
-        } catch is CancellationError {
-            return
-        } catch {
-            receiptCheckFailed = true
-        }
     }
 
     private func resetResult() {
         errorMessage = nil
-        paymentSucceeded = false
-        receiptStatus = nil
-        receiptURL = nil
-        receiptCheckFailed = false
-        receiptToken = nil
+        successfulPayment = nil
     }
 
-    private static func message(for error: DonationPaymentCoordinatorError) -> String {
+    private static func message(for error: DonationPaymentCoordinatorError) -> String? {
         switch error {
         case .missingDonorContact:
-            L10n.string("Apple Pay needs your name and email for monthly donations.")
+            // Required contact details are handled inside the Apple Pay sheet.
+            nil
         case .unavailable, .invalidPaymentRequest:
             L10n.string("Apple Pay isn't available for this donation.")
         case .alreadyActive:

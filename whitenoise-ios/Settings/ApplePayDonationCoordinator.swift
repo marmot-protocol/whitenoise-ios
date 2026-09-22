@@ -2,61 +2,6 @@ import Foundation
 import PassKit
 import StripeApplePay
 
-enum DonationApplePayAvailability: Equatable {
-    case ready
-    case setupRequired
-    case unavailable
-    case notConfigured
-}
-
-struct DonationPaymentSuccess: Equatable {
-    let receiptToken: String
-}
-
-nonisolated struct DonationAuthorizationContext: Equatable, Sendable {
-    let attemptID: UUID
-    let draft: DonationDraft
-
-    init(draft: DonationDraft, attemptID: UUID = UUID()) {
-        self.draft = draft
-        self.attemptID = attemptID
-    }
-
-    func request(
-        paymentMethodID: String,
-        donor: DonationDonor?
-    ) -> DonationCreateRequest {
-        DonationCreateRequest(
-            attemptID: attemptID,
-            amountCents: draft.amountCents,
-            cadence: draft.cadence,
-            paymentMethodID: paymentMethodID,
-            donor: donor
-        )
-    }
-}
-
-enum DonationPaymentCoordinatorError: Error, Equatable {
-    case alreadyActive
-    case unavailable
-    case invalidPaymentRequest
-    case missingDonorContact
-    case paymentFailed
-
-    static func completionError(_ error: Error?) -> Self {
-        error as? Self ?? .paymentFailed
-    }
-}
-
-@MainActor
-protocol DonationPaymentCoordinating: AnyObject {
-    func prepare() async throws
-    func availability(for draft: DonationDraft) -> DonationApplePayAvailability
-    func donate(_ draft: DonationDraft) async throws -> DonationPaymentSuccess
-    func openPaymentSetup()
-    func cancel()
-}
-
 @MainActor
 enum DonationPaymentRequestFactory {
     static func make(draft: DonationDraft, config: DonationBuildConfig) -> PKPaymentRequest {
@@ -136,7 +81,6 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
     private var authorization: DonationAuthorizationContext?
     private var receiptToken: String?
     private var continuation: CheckedContinuation<DonationPaymentSuccess, Error>?
-    private var cancelled = false
     private var isConfigured = false
 
     init(config: DonationBuildConfig, client: any DonationClient) {
@@ -180,7 +124,6 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         self.context = context
         authorization = DonationAuthorizationContext(draft: draft)
         receiptToken = nil
-        cancelled = false
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -194,9 +137,9 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
 
     func cancel() {
         guard context != nil || continuation != nil else { return }
-        cancelled = true
-        context?.dismiss()
+        let dismissedContext = context
         finish(.failure(CancellationError()))
+        dismissedContext?.dismiss()
     }
 
     func applePayContext(
@@ -204,7 +147,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         didCreatePaymentMethod paymentMethod: StripeAPI.PaymentMethod,
         paymentInformation: PKPayment
     ) async throws -> String {
-        guard !cancelled,
+        guard context === self.context,
               let authorization
         else { throw CancellationError() }
 
@@ -219,7 +162,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         let response = try await client.createDonation(
             authorization.request(paymentMethodID: paymentMethod.id, donor: donor)
         )
-        guard !cancelled else { throw CancellationError() }
+        guard context === self.context else { throw CancellationError() }
         receiptToken = response.receiptToken
         return response.clientSecret
     }
@@ -229,6 +172,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         didCompleteWith status: STPApplePayContext.PaymentStatus,
         error: Error?
     ) {
+        guard context === self.context else { return }
         switch status {
         case .success:
             guard let receiptToken else {
@@ -250,5 +194,25 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         authorization = nil
         receiptToken = nil
         continuation?.resume(with: result)
+    }
+}
+
+extension DonateViewModel {
+    convenience init(
+        config: DonationBuildConfig? = DonationBuildConfig.current(),
+        locale: Locale = .autoupdatingCurrent
+    ) {
+        guard let config else {
+            self.init(client: nil, coordinator: nil, locale: locale)
+            return
+        }
+        let client = URLSessionDonationClient(baseURL: config.serviceURL)
+        self.init(
+            client: client,
+            coordinator: ApplePayDonationCoordinator(config: config, client: client),
+            managementURL: config.managementURL,
+            locale: locale,
+            isApplePayPrepared: false
+        )
     }
 }

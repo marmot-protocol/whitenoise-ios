@@ -5,7 +5,7 @@ import Testing
 @MainActor
 struct DonateViewModelTests {
     @Test func unavailableConfigurationKeepsApplePayDisabled() {
-        let model = DonateViewModel(config: nil)
+        let model = DonateViewModel(client: nil, coordinator: nil)
 
         #expect(model.availability == .notConfigured)
         #expect(!model.canDonate)
@@ -21,21 +21,85 @@ struct DonateViewModelTests {
             locale: Locale(identifier: "en_US")
         )
 
-        model.selectCustom()
-        model.customAmountText = "10.25"
-        model.customAmountChanged()
+        model.updateCustomAmount("10.25")
         #expect(model.selectedAmountCents == 1_025)
         #expect(model.draft == DonationDraft(amountCents: 1_025, cadence: .oneTime))
 
-        model.customAmountText = "10.001"
-        model.customAmountChanged()
+        model.updateCustomAmount("10.001")
         #expect(model.selectedAmountCents == nil)
         #expect(model.customAmountErrorMessage == L10n.string(
-            "Enter a valid USD amount with no more than two decimal places."
+            "Use up to two decimal places."
         ))
     }
 
-    @Test func successfulDonationShowsCompletionAndAvailableReceipt() async {
+    @Test func editingVisibleCustomAmountSelectsCustomAndPresetClearsIt() {
+        let model = DonateViewModel(
+            client: DonationClientFake(receipts: []),
+            coordinator: DonationCoordinatorFake(),
+            locale: Locale(identifier: "en_US")
+        )
+
+        model.updateCustomAmount("12.50")
+        #expect(model.amountSelection == .custom)
+        #expect(model.selectedAmountCents == 1_250)
+
+        model.selectPreset(5_000)
+        #expect(model.amountSelection == .preset(5_000))
+        #expect(model.customAmountText.isEmpty)
+        #expect(model.selectedAmountCents == 5_000)
+
+        model.updateCustomAmount("")
+        #expect(model.amountSelection == .custom)
+        #expect(!model.canDonate)
+    }
+
+    @Test func rejectedPastePreservesAmountAndBlocksPaymentUntilCorrected() {
+        let coordinator = DonationCoordinatorFake()
+        let model = DonateViewModel(client: DonationClientFake(receipts: []), coordinator: coordinator,
+                                    locale: Locale(identifier: "en_US"))
+        model.updateCustomAmount("25")
+        #expect(model.decideAmountEdit(current: "25", range: NSRange(location: 0, length: 2), replacement: "10.001", isPaste: true) == .reject(.tooPrecise))
+        #expect(model.customAmountText == "25")
+        #expect(model.customAmountErrorMessage == L10n.string("Use up to two decimal places."))
+        #expect(!model.canDonate)
+        model.startDonation()
+        #expect(!model.isProcessing)
+        #expect(coordinator.drafts.isEmpty)
+        model.updateCustomAmount("10.25")
+        #expect(model.canDonate)
+        #expect(model.customAmountErrorMessage == nil)
+    }
+
+    @Test func applePaySetupAndUnavailableRemainDistinctAndRefreshOnReturn() {
+        let coordinator = DonationCoordinatorFake()
+        coordinator.availabilityValue = .setupRequired
+        let model = DonateViewModel(client: DonationClientFake(receipts: []), coordinator: coordinator)
+        #expect(model.availability == .setupRequired)
+        #expect(!model.canDonate)
+        model.openPaymentSetup()
+        #expect(coordinator.setupCallCount == 1)
+        coordinator.availabilityValue = .ready
+        model.refreshApplePayAvailability()
+        #expect(model.availability == .ready)
+        #expect(model.canDonate)
+        coordinator.availabilityValue = .unavailable
+        model.refreshApplePayAvailability()
+        model.openPaymentSetup()
+        #expect(coordinator.setupCallCount == 1)
+        #expect(!model.canDonate)
+    }
+
+    @Test func customAmountCannotChangeDuringPayment() {
+        let model = DonateViewModel(client: DonationClientFake(receipts: []), coordinator: DonationCoordinatorFake())
+        model.startDonation()
+        defer { model.cancel() }
+
+        model.updateCustomAmount("99")
+        #expect(model.amountSelection == .preset(2_500))
+        #expect(model.customAmountText.isEmpty)
+    }
+
+    @Test func successfulDonationDefersReceiptLoadingUntilInvoiceIsOpened() async throws {
         let receiptURL = URL(string: "https://dashboard.stripe.com/receipt/example")!
         let client = DonationClientFake(receipts: [
             .success(DonationReceiptResponse(status: .available, url: receiptURL))
@@ -49,14 +113,47 @@ struct DonateViewModelTests {
         await waitUntil { !model.isProcessing }
 
         #expect(model.paymentSucceeded)
-        #expect(model.receiptStatus == .available)
-        #expect(model.receiptURL == receiptURL)
+        #expect(model.completedPayments.first?.receipt == nil)
+        #expect(await client.receiptTokens().isEmpty)
+        #expect(model.successfulPayment?.cadence == .oneTime)
         #expect(model.errorMessage == nil)
+        _ = try await model.receipt(for: "receipt-token")
+        #expect(model.completedPayments.first?.receipt?.url == receiptURL)
         #expect(coordinator.drafts == [DonationDraft(amountCents: 2_500, cadence: .oneTime)])
         #expect(await client.receiptTokens() == ["receipt-token"])
     }
 
-    @Test func pendingReceiptCanBeCheckedManually() async {
+    @Test func completedPaymentsKeepTheirCadenceAndInvoiceAfterEditingTheForm() async throws {
+        let response = DonationReceiptResponse(status: .pending, url: nil)
+        let client = DonationClientFake(receipts: [.success(response), .success(response), .success(response)])
+        let coordinator = DonationCoordinatorFake(
+            donationResult: .success(DonationPaymentSuccess(receiptToken: "original-receipt"))
+        )
+        let model = DonateViewModel(client: client, coordinator: coordinator)
+        model.startDonation()
+        await waitUntil { !model.isProcessing }
+        model.cadence = .monthly
+        model.selectPreset(5_000)
+        model.startDonation()
+        await waitUntil { !model.isProcessing }
+
+        #expect(model.completedPayments.count == 2)
+        #expect(model.completedPayments.map(\.cadence) == [.monthly, .oneTime])
+        #expect(model.completedPayments.map(\.amountCents) == [5_000, 2_500])
+        #expect(Set(model.completedPayments.map(\.id)).count == 2)
+        model.updateCustomAmount("100")
+        let payment = try #require(model.completedPayments.last)
+        guard case let .receiptToken(token) = payment.invoice else {
+            Issue.record("Missing invoice token")
+            return
+        }
+        let invoice = try await model.receipt(for: token)
+        #expect(invoice.status == .pending)
+        #expect(await client.receiptTokens().last == "original-receipt")
+        #expect(coordinator.drafts.count == 2)
+    }
+
+    @Test func pendingInvoiceCanBeRetriedFromPaymentHistory() async throws {
         let receiptURL = URL(string: "https://dashboard.stripe.com/receipt/example")!
         let client = DonationClientFake(receipts: [
             .success(DonationReceiptResponse(status: .pending, url: nil)),
@@ -69,13 +166,12 @@ struct DonateViewModelTests {
 
         model.startDonation()
         await waitUntil { !model.isProcessing }
-        #expect(model.receiptStatus == .pending)
-        #expect(model.canCheckReceipt)
+        _ = try await model.receipt(for: "receipt-token")
+        #expect(model.completedPayments.first?.receipt?.status == .pending)
 
-        model.checkReceipt()
-        await waitUntil { model.receiptURL != nil }
-        #expect(model.receiptStatus == .available)
-        #expect(model.receiptURL == receiptURL)
+        _ = try await model.receipt(for: "receipt-token")
+        #expect(model.completedPayments.first?.receipt?.status == .available)
+        #expect(model.completedPayments.first?.receipt?.url == receiptURL)
     }
 
     @Test func paymentFailuresUseAppOwnedLocalizedCopy() async {
@@ -89,26 +185,25 @@ struct DonateViewModelTests {
         await waitUntil { !model.isProcessing }
 
         #expect(!model.paymentSucceeded)
+        #expect(model.completedPayments.isEmpty)
         #expect(model.errorMessage == L10n.string(
             "The donation couldn't be completed. Please try again."
         ))
     }
 
-    @Test func missingMonthlyContactHasSpecificGuidance() async {
-        let client = DonationClientFake(receipts: [])
-        let coordinator = DonationCoordinatorFake(
-            donationResult: .failure(DonationPaymentCoordinatorError.missingDonorContact)
+    @Test func missingContactRestoresTheFormWithoutDuplicatingApplePayValidation() async {
+        let model = DonateViewModel(
+            client: DonationClientFake(receipts: []),
+            coordinator: DonationCoordinatorFake(donationResult: .failure(DonationPaymentCoordinatorError.missingDonorContact))
         )
-        let model = DonateViewModel(client: client, coordinator: coordinator)
         model.cadence = .monthly
-        model.cadenceChanged()
-
         model.startDonation()
         await waitUntil { !model.isProcessing }
 
-        #expect(model.errorMessage == L10n.string(
-            "Apple Pay needs your name and email for monthly donations."
-        ))
+        #expect(model.errorMessage == nil)
+        #expect(!model.paymentSucceeded)
+        #expect(model.completedPayments.isEmpty)
+        #expect(model.canDonate)
     }
 
     @Test func cancellationClearsProcessingAndCancelsCoordinator() async {
@@ -179,19 +274,40 @@ struct DonateViewModelTests {
         #expect(!model.applePayPreparationFailed)
     }
 
-    @Test func availabilityRefreshDetectsCardAddedDuringWalletSetup() {
-        let coordinator = DonationCoordinatorFake()
-        coordinator.availabilityValue = .setupRequired
-        let model = DonateViewModel(
-            client: DonationClientFake(receipts: []),
-            coordinator: coordinator
-        )
-        #expect(model.availability == .setupRequired)
+    @Test func canceledAttemptCannotClearANewerPaymentOrPublishAnError() async {
+        let coordinator = ControlledDonationCoordinator()
+        let model = DonateViewModel(client: DonationClientFake(receipts: []), coordinator: coordinator)
+        model.startDonation()
+        await waitUntil { coordinator.pending.count == 1 }
+        model.cancel()
+        model.startDonation()
+        await waitUntil { coordinator.pending.count == 2 }
 
-        coordinator.availabilityValue = .ready
-        model.refreshApplePayAvailability()
+        coordinator.pending[0].resume(throwing: DonationPaymentCoordinatorError.paymentFailed)
+        await waitUntil { coordinator.returned == 1 }
+        #expect(model.isProcessing)
+        #expect(model.errorMessage == nil)
+        #expect(model.completedPayments.isEmpty)
+        model.startDonation()
+        #expect(coordinator.pending.count == 2)
 
-        #expect(model.availability == .ready)
+        coordinator.pending[1].resume(returning: DonationPaymentSuccess(receiptToken: "new-payment"))
+        await waitUntil { !model.isProcessing }
+        #expect(model.completedPayments.count == 1)
+        #expect(model.completedPayments.first?.invoice == .receiptToken("new-payment"))
+        #expect(model.paymentSucceeded)
+    }
+
+    @Test func changingCadenceDoesNotAcceptARejectedPaste() {
+        let model = DonateViewModel(client: DonationClientFake(receipts: []), coordinator: DonationCoordinatorFake(),
+                                    locale: Locale(identifier: "en_US"))
+        model.updateCustomAmount("25")
+        _ = model.decideAmountEdit(current: "25", range: NSRange(location: 0, length: 2), replacement: "10.001", isPaste: true)
+        model.cadence = .monthly
+        model.cadenceChanged()
+        #expect(!model.canDonate)
+        #expect(model.customAmountErrorMessage != nil)
+        model.selectPreset(2_500)
         #expect(model.canDonate)
     }
 
@@ -241,6 +357,7 @@ private final class DonationCoordinatorFake: DonationPaymentCoordinating {
     var cancelCallCount = 0
     var prepareCallCount = 0
     var prepareResults: [Result<Void, Error>] = []
+    var setupCallCount = 0
     private let waitForCancellation: Bool
 
     init(
@@ -273,9 +390,24 @@ private final class DonationCoordinatorFake: DonationPaymentCoordinating {
         return try donationResult.get()
     }
 
-    func openPaymentSetup() {}
+    func openPaymentSetup() { setupCallCount += 1 }
 
     func cancel() {
         cancelCallCount += 1
     }
+}
+
+@MainActor
+private final class ControlledDonationCoordinator: DonationPaymentCoordinating {
+    var pending: [CheckedContinuation<DonationPaymentSuccess, Error>] = []
+    var returned = 0
+
+    func prepare() async throws {}
+    func availability(for draft: DonationDraft) -> DonationApplePayAvailability { .ready }
+    func donate(_ draft: DonationDraft) async throws -> DonationPaymentSuccess {
+        defer { returned += 1 }
+        return try await withCheckedThrowingContinuation { pending.append($0) }
+    }
+    func openPaymentSetup() {}
+    func cancel() {} // Intentionally delivers late callbacks to exercise stale completions.
 }

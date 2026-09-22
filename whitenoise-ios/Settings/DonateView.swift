@@ -2,51 +2,102 @@ import PassKit
 import SwiftUI
 
 struct DonateView: View {
-    @Environment(\.openURL) private var openURL
+    // TEMPORARY — remove these debug hooks after donation UI review.
+    #if DEBUG
+    @Environment(\.donationReviewSession) private var reviewSession
+    #endif
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: DonateViewModel
     @State private var preparationAttempt = 0
-    @FocusState private var customAmountFocused: Bool
+    @State private var presentedSuccess: DonationPayment?
+    @State private var lastPresentedSuccessID: String?
+    @State private var customPaymentHeight: CGFloat = 0
+    @State private var customAmountFocused = false
+    @ScaledMetric(relativeTo: .body) private var amountHeight = WNInputMetrics.height
+    private let support: DonationSupportSummary
 
-    private let donationURL = URL(
-        string: "https://ipf.dev/donate/?utm_source=whitenoise_ios&utm_medium=app&utm_campaign=donations"
-    )!
+    private enum ScrollTarget: Hashable {
+        case customPayment
+    }
 
     @MainActor
     init() {
         _model = State(initialValue: DonateViewModel())
+        support = DonationSupportSummary()
     }
 
     @MainActor
-    init(model: DonateViewModel) {
+    init(model: DonateViewModel, support: DonationSupportSummary = DonationSupportSummary()) {
         _model = State(initialValue: model)
+        self.support = support
     }
 
     var body: some View {
-        @Bindable var model = model
-
-        Form {
-            introductionSection
-            cadenceSection(model: model)
-            amountSection(model: model)
-            disclosureSection
-            applePaySection
-            resultSection
-            otherWaysSection
+        ScrollViewReader { proxy in
+            donationForm
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: customAmountFocused) {
+                    revealCustomPayment(using: proxy)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    // Focus changes before the keyboard finishes adjusting the form.
+                    revealCustomPayment(using: proxy)
+                }
+                .onScrollGeometryChange(for: CGSize.self) { geometry in
+                    geometry.visibleRect.size
+                } action: { oldSize, newSize in
+                    // Reveal after keyboard avoidance changes the visible viewport.
+                    if newSize.height < oldSize.height || newSize.width != oldSize.width {
+                        revealCustomPayment(using: proxy)
+                    }
+                }
+                .onChange(of: customPaymentHeight) {
+                    revealCustomPayment(using: proxy)
+                }
         }
         .localizedNavigationTitle("Donate")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { customAmountFocused = false }
-            }
-        }
         .task(id: preparationAttempt) { await model.prepareApplePay() }
+        .onDisappear { model.cancel() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.refreshApplePayAvailability() }
         }
-        .onDisappear { model.cancel() }
+        .onChange(of: model.successfulPayment?.id, initial: true) { _, id in
+            guard let id, id != lastPresentedSuccessID else { return }
+            lastPresentedSuccessID = id
+            presentedSuccess = model.successfulPayment
+        }
+        .sheet(item: $presentedSuccess) { payment in
+            DonationSuccessView(cadence: payment.cadence)
+        }
+    }
+
+    private var donationForm: some View {
+        Form {
+            introductionSection
+            if let monthly = support.monthly {
+                Section {
+                    DonationMonthlySupportCard(donation: monthly, managementURL: model.managementURL)
+                        .wnGroupedCardRow(.only)
+                }
+            }
+            donationSection
+            historySection
+            disclosureSection
+            #if DEBUG
+            if let reviewSession {
+                DonationReviewControls(session: reviewSession)
+            }
+            #endif
+        }
+    }
+
+    private func revealCustomPayment(using proxy: ScrollViewProxy) {
+        guard customAmountFocused else { return }
+        withAnimation(reduceMotion ? nil : .default) {
+            proxy.scrollTo(ScrollTarget.customPayment, anchor: .bottom)
+        }
     }
 
     private var introductionSection: some View {
@@ -54,207 +105,266 @@ struct DonateView: View {
             VStack(spacing: 8) {
                 Image(systemName: "heart")
                     .font(.largeTitle)
-                    .foregroundStyle(.primary)
+                    .accessibilityHidden(true)
                 Text("Support White Noise")
                     .font(.headline)
-                Text("Your donation supports IPF's general fund, including White Noise.")
-                    .font(.subheadline)
+                Text("Help the Internet Privacy Foundation (IPF), a nonprofit building tools for private communication.")
+                    .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
         }
         .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets())
     }
 
-    private func cadenceSection(model: DonateViewModel) -> some View {
-        Section(L10n.string("Frequency")) {
-            Picker("Frequency", selection: $model.cadence) {
-                Text("One time").tag(DonationCadence.oneTime)
-                Text("Monthly").tag(DonationCadence.monthly)
-            }
-            .pickerStyle(.segmented)
-            .disabled(model.isProcessing)
-            .onChange(of: model.cadence) { model.cadenceChanged() }
-        }
-    }
-
-    private func amountSection(model: DonateViewModel) -> some View {
+    private var donationSection: some View {
         Section {
-            LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible())],
-                spacing: 10
-            ) {
-                ForEach(DonatePresentation.presetAmountsCents, id: \.self) { cents in
-                    amountButton(
-                        title: DonatePresentation.formattedAmount(cents: cents),
-                        isSelected: model.amountSelection == .preset(cents)
-                    ) {
-                        model.selectPreset(cents)
-                        customAmountFocused = false
+            VStack(alignment: .leading, spacing: 8) {
+                cadencePicker
+                if model.cadence == .monthly {
+                    supportingText(L10n.string("Charged monthly until you cancel."), centered: true)
+                }
+            }
+            .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 20, trailing: 16))
+            .wnGroupedCardRow(.first)
+            amountPicker
+                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16))
+                .wnGroupedCardRow(.middle)
+            VStack(alignment: .leading, spacing: 24) {
+                customAmountField
+                applePayControls
+            }
+            .padding(.bottom)
+            .onGeometryChange(for: CGFloat.self) { geometry in
+                geometry.size.height
+            } action: { height in
+                customPaymentHeight = height
+            }
+            .id(ScrollTarget.customPayment)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .wnGroupedCardRow(.last)
+        }
+        .listRowSeparator(.hidden)
+    }
+
+    private var cadencePicker: some View {
+        @Bindable var model = model
+
+        return Picker("Frequency", selection: $model.cadence) {
+            Text("One time").tag(DonationCadence.oneTime)
+            Text("Monthly").tag(DonationCadence.monthly)
+        }
+        .wnPalettePicker()
+        .frame(maxWidth: .infinity)
+        .disabled(model.isProcessing)
+        .onChange(of: model.cadence) { model.cadenceChanged() }
+    }
+
+    private var amountPicker: some View {
+        VStack(spacing: 12) {
+            ForEach(DonatePresentation.presetAmountsCents, id: \.self) { cents in
+                let isSelected = model.amountSelection == .preset(cents)
+
+                Button {
+                    model.selectPreset(cents)
+                    customAmountFocused = false
+                } label: {
+                    HStack {
+                        Text(DonatePresentation.formattedAmount(cents: cents))
+                            .font(.body.weight(.medium))
+                        Spacer()
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            .accessibilityHidden(true)
                     }
+                    .padding(.horizontal, WNInputMetrics.leadingInset)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: amountHeight)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .overlay {
+                        Capsule().strokeBorder(
+                            isSelected ? Color.primary : Color(.separator),
+                            lineWidth: isSelected ? 2 : 1
+                        )
+                    }
+                    .contentShape(Capsule())
                 }
-                amountButton(
-                    title: L10n.string("Custom"),
-                    isSelected: model.amountSelection == .custom
-                ) {
-                    model.selectCustom()
-                    customAmountFocused = true
-                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .accessibilityIdentifier("donate.amount.\(cents)")
+                .disabled(model.isProcessing)
             }
-            .padding(.vertical, 4)
-
-            if model.amountSelection == .custom {
-                HStack {
-                    TextField("Amount in USD", text: $model.customAmountText)
-                        .keyboardType(.decimalPad)
-                        .focused($customAmountFocused)
-                        .onChange(of: model.customAmountText) { model.customAmountChanged() }
-                        .accessibilityLabel(L10n.string("Custom donation amount in USD"))
-                    Text("USD")
-                        .foregroundStyle(.secondary)
-                }
-
-                if let message = model.customAmountErrorMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .accessibilityIdentifier("donate.amount.error")
-                }
-            }
-        } header: {
-            Text("Amount")
-        } footer: {
-            Text("Choose an amount from $1 to $5,000 USD.")
         }
     }
 
-    private func amountButton(
-        title: String,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack {
-                Text(title)
-                    .fontWeight(.semibold)
-                Spacer(minLength: 4)
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .accessibilityHidden(true)
-                }
+    private var customAmountField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DonationAmountInput(
+                text: model.customAmountText,
+                focused: $customAmountFocused,
+                decideEdit: model.decideAmountEdit,
+                onChange: model.updateCustomAmount
+            )
+            .disabled(model.isProcessing)
+
+            if let message = model.customAmountErrorMessage {
+                supportingText(message, isError: true)
+                    .accessibilityIdentifier("donate.amount.error")
             }
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .tint(isSelected ? .accentColor : .secondary)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .disabled(model.isProcessing)
     }
 
     private var disclosureSection: some View {
         Section {
-            Text("IPF is a 501(c)(3) nonprofit. No goods or services are provided in exchange for your donation.")
-            if model.cadence == .monthly {
-                Text("Your selected amount will be charged every month until you cancel.")
-                if let managementURL = model.managementURL {
-                    Link("Manage monthly donation", destination: managementURL)
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("About your donation")
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                Text("IPF is a nonprofit that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
             }
-        } header: {
-            Text("About your donation")
-        } footer: {
-            Text("Tax deductibility depends on your circumstances. Please consult your tax advisor.")
+            .listRowBackground(Color(uiColor: .quaternarySystemFill).opacity(0.5))
+        }
+    }
+
+    private var paymentHistory: DonationSupportSummary {
+        DonationSupportSummary(payments: model.completedPayments + support.payments)
+    }
+
+    @ViewBuilder
+    private var historySection: some View {
+        let history = paymentHistory
+        if !history.payments.isEmpty {
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Thank you for your support")
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                    Text("Your recent payments:")
+                        .foregroundStyle(.secondary)
+                }
+                .wnGroupedCardRow(.first)
+
+                ForEach(history.recentPayments) { donation in
+                    DonationHistoryRow(donation: donation)
+                        .wnGroupedCardRow(.middle)
+                }
+
+                NavigationLink {
+                    DonationHistoryView(payments: support.payments, model: model)
+                        .wnBackButton()
+                } label: {
+                    Text("See all payments")
+                }
+                .wnGroupedCardRow(.last)
+            }
         }
     }
 
     @ViewBuilder
-    private var applePaySection: some View {
-        Section {
+    private var applePayControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
             switch model.availability {
             case .ready:
-                PayWithApplePayButton(.donate, action: model.startDonation)
-                    .payWithApplePayButtonStyle(.automatic)
-                    .frame(minHeight: 50)
-                    .disabled(!model.canDonate)
-                    .accessibilityIdentifier("donate.apple-pay")
+                DonationApplePayButton(type: .donate) {
+                    customAmountFocused = false
+                    model.startDonation()
+                }
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .disabled(!model.canDonate)
+                .accessibilityIdentifier("donate.apple-pay")
             case .setupRequired:
-                PayWithApplePayButton(.setUp, action: model.openPaymentSetup)
-                    .payWithApplePayButtonStyle(.automatic)
-                    .frame(minHeight: 50)
+                DonationApplePayButton(type: .setUp, action: model.openPaymentSetup)
+                    .frame(maxWidth: .infinity, minHeight: 50)
                     .accessibilityIdentifier("donate.apple-pay-setup")
             case .unavailable:
-                Text("Apple Pay isn't available on this device.")
-                    .foregroundStyle(.secondary)
+                Button {} label: {
+                    Text("Apple Pay unavailable")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .background(Color(uiColor: .systemGray5), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(true)
+                .accessibilityIdentifier("donate.apple-pay-unavailable")
             case .notConfigured:
                 if model.isPreparingApplePay {
-                    ProgressView("Loading…")
-                } else if model.applePayPreparationFailed {
-                    Text("Apple Pay donations couldn't load. Please try again.")
-                        .foregroundStyle(.secondary)
-                    Button("Try again") { preparationAttempt += 1 }
+                    WNButton(title: "Donate", size: .standard, isLoading: true) {}
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .accessibilityLabel("Loading…")
+                        .accessibilityIdentifier("donate.apple-pay-loading")
                 } else {
-                    Text("Apple Pay donations aren't configured in this build.")
-                        .foregroundStyle(.secondary)
+                    supportingText(L10n.string("Donations are temporarily unavailable. Please try again later."))
+                    if model.applePayPreparationFailed {
+                        Button("Try Again") { preparationAttempt += 1 }
+                            .font(.footnote)
+                            .padding(.horizontal, WNInputMetrics.leadingInset)
+                    }
                 }
-            }
-
-            if model.isProcessing {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Completing donation…")
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
             }
 
             if let errorMessage = model.errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
+                supportingText(errorMessage, isError: true)
                     .accessibilityIdentifier("donate.payment.error")
             }
         }
     }
 
-    @ViewBuilder
-    private var resultSection: some View {
-        if model.paymentSucceeded {
-            Section(L10n.string("Donation complete")) {
-                Label("Thank you for supporting IPF.", systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+    private func supportingText(_ message: String, isError: Bool = false, centered: Bool = false) -> some View {
+        Text(message)
+            .font(.footnote)
+            .foregroundStyle(isError ? Color.red : Color.secondary)
+            .multilineTextAlignment(centered ? .center : .leading)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+            .padding(.horizontal, WNInputMetrics.leadingInset)
+    }
+}
 
-                if let receiptURL = model.receiptURL {
-                    Link("View receipt", destination: receiptURL)
-                } else if model.receiptStatus == .pending {
-                    Text("Your receipt is still being prepared.")
-                        .foregroundStyle(.secondary)
-                    Button("Check for receipt", action: model.checkReceipt)
-                        .disabled(!model.canCheckReceipt)
-                } else if model.receiptStatus == .failed || model.receiptCheckFailed {
-                    Text("The donation succeeded, but the receipt isn't available yet.")
-                        .foregroundStyle(.secondary)
-                    Button("Check for receipt", action: model.checkReceipt)
-                        .disabled(!model.canCheckReceipt)
-                }
+private struct DonationApplePayButton: UIViewRepresentable {
+    let type: PKPaymentButtonType
+    let action: () -> Void
 
-                if model.isCheckingReceipt {
-                    ProgressView("Checking receipt…")
-                }
-            }
-        }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
     }
 
-    private var otherWaysSection: some View {
-        Section(L10n.string("Other ways to donate")) {
-            Button {
-                openURL(donationURL)
-            } label: {
-                Label("Open donation website", systemImage: "safari")
-            }
+    func makeUIView(context: Context) -> CapsulePaymentButton {
+        let button = CapsulePaymentButton(paymentButtonType: type, paymentButtonStyle: .automatic)
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        button.addTarget(context.coordinator, action: #selector(Coordinator.activate), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ button: CapsulePaymentButton, context: Context) {
+        context.coordinator.action = action
+        button.isEnabled = context.environment.isEnabled
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+
+        init(action: @escaping () -> Void) {
+            self.action = action
+        }
+
+        @objc func activate() { action() }
+    }
+
+    final class CapsulePaymentButton: PKPaymentButton {
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            let radius = bounds.height / 2
+            if cornerRadius != radius { cornerRadius = radius }
         }
     }
 }

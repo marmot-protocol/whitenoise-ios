@@ -135,6 +135,19 @@ struct DonationClientTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func urlSessionCancellationIsPreservedIncludingAfterRetry(_ afterRetry: Bool) async {
+        var outcomes: [Result<(Data, URLResponse), Error>] = []
+        if afterRetry { outcomes.append(.failure(URLError(.timedOut))) }
+        outcomes.append(.failure(URLError(.cancelled)))
+        let loader = DonationLoaderStub(outcomes: outcomes)
+        let client = URLSessionDonationClient(baseURL: URL(string: "https://payments.example")!, loader: loader)
+        await #expect(throws: CancellationError.self) {
+            try await client.receipt(for: "receipt-token")
+        }
+        #expect(await loader.capturedRequests().count == (afterRetry ? 2 : 1))
+    }
+
     @Test func timeoutRetriesOnceThenMapsToServiceUnavailable() async {
         let loader = DonationLoaderStub(outcomes: [
             .failure(URLError(.timedOut)),

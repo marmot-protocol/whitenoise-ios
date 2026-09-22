@@ -56,10 +56,94 @@ before every release tag.
 
 - [ ] With the runtime configuration endpoint unavailable, malformed, or returning
       the wrong Stripe mode/key prefix, open Settings → Donate. The form remains
-      usable for reviewing amounts and disclosures. Apple Pay shows a retryable
-      loading error; after restoring the endpoint, Try again enables payment.
-      With missing build configuration, Apple Pay instead reports that it is not
-      configured. Other Ways to Donate always opens `ipf.dev/donate`.
+      usable for reviewing amounts and disclosures, a temporary donation-unavailability
+      message appears, and no donation website fallback is offered. A failed runtime
+      configuration load offers Try Again; after restoring the endpoint, retry must
+      enable payment without reopening Donate. Missing build configuration has no retry.
+- [ ] Verify the heart and short nonprofit introduction keep system text margins.
+      The larger frequency switcher, compact single-line preset cards, always-visible
+      plain filled capsule Custom amount field, and native capsule Donate with Apple Pay button sit
+      together inside one white grouped card. Presets have
+      an empty circle and border; the selected preset has a checkmark and stronger
+      border. Spacing between presets and the custom field is consistent, with a
+      larger gap before the payment button. The input has no glass effect or
+      persistent helper text; validation errors appear
+      below it, aligned with the entered text and wrapping without truncation.
+      Typing a third fractional digit must leave the amount and caret unchanged.
+      Pasting an amount with extra decimals must preserve the previous text, show
+      “Use up to two decimal places.”, and block payment until the input is corrected
+      or a preset is selected. Test decimal comma, decimal point, localized digits,
+      selection replacement, deletion, and pasted invalid text. Never round amounts. There is no
+      selectable Custom row. Typing clears the preset selection; focusing alone does
+      not. Choosing a preset clears the field. About your donation is a separate gray
+      section below the button, with headline/body typography and a tight title-to-body
+      gap. Monthly selection shows the billing helper below the cadence tabs,
+      using centered footnote text, including when it wraps onto multiple lines. The
+      management link appears only in the monthly-support card, never below the helper.
+      Payment errors and availability messages use the same footnote styling and
+      equal side insets as amount helpers. Verify long messages wrap within the
+      button width at large text sizes.
+      There is no extra Donate/Amount heading or donation website link.
+- [ ] In the Donate Xcode previews, inspect active (green with a
+      filled checkmark circle), cancellation scheduled (orange), and overdue (red).
+      There is no recent-cancellation notice or seven-day expiration timer.
+      These are presentation scenarios only; the live screen has no
+      subscription-status integration and must not imply a known active subscription.
+- [ ] In the example monthly supporter preview, verify the thank-you card appears
+      above the donation controls. All three statuses use “Thank you for your support”
+      as the title. Active copy includes the monthly amount; overdue copy asks the
+      donor to check their payment method; scheduled cancellation explains that
+      support is ending. Keep the title and body together, with a larger gap before
+      footnote-sized payment details and the management link. Active shows the next
+      payment date; scheduled cancellation shows its own known stop date; overdue
+      shows no date. Never infer the stop date from the next payment date. The card
+      remains available on either cadence tab. Check wrapping at large text sizes.
+- [ ] In the donation-history previews, verify the card below the donation controls
+      shows the newest three payments, each marked One time or Monthly. See all
+      payments opens the full Payments list, newest first. Only this list has
+      tappable rows with chevrons; each opens an Invoice sheet with Share at the top
+      right when a document is available. Test loading, pending, unavailable,
+      retry, page-load failure, sharing, and closing back to the same list.
+      Debug documents are clearly marked samples and never load a service URL.
+      No history card appears without records. Check accessibility text sizes.
+      Real payments are retained only for this Donate session; account history
+      and persistent storage are not connected.
+- [ ] TEMPORARY donation review: in a Debug build, scroll to the end of Donate and
+      expand Testing: choose scenario. Its choices must appear inline below the
+      donation content, without opening a sheet or returning to Chats. Collapsing
+      and reopening it must keep the current scenario. It has no floating control.
+      Selecting or reselecting a scenario resets its data and returns to the top.
+      Exercise each distinct monthly status, payment failure, loading, Wallet setup,
+      and unsupported-device state. Use New donor to switch cadence, edit custom
+      amounts, and tap Donate for either success sheet and payment history.
+      The two direct Success sheets scenarios must open their one-time or monthly
+      thank-you sheet automatically. Closing it must not reopen it; reselecting the
+      scenario must show it again.
+      In monthly fixtures, See all payments opens mixed payment history: the first
+      four invoices are available, pending, unavailable, and loading. Pending and
+      unavailable invoices recover through Try Again inside their sheets.
+      Simulated management links open local test sheets and simulated Wallet setup never opens Wallet. No scenario makes
+      network requests or charges. Current app — real payments restores normal behavior.
+      Confirm Release builds contain neither the picker nor the fixture code. Remove
+      DonationReviewScenarios.swift, its tests, and marked hooks after review.
+- [ ] Tapping Donate opens Apple Pay without inserting a Completing donation row.
+      While Apple Pay configuration loads, show only a centered spinner inside
+      the standard primary button, with no visible Loading label or separate row.
+      Repeated taps stay disabled during payment; cancellation restores the button,
+      and failures stay inline. Both successful one-time and monthly payments show
+      a compact opaque thank-you sheet with a green checkmark, no invoice action,
+      and a top-right Close button, with no Done button. Verify the monthly sheet
+      says “Thank you for your commitment” and uses the monthly giving copy.
+      Check that underlying content does not show through in light or dark mode,
+      and verify Close and pull-down dismissal.
+      Dismiss it, reopen an invoice through Payments, and return
+      without dismissing Settings or showing the success sheet again.
+- [ ] Focus Custom amount from different scroll positions. No Done toolbar appears.
+      After the keyboard opens, the form aligns the payment button above it with
+      standard bottom padding, keeping the custom field visible too. Repeat after
+      dismissing and reopening the keyboard. Check again when an amount
+      error appears, with a hardware keyboard, and after rotation. Dragging the form
+      still dismisses the keyboard interactively.
 - [ ] On iPhone and iPad, verify one-time/monthly selection, $10/$25/$50/$100
       presets, locale-specific decimal entry, the $1–$5,000 boundaries, keyboard
       dismissal, Dark Mode, all Dynamic Type sizes, and VoiceOver labels/values.
@@ -72,16 +156,30 @@ before every release tag.
       network request must retain the same attempt and PaymentMethod IDs.
 - [ ] Verify a monthly gift requests only name and email, shows the amount as a
       monthly recurring payment, supplies the management URL, and completes with
-      `monthly` plus donor contact. Confirm a new authorization uses a new attempt ID.
-      If name or email is missing at authorization, verify the app asks for those
-      details rather than showing a generic payment error.
+      `monthly` plus donor contact. Missing name/email must be handled in Apple Pay,
+      with no duplicate contact error below our button after dismissal. The form
+      must allow retry without recording a successful payment.
+      Confirm a new authorization uses a new attempt ID.
 - [ ] Remove eligible Wallet cards and verify the native Set Up Apple Pay button
-      opens Wallet setup. Add an eligible card, return to Donate, and verify the
-      Donate with Apple Pay button appears without restarting the app. On a device
-      without Apple Pay, verify the unavailable state and web fallback remain visible.
-- [ ] After payment succeeds, verify the thank-you state. An available hosted
-      receipt opens over HTTPS; a pending or temporarily failed receipt lookup
-      shows Check for Receipt and performs no automatic background polling.
+      opens Apple's Wallet setup. Return to the app after adding a supported card
+      and verify the button refreshes to Donate with Apple Pay. On a device without
+      Apple Pay (or where payments are restricted), verify a disabled flat gray capsule
+      labeled Apple Pay unavailable appears, without glass, a border, a logo, or duplicate helper
+      message. It must not open Wallet or a payment sheet. Check the same state in
+      the debug scenario picker. No donation website fallback is offered.
+- [ ] After payment succeeds, verify the thank-you sheet. From See all payments,
+      open the payment's Invoice sheet. Receipt lookup starts only when the invoice
+      is opened; a slow lookup must not delay the success sheet or keep Donate busy.
+      The invoice starts with a loading indicator, without flashing an error.
+      An available hosted receipt opens over HTTPS;
+      a pending or temporarily failed lookup offers Try Again and performs no
+      automatic background polling. Dismissing a loading invoice must not mark it
+      failed, and an older lookup must not replace a newer retry result.
+      Sharing uses the service-provided document URL.
+- [ ] Cancel a payment and start another. A late callback from the first attempt
+      must not clear the newer attempt, show its error, or record a payment for it.
+      Each success sheet must use that completed payment's cadence, even if the form
+      selection changes afterward.
 - [ ] Exercise a declined/cancelled payment, backend non-2xx response, malformed
       success response, timeout, and offline state. The UI must show only localized
       app-owned copy and never backend or Stripe error text.

@@ -160,6 +160,7 @@ nonisolated final class URLSessionDonationClient: DonationClient {
 
     private func loadAndDecode<Response: Decodable>(_ request: URLRequest) async throws -> Response {
         let (data, response) = try await loadWithOneTransientRetry(request)
+        try Task.checkCancellation()
         guard let httpResponse = response as? HTTPURLResponse,
               (200..<300).contains(httpResponse.statusCode)
         else { throw DonationClientError.serviceUnavailable }
@@ -178,11 +179,15 @@ nonisolated final class URLSessionDonationClient: DonationClient {
             return try await loader.data(for: request)
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch let error as URLError where Self.isTransient(error) {
             try Task.checkCancellation()
             do {
                 return try await loader.data(for: request)
             } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as URLError where error.code == .cancelled {
                 throw CancellationError()
             } catch {
                 throw DonationClientError.serviceUnavailable

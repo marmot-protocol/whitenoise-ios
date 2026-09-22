@@ -18,6 +18,7 @@ nonisolated struct DonationDraft: Equatable, Sendable {
 nonisolated enum CustomDonationAmountValidation: Equatable, Sendable {
     case empty
     case invalid
+    case tooPrecise
     case belowMinimum
     case aboveMaximum
     case valid(Int)
@@ -40,7 +41,9 @@ nonisolated enum DonatePresentation {
     ) -> CustomDonationAmountValidation {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .empty }
-        guard let cents = parseCents(trimmed, locale: locale) else { return .invalid }
+        guard let parts = numericParts(trimmed, locale: locale) else { return .invalid }
+        guard parts.fraction.count <= 2 else { return .tooPrecise }
+        guard let cents = parseCents(parts) else { return .invalid }
         guard cents >= minimumAmountCents else { return .belowMinimum }
         guard cents <= maximumAmountCents else { return .aboveMaximum }
         return .valid(cents)
@@ -60,30 +63,50 @@ nonisolated enum DonatePresentation {
         return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "$\(amount)"
     }
 
-    private static func parseCents(_ input: String, locale: Locale) -> Int? {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .decimal
-        formatter.generatesDecimalNumbers = true
-        formatter.isLenient = false
-
-        guard let number = formatter.number(from: input) else { return nil }
-        var amount = number.decimalValue
-        guard amount.isFinite, amount >= 0 else { return nil }
-
-        var cents = Decimal()
-        guard NSDecimalMultiplyByPowerOf10(&cents, &amount, 2, .plain) == .noError else {
-            return nil
-        }
-        var roundedCents = Decimal()
-        NSDecimalRound(&roundedCents, &cents, 0, .plain)
-        guard cents == roundedCents else { return nil }
-
-        let decimalNumber = NSDecimalNumber(decimal: roundedCents)
-        let int64Value = decimalNumber.int64Value
-        guard decimalNumber == NSDecimalNumber(value: int64Value),
-              int64Value <= Int64(Int.max)
-        else { return nil }
-        return Int(int64Value)
+    private static func parseCents(_ parts: (whole: String, fraction: String)) -> Int? {
+        let whole = parts.whole.isEmpty ? "0" : parts.whole
+        guard let dollars = Int(whole), dollars <= (Int.max - 99) / 100 else { return nil }
+        let cents = Int(parts.fraction.padding(toLength: 2, withPad: "0", startingAt: 0)) ?? 0
+        return dollars * 100 + cents
     }
+
+    private static func numericParts(_ input: String, locale: Locale) -> (whole: String, fraction: String)? {
+        let parts = input.components(separatedBy: locale.decimalSeparator ?? ".")
+        guard parts.count <= 2 else { return nil }
+        func digits(_ value: String) -> String? {
+            var result = ""
+            for character in value {
+                guard character.unicodeScalars.allSatisfy({ $0.properties.generalCategory == .decimalNumber }),
+                      let digit = character.wholeNumberValue else { return nil }
+                result.append(String(digit))
+            }
+            return result
+        }
+        guard let whole = digits(parts[0]),
+              let fraction = digits(parts.count == 2 ? parts[1] : ""),
+              !whole.isEmpty || !fraction.isEmpty else { return nil }
+        return (whole, fraction)
+    }
+
+    static func amountEdit(
+        current: String, range: NSRange, replacement: String, isPaste: Bool,
+        locale: Locale = .autoupdatingCurrent
+    ) -> DonationAmountEdit {
+        guard let swiftRange = Range(range, in: current) else { return .reject(nil) }
+        let proposed = current.replacingCharacters(in: swiftRange, with: replacement)
+        let candidate = isPaste ? proposed.trimmingCharacters(in: .whitespacesAndNewlines) : proposed
+        if candidate.isEmpty || candidate == (locale.decimalSeparator ?? ".") { return .accept(candidate) }
+        let validation = validateCustomAmount(candidate, locale: locale)
+        switch validation {
+        case .tooPrecise, .invalid:
+            return .reject(isPaste || replacement.count > 1 ? validation : nil)
+        default:
+            return .accept(candidate)
+        }
+    }
+}
+
+nonisolated enum DonationAmountEdit: Equatable, Sendable {
+    case accept(String)
+    case reject(CustomDonationAmountValidation?)
 }

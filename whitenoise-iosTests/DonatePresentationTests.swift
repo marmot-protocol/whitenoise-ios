@@ -25,7 +25,7 @@ struct DonatePresentationTests {
         #expect(DonatePresentation.validateCustomAmount("1", locale: locale) == .valid(100))
         #expect(DonatePresentation.validateCustomAmount("5000", locale: locale) == .valid(500_000))
         #expect(DonatePresentation.validateCustomAmount("5000.01", locale: locale) == .aboveMaximum)
-        #expect(DonatePresentation.validateCustomAmount("10.001", locale: locale) == .invalid)
+        #expect(DonatePresentation.validateCustomAmount("10.001", locale: locale) == .tooPrecise)
         #expect(DonatePresentation.validateCustomAmount("not money", locale: locale) == .invalid)
     }
 
