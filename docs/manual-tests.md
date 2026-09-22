@@ -109,6 +109,7 @@ before every release tag.
       Verify the lists are found without publishing defaults.
 - [ ] Use Default Relays on an existing valid list needing another route: existing
       entries and read/write roles remain, and only missing defaults are appended.
+      Include `ws://…onion` relay and inbox entries; their schemes and roles survive publication.
       Invalid/retired entries must fail without publishing or silently deleting them.
 
 - [ ] Import a valid nsec: the setup checklist opens before network preflight,
