@@ -102,6 +102,40 @@ struct GIFAttachmentTests {
         }
     }
 
+    @Test func preserveDeltaFrames() throws {
+        // Three optimized 2x2 subframes on a 4x2 canvas, at different offsets.
+        let data = try #require(Data(base64Encoded:
+            "R0lGODlhBAACAPEAAP8AAACAAAAA/wAAACH/C05FVFNDQVBFMi4wAwEBAAAh+QQEBAAAACwAAAAAAgACAAACAoRRACH5BAQEAAAALAIAAAACAAIAAAIClFUAIfkEBAQAAAAsAQAAAAIAAgAAAgKMUwA7"))
+        let attachment = try MediaDraftProcessor.attachment(from: data, fileName: "delta.gif")
+        #expect(attachment.dim == "4x2")
+        let original = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let output = try #require(CGImageSourceCreateWithData(attachment.data as CFData, nil))
+        #expect(CGImageSourceGetCount(output) == 3)
+        for index in 0..<3 {
+            let before = try #require(CGImageSourceCreateImageAtIndex(original, index, nil))
+            let after = try #require(CGImageSourceCreateImageAtIndex(output, index, nil))
+            #expect(try rgba(before) == rgba(after))
+        }
+        var excessive = data
+        excessive[6] = 0
+        excessive[7] = 16
+        excessive[8] = 0
+        excessive[9] = 16
+        #expect(throws: MediaDraftProcessor.Failure.self) {
+            try AttachmentGIF.source(from: excessive)
+        }
+        #expect(throws: MediaDraftProcessor.Failure.self) {
+            try AttachmentGIF.source(from: Data(data.prefix(20)))
+        }
+    }
+
+    private func rgba(_ image: CGImage) throws -> Data {
+        let context = try #require(CGContext(data: nil, width: 4, height: 2, bitsPerComponent: 8, bytesPerRow: 16,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: 4, height: 2))
+        return Data(bytes: try #require(context.data), count: 32)
+    }
+
     @Test func staticPhotoStaysJPEG() throws {
         let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 2)).image { context in
             UIColor.green.setFill()
