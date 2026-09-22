@@ -803,8 +803,8 @@ struct ConversationView: View {
                     }
                     .frame(maxWidth: .infinity)
             }
-            // The identity cluster lives leading-aligned next to the back
-            // chevron; an inline system title would double it up.
+            // The identity cluster is centered on the in-content header bar;
+            // an inline system title would double it up.
             .productScreen(.conversation)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
@@ -1459,24 +1459,13 @@ struct ConversationView: View {
     /// is the single way into the details page for
     /// both direct messages and groups.
     private var conversationHeaderBar: some View {
-        HStack(spacing: 16) {
-            // Selection owns the header; its only exit is the close button.
-            if !isSelectingMessages {
-                WNIconButton(title: "Back", systemImage: "chevron.backward", action: navigateBack)
-            }
-
+        ConversationHeaderBar(
+            isSelectingMessages: isSelectingMessages,
+            onBack: navigateBack,
+            onClose: { exitMessageSelection() }
+        ) {
             conversationTitle
-
-            Spacer(minLength: 0)
-
-            if isSelectingMessages {
-                WNIconButton(title: "Close", systemImage: "xmark") { exitMessageSelection() }
-            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .wnFadingHeader()
     }
 
     @ViewBuilder
