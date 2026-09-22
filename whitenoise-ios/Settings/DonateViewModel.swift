@@ -15,6 +15,8 @@ final class DonateViewModel {
     var isCheckingReceipt = false
     private(set) var isApplePayPrepared = false
     private(set) var isPreparingApplePay = false
+    private(set) var applePayPreparationFailed = false
+    private(set) var availability: DonationApplePayAvailability = .notConfigured
     let managementURL: URL?
 
     private let client: (any DonationClient)?
@@ -55,6 +57,7 @@ final class DonateViewModel {
         self.locale = locale
         self.isApplePayPrepared = isApplePayPrepared
         isPreparingApplePay = !isApplePayPrepared
+        refreshApplePayAvailability()
     }
 
     var selectedAmountCents: Int? {
@@ -92,13 +95,16 @@ final class DonateViewModel {
         return DonationDraft(amountCents: selectedAmountCents, cadence: cadence)
     }
 
-    var availability: DonationApplePayAvailability {
-        guard let coordinator, isApplePayPrepared else { return .notConfigured }
+    func refreshApplePayAvailability() {
+        guard let coordinator, isApplePayPrepared else {
+            availability = .notConfigured
+            return
+        }
         let availabilityDraft = draft ?? DonationDraft(
             amountCents: DonatePresentation.defaultAmountCents,
             cadence: cadence
         )
-        return coordinator.availability(for: availabilityDraft)
+        availability = coordinator.availability(for: availabilityDraft)
     }
 
     var canDonate: Bool {
@@ -112,13 +118,17 @@ final class DonateViewModel {
     func prepareApplePay() async {
         guard !isApplePayPrepared, let coordinator else { return }
         isPreparingApplePay = true
+        applePayPreparationFailed = false
         defer { isPreparingApplePay = false }
         do {
             try await coordinator.prepare()
             try Task.checkCancellation()
             isApplePayPrepared = true
+            refreshApplePayAvailability()
         } catch {
             isApplePayPrepared = false
+            refreshApplePayAvailability()
+            applePayPreparationFailed = !(error is CancellationError) && !Task.isCancelled
         }
     }
 
@@ -126,22 +136,26 @@ final class DonateViewModel {
         guard !isProcessing else { return }
         amountSelection = .preset(cents)
         resetResult()
+        refreshApplePayAvailability()
     }
 
     func selectCustom() {
         guard !isProcessing else { return }
         amountSelection = .custom
         resetResult()
+        refreshApplePayAvailability()
     }
 
     func cadenceChanged() {
         guard !isProcessing else { return }
         resetResult()
+        refreshApplePayAvailability()
     }
 
     func customAmountChanged() {
         guard amountSelection == .custom, !isProcessing else { return }
         resetResult()
+        refreshApplePayAvailability()
     }
 
     func startDonation() {

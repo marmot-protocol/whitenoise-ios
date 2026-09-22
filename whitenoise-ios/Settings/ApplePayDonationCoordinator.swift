@@ -42,6 +42,10 @@ enum DonationPaymentCoordinatorError: Error, Equatable {
     case invalidPaymentRequest
     case missingDonorContact
     case paymentFailed
+
+    static func completionError(_ error: Error?) -> Self {
+        error as? Self ?? .paymentFailed
+    }
 }
 
 @MainActor
@@ -155,7 +159,8 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         guard isConfigured else { return .notConfigured }
         guard PKPaymentAuthorizationController.canMakePayments() else { return .unavailable }
         let request = DonationPaymentRequestFactory.make(draft: draft, config: config)
-        return StripeAPI.canSubmitPaymentRequest(request) ? .ready : .setupRequired
+        return PKPaymentAuthorizationController.canMakePayments(usingNetworks: request.supportedNetworks)
+            ? .ready : .setupRequired
     }
 
     func donate(_ draft: DonationDraft) async throws -> DonationPaymentSuccess {
@@ -232,7 +237,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
             }
             finish(.success(DonationPaymentSuccess(receiptToken: receiptToken)))
         case .error:
-            finish(.failure(DonationPaymentCoordinatorError.paymentFailed))
+            finish(.failure(DonationPaymentCoordinatorError.completionError(error)))
         case .userCancellation:
             finish(.failure(CancellationError()))
         }

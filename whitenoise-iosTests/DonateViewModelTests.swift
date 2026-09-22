@@ -94,6 +94,23 @@ struct DonateViewModelTests {
         ))
     }
 
+    @Test func missingMonthlyContactHasSpecificGuidance() async {
+        let client = DonationClientFake(receipts: [])
+        let coordinator = DonationCoordinatorFake(
+            donationResult: .failure(DonationPaymentCoordinatorError.missingDonorContact)
+        )
+        let model = DonateViewModel(client: client, coordinator: coordinator)
+        model.cadence = .monthly
+        model.cadenceChanged()
+
+        model.startDonation()
+        await waitUntil { !model.isProcessing }
+
+        #expect(model.errorMessage == L10n.string(
+            "Apple Pay needs your name and email for monthly donations."
+        ))
+    }
+
     @Test func cancellationClearsProcessingAndCancelsCoordinator() async {
         let client = DonationClientFake(receipts: [])
         let coordinator = DonationCoordinatorFake(waitForCancellation: true)
@@ -122,6 +139,60 @@ struct DonateViewModelTests {
         await model.prepareApplePay()
         #expect(model.availability == .ready)
         #expect(coordinator.prepareCallCount == 1)
+    }
+
+    @Test func failedPreparationCanRetryWithoutReopeningDonate() async {
+        let coordinator = DonationCoordinatorFake()
+        coordinator.prepareResults = [
+            .failure(DonationClientError.serviceUnavailable),
+            .success(())
+        ]
+        let model = DonateViewModel(
+            client: DonationClientFake(receipts: []),
+            coordinator: coordinator,
+            isApplePayPrepared: false
+        )
+
+        await model.prepareApplePay()
+        #expect(model.availability == .notConfigured)
+        #expect(model.applePayPreparationFailed)
+        #expect(!model.isPreparingApplePay)
+
+        await model.prepareApplePay()
+        #expect(model.availability == .ready)
+        #expect(!model.applePayPreparationFailed)
+        #expect(coordinator.prepareCallCount == 2)
+    }
+
+    @Test func cancelledPreparationDoesNotShowRetryError() async {
+        let coordinator = DonationCoordinatorFake()
+        coordinator.prepareResults = [.failure(CancellationError())]
+        let model = DonateViewModel(
+            client: DonationClientFake(receipts: []),
+            coordinator: coordinator,
+            isApplePayPrepared: false
+        )
+
+        await model.prepareApplePay()
+
+        #expect(model.availability == .notConfigured)
+        #expect(!model.applePayPreparationFailed)
+    }
+
+    @Test func availabilityRefreshDetectsCardAddedDuringWalletSetup() {
+        let coordinator = DonationCoordinatorFake()
+        coordinator.availabilityValue = .setupRequired
+        let model = DonateViewModel(
+            client: DonationClientFake(receipts: []),
+            coordinator: coordinator
+        )
+        #expect(model.availability == .setupRequired)
+
+        coordinator.availabilityValue = .ready
+        model.refreshApplePayAvailability()
+
+        #expect(model.availability == .ready)
+        #expect(model.canDonate)
     }
 
     private func waitUntil(
@@ -169,6 +240,7 @@ private final class DonationCoordinatorFake: DonationPaymentCoordinating {
     var drafts: [DonationDraft] = []
     var cancelCallCount = 0
     var prepareCallCount = 0
+    var prepareResults: [Result<Void, Error>] = []
     private let waitForCancellation: Bool
 
     init(
@@ -181,6 +253,9 @@ private final class DonationCoordinatorFake: DonationPaymentCoordinating {
 
     func prepare() async throws {
         prepareCallCount += 1
+        if !prepareResults.isEmpty {
+            try prepareResults.removeFirst().get()
+        }
     }
 
     func availability(for draft: DonationDraft) -> DonationApplePayAvailability {

@@ -56,8 +56,10 @@ before every release tag.
 
 - [ ] With the runtime configuration endpoint unavailable, malformed, or returning
       the wrong Stripe mode/key prefix, open Settings → Donate. The form remains
-      usable for reviewing amounts and disclosures, Apple Pay reports that it is
-      not configured, and Other Ways to Donate opens `ipf.dev/donate`.
+      usable for reviewing amounts and disclosures. Apple Pay shows a retryable
+      loading error; after restoring the endpoint, Try again enables payment.
+      With missing build configuration, Apple Pay instead reports that it is not
+      configured. Other Ways to Donate always opens `ipf.dev/donate`.
 - [ ] On iPhone and iPad, verify one-time/monthly selection, $10/$25/$50/$100
       presets, locale-specific decimal entry, the $1–$5,000 boundaries, keyboard
       dismissal, Dark Mode, all Dynamic Type sizes, and VoiceOver labels/values.
@@ -71,9 +73,12 @@ before every release tag.
 - [ ] Verify a monthly gift requests only name and email, shows the amount as a
       monthly recurring payment, supplies the management URL, and completes with
       `monthly` plus donor contact. Confirm a new authorization uses a new attempt ID.
+      If name or email is missing at authorization, verify the app asks for those
+      details rather than showing a generic payment error.
 - [ ] Remove eligible Wallet cards and verify the native Set Up Apple Pay button
-      opens Wallet setup. On a device without Apple Pay, verify the unavailable
-      state and web fallback remain visible.
+      opens Wallet setup. Add an eligible card, return to Donate, and verify the
+      Donate with Apple Pay button appears without restarting the app. On a device
+      without Apple Pay, verify the unavailable state and web fallback remain visible.
 - [ ] After payment succeeds, verify the thank-you state. An available hosted
       receipt opens over HTTPS; a pending or temporarily failed receipt lookup
       shows Check for Receipt and performs no automatic background polling.

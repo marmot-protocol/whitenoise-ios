@@ -3,7 +3,9 @@ import SwiftUI
 
 struct DonateView: View {
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     @State private var model: DonateViewModel
+    @State private var preparationAttempt = 0
     @FocusState private var customAmountFocused: Bool
 
     private let donationURL = URL(
@@ -40,7 +42,10 @@ struct DonateView: View {
                 Button("Done") { customAmountFocused = false }
             }
         }
-        .task { await model.prepareApplePay() }
+        .task(id: preparationAttempt) { await model.prepareApplePay() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.refreshApplePayAvailability() }
+        }
         .onDisappear { model.cancel() }
     }
 
@@ -187,6 +192,10 @@ struct DonateView: View {
             case .notConfigured:
                 if model.isPreparingApplePay {
                     ProgressView("Loading…")
+                } else if model.applePayPreparationFailed {
+                    Text("Apple Pay donations couldn't load. Please try again.")
+                        .foregroundStyle(.secondary)
+                    Button("Try again") { preparationAttempt += 1 }
                 } else {
                     Text("Apple Pay donations aren't configured in this build.")
                         .foregroundStyle(.secondary)

@@ -68,4 +68,14 @@ struct DonationPaymentRequestTests {
             try DonationDonorFactory.make(from: contact)
         }
     }
+
+    @Test func completionPreservesOnlyAppOwnedErrors() {
+        #expect(DonationPaymentCoordinatorError.completionError(
+            DonationPaymentCoordinatorError.missingDonorContact
+        ) == .missingDonorContact)
+        #expect(DonationPaymentCoordinatorError.completionError(
+            DonationClientError.serviceUnavailable
+        ) == .paymentFailed)
+        #expect(DonationPaymentCoordinatorError.completionError(nil) == .paymentFailed)
+    }
 }
