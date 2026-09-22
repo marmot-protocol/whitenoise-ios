@@ -14,23 +14,21 @@ struct NotificationSettingsView: View {
             permissionSection
 
             Section {
-                Toggle("Local Notifications", isOn: Binding(
+                WNToggle("Local Notifications", isOn: Binding(
                     get: { model.settings?.localNotificationsEnabled ?? false },
                     set: { enabled in Task { await model.setLocalNotifications(enabled, using: appState) } }
                 ))
                 .disabled(model.isSaving || model.settings == nil)
-                .wnNeutralToggleTint()
             } footer: {
                 Text("Creates message notifications on this iPhone. Without Native Push, delivery may wait until White Noise is active.")
             }
 
             Section {
-                Toggle("Native Push", isOn: Binding(
+                WNToggle("Native Push", isOn: Binding(
                     get: { model.settings?.nativePushEnabled ?? false },
                     set: { enabled in Task { await model.setNativePush(enabled, using: appState) } }
                 ))
                 .disabled(model.nativePushToggleDisabled)
-                .wnNeutralToggleTint()
             } footer: {
                 Text("Uses a generic wake-up signal to check for new messages in the background. Message details stay on this iPhone.")
             }

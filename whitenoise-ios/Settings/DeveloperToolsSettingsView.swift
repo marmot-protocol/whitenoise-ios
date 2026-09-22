@@ -84,11 +84,10 @@ struct DeveloperToolsSettingsView: View {
             }
 
             Section {
-                Toggle("Developer Tools", isOn: Binding(
+                WNToggle("Developer Tools", isOn: Binding(
                     get: { appState.developerMode },
                     set: { appState.developerMode = $0 }
                 ))
-                .wnNeutralToggleTint()
             } footer: {
                 Text("Enable technical tools for this profile.")
             }
@@ -105,11 +104,10 @@ struct DeveloperToolsSettingsView: View {
                     }
                 }
                 Section {
-                    Toggle("Debug Mode", isOn: Binding(
+                    WNToggle("Debug Mode", isOn: Binding(
                         get: { appState.streamingDebugMode },
                         set: { appState.streamingDebugMode = $0 }
                     ))
-                    .wnNeutralToggleTint()
 
                     NavigationLink {
                         DiagnosticsView()

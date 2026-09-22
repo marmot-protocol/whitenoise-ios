@@ -51,15 +51,16 @@ struct DiagnosticsAndImprovementsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if isPrompt {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
+                ToolbarItem(placement: .cancellationAction) {
+                    WNIconButton(
+                        title: "Close",
+                        systemImage: "xmark",
+                        chrome: .container
+                    ) {
                         Task {
                             if await appState.diagnosticsConsent.finishPrompt(using: appState) { dismiss() }
                         }
-                    } label: {
-                        Image(systemName: "checkmark")
                     }
-                    .accessibilityLabel("Done")
                     .disabled(!appState.diagnosticsConsent.available || appState.diagnosticsConsent.errorMessage != nil)
                 }
             }
@@ -90,7 +91,7 @@ struct DiagnosticsAndImprovementsView: View {
     }
 
     private var analyticsToggle: some View {
-        Toggle(isOn: Binding(
+        WNToggle(isOn: Binding(
             get: { appState.diagnosticsConsent.usageEnabled },
             set: { enabled in Task { await appState.diagnosticsConsent.setUsage(enabled, using: appState) } }
         )) {
@@ -104,7 +105,7 @@ struct DiagnosticsAndImprovementsView: View {
     }
 
     private var loggingToggle: some View {
-        Toggle(isOn: Binding(
+        WNToggle(isOn: Binding(
             get: { appState.diagnosticsConsent.auditEnabled },
             set: { enabled in Task { await appState.diagnosticsConsent.setAudit(enabled, using: appState) } }
         )) {

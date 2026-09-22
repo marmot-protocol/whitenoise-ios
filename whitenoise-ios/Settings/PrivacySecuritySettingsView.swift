@@ -11,11 +11,10 @@ struct PrivacySecuritySettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Hide Screen in App Switcher", isOn: Binding(
+                WNToggle("Hide Screen in App Switcher", isOn: Binding(
                     get: { appState.blockScreenshots },
                     set: { appState.blockScreenshots = $0 }
                 ))
-                .wnNeutralToggleTint()
             } header: {
                 Text("App Security")
             } footer: {
@@ -23,11 +22,10 @@ struct PrivacySecuritySettingsView: View {
             }
 
             Section {
-                Toggle(appLockToggleTitle, isOn: Binding(
+                WNToggle(appLockToggleTitle, isOn: Binding(
                     get: { appState.appLock.isEnabled },
                     set: { enabled in Task { await appState.appLock.setEnabled(enabled) } }
                 ))
-                .wnNeutralToggleTint()
                 .disabled(!appLockCapability.available)
 
                 if appState.appLock.isEnabled && appLockCapability.available {

@@ -43,7 +43,7 @@ struct DataAndStorageView: View {
             }
 
             Section {
-                Toggle(
+                WNToggle(
                     "Automatically Load Remote GIFs",
                     isOn: Binding(
                         get: { remoteGIFStore.automaticallyLoads },
