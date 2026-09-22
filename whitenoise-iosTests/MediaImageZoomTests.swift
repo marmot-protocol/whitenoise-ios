@@ -9,6 +9,9 @@ final class MediaImageZoomTests: XCTestCase {
     func testGIFPlaybackKeepsZoom() async throws {
         let data = NSMutableData()
         let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, 2, nil))
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 1],
+        ] as CFDictionary)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 2), format: format)
@@ -40,6 +43,10 @@ final class MediaImageZoomTests: XCTestCase {
             }
         }
         XCTAssertEqual(observedColors, [0, 255], "The native view must display both GIF frames")
+        try await Task.sleep(for: .milliseconds(600))
+        let finalFrame = try XCTUnwrap(view.imageView.image)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
         view.display(poster)
         view.displayGIF(data: data as Data, id: id)
         view.layoutIfNeeded()

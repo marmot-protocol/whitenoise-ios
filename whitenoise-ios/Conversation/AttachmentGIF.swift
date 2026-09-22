@@ -3,6 +3,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 nonisolated enum AttachmentGIF {
+    enum Activity { case active, inactive }
+
+    struct Playback {
+        let data: Data
+        let id: UUID
+    }
+
     static let maxPixelEdge: CGFloat = 4096
     private static let maxFrames = 1000
     private static let maxTotalPixels = 32 * 1024 * 1024
@@ -42,20 +49,13 @@ nonisolated enum AttachmentGIF {
 }
 
 struct AttachmentGIFPlayback<Content: View>: View {
-    enum Activity { case active, inactive }
-
-    struct Playback {
-        let data: Data
-        let id: UUID
-    }
-
     let data: Data?
-    let activity: Activity
-    @ViewBuilder let content: (Playback?) -> Content
+    let activity: AttachmentGIF.Activity
+    @ViewBuilder let content: (AttachmentGIF.Playback?) -> Content
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var playback: Playback?
+    @State private var playback: AttachmentGIF.Playback?
 
     private struct TaskID: Equatable {
         let data: Data?
@@ -80,7 +80,7 @@ struct AttachmentGIFPlayback<Content: View>: View {
                     GiphyPlaybackBudget.shared.release(id)
                     return
                 }
-                playback = Playback(data: data, id: id)
+                playback = AttachmentGIF.Playback(data: data, id: id)
             }
             .onDisappear { stop() }
     }
@@ -103,7 +103,7 @@ struct AttachmentGIFImage: UIViewRepresentable {
 
     func updateUIView(_ view: GiphyAnimatedImageUIView, context: Context) {
         view.contentMode = contentMode
-        view.play(data: data, id: playbackID)
+        view.play(data: data, id: playbackID, loopMode: .source)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: GiphyAnimatedImageUIView, context: Context) -> CGSize? {

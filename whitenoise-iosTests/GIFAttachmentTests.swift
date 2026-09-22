@@ -81,7 +81,19 @@ struct GIFAttachmentTests {
         try checkGIF(await MediaDraftProcessor.preparedAttachment(fromFileURL: url))
         try checkGIF(MediaDraftProcessor.imageAttachment(from: data, fileName: nil))
         // Forwarding supplies no type hint and may have an incorrect filename.
-        try checkGIF(await MediaDraftProcessor.preparedAttachment(from: data, fileName: "wrong.jpg"))
+        let forwarded = try await MediaDraftProcessor.preparedAttachment(from: data, fileName: "wrong.jpg")
+        #expect(forwarded.fileName == "wrong.gif")
+        try checkGIF(forwarded)
+    }
+
+    @Test(arguments: ["image/gif", "Image/GIF", " image/gif; charset=binary "])
+    func recognizesGIF(mediaType: String) {
+        let item = MessageMediaAttachment(id: "gif", reference: nil, fileName: "animation.gif",
+            mediaType: mediaType, dim: nil, localData: nil)
+        #expect(item.isGIF)
+        let still = MessageMediaAttachment(id: "still", reference: nil, fileName: "photo.jpg",
+            mediaType: "image/jpeg", dim: nil, localData: nil)
+        #expect(!still.isGIF)
     }
 
     @Test func rejectsOversizedGIF() throws {
