@@ -3482,7 +3482,13 @@ struct LocalizationCatalogTests {
             "That photo can't be used. Choose a different photo.",
             "New profile",
             "Profile avatar preview",
-            "Selected profile photo"
+            "Selected profile photo",
+            "Camera Access Is Off",
+            "Allow camera access in Settings to take photos and videos.",
+            "Camera Is Restricted",
+            "Camera access is restricted on this iPhone.",
+            "Camera Unavailable",
+            "The camera isn’t available on this iPhone right now."
         ]
 
         for key in expectedKeys {
