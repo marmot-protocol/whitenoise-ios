@@ -10,6 +10,7 @@ nonisolated enum MessageActionsPresentation {
     static let horizontalMargin: CGFloat = 16
     static let verticalMargin: CGFloat = 12
     static let minimumPreviewHeight: CGFloat = 100
+    static let minimumPreviewScale: CGFloat = 0.7
 
     static func actionCount(
         canRetry: Bool,
@@ -49,6 +50,8 @@ nonisolated enum MessageActionsPresentation {
 nonisolated struct MessageActionsOverlayLayout: Equatable {
     let groupTop: CGFloat
     let previewHeight: CGFloat
+    let previewContentHeight: CGFloat
+    let previewIsTruncated: Bool
     let previewScale: CGFloat
     let previewCenterY: CGFloat
     let groupCenterY: CGFloat
@@ -72,8 +75,14 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
                 - MessageActionsPresentation.verticalMargin * 2
                 - fixedHeight
         )
-        let previewScale = min(1, availablePreviewHeight / max(sourceFrame.height, 1))
-        let previewHeight = sourceFrame.height * previewScale
+        let sourceHeight = max(sourceFrame.height, 1)
+        let fittedScale = min(1, availablePreviewHeight / sourceHeight)
+        let isTruncated = fittedScale < MessageActionsPresentation.minimumPreviewScale
+        let previewScale = max(MessageActionsPresentation.minimumPreviewScale, fittedScale)
+        let previewContentHeight = isTruncated
+            ? availablePreviewHeight / previewScale
+            : sourceHeight
+        let previewHeight = isTruncated ? availablePreviewHeight : sourceHeight * previewScale
         let groupHeight = fixedHeight + previewHeight
         let preferredTop = sourceFrame.minY - reactionHeight - reactionGap
         let maximumTop = max(
@@ -89,6 +98,8 @@ nonisolated struct MessageActionsOverlayLayout: Equatable {
         return Self(
             groupTop: groupTop,
             previewHeight: previewHeight,
+            previewContentHeight: previewContentHeight,
+            previewIsTruncated: isTruncated,
             previewScale: previewScale,
             previewCenterY: previewTop + previewHeight / 2,
             groupCenterY: groupTop + groupHeight / 2,
@@ -251,5 +262,26 @@ struct MessageActionsMenu: View {
             .contentShape(.rect)
         }
         .foregroundStyle(role == .destructive ? Color.red : Color.primary)
+    }
+}
+
+extension View {
+    func messageActionsPreviewTruncation(contentHeight: CGFloat, isTruncated: Bool) -> some View {
+        modifier(MessageActionsPreviewTruncation(contentHeight: contentHeight, isTruncated: isTruncated))
+    }
+}
+
+private struct MessageActionsPreviewTruncation: ViewModifier {
+    let contentHeight: CGFloat
+    let isTruncated: Bool
+
+    func body(content: Content) -> some View {
+        if isTruncated {
+            content
+                .frame(height: contentHeight, alignment: .top)
+                .clipped()
+        } else {
+            content
+        }
     }
 }

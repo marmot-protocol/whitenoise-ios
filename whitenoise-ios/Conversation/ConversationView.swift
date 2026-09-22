@@ -606,6 +606,7 @@ struct ConversationView: View {
     @State private var composerDismissRequest = 0
     @State private var popTransition = InteractivePopTransitionState()
     @State private var isComposerInputFocused = false
+    @State private var composerFocusSuspendedForActions = false
     /// Bumped by `send()` to ask the timeline to re-pin. The composer is a
     /// sibling of the `ScrollViewReader`, so it has no `ScrollViewProxy`; this
     /// carries the request into the reader's scope.
@@ -3108,6 +3109,7 @@ struct ConversationView: View {
             guard !Task.isCancelled, measuredActionRowFrameKey == rowFrameKey else { return }
             pendingActionsPresentation = nil
             measuredActionRowFrameKey = nil
+            resumeComposerFocusAfterActions()
             pendingActionFrameMeasurementClearTask = nil
         }
     }
@@ -3317,6 +3319,10 @@ struct ConversationView: View {
         rowId: String,
         rowFrameKey: String
     ) {
+        if isComposerInputFocused {
+            composerFocusSuspendedForActions = true
+            dismissKeyboard()
+        }
         pendingActionsPresentation = PendingActionsPresentation(
             record: record,
             status: status,
@@ -3325,6 +3331,12 @@ struct ConversationView: View {
         )
         measuredActionRowFrameKey = rowFrameKey
         scheduleActionFrameMeasurementClear(rowFrameKey: rowFrameKey)
+    }
+
+    private func resumeComposerFocusAfterActions() {
+        guard composerFocusSuspendedForActions else { return }
+        composerFocusSuspendedForActions = false
+        requestComposerFocus()
     }
 
     private func completePendingActionsPresentationIfMeasured() {
@@ -3345,9 +3357,14 @@ struct ConversationView: View {
         }
     }
 
-    private func dismissActions() {
+    private func dismissActions(resumingComposerFocus: Bool = false) {
         withAnimation(.easeIn(duration: 0.14)) {
             actionsTarget = nil
+        }
+        if resumingComposerFocus {
+            resumeComposerFocusAfterActions()
+        } else {
+            composerFocusSuspendedForActions = false
         }
     }
 
@@ -3407,7 +3424,7 @@ struct ConversationView: View {
                         .overlay(Color.primary.opacity(0.08))
                         .ignoresSafeArea()
                         .contentShape(.rect)
-                        .onTapGesture { dismissActions() }
+                        .onTapGesture { dismissActions(resumingComposerFocus: true) }
 
                     messageBubble(
                         for: item,
@@ -3416,7 +3433,11 @@ struct ConversationView: View {
                         viewModel: viewModel,
                         showsSenderIdentity: !viewModel.groupDisplay.isDirectMessage
                     )
-                    .frame(width: sourceFrame.width, height: sourceFrame.height)
+                    .frame(width: sourceFrame.width, height: sourceFrame.height, alignment: .top)
+                    .messageActionsPreviewTruncation(
+                        contentHeight: layout.previewContentHeight,
+                        isTruncated: layout.previewIsTruncated
+                    )
                     .scaleEffect(layout.previewScale)
                     .position(x: sourceFrame.midX, y: layout.previewCenterY)
                     .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
@@ -3440,6 +3461,7 @@ struct ConversationView: View {
                     .position(x: menuCenterX, y: layout.groupCenterY)
                 }
             }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .transition(.opacity.combined(with: .scale(scale: 0.98)))
             .accessibilityElement(children: .contain)
         }
@@ -3509,13 +3531,13 @@ struct ConversationView: View {
             maximumActionHeight: maximumActionHeight,
             onRetry: {
                 guard let rowId else { return }
-                dismissActions()
+                dismissActions(resumingComposerFocus: true)
                 Task { await viewModel.retryFailedSend(rowId: rowId) }
             },
             onReact: { emoji in
                 Task { await viewModel.toggleReaction(emoji, on: record) }
                 appState.addRecentReaction(emoji)
-                dismissActions()
+                dismissActions(resumingComposerFocus: true)
             },
             onReply: {
                 dismissActions()
@@ -3524,7 +3546,7 @@ struct ConversationView: View {
             onCopy: {
                 SensitiveClipboard.copyLocalOnly(viewModel.displayBody(of: record))
                 Haptics.tap()
-                dismissActions()
+                dismissActions(resumingComposerFocus: true)
             },
             onForward: {
                 let target = ActionsTarget(record: record, status: status)
