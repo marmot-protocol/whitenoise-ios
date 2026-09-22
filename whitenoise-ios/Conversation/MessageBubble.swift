@@ -69,6 +69,10 @@ enum MessageBubbleReplyLayout {
 }
 
 nonisolated enum MessageRichMediaBubblePresentation {
+    static func singleVisualFillsBubbleWidth(hasCaption: Bool, hasReply: Bool) -> Bool {
+        hasCaption || hasReply
+    }
+
     static func contentWidth(
         maxWidth: CGFloat,
         singleVisualWidth: CGFloat?,
@@ -76,8 +80,7 @@ nonisolated enum MessageRichMediaBubblePresentation {
         hasReply: Bool
     ) -> CGFloat {
         let boundedMaxWidth = max(1, maxWidth)
-        guard !hasCaption,
-              !hasReply,
+        guard !singleVisualFillsBubbleWidth(hasCaption: hasCaption, hasReply: hasReply),
               let singleVisualWidth,
               singleVisualWidth.isFinite,
               singleVisualWidth > 0
@@ -563,6 +566,7 @@ struct MessageBubble: View {
             items: mediaItems,
             isFromMe: isFromMe,
             maxWidth: mediaGridWidth,
+            fillsWidth: singleVisualFillsBubbleWidth,
             onLoadMedia: onLoadMedia,
             onOpenImage: { item, data in
                 mediaGallery = MessageMediaGallery(
@@ -605,6 +609,13 @@ struct MessageBubble: View {
         return 256
     }
 
+    private var singleVisualFillsBubbleWidth: Bool {
+        MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: hasVisibleBodyText,
+            hasReply: replyPreview != nil
+        )
+    }
+
     private var richMediaContentWidth: CGFloat {
         let singleVisualWidth: CGFloat?
         if mediaItems.count == 1, let item = mediaItems.first {
@@ -612,7 +623,8 @@ struct MessageBubble: View {
             case .image:
                 singleVisualWidth = MessageImageBubblePresentation.displaySize(
                     maxWidth: mediaGridWidth,
-                    dim: item.dim
+                    dim: item.dim,
+                    fillsWidth: singleVisualFillsBubbleWidth
                 ).width
             case .video:
                 singleVisualWidth = MessageVideoBubblePresentation.displaySize(
@@ -1480,6 +1492,7 @@ private struct MessageMediaAttachmentContent: View {
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
     let maxWidth: CGFloat
+    let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
@@ -1502,6 +1515,7 @@ private struct MessageMediaAttachmentContent: View {
                 item: singleImage,
                 isFromMe: isFromMe,
                 maxWidth: maxWidth,
+                fillsWidth: fillsWidth,
                 onLoadMedia: onLoadMedia,
                 onOpenImage: onOpenImage,
                 onOpenVideo: onOpenVideo
@@ -1537,7 +1551,11 @@ private struct MessageMediaAttachmentContent: View {
                             MessageMediaTile(
                                 item: item,
                                 isFromMe: isFromMe,
-                                size: MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim),
+                                size: MessageImageBubblePresentation.displaySize(
+                                    maxWidth: maxWidth,
+                                    dim: item.dim,
+                                    fillsWidth: fillsWidth
+                                ),
                                 hiddenCount: 0,
                                 onLoadMedia: onLoadMedia,
                                 onOpenImage: onOpenImage,
@@ -1578,6 +1596,7 @@ private struct MessageSingleImageBubble: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let maxWidth: CGFloat
+    let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
@@ -1585,7 +1604,11 @@ private struct MessageSingleImageBubble: View {
     private let cornerRadius: CGFloat = 12
 
     private var size: CGSize {
-        MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim)
+        MessageImageBubblePresentation.displaySize(
+            maxWidth: maxWidth,
+            dim: item.dim,
+            fillsWidth: fillsWidth
+        )
     }
 
     var body: some View {
@@ -1788,7 +1811,12 @@ nonisolated private enum MessageVisualMediaBubblePresentation {
         return min(4, max(0.25, aspectRatio))
     }
 
-    static func displaySize(maxWidth: CGFloat, dim: String?, fallback: CGFloat) -> CGSize {
+    static func displaySize(
+        maxWidth: CGFloat,
+        dim: String?,
+        fallback: CGFloat,
+        fillsWidth: Bool
+    ) -> CGSize {
         let boundedMaxWidth = max(1, maxWidth)
         let aspectRatio = aspectRatio(dim: dim, fallback: fallback)
         if aspectRatio >= 1 {
@@ -1797,6 +1825,9 @@ nonisolated private enum MessageVisualMediaBubblePresentation {
 
         let maxHeight = boundedMaxWidth * maximumHeightRatio
         let height = min(boundedMaxWidth / aspectRatio, maxHeight)
+        if fillsWidth {
+            return roundedSize(width: boundedMaxWidth, height: height)
+        }
         return roundedSize(width: min(boundedMaxWidth, height * aspectRatio), height: height)
     }
 
@@ -1813,8 +1844,13 @@ nonisolated enum MessageImageBubblePresentation {
         MessageVisualMediaBubblePresentation.aspectRatio(dim: dim, fallback: 1)
     }
 
-    static func displaySize(maxWidth: CGFloat, dim: String?) -> CGSize {
-        MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: dim, fallback: 1)
+    static func displaySize(maxWidth: CGFloat, dim: String?, fillsWidth: Bool = false) -> CGSize {
+        MessageVisualMediaBubblePresentation.displaySize(
+            maxWidth: maxWidth,
+            dim: dim,
+            fallback: 1,
+            fillsWidth: fillsWidth
+        )
     }
 }
 
@@ -1832,7 +1868,8 @@ nonisolated enum MessageVideoBubblePresentation {
         MessageVisualMediaBubblePresentation.displaySize(
             maxWidth: maxWidth,
             dim: dim,
-            fallback: fallbackAspectRatio
+            fallback: fallbackAspectRatio,
+            fillsWidth: false
         )
     }
 }
