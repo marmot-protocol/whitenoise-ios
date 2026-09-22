@@ -133,7 +133,11 @@ struct NewGroupSetupView: View {
         }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button(model.isCreatingGroup ? L10n.string("Creating…") : L10n.string("Create")) {
+                WNButton(
+                    title: model.isCreatingGroup ? "Creating…" : "Create",
+                    size: .compact,
+                    isLoading: model.isCreatingGroup
+                ) {
                     Task {
                         await model.createGroup(
                             name: name,
