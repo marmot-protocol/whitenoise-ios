@@ -21,13 +21,54 @@ nonisolated enum ComposerMediaDraftPresentation {
 }
 
 nonisolated enum ComposerMediaDraftLayout {
-    static let previewSize = CGSize(width: 112, height: 112)
+    static let visualPreviewHeight: CGFloat = 112
+    // Bounded to well under 2x so an aspect-sized portrait never reads as a
+    // sliver beside a panorama in the same shelf.
+    static let minimumVisualPreviewWidth: CGFloat = 84
+    static let maximumVisualPreviewWidth: CGFloat = 160
     static let cornerRadius: CGFloat = 14
     static let shelfPadding: CGFloat = 8
     static let itemSpacing: CGFloat = 8
     static let utilityPreviewHeight: CGFloat = 72
     static let minimumUtilityPreviewWidth: CGFloat = 104
     static let maximumUtilityPreviewWidth: CGFloat = 160
+
+    static func visualPreviewWidth(dim: String?, thumbnailSize: CGSize?) -> CGFloat {
+        visualPreviewWidth(
+            aspectRatio: aspectRatio(dim: dim, thumbnailSize: thumbnailSize),
+            height: visualPreviewHeight,
+            minimumWidth: minimumVisualPreviewWidth,
+            maximumWidth: maximumVisualPreviewWidth
+        )
+    }
+
+    static func visualPreviewWidth(
+        aspectRatio: CGFloat,
+        height: CGFloat,
+        minimumWidth: CGFloat,
+        maximumWidth: CGFloat
+    ) -> CGFloat {
+        let boundedHeight = max(1, height)
+        let boundedMinimum = max(1, minimumWidth)
+        let boundedMaximum = max(boundedMinimum, maximumWidth)
+        let ratio = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1
+        return min(boundedMaximum, max(boundedMinimum, boundedHeight * ratio))
+            .rounded(.toNearestOrAwayFromZero)
+    }
+
+    static func aspectRatio(dim: String?, thumbnailSize: CGSize?) -> CGFloat {
+        if let ratio = aspectRatio(dim: dim) {
+            return ratio
+        }
+        guard let thumbnailSize,
+              thumbnailSize.width.isFinite,
+              thumbnailSize.height.isFinite,
+              thumbnailSize.width > 0,
+              thumbnailSize.height > 0
+        else { return 1 }
+        let ratio = thumbnailSize.width / thumbnailSize.height
+        return ratio.isFinite && ratio > 0 ? ratio : 1
+    }
 
     static func aspectRatio(dim: String?) -> CGFloat? {
         guard let dim else { return nil }
@@ -109,7 +150,7 @@ struct MediaDraftStrip: View {
             .padding(ComposerMediaDraftLayout.shelfPadding)
         }
         .frame(height: containsVisualMedia
-            ? ComposerMediaDraftLayout.previewSize.height + (ComposerMediaDraftLayout.shelfPadding * 2)
+            ? ComposerMediaDraftLayout.visualPreviewHeight + (ComposerMediaDraftLayout.shelfPadding * 2)
             : ComposerMediaDraftLayout.utilityPreviewHeight + (ComposerMediaDraftLayout.shelfPadding * 2))
         .clipShape(.rect(topLeadingRadius: 22, topTrailingRadius: 22))
         .overlay(alignment: .bottom) {
@@ -136,8 +177,11 @@ struct MediaDraftStrip: View {
                     }
                 }
                 .frame(
-                    width: ComposerMediaDraftLayout.previewSize.width,
-                    height: ComposerMediaDraftLayout.previewSize.height
+                    width: ComposerMediaDraftLayout.visualPreviewWidth(
+                        dim: attachment.dim,
+                        thumbnailSize: attachment.thumbnail?.size
+                    ),
+                    height: ComposerMediaDraftLayout.visualPreviewHeight
                 )
                 .clipShape(.rect(cornerRadius: ComposerMediaDraftLayout.cornerRadius))
                 .overlay {
@@ -490,21 +534,24 @@ struct ComposerMediaPreviewView: View {
     }
 
     private func thumbnailWidth(for attachment: MediaDraftAttachment) -> CGFloat {
-        let ratio = ComposerMediaDraftLayout.aspectRatio(dim: attachment.dim)
-            ?? attachment.thumbnail.map { $0.size.width / max(1, $0.size.height) }
-            ?? 1
-        return min(
-            Layout.thumbnailMaximumWidth,
-            max(Layout.thumbnailMinimumWidth, Layout.thumbnailHeight * ratio)
+        ComposerMediaDraftLayout.visualPreviewWidth(
+            aspectRatio: ComposerMediaDraftLayout.aspectRatio(
+                dim: attachment.dim,
+                thumbnailSize: attachment.thumbnail?.size
+            ),
+            height: Layout.thumbnailHeight,
+            minimumWidth: Layout.thumbnailMinimumWidth,
+            maximumWidth: Layout.thumbnailMaximumWidth
         )
     }
 
     private func fittedMediaSize(for attachment: MediaDraftAttachment, in availableSize: CGSize) -> CGSize {
         let availableWidth = max(1, availableSize.width)
         let availableHeight = max(1, availableSize.height)
-        let ratio = ComposerMediaDraftLayout.aspectRatio(dim: attachment.dim)
-            ?? attachment.thumbnail.map { $0.size.width / max(1, $0.size.height) }
-            ?? 1
+        let ratio = ComposerMediaDraftLayout.aspectRatio(
+            dim: attachment.dim,
+            thumbnailSize: attachment.thumbnail?.size
+        )
         let availableRatio = availableWidth / availableHeight
         if availableRatio > ratio {
             return CGSize(width: availableHeight * ratio, height: availableHeight)
