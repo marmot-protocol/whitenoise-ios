@@ -3578,6 +3578,101 @@ struct LocalizationCatalogTests {
         }
     }
 
+    @Test func groupRetentionStringsAreTranslatedInEveryShippedLocale() throws {
+        let catalog = try readCatalog("Shared/Localizable.xcstrings")
+        let strings = try #require(catalog["strings"] as? [String: Any])
+        let expectedTranslations: [String: [String: String]] = [
+            "Disappearing messages": [
+                "de": "Verschwindende Nachrichten",
+                "es": "Mensajes temporales",
+                "fr": "Messages éphémères",
+                "it": "Messaggi effimeri",
+                "pt": "Mensagens temporárias",
+                "ru": "Исчезающие сообщения",
+                "tr": "Kaybolan mesajlar",
+                "zh-Hans": "阅后即焚消息",
+                "zh-Hant": "限時訊息"
+            ],
+            "Off": [
+                "de": "Aus",
+                "es": "Desactivado",
+                "fr": "Désactivé",
+                "it": "Disattivato",
+                "pt": "Desativado",
+                "ru": "Выкл.",
+                "tr": "Kapalı",
+                "zh-Hans": "关闭",
+                "zh-Hant": "關閉"
+            ],
+            "Messages are kept until you delete them.": [
+                "de": "Nachrichten bleiben erhalten, bis du sie löschst.",
+                "es": "Los mensajes se conservan hasta que los elimines.",
+                "fr": "Les messages sont conservés jusqu’à ce que vous les supprimiez.",
+                "it": "I messaggi vengono conservati finché non li elimini.",
+                "pt": "As mensagens são mantidas até você apagá-las.",
+                "ru": "Сообщения хранятся, пока вы их не удалите.",
+                "tr": "Mesajlar siz silene kadar saklanır.",
+                "zh-Hans": "消息会一直保留，直到你删除它们。",
+                "zh-Hant": "訊息會一直保留，直到你刪除為止。"
+            ]
+        ]
+
+        for (key, translations) in expectedTranslations {
+            for locale in expectedLocales {
+                let expected = try #require(
+                    translations[locale],
+                    "No expected \(locale) translation declared for \(key)"
+                )
+                #expect(try localizedValue(key, locale: locale, in: strings) == expected)
+                #expect(
+                    try localizedState(key, locale: locale, in: strings) == "translated",
+                    "\(key) is not marked translated in \(locale)"
+                )
+            }
+        }
+    }
+
+    /// `sharedCatalogMarksEveryLocaleTranslated` passes on a row that carries the
+    /// English source at `state: "translated"`, which is how the whole
+    /// disappearing-messages family once shipped untranslated in all nine locales.
+    @Test func groupRetentionStringsDoNotFallBackToEnglishCopy() throws {
+        let catalog = try readCatalog("Shared/Localizable.xcstrings")
+        let strings = try #require(catalog["strings"] as? [String: Any])
+        let retentionKeys = [
+            "Disappearing messages",
+            "Off",
+            "Messages are kept until you delete them.",
+            "Messages are deleted for everyone after the selected time.",
+            "Custom",
+            "Duration",
+            "Unit",
+            "Seconds",
+            "Minutes",
+            "Hours",
+            "Days",
+            "Weeks",
+            "Enter a duration between %@ and %@.",
+            "Delete older messages?",
+            "Set Timer",
+            "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately.",
+            "Updating disappearing messages…",
+            "Disappearing messages updated",
+            "Couldn't update disappearing messages"
+        ]
+        // "Minutes" is spelled identically in English and French.
+        let sharedSpellings: Set<String> = ["Minutes|fr"]
+
+        for key in retentionKeys {
+            let english = try localizedValue(key, locale: "en", in: strings)
+            for locale in expectedLocales where !sharedSpellings.contains("\(key)|\(locale)") {
+                #expect(
+                    try localizedValue(key, locale: locale, in: strings) != english,
+                    "\(key) still shows English copy in \(locale)"
+                )
+            }
+        }
+    }
+
     @Test func sharedCatalogHasNoMissingLocalizedValuesAndKeepsPlaceholders() throws {
         let catalog = try readCatalog("Shared/Localizable.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
