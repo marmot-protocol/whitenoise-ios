@@ -1,27 +1,14 @@
 import SwiftUI
 import MarmotKit
-import PhotosUI
-import UniformTypeIdentifiers
 import UIKit
 
 /// Edit the Nostr kind:0 profile for the currently active account. Marmot
 /// chooses the account relay lists; iOS only supplies the edited metadata.
 struct ProfileEditView: View {
-    private enum PendingPhotoSource {
-        case photos
-        case files
-    }
-
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var model = ProfileEditViewModel()
-    @State private var pendingPhotoSource: PendingPhotoSource?
-    @State private var showAvatarDisclosure = false
-    @State private var showPhotoPicker = false
     @State private var showPhotoMenu = false
-    @State private var showFileImporter = false
-    @State private var showWebImagePicker = false
-    @State private var cropSource: AvatarImageCropSource?
     @State private var photoError: String?
     @State private var photoProgressPhase: ProfileImageProgressPhase?
     @State private var isEditing = false
@@ -168,80 +155,22 @@ struct ProfileEditView: View {
                 }
             }
         }
-        .wnPhotoMenu(isPresented: $showPhotoMenu, hasPhoto: !model.picture.isEmpty) { action in
-            switch action {
-            case .chooseFromPhotos:
-                requestPhotoSource(.photos)
-            case .chooseFromFiles:
-                requestPhotoSource(.files)
-            case .findImageOnWeb:
-                showWebImagePicker = true
-            case .removePhoto:
-                applyUpload(nil)
-            }
-        }
-        .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
-        .alert("Your avatar is public", isPresented: $showAvatarDisclosure) {
-            Button("Continue") {
-                switch pendingPhotoSource {
-                case .photos:
-                    showPhotoPicker = true
-                case .files:
-                    showFileImporter = true
-                case nil:
-                    break
-                }
-                pendingPhotoSource = nil
-            }
-            Button("Cancel", role: .cancel) {
-                pendingPhotoSource = nil
-            }
-        } message: {
-            Text("The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy.")
-        }
-        .sheet(isPresented: $showPhotoPicker) {
-            PhotoLibraryPickerView(
-                selectionLimit: 1,
-                filter: .images,
-                onSelection: { selections in
-                    guard let selection = selections.first else { return }
-                    photoError = nil
-                    cropSource = AvatarImageCropSource(
-                        data: selection.data,
-                        fileName: selection.fileName,
-                        typeIdentifier: selection.typeIdentifier,
-                        sourceURL: nil
-                    )
-                },
-                onError: { photoError = UserFacingError.message(for: $0) },
-                onDismiss: { showPhotoPicker = false }
-            )
-            .ignoresSafeArea()
-        }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: false
-        ) { result in
-            prepareImportedFile(result)
-        }
-        .sheet(isPresented: $showWebImagePicker) {
-            OnboardingAvatarWebImagePicker { url in
-                prepareWebImage(url)
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(item: $cropSource) { source in
-            AvatarImageCropEditor(source: source) { source, croppedData in
+        .wnPhotoSourceMenu(
+            isPresented: $showPhotoMenu,
+            hasPhoto: !model.picture.isEmpty,
+            confirmsPublicUpload: true,
+            onError: { photoError = UserFacingError.message(for: $0) },
+            onRemove: { applyUpload(nil) },
+            onSelect: { selection in
                 upload(
-                    data: croppedData,
-                    fileName: source.fileName,
-                    typeIdentifier: "public.jpeg",
-                    sourceURL: source.sourceURL
+                    data: selection.data,
+                    fileName: selection.fileName,
+                    typeIdentifier: selection.typeIdentifier,
+                    sourceURL: selection.sourceURL
                 )
             }
-        }
+        )
+        .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
         .background(.background)
     }
 
@@ -250,17 +179,19 @@ struct ProfileEditView: View {
         if let active = appState.activeAccount {
             Section {
                 VStack(spacing: 0) {
-                    WNAvatarPreview(
-                        name: model.displayName.isEmpty
-                            ? appState.shortNpub(forAccountIdHex: active.accountIdHex)
-                            : model.displayName,
-                        pictureURL: ContentSanitizer.imageURL(model.picture)
-                    )
-                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-
                     if isEditing {
-                        avatarMenu(loadedAccountIdHex: active.accountIdHex)
-                            .padding(.top)
+                        WNAvatarPhotoMenu(
+                            hasPhoto: !model.picture.isEmpty,
+                            isPresented: $showPhotoMenu
+                        ) {
+                            avatarPreview(accountIdHex: active.accountIdHex)
+                        }
+                        .disabled(
+                            model.isPublishing
+                                || model.isUploadingPicture
+                                || photoProgressPhase != nil
+                                || model.loadedAccountIdHex != active.accountIdHex
+                        )
 
                         if let photoProgressPhase {
                             ProgressView(photoProgressPhase.label)
@@ -275,6 +206,9 @@ struct ProfileEditView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.top)
                         }
+                    } else {
+                        avatarPreview(accountIdHex: active.accountIdHex)
+                            .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -284,13 +218,12 @@ struct ProfileEditView: View {
         }
     }
 
-    private func avatarMenu(loadedAccountIdHex: String) -> some View {
-        WNPhotoMenuButton(hasPhoto: !model.picture.isEmpty, isPresented: $showPhotoMenu)
-        .disabled(
-            model.isPublishing
-                || model.isUploadingPicture
-                || photoProgressPhase != nil
-                || model.loadedAccountIdHex != loadedAccountIdHex
+    private func avatarPreview(accountIdHex: String) -> some View {
+        WNAvatarPreview(
+            name: model.displayName.isEmpty
+                ? appState.shortNpub(forAccountIdHex: accountIdHex)
+                : model.displayName,
+            pictureURL: ContentSanitizer.imageURL(model.picture)
         )
     }
 
@@ -312,59 +245,6 @@ struct ProfileEditView: View {
         nameFocused = false
         nip05Focused = false
         aboutFocused = false
-    }
-
-    private func requestPhotoSource(_ source: PendingPhotoSource) {
-        pendingPhotoSource = source
-        showAvatarDisclosure = true
-    }
-
-    private func prepareImportedFile(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            photoError = nil
-            Task { await loadImportedFile(url) }
-        case .failure(let error):
-            photoError = UserFacingError.message(for: error)
-        }
-    }
-
-    private func loadImportedFile(_ url: URL) async {
-        let hasAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if hasAccess { url.stopAccessingSecurityScopedResource() }
-        }
-        do {
-            let data = try await Task.detached(priority: .userInitiated) {
-                try AvatarImageCropper.boundedFileData(from: url)
-            }.value
-            cropSource = AvatarImageCropSource(
-                data: data,
-                fileName: url.lastPathComponent,
-                typeIdentifier: nil,
-                sourceURL: url
-            )
-        } catch {
-            photoError = UserFacingError.message(for: error)
-        }
-    }
-
-    private func prepareWebImage(_ url: URL) {
-        photoError = nil
-        Task {
-            do {
-                let data = try await RemoteImageFetch.imageData(for: url)
-                cropSource = AvatarImageCropSource(
-                    data: data,
-                    fileName: url.lastPathComponent,
-                    typeIdentifier: nil,
-                    sourceURL: url
-                )
-            } catch {
-                photoError = UserFacingError.message(for: error)
-            }
-        }
     }
 
     /// Unlike Sign Up, which holds the avatar until the account exists, an edit
