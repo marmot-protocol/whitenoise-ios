@@ -14849,7 +14849,9 @@ struct PresentedChatListTests {
         let row = chatListRow(groupIdHex: "expiry", title: "Chat", lastMessage: preview)
         model.applyPresentedSnapshot(presentedChatSnapshot([row]))
         #expect(model.items.first?.searchHaystack.contains("secret preview") == true)
-        try await Task.sleep(for: .milliseconds(1200))
+        for _ in 0..<400 where model.items.first?.previewExpired != true {
+            try await Task.sleep(for: .milliseconds(25))
+        }
         let expired = try #require(model.items.first)
         #expect(expired.previewExpired)
         #expect(expired.lastMessage == nil)
