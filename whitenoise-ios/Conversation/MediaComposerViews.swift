@@ -1029,8 +1029,8 @@ struct CameraCaptureView: View {
     }
 
     private func unavailableView(
-        title: String,
-        description: String,
+        title: LocalizedStringKey,
+        description: LocalizedStringKey,
         offersSettings: Bool
     ) -> some View {
         ContentUnavailableView {
