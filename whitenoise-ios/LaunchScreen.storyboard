@@ -15,7 +15,7 @@
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
                             <imageView userInteractionEnabled="NO" contentMode="scaleAspectFit" image="WhiteNoiseMark" translatesAutoresizingMaskIntoConstraints="NO" id="launch-mark">
-                                <rect key="frame" x="100.5" y="315.9923076923" width="201" height="154.6153846154"/>
+                                <rect key="frame" x="100.5" y="359.6923076923" width="201" height="154.6153846154"/>
                                 <constraints>
                                     <constraint firstAttribute="width" secondItem="launch-mark" secondAttribute="height" multiplier="598:460" id="mark-aspect"/>
                                 </constraints>
@@ -24,7 +24,7 @@
                         <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                         <constraints>
                             <constraint firstItem="launch-mark" firstAttribute="centerX" secondItem="launch-background" secondAttribute="centerX" id="mark-center-x"/>
-                            <constraint firstItem="launch-mark" firstAttribute="centerY" secondItem="launch-background" secondAttribute="centerY" multiplier="0.9" id="mark-center-y"/>
+                            <constraint firstItem="launch-mark" firstAttribute="centerY" secondItem="launch-background" secondAttribute="centerY" id="mark-center-y"/>
                             <constraint firstItem="launch-mark" firstAttribute="width" secondItem="launch-background" secondAttribute="width" multiplier="0.5" priority="999" id="mark-width"/>
                             <constraint firstItem="launch-mark" firstAttribute="height" relation="lessThanOrEqual" secondItem="launch-background" secondAttribute="height" multiplier="0.3" id="mark-height-limit"/>
                         </constraints>
