@@ -5,9 +5,24 @@ import UniformTypeIdentifiers
 nonisolated enum AttachmentGIF {
     enum Activity { case active, inactive }
 
-    struct Playback {
+    @MainActor
+    final class Playback {
         let data: Data
         let id: UUID
+        private var isStopped = false
+
+        init(data: Data, id: UUID) {
+            self.data = data
+            self.id = id
+        }
+
+        func stop() {
+            guard !isStopped else { return }
+            isStopped = true
+            GiphyPlaybackBudget.shared.release(id)
+        }
+
+        isolated deinit { stop() }
     }
 
     static let maxPixelEdge: CGFloat = 4096
@@ -28,10 +43,12 @@ nonisolated enum AttachmentGIF {
         guard (1...maxFrames).contains(count), CGImageSourceGetStatus(source) == .statusComplete else {
             throw MediaDraftProcessor.Failure.unsupportedImage
         }
-        guard let properties = CGImageSourceCopyProperties(source, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              (1...Int(maxPixelEdge)).contains(width), (1...Int(maxPixelEdge)).contains(height),
+        // The GIF header owns the canvas size; container properties may omit it.
+        let dimensions = Array(data.dropFirst(6).prefix(4))
+        guard dimensions.count == 4 else { throw MediaDraftProcessor.Failure.unsupportedImage }
+        let width = Int(dimensions[0]) | (Int(dimensions[1]) << 8)
+        let height = Int(dimensions[2]) | (Int(dimensions[3]) << 8)
+        guard (1...Int(maxPixelEdge)).contains(width), (1...Int(maxPixelEdge)).contains(height),
               width * height <= maxTotalPixels / count
         else { throw MediaDraftProcessor.Failure.unsupportedImage }
         var remainingPixels = maxTotalPixels
@@ -87,7 +104,7 @@ struct AttachmentGIFPlayback<Content: View>: View {
 
     private func stop() {
         guard let playback else { return }
-        GiphyPlaybackBudget.shared.release(playback.id)
+        playback.stop()
         self.playback = nil
     }
 }
@@ -96,6 +113,7 @@ struct AttachmentGIFImage: UIViewRepresentable {
     let data: Data
     let playbackID: UUID
     let contentMode: UIView.ContentMode
+    let onCompletion: () -> Void
 
     func makeUIView(context: Context) -> GiphyAnimatedImageUIView {
         GiphyAnimatedImageUIView(frame: .zero)
@@ -103,7 +121,7 @@ struct AttachmentGIFImage: UIViewRepresentable {
 
     func updateUIView(_ view: GiphyAnimatedImageUIView, context: Context) {
         view.contentMode = contentMode
-        view.play(data: data, id: playbackID, loopMode: .source)
+        view.play(data: data, id: playbackID, loopMode: .source, onCompletion: onCompletion)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: GiphyAnimatedImageUIView, context: Context) -> CGSize? {

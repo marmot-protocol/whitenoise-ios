@@ -8,6 +8,7 @@ struct ZoomableMediaImage: UIViewRepresentable {
     let onZoomChanged: (Bool) -> Void
     var gifData: Data?
     var playbackID: UUID?
+    var onGIFCompletion: (() -> Void)?
 
     func makeUIView(context: Context) -> MediaImageScrollView {
         MediaImageScrollView()
@@ -17,7 +18,7 @@ struct ZoomableMediaImage: UIViewRepresentable {
         view.onTap = onTap
         view.onZoomChanged = onZoomChanged
         view.display(image)
-        view.displayGIF(data: gifData, id: playbackID)
+        view.displayGIF(data: gifData, id: playbackID, onCompletion: onGIFCompletion)
         if !isSelected { view.setZoomScale(1, animated: false) }
     }
 
@@ -70,11 +71,11 @@ final class MediaImageScrollView: UIScrollView, UIScrollViewDelegate {
         setNeedsLayout()
     }
 
-    func displayGIF(data: Data?, id: UUID?) {
+    func displayGIF(data: Data?, id: UUID?, onCompletion: (() -> Void)? = nil) {
         guard playbackID != id else { return }
         playbackID = id
         if let data, let id {
-            imageView.play(data: data, id: id, loopMode: .source)
+            imageView.play(data: data, id: id, loopMode: .source, onCompletion: onCompletion)
         } else {
             imageView.stop()
             imageView.image = displayedImage
