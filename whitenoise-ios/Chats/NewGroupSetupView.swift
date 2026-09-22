@@ -184,6 +184,7 @@ struct NewGroupSetupView: View {
             stagedCount: model.groupSelection.count,
             hasUsableName: !NewGroupPresentation.normalizedName(name).isEmpty,
             isCreating: model.isCreatingGroup,
+            isPreparingImage: isPreparingImage,
             hasActiveAccount: appState.activeAccountRef != nil
         )
     }
