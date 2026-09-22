@@ -13791,7 +13791,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "cámara"
+            "value" : "Cámara"
           }
         },
         "fr" : {
@@ -16473,7 +16473,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige la calidad de las fotos y los vídeos que envías."
+            "value" : "Elige la calidad de las fotos y los videos que envías."
           }
         },
         "fr" : {
@@ -30042,7 +30042,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toca dos veces para hacer una foto. Mantén pulsado para grabar vídeo y suelta para detener."
+            "value" : "Toca dos veces para hacer una foto. Mantén pulsado para grabar video y suelta para detener."
           }
         },
         "fr" : {
@@ -39644,7 +39644,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "invitación grupal"
+            "value" : "Invitación grupal"
           }
         },
         "fr" : {
@@ -44421,7 +44421,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "solo tu"
+            "value" : "Solo tú"
           }
         },
         "fr" : {
@@ -48164,7 +48164,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hoja local"
+            "value" : "Hoja local"
           }
         },
         "fr" : {
@@ -55802,7 +55802,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay fotos ni vídeos"
+            "value" : "No hay fotos ni videos"
           }
         },
         "fr" : {
@@ -55861,7 +55861,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay fotos ni vídeos en los mensajes cargados"
+            "value" : "No hay fotos ni videos en los mensajes cargados"
           }
         },
         "fr" : {
@@ -62907,7 +62907,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fotos y vídeos"
+            "value" : "Fotos y videos"
           }
         },
         "fr" : {
@@ -63274,7 +63274,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Reproducir video"
           }
         },
         "fr" : {
@@ -68533,7 +68533,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Grabando vídeo, %@"
+            "value" : "Grabando video, %@"
           }
         },
         "fr" : {
@@ -75333,7 +75333,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "buscar emojis"
+            "value" : "Buscar emojis"
           }
         },
         "fr" : {
@@ -83701,7 +83701,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empezar a grabar vídeo"
+            "value" : "Empezar a grabar video"
           }
         },
         "fr" : {
@@ -84352,7 +84352,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Detener la grabación de vídeo"
+            "value" : "Detener la grabación de video"
           }
         },
         "fr" : {
@@ -85686,7 +85686,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toca para foto • Mantén para vídeo"
+            "value" : "Toca para foto • Mantén para video"
           }
         },
         "fr" : {
@@ -92025,7 +92025,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hoy"
+            "value" : "Hoy"
           }
         },
         "fr" : {
@@ -97005,7 +97005,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Archivo de video adjunto"
           }
         },
         "fr" : {
@@ -97070,7 +97070,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vídeo"
+            "value" : "Video"
           }
         },
         "fr" : {
@@ -97135,7 +97135,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vídeos"
+            "value" : "Videos"
           }
         },
         "fr" : {
@@ -97194,7 +97194,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los vídeos se graban sin sonido"
+            "value" : "Los videos se graban sin sonido"
           }
         },
         "fr" : {
@@ -98480,7 +98480,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bem vindo de volta"
+            "value" : "Bem-vindo de volta"
           }
         },
         "ru" : {
@@ -98492,7 +98492,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tekrar hoşgeldiniz"
+            "value" : "Tekrar hoş geldiniz"
           }
         },
         "zh-Hans" : {
@@ -101967,7 +101967,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "enviaste un mensaje"
+            "value" : "Enviaste un mensaje"
           }
         },
         "fr" : {
