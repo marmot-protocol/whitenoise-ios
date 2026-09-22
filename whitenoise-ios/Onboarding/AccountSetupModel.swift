@@ -75,10 +75,8 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
         case .cancelRepair: return try await marmot.cancelOnboardingRepair(accountRef: accountID)
         case .useDefaults(let step):
             return try await AccountSetupPublication.publish(step: step, propose: {
-                try await marmot.proposeOnboardingRelays(
-                    accountRef: accountID, step: step, readRelays: MarmotClient.seedRelays,
-                    writeRelays: step == .relays ? MarmotClient.seedRelays : []
-                )
+                // MDK merges defaults with the checked record and preserves NIP-65 roles.
+                try await marmot.proposeOnboardingRecommendedRelays(accountRef: accountID, step: step)
             }, approve: { revision, epoch in
                 try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
             })

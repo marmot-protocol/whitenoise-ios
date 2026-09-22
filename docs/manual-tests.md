@@ -105,6 +105,12 @@ before every release tag.
 
 ## Imported-account setup
 
+- [ ] Import an identity whose relay lists exist only on public discovery relays.
+      Verify the lists are found without publishing defaults.
+- [ ] Use Default Relays on an existing valid list needing another route: existing
+      entries and read/write roles remain, and only missing defaults are appended.
+      Invalid/retired entries must fail without publishing or silently deleting them.
+
 - [ ] Import a valid nsec: the setup checklist opens before network preflight,
       and the key field and matching clipboard contents are cleared.
 - [ ] A healthy account progresses to the one-device notice. Continue

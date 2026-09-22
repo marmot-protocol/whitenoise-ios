@@ -256,6 +256,21 @@ struct AccountSetupTests {
         #expect(AccountSetupPolicy.automaticAction(value) == nil)
     }
 
+    @Test func discoveryIncludesIndexers() {
+        #expect(AppContainerConfig.discoveryRelays == AppContainerConfig.seedRelays + [
+            "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol"
+        ])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func missingRelaysRequireConsent(_ step: OnboardingStepFfi) {
+        var value = snapshot()
+        value.steps[0].step = step
+        value.steps[0].findings = [OnboardingFindingFfi(issue: .missing, endpoint: nil)]
+        value.steps[0].actions = [.useRecommendedRelays]
+        #expect(AccountSetupPolicy.automaticAction(value) == nil)
+    }
+
     @Test func explicitSaveApprovesOnlyTheReturnedProposalRevision() async throws {
         let proposed = proposalSnapshot(step: .profile)
         var approvedRevision: UInt64?
