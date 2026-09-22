@@ -24065,7 +24065,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Verschwindende Nachrichten konnten nicht aktualisiert werden"
           }
         },
         "en" : {
@@ -24077,49 +24077,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "No se pudieron actualizar los mensajes temporales"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Impossible de mettre à jour les messages éphémères"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Impossibile aggiornare i messaggi effimeri"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Não foi possível atualizar as mensagens temporárias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Не удалось обновить исчезающие сообщения"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Kaybolan mesajlar güncellenemedi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "无法更新阅后即焚消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "無法更新限時訊息"
           }
         }
       }
@@ -25270,7 +25270,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Benutzerdefiniert"
           }
         },
         "en" : {
@@ -25282,49 +25282,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personnalisé"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizzato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Пользовательский"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Özel"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "自定义"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "自訂"
           }
         }
       }
@@ -25641,7 +25641,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Tage"
           }
         },
         "en" : {
@@ -25653,49 +25653,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Días"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Jours"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Giorni"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Dias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Дни"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Gün"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "天"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "天"
           }
         }
       }
@@ -27172,7 +27172,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Ältere Nachrichten löschen?"
           }
         },
         "en" : {
@@ -27184,49 +27184,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "¿Eliminar mensajes anteriores?"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Supprimer les anciens messages ?"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Eliminare i messaggi più vecchi?"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Apagar mensagens mais antigas?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Удалить старые сообщения?"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Eski mesajlar silinsin mi?"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "删除较早的消息？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "刪除較早的訊息？"
           }
         }
       }
@@ -28848,7 +28848,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Verschwindende Nachrichten"
           }
         },
         "en" : {
@@ -28860,49 +28860,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Mensajes temporales"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Messages éphémères"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Messaggi effimeri"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Mensagens temporárias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Исчезающие сообщения"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Kaybolan mesajlar"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "阅后即焚消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "限時訊息"
           }
         }
       }
@@ -29173,7 +29173,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Verschwindende Nachrichten aktualisiert"
           }
         },
         "en" : {
@@ -29185,49 +29185,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Mensajes temporales actualizados"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Messages éphémères mis à jour"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Messaggi effimeri aggiornati"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Mensagens temporárias atualizadas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Исчезающие сообщения обновлены"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Kaybolan mesajlar güncellendi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "阅后即焚消息已更新"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "限時訊息已更新"
           }
         }
       }
@@ -30874,7 +30874,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Dauer"
           }
         },
         "en" : {
@@ -30886,49 +30886,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Duración"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Durée"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Durata"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Duração"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Длительность"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Süre"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "时长"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "時長"
           }
         }
       }
@@ -32644,7 +32644,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Gib eine Dauer zwischen %@ und %@ ein."
           }
         },
         "en" : {
@@ -32656,49 +32656,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Introduce una duración entre %@ y %@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Saisissez une durée comprise entre %@ et %@."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Inserisci una durata compresa tra %@ e %@."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Insira uma duração entre %@ e %@."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Укажите длительность от %@ до %@."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "%@ ile %@ arasında bir süre girin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "请输入 %@ 到 %@ 之间的时长。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "請輸入 %@ 到 %@ 之間的時長。"
           }
         }
       }
@@ -41484,7 +41484,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Stunden"
           }
         },
         "en" : {
@@ -41496,49 +41496,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Horas"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Heures"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Ore"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Horas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Часы"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Saat"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "小时"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "小時"
           }
         }
       }
@@ -51388,7 +51388,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Nachrichten werden nach der gewählten Zeit für alle gelöscht."
           }
         },
         "en" : {
@@ -51400,49 +51400,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Los mensajes se eliminan para todos después del tiempo seleccionado."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Les messages sont supprimés pour tout le monde après le délai sélectionné."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "I messaggi vengono eliminati per tutti dopo il tempo selezionato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "As mensagens são apagadas para todos após o tempo selecionado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Сообщения удаляются у всех по истечении выбранного времени."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Mesajlar seçilen sürenin sonunda herkes için silinir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "消息将在所选时间后为所有人删除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "訊息將在所選時間後為所有人刪除。"
           }
         }
       }
@@ -51453,7 +51453,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Nachrichten bleiben erhalten, bis du sie löschst."
           }
         },
         "en" : {
@@ -51465,49 +51465,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Los mensajes se conservan hasta que los elimines."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Les messages sont conservés jusqu’à ce que vous les supprimiez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "I messaggi vengono conservati finché non li elimini."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "As mensagens são mantidas até você apagá-las."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Сообщения хранятся, пока вы их не удалите."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Mesajlar siz silene kadar saklanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "消息会一直保留，直到你删除它们。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "訊息會一直保留，直到你刪除為止。"
           }
         }
       }
@@ -51644,7 +51644,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minuten"
           }
         },
         "en" : {
@@ -51656,7 +51656,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minutos"
           }
         },
         "fr" : {
@@ -51668,37 +51668,37 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minuti"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minutos"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Минуты"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Dakika"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "分钟"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "分鐘"
           }
         }
       }
@@ -58652,7 +58652,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Aus"
           }
         },
         "en" : {
@@ -58664,49 +58664,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Desactivado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Désactivé"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Disattivato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Desativado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Выкл."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Kapalı"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "关闭"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "關閉"
           }
         }
       }
@@ -76248,7 +76248,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Sekunden"
           }
         },
         "en" : {
@@ -76260,49 +76260,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Segundos"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Secondes"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Secondi"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Segundos"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Секунды"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Saniye"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "秒"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "秒"
           }
         }
       }
@@ -78737,7 +78737,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Timer setzen"
           }
         },
         "en" : {
@@ -78749,49 +78749,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Establecer temporizador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Régler le minuteur"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Imposta timer"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Definir temporizador"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Установить таймер"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Zamanlayıcıyı ayarla"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "设置计时器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "設定計時器"
           }
         }
       }
@@ -91893,7 +91893,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Dieser Timer gilt auch für Nachrichten, die bereits im Chat sind. Alles, was älter als %@ ist, wird sofort gelöscht."
           }
         },
         "en" : {
@@ -91905,49 +91905,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Este temporizador también se aplica a los mensajes que ya están en el chat. Todo lo que tenga más de %@ se eliminará de inmediato."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Ce minuteur s’applique aussi aux messages déjà présents dans la discussion. Tout ce qui est plus ancien que %@ sera supprimé immédiatement."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Questo timer si applica anche ai messaggi già presenti nella chat. Tutto ciò che è più vecchio di %@ verrà eliminato immediatamente."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Este temporizador também se aplica às mensagens que já estão na conversa. Tudo com mais de %@ será apagado imediatamente."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Этот таймер распространяется и на сообщения, которые уже есть в чате. Всё старше %@ будет удалено немедленно."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Bu zamanlayıcı sohbette hâlihazırda bulunan mesajlar için de geçerlidir. %@ değerinden eski olan her şey hemen silinir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "该计时器同样适用于聊天中已有的消息。超过 %@ 的内容将立即删除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "此計時器同樣適用於聊天中已有的訊息。超過 %@ 的內容將立即刪除。"
           }
         }
       }
@@ -93757,7 +93757,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Einheit"
           }
         },
         "en" : {
@@ -93769,49 +93769,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unidad"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unité"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unità"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unidade"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Единица"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Birim"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "单位"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "單位"
           }
         }
       }
@@ -94750,7 +94750,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Verschwindende Nachrichten werden aktualisiert…"
           }
         },
         "en" : {
@@ -94762,49 +94762,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Actualizando los mensajes temporales…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Mise à jour des messages éphémères…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Aggiornamento dei messaggi effimeri…"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Atualizando as mensagens temporárias…"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Обновление исчезающих сообщений…"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Kaybolan mesajlar güncelleniyor…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "正在更新阅后即焚消息…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "正在更新限時訊息…"
           }
         }
       }
@@ -98391,7 +98391,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Wochen"
           }
         },
         "en" : {
@@ -98403,49 +98403,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semanas"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semaines"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Settimane"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semanas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Недели"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Hafta"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "周"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "週"
           }
         }
       }
