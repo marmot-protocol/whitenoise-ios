@@ -11,6 +11,7 @@
 		1FF76E1C2FBE466900DCDFA7 /* MarmotKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1FF76E1B2FBE466900DCDFA7 /* MarmotKit */; };
 		3ED1C9AC2AE94EBDA800EA3E /* NotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 707C5DCDB7AF47DFB23C7B96 /* NotificationServiceExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		41AF4E801BFE453B8DCD621C /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD7505231BF5445F8BE52AD9 /* NotificationService.swift */; };
+		C0D0A7E10000000000000001 /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = C0D0A7E30000000000000003 /* StripeApplePay */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -81,6 +82,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1FF76E1C2FBE466900DCDFA7 /* MarmotKit in Frameworks */,
+				C0D0A7E10000000000000001 /* StripeApplePay in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -169,6 +171,7 @@
 			name = "whitenoise-ios";
 			packageProductDependencies = (
 				1FF76E1B2FBE466900DCDFA7 /* MarmotKit */,
+				C0D0A7E30000000000000003 /* StripeApplePay */,
 			);
 			productName = "whitenoise-ios";
 			productReference = 1FF76DEE2FBE3C9A00DCDFA7 /* whitenoise-ios.app */;
@@ -262,6 +265,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				1FF76E1A2FBE466900DCDFA7 /* XCLocalSwiftPackageReference "Packages/MarmotKit" */,
+				C0D0A7E20000000000000002 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FF76DEF2FBE3C9A00DCDFA7 /* Products */;
@@ -1106,10 +1110,26 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		C0D0A7E20000000000000002 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios-spm";
+			requirement = {
+				kind = exactVersion;
+				version = 26.4.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		1FF76E1B2FBE466900DCDFA7 /* MarmotKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MarmotKit;
+		};
+		C0D0A7E30000000000000003 /* StripeApplePay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C0D0A7E20000000000000002 /* XCRemoteSwiftPackageReference "stripe-ios-spm" */;
+			productName = StripeApplePay;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

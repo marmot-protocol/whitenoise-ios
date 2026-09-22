@@ -1,50 +1,89 @@
-import CoreGraphics
+import Foundation
 
-/// Static donation methods for the Donate screen. The addresses are the
-/// project's public funding endpoints and must stay byte-identical to the
-/// values the Android client ships, so both apps present the same QR.
+nonisolated enum DonationCadence: String, Codable, CaseIterable, Hashable, Sendable {
+    case oneTime = "one_time"
+    case monthly
+}
+
+nonisolated enum DonationAmountSelection: Equatable, Hashable, Sendable {
+    case preset(Int)
+    case custom
+}
+
+nonisolated struct DonationDraft: Equatable, Sendable {
+    let amountCents: Int
+    let cadence: DonationCadence
+}
+
+nonisolated enum CustomDonationAmountValidation: Equatable, Sendable {
+    case empty
+    case invalid
+    case belowMinimum
+    case aboveMaximum
+    case valid(Int)
+
+    var amountCents: Int? {
+        guard case let .valid(amountCents) = self else { return nil }
+        return amountCents
+    }
+}
+
 nonisolated enum DonatePresentation {
+    static let presetAmountsCents = [1_000, 2_500, 5_000, 10_000]
+    static let defaultAmountCents = 2_500
+    static let minimumAmountCents = 100
+    static let maximumAmountCents = 500_000
 
-    struct Method: Equatable, Identifiable {
-        let id: String
-        let address: String
+    static func validateCustomAmount(
+        _ input: String,
+        locale: Locale = .autoupdatingCurrent
+    ) -> CustomDonationAmountValidation {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .empty }
+        guard let cents = parseCents(trimmed, locale: locale) else { return .invalid }
+        guard cents >= minimumAmountCents else { return .belowMinimum }
+        guard cents <= maximumAmountCents else { return .aboveMaximum }
+        return .valid(cents)
+    }
 
-        /// Middle-truncated form for the one-line monospaced row — copy and
-        /// QR paths always carry the full address.
-        var displayAddress: String {
-            IdentityFormatter.short(address, head: 18, tail: 12)
+    static func formattedAmount(
+        cents: Int,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = cents.isMultiple(of: 100) ? 0 : 2
+        let amount = Decimal(cents) / 100
+        return formatter.string(from: NSDecimalNumber(decimal: amount)) ?? "$\(amount)"
+    }
+
+    private static func parseCents(_ input: String, locale: Locale) -> Int? {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .decimal
+        formatter.generatesDecimalNumbers = true
+        formatter.isLenient = false
+
+        guard let number = formatter.number(from: input) else { return nil }
+        var amount = number.decimalValue
+        guard amount.isFinite, amount >= 0 else { return nil }
+
+        var cents = Decimal()
+        guard NSDecimalMultiplyByPowerOf10(&cents, &amount, 2, .plain) == .noError else {
+            return nil
         }
+        var roundedCents = Decimal()
+        NSDecimalRound(&roundedCents, &cents, 0, .plain)
+        guard cents == roundedCents else { return nil }
 
-        /// Bare address with no URI scheme, matching the Android client's QR
-        /// payload so both codes scan identically.
-        var qrPayload: String { address }
-    }
-
-    static let lightning = Method(
-        id: "lightning",
-        address: "whitenoise@donate.ipf.dev"
-    )
-
-    static let bitcoinSilentPayment = Method(
-        id: "bitcoin-silent-payment",
-        address: "sp1qqvp56mxcj9pz9xudvlch5g4ah5hrc8rj6neu25p34rc9gxhp38cwqqlmld28u57w2srgckr34dkyg3q02phu8tm05cyj483q026xedp0s5f5j40p"
-    )
-
-    static let methods = [lightning, bitcoinSilentPayment]
-
-    /// Share of the list width the white QR card spans, so the code scales
-    /// with the device instead of sitting at a fixed point size.
-    static let qrCardWidthFraction: CGFloat = 0.81
-
-    /// Inset that lands the address chip on the QR image's inner edge rather
-    /// than the card's outer edge.
-    static let addressChipInset: CGFloat = 16
-
-    static func qrCardWidth(forContainerWidth width: CGFloat) -> CGFloat {
-        max(0, width * qrCardWidthFraction)
-    }
-
-    static func addressChipWidth(forContainerWidth width: CGFloat) -> CGFloat {
-        max(0, qrCardWidth(forContainerWidth: width) - addressChipInset)
+        let decimalNumber = NSDecimalNumber(decimal: roundedCents)
+        let int64Value = decimalNumber.int64Value
+        guard decimalNumber == NSDecimalNumber(value: int64Value),
+              int64Value <= Int64(Int.max)
+        else { return nil }
+        return Int(int64Value)
     }
 }

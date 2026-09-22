@@ -52,6 +52,39 @@ before every release tag.
       completes while the post-delete report identifies any relay-side work that
       could not be completed.
 
+## Apple Pay donations
+
+- [ ] With the runtime configuration endpoint unavailable, malformed, or returning
+      the wrong Stripe mode/key prefix, open Settings → Donate. The form remains
+      usable for reviewing amounts and disclosures, Apple Pay reports that it is
+      not configured, and Other Ways to Donate opens `ipf.dev/donate`.
+- [ ] On iPhone and iPad, verify one-time/monthly selection, $10/$25/$50/$100
+      presets, locale-specific decimal entry, the $1–$5,000 boundaries, keyboard
+      dismissal, Dark Mode, all Dynamic Type sizes, and VoiceOver labels/values.
+      Invalid and fractional-cent custom amounts must keep Apple Pay disabled.
+- [ ] On a signed staging build, verify `/v1/apple-pay/config` returns `test` plus
+      a `pk_test_` key and the signed app has the Apple merchant entitlement, then
+      complete Apple Pay Sandbox authorization for a one-time gift.
+      Confirm the backend receives integer cents, `one_time`, a fresh attempt ID,
+      no donor object, and the Stripe PaymentMethod ID. Retrying the one bounded
+      network request must retain the same attempt and PaymentMethod IDs.
+- [ ] Verify a monthly gift requests only name and email, shows the amount as a
+      monthly recurring payment, supplies the management URL, and completes with
+      `monthly` plus donor contact. Confirm a new authorization uses a new attempt ID.
+- [ ] Remove eligible Wallet cards and verify the native Set Up Apple Pay button
+      opens Wallet setup. On a device without Apple Pay, verify the unavailable
+      state and web fallback remain visible.
+- [ ] After payment succeeds, verify the thank-you state. An available hosted
+      receipt opens over HTTPS; a pending or temporarily failed receipt lookup
+      shows Check for Receipt and performs no automatic background polling.
+- [ ] Exercise a declined/cancelled payment, backend non-2xx response, malformed
+      success response, timeout, and offline state. The UI must show only localized
+      app-owned copy and never backend or Stripe error text.
+- [ ] Before release, verify Stripe test-mode completion and hosted receipt,
+      recurring renewal and portal cancellation, then one live payment. Finalize
+      the tax/recurring copy with legal/accounting and repeat the App Store build
+      on a signed physical device.
+
 ## MarmotKit 0.10.4 upgrade
 
 - [ ] Back up the app's shared data before opening an existing installation with
