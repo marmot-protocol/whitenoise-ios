@@ -132,6 +132,10 @@ struct UserFacingError: Equatable {
             return kind == .unsupportedFormat
                 ? L10n.string("Unsupported attachment")
                 : L10n.string("Attachment couldn’t be read")
+        case .AttachmentModeRequired:
+            return L10n.string("Download settings need to be refreshed. Reopen the app and try again.")
+        case .AttachmentAccountSignedOut:
+            return L10n.string("Sign in to download attachments.")
         case .MediaUnfetchable:
             return L10n.string("No safe download location is available for this attachment.")
         case .MediaDownloadFailed:

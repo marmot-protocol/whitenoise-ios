@@ -207,9 +207,11 @@ final class ConversationViewModel {
     /// and reads projections back out. See `TimelineStore`.
     @ObservationIgnored let timelineStore: TimelineStore
 
-    /// The send pipeline: in-flight guard, reply target, text/media send FFI.
-    /// Hands optimistic rows to `timelineStore`. See `ComposerModel`.
+    /// The send pipeline: reply target, synchronous staging, text/media send
+    /// FFI. Hands optimistic rows to `timelineStore`. See `ComposerModel`.
     @ObservationIgnored let composer: ComposerModel
+    /// Tail of this conversation's serialized draft-bound submissions.
+    @ObservationIgnored private var submissionTail: Task<Void, Never>?
 
     /// In-conversation message search: query, ordered matches over the loaded
     /// window, current-match cursor, and the budgeted older-history step.
@@ -242,7 +244,6 @@ final class ConversationViewModel {
     private(set) var inviteActionInFlight: ConversationInviteAction?
 
     // Composer surface forwarded from `composer`.
-    var sendInFlight: Bool { composer.sendInFlight }
     /// The message the composer is currently replying to (set by swipe / menu).
     var replyingTo: AppMessageRecordFfi? {
         get { composer.replyingTo }
@@ -533,6 +534,15 @@ final class ConversationViewModel {
             groupMemberDetails: groupMemberDetails, myAccountId: myAccountId, fallbackSelfMembership: group.selfMembership)
     }
 
+    var isAwaitingLiveConversationState: Bool {
+        ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: usesConversationWindow,
+            hasWindowSnapshot: conversationWindow != nil,
+            hasWindowSubscription: windowSubscription != nil,
+            isLocallyReset: isLocallyReset
+        )
+    }
+
     var canSendMessages: Bool {
         guard timelineStore.canStageOutgoingMessage else { return false }
         if let header = conversationWindow?.header { return !isLocallyReset && header.capabilities.canSend && windowSubscription != nil }
@@ -578,6 +588,7 @@ final class ConversationViewModel {
         if group.selfMembership == .left {
             return GroupManagementPresentation.leftGroupComposerMessage
         }
+        if isAwaitingLiveConversationState { return nil }
         if isActiveParticipant { return L10n.string("Conversation unavailable") }
         return GroupManagementPresentation.inactiveGroupComposerMessage
     }
@@ -653,10 +664,10 @@ final class ConversationViewModel {
     }
 
     var selectedAvatarSeed: String {
-        switch conversationWindow?.header.selected.avatar {
-        case .remoteImage(_, let seed), .encryptedGroupImage(_, let seed), .placeholder(let seed, _): return seed
-        case nil: return GroupDisplay.avatarSeed(for: groupDisplay)
+        if let selected = conversationWindow?.header.selected {
+            return SelectedChatPresentation.avatarSeed(for: selected)
         }
+        return GroupDisplay.avatarSeed(for: groupDisplay)
     }
 
     var selectedAvatarURL: URL? {
@@ -1408,6 +1419,18 @@ final class ConversationViewModel {
     private func acceptConversationWindow(_ snapshot: ConversationWindowSnapshotFfi, from window: ConversationWindowSubscription) {
         guard windowSubscription === window,
               windowCursor?.accept(generation: snapshot.revision.generation, sequence: snapshot.revision.sequence) == true else { return }
+        if let previous = conversationWindow, previous.revision.generation == snapshot.revision.generation {
+            let appended = ConversationLiveAppend.ids(
+                previous: previous.messages.map { $0.timeline.messageIdHex },
+                next: snapshot.messages.map { $0.timeline.messageIdHex },
+                wasAtTail: !previous.hasMoreAfter, isAtTail: !snapshot.hasMoreAfter)
+            for message in snapshot.messages where appended.contains(message.timeline.messageIdHex) {
+                let record = Self.appMessageRecord(from: message.timeline)
+                if record.direction == "received", record.kind == MessageSemantics.kindChat {
+                    timelineStore.beginMessageVisibility(rowID: "msg:\(record.messageIdHex)", operation: .inboundMessageVisible)
+                }
+            }
+        }
         installConversationWindow(snapshot)
     }
 
@@ -1477,7 +1500,23 @@ final class ConversationViewModel {
         enqueueConversationCommand(.anchor(messageId))
     }
 
+    /// True when the window is already pinned to the live tail, so asking MDK to
+    /// return to latest would change nothing.
+    var isFollowingConversationLatest: Bool {
+        !ConversationLatestIntent.needsLatestCommand(
+            hasWindow: conversationWindow != nil,
+            intent: viewportIntent,
+            hasMoreAfter: hasMoreAfter,
+            pendingAnchorIntent: latestAnchorIntent,
+            navigationFailed: navigationFailure != nil
+        )
+    }
+
     func followConversationLatest() {
+        // A redundant `returnToLatest` contends with the same window handle the
+        // subscription delivers through, which delays the projection carrying a
+        // row we may have just staged. See `ConversationLatestIntent`.
+        guard !isFollowingConversationLatest else { return }
         navigationFailure = nil
         viewportIntent = .followingLatest
         navigationIntentRevision &+= 1
@@ -2620,6 +2659,46 @@ final class ConversationViewModel {
     func sendPreparedMedia(_ attachments: [MediaDraftAttachment], caption: String,
         draftRevision: MessageDraftRevisionFfi? = nil, completion: (@MainActor (Bool) async -> Void)? = nil) async {
         await composer.sendMedia(attachments, caption: caption, draftRevision: draftRevision, completion: completion)
+    }
+
+    /// Parks a composed message in the timeline at the Send tap, before any
+    /// await. Returns nil when the send can't be staged at all (composer gate,
+    /// no active account, empty submission).
+    func stagePreparedSend(
+        text: String,
+        attachments: [MediaDraftAttachment],
+        replyTargetMessageIdHex: String?
+    ) -> StagedOutgoingSend? {
+        composer.stage(text: text, attachments: attachments, replyTargetId: replyTargetMessageIdHex)
+    }
+
+    /// Runs the draft-bound half of a staged send behind every submission
+    /// already queued for this conversation. `ConversationDraftStore` admits one
+    /// revision-checked submission at a time, so rapid sends serialize here
+    /// while their bubbles are already on screen.
+    func enqueueStagedSubmission(_ submission: @escaping @MainActor () async -> Void) {
+        let predecessor = submissionTail
+        let task = Task { @MainActor in
+            await predecessor?.value
+            await submission()
+        }
+        submissionTail = task
+    }
+
+    func submitStagedSend(
+        _ staged: StagedOutgoingSend,
+        draftRevision: MessageDraftRevisionFfi? = nil,
+        completion: (@MainActor (Bool) async -> Void)? = nil
+    ) async {
+        await composer.submit(staged, draftRevision: draftRevision, completion: completion)
+    }
+
+    /// Settles a staged send that never reached MDK — the bubble stays as the
+    /// only copy of the user's message, in the same failed state a publish
+    /// failure produces.
+    func failStagedSend(_ staged: StagedOutgoingSend) {
+        timelineStore.markFailed(tempId: staged.tempId)
+        error = L10n.string("Send failed")
     }
 
     func forwardDestinations() async throws -> [MessageForwardDestination] {

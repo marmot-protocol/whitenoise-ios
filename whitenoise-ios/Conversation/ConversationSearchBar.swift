@@ -6,78 +6,16 @@ struct ConversationSearchBar: View {
     @Bindable var search: ConversationSearchModel
     let onClose: () -> Void
 
-    @FocusState private var isFieldFocused: Bool
-
-    @ScaledMetric(relativeTo: .body)
-    private var closeIconSize: CGFloat = 18
-
     var body: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                TextField("", text: $search.query, prompt: Text(L10n.string("Search messages")))
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .submitLabel(.search)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($isFieldFocused)
-                if !search.query.isEmpty {
-                    Button {
-                        search.query = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 32, height: 32)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 6)
-            .frame(minHeight: 46)
-            .background(.regularMaterial, in: .capsule)
-            .overlay {
-                Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-            }
-
-            closeButton
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .onAppear {
-            // Focus lands after the inset has been laid out, mirroring the
-            // chat-list search field's deferred focus.
-            Task { @MainActor in
-                await Task.yield()
-                isFieldFocused = true
-            }
-        }
-    }
-
-    private var closeButton: some View {
-        Button(action: onClose) {
-            Image(systemName: "xmark")
-                .font(.system(size: closeIconSize, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .background(.regularMaterial, in: .circle)
-                .overlay {
-                    Circle().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                }
-                .contentShape(.circle)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Close search")
+        WNSearchBar(query: $search.query, prompt: "Search messages",
+                    dismissesKeyboardOnSubmit: false, onClose: onClose)
     }
 }
 
 struct ConversationSearchControls: View {
     @Bindable var search: ConversationSearchModel
+
+    @ScaledMetric(relativeTo: .body) private var controlSize = WNSearchBar.Metrics.fieldHeight
 
     var body: some View {
         VStack(spacing: 4) {
@@ -98,21 +36,15 @@ struct ConversationSearchControls: View {
                         search.goToNewerMatch()
                     }
                 }
-                .background(.regularMaterial, in: .capsule)
-                .overlay {
-                    Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                }
+                .compatibleInputCapsuleChrome(interactive: false)
 
                 Spacer(minLength: 8)
 
                 if search.hasQuery {
                     resultCount
                         .padding(.horizontal, 18)
-                        .frame(minHeight: 44)
-                        .background(.regularMaterial, in: .capsule)
-                        .overlay {
-                            Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-                        }
+                        .frame(minHeight: controlSize)
+                        .compatibleInputCapsuleChrome(interactive: false)
                 }
             }
 
@@ -142,8 +74,8 @@ struct ConversationSearchControls: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .font(.body.weight(.medium))
+                .frame(width: controlSize, height: controlSize)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -164,7 +96,7 @@ struct ConversationSearchControls: View {
                     .font(.footnote.weight(.medium))
             }
             .frame(maxWidth: .infinity)
-            .frame(minHeight: 38)
+            .frame(minHeight: controlSize)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

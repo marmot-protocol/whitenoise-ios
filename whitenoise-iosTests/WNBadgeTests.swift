@@ -4,9 +4,8 @@ import UIKit
 @testable import whitenoise_ios
 
 /// The badge is the shared trailing marker for rows. These lock the two things
-/// callers rely on: a prominent badge fills with the monochrome accent (never
-/// the asset accent, which is the system blue in this app), and a neutral one
-/// stays muted.
+/// callers rely on: a prominent badge fills with the monochrome accent,
+/// and a neutral one stays muted.
 struct WNBadgeTests {
     @Test func prominentBadgeFillsWithTheMonochromeAccent() {
         #expect(
@@ -15,17 +14,6 @@ struct WNBadgeTests {
         #expect(
             WNBadge.Metrics.background(for: .prominent, colorScheme: .dark) == .white
         )
-    }
-
-    @Test func prominentBadgeNeverFillsWithTheAssetAccent() {
-        for colorScheme in [ColorScheme.light, .dark] {
-            #expect(
-                WNBadge.Metrics.background(
-                    for: .prominent,
-                    colorScheme: colorScheme
-                ) != .accentColor
-            )
-        }
     }
 
     @Test func badgeAccentTracksTheButtonAccent() {

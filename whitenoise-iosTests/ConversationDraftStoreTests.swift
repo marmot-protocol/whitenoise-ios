@@ -248,6 +248,26 @@ struct ConversationDraftStoreTests {
         #expect(preview == "First @Alice second")
     }
 
+    @Test func aSendTapClearsTheComposerWithoutDeletingTheDraftItStillHasToClaim() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        store.setDraft(textSnapshot("first message"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
+
+        // Send tap: the slot is claimed synchronously, then the composer clears
+        // so its bubble can be staged before the draft round-trip runs.
+        store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "first message")
+
+        // The next message typed while that send is still queued is its own draft.
+        store.setDraft(textSnapshot("second message"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "second message")
+    }
+
     private func textSnapshot(_ text: String) -> ConversationDraftSnapshot {
         ConversationDraftSnapshot(
             canonicalText: text,

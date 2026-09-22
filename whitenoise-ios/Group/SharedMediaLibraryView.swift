@@ -519,11 +519,11 @@ struct SharedMediaLibraryView: View {
             } label: {
                 if loadingFileID == item.id {
                     ProgressView()
-                        .frame(width: 30, height: 30)
+                        .frame(width: 44, height: 44)
                 } else {
                     Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
+                        .foregroundStyle(.primary)
+                        .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
                 }
             }
@@ -593,8 +593,8 @@ struct SharedMediaLibraryView: View {
                             linkToOpen = link
                         } label: {
                             Image(systemName: "safari")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 30, height: 30)
+                                .foregroundStyle(.primary)
+                                .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -602,8 +602,8 @@ struct SharedMediaLibraryView: View {
 
                         ShareLink(item: link.urlString) {
                             Image(systemName: "square.and.arrow.up")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 30, height: 30)
+                                .foregroundStyle(.primary)
+                                .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

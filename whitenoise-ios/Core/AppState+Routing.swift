@@ -2,6 +2,13 @@ import Foundation
 import MarmotKit
 
 extension AppState {
+    func beginConversationOpenPerformance() -> ConversationOpenPerformance {
+        conversationOpenPerformance?.finish(.cancelled, recorder: productAnalytics)
+        let attempt = ConversationOpenPerformance(start: .now, ticket: productAnalytics.ticket())
+        conversationOpenPerformance = attempt
+        return attempt
+    }
+
     @MainActor
     func presentProfile(npub: String) {
         navigation.presentProfile(npub: npub)
@@ -21,7 +28,8 @@ extension AppState {
             if let accountRef = navigation.presentChat(
                 groupIdHex: groupIdHex,
                 accountRef: requestedAccountRef,
-                messageIdHex: messageIdHex
+                messageIdHex: messageIdHex,
+                performance: beginConversationOpenPerformance()
             ) {
                 activeAccountRef = accountRef
             }
@@ -31,7 +39,8 @@ extension AppState {
         _ = navigation.presentChat(
             groupIdHex: groupIdHex,
             accountRef: nil,
-            messageIdHex: messageIdHex
+            messageIdHex: messageIdHex,
+            performance: beginConversationOpenPerformance()
         )
     }
 

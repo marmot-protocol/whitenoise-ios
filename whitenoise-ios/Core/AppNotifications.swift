@@ -7,6 +7,8 @@ import MarmotKit
 final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     static let shared = AppNotifications()
 
+    private let notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)?
+    private let notificationClock: () -> TimeInterval
     private let center: UNUserNotificationCenter
     private let requestAuthorizationHandler: (() async throws -> Bool)?
     private let authorizationStatusProvider: (() async -> UNAuthorizationStatus)?
@@ -16,6 +18,7 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         (() async -> [DeliveredNotificationDescriptor])?
     private let deliveredNotificationIdentifiersRemover: (([String]) -> Void)?
     private weak var appState: AppState?
+    private var foregroundBatches = ForegroundNotificationBatch()
     private var pendingRoutes: [LocalNotificationRoute] = []
     private var pendingActionOperations: [NotificationActionOperation] = []
     private var actionOperationTask: Task<Void, Never>?
@@ -33,9 +36,13 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         applicationBadgeCountSetter: ((Int) async throws -> Void)? = nil,
         deliveredNotificationDescriptorsProvider:
             (() async -> [DeliveredNotificationDescriptor])? = nil,
-        deliveredNotificationIdentifiersRemover: (([String]) -> Void)? = nil
+        deliveredNotificationIdentifiersRemover: (([String]) -> Void)? = nil,
+        notificationRequestScheduler: ((UNNotificationRequest) async throws -> Void)? = nil,
+        notificationClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     ) {
         self.center = center
+        self.notificationRequestScheduler = notificationRequestScheduler
+        self.notificationClock = notificationClock
         self.requestAuthorizationHandler = requestAuthorizationHandler
         self.authorizationStatusProvider = authorizationStatusProvider
         self.remoteNotificationRegistrar = remoteNotificationRegistrar
@@ -231,7 +238,8 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         // A private contact nickname (App-Group-backed, owner→contact keyed)
         // overrides the kind:0 sender name in the foreground-presented alert,
         // matching what the in-app UI and the NSE render.
-        guard let presentation = LocalNotificationProjection.makePresentation(
+        let previewMode = NotificationPreviewStore.mode()
+        guard var presentation = LocalNotificationProjection.makePresentation(
             for: update,
             nickname: { ownerAccountIdHex, contactAccountIdHex in
                 ContactNicknameStore.nickname(
@@ -239,13 +247,18 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
                     contactAccountIdHex: contactAccountIdHex
                 )
             },
-            previewMode: NotificationPreviewStore.mode()
+            previewMode: previewMode
         ) else {
             return
         }
 
-        // The banner is enqueued immediately; a cold avatar warms the cache
-        // for the sender's next message instead of delaying this one.
+        var trigger: UNNotificationTrigger?
+        if update.trigger == .newMessage {
+            let plan = foregroundBatches.schedule(presentation, now: notificationClock(), previewMode: previewMode)
+            presentation = plan.presentation
+            if plan.delay > 0 { trigger = UNTimeIntervalNotificationTrigger(timeInterval: plan.delay, repeats: false) }
+        }
+        // A cold avatar warms the cache without delaying notification scheduling.
         let avatarData = NotificationCommunicationDecorator.cachedAvatarData(
             forPictureUrl: presentation.senderPictureUrl
         )
@@ -261,11 +274,15 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         let request = UNNotificationRequest(
             identifier: presentation.identifier,
             content: content,
-            trigger: nil
+            trigger: trigger
         )
 
         do {
-            try await center.add(request)
+            if let notificationRequestScheduler {
+                try await notificationRequestScheduler(request)
+            } else {
+                try await center.add(request)
+            }
         } catch {
             appState?.present(.error(
                 L10n.string("Notification failed"),
@@ -470,9 +487,15 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// Dismiss only the notification whose action succeeded. Sibling messages
-    /// in the same conversation may still represent unread content.
+    func cancelForegroundBatches(accountRef: String? = nil) {
+        center.removePendingNotificationRequests(withIdentifiers: foregroundBatches.cancel(account: accountRef))
+    }
+
+    /// Legacy exact-message cleanup; batches are reconciled using their read marker.
     func removeDeliveredNotification(identifier: String) {
+        // The exact-action fallback must not dismiss a newer batch for this chat.
+        // Batched requests carry full routing metadata and use read reconciliation.
+        guard !identifier.hasPrefix("foreground-chat:") else { return }
         center.removeDeliveredNotifications(
             withIdentifiers: NotificationActionDeliveredNotificationPolicy.identifiersToRemove(
                 actedNotificationIdentifier: identifier
@@ -491,6 +514,9 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
         conversationStillHasUnread: Bool?
     ) async {
         guard !readMessageIdHexes.isEmpty else { return }
+        let pending = foregroundBatches.cancel(account: accountRef, group: groupIdHex,
+            readMessages: conversationStillHasUnread == false ? nil : readMessageIdHexes)
+        center.removePendingNotificationRequests(withIdentifiers: pending)
         let descriptors = await deliveredNotificationDescriptors()
         let identifiers = DeliveredNotificationReadCleanupPolicy.identifiersToRemove(
             from: descriptors,

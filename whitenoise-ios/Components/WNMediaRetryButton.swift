@@ -7,6 +7,7 @@ struct WNMediaRetryButton: View {
         Button("Retry", systemImage: "arrow.clockwise", action: action)
             .font(.headline)
             .wnSecondaryButtonStyle()
+            .controlSize(.large)
     }
 }
 

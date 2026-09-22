@@ -3482,7 +3482,13 @@ struct LocalizationCatalogTests {
             "That photo can't be used. Choose a different photo.",
             "New profile",
             "Profile avatar preview",
-            "Selected profile photo"
+            "Selected profile photo",
+            "Camera Access Is Off",
+            "Allow camera access in Settings to take photos and videos.",
+            "Camera Is Restricted",
+            "Camera access is restricted on this iPhone.",
+            "Camera Unavailable",
+            "The camera isn’t available on this iPhone right now."
         ]
 
         for key in expectedKeys {
@@ -6511,21 +6517,6 @@ struct ConversationChromeTests {
 }
 
 @MainActor
-struct AvatarBubbleTests {
-
-    @Test func paletteIndexHandlesMinimumIntegerHash() {
-        let index = AvatarBubble.paletteIndex(forHash: Int.min, paletteCount: 8)
-
-        #expect((0..<8).contains(index))
-    }
-
-    @Test func paletteIndexMatchesAbsoluteRemainderForOrdinaryNegativeHashes() {
-        #expect(AvatarBubble.paletteIndex(forHash: -9, paletteCount: 8) == 1)
-        #expect(AvatarBubble.paletteIndex(forHash: 9, paletteCount: 8) == 1)
-    }
-}
-
-@MainActor
 struct ChatsListProjectionTests {
 
     @Test func directPeerProjectionRequiresExactlySelfAndOneOtherMember() {
@@ -8189,7 +8180,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8199,6 +8190,8 @@ struct ConversationTimelineProjectionTests {
         )
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
+        projected.clientToken = "pending-1"
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: "pending-1")
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8671,7 +8664,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8691,6 +8684,8 @@ struct ConversationTimelineProjectionTests {
         #expect(failedMessages[0].0 == "")
         #expect(failedMessages[0].1 == .failed)
 
+        projected.clientToken = tempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: tempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8725,7 +8720,7 @@ struct ConversationTimelineProjectionTests {
             recordedAt: 10,
             receivedAt: 10
         )
-        let projected = timelineRecord(
+        var projected = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8736,6 +8731,8 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: "pending-1", record: pending)
         viewModel.confirmSent(tempId: "pending-1", record: pending, messageId: nil)
+        projected.clientToken = "pending-1"
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: "pending-1")
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projected], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8861,7 +8858,7 @@ struct ConversationTimelineProjectionTests {
         #expect(viewModel.mediaItems(for: mediaRow).map(\.fileName) == ["canonical.jpg"])
     }
 
-    @Test func projectedOutgoingMessageReconcilesClosestPendingBubbleWhenContentMatches() throws {
+    @Test func projectedOutgoingMessageUsesExactTokenForIdenticalContent() throws {
         let sender = hex("11")
         let groupIdHex = hex("aa")
         let viewModel = ConversationViewModel(
@@ -8894,7 +8891,7 @@ struct ConversationTimelineProjectionTests {
         let tempIds = try #require(
             tempIdsWhereTransientTimelinePrefersNewerPendingFirst(older: olderPending, newer: newerPending)
         )
-        let projectedOlder = timelineRecord(
+        var projectedOlder = timelineRecord(
             messageIdHex: hex("c3"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8905,6 +8902,8 @@ struct ConversationTimelineProjectionTests {
 
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.older, record: olderPending)
         viewModel.applyPendingOutgoingMessage(tempId: tempIds.newer, record: newerPending)
+        projectedOlder.clientToken = tempIds.older
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: tempIds.older)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedOlder], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -8977,7 +8976,7 @@ struct ConversationTimelineProjectionTests {
 
         // The incoming confirmation is the plain text send (no `imeta` tags).
         // It must reconcile the text pending and leave the media bubble alone.
-        let projectedText = timelineRecord(
+        var projectedText = timelineRecord(
             messageIdHex: hex("b2"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -8985,6 +8984,8 @@ struct ConversationTimelineProjectionTests {
             plaintext: caption,
             timelineAt: 20
         )
+        projectedText.clientToken = textTempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: textTempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedText], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -9056,7 +9057,7 @@ struct ConversationTimelineProjectionTests {
         // The incoming confirmation is the media send: kind-9 with an `imeta`
         // tag. It must reconcile the media pending, not the text pending.
         let reference = encryptedMediaReference(sourceEpoch: 0)
-        let projectedMedia = timelineRecord(
+        var projectedMedia = timelineRecord(
             messageIdHex: hex("b3"),
             direction: "sent",
             groupIdHex: groupIdHex,
@@ -9065,6 +9066,8 @@ struct ConversationTimelineProjectionTests {
             tags: [MessageSemantics.imetaTag(for: reference)],
             timelineAt: 20
         )
+        projectedMedia.clientToken = mediaTempId
+        viewModel.timelineStore.markLocalSendSubmitted(tempId: mediaTempId)
         viewModel.applyTimelinePage(
             TimelinePageFfi(messages: [projectedMedia], hasMoreBefore: false, hasMoreAfter: false),
             placement: .window
@@ -11555,6 +11558,61 @@ struct MediaComposerAvailabilityTests {
             disabledMessage: GroupManagementPresentation.leftGroupComposerMessage
         ))
     }
+
+    @Test func openingConversationWindowAwaitsLiveState() {
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false
+        ))
+        #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+    }
+
+    @Test func attachedConversationWindowReportsLiveState() {
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasWindowSubscription: true,
+            isLocallyReset: false
+        ))
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: false,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: false
+        ))
+    }
+
+    @Test func locallyResetConversationDoesNotAwaitLiveState() {
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: false,
+            hasWindowSubscription: false,
+            isLocallyReset: true
+        ))
+    }
+
+    @Test func freshConversationReportsGroupDerivedComposerMessages() throws {
+        let appState = AppState(client: try MarmotClient.testClient())
+        let disbanded = ConversationViewModel(appState: appState, group: group(name: "ended", disbanded: true))
+        let left = ConversationViewModel(appState: appState, group: group(name: "gone", selfMembership: .left))
+
+        #expect(!disbanded.isAwaitingLiveConversationState)
+        #expect(disbanded.inactiveGroupMessage == GroupManagementPresentation.disbandedComposerMessage)
+        #expect(left.inactiveGroupMessage == GroupManagementPresentation.leftGroupComposerMessage)
+    }
 }
 
 struct ConversationInvitePresentationTests {
@@ -11777,34 +11835,9 @@ struct ConversationInviteActionTests {
 }
 
 struct MarmotKitMasterIntegrationTests {
-    @Test func sendAcceptancePolicyDistinguishesPublishedFromDurablyPending() {
-        let published = SendSummaryFfi(
-            published: 1,
-            messageIds: ["message-id"],
-            acceptDisposition: .published,
-            maintenanceDisposition: .ready
-        )
-        let pending = SendSummaryFfi(
-            published: 0,
-            messageIds: [],
-            acceptDisposition: .acceptedPending,
-            maintenanceDisposition: .postJoinRotationPendingRetryable
-        )
-        let completionUnknown = SendSummaryFfi(
-            published: 0,
-            messageIds: [],
-            acceptDisposition: .completionUnknown,
-            maintenanceDisposition: .ready
-        )
-
-        #expect(SendAcceptancePolicy.action(for: published) == .confirmPublished(messageId: "message-id"))
-        #expect(SendAcceptancePolicy.action(for: pending) == .awaitDurableProjection)
-        #expect(SendAcceptancePolicy.action(for: completionUnknown) == .awaitDurableProjection)
-    }
-
     @MainActor
     @Test func durablyAcceptedComposerOutcomesKeepClockWithoutFailureUI() async throws {
-        for disposition in [SendAcceptDispositionFfi.acceptedPending, .completionUnknown] {
+        do {
             let appState = AppState(client: try MarmotClient.testClient())
             appState.activeAccountRef = "account-ref"
             let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
@@ -11816,13 +11849,8 @@ struct MarmotKitMasterIntegrationTests {
             composer.canSendMessages = { true }
             var surfacedErrors: [String] = []
             composer.onError = { surfacedErrors.append($0) }
-            composer.sendTextForTesting = { _, _, _, _ in
-                SendSummaryFfi(
-                    published: 0,
-                    messageIds: [],
-                    acceptDisposition: disposition,
-                    maintenanceDisposition: .ready
-                )
+            composer.sendTextForTesting = { _, _, _, _, token in
+                LocalSendAcceptanceFfi(clientToken: token, messageIdHex: "local")
             }
 
             await composer.send("durably retained")
@@ -11850,7 +11878,8 @@ struct MarmotKitMasterIntegrationTests {
         composer.canSendMessages = { true }
         var surfacedErrors: [String] = []
         composer.onError = { surfacedErrors.append($0) }
-        composer.sendTextForTesting = { _, _, _, _ in
+        composer.localSendStatusForTesting = { _ in nil }
+        composer.sendTextForTesting = { _, _, _, _, _ in
             throw NSError(domain: "ComposerSendTests", code: 1)
         }
 
@@ -12665,6 +12694,53 @@ struct MessageImageBubblePresentationTests {
         #expect(size.height == 405)
     }
 
+    @Test func captionedPortraitImageFillsTheBubbleMediaWidth() {
+        let size = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "1080x1920",
+            fillsWidth: true
+        )
+
+        #expect(size.width == 300)
+        #expect(size.height == 405)
+    }
+
+    @Test func captionedLandscapeImageKeepsItsUnfilledSize() {
+        let filled = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "640x360",
+            fillsWidth: true
+        )
+
+        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "640x360"))
+    }
+
+    @Test func captionedShallowPortraitImageNeedsNoCrop() {
+        let filled = MessageImageBubblePresentation.displaySize(
+            maxWidth: 300,
+            dim: "900x1000",
+            fillsWidth: true
+        )
+
+        #expect(filled == MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "900x1000"))
+        #expect(filled == CGSize(width: 300, height: 333))
+    }
+
+    @Test func captionOrReplyMakesTheSingleVisualFillTheBubble() {
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: false,
+            hasReply: false
+        ) == false)
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: true,
+            hasReply: false
+        ))
+        #expect(MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: false,
+            hasReply: true
+        ))
+    }
+
     @Test func missingOrMalformedImageDimensionsUseSquareFallback() {
         #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: nil) == CGSize(width: 300, height: 300))
         #expect(MessageImageBubblePresentation.displaySize(maxWidth: 300, dim: "bad") == CGSize(width: 300, height: 300))
@@ -13008,12 +13084,12 @@ struct MessageMediaGalleryTests {
         #expect((decoded?.size.width ?? 0) > 0)
     }
 
-    @Test func fullscreenMaxPixelSizeIsScreenBoundedAndPositive() {
-        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 2532) == 2532)
+    @Test func fullscreenMaxPixelSizeAllowsZoomButCapsDecodedPixels() {
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 2532) == 4096)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 0) == 1)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: -10) == 1)
         #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: .infinity) == 1)
-        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 100.4) == 101)
+        #expect(MessageMediaFullscreenPresentation.fullscreenMaxPixelSize(forLongestScreenEdge: 100.4) == 201)
     }
 
     @Test func thumbnailCacheRetainsSourceDataForFullscreenReuse() async throws {
@@ -14013,6 +14089,92 @@ struct TimelineBottomTests {
         #expect(layout.previewScale < 1)
     }
 
+    @Test func messageActionsOverlayClipsMessagesTallerThanTheViewportInsteadOfShrinkingThem() {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: -900, width: 320, height: 2400),
+            containerHeight: 844,
+            actionMenuHeight: 420,
+            showsReactions: true
+        )
+
+        #expect(layout.previewScale >= MessageActionsPresentation.minimumPreviewScale)
+        #expect(layout.previewIsTruncated)
+        #expect(layout.previewContentHeight < 2400)
+        #expect(abs(layout.previewContentHeight * layout.previewScale - layout.previewHeight) < 0.001)
+        #expect(layout.groupTop >= MessageActionsPresentation.verticalMargin)
+        #expect(layout.groupTop + layout.groupHeight <= 844 - MessageActionsPresentation.verticalMargin)
+    }
+
+    @Test(arguments: [CGFloat(2400), CGFloat(5000), CGFloat(20000)])
+    func messageActionsOverlayKeepsTallPreviewsBoundedAndDeterministic(sourceHeight: CGFloat) {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: sourceHeight),
+            containerHeight: 844,
+            actionMenuHeight: 420,
+            showsReactions: true
+        )
+        let reference = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 0, width: 320, height: 2400),
+            containerHeight: 844,
+            actionMenuHeight: 420,
+            showsReactions: true
+        )
+
+        #expect(layout.previewScale == MessageActionsPresentation.minimumPreviewScale)
+        #expect(layout.previewHeight == reference.previewHeight)
+        #expect(layout.previewContentHeight == reference.previewContentHeight)
+        #expect(layout.groupHeight == reference.groupHeight)
+    }
+
+    @Test func messageActionsOverlayLeavesMessagesThatAlreadyFitUntouched() {
+        let source = CGRect(x: 0, y: 220, width: 390, height: 96)
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: source,
+            containerHeight: 844,
+            actionMenuHeight: 320,
+            showsReactions: true
+        )
+
+        #expect(layout.previewScale == 1)
+        #expect(!layout.previewIsTruncated)
+        #expect(layout.previewContentHeight == source.height)
+        #expect(layout.previewHeight == source.height)
+    }
+
+    @Test func messageActionsOverlayStillScalesModeratelyTallMessagesWithoutClipping() {
+        let layout = MessageActionsOverlayLayout.resolve(
+            sourceFrame: CGRect(x: 0, y: 650, width: 390, height: 300),
+            containerHeight: 760,
+            actionMenuHeight: 420,
+            showsReactions: true
+        )
+
+        #expect(layout.previewScale < 1)
+        #expect(layout.previewScale > MessageActionsPresentation.minimumPreviewScale)
+        #expect(!layout.previewIsTruncated)
+        #expect(layout.previewContentHeight == 300)
+    }
+
+    @Test func messageActionsOverlayKeyboardSizedContainerStillRendersAReadablePreview() {
+        let source = CGRect(x: 0, y: 40, width: 320, height: 1200)
+        let keyboardOpen = MessageActionsOverlayLayout.resolve(
+            sourceFrame: source,
+            containerHeight: 508,
+            actionMenuHeight: 300,
+            showsReactions: true
+        )
+        let keyboardClosed = MessageActionsOverlayLayout.resolve(
+            sourceFrame: source,
+            containerHeight: 844,
+            actionMenuHeight: 420,
+            showsReactions: true
+        )
+
+        #expect(keyboardOpen.previewScale == MessageActionsPresentation.minimumPreviewScale)
+        #expect(keyboardClosed.previewHeight > keyboardOpen.previewHeight)
+        #expect(keyboardClosed.previewContentHeight > keyboardOpen.previewContentHeight)
+    }
+
     @Test func messageActionsOverlayDoesNotReserveAReactionSurfaceWhenInteractionIsDisabled() {
         let source = CGRect(x: 0, y: 180, width: 390, height: 80)
         let withReactions = MessageActionsOverlayLayout.resolve(
@@ -14900,6 +15062,66 @@ private struct CompletedAccountSetupTestClient: AccountSetupClient {
 
 @MainActor
 struct PresentedChatListTests {
+    @Test func expiringPreviewDisappearsWithoutAnMDKUpdate() async throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        var preview = chatListPreview(messageIdHex: "expiring", plaintext: "Secret preview")
+        preview.retentionSeconds = 60
+        preview.retentionExpiresAt = UInt64(Date().timeIntervalSince1970) + 1
+        let row = chatListRow(groupIdHex: "expiry", title: "Chat", lastMessage: preview)
+        model.applyPresentedSnapshot(presentedChatSnapshot([row]))
+        #expect(model.items.first?.searchHaystack.contains("secret preview") == true)
+        for _ in 0..<400 where model.items.first?.previewExpired != true {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        let expired = try #require(model.items.first)
+        #expect(expired.previewExpired)
+        #expect(expired.lastMessage == nil)
+        #expect(!expired.searchHaystack.contains("secret preview"))
+        #expect(ChatRow.previewPresentation(for: expired, activeAccountIdHex: nil,
+            senderName: { _ in "Sender" }).body == L10n.string("Message expired"))
+        try await state.client?.marmot.shutdownAndClose()
+    }
+
+    @Test func preparedDraftChangesRefreshWithoutIdentityRevisionOrUnreadChanges() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "draft", title: "Chat", lastMessage: chatListPreview(messageIdHex: "last"), unreadCount: 3)
+        var snapshot = presentedChatSnapshot([row])
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.draftPreview == nil)
+        snapshot.rows[0].preview = .draft(draft: ChatListDraftPreviewFfi(
+            text: "Unsent text", textTruncated: false, attachmentCount: 0, attachmentKind: nil))
+        model.applyPresentedSnapshot(snapshot)
+        let draft = try #require(model.items.first)
+        #expect(draft.draftPreview == "Unsent text")
+        #expect(draft.row == row)
+        #expect(draft.searchHaystack.contains("unsent text"))
+        #expect(ChatRow.previewPresentation(for: draft, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == L10n.formatted("Draft: %@", "Unsent text"))
+        snapshot.rows[0].preview = .message
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(read: true, leave: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.draftPreview == nil)
+        #expect(model.items.first?.actions?.canMarkRead == true)
+        #expect(model.items.first?.departureAction == .leave)
+        #expect(model.items.first?.unreadCount == 3)
+    }
+
+    @Test func invitationCanShowSelectedMessageWithoutLosingInviteState() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "invite", pendingConfirmation: true, title: "Chat", lastMessage: chatListPreview(messageIdHex: "last", plaintext: "Invitation message"))
+        model.applyPresentedSnapshot(presentedChatSnapshot([row]))
+        let item = try #require(model.items.first)
+        #expect(item.row.pendingConfirmation)
+        #expect(ChatRow.previewPresentation(for: item, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == "Invitation message")
+        var empty = presentedChatSnapshot([row])
+        empty.rows[0].preview = .empty
+        model.applyPresentedSnapshot(empty)
+        let emptyItem = try #require(model.items.first)
+        #expect(ChatRow.previewPresentation(for: emptyItem, activeAccountIdHex: nil, senderName: { _ in "Sender" }).body == L10n.string("No messages yet"))
+    }
+
     @Test func avatarOnlySnapshotRefreshesPixelsWithoutChangingChatState() throws {
         let state = AppState(client: try MarmotClient.testClient())
         let model = ChatsListViewModel(appState: state)
@@ -15079,7 +15301,7 @@ struct PresentedChatListTests {
         model.applyPresentedSnapshot(snapshot)
         #expect((archived ? model.archivedItems : model.items).first?.title == "Bestie")
         #expect(model.item(groupIdHex: row.groupIdHex)?.selectedAvatar == selected.avatar)
-        #expect(model.item(groupIdHex: row.groupIdHex)?.avatarSeed == "selected-avatar")
+        #expect(model.item(groupIdHex: row.groupIdHex)?.avatarSeed == peer)
         #expect(model.item(groupIdHex: row.groupIdHex)?.searchHaystack.contains("bestie") == true)
         let unchangedRevision = model.visibleRowsRevision
         model.refreshDisplayProjections()
@@ -15129,6 +15351,6 @@ struct PresentedChatListTests {
         let display = SelectedChatPresentation.display(selected, row: row)
         #expect(display.avatarURL == nil)
         #expect(display.title == L10n.string("Conversation unavailable"))
-        #expect(display.avatarSeed == "selected")
+        #expect(display.avatarSeed == "peer")
     }
 }

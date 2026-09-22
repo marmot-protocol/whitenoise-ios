@@ -26,39 +26,34 @@ nonisolated enum MediaUploadIntegrity {
     }
 }
 
-nonisolated enum SendAcceptanceAction: Equatable {
-    case confirmPublished(messageId: String?)
-    case awaitDurableProjection
+/// One outgoing message already parked in the timeline, waiting for its draft
+/// revision and its trip to MDK. Everything the send publishes is captured at
+/// the Send tap, so a composer edit afterwards belongs to the next message.
+@MainActor
+struct StagedOutgoingSend {
+    let tempId: String
+    let clientToken: String
+    let accountRef: String
+    let lifetime: UUID
+    let replyTargetId: String?
+    let text: String
+    let attachments: [MediaDraftAttachment]
+    let uploadEpoch: Int
+    fileprivate let contentTokens: Task<MarkdownDocumentFfi, Never>
 }
 
-nonisolated enum SendAcceptancePolicy {
-    static func action(for summary: SendSummaryFfi) -> SendAcceptanceAction {
-        switch summary.acceptDisposition {
-        case .published:
-            return .confirmPublished(messageId: summary.messageIds.first)
-        case .acceptedPending, .completionUnknown:
-            return .awaitDurableProjection
-        }
-    }
-}
-
-nonisolated enum SendFailurePolicy {
-    static func awaitsDurableState(error: Error, submittedDraft: Bool) -> Bool {
-        // Revision tokens are opaque; an error cannot prove the draft was not consumed.
-        submittedDraft || error is CancellationError
-            || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
-    }
-}
-
-/// Owns the conversation composer's send pipeline: the in-flight send guard, the
-/// reply target, and the text/media send FFI orchestration. Optimistic rows are
-/// handed to `TimelineStore` (the overlay is timeline-mirror state, not composer
-/// state); the group-derived send gates are injected as closures so the composer
-/// holds no group roster. Carved out of `ConversationViewModel` (Phase 5b).
+/// Owns the conversation composer's send pipeline: the reply target and the
+/// text/media send FFI orchestration. Optimistic rows are handed to
+/// `TimelineStore` (the overlay is timeline-mirror state, not composer state);
+/// the group-derived send gates are injected as closures so the composer holds
+/// no group roster. Carved out of `ConversationViewModel` (Phase 5b).
+///
+/// Sending is two-phase: `stage` parks the bubble synchronously at the tap, and
+/// `submit` publishes it behind `sendQueue`. Nothing blocks the Send button for
+/// the round-trip, so rapid consecutive sends each get their bubble at once.
 @Observable
 @MainActor
 final class ComposerModel {
-    private(set) var sendInFlight = false
     /// The message the composer is currently replying to (set by swipe / menu).
     var replyingTo: AppMessageRecordFfi? {
         didSet {
@@ -82,8 +77,9 @@ final class ComposerModel {
     /// Surfaces a send failure to the view model (sets its observable `error`).
     @ObservationIgnored var onError: (String) -> Void = { _ in }
 #if DEBUG
+    @ObservationIgnored var localSendStatusForTesting: ((String) async throws -> LocalSendStatusFfi?)?
     @ObservationIgnored var sendTextForTesting:
-        ((String, String, String?, String) async throws -> SendSummaryFfi)?
+        ((String, String, String?, String, String) async throws -> LocalSendAcceptanceFfi)?
 #endif
 
     init(appState: AppState?, groupIdHex: String, timelineStore: TimelineStore) {
@@ -134,7 +130,7 @@ final class ComposerModel {
         // row itself: the awaits above are wide enough for a second retry or
         // a Delete to have consumed it already.
         guard timelineStore.failedTransientRecord(rowId: rowId) != nil else { return false }
-        guard !sendInFlight, canSendMessages() else {
+        guard canSendMessages() else {
             onError(L10n.string("Send failed"))
             return false
         }
@@ -143,34 +139,33 @@ final class ComposerModel {
         return true
     }
 
-    func send(_ text: String, draftRevision: MessageDraftRevisionFfi? = nil,
-              completion: (@MainActor (Bool) async -> Void)? = nil) async {
-        await send(text, replyTargetId: nil, draftRevision: draftRevision, completion: completion)
-    }
-
-    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?, retryTempId: String? = nil,
-                      draftRevision: MessageDraftRevisionFfi? = nil,
-                      completion: (@MainActor (Bool) async -> Void)? = nil) async {
+    /// Parks the message in the timeline synchronously, at the Send tap. No
+    /// await runs before the bubble exists, so draft persistence, markdown
+    /// parsing and MDK are all off the path to first paint. The submitted text,
+    /// reply target and attachments are captured here, so later composer edits
+    /// cannot change what publishes.
+    func stage(
+        text: String,
+        attachments: [MediaDraftAttachment] = [],
+        replyTargetId overrideReplyTargetId: String? = nil,
+        retryTempId: String? = nil
+    ) -> StagedOutgoingSend? {
+        guard let appState, let accountRef = appState.activeAccountRef else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !sendInFlight,
-              canSendMessages(),
-              !trimmed.isEmpty,
-              let appState,
-              let accountRef = appState.activeAccountRef else { await completion?(false); return }
-
         // Defense-in-depth: clamp to the protocol's max length so an oversized
         // paste can't bypass the composer's cap (#54).
-        let outgoing = ConversationViewModel.cappedOutgoingText(trimmed)
+        let outgoing = trimmed.isEmpty ? "" : ConversationViewModel.cappedOutgoingText(trimmed)
+        if attachments.isEmpty {
+            guard !outgoing.isEmpty, canSendMessages() else { return nil }
+        } else {
+            guard canSendMediaAttachments() else { return nil }
+        }
 
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // markdown parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
-        let lifetime = timelineStore.outgoingLifetime
-
-        let replyTargetId = overrideReplyTargetId ?? replyTargetMessageId()
-        let tempId = retryTempId ?? UUID().uuidString
-        timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
+        let clientToken = UUID().uuidString
+        let tempId = retryTempId ?? clientToken
+        let rowID = "msg:\(tempId)"
+        // A media send carries its caption, never a reply target.
+        let replyTargetId = attachments.isEmpty ? (overrideReplyTargetId ?? replyTargetMessageId()) : nil
         let now = UInt64(Date().timeIntervalSince1970)
         // A reply is a kind-9 with `e` + `q` tags pointing at the parent; a plain
         // message is a bare kind-9.
@@ -180,67 +175,132 @@ final class ComposerModel {
                 MessageTagFfi(values: [MessageSemantics.quoteRefTag, $0]),
             ]
         } ?? []
-        // Parse markdown off the MainActor: `parseMarkdown` is a synchronous
-        // rustCall whose cost scales with message length, so building the
-        // optimistic record inline would stall the composer at send time (#226).
-        let contentTokens = await appState.parseMarkdown(text: outgoing)
-        let optimistic = AppMessageRecordFfi(
+        // Staged with no parsed tokens: `displayBlocks` returns nil for an empty
+        // document and the bubble renders its plain-text path until the
+        // off-MainActor parse upgrades the row (#226 kept the parse off the UI
+        // thread; this also keeps it off the path to first paint).
+        let record = AppMessageRecordFfi(
             messageIdHex: "",
             direction: "sent",
             groupIdHex: groupIdHex,
             sender: appState.activeAccount?.accountIdHex ?? "",
             plaintext: outgoing,
-            contentTokens: contentTokens,
+            contentTokens: .emptyDocument,
             kind: MessageSemantics.kindChat,
             tags: optimisticTags,
             recordedAt: now,
             receivedAt: now
         )
-        guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
-            sendInFlight = false
+        // Measured from the tap, so tap-to-draft-ready is inside the window.
+        timelineStore.beginMessageVisibility(rowID: rowID, operation: .outboundMessageVisible)
+        if !attachments.isEmpty {
+            timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: rowID)
+        }
+        timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: record, clientToken: clientToken)
+        replyingTo = nil
+
+        let contentTokens = Task { @MainActor [weak timelineStore] () -> MarkdownDocumentFfi in
+            guard !outgoing.isEmpty else { return .emptyDocument }
+            let parsed = await appState.parseMarkdown(text: outgoing)
+            timelineStore?.upgradePendingOutgoingTokens(tempId: tempId, contentTokens: parsed)
+            return parsed
+        }
+        return StagedOutgoingSend(
+            tempId: tempId,
+            clientToken: clientToken,
+            accountRef: accountRef,
+            lifetime: timelineStore.outgoingLifetime,
+            replyTargetId: replyTargetId,
+            text: outgoing,
+            attachments: attachments,
+            // Captured before the upload round-trip: a wipe completing while the
+            // send is in flight must invalidate the post-upload cache store.
+            uploadEpoch: MessageMediaCache.currentProducerEpoch(),
+            contentTokens: contentTokens
+        )
+    }
+
+    /// Admits staged sends in tap order; MDK owns publication after acceptance.
+    func submit(
+        _ staged: StagedOutgoingSend,
+        draftRevision: MessageDraftRevisionFfi? = nil,
+        completion: (@MainActor (Bool) async -> Void)? = nil
+    ) async {
+        guard let appState else { await completion?(false); return }
+        if staged.attachments.isEmpty {
+            await submitText(staged, appState: appState, draftRevision: draftRevision, completion: completion)
+        } else {
+            await submitMedia(staged, appState: appState, draftRevision: draftRevision, completion: completion)
+        }
+    }
+
+    /// Stage-and-submit for sends with no draft revision behind them (Giphy,
+    /// shared location, failed-send retry).
+    func send(_ text: String, draftRevision: MessageDraftRevisionFfi? = nil,
+              completion: (@MainActor (Bool) async -> Void)? = nil) async {
+        await send(text, replyTargetId: nil, draftRevision: draftRevision, completion: completion)
+    }
+
+    private func send(_ text: String, replyTargetId overrideReplyTargetId: String?, retryTempId: String? = nil,
+                      draftRevision: MessageDraftRevisionFfi? = nil,
+                      completion: (@MainActor (Bool) async -> Void)? = nil) async {
+        guard let staged = stage(text: text, replyTargetId: overrideReplyTargetId, retryTempId: retryTempId) else {
             await completion?(false)
             return
         }
-        timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
-        // The composer is free the moment the message is parked in the
-        // timeline: the round-trip below waits in `sendQueue`, not on the
-        // Send button (#226 blocked the button for its whole duration).
-        sendInFlight = false
+        await submit(staged, draftRevision: draftRevision, completion: completion)
+    }
 
+    private func submitText(
+        _ staged: StagedOutgoingSend,
+        appState: AppState,
+        draftRevision: MessageDraftRevisionFfi?,
+        completion: (@MainActor (Bool) async -> Void)?
+    ) async {
         await sendQueue.enqueue { [self] in
-            guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+            guard timelineStore.outgoingLifetime == staged.lifetime,
+                  appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
                 return
             }
+            _ = await staged.contentTokens.value
+            guard timelineStore.outgoingLifetime == staged.lifetime,
+                  appState.activeAccountRef == staged.accountRef else {
+                await completion?(false)
+                return
+            }
+            let submission = appState.productAnalytics.beginTiming()
             do {
+                timelineStore.markLocalSendSubmitted(tempId: staged.tempId)
                 let summary = try await sendText(
                     appState: appState,
-                    accountRef: accountRef,
-                    replyTargetId: replyTargetId,
-                    text: outgoing,
-                    draftRevision: draftRevision
+                    accountRef: staged.accountRef,
+                    replyTargetId: staged.replyTargetId,
+                    text: staged.text,
+                    draftRevision: draftRevision,
+                    clientToken: staged.clientToken
                 )
+                appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
                 await completion?(true)
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
-                timelineStore.acceptSend(tempId: tempId, record: optimistic, summary: summary)
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else { return }
+                timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: summary.clientToken)
             } catch {
-                let ambiguous = SendFailurePolicy.awaitsDurableState(
-                    error: error, submittedDraft: draftRevision != nil)
+                appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
+                let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else { return }
                 if ambiguous {
-                    timelineStore.markSendCompletionUnknown(tempId: tempId)
+                    timelineStore.markSendCompletionUnknown(tempId: staged.tempId)
                     onError(UserFacingError.message(for: error))
                     return
                 }
-                timelineStore.markFailed(tempId: tempId)
+                timelineStore.markFailed(tempId: staged.tempId)
                 onError(UserFacingError.message(for: error))
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                Haptics.error()
+                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
             }
         }.value
     }
@@ -250,168 +310,166 @@ final class ComposerModel {
         accountRef: String,
         replyTargetId: String?,
         text: String,
-        draftRevision: MessageDraftRevisionFfi?
-    ) async throws -> SendSummaryFfi {
+        draftRevision: MessageDraftRevisionFfi?,
+        clientToken: String
+    ) async throws -> LocalSendAcceptanceFfi {
 #if DEBUG
         if let sendTextForTesting {
-            return try await sendTextForTesting(accountRef, groupIdHex, replyTargetId, text)
+            return try await sendTextForTesting(accountRef, groupIdHex, replyTargetId, text, clientToken)
         }
 #endif
         let client = try appState.currentMarmotClient()
         if let draftRevision {
-            return try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: [])
+            return try await client.sendDraftWithClientToken(accountRef: accountRef, revision: draftRevision, attachments: [], clientToken: clientToken)
         }
         if let replyTargetId {
-            return try await client.replyToMessage(
+            return try await client.replyWithClientToken(
                 accountRef: accountRef,
                 groupIdHex: groupIdHex,
                 targetMessageId: replyTargetId,
-                text: text
+                text: text,
+                clientToken: clientToken
             )
         }
-        return try await client.sendText(
+        return try await client.sendTextWithClientToken(
             accountRef: accountRef,
             groupIdHex: groupIdHex,
-            text: text
+            text: text,
+            clientToken: clientToken
         )
     }
 
     func sendMedia(_ attachments: [MediaDraftAttachment], caption: String,
                    draftRevision: MessageDraftRevisionFfi? = nil,
                    completion: (@MainActor (Bool) async -> Void)? = nil) async {
-        guard !sendInFlight,
-              !attachments.isEmpty,
-              canSendMediaAttachments(),
-              let appState,
-              let accountRef = appState.activeAccountRef else { await completion?(false); return }
-
-        let trimmedCaption = caption.trimmingCharacters(in: .whitespacesAndNewlines)
-        let outgoingCaption = trimmedCaption.isEmpty ? "" : ConversationViewModel.cappedOutgoingText(trimmedCaption)
-        let captionForRust = outgoingCaption.isEmpty ? nil : outgoingCaption
-        let tempId = UUID().uuidString
-        timelineStore.beginMessageVisibility(rowID: "msg:\(tempId)", operation: .outboundMessageVisible)
-        let tempRowId = "msg:\(tempId)"
-        let now = UInt64(Date().timeIntervalSince1970)
-
-        // Claim the send slot before the first suspension point. The off-MainActor
-        // caption parse below introduces an `await`, so leaving the flag unset
-        // would let a second send task start during a long parse (#226 review).
-        sendInFlight = true
-        let lifetime = timelineStore.outgoingLifetime
-
-        // Captured before the upload round-trip: a wipe completing while the
-        // send is in flight must invalidate the post-upload cache store.
-        let uploadEpoch = MessageMediaCache.currentProducerEpoch()
-
-        let captionTokens: MarkdownDocumentFfi = outgoingCaption.isEmpty
-            ? .emptyDocument
-            : await appState.parseMarkdown(text: outgoingCaption)
-        let optimistic = AppMessageRecordFfi(
-            messageIdHex: "",
-            direction: "sent",
-            groupIdHex: groupIdHex,
-            sender: appState.activeAccount?.accountIdHex ?? "",
-            plaintext: outgoingCaption,
-            contentTokens: captionTokens,
-            kind: MessageSemantics.kindChat,
-            tags: [],
-            recordedAt: now,
-            receivedAt: now
-        )
-        guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
-            sendInFlight = false
+        guard let staged = stage(text: caption, attachments: attachments) else {
             await completion?(false)
             return
         }
-        timelineStore.mediaProjections.setPending(attachments.map(\.displayItem), forRowId: tempRowId)
-        timelineStore.applyPendingOutgoingMessage(tempId: tempId, record: optimistic)
-        replyingTo = nil
-        // Freed at hand-off, like a text send: the upload and publish below
-        // belong to the parked row's bubble, not to the Send button.
-        sendInFlight = false
+        await submit(staged, draftRevision: draftRevision, completion: completion)
+    }
 
+    private func submitMedia(
+        _ staged: StagedOutgoingSend,
+        appState: AppState,
+        draftRevision: MessageDraftRevisionFfi?,
+        completion: (@MainActor (Bool) async -> Void)?
+    ) async {
         await sendQueue.enqueue { [self] in
-            guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+            guard timelineStore.outgoingLifetime == staged.lifetime,
+                  appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
                 return
             }
-            var submittedDraft = false
+            _ = await staged.contentTokens.value
+            let submission = appState.productAnalytics.beginTiming()
             do {
                 let client = try appState.currentMarmotClient()
-                let result = try await client.uploadMedia(
-                    accountRef: accountRef,
+                // MDK may project its retained row before admission returns.
+                timelineStore.markLocalSendSubmitted(tempId: staged.tempId)
+                let submitted = try await client.uploadWithClientToken(
+                    accountRef: staged.accountRef,
                     groupIdHex: groupIdHex,
                     request: MediaUploadRequestFfi(
-                        attachments: attachments.map(\.uploadRequest),
-                        caption: captionForRust,
+                        attachments: staged.attachments.map(\.uploadRequest),
+                        caption: staged.text.isEmpty ? nil : staged.text,
                         send: draftRevision == nil,
                         blossomServer: nil
-                    )
+                    ),
+                    clientToken: staged.clientToken
                 )
+                let result = submitted.upload
                 let verifiedAttachments = await MediaUploadIntegrity.verifiedAttachments(
-                    plaintexts: attachments.map(\.data),
+                    plaintexts: staged.attachments.map(\.data),
                     references: result.attachments.map(\.reference)
                 )
                 let references = verifiedAttachments.map(\.reference)
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else {
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else {
                     await completion?(false)
                     return
                 }
-                let sent: SendSummaryFfi?
+                let sent: LocalSendAcceptanceFfi?
                 if let draftRevision {
-                    submittedDraft = true
-                    sent = try await client.sendMessageDraft(accountRef: accountRef, revision: draftRevision, attachments: references)
-                } else { sent = result.sent }
+                    sent = try await client.sendDraftWithClientToken(accountRef: staged.accountRef, revision: draftRevision, attachments: references, clientToken: staged.clientToken)
+                } else {
+                    // The upload admits the message when `send` is set.
+                    sent = submitted.acceptance
+                }
+                appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
                 await completion?(true)
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else { return }
                 for attachment in verifiedAttachments {
                     await MessageMediaCache.store(
                         attachment.data,
                         for: attachment.reference,
-                        producerGeneration: uploadEpoch
+                        producerGeneration: staged.uploadEpoch
                     )
                 }
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
-                let confirmed = AppMessageRecordFfi(
-                    messageIdHex: "",
-                    direction: "sent",
-                    groupIdHex: groupIdHex,
-                    sender: optimistic.sender,
-                    plaintext: outgoingCaption,
-                    contentTokens: captionTokens,
-                    kind: MessageSemantics.kindChat,
-                    tags: references.map(MessageSemantics.imetaTag(for:)),
-                    recordedAt: now,
-                    receivedAt: now
-                )
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else { return }
                 if let sent {
-                    timelineStore.acceptSend(tempId: tempId, record: confirmed, summary: sent)
-                    if let id = sent.messageIds.first, !id.isEmpty,
+                    timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: sent.clientToken)
+                    let id = sent.messageIdHex
+                    if !id.isEmpty,
                        timelineStore.replaceMediaReferences(references, forMessageId: id) {
                         timelineStore.noteProjectionChanged()
                     }
                 } else {
-                    timelineStore.markSendCompletionUnknown(tempId: tempId)
+                    timelineStore.markSendCompletionUnknown(tempId: staged.tempId)
                 }
             } catch {
-                let ambiguous = SendFailurePolicy.awaitsDurableState(
-                    error: error, submittedDraft: submittedDraft)
+                appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
+                let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
-                guard timelineStore.outgoingLifetime == lifetime, appState.activeAccountRef == accountRef else { return }
+                guard timelineStore.outgoingLifetime == staged.lifetime,
+                      appState.activeAccountRef == staged.accountRef else { return }
                 if ambiguous {
-                    timelineStore.markSendCompletionUnknown(tempId: tempId)
+                    timelineStore.markSendCompletionUnknown(tempId: staged.tempId)
                     onError(UserFacingError.message(for: error))
                     return
                 }
-                timelineStore.markFailed(tempId: tempId)
+                timelineStore.markFailed(tempId: staged.tempId)
                 onError(UserFacingError.message(for: error))
-                await MainActor.run {
-                    Haptics.error()
-                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
-                }
+                Haptics.error()
+                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
             }
         }.value
+    }
+
+    private func recoverSubmission(_ staged: StagedOutgoingSend, appState: AppState, error: Error) async -> Bool {
+        do {
+            let status: LocalSendStatusFfi?
+            #if DEBUG
+            if let localSendStatusForTesting {
+                status = try await localSendStatusForTesting(staged.clientToken)
+            } else {
+                let client = try appState.currentMarmotClient()
+                status = try await client.localSendStatus(accountRef: staged.accountRef,
+                    groupIdHex: groupIdHex, clientToken: staged.clientToken)
+            }
+            #else
+            let client = try appState.currentMarmotClient()
+            status = try await client.localSendStatus(accountRef: staged.accountRef,
+                groupIdHex: groupIdHex, clientToken: staged.clientToken)
+            #endif
+            guard timelineStore.outgoingLifetime == staged.lifetime,
+                  appState.activeAccountRef == staged.accountRef else { return true }
+            switch status {
+            case .queued, .engineOwned, .completed:
+                timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: staged.clientToken)
+                return true
+            case .rejected: return false
+            case nil:
+                return error is CancellationError
+                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+            }
+        } catch {
+            // A failed status read is not evidence that admission failed.
+            return true
+        }
     }
 
     private func replyTargetMessageId() -> String? {

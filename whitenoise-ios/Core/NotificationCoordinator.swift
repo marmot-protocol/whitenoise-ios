@@ -443,6 +443,7 @@ final class NotificationCoordinator {
         _ enabled: Bool,
         host: NotificationCoordinatorHost
     ) async throws -> NotificationSettingsFfi {
+        Self.tracePushToggle(enabled ? "enable.begin" : "disable.begin")
         guard let accountRef = host.activeAccountRef else {
             throw NotificationSettingsActionError.noActiveAccount
         }
@@ -451,11 +452,15 @@ final class NotificationCoordinator {
             guard NativePushServerConfig.current() != nil else {
                 throw NotificationSettingsActionError.nativePushNotConfigured
             }
+            Self.tracePushToggle("authorization.begin")
             let granted = try await host.notifications.requestAuthorizationAndRegister()
+            Self.tracePushToggle(granted ? "authorization.granted" : "authorization.denied")
             guard granted else { throw NotificationSettingsActionError.permissionDenied }
             return try await enableNativePush(accountRef: accountRef, host: host)
         } else {
+            Self.tracePushToggle("disable.drain.begin")
             await cancelNativePushRegistrationTask()
+            Self.tracePushToggle("disable.drain.end")
             return try await disableNativePush(accountRef: accountRef, host: host)
         }
     }
@@ -467,16 +472,25 @@ final class NotificationCoordinator {
         // Mirror the disable path: a background registration sync already in
         // flight must finish (or be cancelled) before this enable issues its
         // own upsert, or two concurrent upsertPushRegistration calls race.
+        Self.tracePushToggle("enable.drain.begin")
         await cancelNativePushRegistrationTask()
+        Self.tracePushToggle("enable.drain.end")
         let client = try host.currentMarmotClient()
+        Self.tracePushToggle("enable.runtime.available")
         let marmot = client.marmot
         let coordinator = NativePushEnableCoordinator(
             setNativePushEnabled: { enabled in
-                try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
+                Self.tracePushToggle(enabled ? "enable.preference.on.begin" : "enable.rollback.off.begin")
+                let settings = try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
+                Self.tracePushToggle(enabled ? "enable.preference.on.end" : "enable.rollback.off.end")
+                return settings
             },
-            syncPushRegistration: { [weak self, weak host] in
-                guard let self, let host else { throw CancellationError() }
+            // This callback is awaited locally, not stored on either owner.
+            // Keep both alive across the preference write and registration.
+            syncPushRegistration: { [self, host] in
+                Self.tracePushToggle("enable.registration.begin")
                 _ = try await self.syncNativePushRegistration(accountRef: accountRef, host: host)
+                Self.tracePushToggle("enable.registration.end")
             }
         )
         return try await coordinator.enable()
@@ -490,13 +504,24 @@ final class NotificationCoordinator {
         let marmot = client.marmot
         let coordinator = NativePushDisableCoordinator(
             setNativePushEnabled: { enabled in
-                try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
+                Self.tracePushToggle(enabled ? "disable.rollback.on.begin" : "disable.preference.off.begin")
+                let settings = try await marmot.setNativePushEnabled(accountRef: accountRef, enabled: enabled)
+                Self.tracePushToggle(enabled ? "disable.rollback.on.end" : "disable.preference.off.end")
+                return settings
             },
             clearPushRegistration: {
+                Self.tracePushToggle("disable.registration.clear.begin")
                 _ = try await marmot.clearPushRegistration(accountRef: accountRef)
+                Self.tracePushToggle("disable.registration.clear.end")
             }
         )
         return try await coordinator.disable()
+    }
+
+    private static func tracePushToggle(_ stage: String) {
+        #if DEBUG
+        pushRegistrationLog.notice("Push toggle: \(stage, privacy: .public), cancelled=\(Task.isCancelled)")
+        #endif
     }
 
     func enableNotificationsByDefault(

@@ -20,6 +20,7 @@ extension EnvironmentValues {
 struct TimelineMediaTaskID: Equatable {
     let contentID: String
     let isVisible: Bool
+    var policyRevision: String = ""
 }
 
 /// Reference box for the media-load callback. Passing the bare async closure
@@ -39,6 +40,17 @@ final class ConversationMediaLoader {
         requested.downloadExplicitly = explicit
         return try await load(requested)
     }
+
+    func selectedPageData(for media: MessageMediaAttachment, isSelected: Bool) async throws -> Data? {
+        guard isSelected else { return nil }
+        return try await data(for: media, explicit: true)
+    }
+
+    func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async {
+        guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return }
+        // MDK retains bytes and acquisition history; a miss never becomes an explicit retry.
+        _ = try? await data(for: media, explicit: false)
+    }
 }
 
 enum MessageBubbleReplyLayout {
@@ -57,6 +69,10 @@ enum MessageBubbleReplyLayout {
 }
 
 nonisolated enum MessageRichMediaBubblePresentation {
+    static func singleVisualFillsBubbleWidth(hasCaption: Bool, hasReply: Bool) -> Bool {
+        hasCaption || hasReply
+    }
+
     static func contentWidth(
         maxWidth: CGFloat,
         singleVisualWidth: CGFloat?,
@@ -64,8 +80,7 @@ nonisolated enum MessageRichMediaBubblePresentation {
         hasReply: Bool
     ) -> CGFloat {
         let boundedMaxWidth = max(1, maxWidth)
-        guard !hasCaption,
-              !hasReply,
+        guard !singleVisualFillsBubbleWidth(hasCaption: hasCaption, hasReply: hasReply),
               let singleVisualWidth,
               singleVisualWidth.isFinite,
               singleVisualWidth > 0
@@ -241,7 +256,7 @@ struct MessageBubble: View {
                 if !isFromMe, clusterPresentation.showsSenderName {
                     Text(identityName?(record.sender) ?? appState.displayName(forAccountIdHex: record.sender))
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(WNIdentityPalette.color(for: record.sender))
                         .padding(.leading, 12)
                 }
 
@@ -551,6 +566,7 @@ struct MessageBubble: View {
             items: mediaItems,
             isFromMe: isFromMe,
             maxWidth: mediaGridWidth,
+            fillsWidth: singleVisualFillsBubbleWidth,
             onLoadMedia: onLoadMedia,
             onOpenImage: { item, data in
                 mediaGallery = MessageMediaGallery(
@@ -593,6 +609,13 @@ struct MessageBubble: View {
         return 256
     }
 
+    private var singleVisualFillsBubbleWidth: Bool {
+        MessageRichMediaBubblePresentation.singleVisualFillsBubbleWidth(
+            hasCaption: hasVisibleBodyText,
+            hasReply: replyPreview != nil
+        )
+    }
+
     private var richMediaContentWidth: CGFloat {
         let singleVisualWidth: CGFloat?
         if mediaItems.count == 1, let item = mediaItems.first {
@@ -600,7 +623,8 @@ struct MessageBubble: View {
             case .image:
                 singleVisualWidth = MessageImageBubblePresentation.displaySize(
                     maxWidth: mediaGridWidth,
-                    dim: item.dim
+                    dim: item.dim,
+                    fillsWidth: singleVisualFillsBubbleWidth
                 ).width
             case .video:
                 singleVisualWidth = MessageVideoBubblePresentation.displaySize(
@@ -1468,6 +1492,7 @@ private struct MessageMediaAttachmentContent: View {
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
     let maxWidth: CGFloat
+    let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
@@ -1490,6 +1515,7 @@ private struct MessageMediaAttachmentContent: View {
                 item: singleImage,
                 isFromMe: isFromMe,
                 maxWidth: maxWidth,
+                fillsWidth: fillsWidth,
                 onLoadMedia: onLoadMedia,
                 onOpenImage: onOpenImage,
                 onOpenVideo: onOpenVideo
@@ -1525,7 +1551,11 @@ private struct MessageMediaAttachmentContent: View {
                             MessageMediaTile(
                                 item: item,
                                 isFromMe: isFromMe,
-                                size: MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim),
+                                size: MessageImageBubblePresentation.displaySize(
+                                    maxWidth: maxWidth,
+                                    dim: item.dim,
+                                    fillsWidth: fillsWidth
+                                ),
                                 hiddenCount: 0,
                                 onLoadMedia: onLoadMedia,
                                 onOpenImage: onOpenImage,
@@ -1566,6 +1596,7 @@ private struct MessageSingleImageBubble: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let maxWidth: CGFloat
+    let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
     let onOpenImage: (MessageMediaAttachment, Data) -> Void
     let onOpenVideo: (MessageMediaAttachment) -> Void
@@ -1573,7 +1604,11 @@ private struct MessageSingleImageBubble: View {
     private let cornerRadius: CGFloat = 12
 
     private var size: CGSize {
-        MessageImageBubblePresentation.displaySize(maxWidth: maxWidth, dim: item.dim)
+        MessageImageBubblePresentation.displaySize(
+            maxWidth: maxWidth,
+            dim: item.dim,
+            fillsWidth: fillsWidth
+        )
     }
 
     var body: some View {
@@ -1776,7 +1811,12 @@ nonisolated private enum MessageVisualMediaBubblePresentation {
         return min(4, max(0.25, aspectRatio))
     }
 
-    static func displaySize(maxWidth: CGFloat, dim: String?, fallback: CGFloat) -> CGSize {
+    static func displaySize(
+        maxWidth: CGFloat,
+        dim: String?,
+        fallback: CGFloat,
+        fillsWidth: Bool
+    ) -> CGSize {
         let boundedMaxWidth = max(1, maxWidth)
         let aspectRatio = aspectRatio(dim: dim, fallback: fallback)
         if aspectRatio >= 1 {
@@ -1785,6 +1825,9 @@ nonisolated private enum MessageVisualMediaBubblePresentation {
 
         let maxHeight = boundedMaxWidth * maximumHeightRatio
         let height = min(boundedMaxWidth / aspectRatio, maxHeight)
+        if fillsWidth {
+            return roundedSize(width: boundedMaxWidth, height: height)
+        }
         return roundedSize(width: min(boundedMaxWidth, height * aspectRatio), height: height)
     }
 
@@ -1801,8 +1844,13 @@ nonisolated enum MessageImageBubblePresentation {
         MessageVisualMediaBubblePresentation.aspectRatio(dim: dim, fallback: 1)
     }
 
-    static func displaySize(maxWidth: CGFloat, dim: String?) -> CGSize {
-        MessageVisualMediaBubblePresentation.displaySize(maxWidth: maxWidth, dim: dim, fallback: 1)
+    static func displaySize(maxWidth: CGFloat, dim: String?, fillsWidth: Bool = false) -> CGSize {
+        MessageVisualMediaBubblePresentation.displaySize(
+            maxWidth: maxWidth,
+            dim: dim,
+            fallback: 1,
+            fillsWidth: fillsWidth
+        )
     }
 }
 
@@ -1820,7 +1868,8 @@ nonisolated enum MessageVideoBubblePresentation {
         MessageVisualMediaBubblePresentation.displaySize(
             maxWidth: maxWidth,
             dim: dim,
-            fallback: fallbackAspectRatio
+            fallback: fallbackAspectRatio,
+            fillsWidth: false
         )
     }
 }
@@ -1938,7 +1987,8 @@ private struct MessageMediaTile: View {
         .frame(width: size.width, height: size.height)
         .clipped()
         .contentShape(Rectangle())
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             // The auto-download policy gates only the automatic fetch: a
             // cached thumbnail always renders, and a tap always downloads.
@@ -2145,7 +2195,8 @@ private struct MessageReplyMediaThumbnail: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             await loadThumbnailIfAllowed()
         }
@@ -2459,7 +2510,8 @@ private struct MessageVideoAttachmentView: View {
         .onTapGesture {
             Task { await loadAndPlay(scale: displayScale) }
         }
-        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible)) {
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
             guard isTimelineRowVisible else { return }
             // Auto-download per the Videos matrix row: fetch, cache, and
             // render the poster so the bubble shows the download happened;
@@ -2817,7 +2869,8 @@ private struct MessageAudioAttachmentView: View {
         }
         .task(id: TimelineMediaTaskID(
             contentID: metadataCacheKey,
-            isVisible: isTimelineRowVisible
+            isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
         )) {
             guard isTimelineRowVisible else { return }
             await loadMetadataIfNeeded()
@@ -2828,15 +2881,10 @@ private struct MessageAudioAttachmentView: View {
         }
     }
 
-    /// Downloads the payload ahead of the first play tap when policy allows —
-    /// voice messages always, other audio per the auto-download matrix.
+    /// Prefetches audio only when the Audio auto-download preference allows it.
     private func prefetchIfNeeded() async {
         guard player == nil, !isLoading else { return }
-        let isVoice = AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: item.durationSeconds)
-        guard AudioAutoDownloadPolicy.shouldPrefetch(
-            isVoiceMessage: isVoice,
-            matrixAllows: MediaAutoDownloadStore.shared.shouldAutoDownload(.audio)
-        ) else { return }
+        guard MediaAutoDownloadStore.shared.shouldAutoDownload(.audio) else { return }
         guard MediaPrefetchRegistry.claim(metadataCacheKey) else { return }
         guard let data = try? await onLoadMedia.data(for: item, explicit: false) else {
             MediaPrefetchRegistry.release(metadataCacheKey)
@@ -3086,6 +3134,7 @@ private enum MessageAudioMetadataCache {
 }
 
 private struct MessageDocumentAttachmentView: View {
+    @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let width: CGFloat
@@ -3140,6 +3189,11 @@ private struct MessageDocumentAttachmentView: View {
         .accessibilityLabel("Open attachment")
         .sheet(item: $shareItem) { shareItem in
             MessageDocumentShareSheet(url: shareItem.url)
+        }
+        .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isTimelineRowVisible,
+            policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision)) {
+            await onLoadMedia.prefetchDocument(item, isVisible: isTimelineRowVisible,
+                allowed: MediaAutoDownloadStore.shared.shouldAutoDownload(.document))
         }
     }
 
@@ -3423,19 +3477,14 @@ private enum FullscreenMediaPreparationError: Error {
 }
 
 enum MessageMediaFullscreenPresentation {
-    /// Pixel budget for a fullscreen decode derived from the longest native
-    /// screen edge. The fullscreen view only ever renders the image
-    /// `scaledToFit` within the screen, so a screen-sized decode is visually
-    /// lossless for presentation while capping the worst-case bitmap
-    /// allocation. Pure helper kept separate from `UIScreen` so it stays
-    /// testable and free of MainActor isolation.
+    /// Leave detail for zooming, with a hard ceiling on peer-controlled bitmap allocation.
     static func fullscreenMaxPixelSize(forLongestScreenEdge longestEdge: CGFloat) -> Int {
         guard longestEdge.isFinite, longestEdge >= 1 else { return 1 }
-        return max(1, Int(longestEdge.rounded(.up)))
+        return Int(min(4096, longestEdge * 2).rounded(.up))
     }
 
-    /// Decodes attacker-controlled image bytes off the MainActor, bounded to a
-    /// screen-sized pixel budget. Mirrors the thumbnail/grid hardening
+    /// Decodes attacker-controlled image bytes off the MainActor, bounded to the
+    /// fullscreen pixel budget. Mirrors the thumbnail/grid hardening
     /// (`MessageMediaThumbnailDecoder`) so the fullscreen path never performs a
     /// full-resolution decode on the MainActor, and a crafted high-megapixel
     /// image cannot allocate an unbounded bitmap on the UI actor.
@@ -3486,6 +3535,7 @@ struct MessageMediaFullscreenGalleryView: View {
     let onDismiss: () -> Void
 
     @State private var selectedItemID: String
+    @State private var zoomedItemID: String?
     @State private var dismissDragOffset: CGFloat = 0
     @State private var preparedMedia: FullscreenMediaPrepared?
     @State private var mediaShare: FullscreenMediaShare?
@@ -3524,7 +3574,11 @@ struct MessageMediaFullscreenGalleryView: View {
                         isSelected: item.id == selectedItemID,
                         initialImageData: gallery.initialData(for: item),
                         onLoadMedia: onLoadMedia,
-                        onToggleChrome: toggleChrome
+                        onToggleChrome: toggleChrome,
+                        onZoomChanged: { zoomed in
+                            if zoomed, item.id == selectedItemID { zoomedItemID = item.id }
+                            else if zoomedItemID == item.id { zoomedItemID = nil }
+                        }
                     )
                     .tag(item.id)
                 }
@@ -3549,7 +3603,11 @@ struct MessageMediaFullscreenGalleryView: View {
         }
         .offset(y: dismissDragOffset)
         .opacity(1 - min(dismissDragOffset / 420, 0.35))
-        .simultaneousGesture(swipeDownToDismissGesture)
+        .simultaneousGesture(swipeDownToDismissGesture, including: zoomedItemID == nil ? .all : .subviews)
+        .onChange(of: selectedItemID) { _, _ in
+            zoomedItemID = nil
+            dismissDragOffset = 0
+        }
         .task(id: selectedItemID) { await prepareSelectedMedia() }
         .sheet(item: $mediaShare) { share in
             ActivityShareSheet(items: [share.url])
@@ -3707,6 +3765,7 @@ private struct MessageMediaFullscreenPage: View {
     let initialImageData: Data?
     let onLoadMedia: ConversationMediaLoader
     let onToggleChrome: () -> Void
+    let onZoomChanged: (Bool) -> Void
 
     var body: some View {
         if item.isVideo {
@@ -3718,9 +3777,11 @@ private struct MessageMediaFullscreenPage: View {
         } else {
             MessageMediaFullscreenImagePage(
                 item: item,
+                isSelected: isSelected,
                 initialImageData: initialImageData,
                 onLoadMedia: onLoadMedia,
-                onToggleChrome: onToggleChrome
+                onToggleChrome: onToggleChrome,
+                onZoomChanged: onZoomChanged
             )
         }
     }
@@ -3855,7 +3916,9 @@ private struct MessageMediaFullscreenVideoPage: View {
 private struct MessageMediaFullscreenImagePage: View {
     @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
+    let isSelected: Bool
     let onLoadMedia: ConversationMediaLoader
+    let onZoomChanged: (Bool) -> Void
 
     @State private var imageData: Data?
     @State private var image: UIImage?
@@ -3868,13 +3931,17 @@ private struct MessageMediaFullscreenImagePage: View {
 
     init(
         item: MessageMediaAttachment,
+        isSelected: Bool,
         initialImageData: Data?,
         onLoadMedia: ConversationMediaLoader,
-        onToggleChrome: @escaping () -> Void
+        onToggleChrome: @escaping () -> Void,
+        onZoomChanged: @escaping (Bool) -> Void
     ) {
         self.item = item
+        self.isSelected = isSelected
         self.onLoadMedia = onLoadMedia
         self.onToggleChrome = onToggleChrome
+        self.onZoomChanged = onZoomChanged
         // Do NOT decode here. Decoding attacker-controlled bytes is deferred to
         // `loadImageIfNeeded`, which runs the decode off the MainActor and
         // bounded to a screen-sized pixel budget. Stash the raw initial bytes
@@ -3894,11 +3961,8 @@ private struct MessageMediaFullscreenImagePage: View {
                 WNMediaSurface().ignoresSafeArea()
 
                 if let image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .simultaneousGesture(TapGesture().onEnded { onToggleChrome() })
+                    ZoomableMediaImage(image: image, isSelected: isSelected,
+                        onTap: onToggleChrome, onZoomChanged: onZoomChanged)
                 } else if isLoading {
                     ProgressView()
                 } else if didFail {
@@ -3910,13 +3974,15 @@ private struct MessageMediaFullscreenImagePage: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task(id: item.id) {
+            .task(id: TimelineMediaTaskID(contentID: item.id, isVisible: isSelected)) {
+                guard isSelected else { return }
                 await loadImageIfNeeded(viewSize: proxy.size, scale: displayScale)
             }
         }
     }
 
     private func loadImageIfNeeded(viewSize: CGSize, scale: CGFloat, force: Bool = false) async {
+        guard isSelected else { return }
         guard image == nil || force else { return }
         let productTicket = appState.productAnalytics.ticket()
         var productOutcome: ProductOutcome = .cancelled
@@ -3944,7 +4010,7 @@ private struct MessageMediaFullscreenImagePage: View {
         didFail = false
         defer { isLoading = false }
         do {
-            let data = try await onLoadMedia.data(for: item)
+            guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected) else { return }
             guard !Task.isCancelled else { return }
             guard let decoded = await MessageMediaFullscreenPresentation.decodedImage(
                 from: data,

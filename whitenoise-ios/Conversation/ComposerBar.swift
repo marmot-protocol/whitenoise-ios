@@ -113,6 +113,16 @@ nonisolated enum ComposerAvailabilityPresentation {
     static func showsInput(disabledMessage: String?) -> Bool {
         disabledMessage == nil
     }
+
+    static func awaitsLiveConversationState(
+        usesLiveWindow: Bool,
+        hasWindowSnapshot: Bool,
+        hasWindowSubscription: Bool,
+        isLocallyReset: Bool
+    ) -> Bool {
+        guard usesLiveWindow, !isLocallyReset else { return false }
+        return !hasWindowSnapshot || !hasWindowSubscription
+    }
 }
 
 nonisolated struct ComposerAttachmentButtonAppearance: Equatable {
@@ -268,8 +278,7 @@ struct ComposerBar: View {
                             .frame(maxWidth: .infinity)
                             .compatibleInputRoundedChrome(
                                 cornerRadius: controlSize / 2,
-                                interactive: false,
-                                usesRegularGlass: true
+                                interactive: false
                             )
                         }
                     }
@@ -442,7 +451,8 @@ struct ComposerBar: View {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .frame(width: 30, height: controlSize)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.string("Expand editor"))
@@ -558,7 +568,7 @@ struct ComposerBar: View {
             .font(.system(size: size, weight: weight))
             .foregroundStyle(tone.color)
             .frame(width: controlSize, height: controlSize)
-            .compatibleInputCircleChrome(interactive: interactive, usesRegularGlass: true)
+            .compatibleInputCircleChrome(interactive: interactive)
     }
 
     private var hasSendableContent: Bool {
@@ -904,11 +914,10 @@ private struct ComposerAttachmentUnavailableTooltip: View {
 
 nonisolated enum ComposerExpandedEditorPresentation {
     static let minimumExpandCharacterCount = 180
-    static let minimumExpandLineCount = 4
 
     static func shouldShowExpandButton(for text: String) -> Bool {
         text.count >= minimumExpandCharacterCount
-            || text.split(separator: "\n", omittingEmptySubsequences: false).count >= minimumExpandLineCount
+            || text.contains(where: \.isNewline)
     }
 }
 

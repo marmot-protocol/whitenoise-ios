@@ -599,6 +599,8 @@ struct GroupDetailsView: View {
                     action: openConversationSearch
                 )
             }
+            // Form cells clip overflow; leave room for the glass press expansion.
+            .padding(.vertical, 12)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         }
@@ -833,23 +835,8 @@ struct GroupDetailsView: View {
     }
 
     private var memberSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search members", text: $memberSearchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !memberSearchText.isEmpty {
-                Button {
-                    memberSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear member search")
-            }
-        }
+        WNSearchField(query: $memberSearchText, prompt: "Search members")
+            .wnInputRow()
     }
 
     // MARK: - Technical details

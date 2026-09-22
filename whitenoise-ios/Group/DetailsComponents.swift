@@ -25,17 +25,14 @@ struct DetailsActionButton: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
             }
-            .buttonStyle(.bordered)
+            .wnSecondaryButtonStyle()
             .disabled(isDisabled || isLoading)
         case .circular:
             VStack(spacing: 6) {
                 Button(action: action) {
                     icon
                         .frame(width: 44, height: 44)
-                        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .circle)
-                        .overlay {
-                            Circle().strokeBorder(Color.primary.opacity(0.10), lineWidth: 0.5)
-                        }
+                        .compatibleInputCircleChrome()
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)

@@ -90,16 +90,7 @@ struct OnboardingAvatarWebImagePicker: View {
                 }
 
                 searchCard {
-                    TextField("Search Images", text: $query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .background(
-                            Color(uiColor: .tertiarySystemGroupedBackground),
-                            in: .rect(cornerRadius: 10)
-                        )
+                    WNSearchField(query: $query, prompt: "Search Images")
                 }
 
                 if isSearching {
@@ -235,7 +226,7 @@ struct OnboardingAvatarWebImagePicker: View {
                     if selectedURL == result.imageURL {
                         Image(systemName: "checkmark")
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(WNNeutralAccent.foreground)
                             .padding(5)
                             .background(Color.accentColor, in: .circle)
                             .overlay(Circle().stroke(.white, lineWidth: 2))

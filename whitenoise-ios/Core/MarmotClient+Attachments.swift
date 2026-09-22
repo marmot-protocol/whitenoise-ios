@@ -33,18 +33,15 @@ extension MarmotClient {
     func acquireAttachmentData(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
                                explicit: Bool) async throws -> Data? {
         if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) { return data }
-        let status = try await marmot.attachmentTransferSnapshot(accountRef: accountRef,
-            groupIdHex: groupID, targets: [target]).items.first
-        guard let status, status.state != .unavailable else { throw AttachmentReadError.unavailable }
-        if !explicit, [.removed, .cancelled, .failed, .policyBlocked].contains(status.state) {
-            throw AttachmentReadError.unavailable
-        }
-        // Partial per-type/network policies cannot enqueue an automatic MDK job yet.
-        // Keep the existing visible-media path instead of escalating an automatic fetch to explicit work.
-        if !explicit, [.notRequested, .paused].contains(status.state) { return nil }
-        if [.notRequested, .paused, .removed, .cancelled, .failed, .policyBlocked].contains(status.state) {
+        if explicit {
             guard try await marmot.downloadAttachmentAgain(accountRef: accountRef, groupIdHex: groupID,
                 target: target) != nil else { throw AttachmentReadError.unavailable }
+        } else {
+            let request = try await marmot.requestAutomaticAttachment(accountRef: accountRef,
+                groupIdHex: groupID, target: target)
+            guard AttachmentAcquisitionPresentation.canAwait(request.status.state) else {
+                throw AttachmentReadError.unavailable
+            }
         }
         let subscription = try await marmot.subscribeAttachmentTransfers(accountRef: accountRef,
             groupIdHex: groupID, targets: [target])
@@ -58,7 +55,8 @@ extension MarmotClient {
                     guard let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target)
                     else { throw AttachmentReadError.stale }
                     return data
-                case .unavailable, .cancelled, .removed, .failed, .policyBlocked, .paused:
+                case .unavailable, .cancelled, .removed, .failed, .policyBlocked, .paused,
+                     .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted, .notRequested:
                     throw AttachmentReadError.unavailable
                 default: break
                 }
@@ -110,5 +108,16 @@ extension MarmotClient {
             cursor = page.hasMore ? page.nextCursor : nil
         } while cursor != nil
         throw AttachmentReadError.unavailable
+    }
+}
+
+nonisolated enum AttachmentAcquisitionPresentation {
+    static func canAwait(_ state: AttachmentTransferStateFfi) -> Bool {
+        switch state {
+        case .queued, .downloading, .verifyingCiphertext, .decrypting, .verifyingPlaintext,
+             .ready, .retryScheduled: true
+        case .unavailable, .notRequested, .paused, .failed, .policyBlocked, .cancelled, .removed,
+             .previouslyAcquiredUnavailable, .completedUnretained, .retryExhausted: false
+        }
     }
 }

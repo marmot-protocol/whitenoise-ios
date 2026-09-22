@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 @preconcurrency import MarmotKit
 
-struct TimelineReadMarkResult {
+nonisolated struct TimelineReadMarkResult {
     let messageIdHex: String
     let row: ChatListRowFfi?
     let succeeded: Bool
@@ -84,12 +84,11 @@ nonisolated final class MarmotClient: Sendable {
         self.cursorPersistence = cursorPersistence
         self.telemetryConfig = telemetryConfig
         self.productConfig = .current()
-        self.marmot = try Marmot.newWithClientName(
+        self.marmot = try Marmot.newWithConfiguration(
             rootPath: rootPath,
             relayUrls: relayUrls,
-            clientName: "whitenoise",
-            cursorPersistence: cursorPersistence,
-            secretStore: nil
+            options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
+                attachmentAcquisitionMode: .hostManaged)
         )
         _ = try marmot.setAuditLogTrackerConfig(
             config: telemetryConfig.auditTrackerConfig()
@@ -128,6 +127,15 @@ nonisolated final class MarmotClient: Sendable {
     func onboardingSnapshot(accountID: String) async throws -> OnboardingSnapshotFfi? {
         try await Task.detached { [marmot] in
             try marmot.onboardingSnapshot(accountRef: accountID)
+        }.value
+    }
+
+    /// Reads the durable generated-identity setup state off MainActor. Demo
+    /// setup uses this local milestone instead of guessing when its KeyPackage
+    /// publication has finished.
+    func accountSetupReadiness(accountRef: String) async throws -> AccountSetupReadinessFfi {
+        try await Task.detached { [marmot, accountRef] in
+            try marmot.accountSetupReadiness(accountRef: accountRef)
         }.value
     }
 

@@ -15,7 +15,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func timelineConversionKeepsContentTokens() {
         let record = TimelineMessageRecordFfi(
-            hasReports: false, messageIdHex: "01",
+            clientToken: nil, hasReports: false, messageIdHex: "01",
             sourceMessageIdHex: "02",
             sourceEpoch: 7,
             retentionSeconds: 300,
@@ -225,7 +225,7 @@ struct MarkdownTokenThreadingTests {
         retentionExpiresAt: UInt64?
     ) -> TimelineMessageRecordFfi {
         TimelineMessageRecordFfi(
-            hasReports: false, messageIdHex: "01",
+            clientToken: nil, hasReports: false, messageIdHex: "01",
             sourceMessageIdHex: "02",
             sourceEpoch: sourceEpoch,
             retentionSeconds: retentionSeconds,

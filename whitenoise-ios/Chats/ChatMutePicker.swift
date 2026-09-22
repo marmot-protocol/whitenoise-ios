@@ -18,14 +18,15 @@ struct ChatMutePicker: UIViewControllerRepresentable {
 
     static func dismantleUIViewController(_ controller: Controller, coordinator: ()) {
         let picker = controller.picker
-        controller.picker = nil
-        controller.dismissPicker()
+        controller.tearDown()
         Task { @MainActor in picker?.isPresented = false }
     }
 
     final class Controller: UIViewController, UIAdaptivePresentationControllerDelegate {
         var picker: ChatMutePicker?
         private var alert: UIAlertController?
+        private var state = ChatMutePickerState()
+        private var selectedDuration: ChatMuteDuration?
 
         override func loadView() {
             view = UIView()
@@ -41,7 +42,9 @@ struct ChatMutePicker: UIViewControllerRepresentable {
 
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
-            alert?.popoverPresentationController?.sourceRect = view.bounds
+            if state.canUpdateAnchor, alert?.isBeingDismissed == false {
+                alert?.popoverPresentationController?.sourceRect = view.bounds
+            }
             updatePresentation()
         }
 
@@ -51,7 +54,8 @@ struct ChatMutePicker: UIViewControllerRepresentable {
                 return
             }
             guard alert == nil, presentedViewController == nil,
-                  viewIfLoaded?.window != nil, !view.bounds.isEmpty else { return }
+                  viewIfLoaded?.window != nil, !view.bounds.isEmpty,
+                  state.beginPresentation() else { return }
 
             let alert = UIAlertController(
                 title: L10n.string("Mute Notifications"),
@@ -60,14 +64,11 @@ struct ChatMutePicker: UIViewControllerRepresentable {
             )
             for duration in ChatMuteDuration.allCases {
                 alert.addAction(UIAlertAction(title: duration.title, style: .default) { [weak self] _ in
-                    self?.alert = nil
-                    picker.onSelect(duration)
-                    picker.isPresented = false
+                    self?.select(duration)
                 })
             }
             alert.addAction(UIAlertAction(title: L10n.string("Cancel"), style: .cancel) { [weak self] _ in
-                self?.alert = nil
-                picker.isPresented = false
+                self?.dismissPicker()
             })
             if let popover = alert.popoverPresentationController {
                 popover.sourceView = view
@@ -80,14 +81,62 @@ struct ChatMutePicker: UIViewControllerRepresentable {
         }
 
         func dismissPicker() {
-            guard let alert else { return }
-            self.alert = nil
-            alert.dismiss(animated: true)
+            guard state.beginDismissal() else { return }
+            completeDismissal()
+        }
+
+        private func select(_ duration: ChatMuteDuration) {
+            guard state.beginDismissal() else { return }
+            selectedDuration = duration
+            completeDismissal()
+        }
+
+        private func completeDismissal() {
+            guard let alert, alert.presentingViewController != nil else {
+                finishDismissal()
+                return
+            }
+            // An alert action may already have started UIKit's dismissal.
+            if alert.isBeingDismissed, let transition = alert.transitionCoordinator,
+               transition.animate(alongsideTransition: nil, completion: { [weak self] _ in
+                   self?.finishDismissal()
+               }) {
+                return
+            }
+            alert.dismiss(animated: true) { [weak self] in
+                self?.finishDismissal()
+            }
+        }
+
+        private func finishDismissal() {
+            guard state.finish() else { return }
+            alert = nil
+            let duration = selectedDuration
+            selectedDuration = nil
+            guard let picker else { return }
+            // Removing the row's presenter is safe only after UIKit finishes.
+            if let duration, picker.isPresented { picker.onSelect(duration) }
+            picker.isPresented = false
+        }
+
+        func tearDown() {
+            picker = nil
+            selectedDuration = nil
+            _ = state.finish()
+            alert?.dismiss(animated: false)
+            alert = nil
+        }
+
+        func presentationControllerWillDismiss(_ presentationController: UIPresentationController) {
+            guard state.beginDismissal() else { return }
+            presentationController.presentedViewController.transitionCoordinator?
+                .notifyWhenInteractionChanges { [weak self] context in
+                    if context.isCancelled { self?.state.cancelInteractiveDismissal() }
+                }
         }
 
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-            alert = nil
-            picker?.isPresented = false
+            finishDismissal()
         }
     }
 }

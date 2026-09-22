@@ -123,7 +123,7 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.21
 ```
 
-The app now pins the formal MarmotKit 0.10.2 release. For local reproduction only,
+The app now pins the formal MarmotKit 0.10.4 release. For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
@@ -140,10 +140,13 @@ Attachment libraries use bounded MDK attachment-history pages and preserve the o
 message/slot identity and collection baseline. Deletions and scope changes discard
 pages; additions keep existing cursors valid. Read retained bytes through opaque
 MDK references, discarding partial bytes on revocation. Never silently retry a
-removed/cancelled attachment from an automatic UI load. AttachmentPolicyBridge
-serializes the per-account automatic gate with iOS media/network preferences;
-partial policies retain the legacy visible-media download path until MDK exposes
-per-category automatic requests. Do not escalate automatic loads to explicit jobs.
+removed/cancelled attachment from an automatic UI load. AttachmentPolicyBridge revokes per-account permissions in event order, then grants
+only the captured generation against current media/network preferences. Construct
+all runtimes in HostManaged mode before startup. Automatic loads use original-slot
+requestAutomaticAttachment and opaque local reads, never legacy downloadMedia or
+explicit retry on a read miss. Voice notes follow the Audio preference. Preserve
+terminal acquisition states until an explicit user retry. Do not escalate automatic
+loads to explicit jobs.
 Conversation-open performance ends at rendered layout, uses the navigation consent
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 

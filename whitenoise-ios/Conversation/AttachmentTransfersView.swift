@@ -49,7 +49,8 @@ struct AttachmentTransfersView: View {
                                 Button("Download again") { perform(item, control: .retry) }
                             }
                         }
-                        .buttonStyle(.bordered)
+                        .wnSecondaryButtonStyle()
+                        .controlSize(.large)
                         .disabled(busy)
                     } else { ProgressView().controlSize(.small) }
                 }
@@ -121,6 +122,9 @@ nonisolated enum AttachmentTransferPresentation {
         case .cancelled: L10n.string("Cancelled")
         case .paused: L10n.string("Paused")
         case .removed: L10n.string("Download removed")
+        case .previouslyAcquiredUnavailable: L10n.string("Download unavailable")
+        case .completedUnretained: L10n.string("Download not saved")
+        case .retryExhausted: L10n.string("Download retry limit reached")
         case .policyBlocked: L10n.string("Download limit reached")
         }
     }
