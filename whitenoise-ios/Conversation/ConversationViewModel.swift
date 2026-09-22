@@ -534,6 +534,15 @@ final class ConversationViewModel {
             groupMemberDetails: groupMemberDetails, myAccountId: myAccountId, fallbackSelfMembership: group.selfMembership)
     }
 
+    var isAwaitingLiveConversationState: Bool {
+        ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: usesConversationWindow,
+            hasWindowSnapshot: conversationWindow != nil,
+            hasWindowSubscription: windowSubscription != nil,
+            isLocallyReset: isLocallyReset
+        )
+    }
+
     var canSendMessages: Bool {
         guard timelineStore.canStageOutgoingMessage else { return false }
         if let header = conversationWindow?.header { return !isLocallyReset && header.capabilities.canSend && windowSubscription != nil }
@@ -579,6 +588,7 @@ final class ConversationViewModel {
         if group.selfMembership == .left {
             return GroupManagementPresentation.leftGroupComposerMessage
         }
+        if isAwaitingLiveConversationState { return nil }
         if isActiveParticipant { return L10n.string("Conversation unavailable") }
         return GroupManagementPresentation.inactiveGroupComposerMessage
     }

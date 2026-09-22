@@ -113,6 +113,16 @@ nonisolated enum ComposerAvailabilityPresentation {
     static func showsInput(disabledMessage: String?) -> Bool {
         disabledMessage == nil
     }
+
+    static func awaitsLiveConversationState(
+        usesLiveWindow: Bool,
+        hasWindowSnapshot: Bool,
+        hasWindowSubscription: Bool,
+        isLocallyReset: Bool
+    ) -> Bool {
+        guard usesLiveWindow, !isLocallyReset else { return false }
+        return !hasWindowSnapshot || !hasWindowSubscription
+    }
 }
 
 nonisolated struct ComposerAttachmentButtonAppearance: Equatable {
