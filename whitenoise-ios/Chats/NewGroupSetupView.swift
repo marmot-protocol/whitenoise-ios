@@ -14,33 +14,39 @@ struct NewGroupSetupView: View {
     @State private var retentionSeconds: UInt64 = 0
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
-    @State private var showGroupImagePicker = false
+    @State private var showPhotoMenu = false
+    @State private var isPreparingImage = false
+    @State private var imageError: String?
 
     var body: some View {
         Form {
             Section {
                 VStack(spacing: 0) {
-                    Button {
-                        showGroupImagePicker = true
-                    } label: {
+                    WNAvatarPhotoMenu(
+                        hasPhoto: groupImage != nil,
+                        isPresented: $showPhotoMenu
+                    ) {
                         WNAvatarPreview(
                             name: name,
                             image: groupImage?.thumbnail,
                             emptySystemImage: "person.2"
                         )
-                        .accessibilityHidden(true)
                     }
-                    .buttonStyle(.plain)
-                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-                    .disabled(model.isCreatingGroup)
-                    .accessibilityLabel("Set group image")
+                    .disabled(model.isCreatingGroup || isPreparingImage)
 
-                    Button(groupImage == nil ? "Add Photo" : "Change Photo") {
-                        showGroupImagePicker = true
+                    if isPreparingImage {
+                        ProgressView(GroupImageProgressPhase.preparing.label)
+                            .font(.footnote)
+                            .padding(.top)
                     }
-                    .wnAvatarActionButtonStyle()
-                    .padding(.top)
-                    .disabled(model.isCreatingGroup)
+
+                    if let imageError {
+                        Text(imageError)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.top)
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -120,17 +126,19 @@ struct NewGroupSetupView: View {
         .navigationDestination(isPresented: $showRetentionPicker) {
             RetentionPresetPickerView(selection: $retentionSeconds)
         }
-        .sheet(isPresented: $showGroupImagePicker) {
-            GroupImageURLSheet(
-                hasCurrentImage: groupImage != nil,
-                currentURL: nil,
-                initialDraft: groupImage,
-                onSave: GroupImageSaveSubmitter { draft in
-                    groupImage = draft
-                }
-            )
-            .appAppearance()
-        }
+        .wnPhotoSourceMenu(
+            isPresented: $showPhotoMenu,
+            hasPhoto: groupImage != nil,
+            // The selected bytes ride the encrypted group-image component, so
+            // nothing here is published to a public host.
+            confirmsPublicUpload: false,
+            onError: { imageError = UserFacingError.message(for: $0) },
+            onRemove: {
+                imageError = nil
+                groupImage = nil
+            },
+            onSelect: prepareImage
+        )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 WNButton(
@@ -155,11 +163,32 @@ struct NewGroupSetupView: View {
         .navigationBarBackButtonHidden(model.isCreatingGroup)
     }
 
+    private func prepareImage(_ selection: WNPhotoSourceSelection) {
+        imageError = nil
+        isPreparingImage = true
+        Task {
+            defer { isPreparingImage = false }
+            do {
+                groupImage = try await GroupImageDraftProcessor.prepare(
+                    data: selection.data,
+                    fileName: selection.fileName,
+                    typeIdentifier: selection.typeIdentifier,
+                    sourceURL: selection.sourceURL
+                )
+                Haptics.selection()
+            } catch {
+                imageError = UserFacingError.message(for: error)
+                Haptics.error()
+            }
+        }
+    }
+
     private var canCreate: Bool {
         AddMembersPresentation.canCreate(
             stagedCount: model.groupSelection.count,
             hasUsableName: !NewGroupPresentation.normalizedName(name).isEmpty,
             isCreating: model.isCreatingGroup,
+            isPreparingImage: isPreparingImage,
             hasActiveAccount: appState.activeAccountRef != nil
         )
     }

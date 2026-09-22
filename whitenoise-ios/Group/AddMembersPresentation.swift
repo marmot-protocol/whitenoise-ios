@@ -88,14 +88,19 @@ nonisolated enum AddMembersPresentation {
 
     /// A group may start empty when it has a usable name. Unnamed groups still
     /// need at least one staged peer because an empty unnamed group has no useful
-    /// identity in the chat list.
+    /// identity in the chat list. Creating while a picked image is still being
+    /// downsampled would publish the group without it.
     static func canCreate(
         stagedCount: Int,
         hasUsableName: Bool,
         isCreating: Bool,
+        isPreparingImage: Bool,
         hasActiveAccount: Bool
     ) -> Bool {
-        (stagedCount > 0 || hasUsableName) && !isCreating && hasActiveAccount
+        (stagedCount > 0 || hasUsableName)
+            && !isCreating
+            && !isPreparingImage
+            && hasActiveAccount
     }
 
     /// "Invite" is enabled when no invite is in flight and at least one
