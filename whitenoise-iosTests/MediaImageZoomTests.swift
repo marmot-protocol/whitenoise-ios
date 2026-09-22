@@ -27,9 +27,17 @@ final class MediaImageZoomTests: XCTestCase {
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         let view = makeViewer()
         let poster = try XCTUnwrap(view.imageView.image)
-        let id = UUID()
+        let previousReservations = GiphyPlaybackBudget.shared.activePlaybackCount
+        let reservation = await GiphyPlaybackBudget.shared.acquire()
+        let id = try XCTUnwrap(reservation)
+        let playback = AttachmentGIF.Playback(data: data as Data, id: id)
+        defer { playback.stop() }
+        var completionFrame: UIImage?
         view.setZoomScale(2.5, animated: false)
-        view.displayGIF(data: data as Data, id: id)
+        view.displayGIF(data: data as Data, id: id) {
+            completionFrame = view.imageView.image
+            playback.stop()
+        }
         defer { view.displayGIF(data: nil, id: nil) }
         var observedColors = Set<UInt8>()
         let deadline = ContinuousClock.now.advanced(by: .seconds(3))
@@ -45,6 +53,8 @@ final class MediaImageZoomTests: XCTestCase {
         XCTAssertEqual(observedColors, [0, 255], "The native view must display both GIF frames")
         try await Task.sleep(for: .milliseconds(600))
         let finalFrame = try XCTUnwrap(view.imageView.image)
+        XCTAssertTrue(completionFrame === finalFrame, "Release the slot on the final frame, not an earlier loop")
+        XCTAssertEqual(GiphyPlaybackBudget.shared.activePlaybackCount, previousReservations)
         try await Task.sleep(for: .milliseconds(250))
         XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
         view.display(poster)

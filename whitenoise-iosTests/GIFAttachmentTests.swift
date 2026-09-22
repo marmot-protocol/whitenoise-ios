@@ -1,4 +1,5 @@
 import ImageIO
+import MarmotKit
 import Testing
 import UIKit
 import UniformTypeIdentifiers

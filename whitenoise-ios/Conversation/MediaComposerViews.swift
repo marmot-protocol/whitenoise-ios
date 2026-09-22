@@ -537,7 +537,8 @@ private struct ComposerMediaPreviewPage: View {
                 AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
-                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit)
+                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
+                            onCompletion: playback.stop)
                     } else {
                         Image(uiImage: image).resizable().scaledToFit()
                     }
@@ -806,7 +807,8 @@ private struct MediaApprovalPage: View {
                 AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
-                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit)
+                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
+                            onCompletion: playback.stop)
                     } else {
                         Image(uiImage: image).resizable().scaledToFit()
                     }
