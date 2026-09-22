@@ -2164,7 +2164,7 @@ private struct MessageMediaTile: View {
                 maxPixelSize: maxPixelSize
             ) {
                 image = cachedThumbnail.image
-                gifData = item.mediaType == "image/gif" ? cachedThumbnail.sourceData : nil
+                gifData = item.isGIF ? cachedThumbnail.sourceData : nil
                 loadedImageID = item.id
                 didFail = false
                 return cachedThumbnail.sourceData
@@ -2200,7 +2200,7 @@ private struct MessageMediaTile: View {
             }
             guard !Task.isCancelled else { return nil }
             image = decoded
-            gifData = item.mediaType == "image/gif" ? data : nil
+            gifData = item.isGIF ? data : nil
             loadedImageID = item.id
             MessageMediaThumbnailDecoder.store(
                 decoded,
@@ -4094,7 +4094,7 @@ private struct MessageMediaFullscreenImagePage: View {
                 WNMediaSurface().ignoresSafeArea()
 
                 if let image {
-                    AttachmentGIFPlayback(data: item.mediaType == "image/gif" ? imageData : nil,
+                    AttachmentGIFPlayback(data: item.isGIF ? imageData : nil,
                         activity: isSelected ? .active : .inactive) { playback in
                         ZoomableMediaImage(image: image, isSelected: isSelected,
                             onTap: onToggleChrome, onZoomChanged: onZoomChanged,

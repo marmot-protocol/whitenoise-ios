@@ -279,6 +279,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentPolicy.isDecodableImageMediaType(mediaType)
     }
 
+    var isGIF: Bool {
+        MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
+    }
+
     var isVideo: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("video/")
     }
@@ -813,7 +817,9 @@ nonisolated enum MediaDraftProcessor {
         guard CGImageDestinationFinalize(destination) else { throw Failure.encodingFailed }
         guard encoded.length <= maxImageAttachmentBytes else { throw Failure.attachmentTooLarge(encoded.length) }
         var name = sanitizedFileName(fileName, fallbackStem: "animation", fallbackExtension: "gif")
-        if !name.lowercased().hasSuffix(".gif") { name += ".gif" }
+        if !name.lowercased().hasSuffix(".gif") {
+            name = "\((name as NSString).deletingPathExtension).gif"
+        }
         return MediaDraftAttachment(
             fileName: name, mediaType: "image/gif", data: encoded as Data, dim: dim,
             thumbhash: thumbnail.flatMap { ThumbHash.encodedString(from: $0) }, thumbnail: thumbnail

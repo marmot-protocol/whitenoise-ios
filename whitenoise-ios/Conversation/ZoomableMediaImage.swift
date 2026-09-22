@@ -51,7 +51,7 @@ final class MediaImageScrollView: WNZoomScrollView {
         guard playbackID != id else { return }
         playbackID = id
         if let data, let id {
-            imageView.play(data: data, id: id)
+            imageView.play(data: data, id: id, loopMode: .source)
         } else {
             imageView.stop()
             imageView.image = displayedImage
