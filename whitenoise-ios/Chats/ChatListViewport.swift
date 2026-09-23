@@ -12,6 +12,7 @@ final class ChatListViewport {
         let groupId: String?
         let offset: CGFloat
         let sequence: UInt64
+        var retainedMinY: CGFloat?
     }
 
     private var rows: [String: WeakRow] = [:]
@@ -90,7 +91,12 @@ final class ChatListViewport {
     }
 
     private func prepare(anchor: ChatListAnchorOutcomeFfi, sequence: UInt64) {
-        guard programmaticScroll == nil, let scrollView, !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else {
+        guard programmaticScroll == nil, let scrollView else {
+            pending = nil
+            return
+        }
+        let retainedRow: ChatListAnchorView? = if case .retained(let id, _) = anchor { rows[id]?.view } else { nil }
+        guard retainedRow != nil || !Self.isUserScrolling(scrollView) else {
             pending = nil
             return
         }
@@ -109,8 +115,9 @@ final class ChatListViewport {
             pending = Pending(groupId: id, offset: visible?.offset ?? 0, sequence: sequence)
         case .retained(let id, _):
             let top = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
-            let offset = rows[id]?.view.map { $0.convert($0.bounds, to: scrollView).minY - top }
-            pending = Pending(groupId: id, offset: offset ?? visible?.offset ?? 0, sequence: sequence)
+            let minY = retainedRow.map { $0.convert($0.bounds, to: scrollView).minY }
+            pending = Pending(groupId: id, offset: minY.map { $0 - top } ?? visible?.offset ?? 0,
+                              sequence: sequence, retainedMinY: minY)
         }
     }
 
@@ -120,12 +127,16 @@ final class ChatListViewport {
         guard !isRestoring, let pending, pending.sequence == view.sequence,
               pending.groupId == nil || pending.groupId == view.groupId,
               let scrollView, view.window != nil else { return }
-        guard !scrollView.isTracking, !scrollView.isDragging, !scrollView.isDecelerating else {
+        isRestoring = true
+        defer { isRestoring = false }
+        if Self.isUserScrolling(scrollView) {
+            if let previousMinY = pending.retainedMinY {
+                let delta = view.convert(view.bounds, to: scrollView).minY - previousMinY
+                scrollView.contentOffset.y += delta
+            }
             self.pending = nil
             return
         }
-        isRestoring = true
-        defer { isRestoring = false }
         let insets = scrollView.adjustedContentInset
         let target: CGFloat
         if pending.groupId == nil {
@@ -137,6 +148,10 @@ final class ChatListViewport {
         let maximum = max(-insets.top, scrollView.contentSize.height - scrollView.bounds.height + insets.bottom)
         scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: min(maximum, max(-insets.top, target))), animated: false)
         self.pending = nil
+    }
+
+    private static func isUserScrolling(_ scrollView: UIScrollView) -> Bool {
+        scrollView.isTracking || scrollView.isDragging || scrollView.isDecelerating
     }
 }
 
