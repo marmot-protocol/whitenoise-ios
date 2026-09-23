@@ -1,6 +1,42 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Choose Relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose Relays" } }
+      }
+    },
+    "Read relays (optional)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Read relays (optional)" } }
+      }
+    },
+    "Inbox relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Inbox relays" } }
+      }
+    },
+    "Review Replacement" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review Replacement" } }
+      }
+    },
+    "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list." } }
+      }
+    },
+    "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it." } }
+      }
+    },
     "Sign in to download attachments." : {
       "extractionState" : "manual",
       "localizations" : {

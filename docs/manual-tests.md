@@ -136,6 +136,12 @@ before every release tag.
       and shows relay.eu.whitenoise.chat and relay.us.whitenoise.chat before saving.
 - [ ] Enter another discovery relay: lookup does not publish any settings. A failed
       or inconclusive lookup does not enable default-relay publication.
+- [ ] Import a profile with both default relays marked read-only and only an onion
+      write relay. Use default relays is absent; Choose Relays opens an explicit
+      editor. Read and write fields remain separate. Review Replacement publishes
+      nothing; review the roles, then approve to replace the list. Closing the
+      editor or cancelling the proposal preserves the original list. Repeat for
+      inbox relays; invalid/private/retired selections fail without publication.
 - [ ] For both relay-list and inbox-list recovery, search a reachable relay that
       returns no declaration. After any earlier checks finish, Use default relays
       remains available alongside Look on another relay. Defaults publish only
