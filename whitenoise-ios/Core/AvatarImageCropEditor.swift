@@ -172,10 +172,12 @@ nonisolated enum AvatarImageCropper {
 struct AvatarImageCropEditor: View {
     @Environment(\.dismiss) private var dismiss
 
-    let source: AvatarImageCropSource
+    let source: AvatarImageCropSource?
+    var onClose: (() -> Void)?
     let onCrop: (AvatarImageCropSource, Data) -> Void
 
     @State private var image: UIImage?
+    @State private var isDecoding = true
     @State private var zoom: CGFloat = 1
     @State private var committedZoom: CGFloat = 1
     @State private var offset: CGSize = .zero
@@ -184,74 +186,86 @@ struct AvatarImageCropEditor: View {
     @State private var cropSide: CGFloat = AvatarImageCropper.maximumCropSide
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 24) {
-                Group {
-                    if let image {
-                        cropCanvas(image)
-                    } else {
-                        ContentUnavailableView("Image", systemImage: "photo")
-                    }
+        VStack(spacing: 24) {
+            Group {
+                if let image {
+                    cropCanvas(image)
+                } else if isDecoding {
+                    ProgressView()
+                        .controlSize(.large)
+                } else {
+                    ContentUnavailableView("Image", systemImage: "photo")
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .frame(maxHeight: AvatarImageCropper.maximumCropSide)
-                .onGeometryChange(for: CGFloat.self) { proxy in
-                    AvatarImageCropper.fittedCropSide(proxy.size)
-                } action: { side in
-                    resizeCrop(to: side)
-                }
-
-                Text("Pinch to zoom, then drag to position the image.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle("Crop image")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.backward")
-                            .imageScale(.large)
-                    }
-                    .accessibilityLabel(L10n.string("Back"))
-                }
+            .frame(maxHeight: AvatarImageCropper.maximumCropSide)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                AvatarImageCropper.fittedCropSide(proxy.size)
+            } action: { side in
+                resizeCrop(to: side)
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                WNButton(title: "Done") {
-                    guard let image,
-                          let data = AvatarImageCropper.croppedJPEG(
-                            image: image,
-                            cropSide: cropSide,
-                            zoom: zoom,
-                            offset: offset
-                          )
-                    else { return }
-                    onCrop(source, data)
-                    dismiss()
+
+            Text("Pinch to zoom, then drag to position the image.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("Crop image")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    close()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                        .imageScale(.large)
                 }
-                .disabled(image == nil)
-                .safeAreaPadding(.horizontal)
-                .padding(.vertical)
-                .safeAreaPadding(.bottom)
-            }
-            .background {
-                Color(.systemBackground)
-                    .ignoresSafeArea()
+                .accessibilityLabel(L10n.string("Back"))
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            WNButton(title: "Done") {
+                guard let source,
+                      let image,
+                      let data = AvatarImageCropper.croppedJPEG(
+                        image: image,
+                        cropSide: cropSide,
+                        zoom: zoom,
+                        offset: offset
+                      )
+                else { return }
+                onCrop(source, data)
+                close()
+            }
+            .disabled(image == nil)
+            .safeAreaPadding(.horizontal)
+            .padding(.vertical)
+            .safeAreaPadding(.bottom)
+        }
+        .background {
+            Color(.systemBackground)
+                .ignoresSafeArea()
+        }
+        .navigationBarBackButtonHidden()
         .interactiveDismissDisabled()
-        .task(id: source.id) {
-            let data = source.data
+        .task(id: source?.id) {
+            guard let data = source?.data else { return }
             let prepared = await Task.detached(priority: .userInitiated) {
                 AvatarImageCropper.normalizedImage(from: data)
             }.value
             guard !Task.isCancelled else { return }
             image = prepared
+            isDecoding = false
+        }
+    }
+
+    private func close() {
+        if let onClose {
+            onClose()
+        } else {
+            dismiss()
         }
     }
 

@@ -141,22 +141,11 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
                 Text("The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy.")
             }
             .sheet(isPresented: $showPhotoPicker) {
-                PhotoLibraryPickerView(
-                    selectionLimit: 1,
-                    filter: .images,
-                    onSelection: { selections in
-                        guard let selection = selections.first else { return }
-                        cropSource = AvatarImageCropSource(
-                            data: selection.data,
-                            fileName: selection.fileName,
-                            typeIdentifier: selection.typeIdentifier,
-                            sourceURL: nil
-                        )
-                    },
+                WNPhotoLibraryCropFlow(
+                    onCrop: select,
                     onError: onError,
-                    onDismiss: { showPhotoPicker = false }
+                    onClose: { showPhotoPicker = false }
                 )
-                .ignoresSafeArea()
             }
             .fileImporter(
                 isPresented: $showFileImporter,
@@ -166,24 +155,26 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
                 prepareImportedFile(result)
             }
             .sheet(isPresented: $showWebImagePicker) {
-                OnboardingAvatarWebImagePicker { url in
-                    prepareWebImage(url)
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                OnboardingAvatarWebImagePicker(onCrop: select, onError: onError)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .fullScreenCover(item: $cropSource) { source in
-                AvatarImageCropEditor(source: source) { source, croppedData in
-                    onSelect(
-                        WNPhotoSourceSelection(
-                            data: croppedData,
-                            fileName: source.fileName,
-                            typeIdentifier: "public.jpeg",
-                            sourceURL: source.sourceURL
-                        )
-                    )
+                NavigationStack {
+                    AvatarImageCropEditor(source: source, onCrop: select)
                 }
             }
+    }
+
+    private func select(_ source: AvatarImageCropSource, _ croppedData: Data) {
+        onSelect(
+            WNPhotoSourceSelection(
+                data: croppedData,
+                fileName: source.fileName,
+                typeIdentifier: "public.jpeg",
+                sourceURL: source.sourceURL
+            )
+        )
     }
 
     private func open(_ kind: WNPhotoSourceKind) {
@@ -224,20 +215,75 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
             onError(error)
         }
     }
+}
 
-    private func prepareWebImage(_ url: URL) {
-        Task {
-            do {
-                let data = try await RemoteImageFetch.imageData(for: url)
-                cropSource = AvatarImageCropSource(
-                    data: data,
-                    fileName: url.lastPathComponent,
-                    typeIdentifier: nil,
-                    sourceURL: url
-                )
-            } catch {
-                onError(error)
+struct WNPhotoLibraryCropFlow: View {
+    let onCrop: (AvatarImageCropSource, Data) -> Void
+    let onError: (Error) -> Void
+    let onClose: () -> Void
+
+    @State private var item: PhotosPickerItem?
+    @State private var isCropping = false
+    @State private var source: AvatarImageCropSource?
+
+    var body: some View {
+        NavigationStack {
+            PhotosPicker(selection: $item, matching: .images) {
+                EmptyView()
             }
+            .photosPickerStyle(.inline)
+            .photosPickerDisabledCapabilities(.selectionActions)
+            .photosPickerAccessoryVisibility(.hidden, edges: .all)
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle("Photos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onClose)
+                }
+            }
+            .navigationDestination(isPresented: $isCropping) {
+                AvatarImageCropEditor(source: source, onClose: onClose, onCrop: onCrop)
+            }
+        }
+        .task(id: item) {
+            await load(item)
+        }
+    }
+
+    private func load(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        source = nil
+        isCropping = true
+        do {
+            guard let file = try await item.loadTransferable(type: WNPhotoLibraryFile.self) else {
+                throw MediaDraftProcessor.Failure.unsupportedImage
+            }
+            try Task.checkCancellation()
+            source = AvatarImageCropSource(
+                data: file.data,
+                fileName: file.fileName,
+                typeIdentifier: item.supportedContentTypes.first?.identifier,
+                sourceURL: nil
+            )
+        } catch {
+            guard !Task.isCancelled else { return }
+            onError(error)
+            onClose()
+        }
+    }
+}
+
+private nonisolated struct WNPhotoLibraryFile: Transferable {
+    let data: Data
+    let fileName: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { received in
+            Self(
+                data: try AvatarImageCropper.boundedFileData(from: received.file),
+                fileName: received.file.lastPathComponent
+            )
         }
     }
 }

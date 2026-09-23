@@ -347,7 +347,8 @@ struct GroupImageURLSheet: View {
     @State private var isPreparing = false
     @State private var isSaving = false
     @State private var showPhotoPicker = false
-    @State private var cropSource: AvatarImageCropSource?
+    @State private var cropRequest: GroupImageCropRequest?
+    @State private var webImageLoad: Task<Void, Never>?
     @State private var progressPhase: GroupImageProgressPhase?
 
     private let resultColumns = [
@@ -400,39 +401,45 @@ struct GroupImageURLSheet: View {
                     .disabled(draft == nil || isBusy)
                 }
             }
+            .navigationDestination(isPresented: isCropping) {
+                AvatarImageCropEditor(source: cropRequest?.source, onCrop: prepareCroppedImage)
+            }
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(isSaving)
         .sheet(isPresented: $showPhotoPicker) {
-            PhotoLibraryPickerView(
-                selectionLimit: 1,
-                filter: .images,
-                onSelection: { selections in
-                    guard let selection = selections.first else { return }
-                    preparePhotoSelection(selection)
-                },
+            WNPhotoLibraryCropFlow(
+                onCrop: prepareCroppedImage,
                 onError: { error in
                     saveError = UserFacingError.message(for: error)
+                    Haptics.error()
                 },
-                onDismiss: {
-                    showPhotoPicker = false
-                }
+                onClose: { showPhotoPicker = false }
             )
-            .ignoresSafeArea()
         }
-        .fullScreenCover(item: $cropSource) { source in
-            AvatarImageCropEditor(source: source) { source, croppedData in
-                isPreparing = true
-                progressPhase = .preparing
-                Task {
-                    await prepare(
-                        data: croppedData,
-                        fileName: source.fileName,
-                        typeIdentifier: "public.jpeg",
-                        sourceURL: source.sourceURL
-                    )
-                }
+    }
+
+    private var isCropping: Binding<Bool> {
+        Binding(
+            get: { cropRequest != nil },
+            set: { isPresented in
+                guard !isPresented else { return }
+                cancelWebImageLoad()
+                cropRequest = nil
             }
+        )
+    }
+
+    private func prepareCroppedImage(_ source: AvatarImageCropSource, _ croppedData: Data) {
+        isPreparing = true
+        progressPhase = .preparing
+        Task {
+            await prepare(
+                data: croppedData,
+                fileName: source.fileName,
+                typeIdentifier: "public.jpeg",
+                sourceURL: source.sourceURL
+            )
         }
     }
 
@@ -664,32 +671,37 @@ struct GroupImageURLSheet: View {
         await save(nil)
     }
 
-    private func preparePhotoSelection(_ selection: PhotoLibrarySelection) {
-        saveError = nil
-        cropSource = AvatarImageCropSource(
-            data: selection.data,
-            fileName: selection.fileName,
-            typeIdentifier: selection.typeIdentifier,
-            sourceURL: nil
-        )
-    }
-
     private func prepareSearchResult(_ result: GroupImageSearchResult) {
         saveError = nil
-        Task {
+        webImageLoad?.cancel()
+        let request = GroupImageCropRequest.loading()
+        cropRequest = request
+        webImageLoad = Task {
             do {
                 let data = try await RemoteImageFetch.imageData(for: result.imageURL)
-                cropSource = AvatarImageCropSource(
-                    data: data,
-                    fileName: result.imageURL.lastPathComponent,
-                    typeIdentifier: nil,
-                    sourceURL: result.imageURL
+                try Task.checkCancellation()
+                cropRequest = GroupImageCropRequest.resolving(
+                    cropRequest,
+                    requestID: request.id,
+                    with: AvatarImageCropSource(
+                        data: data,
+                        fileName: result.imageURL.lastPathComponent,
+                        typeIdentifier: nil,
+                        sourceURL: result.imageURL
+                    )
                 )
             } catch {
+                guard !Task.isCancelled, cropRequest?.id == request.id else { return }
+                cropRequest = GroupImageCropRequest.failing(cropRequest, requestID: request.id)
                 saveError = UserFacingError.message(for: error)
                 Haptics.error()
             }
         }
+    }
+
+    private func cancelWebImageLoad() {
+        webImageLoad?.cancel()
+        webImageLoad = nil
     }
 
     private func prepare(
