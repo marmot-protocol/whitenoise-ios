@@ -242,6 +242,34 @@ struct OutgoingSendResponsivenessTests {
         try await harness.shutdown()
     }
 
+    @Test(arguments: [true, false])
+    func aJustSentAttachmentRendersFromItsOwnBytesOnceTheDurableRowArrives(retained: Bool) async throws {
+        let harness = try SendHarness()
+        harness.installWindow([])
+        let draft = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([4, 5, 6]), dim: nil)
+        let rowID = "msg:photo"
+        harness.store.mediaProjections.setPending([draft.displayItem], forRowId: rowID)
+        harness.store.applyPendingOutgoingMessage(tempId: "photo", record: harness.optimisticRecord(text: ""),
+            clientToken: "photo")
+        harness.store.markLocalSendSubmitted(tempId: "photo")
+        let plaintextSha256 = String(repeating: "d", count: 64)
+        if retained {
+            harness.store.mediaProjections.retainOwnSend(draft.displayItem, plaintextSha256: plaintextSha256)
+        }
+
+        var durable = harness.ownRecord(id: hexId(12), text: "", timelineAt: 70, delivered: true, token: "photo")
+        durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: plaintextSha256))]
+        harness.installWindow([durable])
+
+        let row = try #require(harness.store.timeline.first)
+        #expect(harness.store.protocolID(forDisplayID: rowID) == hexId(12))
+        #expect(harness.store.mediaProjections.pending(forRowId: row.id) == nil)
+        let items = harness.store.mediaItems(for: row)
+        #expect(items.first?.reference?.plaintextSha256 == plaintextSha256)
+        #expect(items.first?.localData == (retained ? Data([4, 5, 6]) : nil))
+        try await harness.shutdown()
+    }
+
     @Test func anAmbiguousCompletionKeepsTheBubbleClaimableRatherThanFailed() async throws {
         let harness = try SendHarness()
         harness.installWindow([])
@@ -416,6 +444,21 @@ private func accepted(_ id: String, token: String) -> LocalSendAcceptanceFfi {
 }
 
 private func hexId(_ n: Int) -> String { String(format: "%064x", n) }
+
+private func mediaReference(plaintextSha256: String) -> MediaAttachmentReferenceFfi {
+    MediaAttachmentReferenceFfi(
+        locators: [MediaLocatorFfi(kind: "blossom-v1", value: "https://example.com/photo")],
+        ciphertextSha256: String(repeating: "a", count: 64),
+        plaintextSha256: plaintextSha256,
+        nonceHex: String(repeating: "2", count: 24),
+        fileName: "photo.jpg",
+        mediaType: "image/jpeg",
+        version: .v1,
+        sourceEpoch: 1,
+        dim: nil,
+        thumbhash: nil
+    )
+}
 
 private let harnessGroupId = String(repeating: "c", count: 64)
 

@@ -907,6 +907,7 @@ final class ConversationViewModel {
         }
         composer.canSendMessages = { [weak self] in self?.canSendMessages ?? false }
         composer.canSendMediaAttachments = { [weak self] in self?.canSendMediaAttachments ?? false }
+        composer.currentGroupEpoch = { [weak self] in self?.conversationWindow?.header.epoch }
         composer.onError = { [weak self] message in self?.error = message }
     }
 
@@ -918,6 +919,7 @@ final class ConversationViewModel {
         groupDetailsTask?.cancel()
         tailRefreshTask?.cancel()
         streamWatcher.cancelAll()
+        composer.cancelDraftMediaUploads()
     }
 
     func start() async {
@@ -2696,7 +2698,16 @@ final class ConversationViewModel {
     /// Settles a staged send that never reached MDK — the bubble stays as the
     /// only copy of the user's message, in the same failed state a publish
     /// failure produces.
+    var draftMediaUploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] {
+        composer.draftMediaUploadStates
+    }
+
+    func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
+        composer.reconcileDraftMediaUploads(attachments)
+    }
+
     func failStagedSend(_ staged: StagedOutgoingSend) {
+        staged.cancelPreparedUploads()
         timelineStore.markFailed(tempId: staged.tempId)
         error = L10n.string("Send failed")
     }

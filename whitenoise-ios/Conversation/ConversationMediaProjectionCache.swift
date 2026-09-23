@@ -28,6 +28,7 @@ final class ConversationMediaProjectionCache {
     private var sourceIDs: [String: String] = [:]
     private var referencesByMessageId: [String: [MediaAttachmentOutcomeFfi]] = [:]
     private var pendingByRowId: [String: [MessageMediaAttachment]] = [:]
+    private var ownSends = OwnSendMediaStore()
     private var projectionsByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
 #if DEBUG
@@ -88,12 +89,14 @@ final class ConversationMediaProjectionCache {
 #endif
             return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId,
                 messageId: record.messageIdHex, sourceMessageId: sourceIDs[record.messageIdHex])
+                .map(ownSends.overlay)
         }
         guard case .media(let references) = MessageSemantics.classify(record) else { return [] }
 #if DEBUG
         buildCountForTesting += 1
 #endif
         return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
+            .map(ownSends.overlay)
     }
 
     // MARK: Resolved references (ingest write-path)
@@ -150,6 +153,11 @@ final class ConversationMediaProjectionCache {
 
     func removeAllPending() {
         pendingByRowId.removeAll()
+        ownSends = OwnSendMediaStore()
+    }
+
+    func retainOwnSend(_ item: MessageMediaAttachment, plaintextSha256: String) {
+        ownSends.retain(item, plaintextSha256: plaintextSha256)
     }
 
     // MARK: Projection maintenance
@@ -215,4 +223,52 @@ final class ConversationMediaProjectionCache {
         referencesByMessageId.values.reduce(0) { $0 + $1.count }
     }
 #endif
+}
+
+nonisolated struct OwnSendMediaStore {
+    static let itemLimit = 20
+    static let byteBudget = 64 * 1024 * 1024
+
+    private var itemsBySha: [String: MessageMediaAttachment] = [:]
+    private var order: [String] = []
+    private var retainedBytes = 0
+
+    mutating func retain(_ item: MessageMediaAttachment, plaintextSha256: String) {
+        guard let data = item.localData, data.count <= Self.byteBudget else { return }
+        let sha = plaintextSha256.lowercased()
+        if let previous = itemsBySha.removeValue(forKey: sha) {
+            retainedBytes -= previous.localData?.count ?? 0
+            order.removeAll { $0 == sha }
+        }
+        itemsBySha[sha] = item
+        order.append(sha)
+        retainedBytes += data.count
+        while order.count > Self.itemLimit || retainedBytes > Self.byteBudget {
+            let evicted = order.removeFirst()
+            retainedBytes -= itemsBySha.removeValue(forKey: evicted)?.localData?.count ?? 0
+        }
+    }
+
+    func overlay(_ item: MessageMediaAttachment) -> MessageMediaAttachment {
+        guard item.localData == nil,
+              let reference = item.reference,
+              let own = itemsBySha[reference.plaintextSha256.lowercased()]
+        else { return item }
+        var overlaid = MessageMediaAttachment(
+            id: item.id,
+            reference: reference,
+            fileName: item.fileName,
+            mediaType: item.mediaType,
+            dim: item.dim,
+            localData: own.localData,
+            thumbnail: own.thumbnail,
+            durationSeconds: own.durationSeconds,
+            waveformSamples: own.waveformSamples,
+            rejectionKind: item.rejectionKind,
+            localTarget: item.localTarget
+        )
+        overlaid.sourceHint = item.sourceHint
+        overlaid.downloadExplicitly = item.downloadExplicitly
+        return overlaid
+    }
 }
