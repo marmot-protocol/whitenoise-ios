@@ -42,7 +42,7 @@ nonisolated enum AppContainerConfig {
     // Existing Nostr identities may never have published to our messaging relays.
     static let discoveryRelays = seedRelays + [
         "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
-        "wss://relay.ditto.pub", "wss://relay.damus.io", "wss://relay.primal.net"
+        "wss://relay.ditto.pub", "wss://relay.primal.net"
     ]
 
     /// MIP-05 notification-server inbox relay stamped into push registrations.

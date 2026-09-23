@@ -106,8 +106,8 @@ before every release tag.
 ## Imported-account setup
 
 - [ ] Import an identity whose relay lists exist only on public discovery relays.
-      Verify the lists are found without publishing defaults, including on Ditto,
-      Damus, and Primal.
+      Verify the lists are found without publishing defaults, including on Ditto
+      and Primal.
 - [ ] Use Default Relays on an existing valid list needing another route: existing
       entries and read/write roles remain, and only missing defaults are appended.
       Include `ws://…onion` relay and inbox entries; their schemes and roles survive publication.
