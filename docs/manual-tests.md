@@ -106,11 +106,14 @@ before every release tag.
 ## Imported-account setup
 
 - [ ] Import an identity whose relay lists exist only on public discovery relays.
-      Verify the lists are found without publishing defaults.
+      Verify the lists are found without publishing defaults, including on Ditto,
+      Damus, and Primal.
 - [ ] Use Default Relays on an existing valid list needing another route: existing
       entries and read/write roles remain, and only missing defaults are appended.
       Include `ws://…onion` relay and inbox entries; their schemes and roles survive publication.
-      Invalid/retired entries must fail without publishing or silently deleting them.
+      Include Tailscale, custom-TLD, retired, and unparseable entries: original tags
+      survive publication. Unusable entries remain informational once a working
+      route exists; a proposal containing no supported route must fail before publication.
 
 - [ ] Import a valid nsec: the setup checklist opens before network preflight,
       and the key field and matching clipboard contents are cleared.

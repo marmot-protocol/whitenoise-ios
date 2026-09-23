@@ -258,7 +258,8 @@ struct AccountSetupTests {
 
     @Test func discoveryIncludesIndexers() {
         #expect(AppContainerConfig.discoveryRelays == AppContainerConfig.seedRelays + [
-            "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol"
+            "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
+            "wss://relay.ditto.pub", "wss://relay.damus.io", "wss://relay.primal.net"
         ])
     }
 
