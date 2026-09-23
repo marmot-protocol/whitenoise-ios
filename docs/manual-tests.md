@@ -147,6 +147,9 @@ before every release tag.
       Test a revoked/expired grant: old history is not shown as an empty new-donor
       state, and a new gift does not silently merge with the old Stripe Customer.
       Verify the production flavor cannot use a staging credential.
+- [ ] After a confirmed gift, refresh support while Stripe history is delayed and
+      verify the new receipt remains available on that screen. Erase App Data and
+      verify Donate no longer loads donor history in either flavor on that device.
 - [ ] Verify a monthly gift requests only name and email, shows the amount as a
       monthly recurring payment, supplies the management URL, and completes with
       `monthly` plus donor contact. Missing name/email must be handled in Apple Pay,
@@ -158,13 +161,13 @@ before every release tag.
       and verify the button refreshes to Donate with Apple Pay. On a device without
       Apple Pay (or where payments are restricted), verify a disabled flat gray capsule
       labeled Apple Pay unavailable appears, without glass, a border, a logo, or duplicate helper
-      message. It must not open Wallet or a payment sheet. Check the same state in
-      the debug scenario picker. No donation website fallback is offered.
+      message. It must not open Wallet or a payment sheet. Verify Other ways to
+      donate opens the IPF website when Apple Pay is unavailable or unconfigured.
 - [ ] After payment succeeds, verify the thank-you sheet. From See all billing activity,
       open the payment's Invoice sheet. Receipt lookup starts only when the invoice
       is opened; a slow lookup must not delay the success sheet or keep Donate busy.
       The invoice starts with a loading indicator, without flashing an error.
-      An available hosted receipt opens over HTTPS;
+      An available hosted receipt opens only on an approved Stripe HTTPS host;
       a pending or temporarily failed lookup offers Try Again and performs no
       automatic background polling. Dismissing a loading invoice must not mark it
       failed, and an older lookup must not replace a newer retry result.

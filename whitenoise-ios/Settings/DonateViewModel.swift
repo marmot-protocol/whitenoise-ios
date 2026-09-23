@@ -20,6 +20,12 @@ final class DonateViewModel {
     private(set) var completedPayments: [DonationPayment] = []
     private(set) var support = DonationSupportSummary()
     private(set) var supportState: DonationSupportLoadState = .none
+    var displayedPayments: DonationSupportSummary {
+        guard supportState != .accessExpired else { return DonationSupportSummary() }
+        // The receipt token is opaque, so a just-confirmed gift cannot be matched to a Stripe history ID.
+        // Keep its receipt row for this screen session even if history has not caught up yet.
+        return DonationSupportSummary(payments: completedPayments + support.payments)
+    }
     private(set) var historyNextCursor: String?
     private(set) var isLoadingMoreHistory = false
     private(set) var historyLoadFailed = false
@@ -201,6 +207,10 @@ final class DonateViewModel {
                     invoice: .receiptToken(success.receiptToken)
                 )
                 completedPayments.insert(payment, at: 0)
+                if success.historyAccessUnavailable {
+                    accessSaveFailed = true
+                    supportState = .failed
+                }
                 if let credential = success.credential, let accessStore {
                     do {
                         try accessStore.save(credential)
@@ -278,14 +288,29 @@ final class DonateViewModel {
             }
             supportState = .loading
             if credential.expiresAt.timeIntervalSinceNow < 30 * 86_400 {
-                let renewed = try await client.renew(
-                    token: credential.token, renewalID: UUID(), requestedAt: Int64(Date.now.timeIntervalSince1970)
-                )
-                credential = DonationAccessCredential(
-                    token: renewed.donorAccessToken,
-                    expiresAt: Date(timeIntervalSince1970: TimeInterval(renewed.donorAccessExpiresAt))
-                )
-                try accessStore.save(credential)
+                do {
+                    let renewed = try await client.renew(
+                        token: credential.token, renewalID: UUID(), requestedAt: Int64(Date.now.timeIntervalSince1970)
+                    )
+                    guard renewed.donorAccessToken == credential.token else {
+                        throw DonationClientError.invalidResponse
+                    }
+                    let updated = DonationAccessCredential(
+                        token: credential.token,
+                        expiresAt: Date(timeIntervalSince1970: TimeInterval(renewed.donorAccessExpiresAt))
+                    )
+                    try accessStore.save(updated)
+                    credential = updated
+                } catch DonationClientError.invalidDonorAccess {
+                    throw DonationClientError.invalidDonorAccess
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch DonationClientError.serviceUnavailable, DonationClientError.invalidResponse,
+                        DonationAccessStoreError.unavailable {
+                    // The existing grant remains valid, even if its new expiry was not persisted.
+                } catch {
+                    throw error
+                }
             }
             guard supportLoadID == loadID else { return }
 

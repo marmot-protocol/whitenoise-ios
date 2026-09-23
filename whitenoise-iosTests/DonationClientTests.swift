@@ -167,7 +167,7 @@ struct DonationClientTests {
     @Test(arguments: [
         ("pending", nil),
         ("failed", nil),
-        ("available", "https://dashboard.stripe.com/receipt/example")
+        ("available", "https://pay.stripe.com/receipts/example")
     ])
     func decodesReceiptStates(status: String, url: String?) async throws {
         let urlFragment = url.map { #", "url":"\#($0)""# } ?? ""
@@ -204,6 +204,22 @@ struct DonationClientTests {
             loader: loader
         )
 
+        await #expect(throws: DonationClientError.invalidResponse) {
+            try await client.receipt(for: "opaque-token")
+        }
+    }
+
+    @Test(arguments: [
+        "https://evil.example/receipt",
+        "https://pay.stripe.com.evil.example/receipt",
+        "https://pay.stripe.com:8443/receipt",
+        "https://user@pay.stripe.com/receipt"
+    ])
+    func rejectsUntrustedAvailableReceipt(_ url: String) async {
+        let loader = DonationLoaderStub(outcomes: [
+            .success(httpResponse(status: 200, body: #"{"status":"available","url":"\#(url)"}"#))
+        ])
+        let client = URLSessionDonationClient(baseURL: URL(string: "https://payments.example")!, loader: loader)
         await #expect(throws: DonationClientError.invalidResponse) {
             try await client.receipt(for: "opaque-token")
         }

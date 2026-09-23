@@ -82,6 +82,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
     private var authorization: DonationAuthorizationContext?
     private var receiptToken: String?
     private var pendingCredential: DonationAccessCredential?
+    private var pendingHistoryAccessUnavailable = false
     private var continuation: CheckedContinuation<DonationPaymentSuccess, Error>?
     private var isConfigured = false
 
@@ -141,6 +142,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         authorization = DonationAuthorizationContext(draft: draft, accessToken: credential?.token, accessNonce: nonce)
         receiptToken = nil
         pendingCredential = nil
+        pendingHistoryAccessUnavailable = false
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -187,12 +189,14 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         }
         guard context === self.context else { throw CancellationError() }
         if accessStore != nil {
-            guard let token = response.donorAccessToken, !token.isEmpty,
-                  let expiry = response.donorAccessExpiresAt,
-                  expiry > Int64(Date.now.timeIntervalSince1970) else {
-                throw DonationClientError.invalidResponse
+            if let token = response.donorAccessToken, !token.isEmpty,
+               let expiry = response.donorAccessExpiresAt,
+               expiry > Int64(Date.now.timeIntervalSince1970) {
+                pendingCredential = DonationAccessCredential(token: token, expiresAt: Date(timeIntervalSince1970: TimeInterval(expiry)))
+            } else {
+                pendingCredential = nil
+                pendingHistoryAccessUnavailable = authorization.accessToken == nil
             }
-            pendingCredential = DonationAccessCredential(token: token, expiresAt: Date(timeIntervalSince1970: TimeInterval(expiry)))
         }
         receiptToken = response.receiptToken
         return response.clientSecret
@@ -210,7 +214,11 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
                 finish(.failure(DonationPaymentCoordinatorError.paymentFailed))
                 return
             }
-            finish(.success(DonationPaymentSuccess(receiptToken: receiptToken, credential: pendingCredential)))
+            finish(.success(DonationPaymentSuccess(
+                receiptToken: receiptToken,
+                credential: pendingCredential,
+                historyAccessUnavailable: pendingHistoryAccessUnavailable
+            )))
         case .error:
             finish(.failure(DonationPaymentCoordinatorError.completionError(error)))
         case .userCancellation:
@@ -225,6 +233,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         authorization = nil
         receiptToken = nil
         pendingCredential = nil
+        pendingHistoryAccessUnavailable = false
         continuation?.resume(with: result)
     }
 }

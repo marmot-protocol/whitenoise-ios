@@ -10,6 +10,7 @@ nonisolated enum DonationApplePayAvailability: Equatable {
 nonisolated struct DonationPaymentSuccess: Equatable {
     let receiptToken: String
     var credential: DonationAccessCredential? = nil
+    var historyAccessUnavailable = false
 }
 
 nonisolated struct DonationAuthorizationContext: Equatable, Sendable {

@@ -6,9 +6,7 @@ struct DonationHistoryView: View {
     @State private var nextPageAttempt = 0
 
     private var allPayments: [DonationPayment] {
-        guard model.supportState != .accessExpired else { return [] }
-        let local = model.supportState == .loaded ? [] : model.completedPayments
-        return DonationSupportSummary(payments: local + model.support.payments).payments
+        model.displayedPayments.payments
     }
 
     var body: some View {

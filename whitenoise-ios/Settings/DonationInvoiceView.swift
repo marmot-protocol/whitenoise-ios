@@ -116,6 +116,19 @@ private struct DonationInvoiceWebView: UIViewRepresentable {
         var parent: DonationInvoiceWebView
         init(parent: DonationInvoiceWebView) { self.parent = parent }
 
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if navigationAction.targetFrame?.isMainFrame != false {
+                guard let url = navigationAction.request.url, DonationHostedDocumentURL.isAllowed(url) else {
+                    parent.loading = false
+                    parent.failed = true
+                    decisionHandler(.cancel)
+                    return
+                }
+            }
+            decisionHandler(.allow)
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
             parent.loading = false
         }

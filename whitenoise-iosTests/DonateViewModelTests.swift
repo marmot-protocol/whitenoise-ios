@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Testing
 @testable import whitenoise_ios
 
@@ -339,6 +340,45 @@ struct DonateViewModelTests {
         #expect(store.credential == grant)
         await model.refreshSupport()
         #expect(model.supportState == .loaded)
+        #expect(model.displayedPayments.payments.count == 2)
+        #expect(model.displayedPayments.payments.contains { $0.invoice == .receiptToken("receipt") })
+    }
+
+    @Test func failedRenewalKeepsValidHistoryAccess() async {
+        let store = DonationAccessStoreFake()
+        let credential = DonationAccessCredential(token: "grant", expiresAt: .now.addingTimeInterval(86_400))
+        store.credential = credential
+        let model = DonateViewModel(client: DonorReviewClientFake(), coordinator: nil, accessStore: store)
+        await model.refreshSupport()
+        #expect(model.supportState == .loaded)
+        #expect(model.support.payments.map(\.id) == ["inv.one"])
+        #expect(store.credential == credential)
+    }
+
+    @Test func missingNewHistoryGrantDoesNotTurnConfirmedGiftIntoFailure() async {
+        let store = DonationAccessStoreFake()
+        let coordinator = DonationCoordinatorFake(donationResult: .success(
+            DonationPaymentSuccess(receiptToken: "receipt", historyAccessUnavailable: true)
+        ))
+        let model = DonateViewModel(client: DonorReviewClientFake(), coordinator: coordinator, accessStore: store)
+        model.startDonation()
+        await waitUntil { !model.isProcessing }
+        #expect(model.paymentSucceeded)
+        #expect(model.errorMessage == nil)
+        #expect(model.accessSaveFailed)
+        #expect(model.supportState == .failed)
+        #expect(model.displayedPayments.payments.first?.invoice == .receiptToken("receipt"))
+    }
+
+    @Test func erasingDonationServiceTargetsEveryFlavorAndMarker() throws {
+        var captured: NSDictionary?
+        try DonationKeychainAccessStore.eraseAllAppData { query in
+            captured = query as NSDictionary
+            return errSecSuccess
+        }
+        #expect(captured?[kSecAttrService] as? String == "dev.ipf.whitenoise.donor-access")
+        #expect(captured?[kSecAttrAccount] == nil)
+        #expect(captured?[kSecClass] as? String == kSecClassGenericPassword as String)
     }
 
     @Test func revokedGrantClearsHistoryAndKeepsRecoveryState() async {

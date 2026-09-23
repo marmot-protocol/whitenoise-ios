@@ -253,17 +253,9 @@ struct DonateView: View {
         }
     }
 
-    private var paymentHistory: DonationSupportSummary {
-        if model.supportState == .accessExpired {
-            return DonationSupportSummary()
-        }
-        let local = model.supportState == .loaded ? [] : model.completedPayments
-        return DonationSupportSummary(payments: local + model.support.payments)
-    }
-
     @ViewBuilder
     private var historySection: some View {
-        let history = paymentHistory
+        let history = model.displayedPayments
         if !history.payments.isEmpty {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
@@ -307,6 +299,7 @@ struct DonateView: View {
                 DonationApplePayButton(type: .setUp, action: model.openPaymentSetup)
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .accessibilityIdentifier("donate.apple-pay-setup")
+                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .unavailable:
                 Button {} label: {
                     Text("Apple Pay unavailable")
@@ -322,6 +315,7 @@ struct DonateView: View {
                 .buttonStyle(.plain)
                 .disabled(true)
                 .accessibilityIdentifier("donate.apple-pay-unavailable")
+                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .notConfigured:
                 if model.isPreparingApplePay {
                     WNButton(title: "Donate", size: .standard, isLoading: true) {}
@@ -335,6 +329,7 @@ struct DonateView: View {
                             .font(.footnote)
                             .padding(.horizontal, WNInputMetrics.leadingInset)
                     }
+                    Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
                 }
             }
 

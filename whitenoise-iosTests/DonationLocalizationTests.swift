@@ -83,7 +83,15 @@ struct DonationLocalizationTests {
             let entry = try #require(strings[key] as? [String: Any], "Missing localization key: \(key)")
             let localizations = try #require(entry["localizations"] as? [String: Any])
             for locale in locales {
-                #expect(localizations[locale] != nil, "Missing \(locale) localization for \(key)")
+                let localization = try #require(localizations[locale] as? [String: Any],
+                                                "Missing \(locale) localization for \(key)")
+                let unit = try #require(localization["stringUnit"] as? [String: Any])
+                let value = try #require(unit["value"] as? String)
+                #expect(unit["state"] as? String == "translated", "Untranslated \(locale) copy for \(key)")
+                #expect(!value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if key != "USD" {
+                    #expect(value != key, "English fallback in \(locale) for \(key)")
+                }
             }
         }
     }

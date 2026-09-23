@@ -17,11 +17,23 @@ protocol DonationAccessStoring: AnyObject {
 
 @MainActor
 final class DonationKeychainAccessStore: DonationAccessStoring {
+    private static let defaultService = "dev.ipf.whitenoise.donor-access"
     private let account: String
-    private let service = "dev.ipf.whitenoise.donor-access"
+    private var service: String { Self.defaultService }
 
     init(environment: DonationBuildConfig.Environment) {
         account = environment.rawValue
+    }
+
+    static func eraseAllAppData(delete: (CFDictionary) -> OSStatus = SecItemDelete) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: defaultService
+        ]
+        let status = delete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw DonationAccessStoreError.unavailable
+        }
     }
 
     func load() throws -> DonationAccessCredential? {

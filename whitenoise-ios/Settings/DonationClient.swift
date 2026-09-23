@@ -1,5 +1,15 @@
 import Foundation
 
+nonisolated enum DonationHostedDocumentURL {
+    static func isAllowed(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "https"
+            && ["pay.stripe.com", "invoice.stripe.com"].contains(url.host?.lowercased() ?? "")
+            && (url.port == nil || url.port == 443)
+            && url.user == nil
+            && url.password == nil
+    }
+}
+
 nonisolated enum DonationStripeMode: String, Decodable, Equatable, Sendable {
     case test
     case live
@@ -239,12 +249,7 @@ nonisolated final class URLSessionDonationClient: DonationClient {
             path: "v1/apple-pay/donations/receipt",
             body: ReceiptRequest(receiptToken: token)
         )
-        if response.status == .available {
-            guard let url = response.url,
-                  url.scheme?.lowercased() == "https",
-                  url.host?.isEmpty == false
-            else { throw DonationClientError.invalidResponse }
-        }
+        try validateReceipt(response)
         return response
     }
 
@@ -290,8 +295,7 @@ nonisolated final class URLSessionDonationClient: DonationClient {
 
     private func validateReceipt(_ response: DonationReceiptResponse) throws {
         if response.status == .available {
-            guard let url = response.url, url.scheme?.lowercased() == "https",
-                  ["pay.stripe.com", "invoice.stripe.com"].contains(url.host?.lowercased() ?? "")
+            guard let url = response.url, DonationHostedDocumentURL.isAllowed(url)
             else { throw DonationClientError.invalidResponse }
         }
     }
