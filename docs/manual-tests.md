@@ -232,6 +232,22 @@ before every release tag.
       are public identifiers, not sign-in credentials.
 - [ ] Importing with garbage (random string) surfaces an error toast at
       the top of the screen and stays on the Import screen.
+- [ ] On a signed device, save a valid nsec as a password in Apple Passwords
+      and in one third-party provider (e.g. 1Password or Bitwarden). On both
+      iOS 18 and the latest iOS, open Sign In from the Welcome sheet and from
+      Add Profile, focus Private Key, and fill it from the QuickType Passwords
+      key for each provider, starting from a fresh launch so the first fill is
+      checked. The first attempt fills the key and enables Sign In, the app
+      never crashes, the key renders as bullets, the paste control becomes the
+      clear button, the keyboard stays up, and Sign In submits once. Copy
+      unrelated text first and confirm it is still on the clipboard after
+      sign-in. If iOS offers to save the key as a password, Not Now dismisses
+      it and sign-in completes normally.
+- [ ] With the same providers: cancel the picker, choose an entry whose
+      password is empty or not an nsec, reopen the picker several times in a
+      row, background the app while the picker is up, and dismiss Sign In right
+      after a fill. Each case leaves Sign In responsive, shows the matching
+      validation copy, and creates no account.
 - [ ] Force-quit + relaunch after onboarding lands directly on Chats; the
       Welcome screen does not reappear.
 
