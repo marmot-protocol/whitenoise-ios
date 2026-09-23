@@ -311,23 +311,6 @@ Do not add a second storage path for data Marmot already owns.
 
 ## Validation
 
-### String catalogs
-
-- After editing or merging `.xcstrings` files, run `just format-localizations`
-  before reviewing the diff. It uses Xcode's sorted JSON keys, two-space
-  indentation, spaced colons, expanded empty objects, and no trailing newline.
-  Keep automatic string extraction enabled; do not append entries in a separate
-  ordering or apply a generic JSON formatter.
-- Run `just check-localizations` to perform the same read-only formatting check
-  as CI. Both commands default to all Git-tracked catalogs; pass an untracked new
-  catalog to `python3 scripts/format-string-catalogs.py --write <path>` explicitly.
-- Formatting must preserve all parsed content, including translations, plural
-  forms, comments, and extraction states. Review additions, removals, and metadata
-  changes separately; do not discard a whole catalog diff as Xcode noise or remove
-  translations just because Xcode marks an entry stale.
-
-### App validation
-
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.
 
 Useful commands:

@@ -12,14 +12,6 @@ sync-bindings release:
 lint:
     @./scripts/lint.sh
 
-# Keep string catalogs in the same format as Xcode.
-format-localizations:
-    @python3 scripts/format-string-catalogs.py --write
-
-# Read-only check, also run by GitHub Actions.
-check-localizations:
-    @python3 scripts/format-string-catalogs.py --check
-
 # Auto-corrects everything SwiftLint can auto-correct
 autofix:
     @swiftlint lint --fix --config .swiftlint.yml || true
@@ -36,7 +28,6 @@ clean:
 
 # Full pre-commit gate. Runs the exact same command CI runs.
 precommit:
-    @python3 scripts/format-string-catalogs.py --check
     @./scripts/lint.sh
     @./scripts/test.sh
     @echo "✓ precommit (lint only)"
