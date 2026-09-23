@@ -39,6 +39,7 @@ private struct WebsiteDonateView: View {
                 WNButton(title: "Donate", size: .standard) {
                     openURL(DonationScreenRoute.websiteURL)
                 }
+                .accessibilityAddTraits(.isLink)
                 .accessibilityIdentifier("donate.website")
             }
         }

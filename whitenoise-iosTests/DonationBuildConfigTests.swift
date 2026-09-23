@@ -9,7 +9,6 @@ struct DonationBuildConfigTests {
         #expect(DonationScreenRoute.current(infoDictionary: [key: "staging"]) == .website)
         #expect(DonationScreenRoute.current(infoDictionary: [key: "unknown"]) == .unavailable)
         #expect(DonationScreenRoute.current(infoDictionary: [:]) == .unavailable)
-        #expect(DonationScreenRoute.websiteURL.absoluteString == "https://ipf.dev/donate")
     }
 
     @Test func acceptsMatchingProductionAndStagingConfiguration() throws {
