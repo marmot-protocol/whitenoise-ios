@@ -5,14 +5,17 @@ struct DonationInvoiceView: View {
     @Environment(\.dismiss) private var dismiss
     let payment: DonationPayment
     let loadReceipt: (String) async throws -> DonationReceiptResponse
+    let loadDocument: (String) async throws -> DonationReceiptResponse
     @State private var model: DonationInvoiceModel
     @State private var requestID = UUID()
     @State private var webLoading = true
     @State private var webFailed = false
 
-    init(payment: DonationPayment, loadReceipt: @escaping (String) async throws -> DonationReceiptResponse) {
+    init(payment: DonationPayment, loadReceipt: @escaping (String) async throws -> DonationReceiptResponse,
+         loadDocument: @escaping (String) async throws -> DonationReceiptResponse) {
         self.payment = payment
         self.loadReceipt = loadReceipt
+        self.loadDocument = loadDocument
         _model = State(initialValue: DonationInvoiceModel(payment: payment))
     }
 
@@ -30,23 +33,12 @@ struct DonationInvoiceView: View {
                         WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) { dismiss() }
                     }
                     ToolbarItem(placement: .topBarTrailing) {
-                        #if DEBUG
-                        if isSample {
-                            ShareLink(item: DonationReviewInvoice.sampleText(payment)) {
-                                Label("Share", systemImage: "square.and.arrow.up").labelStyle(.iconOnly)
-                            }
-                            .wnIconButtonChrome(chrome: .container)
-                        } else if let invoiceURL {
-                            invoiceShareLink(invoiceURL)
-                        }
-                        #else
                         if let invoiceURL { invoiceShareLink(invoiceURL) }
-                        #endif
                     }
                 }
         }
         .task(id: requestID) {
-            await model.load(using: loadReceipt)
+            await model.load(using: loadReceipt, fetchDocument: loadDocument)
         }
     }
 
@@ -59,22 +51,8 @@ struct DonationInvoiceView: View {
 
     @ViewBuilder
     private var invoiceContent: some View {
-        #if DEBUG
-        if isSample {
-            DonationReviewInvoice(payment: payment)
-        } else {
-            remoteInvoiceContent
-        }
-        #else
         remoteInvoiceContent
-        #endif
     }
-
-    #if DEBUG
-    private var isSample: Bool {
-        invoiceURL?.host == "donation-review.invalid"
-    }
-    #endif
 
     @ViewBuilder
     private var remoteInvoiceContent: some View {
@@ -92,7 +70,9 @@ struct DonationInvoiceView: View {
             } description: {
                 Text(model.state == .pending
                      ? L10n.string("Your invoice is still being prepared.")
-                     : L10n.string("Your payment succeeded. Please try again later to view the invoice."))
+                     : payment.paymentState == .succeeded
+                       ? L10n.string("Your payment succeeded. Please try again later to view the invoice.")
+                       : L10n.string("This document isn't available right now. Please try again later."))
             } actions: {
                 if model.canRetry {
                     Button("Try Again") {

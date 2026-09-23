@@ -311,6 +311,47 @@ struct DonateViewModelTests {
         #expect(model.canDonate)
     }
 
+    @Test func donorReviewIsBlankWithoutCredentialAndLoadsPagedRecordsWithOne() async {
+        let store = DonationAccessStoreFake()
+        let client = DonorReviewClientFake()
+        let model = DonateViewModel(client: client, coordinator: nil, accessStore: store)
+        await model.refreshSupport()
+        #expect(model.supportState == .none)
+        #expect(model.support.payments.isEmpty)
+
+        store.credential = DonationAccessCredential(token: "grant", expiresAt: .now.addingTimeInterval(365 * 86_400))
+        await model.refreshSupport()
+        #expect(model.supportState == .loaded)
+        #expect(model.support.monthlies.map(\.id) == ["sub.one"])
+        #expect(model.support.payments.map(\.id) == ["inv.one"])
+    }
+
+    @Test func successfulPaymentStoresGrantOnlyAfterConfirmation() async {
+        let store = DonationAccessStoreFake()
+        let grant = DonationAccessCredential(token: "grant", expiresAt: .now.addingTimeInterval(365 * 86_400))
+        let coordinator = DonationCoordinatorFake(donationResult: .success(
+            DonationPaymentSuccess(receiptToken: "receipt", credential: grant)
+        ))
+        let model = DonateViewModel(client: DonorReviewClientFake(), coordinator: coordinator, accessStore: store)
+        #expect(store.credential == nil)
+        model.startDonation()
+        await waitUntil { !model.isProcessing }
+        #expect(store.credential == grant)
+        await model.refreshSupport()
+        #expect(model.supportState == .loaded)
+    }
+
+    @Test func revokedGrantClearsHistoryAndKeepsRecoveryState() async {
+        let store = DonationAccessStoreFake()
+        store.credential = DonationAccessCredential(token: "revoked", expiresAt: .now.addingTimeInterval(365 * 86_400))
+        let model = DonateViewModel(client: DonorReviewClientFake(revoked: true), coordinator: nil, accessStore: store)
+        await model.refreshSupport()
+        #expect(model.supportState == .accessExpired)
+        #expect(store.credential == nil)
+        await model.refreshSupport()
+        #expect(model.supportState == .accessExpired)
+    }
+
     private func waitUntil(
         _ condition: @MainActor () -> Bool,
         sourceLocation: SourceLocation = #_sourceLocation
@@ -319,6 +360,41 @@ struct DonateViewModelTests {
             await Task.yield()
         }
         #expect(condition(), sourceLocation: sourceLocation)
+    }
+}
+
+@MainActor
+private final class DonationAccessStoreFake: DonationAccessStoring {
+    var credential: DonationAccessCredential?
+    private var lost = false
+    func load() throws -> DonationAccessCredential? { credential }
+    func save(_ credential: DonationAccessCredential) throws { self.credential = credential; lost = false }
+    func delete() throws { credential = nil }
+    func hasLostAccess() throws -> Bool { lost }
+    func markLostAccess() throws { credential = nil; lost = true }
+}
+
+private actor DonorReviewClientFake: DonationClient {
+    let revoked: Bool
+    init(revoked: Bool = false) { self.revoked = revoked }
+    func configuration() async throws -> DonationRuntimeConfig { throw DonationClientError.serviceUnavailable }
+    func createDonation(_ request: DonationCreateRequest) async throws -> DonationCreateResponse { throw DonationClientError.serviceUnavailable }
+    func receipt(for token: String) async throws -> DonationReceiptResponse { throw DonationClientError.serviceUnavailable }
+    func supportSummary(token: String, cursor: String?) async throws -> DonationSupportPage {
+        if revoked { throw DonationClientError.invalidDonorAccess }
+        if cursor == nil {
+            return DonationSupportPage(version: 1, subscriptions: [], nextCursor: "next")
+        }
+        return DonationSupportPage(version: 1, subscriptions: [
+            DonationSubscriptionRecord(recordID: "sub.one", amountCents: 2_500, currency: "usd", status: .active,
+                                       nextBillingAt: 1_800_000_000, scheduledCancelAt: nil, endedAt: nil)
+        ], nextCursor: nil)
+    }
+    func billingHistory(token: String, cursor: String?) async throws -> DonationHistoryPage {
+        DonationHistoryPage(version: 1, items: [
+            DonationBillingRecord(recordID: "inv.one", amountCents: 2_500, currency: "usd", date: 1_790_000_000,
+                                  cadence: .monthly, paymentState: .succeeded, hasDocument: true)
+        ], nextCursor: nil)
     }
 }
 

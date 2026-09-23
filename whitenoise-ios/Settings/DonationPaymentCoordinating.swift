@@ -9,15 +9,20 @@ nonisolated enum DonationApplePayAvailability: Equatable {
 
 nonisolated struct DonationPaymentSuccess: Equatable {
     let receiptToken: String
+    var credential: DonationAccessCredential? = nil
 }
 
 nonisolated struct DonationAuthorizationContext: Equatable, Sendable {
     let attemptID: UUID
     let draft: DonationDraft
+    let accessToken: String?
+    let accessNonce: String?
 
-    init(draft: DonationDraft, attemptID: UUID = UUID()) {
+    init(draft: DonationDraft, attemptID: UUID = UUID(), accessToken: String? = nil, accessNonce: String? = nil) {
         self.draft = draft
         self.attemptID = attemptID
+        self.accessToken = accessToken
+        self.accessNonce = accessNonce
     }
 
     func request(
@@ -29,7 +34,9 @@ nonisolated struct DonationAuthorizationContext: Equatable, Sendable {
             amountCents: draft.amountCents,
             cadence: draft.cadence,
             paymentMethodID: paymentMethodID,
-            donor: donor
+            donor: donor,
+            donorAccessToken: accessToken,
+            donorAccessNonce: accessNonce
         )
     }
 }
@@ -40,6 +47,7 @@ nonisolated enum DonationPaymentCoordinatorError: Error, Equatable {
     case invalidPaymentRequest
     case missingDonorContact
     case paymentFailed
+    case accessExpired
 
     static func completionError(_ error: Error?) -> Self {
         error as? Self ?? .paymentFailed

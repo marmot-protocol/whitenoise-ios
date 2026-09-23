@@ -62,7 +62,7 @@ before every release tag.
       enable payment without reopening Donate. Missing build configuration has no retry.
 - [ ] Verify the heart and short nonprofit introduction keep system text margins.
       The larger frequency switcher, compact single-line preset cards, always-visible
-      plain filled capsule Custom amount field, and native capsule Donate with Apple Pay button sit
+      plain filled capsule Custom amount field with a US$ suffix, and native capsule Donate with Apple Pay button sit
       together inside one white grouped card. Presets have
       an empty circle and border; the selected preset has a checkmark and stronger
       border. Spacing between presets and the custom field is consistent, with a
@@ -83,12 +83,14 @@ before every release tag.
       Payment errors and availability messages use the same footnote styling and
       equal side insets as amount helpers. Verify long messages wrap within the
       button width at large text sizes.
-      There is no extra Donate/Amount heading or donation website link.
-- [ ] In the Donate Xcode previews, inspect active (green with a
-      filled checkmark circle), cancellation scheduled (orange), and overdue (red).
-      There is no recent-cancellation notice or seven-day expiration timer.
-      These are presentation scenarios only; the live screen has no
-      subscription-status integration and must not imply a known active subscription.
+      There is no extra Donate/Amount heading; the donation website link appears
+      only in the lost-access recovery state.
+- [ ] With no device donor credential, Donate shows no claimed subscription or
+      payment history and does not look up a donor by email or White Noise identity.
+      After a new Sandbox gift, verify the live screen loads Stripe-backed status
+      on re-entry. If several monthly subscriptions exist, each gets its own card.
+      Check active, cancellation scheduled, overdue/unpaid, incomplete, ended, and
+      unknown states without treating a scheduled cancellation as already ended.
 - [ ] In the example monthly supporter preview, verify the thank-you card appears
       above the donation controls. All three statuses use “Thank you for your support”
       as the title. Active copy includes the monthly amount; overdue copy asks the
@@ -98,34 +100,16 @@ before every release tag.
       payment date; scheduled cancellation shows its own known stop date; overdue
       shows no date. Never infer the stop date from the next payment date. The card
       remains available on either cadence tab. Check wrapping at large text sizes.
-- [ ] In the donation-history previews, verify the card below the donation controls
-      shows the newest three payments, each marked One time or Monthly. See all
-      payments opens the full Payments list, newest first. Only this list has
+- [ ] With a saved donor credential, verify the card below the donation controls
+      shows the newest three billing records, each marked One time or Monthly. See all
+      billing activity opens the paged list, newest first. Pending, failed, credited,
+      and manually paid invoices must not appear to be successful gifts. Only this list has
       tappable rows with chevrons; each opens an Invoice sheet with Share at the top
       right when a document is available. Test loading, pending, unavailable,
       retry, page-load failure, sharing, and closing back to the same list.
-      Debug documents are clearly marked samples and never load a service URL.
       No history card appears without records. Check accessibility text sizes.
-      Real payments are retained only for this Donate session; account history
-      and persistent storage are not connected.
-- [ ] TEMPORARY donation review: in a Debug build, scroll to the end of Donate and
-      expand Testing: choose scenario. Its choices must appear inline below the
-      donation content, without opening a sheet or returning to Chats. Collapsing
-      and reopening it must keep the current scenario. It has no floating control.
-      Selecting or reselecting a scenario resets its data and returns to the top.
-      Exercise each distinct monthly status, payment failure, loading, Wallet setup,
-      and unsupported-device state. Use New donor to switch cadence, edit custom
-      amounts, and tap Donate for either success sheet and payment history.
-      The two direct Success sheets scenarios must open their one-time or monthly
-      thank-you sheet automatically. Closing it must not reopen it; reselecting the
-      scenario must show it again.
-      In monthly fixtures, See all payments opens mixed payment history: the first
-      four invoices are available, pending, unavailable, and loading. Pending and
-      unavailable invoices recover through Try Again inside their sheets.
-      Simulated management links open local test sheets and simulated Wallet setup never opens Wallet. No scenario makes
-      network requests or charges. Current app — real payments restores normal behavior.
-      Confirm Release builds contain neither the picker nor the fixture code. Remove
-      DonationReviewScenarios.swift, its tests, and marked hooks after review.
+      Real review data reloads from Stripe via the device's Keychain donor grant;
+      no donor details, Stripe Customer ID, or payment history are stored in app defaults.
 - [ ] Tapping Donate opens Apple Pay without inserting a Completing donation row.
       While Apple Pay configuration loads, show only a centered spinner inside
       the standard primary button, with no visible Loading label or separate row.
@@ -152,8 +136,17 @@ before every release tag.
       a `pk_test_` key and the signed app has the Apple merchant entitlement, then
       complete Apple Pay Sandbox authorization for a one-time gift.
       Confirm the backend receives integer cents, `one_time`, a fresh attempt ID,
-      no donor object, and the Stripe PaymentMethod ID. Retrying the one bounded
-      network request must retain the same attempt and PaymentMethod IDs.
+      no donor object, the Stripe PaymentMethod ID, and a fresh 43-character
+      donor-access nonce. Retrying the one bounded network request must retain
+      the same attempt, nonce, and PaymentMethod IDs. A subsequent donation must
+      send the Keychain donor token instead of a new nonce.
+- [ ] Verify the donor credential is not saved when Apple Pay is canceled or fails,
+      but is saved after confirmation succeeds. Reopen Donate to verify on-demand
+      support/history reads, hosted document lookup, and history pagination. Return
+      from Stripe management after canceling or updating a card and verify refresh.
+      Test a revoked/expired grant: old history is not shown as an empty new-donor
+      state, and a new gift does not silently merge with the old Stripe Customer.
+      Verify the production flavor cannot use a staging credential.
 - [ ] Verify a monthly gift requests only name and email, shows the amount as a
       monthly recurring payment, supplies the management URL, and completes with
       `monthly` plus donor contact. Missing name/email must be handled in Apple Pay,
@@ -167,7 +160,7 @@ before every release tag.
       labeled Apple Pay unavailable appears, without glass, a border, a logo, or duplicate helper
       message. It must not open Wallet or a payment sheet. Check the same state in
       the debug scenario picker. No donation website fallback is offered.
-- [ ] After payment succeeds, verify the thank-you sheet. From See all payments,
+- [ ] After payment succeeds, verify the thank-you sheet. From See all billing activity,
       open the payment's Invoice sheet. Receipt lookup starts only when the invoice
       is opened; a slow lookup must not delay the success sheet or keep Donate busy.
       The invoice starts with a loading indicator, without flashing an error.

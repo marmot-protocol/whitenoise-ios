@@ -13,7 +13,7 @@ struct DonationAmountInput: View {
         HStack(spacing: WNInputMetrics.contentSpacing) {
             DonationAmountTextField(text: text, focused: $focused, decideEdit: decideEdit, onChange: onChange)
                 .frame(minWidth: 0, maxWidth: .infinity)
-            Text("USD")
+            Text(verbatim: "US$")
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, WNInputMetrics.leadingInset)

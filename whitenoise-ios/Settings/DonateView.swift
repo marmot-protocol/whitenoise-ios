@@ -2,20 +2,16 @@ import PassKit
 import SwiftUI
 
 struct DonateView: View {
-    // TEMPORARY — remove these debug hooks after donation UI review.
-    #if DEBUG
-    @Environment(\.donationReviewSession) private var reviewSession
-    #endif
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: DonateViewModel
     @State private var preparationAttempt = 0
+    @State private var supportRefreshAttempt = 0
     @State private var presentedSuccess: DonationPayment?
     @State private var lastPresentedSuccessID: String?
     @State private var customPaymentHeight: CGFloat = 0
     @State private var customAmountFocused = false
     @ScaledMetric(relativeTo: .body) private var amountHeight = WNInputMetrics.height
-    private let support: DonationSupportSummary
 
     private enum ScrollTarget: Hashable {
         case customPayment
@@ -24,13 +20,6 @@ struct DonateView: View {
     @MainActor
     init() {
         _model = State(initialValue: DonateViewModel())
-        support = DonationSupportSummary()
-    }
-
-    @MainActor
-    init(model: DonateViewModel, support: DonationSupportSummary = DonationSupportSummary()) {
-        _model = State(initialValue: model)
-        self.support = support
     }
 
     var body: some View {
@@ -59,14 +48,19 @@ struct DonateView: View {
         .localizedNavigationTitle("Donate")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: preparationAttempt) { await model.prepareApplePay() }
+        .task(id: supportRefreshAttempt) { await model.refreshSupport() }
         .onDisappear { model.cancel() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { model.refreshApplePayAvailability() }
+            if phase == .active {
+                model.refreshApplePayAvailability()
+                if !model.accessSaveFailed { supportRefreshAttempt += 1 }
+            }
         }
         .onChange(of: model.successfulPayment?.id, initial: true) { _, id in
             guard let id, id != lastPresentedSuccessID else { return }
             lastPresentedSuccessID = id
             presentedSuccess = model.successfulPayment
+            if !model.accessSaveFailed { supportRefreshAttempt += 1 }
         }
         .sheet(item: $presentedSuccess) { payment in
             DonationSuccessView(cadence: payment.cadence)
@@ -76,7 +70,8 @@ struct DonateView: View {
     private var donationForm: some View {
         Form {
             introductionSection
-            if let monthly = support.monthly {
+            supportLoadingSection
+            ForEach(model.support.monthlies, id: \.id) { monthly in
                 Section {
                     DonationMonthlySupportCard(donation: monthly, managementURL: model.managementURL)
                         .wnGroupedCardRow(.only)
@@ -85,11 +80,39 @@ struct DonateView: View {
             donationSection
             historySection
             disclosureSection
-            #if DEBUG
-            if let reviewSession {
-                DonationReviewControls(session: reviewSession)
+        }
+    }
+
+    @ViewBuilder
+    private var supportLoadingSection: some View {
+        switch model.supportState {
+        case .loading:
+            Section {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
             }
-            #endif
+        case .failed:
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(model.accessSaveFailed
+                         ? L10n.string("Your donation succeeded, but history couldn't be saved on this device.")
+                         : L10n.string("Your donation history couldn't be loaded. Please try again."))
+                    if !model.accessSaveFailed {
+                        Button("Try Again") { supportRefreshAttempt += 1 }
+                    }
+                }
+            }
+        case .accessExpired:
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Donation history access is no longer available on this device.")
+                    Text("A new donation won't restore earlier payments.")
+                        .foregroundStyle(.secondary)
+                }
+                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
+            }
+        case .none, .loaded:
+            EmptyView()
         }
     }
 
@@ -231,7 +254,11 @@ struct DonateView: View {
     }
 
     private var paymentHistory: DonationSupportSummary {
-        DonationSupportSummary(payments: model.completedPayments + support.payments)
+        if model.supportState == .accessExpired {
+            return DonationSupportSummary()
+        }
+        let local = model.supportState == .loaded ? [] : model.completedPayments
+        return DonationSupportSummary(payments: local + model.support.payments)
     }
 
     @ViewBuilder
@@ -243,7 +270,7 @@ struct DonateView: View {
                     Text("Thank you for your support")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
-                    Text("Your recent payments:")
+                    Text("Recent billing activity")
                         .foregroundStyle(.secondary)
                 }
                 .wnGroupedCardRow(.first)
@@ -254,10 +281,10 @@ struct DonateView: View {
                 }
 
                 NavigationLink {
-                    DonationHistoryView(payments: support.payments, model: model)
+                    DonationHistoryView(model: model)
                         .wnBackButton()
                 } label: {
-                    Text("See all payments")
+                    Text("See all billing activity")
                 }
                 .wnGroupedCardRow(.last)
             }

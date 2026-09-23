@@ -39,18 +39,26 @@ final class DonationInvoiceModel {
         loadID = nil
         switch source {
         case let .url(url): state = .available(url)
-        case .receiptToken: state = .loading
+        case .receiptToken, .recordID: state = .loading
         case .unavailable: state = .unavailable
         }
     }
 
-    func load(using fetch: (String) async throws -> DonationReceiptResponse) async {
-        guard state == .loading, case let .receiptToken(token) = source else { return }
+    func load(
+        using fetch: (String) async throws -> DonationReceiptResponse,
+        fetchDocument: (String) async throws -> DonationReceiptResponse = { _ in throw DonationClientError.serviceUnavailable }
+    ) async {
+        guard state == .loading else { return }
         let id = UUID()
         loadID = id
         do {
             try Task.checkCancellation()
-            let response = try await fetch(token)
+            let response: DonationReceiptResponse
+            switch source {
+            case let .receiptToken(token): response = try await fetch(token)
+            case let .recordID(id): response = try await fetchDocument(id)
+            case .url, .unavailable: return
+            }
             try Task.checkCancellation()
             guard loadID == id else { return }
             state = Self.state(for: response)

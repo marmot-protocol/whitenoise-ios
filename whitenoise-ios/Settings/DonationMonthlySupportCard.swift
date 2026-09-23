@@ -55,6 +55,12 @@ struct DonationMonthlySupportCard: View {
             L10n.string("Your monthly payment couldn’t be completed. Please check your payment method to continue your support.")
         case .cancellationScheduled:
             L10n.string("Your monthly donation is scheduled to end. Your support has helped us build tools for private communication.")
+        case .incomplete:
+            L10n.string("Your monthly donation has not started yet. Check your payment method to complete it.")
+        case .canceled:
+            L10n.string("This monthly donation has ended.")
+        case .unsupported:
+            L10n.string("This monthly donation's status is unavailable. Check Stripe to manage it.")
         }
     }
 
@@ -70,6 +76,10 @@ struct DonationMonthlySupportCard: View {
             }
         case .overdue:
             nil
+        case .canceled:
+            donation.endDate.map { L10n.formatted("Ended on %@", $0.formatted(date: .long, time: .omitted)) }
+        case .incomplete, .unsupported:
+            nil
         }
     }
 
@@ -81,6 +91,9 @@ private extension DonationMonthlyStatus {
         case .active: L10n.string("Monthly donation active")
         case .cancellationScheduled: L10n.string("Cancellation scheduled")
         case .overdue: L10n.string("Monthly donation overdue")
+        case .incomplete: L10n.string("Monthly donation not yet active")
+        case .canceled: L10n.string("Monthly donation ended")
+        case .unsupported: L10n.string("Monthly donation status unavailable")
         }
     }
 
@@ -89,6 +102,8 @@ private extension DonationMonthlyStatus {
         case .active: "checkmark.circle.fill"
         case .cancellationScheduled: "clock.fill"
         case .overdue: "exclamationmark.circle.fill"
+        case .incomplete, .unsupported: "questionmark.circle.fill"
+        case .canceled: "checkmark.circle"
         }
     }
 
@@ -97,6 +112,8 @@ private extension DonationMonthlyStatus {
         case .active: .green
         case .cancellationScheduled: .orange
         case .overdue: .red
+        case .incomplete, .unsupported: .orange
+        case .canceled: .secondary
         }
     }
 }

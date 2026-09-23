@@ -232,12 +232,7 @@ struct SettingsView: View {
         case .aiAgents: AIAgentsSettingsView().wnBackButton()
         case .support: SupportChatView().wnBackButton()
         case .donate:
-            // TEMPORARY — remove the debug host after donation UI review.
-            #if DEBUG
-            DonationReviewHost().wnBackButton()
-            #else
             DonateView().wnBackButton()
-            #endif
         case .developerTools: DeveloperToolsSettingsView().wnBackButton()
         }
     }

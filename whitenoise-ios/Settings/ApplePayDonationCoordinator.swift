@@ -76,16 +76,19 @@ enum DonationDonorFactory {
 final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, ApplePayContextDelegate {
     private let config: DonationBuildConfig
     private let client: any DonationClient
+    private let accessStore: (any DonationAccessStoring)?
 
     private var context: STPApplePayContext?
     private var authorization: DonationAuthorizationContext?
     private var receiptToken: String?
+    private var pendingCredential: DonationAccessCredential?
     private var continuation: CheckedContinuation<DonationPaymentSuccess, Error>?
     private var isConfigured = false
 
-    init(config: DonationBuildConfig, client: any DonationClient) {
+    init(config: DonationBuildConfig, client: any DonationClient, accessStore: (any DonationAccessStoring)? = nil) {
         self.config = config
         self.client = client
+        self.accessStore = accessStore
     }
 
     func prepare() async throws {
@@ -115,6 +118,19 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
             throw DonationPaymentCoordinatorError.unavailable
         }
 
+        let credential: DonationAccessCredential?
+        do { credential = try accessStore?.load() }
+        catch { throw DonationPaymentCoordinatorError.unavailable }
+        if let credential, credential.expiresAt <= .now {
+            try? accessStore?.markLostAccess()
+            throw DonationPaymentCoordinatorError.accessExpired
+        }
+        var nonce: String?
+        if credential == nil, accessStore != nil {
+            do { nonce = try DonationAccessNonce.generate() }
+            catch { throw DonationPaymentCoordinatorError.unavailable }
+        }
+
         let request = DonationPaymentRequestFactory.make(draft: draft, config: config)
         guard let context = STPApplePayContext(paymentRequest: request, delegate: self) else {
             throw DonationPaymentCoordinatorError.invalidPaymentRequest
@@ -122,8 +138,9 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
 
         context.apiClient = STPAPIClient.shared
         self.context = context
-        authorization = DonationAuthorizationContext(draft: draft)
+        authorization = DonationAuthorizationContext(draft: draft, accessToken: credential?.token, accessNonce: nonce)
         receiptToken = nil
+        pendingCredential = nil
 
         return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
@@ -159,10 +176,24 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
             donor = try DonationDonorFactory.make(from: paymentInformation.shippingContact)
         }
 
-        let response = try await client.createDonation(
-            authorization.request(paymentMethodID: paymentMethod.id, donor: donor)
-        )
+        let response: DonationCreateResponse
+        do {
+            response = try await client.createDonation(
+                authorization.request(paymentMethodID: paymentMethod.id, donor: donor)
+            )
+        } catch DonationClientError.invalidDonorAccess {
+            try? accessStore?.markLostAccess()
+            throw DonationPaymentCoordinatorError.accessExpired
+        }
         guard context === self.context else { throw CancellationError() }
+        if accessStore != nil {
+            guard let token = response.donorAccessToken, !token.isEmpty,
+                  let expiry = response.donorAccessExpiresAt,
+                  expiry > Int64(Date.now.timeIntervalSince1970) else {
+                throw DonationClientError.invalidResponse
+            }
+            pendingCredential = DonationAccessCredential(token: token, expiresAt: Date(timeIntervalSince1970: TimeInterval(expiry)))
+        }
         receiptToken = response.receiptToken
         return response.clientSecret
     }
@@ -179,7 +210,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
                 finish(.failure(DonationPaymentCoordinatorError.paymentFailed))
                 return
             }
-            finish(.success(DonationPaymentSuccess(receiptToken: receiptToken)))
+            finish(.success(DonationPaymentSuccess(receiptToken: receiptToken, credential: pendingCredential)))
         case .error:
             finish(.failure(DonationPaymentCoordinatorError.completionError(error)))
         case .userCancellation:
@@ -193,6 +224,7 @@ final class ApplePayDonationCoordinator: NSObject, DonationPaymentCoordinating, 
         context = nil
         authorization = nil
         receiptToken = nil
+        pendingCredential = nil
         continuation?.resume(with: result)
     }
 }
@@ -207,9 +239,11 @@ extension DonateViewModel {
             return
         }
         let client = URLSessionDonationClient(baseURL: config.serviceURL)
+        let accessStore = DonationKeychainAccessStore(environment: config.environment)
         self.init(
             client: client,
-            coordinator: ApplePayDonationCoordinator(config: config, client: client),
+            coordinator: ApplePayDonationCoordinator(config: config, client: client, accessStore: accessStore),
+            accessStore: accessStore,
             managementURL: config.managementURL,
             locale: locale,
             isApplePayPrepared: false

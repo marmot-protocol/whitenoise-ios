@@ -78,4 +78,19 @@ struct DonationPaymentRequestTests {
         ) == .paymentFailed)
         #expect(DonationPaymentCoordinatorError.completionError(nil) == .paymentFailed)
     }
+
+    @Test func donorNonceAndAttemptStayStableWithinOneAuthorization() throws {
+        let nonce = try DonationAccessNonce.generate()
+        #expect(nonce.count == 43)
+        #expect(nonce.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
+        let authorization = DonationAuthorizationContext(
+            draft: DonationDraft(amountCents: 2_500, cadence: .oneTime), accessNonce: nonce
+        )
+        let first = authorization.request(paymentMethodID: "pm_one", donor: nil)
+        let retry = authorization.request(paymentMethodID: "pm_one", donor: nil)
+        #expect(first == retry)
+        #expect(first.donorAccessNonce == nonce)
+        #expect(first.donorAccessToken == nil)
+        #expect(DonationAuthorizationContext(draft: authorization.draft).attemptID != authorization.attemptID)
+    }
 }
