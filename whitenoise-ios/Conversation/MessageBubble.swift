@@ -389,24 +389,31 @@ struct MessageBubble: View {
     }
 
     private func replyCard(_ preview: ConversationReplyPreview) -> some View {
-        Button(action: onReplyPreviewTap) {
-            quoted(preview)
-                .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
-                .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset)
-                .frame(
-                    width: MessageBubbleReplyLayout.richContentWidth,
-                    alignment: .leading
+        quoted(preview)
+            .padding(.horizontal, MessageBubbleReplyLayout.cardHorizontalInset)
+            .padding(.vertical, MessageBubbleReplyLayout.cardVerticalInset)
+            .frame(
+                width: MessageBubbleReplyLayout.richContentWidth,
+                alignment: .leading
+            )
+            .background(
+                replyCardBackground,
+                in: .rect(
+                    cornerRadius: MessageBubbleReplyLayout.cardCornerRadius,
+                    style: .continuous
                 )
-                .background(
-                    replyCardBackground,
-                    in: .rect(
-                        cornerRadius: MessageBubbleReplyLayout.cardCornerRadius,
-                        style: .continuous
-                    )
+            )
+            .contentShape(
+                .rect(
+                    cornerRadius: MessageBubbleReplyLayout.cardCornerRadius,
+                    style: .continuous
                 )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.formatted("Reply to %@", preview.name))
+            )
+            .onTapGesture(perform: onReplyPreviewTap)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(L10n.formatted("Reply to %@", preview.name))
+            .accessibilityAction { onReplyPreviewTap() }
     }
 
     private var textBubble: some View {
