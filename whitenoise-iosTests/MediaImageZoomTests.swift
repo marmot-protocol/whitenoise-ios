@@ -1,9 +1,71 @@
 import SwiftUI
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 @testable import whitenoise_ios
 
 @MainActor
 final class MediaImageZoomTests: XCTestCase {
+    func testGIFPlaybackKeepsZoom() async throws {
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, 2, nil))
+        CGImageDestinationSetProperties(destination, [
+            kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: 1],
+        ] as CFDictionary)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 2), format: format)
+        for color in [UIColor.red, .blue] {
+            let image = renderer.image { context in
+                color.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 4, height: 2))
+            }
+            CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1],
+            ] as CFDictionary)
+        }
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let view = makeViewer()
+        let poster = try XCTUnwrap(view.imageView.image)
+        let previousReservations = GiphyPlaybackBudget.shared.activePlaybackCount
+        let reservation = await GiphyPlaybackBudget.shared.acquire()
+        let id = try XCTUnwrap(reservation)
+        let playback = AttachmentGIF.Playback(data: data as Data, id: id)
+        defer { playback.stop() }
+        var completionFrame: UIImage?
+        view.setZoomScale(2.5, animated: false)
+        view.displayGIF(data: data as Data, id: id) {
+            completionFrame = view.imageView.image
+            playback.stop()
+        }
+        defer { view.displayGIF(data: nil, id: nil) }
+        var observedColors = Set<UInt8>()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while observedColors.count < 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(30))
+            if let frame = view.imageView.image?.cgImage {
+                let context = try XCTUnwrap(CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                context.draw(frame, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+                observedColors.insert(try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)[0])
+            }
+        }
+        XCTAssertEqual(observedColors, [0, 255], "The native view must display both GIF frames")
+        try await Task.sleep(for: .milliseconds(600))
+        let finalFrame = try XCTUnwrap(view.imageView.image)
+        XCTAssertTrue(completionFrame === finalFrame, "Release the slot on the final frame, not an earlier loop")
+        XCTAssertEqual(GiphyPlaybackBudget.shared.activePlaybackCount, previousReservations)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
+        view.display(poster)
+        view.displayGIF(data: data as Data, id: id)
+        view.layoutIfNeeded()
+        XCTAssertEqual(view.zoomScale, 2.5)
+        view.displayGIF(data: nil, id: nil)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(view.imageView.image === poster, "Cancelled callbacks must not replace the still image")
+    }
+
     private func makeViewer(size: CGSize = CGSize(width: 390, height: 844)) -> MediaImageScrollView {
         let view = MediaImageScrollView(frame: CGRect(origin: .zero, size: size))
         let image = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 600)).image { context in

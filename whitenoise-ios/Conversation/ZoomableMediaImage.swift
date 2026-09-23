@@ -6,6 +6,9 @@ struct ZoomableMediaImage: UIViewRepresentable {
     let isSelected: Bool
     let onTap: () -> Void
     let onZoomChanged: (Bool) -> Void
+    var gifData: Data?
+    var playbackID: UUID?
+    var onGIFCompletion: (() -> Void)?
 
     func makeUIView(context: Context) -> MediaImageScrollView {
         MediaImageScrollView()
@@ -15,17 +18,24 @@ struct ZoomableMediaImage: UIViewRepresentable {
         view.onTap = onTap
         view.onZoomChanged = onZoomChanged
         view.display(image)
+        view.displayGIF(data: gifData, id: playbackID, onCompletion: onGIFCompletion)
         if !isSelected { view.setZoomScale(1, animated: false) }
+    }
+
+    static func dismantleUIView(_ view: MediaImageScrollView, coordinator: Void) {
+        view.displayGIF(data: nil, id: nil)
     }
 }
 
 /// The image owns pans only while enlarged; at fit size the gallery owns paging.
 final class MediaImageScrollView: UIScrollView, UIScrollViewDelegate {
-    let imageView = UIImageView()
+    let imageView = GiphyAnimatedImageUIView(frame: .zero)
     var onTap: (() -> Void)?
     var onZoomChanged: ((Bool) -> Void)?
     private var viewportSize = CGSize.zero
     private var reportedZoomed = false
+    private var displayedImage: UIImage?
+    private var playbackID: UUID?
     var isImageZoomed: Bool { zoomScale > minimumZoomScale + 0.01 }
 
     override init(frame: CGRect) {
@@ -54,15 +64,27 @@ final class MediaImageScrollView: UIScrollView, UIScrollViewDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func display(_ image: UIImage) {
-        guard imageView.image !== image else { return }
+        guard displayedImage !== image else { return }
+        displayedImage = image
         imageView.image = image
         viewportSize = .zero
         setNeedsLayout()
     }
 
+    func displayGIF(data: Data?, id: UUID?, onCompletion: (() -> Void)? = nil) {
+        guard playbackID != id else { return }
+        playbackID = id
+        if let data, let id {
+            imageView.play(data: data, id: id, loopMode: .source, onCompletion: onCompletion)
+        } else {
+            imageView.stop()
+            imageView.image = displayedImage
+        }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard let image = imageView.image, bounds.width > 0, bounds.height > 0,
+        guard let image = displayedImage, bounds.width > 0, bounds.height > 0,
               image.size.width > 0, image.size.height > 0 else { return }
         if viewportSize != bounds.size {
             viewportSize = bounds.size

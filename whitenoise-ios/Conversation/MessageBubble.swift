@@ -1935,6 +1935,7 @@ private struct MessageMediaTile: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
     @State private var image: UIImage?
+    @State private var gifData: Data?
     @State private var loadedImageID: String?
     @State private var isLoading = false
     @State private var didFail = false
@@ -1947,11 +1948,16 @@ private struct MessageMediaTile: View {
     var body: some View {
         ZStack {
             if item.isImage, loadedImageID == item.id, let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: size.width, height: size.height)
-                    .clipped()
+                AttachmentGIFPlayback(data: gifData, activity: isTimelineRowVisible ? .active : .inactive) { playback in
+                    if let playback {
+                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFill,
+                            onCompletion: playback.stop)
+                    } else {
+                        Image(uiImage: image).resizable().scaledToFill()
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+                .clipped()
             } else if item.isImage {
                 imagePlaceholder
             } else if item.isVideo {
@@ -2001,6 +2007,9 @@ private struct MessageMediaTile: View {
             }
             awaitingManualDownload = false
             _ = await loadImageIfNeeded(scale: displayScale)
+        }
+        .onChange(of: isTimelineRowVisible) { _, visible in
+            if !visible { gifData = nil }
         }
         .onTapGesture {
             if awaitingManualDownload {
@@ -2069,6 +2078,7 @@ private struct MessageMediaTile: View {
                 maxPixelSize: maxPixelSize
             ) {
                 image = cachedThumbnail.image
+                gifData = item.isGIF ? cachedThumbnail.sourceData : nil
                 loadedImageID = item.id
                 didFail = false
                 return cachedThumbnail.sourceData
@@ -2086,12 +2096,14 @@ private struct MessageMediaTile: View {
                 scale: scale
             ) else {
                 image = nil
+                gifData = nil
                 loadedImageID = item.id
                 didFail = true
                 return nil
             }
             guard !Task.isCancelled else { return nil }
             image = decoded
+            gifData = item.isGIF ? data : nil
             loadedImageID = item.id
             MessageMediaThumbnailDecoder.store(
                 decoded,
@@ -2102,6 +2114,7 @@ private struct MessageMediaTile: View {
             return data
         } catch {
             image = nil
+            gifData = nil
             loadedImageID = item.id
             didFail = true
             return nil
@@ -3961,8 +3974,12 @@ private struct MessageMediaFullscreenImagePage: View {
                 WNMediaSurface().ignoresSafeArea()
 
                 if let image {
-                    ZoomableMediaImage(image: image, isSelected: isSelected,
-                        onTap: onToggleChrome, onZoomChanged: onZoomChanged)
+                    AttachmentGIFPlayback(data: item.isGIF ? imageData : nil,
+                        activity: isSelected ? .active : .inactive) { playback in
+                        ZoomableMediaImage(image: image, isSelected: isSelected,
+                            onTap: onToggleChrome, onZoomChanged: onZoomChanged,
+                            gifData: playback?.data, playbackID: playback?.id, onGIFCompletion: playback?.stop)
+                    }
                 } else if isLoading {
                     ProgressView()
                 } else if didFail {

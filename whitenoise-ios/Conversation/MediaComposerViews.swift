@@ -534,9 +534,15 @@ private struct ComposerMediaPreviewPage: View {
                     ProgressView()
                 }
             } else if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
+                AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
+                    activity: isSelected ? .active : .inactive) { playback in
+                    if let playback {
+                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
+                            onCompletion: playback.stop)
+                    } else {
+                        Image(uiImage: image).resizable().scaledToFit()
+                    }
+                }
             } else if let thumbnail = attachment.thumbnail {
                 Image(uiImage: thumbnail)
                     .resizable()
@@ -630,7 +636,7 @@ struct MediaApprovalView: View {
 
                 TabView(selection: $selectedID) {
                     ForEach(attachments) { attachment in
-                        MediaApprovalPage(attachment: attachment)
+                        MediaApprovalPage(attachment: attachment, isSelected: selectedID == attachment.id)
                             .tag(Optional(attachment.id))
                     }
                 }
@@ -788,6 +794,7 @@ struct MediaApprovalView: View {
 
 private struct MediaApprovalPage: View {
     let attachment: MediaDraftAttachment
+    let isSelected: Bool
 
     @State private var image: UIImage?
 
@@ -796,10 +803,16 @@ private struct MediaApprovalPage: View {
             Color.black
 
             if attachment.kind == .image, let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
+                    activity: isSelected ? .active : .inactive) { playback in
+                    if let playback {
+                        AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
+                            onCompletion: playback.stop)
+                    } else {
+                        Image(uiImage: image).resizable().scaledToFit()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let thumbnail = attachment.thumbnail {
                 Image(uiImage: thumbnail)
                     .resizable()
@@ -1631,7 +1644,10 @@ struct PhotoLibraryPickerView: UIViewControllerRepresentable {
         }
 
         private static func mediaTypeIdentifier(from provider: NSItemProvider) -> String? {
-            provider.registeredTypeIdentifiers.first { identifier in
+            if provider.hasItemConformingToTypeIdentifier(UTType.gif.identifier) {
+                return UTType.gif.identifier
+            }
+            return provider.registeredTypeIdentifiers.first { identifier in
                 guard let type = UTType(identifier) else { return false }
                 return type.conforms(to: .image) || type.conforms(to: .movie)
             } ?? {
