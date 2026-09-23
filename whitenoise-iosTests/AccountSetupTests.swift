@@ -256,6 +256,22 @@ struct AccountSetupTests {
         #expect(AccountSetupPolicy.automaticAction(value) == nil)
     }
 
+    @Test func discoveryIncludesIndexers() {
+        #expect(AppContainerConfig.discoveryRelays == AppContainerConfig.seedRelays + [
+            "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
+            "wss://relay.ditto.pub", "wss://relay.primal.net"
+        ])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func missingRelaysRequireConsent(_ step: OnboardingStepFfi) {
+        var value = snapshot()
+        value.steps[0].step = step
+        value.steps[0].findings = [OnboardingFindingFfi(issue: .missing, endpoint: nil)]
+        value.steps[0].actions = [.useRecommendedRelays]
+        #expect(AccountSetupPolicy.automaticAction(value) == nil)
+    }
+
     @Test func explicitSaveApprovesOnlyTheReturnedProposalRevision() async throws {
         let proposed = proposalSnapshot(step: .profile)
         var approvedRevision: UInt64?
@@ -264,6 +280,34 @@ struct AccountSetupTests {
             return proposed
         })
         #expect(approvedRevision == proposed.revision)
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func relayEditorRequiresApproval(_ step: OnboardingStepFfi) async {
+        var initial = snapshot()
+        initial.steps[0].step = step
+        initial.steps[0].actions = [.editRelays, .retry]
+        let client = SetupTestClient(initial: initial)
+        let model = AccountSetupModel(snapshot: initial)
+        await model.connect(client)
+        await settle { model.isConnected && !model.isBusy }
+        #expect(!model.offeredActions.contains(.useRecommendedRelays))
+        #expect(await client.approvalCount == 0)
+
+        let reads = ["wss://read.example"]
+        let writes = step == .relays ? ["wss://write.example"] : []
+        let operation = model.send(.editRelays(step, reads: reads, writes: writes))
+        #expect(operation != nil)
+        await operation?.value
+
+        #expect(model.snapshot.proposal?.readRelays == reads)
+        #expect(model.snapshot.proposal?.writeRelays == writes)
+        #expect(model.offeredActions.contains(.approveRepair))
+        #expect(AccountSetupPolicy.automaticAction(model.snapshot) == nil)
+        #expect(await client.approvalCount == 0)
+        #expect(await client.defaultPublicationCount == 0)
+        model.suspend()
+        await model.drain()
     }
 
     @Test func recoveredPublicationUsesTheEpochOfTheDisplayedProposal() async throws {
@@ -489,6 +533,15 @@ private actor SetupTestClient: AccountSetupClient {
             runCount += 1
             await runGate?.wait()
         case .discovery: return discoveryResult ?? initial
+        case .editRelays(let step, let reads, let writes):
+            var value = initial
+            value.revision += 1
+            value.steps[0].actions = [.approveRepair, .cancelRepair]
+            value.proposal = OnboardingRepairProposalFfi(
+                step: step, revision: value.revision, previousEventId: nil,
+                readRelays: reads, writeRelays: writes, profile: nil, follows: nil
+            )
+            return value
         case .useDefaults:
             defaultPublicationCount += 1
             var value = discoveryResult ?? initial

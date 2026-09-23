@@ -105,6 +105,16 @@ before every release tag.
 
 ## Imported-account setup
 
+- [ ] Import an identity whose relay lists exist only on public discovery relays.
+      Verify the lists are found without publishing defaults, including on Ditto
+      and Primal.
+- [ ] Use Default Relays on an existing valid list needing another route: existing
+      entries and read/write roles remain, and only missing defaults are appended.
+      Include `ws://…onion` relay and inbox entries; their schemes and roles survive publication.
+      Include Tailscale, custom-TLD, retired, and unparseable entries: original tags
+      survive publication. Unusable entries remain informational once a working
+      route exists; a proposal containing no supported route must fail before publication.
+
 - [ ] Import a valid nsec: the setup checklist opens before network preflight,
       and the key field and matching clipboard contents are cleared.
 - [ ] A healthy account progresses to the one-device notice. Continue
@@ -126,6 +136,12 @@ before every release tag.
       and shows relay.eu.whitenoise.chat and relay.us.whitenoise.chat before saving.
 - [ ] Enter another discovery relay: lookup does not publish any settings. A failed
       or inconclusive lookup does not enable default-relay publication.
+- [ ] Import a profile with both default relays marked read-only and only an onion
+      write relay. Use default relays is absent; Choose Relays opens an explicit
+      editor. Read and write fields remain separate. Review Replacement publishes
+      nothing; review the roles, then approve to replace the list. Closing the
+      editor or cancelling the proposal preserves the original list. Repeat for
+      inbox relays; invalid/private/retired selections fail without publication.
 - [ ] For both relay-list and inbox-list recovery, search a reachable relay that
       returns no declaration. After any earlier checks finish, Use default relays
       remains available alongside Look on another relay. Defaults publish only
