@@ -119,61 +119,61 @@
         }
       }
     },
-    "IPF is a nonprofit that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone." : {
+    "IPF is a 501(c)(3) nonprofit incorporated in Wyoming that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF ist eine gemeinnützige Organisation, die Werkzeuge für private Kommunikation entwickelt. Wir entwickeln White Noise und Marmot, das offene Nachrichtenprotokoll dahinter. Deine Spende unterstützt diese Arbeit und unsere Überzeugung, dass private Gespräche allen möglich sein sollten."
+            "value" : "IPF ist eine in Wyoming gegründete gemeinnützige Organisation mit Anerkennung nach Abschnitt 501(c)(3) des US-Steuerrechts, die Werkzeuge für private Kommunikation entwickelt. Wir entwickeln White Noise und Marmot, das offene Nachrichtenprotokoll dahinter. Deine Spende unterstützt diese Arbeit und unsere Überzeugung, dass private Gespräche allen möglich sein sollten."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF es una organización sin fines de lucro que crea herramientas para ayudar a las personas a comunicarse en privado. Desarrollamos White Noise y Marmot, el protocolo abierto de mensajería en el que se basa. Tu donación apoya este trabajo y nuestra convicción de que todos deberían poder conversar en privado."
+            "value" : "IPF, entidad sin fines de lucro constituida en Wyoming y reconocida bajo la sección 501(c)(3) del código fiscal de EE. UU., crea herramientas para ayudar a las personas a comunicarse en privado. Desarrollamos White Noise y Marmot, el protocolo abierto de mensajería en el que se basa. Tu donación apoya este trabajo y nuestra convicción de que todos deberían poder conversar en privado."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF est une organisation à but non lucratif qui crée des outils pour aider chacun à communiquer en privé. Nous développons White Noise et Marmot, le protocole ouvert de messagerie sur lequel l’app repose. Votre don soutient ce travail et notre conviction que les conversations privées doivent être accessibles à tous."
+            "value" : "IPF, organisation à but non lucratif constituée dans le Wyoming et reconnue au titre de l’article 501(c)(3) du code fiscal américain, crée des outils pour aider chacun à communiquer en privé. Nous développons White Noise et Marmot, le protocole ouvert de messagerie sur lequel l’app repose. Votre don soutient ce travail et notre conviction que les conversations privées doivent être accessibles à tous."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF è un’organizzazione senza scopo di lucro che crea strumenti per aiutare le persone a comunicare in privato. Sviluppiamo White Noise e Marmot, il protocollo aperto di messaggistica su cui si basa. La tua donazione sostiene questo lavoro e la nostra convinzione che tutti debbano poter conversare in privato."
+            "value" : "IPF, organizzazione senza scopo di lucro costituita nel Wyoming e riconosciuta ai sensi della sezione 501(c)(3) del codice fiscale statunitense, crea strumenti per aiutare le persone a comunicare in privato. Sviluppiamo White Noise e Marmot, il protocollo aperto di messaggistica su cui si basa. La tua donazione sostiene questo lavoro e la nostra convinzione che tutti debbano poter conversare in privato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A IPF é uma organização sem fins lucrativos que cria ferramentas para ajudar as pessoas a comunicar em privado. Desenvolvemos o White Noise e o Marmot, o protocolo aberto de mensagens em que se baseia. O seu donativo apoia este trabalho e a nossa convicção de que todos devem poder conversar em privado."
+            "value" : "A IPF, organização sem fins lucrativos constituída no Wyoming e reconhecida ao abrigo da secção 501(c)(3) do código fiscal dos EUA, cria ferramentas para ajudar as pessoas a comunicar em privado. Desenvolvemos o White Noise e o Marmot, o protocolo aberto de mensagens em que se baseia. O seu donativo apoia este trabalho e a nossa convicção de que todos devem poder conversar em privado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF — некоммерческая организация, создающая инструменты для приватного общения. Мы разрабатываем White Noise и Marmot — открытый протокол обмена сообщениями, на котором работает приложение. Ваше пожертвование поддерживает эту работу и наше убеждение, что приватное общение должно быть доступно каждому."
+            "value" : "IPF — некоммерческая организация, учреждённая в штате Вайоминг, признанная по разделу 501(c)(3) Налогового кодекса США и создающая инструменты для приватного общения. Мы разрабатываем White Noise и Marmot — открытый протокол обмена сообщениями, на котором работает приложение. Ваше пожертвование поддерживает эту работу и наше убеждение, что приватное общение должно быть доступно каждому."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF, insanların özel iletişim kurmasına yardımcı olan araçlar geliştiren, kâr amacı gütmeyen bir kuruluştur. White Noise ve temelindeki açık mesajlaşma protokolü Marmot’u geliştiriyoruz. Bağışınız bu çalışmaları ve özel konuşmaların herkes için erişilebilir olması gerektiğine dair inancımızı destekler."
+            "value" : "IPF, Wyoming eyaletinde kurulmuş, ABD vergi kanununun 501(c)(3) maddesi kapsamında tanınan ve insanların özel iletişim kurmasına yardımcı olan araçlar geliştiren kâr amacı gütmeyen bir kuruluştur. White Noise ve temelindeki açık mesajlaşma protokolü Marmot’u geliştiriyoruz. Bağışınız bu çalışmaları ve özel konuşmaların herkes için erişilebilir olması gerektiğine dair inancımızı destekler."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF 是一家非营利组织，开发工具帮助人们私密交流。我们开发 White Noise 及其背后的开放消息协议 Marmot。您的捐款支持这些工作，也支持我们的信念：每个人都应该能够私密交谈。"
+            "value" : "IPF 是一家在美国怀俄明州注册成立、依据美国税法第 501(c)(3) 条获得免税资格的非营利机构，致力于开发帮助人们私密交流的工具。我们开发 White Noise 及其背后的开放消息协议 Marmot。您的捐款支持这些工作，也支持我们的信念：每个人都应该能够私密交谈。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "IPF 是一家非營利組織，開發工具幫助人們私密交流。我們開發 White Noise 及其背後的開放訊息協定 Marmot。您的捐款支持這些工作，也支持我們的信念：每個人都應該能夠私密交談。"
+            "value" : "IPF 是一家在美國懷俄明州註冊成立、依據美國稅法第 501(c)(3) 條取得免稅資格的非營利機構，致力於開發幫助人們私密交流的工具。我們開發 White Noise 及其背後的開放訊息協定 Marmot。您的捐款支持這些工作，也支持我們的信念：每個人都應該能夠私密交談。"
           }
         }
       }

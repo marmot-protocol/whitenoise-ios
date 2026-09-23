@@ -22,7 +22,7 @@ struct DonationLocalizationTests {
             "Your payment succeeded. Please try again later to view the invoice.",
             "Thank you for supporting IPF and White Noise. You’re helping people communicate freely and privately.",
             "Help the Internet Privacy Foundation (IPF), a nonprofit building tools for private communication.",
-            "IPF is a nonprofit that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone.",
+            "IPF is a 501(c)(3) nonprofit incorporated in Wyoming that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone.",
             "Charged monthly until you cancel.",
             "Monthly donation active",
             "Cancellation scheduled",

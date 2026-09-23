@@ -245,7 +245,7 @@ struct DonateView: View {
                 Text("About your donation")
                     .font(.headline)
                     .accessibilityAddTraits(.isHeader)
-                Text("IPF is a nonprofit that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone.")
+                Text("IPF is a 501(c)(3) nonprofit incorporated in Wyoming that builds tools to help people communicate privately. We develop White Noise and Marmot, the open messaging protocol behind it. Your donation supports this work and our belief that private conversations should be available to everyone.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
