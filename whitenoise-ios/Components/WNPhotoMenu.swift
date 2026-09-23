@@ -183,7 +183,7 @@ private struct WNPhotoMenuPanel: View {
             }
         }
         .frame(width: WNPhotoMenuMetrics.menuWidth)
-        .background(.regularMaterial, in: .rect(cornerRadius: WNPhotoMenuMetrics.cornerRadius))
+        .compatibleInputRoundedChrome(cornerRadius: WNPhotoMenuMetrics.cornerRadius, interactive: false)
         .overlay {
             RoundedRectangle(cornerRadius: WNPhotoMenuMetrics.cornerRadius)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)

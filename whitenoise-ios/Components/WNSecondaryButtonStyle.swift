@@ -115,6 +115,7 @@ private struct WNSecondaryButtonLabel: View {
             .padding(.horizontal, insets.horizontal)
             .padding(.vertical, insets.vertical)
             .frame(width: diameter, height: diameter)
+            .frame(minHeight: scaledDiameter)
             .background {
                 background
                     .fill(Metrics.fill(for: Metrics.surface(for: colorScheme)))

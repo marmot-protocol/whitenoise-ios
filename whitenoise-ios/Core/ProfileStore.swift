@@ -102,6 +102,13 @@ final class ProfileStore {
         category: "profile-hydration"
     )
 
+    // Contact nicknames: private per-device labels layered over the projection
+    // cache. Only the main app writes them, so the snapshot is loaded once and
+    // kept in sync by the write path — no cross-process invalidation needed.
+    // Injectable defaults keep nickname tests hermetic.
+    var contactNicknameDefaults: UserDefaults? = ContactNicknameStore.defaults
+    private var contactNicknamesByKey: [String: String]?
+
     // MARK: - Dependencies (read through AppState; never retained)
 
     private var canRefreshProfiles: Bool { appState?.canRefreshProfiles ?? false }
@@ -123,15 +130,75 @@ final class ProfileStore {
         return profileProjectionCache[id]?.profile
     }
 
+    /// A local nickname wins over the resolved profile projection; this is the
+    /// resolution chokepoint every display-name consumer reads through, so the
+    /// override applies everywhere at once. The projection is still resolved
+    /// first: it registers SwiftUI observation and warms the cache so the real
+    /// profile name and avatar stay available alongside the nickname.
     func knownDisplayName(forAccountIdHex id: String) -> String? {
-        cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.knownDisplayName
+        let resolved = cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.knownDisplayName
+        return contactNickname(forAccountIdHex: id) ?? resolved
     }
 
     /// Cache-only display-name read for bounded batch projections. The
     /// projection's name is already sanitized by `resolvedKnownDisplayName`.
     func cachedKnownDisplayName(forAccountIdHex id: String) -> String? {
         _ = appState?.profileRefreshGeneration
-        return profileProjectionCache[id]?.knownDisplayName
+        return contactNickname(forAccountIdHex: id) ?? profileProjectionCache[id]?.knownDisplayName
+    }
+
+    /// The resolved profile-directory name, ignoring any local nickname — the
+    /// secondary line on the profile screen when a nickname overrides it.
+    func knownProfileDisplayName(forAccountIdHex id: String) -> String? {
+        cachedProfileProjection(forAccountIdHex: id, refreshAfterLoad: true)?.knownDisplayName
+    }
+
+    // MARK: - Contact nicknames
+
+    func contactNickname(forAccountIdHex id: String) -> String? {
+        _ = appState?.profileRefreshGeneration
+        guard let owner = contactNicknameOwner(forContactAccountIdHex: id) else { return nil }
+        return ContactNicknameStore.nickname(
+            ownerAccountIdHex: owner,
+            contactAccountIdHex: id,
+            in: contactNicknameSnapshot()
+        )
+    }
+
+    func setContactNickname(_ nickname: String?, forAccountIdHex id: String) {
+        guard let owner = contactNicknameOwner(forContactAccountIdHex: id) else { return }
+        ContactNicknameStore.setNickname(
+            nickname,
+            ownerAccountIdHex: owner,
+            contactAccountIdHex: id,
+            defaults: contactNicknameDefaults
+        )
+        contactNicknamesByKey = ContactNicknameStore.nicknamesByKey(defaults: contactNicknameDefaults)
+        appState?.noteProfileRefreshCompleted()
+    }
+
+    /// Sign-out cleanup: drops every nickname the departing owner authored and
+    /// invalidates the snapshot so a later active account reloads fresh state.
+    func clearContactNicknames(ownerAccountIdHex: String) {
+        ContactNicknameStore.clearAll(ownerAccountIdHex: ownerAccountIdHex, defaults: contactNicknameDefaults)
+        contactNicknamesByKey = nil
+        appState?.noteProfileRefreshCompleted()
+    }
+
+    private func contactNicknameOwner(forContactAccountIdHex id: String) -> String? {
+        guard let appState else { return nil }
+        return AppState.contactNicknameOwner(
+            activeAccountIdHex: appState.activeAccount?.accountIdHex,
+            localAccountIdsHex: appState.accounts.map(\.accountIdHex),
+            contactAccountIdHex: id
+        )
+    }
+
+    private func contactNicknameSnapshot() -> [String: String] {
+        if let contactNicknamesByKey { return contactNicknamesByKey }
+        let snapshot = ContactNicknameStore.nicknamesByKey(defaults: contactNicknameDefaults)
+        contactNicknamesByKey = snapshot
+        return snapshot
     }
 
     func avatarURL(forAccountIdHex id: String) -> URL? {

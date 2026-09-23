@@ -65,7 +65,9 @@ struct ProfileShareCard: View {
         guard let qrImage = QRCode.image(from: profileURL) else { throw RenderError.unavailable }
         let renderer = ImageRenderer(content: ProfileShareCard(
             accountIdHex: accountIdHex, displayName: displayName, avatar: avatar, qrImage: qrImage
-        ))
+        )
+        // ImageRenderer starts a separate view tree without the app's locale environment.
+        .environment(\.locale, AppLanguage.currentLocale))
         renderer.scale = 3
         renderer.isOpaque = true
         guard let image = renderer.uiImage else { throw RenderError.unavailable }

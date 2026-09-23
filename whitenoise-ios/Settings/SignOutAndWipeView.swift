@@ -104,7 +104,7 @@ struct SignOutAndWipeCover: View {
                         Text("Sign Out & Wipe")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .wnPrimaryButtonStyle()
                     .buttonBorderShape(.capsule)
                     .controlSize(.large)
                     .tint(.red)

@@ -9,6 +9,7 @@ struct AppProfileLink: Identifiable, Equatable {
 @Observable
 final class NavigationState {
     private(set) var pendingProfile: AppProfileLink?
+    private(set) var pendingChatPerformance: ConversationOpenPerformance?
     private(set) var pendingChatId: String?
     private(set) var pendingChatAccountRef: String?
     private(set) var pendingChatMessageIdHex: String?
@@ -28,8 +29,10 @@ final class NavigationState {
     func presentChat(
         groupIdHex: String,
         accountRef: String? = nil,
-        messageIdHex: String? = nil
+        messageIdHex: String? = nil,
+        performance: ConversationOpenPerformance? = nil
     ) -> String? {
+        pendingChatPerformance = performance
         let activatedAccountRef: String?
         if let accountRef, !accountRef.isEmpty {
             pendingChatAccountRef = accountRef
@@ -47,6 +50,7 @@ final class NavigationState {
 
     @MainActor
     func clearPendingChat() {
+        pendingChatPerformance = nil
         pendingChatId = nil
         pendingChatAccountRef = nil
         pendingChatMessageIdHex = nil

@@ -51,7 +51,7 @@ struct WNQRCodeCardRenderingTests {
 
     @Test func theRenderedCardDecodesBackToItsPayload() throws {
         for containerWidth in Self.containerWidths {
-            let card = try Self.renderCard(containerWidth: containerWidth)
+            let card = try Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload))
 
             #expect(
                 Self.decodedPayloads(in: card).contains(Self.payload),
@@ -65,7 +65,7 @@ struct WNQRCodeCardRenderingTests {
         let moduleCount = bare.size.width
 
         for containerWidth in Self.containerWidths {
-            let card = try Self.renderCard(containerWidth: containerWidth)
+            let card = try Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload))
             let bitmap = try #require(Self.bitmap(of: card))
             let symbol = try #require(
                 bitmap.horizontalExtent { $0 <= 100 },
@@ -94,7 +94,7 @@ struct WNQRCodeCardRenderingTests {
                 Self.bitmap(of: Self.renderCard(containerWidth: containerWidth, image: nil))
             )
             let loaded = try #require(
-                Self.bitmap(of: Self.renderCard(containerWidth: containerWidth))
+                Self.bitmap(of: Self.renderCard(containerWidth: containerWidth, image: QRCode.image(from: Self.payload)))
             )
             let isCard: (UInt8) -> Bool = { $0 >= 250 }
 
@@ -121,7 +121,8 @@ struct WNQRCodeCardRenderingTests {
 
     @Test func theSymbolKeepsTheSizeItHadInThePrototype() throws {
         for containerWidth in Self.containerWidths {
-            let card = try #require(Self.bitmap(of: Self.renderCard(containerWidth: containerWidth)))
+            let card = try #require(Self.bitmap(of: Self.renderCard(
+                containerWidth: containerWidth, image: QRCode.image(from: Self.payload))))
             let symbol = try #require(card.horizontalExtent { $0 <= 100 })
             let width = CGFloat(symbol.upperBound - symbol.lowerBound + 1) / Self.renderScale
             let prototype = WNQRCodeCardMetricsTests
@@ -136,7 +137,7 @@ struct WNQRCodeCardRenderingTests {
 
     private static func renderCard(
         containerWidth: CGFloat,
-        image: UIImage? = QRCode.image(from: payload)
+        image: UIImage?
     ) throws -> UIImage {
         let controller = UIHostingController(
             rootView: WNQRCodeCard(

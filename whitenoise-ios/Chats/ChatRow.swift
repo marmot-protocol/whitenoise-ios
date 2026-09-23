@@ -8,10 +8,11 @@ import UIKit
 /// relative timestamp.
 struct ChatRow: View {
     @Environment(AppState.self) private var appState
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let item: ChatsListViewModel.Item
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 12) {
             GroupAvatarBubble(
                 groupIdHex: item.id,
                 imageHashHex: encryptedImageHashHex,
@@ -23,12 +24,16 @@ struct ChatRow: View {
                 usesNativeAsset: item.selectedAvatar != nil
             )
             .frame(width: 56, height: 56)
+            .overlay(alignment: .bottomTrailing) {
+                if item.isPinned { PinnedChatAvatarBadge() }
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(title)
                         .font(.headline)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if item.isMuted {
                         Image(systemName: MuteBadgePresentation.systemImageName)
                             .font(.caption)
@@ -66,6 +71,8 @@ struct ChatRow: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -73,15 +80,9 @@ struct ChatRow: View {
                     previewText
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    if item.isPinned {
-                        Image(systemName: PinBadgePresentation.systemImageName)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .rotationEffect(.degrees(PinBadgePresentation.rotationDegrees))
-                            .accessibilityLabel(Text(L10n.string("Pinned")))
-                    }
                     switch status {
                     case .invitation:
                         ChatInviteBadge()
@@ -95,6 +96,7 @@ struct ChatRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+        .accessibilityValue(item.isPinned ? L10n.string("Pinned") : "")
     }
 
     private var status: ChatRowStatusPresentation.Status {
@@ -157,20 +159,23 @@ struct ChatRow: View {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You left this chat."))
         case .membershipEnded:
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You were removed from this chat."))
-        case .pendingInvite:
+        case .pendingInvite where item.selectedPreview == nil || item.selectedPreview == .invitation:
             return ChatRowPreviewPresentation(
                 prefix: nil,
                 body: ConversationInvitePresentation.invitationText(
                     inviterName: item.inviterAccountIdHex.map(senderName)
                 )
             )
-        case nil:
+        case .pendingInvite, nil:
             break
         }
         if let draftPreview = item.draftPreview {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.formatted("Draft: %@", draftPreview))
         }
-        guard let latest = item.lastMessage else {
+        if item.previewExpired {
+            return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("Message expired"))
+        }
+        guard item.selectedPreview != .empty, let latest = item.lastMessage else {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.string("No messages yet"))
         }
         let body = item.previewText ?? ""
@@ -235,11 +240,27 @@ nonisolated enum MuteBadgePresentation {
 
 nonisolated enum PinBadgePresentation {
     static let systemImageName = "pin.fill"
-    static let rotationDegrees = 45.0
+}
+
+private struct PinnedChatAvatarBadge: View {
+    @Environment(\.layoutDirection) private var layoutDirection
+
+    var body: some View {
+        Image(systemName: PinBadgePresentation.systemImageName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(4)
+            .background(Color(uiColor: .systemBackground), in: Circle())
+            .overlay {
+                Circle().strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+            }
+            .offset(x: layoutDirection == .rightToLeft ? -2 : 2, y: 2)
+            .accessibilityHidden(true)
+    }
 }
 
 /// Circular avatar. Renders the profile picture when a URL is provided,
-/// otherwise falls back to initials over a deterministic color derived from
+/// otherwise falls back to an initial over a deterministic color derived from
 /// the seed string (so a given group/person keeps the same color).
 struct AvatarBubble: View {
     let seed: String
@@ -249,11 +270,7 @@ struct AvatarBubble: View {
 
     var body: some View {
         Circle()
-            .fill(LinearGradient(
-                colors: [color.opacity(0.85), color.opacity(0.5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ))
+            .fill(WNIdentityPalette.avatarBackground(for: seed))
             .overlay {
                 initialsView
                 if let pictureURL {
@@ -275,31 +292,8 @@ struct AvatarBubble: View {
     }
 
     private var initialsView: some View {
-        Text(initials)
-            .font(.headline)
+        WNAvatarMonogramView(name: title)
             .foregroundStyle(.white)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var initials: String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "?" }
-        let parts = trimmed.split(separator: " ", maxSplits: 1)
-        let first = parts.first?.first.map(String.init) ?? ""
-        let second = parts.count > 1 ? (parts[1].first.map(String.init) ?? "") : ""
-        let combined = (first + second).uppercased()
-        return combined.isEmpty ? "?" : combined
-    }
-
-    private var color: Color {
-        let palette: [Color] = [.indigo, .blue, .teal, .green, .orange, .pink, .purple, .red]
-        let hash = seed.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }
-        return palette[Self.paletteIndex(forHash: hash, paletteCount: palette.count)]
-    }
-
-    static func paletteIndex(forHash hash: Int, paletteCount: Int) -> Int {
-        precondition(paletteCount > 0)
-        return Int(hash.magnitude % UInt(paletteCount))
     }
 }
 

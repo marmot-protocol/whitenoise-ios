@@ -4,6 +4,7 @@ import SwiftUI
 struct ProfileIdentityHeader<Avatar: View>: View {
     let name: String
     let npub: String?
+    var profileName: String?
     var nostrAddress: String?
     var isAddressVerified = false
     var bottomPadding: CGFloat = 14
@@ -24,6 +25,12 @@ struct ProfileIdentityHeader<Avatar: View>: View {
                     .font(.title2.weight(.semibold))
                     .multilineTextAlignment(.center)
 
+                if let profileName {
+                    Text(L10n.formatted("Name from profile: %@", profileName))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 if showsIdentityValues, let nostrAddress {
                     ProfileAddressValue(address: nostrAddress, isVerified: isAddressVerified)
                 }

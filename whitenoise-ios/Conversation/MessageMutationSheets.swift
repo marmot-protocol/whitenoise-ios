@@ -154,15 +154,16 @@ struct ForwardMessageSheet: View {
                 Group {
                     if isSending {
                         ProgressView()
-                            .tint(.white)
+                            .tint(WNNeutralAccent.foreground)
                     } else {
                         Text("Forward")
                             .fontWeight(.semibold)
                     }
                 }
                 .frame(maxWidth: .infinity, minHeight: 24)
+                .foregroundStyle(WNNeutralAccent.foreground)
             }
-            .buttonStyle(.borderedProminent)
+            .wnPrimaryButtonStyle()
             .controlSize(.large)
             .buttonBorderShape(.capsule)
             .disabled(selectedGroupIds.isEmpty || isSending || isLoading)

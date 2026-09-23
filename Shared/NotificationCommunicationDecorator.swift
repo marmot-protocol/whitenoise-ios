@@ -87,7 +87,7 @@ nonisolated enum NotificationCommunicationDecorator {
     }
 
     /// Stable per-sender identity: the account id survives display-name and
-    /// profile name changes and keeps two same-named senders in one thread apart.
+    /// nickname changes and keeps two same-named senders in one thread apart.
     private static func personHandleValue(for presentation: LocalNotificationPresentation) -> String {
         "\(presentation.threadIdentifier):\(presentation.senderAccountIdHex ?? presentation.senderName ?? "")"
     }

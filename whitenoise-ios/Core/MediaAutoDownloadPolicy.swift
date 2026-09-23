@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import MarmotKit
 
 /// The kinds of media a bubble can carry. Each call site already knows its
 /// own type (image bubble → `.image`, voice bubble → `.audio`), so the gate
@@ -168,7 +169,7 @@ nonisolated struct MediaAutoDownloadMatrix: Equatable {
 @MainActor
 @Observable
 final class MediaAutoDownloadStore {
-    static let shared = MediaAutoDownloadStore()
+    static let shared = MediaAutoDownloadStore(onPolicyChange: AttachmentPolicyBridge.policyDidChange)
     static let storageKey = "media.autoDownloadMatrix"
     /// Posted on the offline→online transition — the app's cue to run the
     /// same relay catch-up it runs on foreground activation.
@@ -179,7 +180,9 @@ final class MediaAutoDownloadStore {
     /// Raw path satisfaction — distinct from `activeNetworks`, which is empty
     /// both when offline and on interface types the matrix doesn't model.
     private(set) var isOnline = true
+    private(set) var permissionRevision: UInt64 = 0
     private let defaults: UserDefaults
+    private let onPolicyChange: @MainActor () -> Void
     private let monitor = NWPathMonitor()
     private var accountIdHex: String?
 
@@ -199,8 +202,9 @@ final class MediaAutoDownloadStore {
         ) ?? .defaultMatrix
     }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, onPolicyChange: @escaping @MainActor () -> Void = {}) {
         self.defaults = defaults
+        self.onPolicyChange = onPolicyChange
         self.matrix = MediaAutoDownloadMatrix.fromPreference(defaults.string(forKey: Self.storageKey))
             ?? .defaultMatrix
         monitor.pathUpdateHandler = { [weak self] path in
@@ -218,6 +222,7 @@ final class MediaAutoDownloadStore {
                     NotificationCenter.default.post(name: Self.connectivityRestored, object: nil)
                 }
                 self.isOnline = satisfied
+                self.onPolicyChange()
             }
         }
         monitor.start(queue: DispatchQueue(label: "media.autodownload.path"))
@@ -226,47 +231,34 @@ final class MediaAutoDownloadStore {
     func setLevel(_ level: MediaAutoDownloadLevel, for type: MediaAutoDownloadType) {
         matrix = matrix.setting(type, to: level)
         defaults.set(matrix.toPreference(), forKey: Self.storageKey(accountIdHex: accountIdHex))
+        self.onPolicyChange()
     }
 
     func resetToDefaults() {
         matrix = .defaultMatrix
         defaults.removeObject(forKey: Self.storageKey(accountIdHex: accountIdHex))
+        self.onPolicyChange()
     }
 
     var attachmentPolicyRevision: String {
-        "\(matrix.toPreference())/\(activeNetworks.map(\.rawValue).sorted().joined(separator: ","))"
+        "\(matrix.toPreference())/\(activeNetworks.map(\.rawValue).sorted().joined(separator: ","))/\(permissionRevision)"
     }
 
-    func allowsBackgroundAttachments(accountID: String) -> Bool {
+    func didApplyAttachmentPermission() {
+        permissionRevision &+= 1
+    }
+
+    func attachmentPermission(accountID: String) -> AttachmentAutomaticPermissionFfi {
         let preference = MediaAutoDownloadMatrix.fromPreference(
             defaults.string(forKey: Self.storageKey(accountIdHex: accountID))) ?? .defaultMatrix
-        return MediaAutoDownloadType.allCases.allSatisfy {
-            preference.shouldAutoDownload($0, activeNetworks: activeNetworks)
-        }
+        return AttachmentAutomaticPermissionFfi(
+            images: preference.shouldAutoDownload(.image, activeNetworks: activeNetworks),
+            videos: preference.shouldAutoDownload(.video, activeNetworks: activeNetworks),
+            audio: preference.shouldAutoDownload(.audio, activeNetworks: activeNetworks),
+            files: preference.shouldAutoDownload(.document, activeNetworks: activeNetworks))
     }
 
     func shouldAutoDownload(_ type: MediaAutoDownloadType) -> Bool {
         matrix.shouldAutoDownload(type, activeNetworks: activeNetworks)
-    }
-}
-
-/// Voice messages always auto-download — they are small, conversational, and
-/// both major reference messengers exempt them from the matrix. Other audio
-/// attachments honor the audio row.
-nonisolated enum AudioAutoDownloadPolicy {
-    /// The wire carries no trustworthy voice marker yet, so the
-    /// always-download bypass requires a locally-known, plausible duration —
-    /// unknown audio honors the matrix (an explicit Never must win over an
-    /// unverifiable guess). Becomes exact for received notes once the media
-    /// reference carries bounded metadata (engine follow-up).
-    static let maxVoiceMessageSeconds: Double = 600
-
-    static func isVoiceMessage(durationSeconds: Double?) -> Bool {
-        guard let durationSeconds, durationSeconds.isFinite else { return false }
-        return durationSeconds > 0 && durationSeconds <= maxVoiceMessageSeconds
-    }
-
-    static func shouldPrefetch(isVoiceMessage: Bool, matrixAllows: Bool) -> Bool {
-        isVoiceMessage || matrixAllows
     }
 }

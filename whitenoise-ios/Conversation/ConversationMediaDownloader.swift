@@ -84,11 +84,14 @@ nonisolated enum MediaPlaintextHash {
 
 @MainActor
 protocol ConversationMediaCacheAccessing {
+    var producerGeneration: Int { get }
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data?
     func store(_ data: Data, for reference: MediaAttachmentReferenceFfi, producerGeneration: Int?) async
 }
 
 struct DefaultConversationMediaCache: ConversationMediaCacheAccessing {
+    var producerGeneration: Int { MessageMediaCache.currentProducerEpoch() }
+
     func cachedData(for reference: MediaAttachmentReferenceFfi) async -> Data? {
         await MessageMediaCache.cachedData(for: reference)
     }
@@ -157,7 +160,6 @@ final class ConversationMediaDownloader {
                 sourceHint: media.sourceHint, scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)")
         ) {
             var target = media.localTarget
-            var nativeScope: (client: MarmotClient, account: String)?
             if target == nil, let hint = media.sourceHint,
                let appState, let account = appState.activeAccountRef {
                 let client = try appState.currentMarmotClient()
@@ -166,7 +168,6 @@ final class ConversationMediaDownloader {
             if let target {
                 guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
                 let client = try appState.currentMarmotClient()
-                nativeScope = (client, account)
                 if let data = try await client.acquireAttachmentData(accountRef: account, groupID: groupIdHex,
                     target: target, explicit: media.downloadExplicitly) {
                     try Task.checkCancellation()
@@ -179,34 +180,18 @@ final class ConversationMediaDownloader {
                     return data
                 }
             }
-            // Captured before any async gap — cache read or download — so a
-            // wipe completing mid-operation invalidates this producer's store.
-            let producerEpoch = MessageMediaCache.currentProducerEpoch()
+            // A cache miss never grants new automatic network work. Source-scoped
+            // MDK reads above own expiry, removal and acquisition history.
+            guard media.downloadExplicitly else { throw AttachmentReadError.unavailable }
+            let producerEpoch = self.cache.producerGeneration
             if let cached = await self.cache.cachedData(for: reference),
-               await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256)
-            {
+               await MediaPlaintextHash.matches(cached, expectedSha256: reference.plaintextSha256) {
                 try Task.checkCancellation()
-                guard !self.isStopped, MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
-                if let scope = nativeScope, let target {
-                    guard appState?.activeAccountRef == scope.account, appState?.client === scope.client else { throw CancellationError() }
-                    let state = try await scope.client.marmot.attachmentTransferSnapshot(accountRef: scope.account,
-                        groupIdHex: groupIdHex, targets: [target]).items.first?.state
-                    guard let state, ![.unavailable, .removed, .cancelled].contains(state) else { throw AttachmentReadError.stale }
-                }
+                guard !self.isStopped, self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
                 return cached
             }
             guard let appState, let accountRef = appState.activeAccountRef else {
                 throw MediaDataError.missingAccount
-            }
-            if nativeScope != nil, !media.downloadExplicitly {
-                let type: MediaAutoDownloadType = switch media.kind {
-                case .image: .image
-                case .video: .video
-                case .audio: .audio
-                case .document, .unsupported: .document
-                }
-                let voice = media.isAudio && AudioAutoDownloadPolicy.isVoiceMessage(durationSeconds: media.durationSeconds)
-                guard voice || MediaAutoDownloadStore.shared.shouldAutoDownload(type) else { throw CancellationError() }
             }
             let locatorResolver = self.locatorResolver
             let locatorResolutionIsSafe = await Task.detached(priority: .utility) {
@@ -239,7 +224,7 @@ final class ConversationMediaDownloader {
                 }
             }
             await self.cache.store(result.plaintext, for: reference, producerGeneration: producerEpoch)
-            guard MessageMediaCache.currentProducerEpoch() == producerEpoch else { throw CancellationError() }
+            guard self.cache.producerGeneration == producerEpoch else { throw CancellationError() }
             return result.plaintext
         }
     }

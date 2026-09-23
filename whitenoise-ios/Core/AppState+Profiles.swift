@@ -23,7 +23,8 @@ extension AppState {
         profileStore.cachedProfile(forAccountIdHex: id)
     }
 
-    /// A display name we actually *know* for an account: kind:0 display_name/name, then a
+    /// A display name we actually *know* for an account: the user's private
+    /// contact nickname first, then projected kind:0 display_name/name, then a
     /// local account's label. `nil` when nothing better than the raw id is
     /// available, so callers can choose their own fallback (e.g. an npub for a
     /// DM peer).
@@ -37,6 +38,45 @@ extension AppState {
     @MainActor
     func cachedKnownDisplayName(forAccountIdHex id: String) -> String? {
         profileStore.cachedKnownDisplayName(forAccountIdHex: id)
+    }
+
+    /// The resolved profile-directory name with any local nickname ignored —
+    /// what the contact publicly calls themselves. Shown as secondary text on
+    /// the profile screen when a nickname overrides it.
+    @MainActor
+    func knownProfileDisplayName(forAccountIdHex id: String) -> String? {
+        profileStore.knownProfileDisplayName(forAccountIdHex: id)
+    }
+
+    /// The private, device-local nickname for a contact, if the active account
+    /// has set one. Never published; stored in the shared App Group defaults so
+    /// the Notification Service Extension resolves the same override.
+    @MainActor
+    func contactNickname(forAccountIdHex id: String) -> String? {
+        profileStore.contactNickname(forAccountIdHex: id)
+    }
+
+    /// Sets or clears the active account's private nickname for a contact.
+    /// The value is sanitized with the display-name rules; a blank value clears.
+    @MainActor
+    func setContactNickname(_ nickname: String?, forAccountIdHex id: String) {
+        profileStore.setContactNickname(nickname, forAccountIdHex: id)
+    }
+
+    /// Pure gate for whether a contact nickname applies: there must be an
+    /// active owner account, and the contact must not be one of this device's
+    /// own accounts (their local label wins). Extracted so the decision is
+    /// unit testable without a profile store.
+    static func contactNicknameOwner(
+        activeAccountIdHex: String?,
+        localAccountIdsHex: [String],
+        contactAccountIdHex: String
+    ) -> String? {
+        guard let activeAccountIdHex, !activeAccountIdHex.isEmpty else { return nil }
+        let contact = contactAccountIdHex.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !contact.isEmpty else { return nil }
+        let contactIsLocalAccount = localAccountIdsHex.contains { $0.lowercased() == contact }
+        return contactIsLocalAccount ? nil : activeAccountIdHex
     }
 
     /// Pure resolution of the best known display name from its three sources, in

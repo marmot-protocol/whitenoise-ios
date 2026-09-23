@@ -65,6 +65,11 @@ nonisolated enum LocalNotificationProjection {
 
     private static let maxPreviewLength = 240
 
+    /// `nickname` resolves the viewer's private label for a (owner, contact)
+    /// pair — the same App-Group-backed override the in-app UI reads — so a set
+    /// nickname wins over the kind:0 sender name in notification titles too.
+    /// Defaults to none so the many test/summary call sites stay unchanged.
+    ///
     /// `previewMode` is the single redaction point for every delivery path: the
     /// foreground presenter, the extension's primary content, its additional
     /// presentations, and overflow summaries all build their content here, so a
@@ -74,6 +79,7 @@ nonisolated enum LocalNotificationProjection {
     /// sites pass `NotificationPreviewStore.mode()`.
     static func makePresentation(
         for update: NotificationUpdateFfi,
+        nickname: (String, String) -> String? = { _, _ in nil },
         previewMode: NotificationPreviewMode = .senderAndMessage
     ) -> LocalNotificationPresentation? {
         guard !update.isFromSelf else { return nil }
@@ -85,7 +91,10 @@ nonisolated enum LocalNotificationProjection {
             messageIdHex: update.messageIdHex
         )
 
-        let senderName = displayName(for: update.sender)
+        let senderName = displayName(
+            for: update.sender,
+            nickname: nickname(update.accountIdHex, update.sender.accountIdHex)
+        )
         // A withheld preview reuses the existing "no preview text" wording
         // ("Alice sent a message", "Alice mentioned you"), so sender-only
         // delivery needs no separate copy.
@@ -238,10 +247,12 @@ nonisolated enum LocalNotificationProjection {
         }
     }
 
-    private static func displayName(for user: NotificationUserFfi) -> String {
+    private static func displayName(for user: NotificationUserFfi, nickname: String?) -> String {
+        // A private nickname overrides the kind:0 sender name; it is already
+        // sanitized at the store boundary but re-checked here for safety.
         IdentityPresentation.text(
             accountIdHex: user.accountIdHex,
-            knownName: user.displayName,
+            knownName: ContentSanitizer.displayName(nickname) ?? user.displayName,
             unknown: .sender
         )
     }

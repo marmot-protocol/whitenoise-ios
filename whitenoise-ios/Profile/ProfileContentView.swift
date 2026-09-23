@@ -134,6 +134,7 @@ struct ProfileContentView: View {
             ProfileIdentityHeader(
                 name: title,
                 npub: displayReference,
+                profileName: nickname == nil ? nil : ContentSanitizer.displayName(effectiveProfile?.displayName ?? effectiveProfile?.name),
                 nostrAddress: declaredNip05,
                 isAddressVerified: model.verifiedNip05 == declaredNip05,
                 bottomPadding: 0,
@@ -174,6 +175,7 @@ struct ProfileContentView: View {
                     .disabled(isBlockedPeer)
                 }
                 if let hex = model.hex {
+                    ContactNicknameRow(accountIdHex: hex)
                     ProfileFollowButton(accountIdHex: hex, onChanged: onFollowChanged)
                         .disabled(isBlockedPeer)
                 }
@@ -347,12 +349,16 @@ struct ProfileContentView: View {
     private var title: String {
         IdentityPresentation.text(
             accountIdHex: resolvedAccountIdHex,
-            knownName: AppState.resolvedKnownDisplayName(
+            knownName: nickname ?? AppState.resolvedKnownDisplayName(
                 profile: effectiveProfile,
                 projectedName: projectedDisplayName,
                 localAccountLabel: nil
             )
         )
+    }
+
+    private var nickname: String? {
+        model.hex.flatMap { appState.contactNickname(forAccountIdHex: $0) }
     }
 
     private var declaredNip05: String? {

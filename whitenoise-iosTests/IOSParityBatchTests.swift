@@ -37,21 +37,41 @@ struct IOSParityBatchTests {
             stagedCount: 0,
             hasUsableName: true,
             isCreating: false,
+            isPreparingImage: false,
             hasActiveAccount: true
         ))
         #expect(!AddMembersPresentation.canCreate(
             stagedCount: 0,
             hasUsableName: false,
             isCreating: false,
+            isPreparingImage: false,
             hasActiveAccount: true
         ))
         #expect(AddMembersPresentation.canCreate(
             stagedCount: 1,
             hasUsableName: false,
             isCreating: false,
+            isPreparingImage: false,
             hasActiveAccount: true
         ))
         #expect(!AddMembersPresentation.canInvite(stagedCount: 0, isInviting: false))
+    }
+
+    @Test func creationWaitsForAPickedImageToFinishPreparing() {
+        #expect(!AddMembersPresentation.canCreate(
+            stagedCount: 1,
+            hasUsableName: true,
+            isCreating: false,
+            isPreparingImage: true,
+            hasActiveAccount: true
+        ))
+        #expect(AddMembersPresentation.canCreate(
+            stagedCount: 1,
+            hasUsableName: true,
+            isCreating: false,
+            isPreparingImage: false,
+            hasActiveAccount: true
+        ))
     }
 
     @Test func namedEmptyGroupCreationSendsSanitizedRequestWithoutMemberRefs() async throws {

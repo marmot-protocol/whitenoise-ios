@@ -1,7 +1,5 @@
-import PhotosUI
 import MarmotKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct CreateIdentityView: View {
     var isPushed = false
@@ -13,22 +11,11 @@ struct CreateIdentityView: View {
 
 /// Shared profile form for sign-up and an optional imported-account update.
 struct IdentityProfileSetupView: View {
-    private enum PendingPhotoSource {
-        case photos
-        case files
-    }
-
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
 
     @State private var model = CreateIdentityViewModel()
-    @State private var pendingPhotoSource: PendingPhotoSource?
-    @State private var showAvatarDisclosure = false
-    @State private var showPhotoPicker = false
     @State private var showPhotoMenu = false
-    @State private var showFileImporter = false
-    @State private var showWebImagePicker = false
-    @State private var cropSource: AvatarImageCropSource?
     @State private var isKeyboardVisible = false
     @FocusState private var nameFocused: Bool
     @FocusState private var aboutFocused: Bool
@@ -99,18 +86,22 @@ struct IdentityProfileSetupView: View {
         }
         .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
-        .wnPhotoMenu(isPresented: $showPhotoMenu, hasPhoto: model.avatarDraft != nil) { action in
-            switch action {
-            case .chooseFromPhotos:
-                requestPhotoSource(.photos)
-            case .chooseFromFiles:
-                requestPhotoSource(.files)
-            case .findImageOnWeb:
-                showWebImagePicker = true
-            case .removePhoto:
-                model.setAvatarDraft(nil)
+        .wnPhotoSourceMenu(
+            isPresented: $showPhotoMenu,
+            hasPhoto: model.avatarDraft != nil,
+            confirmsPublicUpload: true,
+            onError: model.setAvatarPreparationError,
+            onRemove: { model.setAvatarDraft(nil) },
+            onSelect: { selection in
+                Task {
+                    await model.prepareAvatar(
+                        data: selection.data,
+                        fileName: selection.fileName,
+                        typeIdentifier: selection.typeIdentifier
+                    )
+                }
             }
-        }
+        )
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
@@ -195,67 +186,6 @@ struct IdentityProfileSetupView: View {
                 await model.prepare(using: appState)
             }
         }
-        .alert("Your avatar is public", isPresented: $showAvatarDisclosure) {
-            Button("Continue") {
-                switch pendingPhotoSource {
-                case .photos:
-                    showPhotoPicker = true
-                case .files:
-                    showFileImporter = true
-                case nil:
-                    break
-                }
-                pendingPhotoSource = nil
-            }
-            Button("Cancel", role: .cancel) {
-                pendingPhotoSource = nil
-            }
-        } message: {
-            Text("The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy.")
-        }
-        .sheet(isPresented: $showPhotoPicker) {
-            PhotoLibraryPickerView(
-                selectionLimit: 1,
-                filter: .images,
-                onSelection: { selections in
-                    guard let selection = selections.first else { return }
-                    cropSource = AvatarImageCropSource(
-                        data: selection.data,
-                        fileName: selection.fileName,
-                        typeIdentifier: selection.typeIdentifier,
-                        sourceURL: nil
-                    )
-                },
-                onError: model.setAvatarPreparationError,
-                onDismiss: { showPhotoPicker = false }
-            )
-            .ignoresSafeArea()
-        }
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.image],
-            allowsMultipleSelection: false
-        ) { result in
-            prepareImportedFile(result)
-        }
-        .sheet(isPresented: $showWebImagePicker) {
-            OnboardingAvatarWebImagePicker { url in
-                prepareWebImage(url)
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(item: $cropSource) { source in
-            AvatarImageCropEditor(source: source) { source, croppedData in
-                Task {
-                    await model.prepareAvatar(
-                        data: croppedData,
-                        fileName: source.fileName,
-                        typeIdentifier: "public.jpeg"
-                    )
-                }
-            }
-        }
         .background {
             Color(.systemBackground)
                 .ignoresSafeArea()
@@ -264,15 +194,16 @@ struct IdentityProfileSetupView: View {
 
     private var avatarSection: some View {
         VStack(spacing: 0) {
-            WNAvatarPreview(
-                name: model.displayName,
-                image: model.avatarDraft?.thumbnail,
-                pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
-            )
-            .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-
-            WNPhotoMenuButton(hasPhoto: model.avatarDraft != nil, isPresented: $showPhotoMenu)
-            .padding(.top)
+            WNAvatarPhotoMenu(
+                hasPhoto: model.avatarDraft != nil,
+                isPresented: $showPhotoMenu
+            ) {
+                WNAvatarPreview(
+                    name: model.displayName,
+                    image: model.avatarDraft?.thumbnail,
+                    pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
+                )
+            }
             .disabled(model.isPreparingAvatar)
 
             if model.isPreparingAvatar {
@@ -324,54 +255,4 @@ struct IdentityProfileSetupView: View {
         ContentSanitizer.displayName(model.displayName) != nil
     }
 
-    private func requestPhotoSource(_ source: PendingPhotoSource) {
-        pendingPhotoSource = source
-        showAvatarDisclosure = true
-    }
-
-    private func prepareImportedFile(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            Task { await loadImportedFile(url) }
-        case .failure(let error):
-            model.setAvatarPreparationError(error)
-        }
-    }
-
-    private func loadImportedFile(_ url: URL) async {
-        let hasAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if hasAccess { url.stopAccessingSecurityScopedResource() }
-        }
-        do {
-            let data = try await Task.detached(priority: .userInitiated) {
-                try AvatarImageCropper.boundedFileData(from: url)
-            }.value
-            cropSource = AvatarImageCropSource(
-                data: data,
-                fileName: url.lastPathComponent,
-                typeIdentifier: nil,
-                sourceURL: url
-            )
-        } catch {
-            model.setAvatarPreparationError(error)
-        }
-    }
-
-    private func prepareWebImage(_ url: URL) {
-        Task {
-            do {
-                let data = try await RemoteImageFetch.imageData(for: url)
-                cropSource = AvatarImageCropSource(
-                    data: data,
-                    fileName: url.lastPathComponent,
-                    typeIdentifier: nil,
-                    sourceURL: url
-                )
-            } catch {
-                model.setAvatarPreparationError(error)
-            }
-        }
-    }
 }

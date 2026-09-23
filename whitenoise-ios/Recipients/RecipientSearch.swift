@@ -1,8 +1,9 @@
 import Foundation
 
 /// Pure matching rules for the people list in New Message, New Group, and Add
-/// Members. Matches display names, NIP-05 addresses, and npub/hex prefixes.
-/// Name-prefix matches rank before contained matches, identity matches last.
+/// Members. Matches resolved display names (private nicknames fold in through
+/// the resolved name), NIP-05 addresses, and npub/hex prefixes; name-prefix
+/// matches rank before contained matches, identity matches last.
 nonisolated enum RecipientSearch {
     enum ResultContext: Equatable {
         case youFollow
@@ -11,10 +12,12 @@ nonisolated enum RecipientSearch {
 
     struct MatchFields: Equatable {
         let displayName: String?
+        let nickname: String?
         let nip05: String?
 
-        init(displayName: String? = nil, nip05: String? = nil) {
+        init(displayName: String? = nil, nickname: String? = nil, nip05: String? = nil) {
             self.displayName = displayName
+            self.nickname = nickname
             self.nip05 = nip05
         }
     }
@@ -42,10 +45,12 @@ nonisolated enum RecipientSearch {
         var identity: [RecipientCandidate] = []
         for candidate in eligible {
             let matchFields = fields(candidate)
-            let name = matchFields.displayName.map(folded)
-            if name?.hasPrefix(needle) == true {
+            let names = [matchFields.displayName, matchFields.nickname]
+                .compactMap { $0 }
+                .map { folded($0) }
+            if names.contains(where: { $0.hasPrefix(needle) }) {
                 namePrefix.append(candidate)
-            } else if name?.contains(needle) == true {
+            } else if names.contains(where: { $0.contains(needle) }) {
                 nameContained.append(candidate)
             } else if matchesIdentity(candidate, fields: matchFields, needle: needle) {
                 identity.append(candidate)

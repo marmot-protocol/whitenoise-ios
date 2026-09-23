@@ -42,7 +42,11 @@ struct GroupsInCommonRow: View {
                 .foregroundStyle(.secondary)
             }
         } else if groups.isEmpty {
-            Button("Add to Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
+            LabeledContent {
+                Text("None")
+            } label: {
+                Label("Groups in Common", systemImage: "person.2")
+            }
         } else {
             NavigationLink {
                 GroupsInCommonView(
@@ -84,6 +88,7 @@ struct GroupsInCommonRow: View {
                 .accessibilityValue(L10n.plural("%lld groups in common", Int64(groups.count)))
             }
         }
+        Button("Add to Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
     }
 }
 

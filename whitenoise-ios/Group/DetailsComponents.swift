@@ -25,7 +25,7 @@ struct DetailsActionButton: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
             }
-            .buttonStyle(.bordered)
+            .wnSecondaryButtonStyle()
             .disabled(isDisabled || isLoading)
         case .circular:
             DetailsQuickAction(title: title, size: .compact) {
@@ -98,13 +98,8 @@ private struct DetailsQuickActionStyle: ButtonStyle {
             .font(font)
             .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
-            .background(
-                Color(uiColor: configuration.isPressed ? .secondarySystemFill : .secondarySystemGroupedBackground),
-                in: Circle()
-            )
-            .overlay {
-                Circle().stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
-            }
-            .opacity(isEnabled ? 1 : 0.45)
+            .compatibleInputCircleChrome()
+            .contentShape(.circle)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
     }
 }

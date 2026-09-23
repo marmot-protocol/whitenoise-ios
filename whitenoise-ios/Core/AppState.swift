@@ -165,6 +165,7 @@ final class AppState {
     var productOnboardingPath: ProductOnboardingPath?
     var productOnboardingTicket: ProductAnalyticsRecorder.Ticket?
     let productAnalytics = ProductAnalyticsRecorder()
+    @ObservationIgnored var conversationOpenPerformance: ConversationOpenPerformance?
     var pendingProductActivity: ProductAnalyticsActivityFfi = .foreground
     let diagnosticsConsent: DeviceDiagnosticsConsent
     var pendingAccountSetup: AccountSetupModel?
@@ -353,6 +354,7 @@ final class AppState {
     var client: MarmotClient? { runtimeLifecycle.client }
     let notifications: AppNotifications
     @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
+    let appReviewDemo = AppReviewDemoCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
     /// Optional local-auth gate and app-switcher privacy shield. UI-only:
@@ -498,6 +500,8 @@ final class AppState {
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
+        // Default arguments evaluate in a nonisolated context and `UserDefaults`
+        // is not Sendable, so the MainActor store is resolved in the body.
         erasureDefaults: UserDefaults? = nil,
         suspendedRuntimeTelemetryBuildConfig: TelemetryBuildConfig = AppState.defaultSuspendedRuntimeTelemetryBuildConfig,
         runtimeClientFactory: @escaping RuntimeLifecycle.RuntimeClientFactory =
@@ -519,8 +523,7 @@ final class AppState {
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
         self.erasureState = AppDataErasureState(
             defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
-            legacyDefaults: accountDefaults
-        )
+            legacyDefaults: accountDefaults)
         self.signInAttempts = SignInAttemptStore(defaults: accountDefaults)
         self.diagnosticsConsent = DeviceDiagnosticsConsent()
         self.developerMode = UserDefaults.standard.bool(forKey: Self.developerModeKey)
@@ -532,6 +535,7 @@ final class AppState {
         self.profileStore.appState = self
         self.runtimeLifecycle.configure(appState: self)
         self.conversationDraftStore.configure(persistence: self)
+        self.appReviewDemo.configure(appState: self, defaults: accountDefaults)
     }
 
     convenience init(client: MarmotClient) {
@@ -793,6 +797,7 @@ final class AppState {
         // the flag on every exit path, including the early wipe failure return
         // below.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: signingOut)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't sign out")))
@@ -859,8 +864,12 @@ final class AppState {
             await conversationDraftStore.flush()
             MessageHideStore.clearAll(accountRef: removedRef)
 
+            // Drop the wiped account's private contact nicknames so they don't
+            // outlive the identity on this device. Only on a destructive wipe —
+            // a normal sign-out retains the account (and its local state,
+            // including nicknames) for reactivation.
             if let removedAccountIdHex {
-                ContactNicknameStore.clearAll(ownerAccountIdHex: removedAccountIdHex)
+                profileStore.clearContactNicknames(ownerAccountIdHex: removedAccountIdHex)
                 // The wiped identity's per-chat mute and notify-mode entries
                 // live in the shared suite for the NSE; they must not outlive
                 // the account either.
@@ -972,6 +981,7 @@ final class AppState {
         // push reschedule for the whole teardown; cleared before routing so a
         // reschedule for the *new* active account is not suppressed.
         isSigningOut = true
+        notifications.cancelForegroundBatches(accountRef: wipingRef)
         defer { finishAccountExit() }
         guard let exitingClient = client else {
             present(.error(L10n.string("Couldn't wipe profile")))
@@ -1057,7 +1067,7 @@ final class AppState {
                 try await erasingClient.marmot.removeAccount(accountRef: account.label)
                 ChatMuteStore.clearAll(accountIdHex: account.accountIdHex)
                 MessageHideStore.clearAll(accountRef: account.label)
-                ContactNicknameStore.clearAll(ownerAccountIdHex: account.accountIdHex)
+                profileStore.clearContactNicknames(ownerAccountIdHex: account.accountIdHex)
             }
             guard try await erasingClient.listAccounts().isEmpty else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
@@ -1073,6 +1083,7 @@ final class AppState {
             guard await NotificationCommunicationDecorator.deleteAllDonatedInteractions() else {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
+            notifications.cancelForegroundBatches()
             UNUserNotificationCenter.current().removeAllDeliveredNotifications()
             UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
             URLCache.shared.removeAllCachedResponses()
@@ -1649,6 +1660,29 @@ final class AppState {
                 L10n.string("Account created"),
                 message: L10n.string("Secure setup is finishing in the background.")
             ))
+        }
+    }
+
+    /// Finishes a generated secondary identity without changing which profile
+    /// the app is presenting. The App Review demo uses this after MDK reports
+    /// that Johnny's initial KeyPackage publication is network-ready.
+    @MainActor
+    func completeSecondaryIdentityProfileSetup(_ summary: AccountSummaryFfi) async {
+        await productAnalytics.record(
+            .onboarding(.complete, .create, .success),
+            ticket: productOnboardingTicket
+        )?.value
+        productOnboardingTicket = nil
+        productOnboardingPath = nil
+        pendingAccountSetupReadiness.removeValue(forKey: summary.label)
+        cacheActivatedAccountSummaryIfNeeded(summary)
+        updateProfileProjectionLocalAccountLabels()
+        warmProfileProjection(forAccountIdHex: summary.accountIdHex)
+        restartReadyForegroundMaintenanceIfStopped()
+        do {
+            try await refreshAccounts(refreshUnreadSummaries: false)
+        } catch {
+            scheduleAccountUnreadSummaryRefresh()
         }
     }
 

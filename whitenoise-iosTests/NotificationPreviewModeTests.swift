@@ -160,20 +160,43 @@ struct NotificationPreviewProjectionTests {
         #expect(presentation(update, .generic)?.senderPictureUrl == nil)
     }
 
-    @Test func publicNamesAppearOnlyInModesThatRevealSenderIdentity() {
+    /// Sender-only makes the name the entire payload, so the private nickname
+    /// has to keep winning over the peer-controlled kind:0 name there — and a
+    /// nickname is more sensitive than a public name, so generic must withhold
+    /// it too.
+    @Test func nicknamesOutrankPublicNamesInEveryModeThatShowsAName() {
         withAppLanguage(.english) {
             let update = previewUpdate(previewText: "Ship it")
-            for mode in [NotificationPreviewMode.senderAndMessage, .senderOnly] {
-                let rendered = LocalNotificationProjection.makePresentation(for: update, previewMode: mode)
-                #expect(rendered?.title == "Alice")
-                #expect(rendered?.senderName == "Alice")
+            let owner = String(repeating: "11", count: 32)
+            let sender = String(repeating: "22", count: 32)
+            let nickname: (String, String) -> String? = { resolvedOwner, contact in
+                resolvedOwner == owner && contact == sender ? "Bestie" : nil
             }
+
+            for mode in [NotificationPreviewMode.senderAndMessage, .senderOnly] {
+                let rendered = LocalNotificationProjection.makePresentation(
+                    for: update,
+                    nickname: nickname,
+                    previewMode: mode
+                )
+                #expect(rendered?.title == "Bestie")
+                #expect(rendered?.senderName == "Bestie")
+                #expect(!containsPlaintext(rendered, "Alice"))
+            }
+
             let group = LocalNotificationProjection.makePresentation(
                 for: previewUpdate(isDm: false, groupName: "Project Room", previewText: "Ship it"),
+                nickname: nickname,
                 previewMode: .senderOnly
             )
-            #expect(group?.body == "Alice sent a message")
-            let generic = LocalNotificationProjection.makePresentation(for: update, previewMode: .generic)
+            #expect(group?.body == "Bestie sent a message")
+
+            let generic = LocalNotificationProjection.makePresentation(
+                for: update,
+                nickname: nickname,
+                previewMode: .generic
+            )
+            #expect(!containsPlaintext(generic, "Bestie"))
             #expect(!containsPlaintext(generic, "Alice"))
             #expect(generic?.senderName == nil)
         }
@@ -255,8 +278,10 @@ struct NotificationPreviewServiceDecisionTests {
         }
     }
 
-    @Test func publicNamesReachTheExtensionsPresentationsInSenderOnlyMode() {
+    @Test func nicknamesReachTheExtensionsPresentationsInSenderOnlyMode() {
         withAppLanguage(.english) {
+            let owner = String(repeating: "11", count: 32)
+            let sender = String(repeating: "22", count: 32)
             let collection = BackgroundNotificationCollectionFfi(
                 status: .newData,
                 notifications: [
@@ -268,6 +293,9 @@ struct NotificationPreviewServiceDecisionTests {
 
             let decision = NotificationServiceProjection.decision(
                 for: collection,
+                nickname: { resolvedOwner, contact in
+                    resolvedOwner == owner && contact == sender ? "Bestie" : nil
+                },
                 previewMode: .senderOnly
             )
 
@@ -275,9 +303,10 @@ struct NotificationPreviewServiceDecisionTests {
                 Issue.record("expected a decorated decision")
                 return
             }
-            #expect(primary.title == "Alice")
+            #expect(primary.title == "Bestie")
             for rendered in [primary] + additional {
-                #expect(rendered.senderName == "Alice")
+                #expect(rendered.senderName == "Bestie")
+                #expect(!containsPlaintext(rendered, "Alice"))
             }
         }
     }

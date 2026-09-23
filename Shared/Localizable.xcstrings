@@ -1,6 +1,360 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Sign in to download attachments." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich an, um Anhänge herunterzuladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión para descargar archivos adjuntos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous pour télécharger les pièces jointes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accedi per scaricare gli allegati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entre para baixar anexos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите, чтобы загрузить вложения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ekleri indirmek için giriş yapın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请登录以下载附件。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請登入以下載附件。"
+          }
+        }
+      }
+    },
+    "Download settings need to be refreshed. Reopen the app and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Download-Einstellungen müssen aktualisiert werden. Öffne die App erneut und versuche es noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es necesario actualizar los ajustes de descarga. Vuelve a abrir la app e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paramètres de téléchargement doivent être actualisés. Rouvrez l’application et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le impostazioni di download devono essere aggiornate. Riapri l’app e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As configurações de download precisam ser atualizadas. Reabra o app e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужно обновить настройки загрузки. Откройте приложение заново и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme ayarlarının yenilenmesi gerekiyor. Uygulamayı yeniden açıp tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载设置需要刷新。请重新打开应用后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載設定需要重新整理。請重新開啟應用程式後再試。"
+          }
+        }
+      }
+    },
+    "Download retry limit reached" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maximale Anzahl an Downloadversuchen erreicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se alcanzó el límite de reintentos de descarga"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de tentatives de téléchargement atteinte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite di tentativi di download raggiunto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de tentativas de download atingido"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Достигнут лимит повторных загрузок"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme denemesi sınırına ulaşıldı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已达到下载重试次数上限"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已達到下載重試次數上限"
+          }
+        }
+      }
+    },
+    "Download not saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download nicht gespeichert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga no guardada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargement non enregistré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download non salvato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download não salvo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка не сохранена"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme kaydedilmedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载未保存"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載未儲存"
+          }
+        }
+      }
+    },
+    "Download unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargement indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download non disponibile"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download indisponível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка недоступна"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme kullanılamıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法下载"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法下載"
+          }
+        }
+      }
+    },
+    "Message expired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachricht abgelaufen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje caducado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message expiré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio scaduto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensagem expirada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок хранения сообщения истёк"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesajın süresi doldu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消息已过期"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息已過期"
+          }
+        }
+      }
+    },
     "" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3712,6 +4066,286 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 成員必須更新 White Noise 才能結束此群組。"
+          }
+        }
+      }
+    },
+    "%lld new messages" : {
+      "comment" : "Number of new messages received in a foreground notification batch.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld neue Nachricht"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld neue Nachrichten"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld new message"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld new messages"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld mensaje nuevo"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld mensajes nuevos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nouveau message"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nouveaux messages"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nuovo messaggio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nuovi messaggi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nova mensagem"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld novas mensagens"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщения"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщений"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новое сообщение"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщения"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld yeni mesaj"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld 条新消息"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld 則新訊息"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -9332,6 +9966,65 @@
         }
       }
     },
+    "Allow camera access in Settings to take photos and videos." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erlaube den Kamerazugriff in den Einstellungen, um Fotos und Videos aufzunehmen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permite el acceso a la cámara en Configuración para tomar fotos y vídeos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autorisez l’accès à l’appareil photo dans Réglages pour prendre des photos et des vidéos."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consenti l’accesso alla fotocamera in Impostazioni per scattare foto e registrare video."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permita o acesso à câmera nas Configurações para tirar fotos e gravar vídeos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Разрешите доступ к камере в настройках, чтобы снимать фото и видео."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraf ve video çekmek için Ayarlar’da kamera erişimine izin verin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“设置”中允许访问相机，以拍摄照片和视频。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「設定」中允許存取相機，以拍攝照片和影片。"
+          }
+        }
+      }
+    },
     "Allow Notifications" : {
       "comment" : "A button that allows notifications to be enabled.",
       "isCommentAutoGenerated" : true,
@@ -13157,7 +13850,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "cámara"
+            "value" : "Cámara"
           }
         },
         "fr" : {
@@ -13263,6 +13956,124 @@
         }
       }
     },
+    "Camera Access Is Off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamerazugriff ist deaktiviert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El acceso a la cámara está desactivado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accès à l’appareil photo est désactivé"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accesso alla fotocamera è disattivato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O acesso à câmera está desativado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступ к камере выключен"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera erişimi kapalı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机访问已关闭"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相機存取已關閉"
+          }
+        }
+      }
+    },
+    "Camera access is restricted on this iPhone." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Kamerazugriff ist auf diesem iPhone eingeschränkt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El acceso a la cámara está restringido en este iPhone."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accès à l’appareil photo est restreint sur cet iPhone."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accesso alla fotocamera è limitato su questo iPhone."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O acesso à câmera está restrito neste iPhone."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доступ к камере ограничен на этом iPhone."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu iPhone’da kamera erişimi kısıtlanmış."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 上的相机访问受到限制。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 上的相機存取受到限制。"
+          }
+        }
+      }
+    },
     "Camera is not available on this device" : {
       "comment" : "Warning message displayed when the user tries to take a photo but the device does not have a camera.",
       "extractionState" : "manual",
@@ -13320,6 +14131,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此裝置上無法使用相機"
+          }
+        }
+      }
+    },
+    "Camera Is Restricted" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera ist eingeschränkt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cámara está restringida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’appareil photo est restreint"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fotocamera è limitata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A câmera está restrita"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера ограничена"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera kısıtlanmış"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机受限制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相機受限制"
           }
         }
       }
@@ -13439,6 +14309,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "相機不可用"
+          }
+        }
+      }
+    },
+    "Camera Unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cámara no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appareil photo indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotocamera non disponibile"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Câmera indisponível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера недоступна"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera kullanılamıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相机不可用"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "相機無法使用"
           }
         }
       }
@@ -15839,7 +16768,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige la calidad de las fotos y los vídeos que envías."
+            "value" : "Elige la calidad de las fotos y los videos que envías."
           }
         },
         "fr" : {
@@ -23431,7 +24360,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Verschwindende Nachrichten konnten nicht aktualisiert werden"
           }
         },
         "en" : {
@@ -23443,49 +24372,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "No se pudieron actualizar los mensajes temporales"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Impossible de mettre à jour les messages éphémères"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Impossibile aggiornare i messaggi effimeri"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Não foi possível atualizar as mensagens temporárias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Не удалось обновить исчезающие сообщения"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "Kaybolan mesajlar güncellenemedi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "无法更新阅后即焚消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't update disappearing messages"
+            "value" : "無法更新限時訊息"
           }
         }
       }
@@ -24637,7 +25566,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Benutzerdefiniert"
           }
         },
         "en" : {
@@ -24649,49 +25578,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personnalisé"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizzato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Personalizado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Пользовательский"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "Özel"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "自定义"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Custom"
+            "value" : "自訂"
           }
         }
       }
@@ -25008,7 +25937,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Tage"
           }
         },
         "en" : {
@@ -25020,49 +25949,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Días"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Jours"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Giorni"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Dias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Дни"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "Gün"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "天"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Days"
+            "value" : "天"
           }
         }
       }
@@ -26539,7 +27468,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Ältere Nachrichten löschen?"
           }
         },
         "en" : {
@@ -26551,49 +27480,108 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "¿Eliminar mensajes anteriores?"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Supprimer les anciens messages ?"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Eliminare i messaggi più vecchi?"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Apagar mensagens mais antigas?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Удалить старые сообщения?"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "Eski mesajlar silinsin mi?"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "删除较早的消息？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete older messages?"
+            "value" : "刪除較早的訊息？"
+          }
+        }
+      }
+    },
+    "Delete Profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil löschen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profili Sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除個人檔案"
           }
         }
       }
@@ -28156,7 +29144,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Verschwindende Nachrichten"
           }
         },
         "en" : {
@@ -28168,49 +29156,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Mensajes temporales"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Messages éphémères"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Messaggi effimeri"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Mensagens temporárias"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Исчезающие сообщения"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "Kaybolan mesajlar"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "阅后即焚消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages"
+            "value" : "限時訊息"
           }
         }
       }
@@ -28481,7 +29469,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Verschwindende Nachrichten aktualisiert"
           }
         },
         "en" : {
@@ -28493,49 +29481,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Mensajes temporales actualizados"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Messages éphémères mis à jour"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Messaggi effimeri aggiornati"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Mensagens temporárias atualizadas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Исчезающие сообщения обновлены"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "Kaybolan mesajlar güncellendi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "阅后即焚消息已更新"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Disappearing messages updated"
+            "value" : "限時訊息已更新"
           }
         }
       }
@@ -29350,7 +30338,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toca dos veces para hacer una foto. Mantén pulsado para grabar vídeo y suelta para detener."
+            "value" : "Toca dos veces para hacer una foto. Mantén pulsado para grabar video y suelta para detener."
           }
         },
         "fr" : {
@@ -30182,7 +31170,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Dauer"
           }
         },
         "en" : {
@@ -30194,49 +31182,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Duración"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Durée"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Durata"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Duração"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Длительность"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "Süre"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "时长"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Duration"
+            "value" : "時長"
           }
         }
       }
@@ -31952,7 +32940,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Gib eine Dauer zwischen %@ und %@ ein."
           }
         },
         "en" : {
@@ -31964,49 +32952,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Introduce una duración entre %@ y %@."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Saisissez une durée comprise entre %@ et %@."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Inserisci una durata compresa tra %@ e %@."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Insira uma duração entre %@ e %@."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "Укажите длительность от %@ до %@."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "%@ ile %@ arasında bir süre girin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "请输入 %@ 到 %@ 之间的时长。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter a duration between %@ and %@."
+            "value" : "請輸入 %@ 到 %@ 之間的時長。"
           }
         }
       }
@@ -38952,7 +39940,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "invitación grupal"
+            "value" : "Invitación grupal"
           }
         },
         "fr" : {
@@ -40792,7 +41780,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Stunden"
           }
         },
         "en" : {
@@ -40804,49 +41792,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Horas"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Heures"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Ore"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Horas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Часы"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "Saat"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "小时"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hours"
+            "value" : "小時"
           }
         }
       }
@@ -43729,7 +44717,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "solo tu"
+            "value" : "Solo tú"
           }
         },
         "fr" : {
@@ -47472,7 +48460,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hoja local"
+            "value" : "Hoja local"
           }
         },
         "fr" : {
@@ -50696,7 +51684,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Nachrichten werden nach der gewählten Zeit für alle gelöscht."
           }
         },
         "en" : {
@@ -50708,49 +51696,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Los mensajes se eliminan para todos después del tiempo seleccionado."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Les messages sont supprimés pour tout le monde après le délai sélectionné."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "I messaggi vengono eliminati per tutti dopo il tempo selezionato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "As mensagens são apagadas para todos após o tempo selecionado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Сообщения удаляются у всех по истечении выбранного времени."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "Mesajlar seçilen sürenin sonunda herkes için silinir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "消息将在所选时间后为所有人删除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are deleted for everyone after the selected time."
+            "value" : "訊息將在所選時間後為所有人刪除。"
           }
         }
       }
@@ -50761,7 +51749,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Nachrichten bleiben erhalten, bis du sie löschst."
           }
         },
         "en" : {
@@ -50773,49 +51761,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Los mensajes se conservan hasta que los elimines."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Les messages sont conservés jusqu’à ce que vous les supprimiez."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "I messaggi vengono conservati finché non li elimini."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "As mensagens são mantidas até você apagá-las."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Сообщения хранятся, пока вы их не удалите."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "Mesajlar siz silene kadar saklanır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "消息会一直保留，直到你删除它们。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messages are kept until you delete them."
+            "value" : "訊息會一直保留，直到你刪除為止。"
           }
         }
       }
@@ -50952,7 +51940,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minuten"
           }
         },
         "en" : {
@@ -50964,7 +51952,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minutos"
           }
         },
         "fr" : {
@@ -50976,37 +51964,37 @@
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minuti"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Minutos"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Минуты"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "Dakika"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "分钟"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minutes"
+            "value" : "分鐘"
           }
         }
       }
@@ -55110,7 +56098,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay fotos ni vídeos"
+            "value" : "No hay fotos ni videos"
           }
         },
         "fr" : {
@@ -55169,7 +56157,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No hay fotos ni vídeos en los mensajes cargados"
+            "value" : "No hay fotos ni videos en los mensajes cargados"
           }
         },
         "fr" : {
@@ -57960,7 +58948,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Aus"
           }
         },
         "en" : {
@@ -57972,49 +58960,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Desactivado"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Désactivé"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Disattivato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Desativado"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Выкл."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "Kapalı"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "关闭"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off"
+            "value" : "關閉"
           }
         }
       }
@@ -62072,6 +63060,71 @@
         }
       }
     },
+    "Photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Фото"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraf"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片"
+          }
+        }
+      }
+    },
     "Photos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -62150,7 +63203,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fotos y vídeos"
+            "value" : "Fotos y videos"
           }
         },
         "fr" : {
@@ -62517,7 +63570,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Reproducir video"
           }
         },
         "fr" : {
@@ -67776,7 +68829,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Grabando vídeo, %@"
+            "value" : "Grabando video, %@"
           }
         },
         "fr" : {
@@ -74576,7 +75629,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "buscar emojis"
+            "value" : "Buscar emojis"
           }
         },
         "fr" : {
@@ -75491,7 +76544,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Sekunden"
           }
         },
         "en" : {
@@ -75503,49 +76556,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Segundos"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Secondes"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Secondi"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Segundos"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Секунды"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "Saniye"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "秒"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Seconds"
+            "value" : "秒"
           }
         }
       }
@@ -77980,7 +79033,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Timer setzen"
           }
         },
         "en" : {
@@ -77992,49 +79045,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Establecer temporizador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Régler le minuteur"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Imposta timer"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Definir temporizador"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Установить таймер"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "Zamanlayıcıyı ayarla"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "设置计时器"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Set Timer"
+            "value" : "設定計時器"
           }
         }
       }
@@ -82944,7 +83997,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empezar a grabar vídeo"
+            "value" : "Empezar a grabar video"
           }
         },
         "fr" : {
@@ -83595,7 +84648,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Detener la grabación de vídeo"
+            "value" : "Detener la grabación de video"
           }
         },
         "fr" : {
@@ -84929,7 +85982,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toca para foto • Mantén para vídeo"
+            "value" : "Toca para foto • Mantén para video"
           }
         },
         "fr" : {
@@ -86691,6 +87744,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法確認封鎖清單更新。請重試相同變更以檢查其狀態。"
+          }
+        }
+      }
+    },
+    "The camera isn’t available on this iPhone right now." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kamera ist auf diesem iPhone derzeit nicht verfügbar."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cámara no está disponible en este iPhone en este momento."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’appareil photo n’est pas disponible sur cet iPhone pour le moment."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fotocamera non è al momento disponibile su questo iPhone."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A câmera não está disponível neste iPhone no momento."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Камера сейчас недоступна на этом iPhone."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kamera şu anda bu iPhone’da kullanılamıyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 上的相机当前不可用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 iPhone 上的相機目前無法使用。"
           }
         }
       }
@@ -91136,7 +92248,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Dieser Timer gilt auch für Nachrichten, die bereits im Chat sind. Alles, was älter als %@ ist, wird sofort gelöscht."
           }
         },
         "en" : {
@@ -91148,49 +92260,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Este temporizador también se aplica a los mensajes que ya están en el chat. Todo lo que tenga más de %@ se eliminará de inmediato."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Ce minuteur s’applique aussi aux messages déjà présents dans la discussion. Tout ce qui est plus ancien que %@ sera supprimé immédiatement."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Questo timer si applica anche ai messaggi già presenti nella chat. Tutto ciò che è più vecchio di %@ verrà eliminato immediatamente."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Este temporizador também se aplica às mensagens que já estão na conversa. Tudo com mais de %@ será apagado imediatamente."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Этот таймер распространяется и на сообщения, которые уже есть в чате. Всё старше %@ будет удалено немедленно."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "Bu zamanlayıcı sohbette hâlihazırda bulunan mesajlar için de geçerlidir. %@ değerinden eski olan her şey hemen silinir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "该计时器同样适用于聊天中已有的消息。超过 %@ 的内容将立即删除。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This timer also applies to messages already in the chat. Everything older than %@ will be deleted immediately."
+            "value" : "此計時器同樣適用於聊天中已有的訊息。超過 %@ 的內容將立即刪除。"
           }
         }
       }
@@ -91268,7 +92380,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "hoy"
+            "value" : "Hoy"
           }
         },
         "fr" : {
@@ -93000,7 +94112,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Einheit"
           }
         },
         "en" : {
@@ -93012,49 +94124,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unidad"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unité"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unità"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Unidade"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Единица"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "Birim"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "单位"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unit"
+            "value" : "單位"
           }
         }
       }
@@ -93993,7 +95105,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Verschwindende Nachrichten werden aktualisiert…"
           }
         },
         "en" : {
@@ -94005,49 +95117,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Actualizando los mensajes temporales…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Mise à jour des messages éphémères…"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Aggiornamento dei messaggi effimeri…"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Atualizando as mensagens temporárias…"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Обновление исчезающих сообщений…"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "Kaybolan mesajlar güncelleniyor…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "正在更新阅后即焚消息…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Updating disappearing messages…"
+            "value" : "正在更新限時訊息…"
           }
         }
       }
@@ -96248,7 +97360,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Archivo de video adjunto"
           }
         },
         "fr" : {
@@ -96295,6 +97407,71 @@
         }
       }
     },
+    "Video" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vidéo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vídeo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Видео"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "影片"
+          }
+        }
+      }
+    },
     "Videos" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -96313,7 +97490,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Vídeos"
+            "value" : "Videos"
           }
         },
         "fr" : {
@@ -96372,7 +97549,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Los vídeos se graban sin sonido"
+            "value" : "Los videos se graban sin sonido"
           }
         },
         "fr" : {
@@ -97570,7 +98747,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Wochen"
           }
         },
         "en" : {
@@ -97582,49 +98759,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semanas"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semaines"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Settimane"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Semanas"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Недели"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "Hafta"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "周"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Weeks"
+            "value" : "週"
           }
         }
       }
@@ -97659,7 +98836,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "bem vindo de volta"
+            "value" : "Bem-vindo de volta"
           }
         },
         "ru" : {
@@ -97671,7 +98848,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "tekrar hoşgeldiniz"
+            "value" : "Tekrar hoş geldiniz"
           }
         },
         "zh-Hans" : {
@@ -97861,6 +99038,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise"
+          }
+        }
+      }
+    },
+    "White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise kann verschlüsselte Nachrichten, die bereits an andere Mitglieder zugestellt wurden, oder Kopien, die von unabhängigen Relays gespeichert werden, nicht löschen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise no puede eliminar los mensajes cifrados que ya se hayan entregado a otros miembros ni las copias que conserven relés independientes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise ne peut pas supprimer les messages chiffrés déjà remis à d’autres membres ni les copies conservées par des relais indépendants."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise non può eliminare i messaggi crittografati già consegnati ad altri membri o le copie conservate da relay indipendenti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O White Noise não pode eliminar mensagens encriptadas já entregues a outros membros nem cópias mantidas por relays independentes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise не может удалить зашифрованные сообщения, уже доставленные другим участникам, или копии, сохранённые независимыми ретрансляторами."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise, diğer üyelere zaten teslim edilmiş şifreli mesajları veya bağımsız aktarıcıların sakladığı kopyaları silemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 无法删除已送达其他成员的加密消息，也无法删除独立中继保存的副本。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 無法刪除已傳送給其他成員的加密訊息，也無法刪除獨立中繼站保留的副本。"
           }
         }
       }
@@ -101087,7 +102323,7 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "enviaste un mensaje"
+            "value" : "Enviaste un mensaje"
           }
         },
         "fr" : {

@@ -495,6 +495,7 @@ struct GroupDetailsView: View {
                 ProfileIdentityHeader(
                     name: contactTitle,
                     npub: contactNpub,
+                    profileName: contactProfileName,
                     nostrAddress: contactNip05,
                     isAddressVerified: contactIdentity.verifiedNip05 == contactNip05
                 ) { size in
@@ -557,6 +558,7 @@ struct GroupDetailsView: View {
                 .disabled(blockedUsers.targetIsBlocked)
             }
             if let contactAccountIdHex {
+                ContactNicknameRow(accountIdHex: contactAccountIdHex)
                 ProfileFollowButton(accountIdHex: contactAccountIdHex)
                     .disabled(blockedUsers.targetIsBlocked)
                 BlockUserActions(model: blockedUsers) { blockReload += 1 }
@@ -641,6 +643,8 @@ struct GroupDetailsView: View {
                     action: openConversationSearch
                 )
             }
+            // Form cells clip overflow; leave room for the glass press expansion.
+            .padding(.vertical, 12)
             .listRowBackground(Color.clear)
             .listRowInsets(EdgeInsets())
         }
@@ -844,23 +848,8 @@ struct GroupDetailsView: View {
     }
 
     private var memberSearchField: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("Search members", text: $memberSearchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            if !memberSearchText.isEmpty {
-                Button {
-                    memberSearchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear member search")
-            }
-        }
+        WNSearchField(query: $memberSearchText, prompt: "Search members")
+            .wnInputRow()
     }
 
     // MARK: - Technical details
@@ -1163,6 +1152,12 @@ struct GroupDetailsView: View {
     }
 
     private var contactTitle: String { viewModel.displayTitle }
+
+    private var contactProfileName: String? {
+        guard let contactAccountIdHex,
+              appState.contactNickname(forAccountIdHex: contactAccountIdHex) != nil else { return nil }
+        return appState.knownProfileDisplayName(forAccountIdHex: contactAccountIdHex)
+    }
 
     private var contactNip05: String? {
         contactAccountIdHex.flatMap {
