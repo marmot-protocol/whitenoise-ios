@@ -235,13 +235,12 @@ final class NotificationCoordinator {
                     host: host
                 )
                 let isArchived = await self.chatIsArchivedForPresentation(update: update, host: host)
-                let nativeMuted = await self.chatIsMutedForPresentation(update: update, host: host)
                 guard self.canPresentRuntimeNotificationUpdate(host: host) else { return }
                 let shouldPresent = await MainActor.run {
                     guard self.canPresentRuntimeNotificationUpdate(host: host) else { return false }
                     // Read at the decision point so a mode change during the
                     // off-main settings read can't present against a stale value.
-                    let notifyMode = nativeMuted ? .nothing : ChatMuteStore.notifyMode(
+                    let notifyMode = ChatMuteStore.notifyMode(
                         accountIdHex: update.accountIdHex,
                         groupIdHex: update.groupIdHex
                     )
@@ -376,16 +375,6 @@ final class NotificationCoordinator {
               let client = host.client
         else { return true }
         return await client.localNotificationsEnabledForPresentation(accountRef: accountRef)
-    }
-
-    private func chatIsMutedForPresentation(
-        update: NotificationUpdateFfi,
-        host: NotificationCoordinatorHost
-    ) async -> Bool {
-        guard let client = foregroundSettingsReadClient(host: host) else { return false }
-        return (try? await client.chatNotificationSettings(
-            accountRef: update.accountRef, groupIdHex: update.groupIdHex
-        ))?.muted ?? false
     }
 
     func notificationSettings(

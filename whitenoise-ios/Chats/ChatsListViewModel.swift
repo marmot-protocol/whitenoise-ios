@@ -132,7 +132,7 @@ final class ChatsListViewModel {
             self.isDirectMessage = isDirectMessage
             self.directPeerAccountIdHex = directPeerAccountIdHex
             self.inviterAccountIdHex = inviterAccountIdHex
-            self.isMuted = row.muted || isMuted
+            self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
             self.previewExpired = previewExpired
@@ -288,6 +288,7 @@ final class ChatsListViewModel {
     @ObservationIgnored private let draftStore: ConversationDraftStore
     private var chatListTask: Task<Void, Never>?
     @ObservationIgnored private var previewExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var muteExpiryTask: Task<Void, Never>?
     private var chatListTaskID: UUID?
     private var avatarURLTask: Task<Void, Never>?
     private var avatarEnrichmentTaskID: UUID?
@@ -333,6 +334,7 @@ final class ChatsListViewModel {
 
     isolated deinit {
         previewExpiryTask?.cancel()
+        muteExpiryTask?.cancel()
         chatListTask?.cancel()
         windowCommandTask?.cancel()
         avatarURLTask?.cancel()
@@ -371,6 +373,8 @@ final class ChatsListViewModel {
         chatListTaskID = nil
         presentedCursor = PresentedChatListCursor()
         deferredPresentedSnapshot = nil
+        muteExpiryTask?.cancel()
+        muteExpiryTask = nil
         avatarURLTask?.cancel()
         avatarURLTask = nil
         avatarEnrichmentTaskID = nil
@@ -1018,7 +1022,10 @@ final class ChatsListViewModel {
     }
 
     func refreshDisplayProjections() {
-        guard !rowByGroupId.isEmpty else { return }
+        guard !rowByGroupId.isEmpty else {
+            scheduleMuteExpiry()
+            return
+        }
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.inboxRefresh, since: timing) }
 
@@ -1033,6 +1040,8 @@ final class ChatsListViewModel {
         }
         if changed {
             publishItems()
+        } else {
+            scheduleMuteExpiry()
         }
     }
 
@@ -1350,7 +1359,10 @@ final class ChatsListViewModel {
 
     @discardableResult
     private func publishItems() -> Bool {
-        defer { schedulePreviewExpiry() }
+        defer {
+            schedulePreviewExpiry()
+            scheduleMuteExpiry()
+        }
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.inboxPublish, since: timing) }
 
@@ -1381,6 +1393,20 @@ final class ChatsListViewModel {
             destinationItems[id] = makeItem(for: item.row)
         }
         publishItems()
+    }
+
+    private func scheduleMuteExpiry() {
+        muteExpiryTask?.cancel()
+        guard let accountIdHex = currentAccountIdHex,
+              let snapshot = ChatMuteStore.notifyModeSnapshot(),
+              let next = ChatMuteStore.nextMuteExpiry(accountIdHex: accountIdHex, in: snapshot)
+        else { muteExpiryTask = nil; return }
+        let delay = max(0.01, min(next.timeIntervalSinceNow, 86_400))
+        muteExpiryTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            self?.refreshDisplayProjections()
+        }
     }
 
     private func schedulePreviewExpiry() {

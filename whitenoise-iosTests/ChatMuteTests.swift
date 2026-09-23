@@ -129,6 +129,54 @@ struct ChatMuteStoreTests {
 
 struct ChatMuteSuppressionPolicyTests {
 
+    @Test func timedMuteControlsBackgroundAndForegroundUntilExpiry() throws {
+        let suite = "timed-mute-notifications.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let muted = muteTestUpdate(notificationKey: "muted", groupIdHex: "muted", timestampMs: 2_000)
+        let allowed = muteTestUpdate(notificationKey: "allowed", groupIdHex: "allowed", timestampMs: 1_000)
+        ChatMuteAction.mute(.oneHour).perform(
+            accountIdHex: muted.accountIdHex, groupIdHex: muted.groupIdHex, defaults: defaults, now: now
+        )
+        let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+        for instant in [now, now.addingTimeInterval(3_600)] {
+            let notifyMode: (String, String) -> ChatNotifyMode = { account, group in
+                ChatMuteStore.notifyMode(accountIdHex: account, groupIdHex: group, in: snapshot, now: instant)
+            }
+            let beforeExpiry = instant == now
+            let mutedOnly = NotificationServiceProjection.decision(
+                for: BackgroundNotificationCollectionFfi(status: .newData, notifications: [muted], error: nil),
+                notifyMode: notifyMode
+            )
+            if beforeExpiry {
+                #expect(mutedOnly == .deliverQuietly)
+            } else {
+                #expect(mutedOnly == .decorate(LocalNotificationProjection.makePresentation(for: muted)!, additionalPresentations: []))
+            }
+            let mixed = NotificationServiceProjection.decision(
+                for: BackgroundNotificationCollectionFfi(status: .newData, notifications: [muted, allowed], error: nil),
+                notifyMode: notifyMode
+            )
+            #expect(mixed == .decorate(
+                LocalNotificationProjection.makePresentation(for: beforeExpiry ? allowed : muted)!,
+                additionalPresentations: beforeExpiry ? [] : [LocalNotificationProjection.makePresentation(for: allowed)!]
+            ))
+            #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+                localNotificationsEnabled: true,
+                notifyMode: notifyMode(muted.accountIdHex, muted.groupIdHex),
+                appSceneActive: false, updateAccountRef: muted.accountRef,
+                updateGroupIdHex: muted.groupIdHex, visibleChat: nil
+            ) == !beforeExpiry)
+            for status in [NotificationCollectionStatusFfi.noData, .failed] {
+                #expect(NotificationServiceProjection.decision(
+                    for: BackgroundNotificationCollectionFfi(status: status, notifications: [], error: nil),
+                    notifyMode: notifyMode
+                ) == .fallback)
+            }
+        }
+    }
+
     @Test func mutedChatIsNeverPresented() {
         #expect(!LocalNotificationSuppressionPolicy.shouldPresent(
             localNotificationsEnabled: true,

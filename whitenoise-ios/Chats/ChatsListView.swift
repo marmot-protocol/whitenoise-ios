@@ -51,7 +51,6 @@ struct ChatsListView: View {
     @State private var showBulkLeaveConfirmation = false
     @State private var bulkLeaveRequest: BulkLeaveRequest?
     @State private var pendingMute: MuteTarget?
-    @State private var isUpdatingMutes = false
     @State private var isUpdatingPinnedOrder = false
     @State private var isPinMutationInProgress = false
     @State private var blockedUsers = BlockedUsersModel()
@@ -69,8 +68,8 @@ struct ChatsListView: View {
 
     private struct MuteTarget {
         let id = UUID()
+        let accountIdHex: String
         let accountRef: String
-        let runtimeGeneration: Int
         let groupIds: [String]
         let fromSelection: Bool
     }
@@ -643,7 +642,7 @@ struct ChatsListView: View {
         let isUpdating = updatingChatIds.contains(item.id)
         let isPreparingLeave = leaveActionState.preparingGroupIds.contains(item.id)
         let isLeaving = leaveActionState.leavingGroupIds.contains(item.id)
-        let rowActionInProgress = isDeleting || isUpdating || isPreparingLeave || isLeaving || isUpdatingMutes || bulkLeave.isBusy
+        let rowActionInProgress = isDeleting || isUpdating || isPreparingLeave || isLeaving || bulkLeave.isBusy
 
         return HStack(spacing: 12) {
             if selectionMode {
@@ -760,7 +759,7 @@ struct ChatsListView: View {
     private var selectionMode: Bool { chatListEditMode.isEditing }
 
     private var selectionMutationInProgress: Bool {
-        bulkDeleteInProgress || isUpdatingMutes || bulkLeave.isBusy
+        bulkDeleteInProgress || bulkLeave.isBusy
     }
 
     private var selectionAnimation: Animation? {
@@ -850,7 +849,7 @@ struct ChatsListView: View {
                     selectionAction("Delete", systemImage: "trash", role: .destructive) {
                         showBulkDeleteConfirmation = true
                     }
-                    .disabled(isUpdatingMutes || bulkLeave.isBusy)
+                    .disabled(bulkLeave.isBusy)
                     .confirmationDialog(
                         L10n.plural("Delete %lld chats from this device?", Int64(items.count)),
                         isPresented: $showBulkDeleteConfirmation,
@@ -895,13 +894,13 @@ struct ChatsListView: View {
                     actions.append(UIMenu(title: L10n.string("Mute"), image: UIImage(systemName: "bell.slash"), children:
                         ChatMuteDuration.allCases.map { duration in
                             UIAction(title: duration.title) { _ in
-                                Task { await updateMute(.mute(duration), target: target) }
+                                updateMute(.mute(duration), target: target)
                             }
                         }
                     ))
                 } else {
                     actions.append(UIAction(title: L10n.string("Unmute"), image: UIImage(systemName: "bell")) { _ in
-                        Task { await updateMute(.unmute, target: target) }
+                        updateMute(.unmute, target: target)
                     })
                 }
             }
@@ -1074,7 +1073,7 @@ struct ChatsListView: View {
             pendingMute = muteTarget(groupIds: [item.id], fromSelection: false)
         case .unmute:
             if let target = muteTarget(groupIds: [item.id], fromSelection: false) {
-                Task { await updateMute(.unmute, target: target) }
+                updateMute(.unmute, target: target)
             }
         case .archive:
             Task { await setArchived(groupIdHex: item.id, archived: true) }
@@ -1524,64 +1523,39 @@ struct ChatsListView: View {
         ) { duration in
             guard pendingMute?.id == target.id else { return }
             pendingMute = nil
-            Task { await updateMute(.mute(duration), target: target) }
+            updateMute(.mute(duration), target: target)
         }
     }
 
     private func muteTarget(groupIds: [String], fromSelection: Bool) -> MuteTarget? {
-        guard !groupIds.isEmpty, !isUpdatingMutes,
-              let accountRef = appState.activeAccountRef,
-              appState.canUseRuntimeForLocalForegroundWork else { return nil }
+        guard !groupIds.isEmpty,
+              let accountIdHex = appState.activeAccount?.accountIdHex,
+              let accountRef = appState.activeAccountRef else { return nil }
         return MuteTarget(
-            accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration,
+            accountIdHex: accountIdHex, accountRef: accountRef,
             groupIds: groupIds, fromSelection: fromSelection
         )
     }
 
     private func muteTargetIsCurrent(_ target: MuteTarget) -> Bool {
         appState.activeAccountRef == target.accountRef
-            && appState.runtimeGeneration == target.runtimeGeneration
-            && appState.canUseRuntimeForLocalForegroundWork
+            && appState.activeAccount?.accountIdHex == target.accountIdHex
     }
 
     @MainActor
-    private func updateMute(_ action: ChatMuteAction, target: MuteTarget) async {
-        guard !isUpdatingMutes, muteTargetIsCurrent(target) else { return }
-        isUpdatingMutes = true
-        updatingChatIds.formUnion(target.groupIds)
-        defer {
-            isUpdatingMutes = false
-            updatingChatIds.subtract(target.groupIds)
-        }
-        var failedIds = Set(target.groupIds)
-        let now = Date.now
-        do {
-            let client = try appState.currentMarmotClient()
-            for id in target.groupIds {
-                guard !Task.isCancelled, muteTargetIsCurrent(target) else { return }
-                do {
-                    try await client.updateChatMute(action, accountRef: target.accountRef, groupIdHex: id, now: now)
-                    failedIds.remove(id)
-                } catch {
-                    // Keep failed chats selected so the action can be retried.
-                }
-                guard muteTargetIsCurrent(target) else { return }
-                await viewModel?.refreshRow(groupIdHex: id)
-            }
-        } catch { }
-        guard !Task.isCancelled, muteTargetIsCurrent(target) else { return }
-        if target.fromSelection {
-            if failedIds.isEmpty {
-                endSelectionMode()
-            } else {
-                selectedChatIds = failedIds
-            }
-        }
-        if failedIds.isEmpty {
-            Haptics.success()
-        } else {
+    private func updateMute(_ action: ChatMuteAction, target: MuteTarget) {
+        guard muteTargetIsCurrent(target) else { return }
+        guard let defaults = ChatMuteStore.defaults else {
             presentChatMutationFailure(title: L10n.string("Couldn't update notifications"))
+            return
         }
+        let now = Date.now
+        for id in target.groupIds {
+            action.perform(accountIdHex: target.accountIdHex, groupIdHex: id, defaults: defaults, now: now)
+        }
+        viewModel?.refreshDisplayProjections()
+        if target.fromSelection { endSelectionMode() }
+        Haptics.success()
     }
 
     @MainActor

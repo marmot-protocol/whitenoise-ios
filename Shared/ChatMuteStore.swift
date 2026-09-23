@@ -10,9 +10,8 @@ nonisolated enum ChatNotifyMode: String, CaseIterable, Sendable {
 
 /// Per-device chat mute preference, keyed by (accountIdHex, groupIdHex).
 ///
-/// Stores mentions-only delivery and legacy indefinite mutes in the shared
-/// App Group defaults. New mutes and their expiry belong to MDK; these host
-/// preferences apply in addition to MDK's notification suppression.
+/// Shared App Group preferences let the app and notification extension apply
+/// the same policy. Timed mutes overlay the delivery mode until their expiry.
 nonisolated enum ChatMuteStore {
     static let storageKey = "chats.mutedChatKeys"
 
@@ -36,8 +35,16 @@ nonisolated enum ChatMuteStore {
         return "\(account):\(group)"
     }
 
-    static func mutedChatKeys(defaults: UserDefaults) -> Set<String> {
+    private static func storedMutedChatKeys(defaults: UserDefaults) -> Set<String> {
         Set(defaults.stringArray(forKey: storageKey) ?? [])
+    }
+
+    static func mutedChatKeys(defaults: UserDefaults, now: Date = .now) -> Set<String> {
+        let snapshot = notifyModeSnapshot(defaults: defaults)
+        let keys = snapshot.legacyMutedChatKeys
+            .union(snapshot.modesByChatKey.keys)
+            .union(snapshot.mutedUntilByChatKey.keys)
+        return Set(keys.filter { effectiveMode(for: $0, in: snapshot, now: now) == .nothing })
     }
 
     /// Removes every mute and notify-mode entry the account owns. Called on
@@ -46,7 +53,7 @@ nonisolated enum ChatMuteStore {
     static func clearAll(accountIdHex: String, defaults: UserDefaults? = ChatMuteStore.defaults) {
         guard let defaults, let account = normalizedComponent(accountIdHex) else { return }
         let prefix = "\(account):"
-        let muted = mutedChatKeys(defaults: defaults)
+        let muted = storedMutedChatKeys(defaults: defaults)
         let remainingMuted = muted.filter { !$0.hasPrefix(prefix) }
         if remainingMuted.count != muted.count {
             defaults.set(Array(remainingMuted), forKey: storageKey)
@@ -59,6 +66,8 @@ nonisolated enum ChatMuteStore {
             }
             defaults.set(modes, forKey: notifyModeStorageKey)
         }
+        let deadlines = mutedUntilByChatKey(defaults: defaults).filter { !$0.key.hasPrefix(prefix) }
+        defaults.set(deadlines, forKey: mutedUntilStorageKey)
     }
 
     /// Resolving snapshot for in-app display. A `nil` suite reads as empty here;
@@ -143,7 +152,7 @@ nonisolated enum ChatMuteStore {
         key: String,
         defaults: UserDefaults
     ) {
-        var keys = mutedChatKeys(defaults: defaults)
+        var keys = storedMutedChatKeys(defaults: defaults)
         if muted {
             keys.insert(key)
         } else {
@@ -155,12 +164,18 @@ nonisolated enum ChatMuteStore {
     // MARK: - Tri-state notify mode
 
     static let notifyModeStorageKey = "chats.notifyModeByChatKey"
+    static let mutedUntilStorageKey = "chats.mutedUntilByChatKey"
+
+    private static func mutedUntilByChatKey(defaults: UserDefaults) -> [String: Double] {
+        (defaults.dictionary(forKey: mutedUntilStorageKey) as? [String: Double]) ?? [:]
+    }
 
     /// Once-per-wake snapshot for the extension: the mode map plus the legacy
     /// mute set it inherits from.
     struct NotifyModeSnapshot {
         let modesByChatKey: [String: String]
         let legacyMutedChatKeys: Set<String>
+        var mutedUntilByChatKey: [String: Double] = [:]
     }
 
     /// `nil` signals the shared suite could not be resolved; readers fail safe
@@ -173,7 +188,8 @@ nonisolated enum ChatMuteStore {
     static func notifyModeSnapshot(defaults: UserDefaults) -> NotifyModeSnapshot {
         NotifyModeSnapshot(
             modesByChatKey: (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:],
-            legacyMutedChatKeys: mutedChatKeys(defaults: defaults)
+            legacyMutedChatKeys: storedMutedChatKeys(defaults: defaults),
+            mutedUntilByChatKey: mutedUntilByChatKey(defaults: defaults)
         )
     }
 
@@ -183,9 +199,17 @@ nonisolated enum ChatMuteStore {
     static func notifyMode(
         accountIdHex: String,
         groupIdHex: String,
-        in snapshot: NotifyModeSnapshot
+        in snapshot: NotifyModeSnapshot,
+        now: Date = .now
     ) -> ChatNotifyMode {
         guard let key = key(accountIdHex: accountIdHex, groupIdHex: groupIdHex) else { return .all }
+        return effectiveMode(for: key, in: snapshot, now: now)
+    }
+
+    private static func effectiveMode(for key: String, in snapshot: NotifyModeSnapshot, now: Date) -> ChatNotifyMode {
+        if let deadline = snapshot.mutedUntilByChatKey[key], deadline > now.timeIntervalSince1970 {
+            return .nothing
+        }
         if let raw = snapshot.modesByChatKey[key], let mode = ChatNotifyMode(rawValue: raw) {
             return mode
         }
@@ -195,10 +219,11 @@ nonisolated enum ChatMuteStore {
     static func notifyMode(
         accountIdHex: String,
         groupIdHex: String,
-        snapshot: NotifyModeSnapshot?
+        snapshot: NotifyModeSnapshot?,
+        now: Date = .now
     ) -> ChatNotifyMode {
         guard let snapshot else { return .nothing }
-        return notifyMode(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot)
+        return notifyMode(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot, now: now)
     }
 
     /// Resolving read for the main app. A `nil` suite fails safe (`.nothing`).
@@ -220,6 +245,51 @@ nonisolated enum ChatMuteStore {
         modes[key] = mode.rawValue
         defaults.set(modes, forKey: notifyModeStorageKey)
         writeLegacyMuted(mode == .nothing, key: key, defaults: defaults)
+        var deadlines = mutedUntilByChatKey(defaults: defaults)
+        deadlines.removeValue(forKey: key)
+        defaults.set(deadlines, forKey: mutedUntilStorageKey)
+    }
+
+    static func setTimedMute(
+        until deadline: Date,
+        accountIdHex: String,
+        groupIdHex: String,
+        defaults: UserDefaults
+    ) {
+        guard let key = key(accountIdHex: accountIdHex, groupIdHex: groupIdHex) else { return }
+        var deadlines = mutedUntilByChatKey(defaults: defaults)
+        deadlines[key] = deadline.timeIntervalSince1970
+        defaults.set(deadlines, forKey: mutedUntilStorageKey)
+        // Preserve mentions-only after expiry; an indefinite mute is replaced.
+        var modes = (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:]
+        if modes[key] != ChatNotifyMode.mentionsOnly.rawValue {
+            modes[key] = ChatNotifyMode.all.rawValue
+        }
+        defaults.set(modes, forKey: notifyModeStorageKey)
+        writeLegacyMuted(false, key: key, defaults: defaults)
+    }
+
+    static func muteExpiry(
+        accountIdHex: String,
+        groupIdHex: String,
+        in snapshot: NotifyModeSnapshot,
+        now: Date = .now
+    ) -> Date? {
+        guard let key = key(accountIdHex: accountIdHex, groupIdHex: groupIdHex),
+              let deadline = snapshot.mutedUntilByChatKey[key], deadline > now.timeIntervalSince1970
+        else { return nil }
+        return Date(timeIntervalSince1970: deadline)
+    }
+
+    static func nextMuteExpiry(
+        accountIdHex: String,
+        in snapshot: NotifyModeSnapshot,
+        now: Date = .now
+    ) -> Date? {
+        guard let account = normalizedComponent(accountIdHex) else { return nil }
+        return snapshot.mutedUntilByChatKey
+            .filter { $0.key.hasPrefix("\(account):") && $0.value > now.timeIntervalSince1970 }
+            .values.min().map { Date(timeIntervalSince1970: $0) }
     }
 
     /// Resolving write. No-op when the shared suite can't be resolved.

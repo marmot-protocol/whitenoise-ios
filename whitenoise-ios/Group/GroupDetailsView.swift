@@ -329,18 +329,18 @@ struct GroupDetailsView: View {
             }
         }
         .task(id: muteStateKey) {
-            await model.loadMuteState(using: appState)
+            model.loadMuteState(using: appState)
         }
         .task(id: model.muteExpiresAt) {
             guard let deadline = model.muteExpiresAt else { return }
             do {
                 try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
                 try Task.checkCancellation()
-                await model.loadMuteState(using: appState)
+                model.loadMuteState(using: appState)
             } catch { }
         }
         .refreshable {
-            await model.loadMuteState(using: appState)
+            model.loadMuteState(using: appState)
             await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState, force: true)
         }
@@ -581,9 +581,9 @@ struct GroupDetailsView: View {
                 DetailsActionButton(
                     title: model.isMuted ? "Unmute" : "Mute",
                     systemImage: model.isMuted ? "bell.fill" : "bell.slash",
-                    isDisabled: !model.isMuteStateLoaded || model.isUpdatingNotifyMode,
+                    isDisabled: !model.isMuteStateLoaded,
                     appearance: .circular,
-                    action: { Task { await model.setMuted(!model.isMuted, using: appState) } }
+                    action: { model.setMuted(!model.isMuted, using: appState) }
                 )
                 DetailsActionButton(
                     title: "Disappearing",
@@ -1022,7 +1022,7 @@ struct GroupDetailsView: View {
     }
 
     private var muteStateKey: String {
-        "\(appState.activeAccountRef ?? ""):\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork):\(viewModel.group.groupIdHex)"
+        "\(appState.activeAccountRef ?? ""):\(appState.isAppSceneActive):\(viewModel.group.groupIdHex)"
     }
 
     private var blockSubscriptionKey: String {

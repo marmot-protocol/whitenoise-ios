@@ -3,70 +3,108 @@ import Testing
 @testable import whitenoise_ios
 
 struct ChatMuteActionTests {
-    @Test func durationsProduceAbsoluteMillisecondDeadlines() {
-        let now = Date(timeIntervalSince1970: 1_800_000_000)
-        #expect(ChatMuteDuration.oneHour.deadlineMilliseconds(from: now) == 1_800_003_600_000)
-        #expect(ChatMuteDuration.eightHours.deadlineMilliseconds(from: now) == 1_800_028_800_000)
-        #expect(ChatMuteDuration.oneDay.deadlineMilliseconds(from: now) == 1_800_086_400_000)
-        #expect(ChatMuteDuration.oneWeek.deadlineMilliseconds(from: now) == 1_800_604_800_000)
-        #expect(ChatMuteDuration.always.deadlineMilliseconds(from: now) == nil)
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    @Test func durationsProduceAbsoluteDeadlines() {
+        #expect(ChatMuteDuration.oneHour.deadline(from: now) == now.addingTimeInterval(3600))
+        #expect(ChatMuteDuration.eightHours.deadline(from: now) == now.addingTimeInterval(28800))
+        #expect(ChatMuteDuration.oneDay.deadline(from: now) == now.addingTimeInterval(86400))
+        #expect(ChatMuteDuration.oneWeek.deadline(from: now) == now.addingTimeInterval(604800))
+        #expect(ChatMuteDuration.always.deadline(from: now) == nil)
     }
 
-    @Test func failedNativeMutationPreservesLegacyMute() throws {
+    @Test func timedMutePersistsAndExpiresWithoutAnotherWrite() throws {
         try withDefaults { defaults in
+            ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+            let deadline = now.addingTimeInterval(3_600)
+            #expect(mode(snapshot, at: now) == .nothing)
+            #expect(mode(snapshot, at: deadline.addingTimeInterval(-0.001)) == .nothing)
+            #expect(mode(snapshot, at: deadline) == .all)
+            #expect(ChatMuteStore.muteExpiry(accountIdHex: "aa", groupIdHex: "01", in: snapshot, now: now) == deadline)
+            #expect(ChatMuteStore.muteExpiry(accountIdHex: "aa", groupIdHex: "01", in: snapshot, now: deadline) == nil)
             let key = try #require(ChatMuteStore.key(accountIdHex: "aa", groupIdHex: "01"))
-            defaults.set([key], forKey: ChatMuteStore.storageKey)
-            #expect(throws: NativeFailure.self) {
-                try ChatMuteAction.mute(.oneHour).perform(groupIdHex: "01", defaults: defaults) {
-                    throw NativeFailure()
-                }
-            }
-            #expect(ChatMuteStore.mutedChatKeys(defaults: defaults) == [key])
-            #expect(defaults.dictionary(forKey: ChatMuteStore.notifyModeStorageKey) == nil)
+            #expect(ChatMuteStore.mutedChatKeys(defaults: defaults, now: now) == [key])
+            #expect(ChatMuteStore.mutedChatKeys(defaults: defaults, now: deadline).isEmpty)
         }
     }
 
-    @Test func timedReplacementRetiresOnlyTheSuccessfulChatsLegacyMute() throws {
+    @Test func timedReplacementPreservesOtherAccountsAndChats() throws {
         try withDefaults { defaults in
             for (account, group) in [("aa", "01"), ("aa", "02"), ("bb", "01")] {
                 ChatMuteStore.setNotifyMode(.nothing, accountIdHex: account, groupIdHex: group, defaults: defaults)
             }
-            ChatMuteAction.mute(.oneHour).perform(groupIdHex: "01", defaults: defaults) { "aa" }
+            ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
             let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
-            #expect(ChatMuteStore.notifyMode(accountIdHex: "aa", groupIdHex: "01", in: snapshot) == .all)
-            #expect(!ChatMuteStore.isMuted(accountIdHex: "aa", groupIdHex: "01", defaults: defaults))
-            #expect(ChatMuteStore.notifyMode(accountIdHex: "aa", groupIdHex: "02", in: snapshot) == .nothing)
-            #expect(ChatMuteStore.notifyMode(accountIdHex: "bb", groupIdHex: "01", in: snapshot) == .nothing)
+            let afterExpiry = now.addingTimeInterval(3_600)
+            #expect(mode(snapshot, at: afterExpiry) == .all)
+            #expect(ChatMuteStore.notifyMode(accountIdHex: "aa", groupIdHex: "02", in: snapshot, now: afterExpiry) == .nothing)
+            #expect(ChatMuteStore.notifyMode(accountIdHex: "bb", groupIdHex: "01", in: snapshot, now: afterExpiry) == .nothing)
         }
     }
 
-    @Test func timedMutePreservesMentionsOnlyForAfterExpiry() throws {
+    @Test func extendingTimedMutePreservesMentionsOnlyAfterExpiry() throws {
         try withDefaults { defaults in
             ChatMuteStore.setNotifyMode(.mentionsOnly, accountIdHex: "aa", groupIdHex: "01", defaults: defaults)
-            ChatMuteAction.mute(.eightHours).perform(groupIdHex: "01", defaults: defaults) { "aa" }
-            #expect(ChatMuteStore.notifyMode(
-                accountIdHex: "aa", groupIdHex: "01", in: ChatMuteStore.notifyModeSnapshot(defaults: defaults)
-            ) == .mentionsOnly)
+            ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            ChatMuteAction.mute(.eightHours).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+            #expect(mode(snapshot, at: now.addingTimeInterval(3_600)) == .nothing)
+            #expect(mode(snapshot, at: now.addingTimeInterval(28_800)) == .mentionsOnly)
         }
     }
 
-    @Test func explicitUnmuteClearsHostSuppressionOnlyAfterNativeSuccess() throws {
+    @Test func explicitModeReplacesTimedMute() throws {
         try withDefaults { defaults in
-            ChatMuteStore.setNotifyMode(.nothing, accountIdHex: "aa", groupIdHex: "01", defaults: defaults)
-            var nativeWasCleared = false
-            ChatMuteAction.unmute.perform(groupIdHex: "01", defaults: defaults) {
-                #expect(ChatMuteStore.isMuted(accountIdHex: "aa", groupIdHex: "01", defaults: defaults))
-                nativeWasCleared = true
-                return "aa"
+            for newMode in ChatNotifyMode.allCases {
+                ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+                ChatMuteStore.setNotifyMode(newMode, accountIdHex: "aa", groupIdHex: "01", defaults: defaults)
+                let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+                #expect(mode(snapshot, at: now) == newMode)
+                #expect(mode(snapshot, at: now.addingTimeInterval(3_600)) == newMode)
+                #expect(ChatMuteStore.muteExpiry(accountIdHex: "aa", groupIdHex: "01", in: snapshot, now: now) == nil)
             }
-            #expect(nativeWasCleared)
-            #expect(ChatMuteStore.notifyMode(
-                accountIdHex: "aa", groupIdHex: "01", in: ChatMuteStore.notifyModeSnapshot(defaults: defaults)
-            ) == .all)
         }
     }
 
-    private struct NativeFailure: Error { }
+    @Test func alwaysAndUnmuteReplaceTimedMute() throws {
+        try withDefaults { defaults in
+            ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            ChatMuteAction.mute(.always).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            #expect(mode(ChatMuteStore.notifyModeSnapshot(defaults: defaults), at: now.addingTimeInterval(86_400)) == .nothing)
+            ChatMuteAction.unmute.perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            #expect(mode(ChatMuteStore.notifyModeSnapshot(defaults: defaults), at: now) == .all)
+            #expect(ChatMuteStore.mutedChatKeys(defaults: defaults, now: now).isEmpty)
+        }
+    }
+
+    @Test func clearingAccountRemovesItsDeadlinesAndKeepsOtherAccounts() throws {
+        try withDefaults { defaults in
+            ChatMuteAction.mute(.oneHour).perform(accountIdHex: "aa", groupIdHex: "01", defaults: defaults, now: now)
+            ChatMuteAction.mute(.oneDay).perform(accountIdHex: "bb", groupIdHex: "01", defaults: defaults, now: now)
+            ChatMuteStore.clearAll(accountIdHex: "AA", defaults: defaults)
+            let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+            #expect(mode(snapshot, at: now) == .all)
+            #expect(ChatMuteStore.nextMuteExpiry(accountIdHex: "aa", in: snapshot, now: now) == nil)
+            #expect(ChatMuteStore.nextMuteExpiry(accountIdHex: "bb", in: snapshot, now: now) == now.addingTimeInterval(86_400))
+            #expect(ChatMuteStore.notifyMode(accountIdHex: "bb", groupIdHex: "01", in: snapshot, now: now) == .nothing)
+        }
+    }
+
+    @Test func nextExpirySkipsExpiredAndForeignDeadlines() throws {
+        try withDefaults { defaults in
+            for (account, group, duration) in [("aa", "01", ChatMuteDuration.oneHour), ("aa", "02", .oneDay), ("bb", "01", .eightHours)] {
+                ChatMuteAction.mute(duration).perform(accountIdHex: account, groupIdHex: group, defaults: defaults, now: now)
+            }
+            let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+            #expect(ChatMuteStore.nextMuteExpiry(accountIdHex: " AA ", in: snapshot, now: now) == now.addingTimeInterval(3_600))
+            #expect(ChatMuteStore.nextMuteExpiry(accountIdHex: "aa", in: snapshot, now: now.addingTimeInterval(3_600)) == now.addingTimeInterval(86_400))
+        }
+    }
+
+    private func mode(_ snapshot: ChatMuteStore.NotifyModeSnapshot, at date: Date) -> ChatNotifyMode {
+        ChatMuteStore.notifyMode(accountIdHex: "aa", groupIdHex: "01", in: snapshot, now: date)
+    }
 
     private func withDefaults(_ operation: (UserDefaults) throws -> Void) throws {
         let suite = "ChatMuteActionTests.\(UUID().uuidString)"

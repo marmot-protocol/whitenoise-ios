@@ -13,7 +13,7 @@ nonisolated enum ChatMuteDuration: CaseIterable, Sendable {
         }
     }
 
-    func deadlineMilliseconds(from now: Date) -> Int64? {
+    func deadline(from now: Date) -> Date? {
         let seconds: TimeInterval
         switch self {
         case .oneHour: seconds = 60 * 60
@@ -22,7 +22,7 @@ nonisolated enum ChatMuteDuration: CaseIterable, Sendable {
         case .oneWeek: seconds = 7 * 24 * 60 * 60
         case .always: return nil
         }
-        return Int64((now.timeIntervalSince1970 + seconds) * 1_000)
+        return now.addingTimeInterval(seconds)
     }
 }
 
@@ -30,28 +30,24 @@ nonisolated enum ChatMuteAction: Sendable {
     case mute(ChatMuteDuration)
     case unmute
 
-    /// MDK owns the mute and its expiry. Keep mentions-only underneath it,
-    /// but retire a legacy indefinite mute after an explicit replacement.
-    func localModeAfterSuccess(previous: ChatNotifyMode) -> ChatNotifyMode {
-        switch self {
-        case .mute: previous == .mentionsOnly ? .mentionsOnly : .all
-        case .unmute: .all
-        }
-    }
-
     func perform(
+        accountIdHex: String,
         groupIdHex: String,
         defaults: UserDefaults,
-        updateNative: () throws -> String
-    ) rethrows {
-        let accountIdHex = try updateNative()
-        let previous = ChatMuteStore.notifyMode(
-            accountIdHex: accountIdHex, groupIdHex: groupIdHex,
-            in: ChatMuteStore.notifyModeSnapshot(defaults: defaults)
-        )
-        ChatMuteStore.setNotifyMode(
-            localModeAfterSuccess(previous: previous),
-            accountIdHex: accountIdHex, groupIdHex: groupIdHex, defaults: defaults
-        )
+        now: Date = .now
+    ) {
+        switch self {
+        case .mute(let duration):
+            if let deadline = duration.deadline(from: now) {
+                ChatMuteStore.setTimedMute(
+                    until: deadline,
+                    accountIdHex: accountIdHex, groupIdHex: groupIdHex, defaults: defaults
+                )
+            } else {
+                ChatMuteStore.setNotifyMode(.nothing, accountIdHex: accountIdHex, groupIdHex: groupIdHex, defaults: defaults)
+            }
+        case .unmute:
+            ChatMuteStore.setNotifyMode(.all, accountIdHex: accountIdHex, groupIdHex: groupIdHex, defaults: defaults)
+        }
     }
 }

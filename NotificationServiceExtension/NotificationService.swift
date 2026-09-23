@@ -136,6 +136,7 @@ final class NotificationService: UNNotificationServiceExtension {
                 // in-memory snapshots. A nil mode snapshot means the shared suite
                 // couldn't be resolved, so delivery fails safe (all suppressed).
                 let notifyModeSnapshot = ChatMuteStore.notifyModeSnapshot()
+                let muteEvaluationTime = Date.now
                 let contactNicknames = ContactNicknameStore.nicknamesByKey()
                 let previewMode = NotificationPreviewStore.mode()
                 let accountRefs = Set(result.notifications.map(\.accountRef))
@@ -149,7 +150,8 @@ final class NotificationService: UNNotificationServiceExtension {
                     ChatMuteStore.notifyMode(
                         accountIdHex: accountIdHex,
                         groupIdHex: groupIdHex,
-                        snapshot: notifyModeSnapshot
+                        snapshot: notifyModeSnapshot,
+                        now: muteEvaluationTime
                     )
                 }
                 let accountsRequiringArchivedLookup =

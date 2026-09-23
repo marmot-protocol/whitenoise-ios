@@ -306,11 +306,10 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
             let localNotificationsEnabled = await appState?.client?
                 .localNotificationsEnabledForPresentation(accountRef: route.accountRef) ?? true
             let isArchived = await routeIsArchived(route)
-            let notifyMode = await routeNotifyMode(route, userInfo: userInfo)
             guard NotificationPresentationPolicy.shouldPresent(
                 localNotificationsEnabled: localNotificationsEnabled,
                 isArchived: isArchived,
-                notifyMode: notifyMode,
+                notifyMode: routeNotifyMode(route, userInfo: userInfo),
                 isMention: LocalNotificationProjection.isMention(
                     from: notification.request.content.userInfo
                 ),
@@ -344,14 +343,8 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
     private func routeNotifyMode(
         _ route: LocalNotificationRoute,
         userInfo: [AnyHashable: Any]
-    ) async -> ChatNotifyMode {
+    ) -> ChatNotifyMode {
         guard let accountIdHex = LocalNotificationProjection.accountIdHex(from: userInfo) else {
-            return .nothing
-        }
-        if let client = appState?.client,
-           let settings = try? await client.chatNotificationSettings(
-               accountRef: route.accountRef, groupIdHex: route.groupIdHex
-           ), settings.muted {
             return .nothing
         }
         return ChatMuteStore.notifyMode(accountIdHex: accountIdHex, groupIdHex: route.groupIdHex)

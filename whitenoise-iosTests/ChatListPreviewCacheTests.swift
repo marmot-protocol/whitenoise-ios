@@ -29,11 +29,11 @@ struct ChatListPreviewCacheTests {
         #expect(item.departureAction == .deleteLocally)
     }
 
-    @Test func nativeMuteAndLegacyMuteBothSuppressRowNotifications() {
+    @Test func rowMutePresentationUsesTheAppPreference() {
         var nativeRow = row()
         nativeRow.muted = true
         nativeRow.mutedUntilMs = 1_800_003_600_000
-        #expect(ChatsListViewModel.Item(row: nativeRow, avatarURL: nil, title: "Room").isMuted)
+        #expect(!ChatsListViewModel.Item(row: nativeRow, avatarURL: nil, title: "Room").isMuted)
         #expect(ChatsListViewModel.Item(row: row(), avatarURL: nil, title: "Room", isMuted: true).isMuted)
 
         nativeRow.muted = false
