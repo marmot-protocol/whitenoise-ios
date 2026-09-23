@@ -1,360 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Sign in to download attachments." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Melde dich an, um Anhänge herunterzuladen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión para descargar archivos adjuntos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connectez-vous pour télécharger les pièces jointes."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accedi per scaricare gli allegati."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entre para baixar anexos."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Войдите, чтобы загрузить вложения."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ekleri indirmek için giriş yapın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请登录以下载附件。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請登入以下載附件。"
-          }
-        }
-      }
-    },
-    "Download settings need to be refreshed. Reopen the app and try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Download-Einstellungen müssen aktualisiert werden. Öffne die App erneut und versuche es noch einmal."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Es necesario actualizar los ajustes de descarga. Vuelve a abrir la app e inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les paramètres de téléchargement doivent être actualisés. Rouvrez l’application et réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le impostazioni di download devono essere aggiornate. Riapri l’app e riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As configurações de download precisam ser atualizadas. Reabra o app e tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Нужно обновить настройки загрузки. Откройте приложение заново и повторите попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarlarının yenilenmesi gerekiyor. Uygulamayı yeniden açıp tekrar deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载设置需要刷新。请重新打开应用后重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載設定需要重新整理。請重新開啟應用程式後再試。"
-          }
-        }
-      }
-    },
-    "Download retry limit reached" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Maximale Anzahl an Downloadversuchen erreicht"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se alcanzó el límite de reintentos de descarga"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite de tentatives de téléchargement atteinte"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite di tentativi di download raggiunto"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Limite de tentativas de download atingido"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Достигнут лимит повторных загрузок"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme denemesi sınırına ulaşıldı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已达到下载重试次数上限"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已達到下載重試次數上限"
-          }
-        }
-      }
-    },
-    "Download not saved" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download nicht gespeichert"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descarga no guardada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Téléchargement non enregistré"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download non salvato"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download não salvo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Загрузка не сохранена"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme kaydedilmedi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载未保存"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載未儲存"
-          }
-        }
-      }
-    },
-    "Download unavailable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download nicht verfügbar"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descarga no disponible"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Téléchargement indisponible"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download non disponibile"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download indisponível"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Загрузка недоступна"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme kullanılamıyor"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法下载"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法下載"
-          }
-        }
-      }
-    },
-    "Message expired" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nachricht abgelaufen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje caducado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message expiré"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Messaggio scaduto"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensagem expirada"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Срок хранения сообщения истёк"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mesajın süresi doldu"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "消息已过期"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "訊息已過期"
-          }
-        }
-      }
-    },
     "" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4070,286 +3716,6 @@
         }
       }
     },
-    "%lld new messages" : {
-      "comment" : "Number of new messages received in a foreground notification batch.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld neue Nachricht"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld neue Nachrichten"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld new message"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld new messages"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld mensaje nuevo"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld mensajes nuevos"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld nouveau message"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld nouveaux messages"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld nuovo messaggio"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld nuovi messaggi"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld nova mensagem"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld novas mensagens"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "few" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld новых сообщения"
-                    }
-                  },
-                  "many" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld новых сообщений"
-                    }
-                  },
-                  "one" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld новое сообщение"
-                    }
-                  },
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld новых сообщения"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld yeni mesaj"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld 条新消息"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%#@count@"
-          },
-          "substitutions" : {
-            "count" : {
-              "argNum" : 1,
-              "formatSpecifier" : "lld",
-              "variations" : {
-                "plural" : {
-                  "other" : {
-                    "stringUnit" : {
-                      "state" : "translated",
-                      "value" : "%lld 則新訊息"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld more messages" : {
       "comment" : "Summary line on a coalesced notification: count of additional messages beyond those shown individually.",
       "extractionState" : "manual",
@@ -4621,6 +3987,286 @@
                     "stringUnit" : {
                       "state" : "translated",
                       "value" : "另外 %lld 則訊息"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld new messages" : {
+      "comment" : "Number of new messages received in a foreground notification batch.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld neue Nachricht"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld neue Nachrichten"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld new message"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld new messages"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld mensaje nuevo"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld mensajes nuevos"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nouveau message"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nouveaux messages"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nuovo messaggio"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nuovi messaggi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld nova mensagem"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld novas mensagens"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "few" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщения"
+                    }
+                  },
+                  "many" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщений"
+                    }
+                  },
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новое сообщение"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld новых сообщения"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld yeni mesaj"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld 条新消息"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@count@"
+          },
+          "substitutions" : {
+            "count" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%lld 則新訊息"
                     }
                   }
                 }
@@ -6709,6 +6355,10 @@
         }
       }
     },
+    "A profile needs account-setup recovery before the demo can continue." : {
+      "comment" : "Error message displayed when a profile needs account-setup recovery before the demo can continue.",
+      "isCommentAutoGenerated" : true
+    },
     "A relay address is invalid." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7294,6 +6944,10 @@
         }
       }
     },
+    "A secondary line describing what the switch shares." : {
+      "comment" : "A secondary line of text describing the purpose of a toggle.",
+      "isCommentAutoGenerated" : true
+    },
     "About" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7660,6 +7314,10 @@
           }
         }
       }
+    },
+    "Accepting the invitation as Johnny" : {
+      "comment" : "Text displayed in a notification when the user is invited to join a conversation.",
+      "isCommentAutoGenerated" : true
     },
     "Account" : {
       "extractionState" : "manual",
@@ -9013,6 +8671,10 @@
           }
         }
       }
+    },
+    "Adding replies and reactions" : {
+      "comment" : "Title of the current stage of the demo.",
+      "isCommentAutoGenerated" : true
     },
     "Adds %@ to the group you pick." : {
       "extractionState" : "manual",
@@ -11000,6 +10662,9 @@
           }
         }
       }
+    },
+    "App Review Demo" : {
+
     },
     "App Security" : {
       "comment" : "A section title for the app security settings.",
@@ -17434,6 +17099,9 @@
         }
       }
     },
+    "Clear Saved Demo Setup" : {
+
+    },
     "Clear search" : {
       "comment" : "A button that clears the search.",
       "extractionState" : "manual",
@@ -19654,301 +19322,6 @@
         }
       }
     },
-    "Couldn't load download settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen konnten nicht geladen werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo cargar la configuración de descargas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de charger les réglages de téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile caricare le impostazioni dei download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível carregar as configurações de download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось загрузить настройки загрузок."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları yüklenemedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载下载设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入下載設定。"
-          }
-        }
-      }
-    },
-    "Couldn't load download status." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadstatus konnte nicht geladen werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo cargar el estado de la descarga."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de charger l’état du téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile caricare lo stato del download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível carregar o status do download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось загрузить состояние загрузки."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme durumu yüklenemedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法加载下载状态。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法載入下載狀態。"
-          }
-        }
-      }
-    },
-    "Couldn't save download settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen konnten nicht gespeichert werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo guardar la configuración de descargas."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d’enregistrer les réglages de téléchargement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile salvare le impostazioni dei download."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível salvar as configurações de download."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось сохранить настройки загрузок."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları kaydedilemedi."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法保存下载设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法儲存下載設定。"
-          }
-        }
-      }
-    },
-    "Couldn't update download settings" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Downloadeinstellungen konnten nicht aktualisiert werden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo actualizar la configuración de descargas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de mettre à jour les réglages de téléchargement"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile aggiornare le impostazioni dei download"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível atualizar as configurações de download"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось обновить настройки загрузок"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme ayarları güncellenemedi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法更新下载设置"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法更新下載設定"
-          }
-        }
-      }
-    },
-    "Couldn't update this download. Please try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dieser Download konnte nicht aktualisiert werden. Bitte erneut versuchen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo actualizar esta descarga. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de mettre à jour ce téléchargement. Réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile aggiornare questo download. Riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível atualizar este download. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось обновить эту загрузку. Повторите попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu indirme güncellenemedi. Lütfen tekrar deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法更新此下载。请重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法更新此下載。請重試。"
-          }
-        }
-      }
-    },
     "Couldn’t access your private key" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21872,6 +21245,124 @@
         }
       }
     },
+    "Couldn't load download settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloadeinstellungen konnten nicht geladen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar la configuración de descargas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger les réglages de téléchargement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare le impostazioni dei download."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar as configurações de download."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить настройки загрузок."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme ayarları yüklenemedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载下载设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法載入下載設定。"
+          }
+        }
+      }
+    },
+    "Couldn't load download status." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloadstatus konnte nicht geladen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar el estado de la descarga."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger l’état du téléchargement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare lo stato del download."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível carregar o status do download."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить состояние загрузки."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme durumu yüklenemedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加载下载状态。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法載入下載狀態。"
+          }
+        }
+      }
+    },
     "Couldn't load draft" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23680,6 +23171,65 @@
         }
       }
     },
+    "Couldn't save download settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloadeinstellungen konnten nicht gespeichert werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la configuración de descargas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer les réglages de téléchargement."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare le impostazioni dei download."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar as configurações de download."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить настройки загрузок."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme ayarları kaydedilemedi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存下载设置。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法儲存下載設定。"
+          }
+        }
+      }
+    },
     "Couldn't save media." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24419,6 +23969,65 @@
         }
       }
     },
+    "Couldn't update download settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloadeinstellungen konnten nicht aktualisiert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo actualizar la configuración de descargas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de mettre à jour les réglages de téléchargement"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile aggiornare le impostazioni dei download"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível atualizar as configurações de download"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось обновить настройки загрузок"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme ayarları güncellenemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新下载设置"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法更新下載設定"
+          }
+        }
+      }
+    },
     "Couldn't update follow status" : {
       "comment" : "Error message when a follow status update fails.",
       "isCommentAutoGenerated" : true,
@@ -24776,6 +24385,65 @@
         }
       }
     },
+    "Couldn't update this download. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Download konnte nicht aktualisiert werden. Bitte erneut versuchen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo actualizar esta descarga. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de mettre à jour ce téléchargement. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile aggiornare questo download. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível atualizar este download. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось обновить эту загрузку. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu indirme güncellenemedi. Lütfen tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新此下载。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法更新此下載。請重試。"
+          }
+        }
+      }
+    },
     "Couldn't wipe profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24894,6 +24562,12 @@
         }
       }
     },
+    "Create a real demo environment?" : {
+
+    },
+    "Create Demo Environment" : {
+
+    },
     "Create group with %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -24958,6 +24632,9 @@
           }
         }
       }
+    },
+    "Create Johnny Appleseed as a second profile, build a real encrypted conversation, and add sample messages, replies, and reactions." : {
+
     },
     "Create New Identity" : {
       "extractionState" : "manual",
@@ -25142,6 +24819,14 @@
           }
         }
       }
+    },
+    "Creating Johnny Appleseed" : {
+      "comment" : "Title of a stage in the demo setup process.",
+      "isCommentAutoGenerated" : true
+    },
+    "Creating the encrypted conversation" : {
+      "comment" : "Title of a step in the demo setup process.",
+      "isCommentAutoGenerated" : true
     },
     "Creating…" : {
       "extractionState" : "manual",
@@ -26062,6 +25747,7 @@
     },
     "Debug Mode" : {
       "comment" : "A toggle that enables or disables debug mode.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -28086,6 +27772,9 @@
           }
         }
       }
+    },
+    "Demo setup was interrupted. Resume it when the app is active." : {
+
     },
     "Denied" : {
       "extractionState" : "manual",
@@ -30384,65 +30073,6 @@
         }
       }
     },
-    "Download Storage" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Download-Speicher"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almacenamiento de descargas"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stockage des téléchargements"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spazio per i download"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Armazenamento de downloads"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хранилище загрузок"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "İndirme depolama alanı"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载存储"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下載儲存空間"
-          }
-        }
-      }
-    },
     "Download again" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30620,6 +30250,65 @@
         }
       }
     },
+    "Download not saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download nicht gespeichert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga no guardada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargement non enregistré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download non salvato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download não salvo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка не сохранена"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme kaydedilmedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载未保存"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載未儲存"
+          }
+        }
+      }
+    },
     "Download removed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30675,6 +30364,124 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下載已移除"
+          }
+        }
+      }
+    },
+    "Download retry limit reached" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maximale Anzahl an Downloadversuchen erreicht"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se alcanzó el límite de reintentos de descarga"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de tentatives de téléchargement atteinte"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite di tentativi di download raggiunto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limite de tentativas de download atingido"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Достигнут лимит повторных загрузок"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme denemesi sınırına ulaşıldı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已达到下载重试次数上限"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已達到下載重試次數上限"
+          }
+        }
+      }
+    },
+    "Download settings need to be refreshed. Reopen the app and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Download-Einstellungen müssen aktualisiert werden. Öffne die App erneut und versuche es noch einmal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es necesario actualizar los ajustes de descarga. Vuelve a abrir la app e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paramètres de téléchargement doivent être actualisés. Rouvrez l’application et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le impostazioni di download devono essere aggiornate. Riapri l’app e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As configurações de download precisam ser atualizadas. Reabra o app e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нужно обновить настройки загрузки. Откройте приложение заново и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme ayarlarının yenilenmesi gerekiyor. Uygulamayı yeniden açıp tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载设置需要刷新。请重新打开应用后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載設定需要重新整理。請重新開啟應用程式後再試。"
           }
         }
       }
@@ -30738,6 +30545,65 @@
         }
       }
     },
+    "Download Storage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download-Speicher"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Almacenamiento de descargas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stockage des téléchargements"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spazio per i download"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Armazenamento de downloads"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Хранилище загрузок"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme depolama alanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载存储"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下載儲存空間"
+          }
+        }
+      }
+    },
     "Download storage limit" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30793,6 +30659,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下載儲存空間限制"
+          }
+        }
+      }
+    },
+    "Download unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download nicht verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga no disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Téléchargement indisponible"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download non disponibile"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download indisponível"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Загрузка недоступна"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "İndirme kullanılamıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法下载"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法下載"
           }
         }
       }
@@ -37078,6 +37003,10 @@
         }
       }
     },
+    "Finishing Johnny’s secure setup" : {
+      "comment" : "Text displayed in a notification when the demo is waiting for Johnny’s secure setup.",
+      "isCommentAutoGenerated" : true
+    },
     "Finishing update…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -41471,6 +41400,7 @@
     },
     "Hide Screen in App Switcher" : {
       "comment" : "A toggle that hides the app's content in the app switcher.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -44703,6 +44633,14 @@
           }
         }
       }
+    },
+    "Johnny has not received the conversation yet. Check the connection and resume setup." : {
+      "comment" : "Error message displayed when the demo is unable to continue because Johnny's setup is taking too long.",
+      "isCommentAutoGenerated" : true
+    },
+    "Johnny’s saved demo profile is no longer available. Clear the saved demo setup and try again." : {
+      "comment" : "Error message when the demo profile for Johnny is missing.",
+      "isCommentAutoGenerated" : true
     },
     "Just you" : {
       "extractionState" : "manual",
@@ -48626,6 +48564,7 @@
     },
     "Local Notifications" : {
       "comment" : "A toggle that enables or disables local notifications.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -51423,6 +51362,65 @@
         }
       }
     },
+    "Message expired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachricht abgelaufen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje caducado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message expiré"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio scaduto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensagem expirada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Срок хранения сообщения истёк"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesajın süresi doldu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消息已过期"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息已過期"
+          }
+        }
+      }
+    },
     "Message inbox" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -53229,6 +53227,7 @@
     },
     "Native Push" : {
       "comment" : "A toggle that enables or disables the use of a generic wake-up signal to check for new messages in the background.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -60067,6 +60066,10 @@
         }
       }
     },
+    "Open Demo Conversation" : {
+      "comment" : "Title of a button that opens a demo conversation.",
+      "isCommentAutoGenerated" : true
+    },
     "Open Diagnostics" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -62998,67 +63001,6 @@
         }
       }
     },
-    "Photo Library" : {
-      "comment" : "A label for the photo library.",
-      "extractionState" : "manual",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotomediathek"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fototeca"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Photothèque"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Libreria foto"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Biblioteca de fotos"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Медиатека"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotoğraf Arşivi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片图库"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "照片圖庫"
-          }
-        }
-      }
-    },
     "Photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -63120,6 +63062,67 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "照片"
+          }
+        }
+      }
+    },
+    "Photo Library" : {
+      "comment" : "A label for the photo library.",
+      "extractionState" : "manual",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotomediathek"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fototeca"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Photothèque"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libreria foto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Biblioteca de fotos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Медиатека"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraf Arşivi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片图库"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "照片圖庫"
           }
         }
       }
@@ -64342,6 +64345,10 @@
           }
         }
       }
+    },
+    "Preparing the demo" : {
+      "comment" : "Title of the stage when the demo is being prepared.",
+      "isCommentAutoGenerated" : true
     },
     "Preparing to end group…" : {
       "comment" : "Text displayed in a warning banner when ending a group.",
@@ -67109,6 +67116,10 @@
           }
         }
       }
+    },
+    "Publishing Johnny’s profile" : {
+      "comment" : "Text displayed in a notification when the app is publishing Johnny’s profile.",
+      "isCommentAutoGenerated" : true
     },
     "Publishing…" : {
       "extractionState" : "manual",
@@ -73432,6 +73443,10 @@
         }
       }
     },
+    "Resume Demo Setup" : {
+      "comment" : "Button title when the demo setup has failed.",
+      "isCommentAutoGenerated" : true
+    },
     "Retained on this device" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -73980,6 +73995,13 @@
           }
         }
       }
+    },
+    "Returning to the original profile" : {
+      "comment" : "Text displayed in a notification when the user is returning to their original profile after being in the demo.",
+      "isCommentAutoGenerated" : true
+    },
+    "Review Environment" : {
+
     },
     "Review group changes" : {
       "extractionState" : "manual",
@@ -76732,6 +76754,10 @@
         }
       }
     },
+    "Secure profile setup is taking longer than expected. Check the connection and resume setup." : {
+      "comment" : "Error message when secure profile setup is taking too long.",
+      "isCommentAutoGenerated" : true
+    },
     "Secure setup is finishing in the background." : {
       "comment" : "A message that is displayed when a new account is created.",
       "isCommentAutoGenerated" : true,
@@ -78224,6 +78250,14 @@
         }
       }
     },
+    "Sending messages as Johnny" : {
+      "comment" : "Action to send messages as Johnny.",
+      "isCommentAutoGenerated" : true
+    },
+    "Sending the first messages" : {
+      "comment" : "Text displayed in the main body of the screen when the app is creating the encrypted conversation.",
+      "isCommentAutoGenerated" : true
+    },
     "Sending…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -79533,6 +79567,9 @@
           }
         }
       }
+    },
+    "Setup uses the configured relays and may take a minute. It publishes real profile, KeyPackage, group, and message events. Clearing the saved setup record does not delete profiles or published events." : {
+
     },
     "Share" : {
       "extractionState" : "manual",
@@ -81529,6 +81566,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登入此裝置上儲存的設定文件，或新增設定檔。"
+          }
+        }
+      }
+    },
+    "Sign in to download attachments." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich an, um Anhänge herunterzuladen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión para descargar archivos adjuntos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous pour télécharger les pièces jointes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accedi per scaricare gli allegati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entre para baixar anexos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите, чтобы загрузить вложения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ekleri indirmek için giriş yapın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请登录以下载附件。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請登入以下載附件。"
           }
         }
       }
@@ -87806,6 +87902,21 @@
         }
       }
     },
+    "The demo can only be created while the app is connected and a local profile is active." : {
+      "comment" : "Error message when the demo can only be created while the app is connected and a local profile is active.",
+      "isCommentAutoGenerated" : true
+    },
+    "The demo could not be completed. Check the connection and resume setup." : {
+
+    },
+    "The demo messages are still being delivered. Check the connection and resume setup." : {
+      "comment" : "Error message when the demo messages are still being delivered.",
+      "isCommentAutoGenerated" : true
+    },
+    "The demo profile could not be identified safely. Clear the saved demo setup and try again." : {
+      "comment" : "Error message when the demo profile cannot be identified.",
+      "isCommentAutoGenerated" : true
+    },
     "The emoji catalog could not be loaded." : {
       "comment" : "Description of an error message when the emoji catalog cannot be loaded.",
       "extractionState" : "manual",
@@ -88296,6 +88407,10 @@
         }
       }
     },
+    "The original profile is no longer available. Clear the saved demo setup and try again." : {
+      "comment" : "Error message when the original profile is no longer available.",
+      "isCommentAutoGenerated" : true
+    },
     "The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy." : {
       "comment" : "A message that appears when the user is prompted to confirm removing their avatar.",
       "isCommentAutoGenerated" : true,
@@ -88550,6 +88665,9 @@
           }
         }
       }
+    },
+    "The real encrypted demo conversation is ready." : {
+
     },
     "The relay list is too large." : {
       "extractionState" : "manual",
@@ -90100,6 +90218,9 @@
           }
         }
       }
+    },
+    "This creates Johnny Appleseed on this device and publishes real encrypted setup and conversation events through the configured relays." : {
+
     },
     "This deletes this group’s local history and state without leaving or ending the group for other members. Downloaded media caches on this device are also cleared. Old invitations cannot restore it; ask a member to send a fresh invitation after the reset." : {
       "comment" : "A description of the reset action.",
@@ -91804,6 +91925,7 @@
     },
     "This profile and all local data will be permanently removed. Previous chats won’t return." : {
       "comment" : "A description of the effect of wiping data from a device.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -97341,71 +97463,6 @@
         }
       }
     },
-    "Video attachment" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archivo de video adjunto"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Video attachment"
-          }
-        }
-      }
-    },
     "Video" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -97467,6 +97524,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "影片"
+          }
+        }
+      }
+    },
+    "Video attachment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo de video adjunto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video attachment"
           }
         }
       }
@@ -99040,65 +99162,6 @@
         }
       }
     },
-    "White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise kann verschlüsselte Nachrichten, die bereits an andere Mitglieder zugestellt wurden, oder Kopien, die von unabhängigen Relays gespeichert werden, nicht löschen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise no puede eliminar los mensajes cifrados que ya se hayan entregado a otros miembros ni las copias que conserven relés independientes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise ne peut pas supprimer les messages chiffrés déjà remis à d’autres membres ni les copies conservées par des relais indépendants."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise non può eliminare i messaggi crittografati già consegnati ad altri membri o le copie conservate da relay indipendenti."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "O White Noise não pode eliminar mensagens encriptadas já entregues a outros membros nem cópias mantidas por relays independentes."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise не может удалить зашифрованные сообщения, уже доставленные другим участникам, или копии, сохранённые независимыми ретрансляторами."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise, diğer üyelere zaten teslim edilmiş şifreli mesajları veya bağımsız aktarıcıların sakladığı kopyaları silemez."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 无法删除已送达其他成员的加密消息，也无法删除独立中继保存的副本。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise 無法刪除已傳送給其他成員的加密訊息，也無法刪除獨立中繼站保留的副本。"
-          }
-        }
-      }
-    },
     "White Noise · %@" : {
       "comment" : "A footer in the settings view that shows the app's name. The argument is the string “%1$arg (%2$arg)”.",
       "isCommentAutoGenerated" : true,
@@ -99155,6 +99218,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "White Noise · %@"
+          }
+        }
+      }
+    },
+    "White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise kann verschlüsselte Nachrichten, die bereits an andere Mitglieder zugestellt wurden, oder Kopien, die von unabhängigen Relays gespeichert werden, nicht löschen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise no puede eliminar los mensajes cifrados que ya se hayan entregado a otros miembros ni las copias que conserven relés independientes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise ne peut pas supprimer les messages chiffrés déjà remis à d’autres membres ni les copies conservées par des relais indépendants."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise non può eliminare i messaggi crittografati già consegnati ad altri membri o le copie conservate da relay indipendenti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O White Noise não pode eliminar mensagens encriptadas já entregues a outros membros nem cópias mantidas por relays independentes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise не может удалить зашифрованные сообщения, уже доставленные другим участникам, или копии, сохранённые независимыми ретрансляторами."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise, diğer üyelere zaten teslim edilmiş şifreli mesajları veya bağımsız aktarıcıların sakladığı kopyaları silemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 无法删除已送达其他成员的加密消息，也无法删除独立中继保存的副本。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise 無法刪除已傳送給其他成員的加密訊息，也無法刪除獨立中繼站保留的副本。"
           }
         }
       }
@@ -99842,6 +99964,7 @@
     },
     "Wipe Data From This Device" : {
       "comment" : "A toggle that lets the user wipe data from their device.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
