@@ -137,7 +137,9 @@ final class ChatsListViewModel {
             self.previewText = previewText
             self.previewExpired = previewExpired
             self.selectedPreview = prepared?.preview
-            self.actions = prepared?.actions
+            var actions = prepared?.actions
+            if leaveRequestPending { actions?.canStartLeave = false }
+            self.actions = actions
             if let prepared {
                 if case .draft(let draft) = prepared.preview {
                     self.draftPreview = ConversationDraftPreview.preparedText(draft, mentionDisplayName: mentionDisplayName)

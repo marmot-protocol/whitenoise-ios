@@ -39,6 +39,14 @@ final class GroupDetailsViewModel {
     var notifyModeError: String?
     var muteExpiresAt: Date?
     var isMuted: Bool { notifyMode == .nothing }
+    var notifyModeSummary: String {
+        guard isMuteStateLoaded else { return L10n.string("Unavailable") }
+        switch notifyMode {
+        case .all: return L10n.string("On")
+        case .mentionsOnly: return L10n.string("Mentions")
+        case .nothing: return L10n.string("Muted")
+        }
+    }
     private(set) var sharedGroups: [SharedGroupsProjection.SharedGroup] = []
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
     private let recipientDirectory = RecipientDirectory()
@@ -512,15 +520,23 @@ final class GroupDetailsViewModel {
 
     func loadMuteState(using appState: AppState) {
         guard let conversation, let accountIdHex = appState.activeAccount?.accountIdHex else { return }
-        guard let snapshot = ChatMuteStore.notifyModeSnapshot() else {
+        loadMuteState(
+            accountIdHex: accountIdHex, groupIdHex: conversation.group.groupIdHex,
+            snapshot: ChatMuteStore.notifyModeSnapshot()
+        )
+    }
+
+    func loadMuteState(
+        accountIdHex: String, groupIdHex: String, snapshot: ChatMuteStore.NotifyModeSnapshot?, now: Date = .now
+    ) {
+        guard let snapshot else {
             isMuteStateLoaded = false
+            muteExpiresAt = nil
             notifyModeError = L10n.string("Couldn't load notification settings")
             return
         }
-        let groupId = conversation.group.groupIdHex
-        let now = Date.now
-        notifyMode = ChatMuteStore.notifyMode(accountIdHex: accountIdHex, groupIdHex: groupId, in: snapshot, now: now)
-        muteExpiresAt = ChatMuteStore.muteExpiry(accountIdHex: accountIdHex, groupIdHex: groupId, in: snapshot, now: now)
+        notifyMode = ChatMuteStore.notifyMode(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot, now: now)
+        muteExpiresAt = ChatMuteStore.muteExpiry(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot, now: now)
         isMuteStateLoaded = true
         notifyModeError = nil
     }

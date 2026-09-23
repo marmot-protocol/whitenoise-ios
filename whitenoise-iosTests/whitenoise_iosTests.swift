@@ -15178,6 +15178,33 @@ struct PresentedChatListTests {
         try await state.client?.marmot.shutdownAndClose()
     }
 
+    @Test func pendingLeaveOverridesCachedPreparedLeaveAction() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "pending-leave", title: "Chat")
+        var snapshot = presentedChatSnapshot([row])
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(leave: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.departureAction == .leave)
+
+        model.markGroupLeavePending(groupIdHex: row.groupIdHex)
+
+        let pending = try #require(model.items.first)
+        #expect(snapshot.rows[0].actions.canStartLeave)
+        #expect(pending.actions?.canStartLeave == false)
+        #expect(pending.departureStatus == .leaving)
+        #expect(pending.departureAction == nil)
+        #expect(!ChatListSwipeActionsPresentation.trailingActions(
+            try #require(pending.actions), isMuted: false
+        ).contains(.leave))
+
+        snapshot.rows[0].row.selfMembership = .left
+        snapshot.rows[0].row.leaveRequestPending = true
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(delete: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.departureAction == .deleteLocally)
+    }
+
     @Test func preparedDraftChangesRefreshWithoutIdentityRevisionOrUnreadChanges() throws {
         let state = AppState(client: try MarmotClient.testClient())
         let model = ChatsListViewModel(appState: state)

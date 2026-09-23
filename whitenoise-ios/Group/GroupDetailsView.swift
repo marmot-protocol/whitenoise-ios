@@ -683,7 +683,7 @@ struct GroupDetailsView: View {
             } label: {
                 settingsRow(title: "Notifications", systemImage: "bell") {
                     HStack(spacing: 6) {
-                        Text(notifyModeSummary)
+                        Text(model.notifyModeSummary)
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
@@ -1159,14 +1159,6 @@ struct GroupDetailsView: View {
 
     private var nicknameAlertTitle: String {
         nickname == nil ? L10n.string("Set nickname") : L10n.string("Edit nickname")
-    }
-
-    private var notifyModeSummary: String {
-        switch model.notifyMode {
-        case .all: L10n.string("On")
-        case .mentionsOnly: L10n.string("Mentions")
-        case .nothing: L10n.string("Muted")
-        }
     }
 
     private func beginEditingNickname() {
