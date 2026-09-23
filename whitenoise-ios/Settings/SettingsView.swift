@@ -231,7 +231,8 @@ struct SettingsView: View {
         case .relays: RelaysView().wnBackButton()
         case .aiAgents: AIAgentsSettingsView().wnBackButton()
         case .support: SupportChatView().wnBackButton()
-        case .donate: DonateView().wnBackButton()
+        case .donate:
+            DonateView().wnBackButton()
         case .developerTools: DeveloperToolsSettingsView().wnBackButton()
         }
     }
