@@ -2,39 +2,393 @@
   "sourceLanguage" : "en",
   "strings" : {
     "Choose Relays" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose Relays" } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Relays"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relays auswählen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir relays"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir les relais"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli relay"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher relays"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбрать ретрансляторы"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktarıcıları Seç"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择中继"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇中繼站"
+          }
+        }
       }
     },
     "Read relays (optional)" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Read relays (optional)" } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read relays (optional)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lese-Relays (optional)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relays de lectura (opcional)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relais de lecture (facultatif)"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay di lettura (facoltativo)"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relays de leitura (opcional)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретрансляторы для чтения (необязательно)"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Okuma aktarıcıları (isteğe bağlı)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取中继（可选）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讀取中繼站（選填）"
+          }
+        }
       }
     },
     "Inbox relays" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Inbox relays" } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox relays"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posteingangs-Relays"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relays de bandeja de entrada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relais de réception"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relay della posta in arrivo"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relays da caixa de entrada"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ретрансляторы входящих сообщений"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gelen kutusu aktarıcıları"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收件箱中继"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收件匣中繼站"
+          }
+        }
       }
     },
     "Review Replacement" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review Replacement" } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review Replacement"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzung prüfen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisar reemplazo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifier le remplacement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controlla la sostituzione"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisar substituição"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить замену"
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Değişikliği İncele"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查替换列表"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查替換清單"
+          }
+        }
       }
     },
     "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list." } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die aktuellen Relay-Rollen bieten keinen funktionierenden Sendeweg. Wähle Relays aus, um eine Ersatzliste zu prüfen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los roles actuales de tus relays no ofrecen una ruta de escritura funcional. Elige relays para revisar una lista de reemplazo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les rôles actuels de vos relais ne permettent pas d’écrire sur un relais accessible. Choisissez des relais pour vérifier une liste de remplacement."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I ruoli attuali dei relay non offrono un percorso di scrittura funzionante. Scegli i relay per controllare una lista sostitutiva."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As funções atuais dos seus relays não oferecem uma rota de escrita funcional. Escolha relays para revisar uma lista de substituição."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текущие роли ретрансляторов не обеспечивают рабочий маршрут для записи. Выберите ретрансляторы, чтобы проверить новый список."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mevcut aktarıcı rolleri çalışan bir yazma yolu sağlamıyor. Yeni listeyi incelemek için aktarıcıları seçin."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前的中继角色无法提供可用的写入路径。请选择中继以检查替换列表。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目前的中繼站角色無法提供可用的寫入路徑。請選擇中繼站以檢查替換清單。"
+          }
+        }
       }
     },
     "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it." } }
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib eine Adresse pro Zeile ein. Dies ersetzt deine öffentliche Relay-Liste und entfernt dabei ausgelassene Einträge. Es wird nichts veröffentlicht, bevor du die Liste geprüft und bestätigt hast."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce una dirección por línea. Esto reemplaza tu lista pública de relays y elimina las entradas que omitas. No se publica nada hasta que la revises y la apruebes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez une adresse par ligne. Cette liste remplace votre liste publique de relais et supprime les entrées omises. Rien n’est publié avant votre vérification et votre approbation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci un indirizzo per riga. Questa operazione sostituisce la tua lista pubblica di relay ed elimina le voci omesse. Non viene pubblicato nulla finché non controlli e approvi la lista."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insira um endereço por linha. Isso substitui sua lista pública de relays e remove as entradas omitidas. Nada é publicado até você revisar e aprovar a lista."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите по одному адресу в строке. Новый список заменит ваш публичный список ретрансляторов, удалив пропущенные записи. Ничего не будет опубликовано, пока вы не проверите и не подтвердите список."
+          }
+        },
+        "tr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Her satıra bir adres girin. Bu işlem herkese açık aktarıcı listenizi değiştirir ve eklemediğiniz kayıtları kaldırır. Listeyi inceleyip onaylayana kadar hiçbir şey yayımlanmaz."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每行输入一个地址。这将替换你的公开中继列表，并删除未包含的条目。在你检查并批准之前，不会发布任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每行輸入一個位址。這將替換你的公開中繼站清單，並刪除未包含的項目。在你檢查並核准之前，不會發佈任何內容。"
+          }
+        }
       }
     },
     "Sign in to download attachments." : {
