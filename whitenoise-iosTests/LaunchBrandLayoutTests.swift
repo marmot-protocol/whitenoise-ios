@@ -28,6 +28,8 @@ struct LaunchBrandLayoutTests {
         let expected = launchMark.convert(launchMark.bounds, to: window)
         #expect(expected.width > 0)
         #expect(expected.height <= size.height * 0.3 + 1)
+        #expect(abs(expected.midX - size.width / 2) < 1)
+        #expect(abs(expected.midY - size.height / 2) < 1)
 
         let appState = AppState(client: try MarmotClient.testClient())
         for textSize in [DynamicTypeSize.large, .accessibility5] {
