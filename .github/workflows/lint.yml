@@ -9,6 +9,9 @@ on:
       - 'NotificationServiceExtension/**'
       - '.swiftlint.yml'
       - 'scripts/lint.sh'
+      - '**/*.xcstrings'
+      - 'scripts/format-string-catalogs.py'
+      - 'scripts/tests/test_string_catalog_format.py'
       - 'justfile'
       - '.github/workflows/lint.yml'
   push:
@@ -22,6 +25,22 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
+  string-catalogs:
+    name: String catalog formatting
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Test formatter
+        run: python3 -m unittest discover -s scripts/tests -p test_string_catalog_format.py
+
+      - name: Check catalog formatting
+        run: python3 scripts/format-string-catalogs.py --check
+
   swiftlint:
     name: SwiftLint (Airbnb config, --strict)
     runs-on: macos-15

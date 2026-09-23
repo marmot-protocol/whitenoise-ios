@@ -14,6 +14,7 @@ on:
       - "scripts/sync-local-bindings.sh"
       - "scripts/check-analytics-release-config.py"
       - "scripts/check-marmotkit-bindings.py"
+      - "scripts/format-string-catalogs.py"
       - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
