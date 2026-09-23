@@ -63,6 +63,8 @@ struct AccountSetupActions: View {
                         IdentityProfileSetupView(accountSetup: model)
                     case .discovery:
                         AccountSetupDiscoverySheet(model: model, step: selectedStep)
+                    case .relays:
+                        AccountSetupRelaySheet(model: model, step: selectedStep)
                     }
                 }
                 .appAppearance()
@@ -95,12 +97,25 @@ struct AccountSetupActions: View {
                 if step?.actions.contains(.useRecommendedRelays) == true || proposal != nil {
                     Text("Relays let your profile publish information, receive chat invitations, and deliver messages.")
                     if let relays {
-                        ForEach(relays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
+                        if let proposal {
+                            if selectedStep == .relays {
+                                Text("Read relays").font(.headline)
+                            }
+                            ForEach(proposal.readRelays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
+                            if selectedStep == .relays {
+                                Text("Write relays").font(.headline)
+                                ForEach(proposal.writeRelays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
+                            }
+                        } else {
+                            ForEach(relays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
+                        }
                         Text("Continuing publishes these addresses to your public profile.")
                             .foregroundStyle(.secondary)
                     } else {
                         Text("A relay address is invalid. Go back and check the settings.").foregroundStyle(.orange)
                     }
+                } else if step?.actions.contains(.editRelays) == true {
+                    Text("Your current relay roles cannot provide a working write route. Choose relays to review a replacement list.")
                 } else {
                     Text("We couldn’t complete the lookup. Try another relay or check again before replacing any settings.")
                 }
@@ -132,6 +147,9 @@ struct AccountSetupActions: View {
                 } else if step.actions.contains(.useRecommendedRelays) {
                     action("Use Default Relays", .useDefaults(selectedStep))
                 } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+                if step.actions.contains(.editRelays) {
+                    WNButton(title: "Choose Relays", emphasis: .secondary) { editor = .relays }
+                }
                 if step.actions.contains(.editDiscoveryRelays) {
                     WNButton(title: "Look on Another Relay", emphasis: .secondary) { editor = .discovery }
                 }
@@ -150,8 +168,72 @@ struct AccountSetupActions: View {
 }
 
 private enum SetupEditor: String, Identifiable {
-    case profile, discovery
+    case profile, discovery, relays
     var id: String { rawValue }
+}
+
+private struct AccountSetupRelaySheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let model: AccountSetupModel
+    let step: OnboardingStepFfi
+    @State private var reads = ""
+    @State private var writes = ""
+    @State private var error: String?
+
+    var body: some View {
+        Form {
+            Section {
+                TextField("wss://relay.example.com", text: $reads, axis: .vertical)
+                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+            } header: {
+                if step == .relays { Text("Read relays (optional)") } else { Text("Inbox relays") }
+            }
+            if step == .relays {
+                Section("Write relays") {
+                    TextField("Write relays", text: $writes, axis: .vertical)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                }
+            }
+            Section {
+                Text("Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it.")
+                    .foregroundStyle(.secondary)
+            }
+            if let error { Text(error).foregroundStyle(.orange) }
+        }
+        .navigationTitle("Choose Relays")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            WNButton(title: "Review Replacement", isLoading: model.isBusy) {
+                let readValues = step == .relays && reads.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? [] : AccountSetupInput.relays(reads)
+                let writeValues = step == .inboxRelays ? [] : AccountSetupInput.relays(writes)
+                guard let readValues, let writeValues else {
+                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
+                    return
+                }
+                guard let operation = model.send(.editRelays(step, reads: readValues, writes: writeValues)) else { return }
+                error = nil
+                Task {
+                    await operation.value
+                    if model.errorMessage == nil,
+                       model.snapshot.proposal?.step == step,
+                       model.snapshot.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true {
+                        dismiss()
+                    } else {
+                        error = model.errorMessage ?? L10n.string("Couldn’t finish this step. Try again.")
+                    }
+                }
+            }
+            .disabled(model.isBusy || !model.isConnected)
+            .safeAreaPadding()
+            .background(.background)
+        }
+    }
 }
 
 private struct AccountSetupDiscoverySheet: View {
