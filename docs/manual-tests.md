@@ -52,8 +52,20 @@ before every release tag.
       completes while the post-delete report identifies any relay-side work that
       could not be completed.
 
-## Apple Pay donations
+## Donations by build flavor
 
+The staging app links to the IPF website. A separate test-payment build is not
+configured yet; do not use the production app for simulated donations.
+
+- [ ] In the staging flavor, Settings → Donate shows only the nonprofit introduction
+      and a Donate button. Tap Donate and verify it opens `https://ipf.dev/donate`.
+      No amount picker, Apple Pay or Wallet button, monthly status, payment history,
+      or payment-service loading state appears. Opening and revisiting the screen
+      must not call `payments-staging.ipf.dev`. Check iPhone/iPad, Dark Mode,
+      Dynamic Type, and VoiceOver.
+- [ ] In the production flavor, Settings → Donate retains the native Apple Pay
+      form. No website donation button or link appears in ready, unavailable,
+      setup-required, history-access-expired, or configuration-failure states.
 - [ ] With the runtime configuration endpoint unavailable, malformed, or returning
       the wrong Stripe mode/key prefix, open Settings → Donate. The form remains
       usable for reviewing amounts and disclosures, a temporary donation-unavailability
@@ -83,11 +95,10 @@ before every release tag.
       Payment errors and availability messages use the same footnote styling and
       equal side insets as amount helpers. Verify long messages wrap within the
       button width at large text sizes.
-      There is no extra Donate/Amount heading; the donation website link appears
-      only in the lost-access recovery state.
+      There is no extra Donate/Amount heading or donation website link.
 - [ ] With no device donor credential, Donate shows no claimed subscription or
       payment history and does not look up a donor by email or White Noise identity.
-      After a new Sandbox gift, verify the live screen loads Stripe-backed status
+      After a new gift, verify the live screen loads Stripe-backed status
       on re-entry. If several monthly subscriptions exist, each gets its own card.
       Check active, cancellation scheduled, overdue/unpaid, incomplete, ended, and
       unknown states without treating a scheduled cancellation as already ended.
@@ -132,9 +143,10 @@ before every release tag.
       presets, locale-specific decimal entry, the $1–$5,000 boundaries, keyboard
       dismissal, Dark Mode, all Dynamic Type sizes, and VoiceOver labels/values.
       Invalid and fractional-cent custom amounts must keep Apple Pay disabled.
-- [ ] On a signed staging build, verify `/v1/apple-pay/config` returns `test` plus
-      a `pk_test_` key and the signed app has the Apple merchant entitlement, then
-      complete Apple Pay Sandbox authorization for a one-time gift.
+- [ ] When a dedicated payment-development build is configured (not the staging flavor),
+      verify `/v1/apple-pay/config` returns `test` plus a `pk_test_` key and the
+      signed app has the Apple merchant entitlement, then complete Apple Pay
+      test authorization for a one-time gift.
       Confirm the backend receives integer cents, `one_time`, a fresh attempt ID,
       no donor object, the Stripe PaymentMethod ID, and a fresh 43-character
       donor-access nonce. Retrying the one bounded network request must retain
@@ -146,10 +158,10 @@ before every release tag.
       from Stripe management after canceling or updating a card and verify refresh.
       Test a revoked/expired grant: old history is not shown as an empty new-donor
       state, and a new gift does not silently merge with the old Stripe Customer.
-      Verify the production flavor cannot use a staging credential.
+      Verify the production flavor cannot use a test-mode credential.
 - [ ] After a confirmed gift, refresh support while Stripe history is delayed and
       verify the new receipt remains available on that screen. Erase App Data and
-      verify Donate no longer loads donor history in either flavor on that device.
+      verify Donate no longer loads donor history in the production flavor on that device.
 - [ ] Verify a monthly gift requests only name and email, shows the amount as a
       monthly recurring payment, supplies the management URL, and completes with
       `monthly` plus donor contact. Missing name/email must be handled in Apple Pay,
@@ -161,8 +173,7 @@ before every release tag.
       and verify the button refreshes to Donate with Apple Pay. On a device without
       Apple Pay (or where payments are restricted), verify a disabled flat gray capsule
       labeled Apple Pay unavailable appears, without glass, a border, a logo, or duplicate helper
-      message. It must not open Wallet or a payment sheet. Verify Other ways to
-      donate opens the IPF website when Apple Pay is unavailable or unconfigured.
+      message. It must not open Wallet or a payment sheet, and no website link appears.
 - [ ] After payment succeeds, verify the thank-you sheet. From See all billing activity,
       open the payment's Invoice sheet. Receipt lookup starts only when the invoice
       is opened; a slow lookup must not delay the success sheet or keep Donate busy.

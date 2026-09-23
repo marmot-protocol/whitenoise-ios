@@ -1,5 +1,21 @@
 import Foundation
 
+nonisolated enum DonationScreenRoute: Equatable {
+    case applePay
+    case website
+    case unavailable
+
+    static let websiteURL = URL(string: "https://ipf.dev/donate")!
+
+    static func current(infoDictionary: [String: Any] = Bundle.main.infoDictionary ?? [:]) -> Self {
+        switch infoDictionary[DonationBuildConfig.environmentKey] as? String {
+        case DonationBuildConfig.Environment.production.rawValue: .applePay
+        case DonationBuildConfig.Environment.staging.rawValue: .website
+        default: .unavailable
+        }
+    }
+}
+
 nonisolated struct DonationBuildConfig: Equatable, Sendable {
     enum Environment: String, Equatable, Sendable {
         case production

@@ -3,6 +3,15 @@ import Testing
 @testable import whitenoise_ios
 
 struct DonationBuildConfigTests {
+    @Test func routesOnlyTheProductionFlavorToApplePay() {
+        let key = DonationBuildConfig.environmentKey
+        #expect(DonationScreenRoute.current(infoDictionary: [key: "production"]) == .applePay)
+        #expect(DonationScreenRoute.current(infoDictionary: [key: "staging"]) == .website)
+        #expect(DonationScreenRoute.current(infoDictionary: [key: "unknown"]) == .unavailable)
+        #expect(DonationScreenRoute.current(infoDictionary: [:]) == .unavailable)
+        #expect(DonationScreenRoute.websiteURL.absoluteString == "https://ipf.dev/donate")
+    }
+
     @Test func acceptsMatchingProductionAndStagingConfiguration() throws {
         let production = try #require(DonationBuildConfig.current(infoDictionary: info(
             environment: "production",
@@ -39,6 +48,10 @@ struct DonationBuildConfigTests {
 
     @Test func missingOrUnexpandedValuesFailClosed() {
         #expect(DonationBuildConfig.current(infoDictionary: [:]) == nil)
+        #expect(DonationBuildConfig.current(infoDictionary: info(
+            environment: "staging",
+            serviceURL: ""
+        )) == nil)
         #expect(DonationBuildConfig.current(infoDictionary: info(
             environment: "production",
             serviceURL: "$(WHITENOISE_DONATION_SERVICE_URL)"

@@ -2,6 +2,71 @@ import PassKit
 import SwiftUI
 
 struct DonateView: View {
+    private let route: DonationScreenRoute
+
+    init(route: DonationScreenRoute = .current()) {
+        self.route = route
+    }
+
+    var body: some View {
+        Group {
+            switch route {
+            case .applePay:
+                ApplePayDonateView()
+            case .website:
+                WebsiteDonateView()
+            case .unavailable:
+                Form {
+                    DonationIntroductionSection()
+                    Section {
+                        Text("Donations are temporarily unavailable. Please try again later.")
+                    }
+                }
+            }
+        }
+        .localizedNavigationTitle("Donate")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct WebsiteDonateView: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Form {
+            DonationIntroductionSection()
+            Section {
+                WNButton(title: "Donate", size: .standard) {
+                    openURL(DonationScreenRoute.websiteURL)
+                }
+                .accessibilityIdentifier("donate.website")
+            }
+        }
+    }
+}
+
+private struct DonationIntroductionSection: View {
+    var body: some View {
+        Section {
+            VStack(spacing: 8) {
+                Image(systemName: "heart")
+                    .font(.largeTitle)
+                    .accessibilityHidden(true)
+                Text("Support White Noise")
+                    .font(.headline)
+                Text("Help the Internet Privacy Foundation (IPF), a nonprofit building tools for private communication.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+        .listRowBackground(Color.clear)
+    }
+}
+
+private struct ApplePayDonateView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var model: DonateViewModel
@@ -45,8 +110,6 @@ struct DonateView: View {
                     revealCustomPayment(using: proxy)
                 }
         }
-        .localizedNavigationTitle("Donate")
-        .navigationBarTitleDisplayMode(.inline)
         .task(id: preparationAttempt) { await model.prepareApplePay() }
         .task(id: supportRefreshAttempt) { await model.refreshSupport() }
         .onDisappear { model.cancel() }
@@ -69,7 +132,7 @@ struct DonateView: View {
 
     private var donationForm: some View {
         Form {
-            introductionSection
+            DonationIntroductionSection()
             supportLoadingSection
             ForEach(model.support.monthlies, id: \.id) { monthly in
                 Section {
@@ -109,7 +172,6 @@ struct DonateView: View {
                     Text("A new donation won't restore earlier payments.")
                         .foregroundStyle(.secondary)
                 }
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             }
         case .none, .loaded:
             EmptyView()
@@ -121,25 +183,6 @@ struct DonateView: View {
         withAnimation(reduceMotion ? nil : .default) {
             proxy.scrollTo(ScrollTarget.customPayment, anchor: .bottom)
         }
-    }
-
-    private var introductionSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "heart")
-                    .font(.largeTitle)
-                    .accessibilityHidden(true)
-                Text("Support White Noise")
-                    .font(.headline)
-                Text("Help the Internet Privacy Foundation (IPF), a nonprofit building tools for private communication.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-        }
-        .listRowBackground(Color.clear)
     }
 
     private var donationSection: some View {
@@ -299,7 +342,6 @@ struct DonateView: View {
                 DonationApplePayButton(type: .setUp, action: model.openPaymentSetup)
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .accessibilityIdentifier("donate.apple-pay-setup")
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .unavailable:
                 Button {} label: {
                     Text("Apple Pay unavailable")
@@ -315,7 +357,6 @@ struct DonateView: View {
                 .buttonStyle(.plain)
                 .disabled(true)
                 .accessibilityIdentifier("donate.apple-pay-unavailable")
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .notConfigured:
                 if model.isPreparingApplePay {
                     WNButton(title: "Donate", size: .standard, isLoading: true) {}
@@ -329,7 +370,6 @@ struct DonateView: View {
                             .font(.footnote)
                             .padding(.horizontal, WNInputMetrics.leadingInset)
                     }
-                    Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
                 }
             }
 
