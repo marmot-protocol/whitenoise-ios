@@ -3,82 +3,66 @@ import Testing
 @testable import whitenoise_ios
 
 struct DonatePresentationTests {
-    @Test func lightningAddressMatchesPublishedFundingValue() {
-        #expect(DonatePresentation.lightning.address == "whitenoise@donate.ipf.dev")
+    @Test func presetsAndDefaultMatchTheDonationDesign() {
+        #expect(DonatePresentation.presetAmountsCents == [1_000, 2_500, 5_000, 10_000])
+        #expect(DonatePresentation.defaultAmountCents == 2_500)
     }
 
-    @Test func silentPaymentAddressMatchesPublishedFundingValue() {
-        // Spelled with a different split point than the production constant so
-        // a copy-paste slip in either spot fails the comparison.
-        let expected = "sp1qqvp56mxcj9pz9xudvlch5g4ah5hrc8rj6neu25p34rc9gxhp38cwqqlmld28u57w2srgckr34dkyg3"
-            + "q02phu8tm05cyj483q026xedp0s5f5j40p"
-        #expect(DonatePresentation.bitcoinSilentPayment.address == expected)
+    @Test func parsesLocaleAwareWholeAndFractionalAmounts() {
+        let english = Locale(identifier: "en_US")
+        let german = Locale(identifier: "de_DE")
+
+        #expect(DonatePresentation.validateCustomAmount("25", locale: english) == .valid(2_500))
+        #expect(DonatePresentation.validateCustomAmount("10.25", locale: english) == .valid(1_025))
+        #expect(DonatePresentation.validateCustomAmount("10,25", locale: german) == .valid(1_025))
     }
 
-    @Test func methodsListLightningFirst() {
-        #expect(DonatePresentation.methods.map(\.id) == ["lightning", "bitcoin-silent-payment"])
+    @Test func validatesLimitsAndRejectsFractionalCents() {
+        let locale = Locale(identifier: "en_US")
+
+        #expect(DonatePresentation.validateCustomAmount("", locale: locale) == .empty)
+        #expect(DonatePresentation.validateCustomAmount("0.99", locale: locale) == .belowMinimum)
+        #expect(DonatePresentation.validateCustomAmount("1", locale: locale) == .valid(100))
+        #expect(DonatePresentation.validateCustomAmount("5000", locale: locale) == .valid(500_000))
+        #expect(DonatePresentation.validateCustomAmount("5000.01", locale: locale) == .aboveMaximum)
+        #expect(DonatePresentation.validateCustomAmount("10.001", locale: locale) == .tooPrecise)
+        #expect(DonatePresentation.validateCustomAmount("not money", locale: locale) == .invalid)
     }
 
-    @Test func lightningDisplayAddressShowsInFull() {
-        #expect(DonatePresentation.lightning.displayAddress == "whitenoise@donate.ipf.dev")
+    @Test func formatsUSDWithoutUnnecessaryFractionDigits() {
+        let locale = Locale(identifier: "en_US")
+
+        #expect(DonatePresentation.formattedAmount(cents: 2_500, locale: locale) == "$25")
+        #expect(DonatePresentation.formattedAmount(cents: 1_025, locale: locale) == "$10.25")
     }
 
-    @Test func silentPaymentDisplayAddressTruncatesTheMiddle() {
-        #expect(DonatePresentation.bitcoinSilentPayment.displayAddress == "sp1qqvp56mxcj9pz9x…edp0s5f5j40p")
+    @Test func createRequestEncodesIntegerCentsAndNullDonor() throws {
+        let attemptID = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let request = DonationCreateRequest(
+            attemptID: attemptID,
+            amountCents: 2_500,
+            cadence: .oneTime,
+            paymentMethodID: "pm_test",
+            donor: nil
+        )
+
+        let object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(request)) as? [String: Any]
+        )
+        #expect(object["attempt_id"] as? String == attemptID.uuidString.lowercased())
+        #expect(object["amount_cents"] as? Int == 2_500)
+        #expect(object["cadence"] as? String == "one_time")
+        #expect(object["payment_method_id"] as? String == "pm_test")
+        #expect(object["donor"] is NSNull)
     }
 
-    @Test func qrPayloadsCarryTheFullBareAddress() {
-        for method in DonatePresentation.methods {
-            #expect(method.qrPayload == method.address)
-        }
-    }
+    @Test func authorizationKeepsItsAttemptIDButNewAuthorizationsDoNot() {
+        let draft = DonationDraft(amountCents: 2_500, cadence: .oneTime)
+        let first = DonationAuthorizationContext(draft: draft)
+        let second = DonationAuthorizationContext(draft: draft)
 
-    @Test func qrCardSpansMostOfTheListWidth() {
-        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 393) == 393 * 0.81)
-        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 320) == 320 * 0.81)
-    }
-
-    @Test func qrCardIsLargerThanTheFixedSizeItReplaced() {
-        // 204 was the previous fixed card width (180 image + 12 padding a side).
-        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 320) > 204)
-    }
-
-    @Test func addressChipSitsInsideTheQRCardEdge() {
-        let container: CGFloat = 393
-        let card = DonatePresentation.qrCardWidth(forContainerWidth: container)
-        #expect(DonatePresentation.addressChipWidth(forContainerWidth: container) == card - 16)
-    }
-
-    @Test func degenerateContainerWidthsStayNonNegative() {
-        #expect(DonatePresentation.qrCardWidth(forContainerWidth: 0) == 0)
-        #expect(DonatePresentation.qrCardWidth(forContainerWidth: -100) == 0)
-        #expect(DonatePresentation.addressChipWidth(forContainerWidth: 0) == 0)
-        #expect(DonatePresentation.addressChipWidth(forContainerWidth: 10) == 0)
-    }
-
-    @Test func donateCatalogKeysCoverAllShippedLocales() throws {
-        let testFile = URL(fileURLWithPath: #filePath)
-        let repoRoot = testFile
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let url = repoRoot.appendingPathComponent("Shared/Localizable.xcstrings")
-        let data = try Data(contentsOf: url)
-        let catalog = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let strings = try #require(catalog["strings"] as? [String: Any])
-
-        let keys = [
-            "Donate",
-            "White Noise is free and open source. Donations keep it that way.",
-            "Lightning address",
-            "Bitcoin silent payment"
-        ]
-        let locales = ["de", "es", "fr", "it", "pt", "ru", "tr", "zh-Hans", "zh-Hant"]
-        for key in keys {
-            let entry = try #require(strings[key] as? [String: Any], "Missing localization key: \(key)")
-            let localizations = try #require(entry["localizations"] as? [String: Any])
-            for locale in locales {
-                #expect(localizations[locale] != nil, "Missing \(locale) localization for \(key)")
-            }
-        }
+        #expect(first.request(paymentMethodID: "pm_1", donor: nil).attemptID == first.attemptID)
+        #expect(first.request(paymentMethodID: "pm_1", donor: nil).attemptID == first.attemptID)
+        #expect(first.attemptID != second.attemptID)
     }
 }

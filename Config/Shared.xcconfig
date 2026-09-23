@@ -15,6 +15,10 @@ WHITENOISE_PUSH_RELAY_HINT = wss:$(WN_SLASH)$(WN_SLASH)relay.eu.whitenoise.chat
 WHITENOISE_AUDIT_LOG_BEARER_TOKEN = $(AUDIT_LOG_TOKEN_WHITENOISE_IOS)
 WHITENOISE_GIPHY_API_KEY = $(GIPHY_API_KEY_WHITENOISE_IOS)
 
+// Native Apple Pay donations. The publishable Stripe key differs by flavor;
+// no Stripe secret key belongs in the app or these build settings.
+WHITENOISE_APPLE_PAY_MERCHANT_IDENTIFIER = merchant.dev.ipf.whitenoise
+
 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = White Noise uses your location only when you choose to share it in an encrypted chat.
 
 // Provision the full verified ingestion route and retention disclosure before distribution.
