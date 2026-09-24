@@ -35,6 +35,8 @@ final class MediaImageScrollView: UIScrollView, UIScrollViewDelegate {
         maximumZoomScale = 5
         showsHorizontalScrollIndicator = false
         showsVerticalScrollIndicator = false
+        alwaysBounceHorizontal = true
+        alwaysBounceVertical = true
         contentInsetAdjustmentBehavior = .never
         backgroundColor = .clear
         imageView.contentMode = .scaleAspectFit

@@ -23,6 +23,8 @@ final class MediaImageZoomTests: XCTestCase {
         let view = makeViewer()
         XCTAssertEqual(view.imageView.frame.width, 390, accuracy: 0.1)
         XCTAssertEqual(view.imageView.center.y, 422, accuracy: 0.1)
+        XCTAssertTrue(view.alwaysBounceHorizontal)
+        XCTAssertTrue(view.alwaysBounceVertical)
         XCTAssertFalse(view.gestureRecognizerShouldBegin(view.panGestureRecognizer))
         view.toggleZoom(at: CGPoint(x: 195, y: 146.25), animated: false)
         XCTAssertEqual(view.zoomScale, 2.5, accuracy: 0.01)
