@@ -35,7 +35,18 @@ final class GroupDetailsViewModel {
     var isLoadingSharedMedia = false
     var sharedMediaError: String?
     var notifyMode: ChatNotifyMode = .all
+    var isMuteStateLoaded = false
+    var notifyModeError: String?
+    var muteExpiresAt: Date?
     var isMuted: Bool { notifyMode == .nothing }
+    var notifyModeSummary: String {
+        guard isMuteStateLoaded else { return L10n.string("Unavailable") }
+        switch notifyMode {
+        case .all: return L10n.string("On")
+        case .mentionsOnly: return L10n.string("Mentions")
+        case .nothing: return L10n.string("Muted")
+        }
+    }
     private(set) var sharedGroups: [SharedGroupsProjection.SharedGroup] = []
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
     private let recipientDirectory = RecipientDirectory()
@@ -508,35 +519,50 @@ final class GroupDetailsViewModel {
     }
 
     func loadMuteState(using appState: AppState) {
-        guard let conversation,
-              let accountIdHex = appState.activeAccount?.accountIdHex
-        else { return }
-        notifyMode = ChatMuteStore.notifyMode(
-            accountIdHex: accountIdHex,
-            groupIdHex: conversation.group.groupIdHex
+        guard let conversation, let accountIdHex = appState.activeAccount?.accountIdHex else { return }
+        loadMuteState(
+            accountIdHex: accountIdHex, groupIdHex: conversation.group.groupIdHex,
+            snapshot: ChatMuteStore.notifyModeSnapshot()
         )
     }
 
-    /// The notify mode is a local, per-device preference; unlike archive it
-    /// publishes nothing and doesn't touch the group record.
-    func setNotifyMode(_ mode: ChatNotifyMode, using appState: AppState) {
-        guard let conversation,
-              let accountIdHex = appState.activeAccount?.accountIdHex
-        else { return }
+    func loadMuteState(
+        accountIdHex: String, groupIdHex: String, snapshot: ChatMuteStore.NotifyModeSnapshot?, now: Date = .now
+    ) {
+        guard let snapshot else {
+            isMuteStateLoaded = false
+            muteExpiresAt = nil
+            notifyModeError = L10n.string("Couldn't load notification settings")
+            return
+        }
+        notifyMode = ChatMuteStore.notifyMode(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot, now: now)
+        muteExpiresAt = ChatMuteStore.muteExpiry(accountIdHex: accountIdHex, groupIdHex: groupIdHex, in: snapshot, now: now)
+        isMuteStateLoaded = true
+        notifyModeError = nil
+    }
+
+    @discardableResult
+    func setNotifyMode(_ mode: ChatNotifyMode, using appState: AppState) -> Bool {
+        guard let conversation, let accountIdHex = appState.activeAccount?.accountIdHex else { return false }
+        guard let defaults = ChatMuteStore.defaults else {
+            notifyModeError = L10n.string("Couldn't update notifications")
+            appState.present(.error(L10n.string("Couldn't update notifications")))
+            Haptics.error()
+            return false
+        }
         ChatMuteStore.setNotifyMode(
-            mode,
-            accountIdHex: accountIdHex,
-            groupIdHex: conversation.group.groupIdHex
+            mode, accountIdHex: accountIdHex, groupIdHex: conversation.group.groupIdHex, defaults: defaults
         )
-        notifyMode = mode
+        loadMuteState(using: appState)
         Haptics.success()
+        return true
     }
 
-    /// The quick-action Mute button toggles between the tri-state's ends; a
-    /// mentions-only chat mutes from here and unmutes back to all messages.
     func setMuted(_ muted: Bool, using appState: AppState) {
-        setNotifyMode(muted ? .nothing : .all, using: appState)
-        guard let conversation else { return }
+        guard setNotifyMode(muted ? .nothing : .all, using: appState) else { return }
+        guard let conversation,
+              appState.activeAccountRef != nil
+        else { return }
         let isDirectMessage = conversation.groupDisplay.isDirectMessage
         let mutedTitle = isDirectMessage ? L10n.string("Chat muted") : L10n.string("Group muted")
         let unmutedTitle = isDirectMessage ? L10n.string("Chat unmuted") : L10n.string("Group unmuted")

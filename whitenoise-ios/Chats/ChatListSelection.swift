@@ -42,6 +42,14 @@ nonisolated enum ChatListSelection {
         Set(visibleIds)
     }
 
+    static func allSelected(_ selected: Set<String>, visibleIds: Set<String>) -> Bool {
+        !visibleIds.isEmpty && visibleIds.isSubset(of: selected)
+    }
+
+    static func togglingAll(_ selected: Set<String>, visibleIds: Set<String>) -> Set<String> {
+        allSelected(selected, visibleIds: visibleIds) ? [] : visibleIds
+    }
+
     /// Local deletion is only valid after membership is inactive. Keeping the
     /// bulk rule here prevents a mixed selection from exposing a destructive
     /// action that is invalid for some of its rows.

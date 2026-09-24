@@ -3578,6 +3578,28 @@ struct LocalizationCatalogTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func localizedLeavesReadBothPluralFormats(usesSubstitution: Bool) throws {
+        let key = "%lld items"
+        let forms: [String: Any] = [
+            "one": ["stringUnit": ["state": "translated", "value": "%lld item"]],
+            "other": ["stringUnit": ["state": "needs_review", "value": "%lld items"]]
+        ]
+        let variations: [String: Any] = ["plural": forms]
+        let localeEntry: [String: Any] = usesSubstitution ? [
+            "stringUnit": ["state": "translated", "value": "%#@count@"],
+            "substitutions": ["count": ["variations": variations]]
+        ] : ["variations": variations]
+        let strings: [String: Any] = [key: ["localizations": ["en": localeEntry]]]
+
+        let leaves = try localizedLeaves(key, locale: "en", in: strings)
+        let pluralLeaves = leaves.filter { !$0.isSubstitutionShell }
+        #expect(pluralLeaves.count == 2)
+        #expect(Set(pluralLeaves.map(\.value)) == ["%lld item", "%lld items"])
+        #expect(Set(pluralLeaves.map(\.state)) == ["translated", "needs_review"])
+        #expect(leaves.filter(\.isSubstitutionShell).count == (usesSubstitution ? 1 : 0))
+    }
+
     @Test func groupRetentionStringsAreTranslatedInEveryShippedLocale() throws {
         let catalog = try readCatalog("Shared/Localizable.xcstrings")
         let strings = try #require(catalog["strings"] as? [String: Any])
@@ -3920,10 +3942,16 @@ struct LocalizationCatalogTests {
             )
         }
 
+        var pluralVariations: [[String: Any]] = []
+        if let variations = localeEntry["variations"] as? [String: Any] {
+            pluralVariations.append(try #require(variations["plural"] as? [String: Any]))
+        }
         for rawSubstitution in substitutions.values {
             let substitution = try #require(rawSubstitution as? [String: Any])
             let variations = try #require(substitution["variations"] as? [String: Any])
-            let plural = try #require(variations["plural"] as? [String: Any])
+            pluralVariations.append(try #require(variations["plural"] as? [String: Any]))
+        }
+        for plural in pluralVariations {
             for rawForm in plural.values {
                 let form = try #require(rawForm as? [String: Any])
                 let stringUnit = try #require(form["stringUnit"] as? [String: Any])
@@ -15148,6 +15176,33 @@ struct PresentedChatListTests {
         #expect(ChatRow.previewPresentation(for: expired, activeAccountIdHex: nil,
             senderName: { _ in "Sender" }).body == L10n.string("Message expired"))
         try await state.client?.marmot.shutdownAndClose()
+    }
+
+    @Test func pendingLeaveOverridesCachedPreparedLeaveAction() throws {
+        let state = AppState(client: try MarmotClient.testClient())
+        let model = ChatsListViewModel(appState: state)
+        let row = chatListRow(groupIdHex: "pending-leave", title: "Chat")
+        var snapshot = presentedChatSnapshot([row])
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(leave: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.departureAction == .leave)
+
+        model.markGroupLeavePending(groupIdHex: row.groupIdHex)
+
+        let pending = try #require(model.items.first)
+        #expect(snapshot.rows[0].actions.canStartLeave)
+        #expect(pending.actions?.canStartLeave == false)
+        #expect(pending.departureStatus == .leaving)
+        #expect(pending.departureAction == nil)
+        #expect(!ChatListSwipeActionsPresentation.trailingActions(
+            try #require(pending.actions), isMuted: false
+        ).contains(.leave))
+
+        snapshot.rows[0].row.selfMembership = .left
+        snapshot.rows[0].row.leaveRequestPending = true
+        snapshot.rows[0].actions = PresentedChatRowFfi.testActions(delete: true)
+        model.applyPresentedSnapshot(snapshot)
+        #expect(model.items.first?.departureAction == .deleteLocally)
     }
 
     @Test func preparedDraftChangesRefreshWithoutIdentityRevisionOrUnreadChanges() throws {
