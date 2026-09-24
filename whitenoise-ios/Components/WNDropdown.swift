@@ -34,6 +34,7 @@ struct WNDropdown<Selection: Hashable, Trigger: View>: View {
             trigger()
         }
         .menuOrder(.fixed)
+        .tint(Color.primary)
     }
 }
 
