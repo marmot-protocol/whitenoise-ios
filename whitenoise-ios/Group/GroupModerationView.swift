@@ -270,6 +270,7 @@ struct GroupModerationView: View {
                                     identityAvatarAsset: { conversation.windowIdentities[$0]?.avatarAsset },
                                     onLoadMedia: ConversationMediaLoader { try await conversation.data(for: $0) }
                                 )
+                                .messageLinkCopyAccessibilityActions(for: entry.markdownBlocks, appState: appState)
                                 Text(Date(timeIntervalSince1970: TimeInterval(message.timelineAt)), format: .dateTime.day().month().year())
                                     .font(.caption).foregroundStyle(.secondary)
                             } else {
