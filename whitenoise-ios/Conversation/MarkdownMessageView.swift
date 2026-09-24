@@ -33,7 +33,7 @@ struct MarkdownMessageView: View {
     private func blockView(_ block: MarkdownDisplayBlock) -> some View {
         switch block {
         case .paragraph(let text), .heading(let text):
-            Text(text)
+            MarkdownLinkText(text)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .codeBlock(let code):

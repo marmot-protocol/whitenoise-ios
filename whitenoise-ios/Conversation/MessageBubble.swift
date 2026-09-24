@@ -295,17 +295,22 @@ struct MessageBubble: View {
                 mediaGallery = nil
             }
         }
-        .alert(L10n.string("Open link?"), isPresented: externalLinkConfirmationPresented) {
-            Button(L10n.string("Open")) {
-                guard let link = pendingExternalLink else { return }
-                pendingExternalLink = nil
-                openURL(link.url)
-            }
-            Button("Cancel", role: .cancel) {
-                pendingExternalLink = nil
-            }
-        } message: {
-            Text(pendingExternalLink?.displayText ?? "")
+        .sheet(item: $pendingExternalLink) { link in
+            MessageLinkActionSheet(
+                url: link.url,
+                onOpen: {
+                    pendingExternalLink = nil
+                    openURL(link.url)
+                },
+                onCopy: {
+                    pendingExternalLink = nil
+                    if let target = MessageLinkTarget(url: link.url) {
+                        MessageLinkCopyAction.copy(target, presenting: appState)
+                    }
+                },
+                onCancel: { pendingExternalLink = nil }
+            )
+            .appAppearance()
         }
     }
 
@@ -760,6 +765,9 @@ struct MessageBubble: View {
             )
             .tint(isFromMe ? MessageBubblePalette.sentForeground : Color.accentColor)
             .environment(\.openURL, OpenURLAction(handler: handleMessageLink))
+            .environment(\.copyMessageLink, MessageLinkCopyAction { [appState] target in
+                MessageLinkCopyAction.copy(target, presenting: appState)
+            })
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
@@ -781,17 +789,6 @@ struct MessageBubble: View {
         case .blocked:
             return .discarded
         }
-    }
-
-    private var externalLinkConfirmationPresented: Binding<Bool> {
-        Binding(
-            get: { pendingExternalLink != nil },
-            set: { isPresented in
-                if !isPresented {
-                    pendingExternalLink = nil
-                }
-            }
-        )
     }
 
     private var replyCardBackground: Color {
@@ -1218,12 +1215,10 @@ private struct ReactionMetadataRowLayout: Layout {
     }
 }
 
-private struct PendingMessageExternalLink: Equatable {
+private struct PendingMessageExternalLink: Identifiable, Equatable {
     let url: URL
 
-    var displayText: String {
-        MessageExternalLinkConfirmation.displayText(for: url)
-    }
+    var id: String { url.absoluteString }
 }
 
 nonisolated enum MessageExternalLinkConfirmation {

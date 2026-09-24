@@ -39,3 +39,9 @@ nonisolated enum MessageLinkPolicy {
         }
     }
 }
+
+nonisolated extension MessageLinkPolicy {
+    static func copyText(for url: URL) -> String? {
+        action(for: url) == .blocked ? nil : url.absoluteString
+    }
+}

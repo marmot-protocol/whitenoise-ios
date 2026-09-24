@@ -2049,6 +2049,10 @@ struct ConversationView: View {
                 }
             }
         }
+        .messageLinkCopyAccessibilityActions(
+            for: interactionsEnabled ? viewModel.markdownDisplayBlocks(for: item) : nil,
+            appState: appState
+        )
     }
 
     private func messageBubble(
