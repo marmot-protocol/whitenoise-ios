@@ -17,9 +17,12 @@ struct OnboardingAvatarWebImagePicker: View {
     @State private var selectedURL: URL?
     @State private var isSearching = false
     @State private var searchError: String?
+    @State private var cropURL: URL?
+    @State private var cropSource: AvatarImageCropSource?
     @FocusState private var isURLFocused: Bool
 
-    let onUseImage: (URL) -> Void
+    let onCrop: (AvatarImageCropSource, Data) -> Void
+    let onError: (Error) -> Void
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: 1),
@@ -54,8 +57,8 @@ struct OnboardingAvatarWebImagePicker: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") {
                             guard let activeURL else { return }
-                            onUseImage(activeURL)
-                            dismiss()
+                            cropSource = nil
+                            cropURL = activeURL
                         }
                         .disabled(activeURL == nil)
                     }
@@ -66,6 +69,34 @@ struct OnboardingAvatarWebImagePicker: View {
                     }
                     isURLFocused = mode == .url
                 }
+                .navigationDestination(item: $cropURL) { _ in
+                    AvatarImageCropEditor(
+                        source: cropSource,
+                        onClose: { dismiss() },
+                        onCrop: onCrop
+                    )
+                }
+        }
+        .task(id: cropURL) {
+            await loadCropSource(cropURL)
+        }
+    }
+
+    private func loadCropSource(_ url: URL?) async {
+        guard let url else { return }
+        do {
+            let data = try await RemoteImageFetch.imageData(for: url)
+            try Task.checkCancellation()
+            cropSource = AvatarImageCropSource(
+                data: data,
+                fileName: url.lastPathComponent,
+                typeIdentifier: nil,
+                sourceURL: url
+            )
+        } catch {
+            guard !Task.isCancelled else { return }
+            onError(error)
+            dismiss()
         }
     }
 

@@ -1115,6 +1115,7 @@ final class AppState {
             }
             UserDefaults(suiteName: AppContainerConfig.appGroupIdentifier)?
                 .removePersistentDomain(forName: AppContainerConfig.appGroupIdentifier)
+            try DonationKeychainAccessStore.eraseAllAppData()
             signInAttempts.reset()
             diagnosticsConsent.reset()
             erasureState.complete()

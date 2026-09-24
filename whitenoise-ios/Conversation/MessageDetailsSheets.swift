@@ -194,6 +194,7 @@ struct ReactionDetailsSheet: View {
     var identityAvatar: ((String) -> URL?)?
     var identityAvatarAsset: ((String) -> AvatarAssetFfi?)?
     @State private var selectedEmoji: String?
+    @Environment(\.colorScheme) private var colorScheme
 
     init(
         details: ConversationViewModel.ReactionDetails,
@@ -284,7 +285,7 @@ struct ReactionDetailsSheet: View {
             .padding(.horizontal, 12)
             .frame(minHeight: 44)
             .background(
-                selected ? Color.accentColor : Color(.tertiarySystemFill),
+                selected ? WNNeutralAccent.color(for: colorScheme) : Color(.tertiarySystemFill),
                 in: Capsule()
             )
         }

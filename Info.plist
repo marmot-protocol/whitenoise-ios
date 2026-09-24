@@ -30,6 +30,12 @@
 	<string>$(WN_URL_SCHEME)</string>
 	<key>WhiteNoiseAuditLogBearerToken</key>
 	<string>$(WHITENOISE_AUDIT_LOG_BEARER_TOKEN)</string>
+	<key>WhiteNoiseApplePayMerchantIdentifier</key>
+	<string>$(WHITENOISE_APPLE_PAY_MERCHANT_IDENTIFIER)</string>
+	<key>WhiteNoiseDonationEnvironment</key>
+	<string>$(WN_FLAVOR)</string>
+	<key>WhiteNoiseDonationServiceURL</key>
+	<string>$(WHITENOISE_DONATION_SERVICE_URL)</string>
 	<key>WhiteNoiseGiphyAPIKey</key>
 	<string>$(WHITENOISE_GIPHY_API_KEY)</string>
 	<key>WhiteNoiseProductAnalyticsAppKey</key>
