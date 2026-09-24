@@ -17,15 +17,12 @@ final class ProfileViewModel {
     private(set) var isLoadingGroups = false
     private var groupLoadGeneration: UInt64 = 0
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
-    private(set) var verifiedNip05: String?
-    private(set) var website: String?
-    private(set) var isFollowing: Bool?
-    private(set) var isLoadingFollow = false
-    private(set) var isUpdatingFollow = false
+    private(set) var groupsLoadState = SharedGroupsLoadState()
+    var verifiedNip05: String? { addressVerification.verifiedNip05 }
 
     let starter = DirectChatStarter()
     let directory = RecipientDirectory()
-    private var attemptedNip05Verification: String?
+    private let addressVerification = ProfileAddressVerificationModel()
     private var resolutionGeneration: UInt64 = 0
 
     func resolve(
@@ -33,17 +30,19 @@ final class ProfileViewModel {
         using appState: AppState,
         refreshProfile: Bool = true
     ) async {
+        guard !Task.isCancelled else { return }
         resolutionGeneration &+= 1
         let generation = resolutionGeneration
-        // A reused profile surface must fail closed while the new identity is
-        // resolving. Keeping the previous account visible through a failed
-        // client lookup would also keep its trust and shared-group state.
-        applyResolvedAccount(nil)
+        // Resolve before awaiting directory reads; keep a completed badge only
+        // when this is still the same identity.
         startPrompt = nil
         conversationChooser = nil
-        sharedGroups = []
-        addableGroups = []
+        isPreparingConversationChoices = false
         let resolvedHex = ProfileReferenceResolution.accountIdHex(npub)
+        if groupsLoadState.prepare(accountRef: appState.activeAccountRef, peerAccountIdHex: resolvedHex) {
+            sharedGroups = []
+            addableGroups = []
+        }
         guard !Task.isCancelled, generation == resolutionGeneration else { return }
         applyResolvedAccount(resolvedHex)
         guard let resolvedHex else { return }
@@ -51,29 +50,34 @@ final class ProfileViewModel {
             // Trigger enrichment (cached read + background relay fetch).
             _ = appState.profile(forAccountIdHex: resolvedHex)
         }
-        await refreshWebsite(using: appState)
         guard !Task.isCancelled,
               generation == resolutionGeneration,
               hex == resolvedHex
         else { return }
-        await refreshGroups(using: appState)
+        await reloadGroups(using: appState)
     }
 
-    func refreshGroups(using appState: AppState, force: Bool = false) async {
-        groupLoadGeneration &+= 1
-        let generation = groupLoadGeneration
-        let account = appState.activeAccountRef
+    func reloadGroups(using appState: AppState, force: Bool = false) async {
         guard let resolvedHex = hex else { return }
+        groupLoadGeneration &+= 1
+        let loadGeneration = groupLoadGeneration
+        let generation = resolutionGeneration
+        let accountRef = appState.activeAccountRef
+        let runtimeGeneration = appState.runtimeGeneration
         isLoadingGroups = true
-        sharedGroups = []
-        addableGroups = []
         defer {
-            if groupLoadGeneration == generation { isLoadingGroups = false }
+            if groupLoadGeneration == loadGeneration { isLoadingGroups = false }
         }
         await directory.load(using: appState, force: force, includeAdminMetadata: true)
-        guard !Task.isCancelled, groupLoadGeneration == generation,
-              appState.activeAccountRef == account, hex == resolvedHex,
-              directory.loadError == nil else { return }
+        guard !Task.isCancelled,
+              groupLoadGeneration == loadGeneration,
+              generation == resolutionGeneration,
+              hex == resolvedHex,
+              appState.activeAccountRef == accountRef,
+              appState.runtimeGeneration == runtimeGeneration
+        else { return }
+        guard directory.loadError == nil else { return }
+        groupsLoadState.complete(accountRef: accountRef, peerAccountIdHex: resolvedHex)
         sharedGroups = SharedGroupsProjection.sharedGroups(
             snapshots: directory.snapshots,
             targetAccountIdHex: resolvedHex,
@@ -86,118 +90,23 @@ final class ProfileViewModel {
         )
     }
 
-    func refreshWebsite(using appState: AppState) async {
-        guard let hex else {
-            website = nil
-            return
-        }
-        let loadingHex = hex
-        let loaded: String?
-        do {
-            let client = try appState.currentMarmotClient()
-            loaded = try await client.userProfileWebsite(accountIdHex: loadingHex)
-        } catch {
-            return
-        }
-        guard !Task.isCancelled, hex == loadingHex else { return }
-        website = loaded
-    }
-
     /// The verified badge is earned per pubkey. A reused profile surface
     /// resolving to a different account must shed it — retaining it would
     /// paint another pubkey's verification, a fail-open trust signal.
     func applyResolvedAccount(_ resolvedHex: String?) {
         if hex != resolvedHex {
-            verifiedNip05 = nil
-            attemptedNip05Verification = nil
-            website = nil
             startPrompt = nil
             conversationChooser = nil
         }
         hex = resolvedHex
+        addressVerification.applyResolvedAccount(resolvedHex)
     }
 
-    /// One bounded lookup per declared address; the verified state appears
-    /// only when the declaration independently resolves back to this pubkey.
     func verifyDeclaredNip05(
         _ declared: String?,
         transport: Nip05Resolver.Transport = Nip05Resolver.pinnedTransport
     ) async {
-        guard let hex,
-              let declared = ContentSanitizer.profileAddress(declared),
-              attemptedNip05Verification != declared
-        else { return }
-        let verifyingHex = hex
-        attemptedNip05Verification = declared
-        let verification = await Nip05Resolver.verification(
-            declaredAddress: declared,
-            accountIdHex: verifyingHex,
-            transport: transport
-        )
-        // The profile can change while the network lookup is suspended. Only
-        // the identity and declaration that started this request may receive
-        // its result.
-        guard !Task.isCancelled,
-              hex == verifyingHex,
-              attemptedNip05Verification == declared
-        else { return }
-        switch verification {
-        case .verified:
-            verifiedNip05 = declared
-        case .mismatch:
-            verifiedNip05 = nil
-        case .lookupFailed:
-            verifiedNip05 = nil
-            attemptedNip05Verification = nil
-        }
-    }
-
-    func prepareFollowStatus(
-        initialValue: Bool?,
-        load: (() async throws -> Bool)?
-    ) async {
-        isFollowing = initialValue ?? false
-        guard let hex, let load else { return }
-        isLoadingFollow = true
-        defer { isLoadingFollow = false }
-        do {
-            let loaded = try await load()
-            guard self.hex == hex, !Task.isCancelled else { return }
-            isFollowing = loaded
-        } catch {
-            // Search results already carry a direct-follow bit. If a later
-            // refresh fails, keep that known state rather than replacing it.
-        }
-    }
-
-    func toggleFollow(
-        using appState: AppState,
-        action: ((Bool) async throws -> Bool)?
-    ) async {
-        guard let hex,
-              !isUpdatingFollow,
-              !appState.accounts.contains(where: { $0.accountIdHex == hex }),
-              let action
-        else { return }
-        let desired = !(isFollowing ?? false)
-        isUpdatingFollow = true
-        defer { isUpdatingFollow = false }
-
-        do {
-            let updated = try await action(desired)
-            guard self.hex == hex else { return }
-            isFollowing = updated
-            Haptics.success()
-        } catch {
-            Haptics.error()
-            appState.present(
-                UserFacingError.toast(
-                    title: L10n.string("Couldn't update follow status"),
-                    error: error,
-                    fallbackMessage: L10n.string("Please try again.")
-                )
-            )
-        }
+        await addressVerification.verifyDeclaredNip05(declared, transport: transport)
     }
 
     func message(
@@ -210,14 +119,23 @@ final class ProfileViewModel {
         appState.seedDiscoveredProfile(profile, forAccountIdHex: hex)
         startPrompt = nil
         conversationChooser = nil
+        let generation = resolutionGeneration
+        let accountRef = appState.activeAccountRef
+        let runtimeGeneration = appState.runtimeGeneration
         isPreparingConversationChoices = true
-        defer { isPreparingConversationChoices = false }
+        defer {
+            if generation == resolutionGeneration { isPreparingConversationChoices = false }
+        }
 
         await directory.load(
             using: appState,
             includeAdminMetadata: true
         )
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled,
+              generation == resolutionGeneration,
+              appState.activeAccountRef == accountRef,
+              appState.runtimeGeneration == runtimeGeneration
+        else { return }
         let memberRef = ProfileReferenceResolution.referenceForResolution(npub) ?? hex
         if let loadError = directory.loadError {
             Haptics.error()
@@ -320,12 +238,20 @@ final class ProfileViewModel {
         using appState: AppState,
         onOpen: (String) -> Void
     ) async {
+        let generation = resolutionGeneration
+        let accountRef = appState.activeAccountRef
+        let runtimeGeneration = appState.runtimeGeneration
         let outcome = await starter.startMapped(
             accountIdHex: accountIdHex,
             memberRef: memberRef,
             existingGroupIdHex: existingGroupIdHex,
             using: appState
         )
+        guard !Task.isCancelled,
+              generation == resolutionGeneration,
+              appState.activeAccountRef == accountRef,
+              appState.runtimeGeneration == runtimeGeneration
+        else { return }
         switch outcome {
         case .open(let groupIdHex):
             onOpen(groupIdHex)

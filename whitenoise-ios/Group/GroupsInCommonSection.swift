@@ -1,115 +1,151 @@
 import SwiftUI
 import MarmotKit
 
-/// The groups-in-common block shown on a contact's pages: create a group
-/// with them, add them to a group you administer, then the groups you share,
-/// collapsed to a short preview with See all.
-struct GroupsInCommonSection: View {
-    let contactAccountIdHex: String
-    let contactNpub: String
-    let contactName: String
-    let sharedGroups: [SharedGroupsProjection.SharedGroup]
-    let addableGroups: [SharedGroupsProjection.SharedGroup]
+/// One navigation row on the profile; the full group list lives one level down.
+struct GroupsInCommonRow: View {
+    private let groups: [SharedGroupsProjection.SharedGroup]
+    let hasLoaded: Bool
+    let loadError: String?
+    let onRetry: () -> Void
     let onOpenChat: (String) -> Void
-    var showsActions = true
-    /// Hoisted to the owning screen: sheets attached to a `Section` detach
-    /// when the list re-renders (the same hazard as the picker scanner).
-    var onStartGroup: () -> Void = {}
-    var onAddToGroup: () -> Void = {}
+    var onAddToGroup: () -> Void
 
-    @State private var expanded = false
-
-    private static let previewCount = 3
+    init(
+        sharedGroups: [SharedGroupsProjection.SharedGroup],
+        hasLoaded: Bool,
+        loadError: String?,
+        onRetry: @escaping () -> Void,
+        onOpenChat: @escaping (String) -> Void,
+        onAddToGroup: @escaping () -> Void
+    ) {
+        groups = sharedGroups.filter { !$0.isDirectMessage }
+        self.hasLoaded = hasLoaded
+        self.loadError = loadError
+        self.onRetry = onRetry
+        self.onOpenChat = onOpenChat
+        self.onAddToGroup = onAddToGroup
+    }
 
     var body: some View {
-        Section {
-            if showsActions {
-                Button {
-                    onStartGroup()
-                } label: {
-                    Label(
-                        L10n.formatted("Create group with %@", contactName),
-                        systemImage: "plus"
-                    )
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(.rect)
+        if !hasLoaded {
+            if loadError != nil {
+                Button(action: onRetry) {
+                    Label("Couldn't load groups", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.plain)
+                .accessibilityHint("Retry")
+            } else {
+                HStack {
+                    Label("Groups in Common", systemImage: "person.2")
+                    Spacer()
+                    ProgressView().controlSize(.small)
+                }
+                .foregroundStyle(.secondary)
+            }
+        } else if groups.isEmpty {
+            LabeledContent {
+                Text("None")
+            } label: {
+                Label("Groups in Common", systemImage: "person.2")
+            }
+        } else {
+            NavigationLink {
+                GroupsInCommonView(
+                    groups: groups,
+                    onOpenChat: onOpenChat,
+                    onAddToGroup: onAddToGroup
+                )
+            } label: {
+                HStack {
+                    HStack(spacing: -10) {
+                        ForEach(groups.prefix(3)) { group in
+                            GroupAvatarBubble(
+                                groupIdHex: group.groupIdHex,
+                                imageHashHex: group.imageHashHex,
+                                seed: group.groupIdHex,
+                                title: group.title,
+                                pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
+                            )
+                            .frame(width: 32, height: 32)
+                            .background(Color(uiColor: .systemGray5), in: Circle())
+                            .overlay { Circle().stroke(Color(uiColor: .secondarySystemGroupedBackground), lineWidth: 2) }
+                        }
+                        if groups.count > 3 {
+                            Text("+\(groups.count - 3)")
+                                .font(.caption2.weight(.semibold))
+                                .monospacedDigit()
+                                .frame(width: 32, height: 32)
+                                .background(Color(uiColor: .systemGray5), in: Circle())
+                                .overlay { Circle().stroke(Color(uiColor: .secondarySystemGroupedBackground), lineWidth: 2) }
+                        }
+                    }
+                    .accessibilityHidden(true)
+                    Text("Groups in Common")
+                        .layoutPriority(1)
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.primary)
+                .accessibilityElement(children: .combine)
+                .accessibilityValue(L10n.plural("%lld groups in common", Int64(groups.count)))
+            }
+        }
+        Button("Add to Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
+    }
+}
 
-                if !addableGroups.isEmpty {
+private struct GroupsInCommonView: View {
+    let groups: [SharedGroupsProjection.SharedGroup]
+    let onOpenChat: (String) -> Void
+    let onAddToGroup: () -> Void
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(groups) { group in
                     Button {
-                        onAddToGroup()
+                        onOpenChat(group.groupIdHex)
                     } label: {
-                        Label("Add to group", systemImage: "person.2.badge.plus")
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(.rect)
+                        HStack {
+                            ProfileGroupSummaryRow(group: group)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
                 }
+                Button("Add to Another Group", systemImage: "person.2.badge.plus", action: onAddToGroup)
             }
-
-            ForEach(visibleShared) { group in
-                let displayTitle = group.isDirectMessage
-                    ? contactName
-                    : group.title
-                Button {
-                    onOpenChat(group.groupIdHex)
-                } label: {
-                    HStack(spacing: 12) {
-                        GroupAvatarBubble(
-                            groupIdHex: group.groupIdHex,
-                            imageHashHex: group.imageHashHex,
-                            seed: group.groupIdHex,
-                            title: displayTitle,
-                            pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
-                        )
-                        .frame(width: 40, height: 40)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(displayTitle)
-                                .lineLimit(1)
-                            if group.isDirectMessage {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "person.fill")
-                                    Text("Direct message")
-                                }
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text(L10n.plural("%lld members", Int64(group.memberCount)))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 8)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-
-            if !expanded, sharedGroups.count > Self.previewCount {
-                Button {
-                    expanded = true
-                } label: {
-                    HStack {
-                        Text("See all")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(.rect)
-                }
-                .buttonStyle(.plain)
-            }
-        } header: {
-            Text(L10n.plural("%lld groups in common", Int64(sharedGroups.count)))
         }
+        .navigationTitle("Groups in Common")
+        .navigationBarTitleDisplayMode(.inline)
     }
+}
 
-    private var visibleShared: [SharedGroupsProjection.SharedGroup] {
-        expanded ? sharedGroups : Array(sharedGroups.prefix(Self.previewCount))
+private struct ProfileGroupSummaryRow: View {
+    let group: SharedGroupsProjection.SharedGroup
+
+    var body: some View {
+        HStack(spacing: 12) {
+            GroupAvatarBubble(
+                groupIdHex: group.groupIdHex,
+                imageHashHex: group.imageHashHex,
+                seed: group.groupIdHex,
+                title: group.title,
+                pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
+            )
+            .frame(width: 40, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(L10n.plural("%lld members", Int64(group.memberCount)))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+        }
     }
 }
 
@@ -122,12 +158,12 @@ struct AddToGroupSheet: View {
     let contactNpub: String
     let contactName: String
     let groups: [SharedGroupsProjection.SharedGroup]
-    var onAdded: @MainActor () async -> Void = {}
     var isLoading = false
     var loadError: String?
-    var onReload: (@MainActor () async -> Void)?
-    @State private var hasLoaded = false
+    var onReload: @MainActor () async -> Void
+    var onAdded: @MainActor () async -> Void = {}
 
+    @State private var loadedKey: String?
     @State private var busyGroupIdHex: String?
     @State private var error: String?
 
@@ -135,27 +171,12 @@ struct AddToGroupSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(groups) { group in
+                    ForEach(isRefreshing || loadError != nil ? [] : groups) { group in
                         Button {
                             Task { await add(to: group) }
                         } label: {
-                            HStack(spacing: 12) {
-                                GroupAvatarBubble(
-                                    groupIdHex: group.groupIdHex,
-                                    imageHashHex: group.imageHashHex,
-                                    seed: group.groupIdHex,
-                                    title: group.title,
-                                    pictureURL: ContentSanitizer.imageURL(group.avatarUrl)
-                                )
-                                .frame(width: 40, height: 40)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(group.title)
-                                        .lineLimit(1)
-                                    Text(L10n.plural("%lld members", Int64(group.memberCount)))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer(minLength: 8)
+                            HStack {
+                                ProfileGroupSummaryRow(group: group)
                                 if busyGroupIdHex == group.groupIdHex {
                                     ProgressView()
                                 }
@@ -166,13 +187,12 @@ struct AddToGroupSheet: View {
                         .disabled(busyGroupIdHex != nil)
                     }
                 } footer: {
-                    if !groups.isEmpty, !isLoading, loadError == nil,
-                       onReload == nil || hasLoaded {
+                    if !groups.isEmpty, !isRefreshing, loadError == nil {
                         Text(L10n.formatted("Adds %@ to the group you pick.", contactName))
                     }
                 }
 
-                if let error {
+                if let error, !isRefreshing {
                     Section {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(.red)
@@ -180,7 +200,7 @@ struct AddToGroupSheet: View {
                 }
             }
             .overlay {
-                if isLoading || (onReload != nil && !hasLoaded) {
+                if isRefreshing {
                     ProgressView()
                 } else if let loadError {
                     ContentUnavailableView {
@@ -188,9 +208,9 @@ struct AddToGroupSheet: View {
                     } description: {
                         Text(loadError)
                     } actions: {
-                        Button("Try Again") { Task { await onReload?() } }
+                        Button("Retry") { Task { await reload() } }
                     }
-                } else if groups.isEmpty {
+                } else if groups.isEmpty, error == nil {
                     ContentUnavailableView {
                         Label("No Available Groups", systemImage: "person.3")
                     } description: {
@@ -198,12 +218,8 @@ struct AddToGroupSheet: View {
                     }
                 }
             }
-            .task(id: appState.activeAccountRef) {
-                hasLoaded = false
-                await onReload?()
-                hasLoaded = true
-            }
-            .navigationTitle("Add to group")
+            .task(id: reloadKey) { await reload() }
+            .navigationTitle("Add to Group")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -215,8 +231,25 @@ struct AddToGroupSheet: View {
         }
     }
 
+    private var reloadKey: String {
+        "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(contactNpub)"
+    }
+
+    private var isRefreshing: Bool { isLoading || loadedKey != reloadKey }
+
+    private func reload() async {
+        let key = reloadKey
+        loadedKey = nil
+        error = nil
+        await onReload()
+        guard !Task.isCancelled, reloadKey == key else { return }
+        loadedKey = key
+    }
+
     private func add(to group: SharedGroupsProjection.SharedGroup) async {
-        guard busyGroupIdHex == nil, let accountRef = appState.activeAccountRef else { return }
+        guard !isRefreshing, loadError == nil,
+              busyGroupIdHex == nil, let accountRef = appState.activeAccountRef else { return }
+        let runtimeGeneration = appState.runtimeGeneration
         busyGroupIdHex = group.groupIdHex
         defer { busyGroupIdHex = nil }
         error = nil
@@ -227,11 +260,14 @@ struct AddToGroupSheet: View {
                 groupIdHex: group.groupIdHex,
                 memberRefs: [contactNpub]
             )
+            guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             await onAdded()
+            guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             Haptics.success()
             appState.present(.success(L10n.string("Added to group"), message: group.title))
             dismiss()
         } catch let marmotError as MarmotKitError {
+            guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             Haptics.error()
             if case .MissingKeyPackage(let account) = marmotError {
                 error = L10n.formatted(
@@ -242,8 +278,16 @@ struct AddToGroupSheet: View {
                 error = UserFacingError.message(for: marmotError)
             }
         } catch {
+            guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             Haptics.error()
             self.error = UserFacingError.message(for: error)
         }
     }
+
+    private func isCurrent(accountRef: String, runtimeGeneration: Int) -> Bool {
+        !Task.isCancelled
+            && appState.activeAccountRef == accountRef
+            && appState.runtimeGeneration == runtimeGeneration
+    }
+
 }

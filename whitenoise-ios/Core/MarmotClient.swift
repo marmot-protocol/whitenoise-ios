@@ -977,12 +977,6 @@ nonisolated final class MarmotClient: Sendable {
         )
     }
 
-    func userProfileWebsite(accountIdHex: String) async throws -> String? {
-        try await Task.detached(priority: .utility) { [marmot, accountIdHex] in
-            try marmot.userProfileWebsite(accountIdHex: accountIdHex)
-        }.value
-    }
-
     func accountKeyPackages(accountRef: String, bootstrapRelays: [String]) async throws -> [AccountKeyPackageFfi] {
         try await marmot.accountKeyPackages(accountRef: accountRef, bootstrapRelays: bootstrapRelays)
     }

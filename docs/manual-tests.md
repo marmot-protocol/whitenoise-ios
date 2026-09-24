@@ -549,6 +549,62 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Settings & profile
 
+- [ ] Compare public profiles from New Chat search, Chat Info → About, group
+      members, blocked users, and QR/profile links with the prototype: one-third
+      width avatar, name, centered bio card, verified address and compact npub,
+      then grouped Groups in Common/Add to Group, Follow/Unfollow, and Block.
+      Message is a full-width primary action below, omitted in Chat Info → About.
+      Nickname is editable in the action card; when set, the header also shows
+      the published profile name. The own-profile edit form stays unchanged.
+      No banner, Create Group, website, or Lightning address appears.
+- [ ] Groups in Common shows overlapping avatars and opens a separate group list
+      with names/member counts and Add to Another Group. Direct-message chats do
+      not appear here. Invite a peer and verify the shared/available lists refresh.
+      Add to Group remains a separate action with zero or many groups in common,
+      while loading, and after a failed lookup. Its picker explains empty/error
+      states and only offers eligible groups.
+- [ ] On first profile/Chat Info load, the groups row shows progress until the
+      result is known; a failed lookup offers Retry. Refresh or background and
+      foreground the same profile: Groups in Common keeps its previous result
+      while loading. Switch account or peer: the previous result is cleared.
+- [ ] Chat Info stays separate: shared identity header, About/Mute/Disappearing/
+      Search controls, grouped relationship actions, Shared in Chat category links,
+      and Chat Actions. Mute's menu retains Notifications. Verify categories,
+      archive, leave confirmations, and group moderation still operate normally.
+- [ ] Review on iPhone and iPad in light/dark and large Dynamic Type: no clipping,
+      readable names/bio, copyable npub, and reachable actions. Check VoiceOver
+      order, action names, verified-address badge, and copy confirmation.
+- [ ] Follow/unfollow a person from each entry and from Chat Info. The action reflects
+      the saved follow relationship after reopening; failed loads offer Retry and
+      failed publishes retain the previous state. Other accounts stored on this
+      device still show the Follow and Block rows, disabled under the current
+      eligibility rules. Developer integration must enable these cases only after
+      resolving that policy; UI visibility must not imply a successful mutation.
+- [ ] From a fresh account with no published follow list, try Follow and
+      reopen the profile to verify persistence. If MDK returns
+      `FollowListUnavailable`, the alert explains that the relay follow list is
+      unavailable and suggests checking connection/relay settings; the previous
+      relationship remains unchanged. Escalate a persistent fresh-account failure
+      to MDK integration rather than treating the UI error copy as a backend fix.
+- [ ] A blocked peer retains the full action card: group/follow rows are disabled,
+      Unblock remains available, and Message stays hidden until unblocked.
+- [ ] Switch accounts or suspend/resume while follow state is loading or saving;
+      an old completion must not change the new account's displayed relationship.
+- [ ] Leave and reopen a profile while its Nostr address is being verified; a
+      cancelled lookup retries. Removing/changing the address or switching the
+      target account never restores a stale verified badge.
+      Repeat in direct Chat Info, including scrolling its identity section offscreen.
+- [ ] Switch accounts during an invitation, group lookup, Message action, or
+      Block confirmation. Old work must not navigate, announce success, or act
+      on the replacement account. Invitation failures remain visible even if
+      the eligible-group list becomes empty.
+- [ ] Set, edit, and clear a nickname from public profiles and direct Chat Info.
+      Chat titles, search, mentions, profiles, and sender-revealing notifications
+      use the active account's private nickname; clearing restores the profile
+      name. Generic notifications still hide the sender. Switch accounts while
+      editing: the old draft must not be saved under the replacement account.
+      Existing saved nicknames remain available. Blocked-peer actions remain gated.
+
 - [ ] Settings → AI Agents shows the introduction, Hermes, OpenClaw, OpenCode,
       Codex, and manual setup. Expand/collapse each prompt and copy it; pasted
       text matches the preview and contains the active profile's public npub.

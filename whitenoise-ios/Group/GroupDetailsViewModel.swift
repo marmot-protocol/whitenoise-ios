@@ -49,7 +49,10 @@ final class GroupDetailsViewModel {
     }
     private(set) var sharedGroups: [SharedGroupsProjection.SharedGroup] = []
     private(set) var addableGroups: [SharedGroupsProjection.SharedGroup] = []
+    private(set) var groupsLoadState = SharedGroupsLoadState()
     private let recipientDirectory = RecipientDirectory()
+    var isLoadingSharedGroups: Bool { recipientDirectory.isLoading }
+    var sharedGroupsLoadError: String? { recipientDirectory.loadError }
     private var didLoadSharedMedia = false
     private var pendingLegacyAvatarClearAfterImageMutation = false
 
@@ -490,22 +493,37 @@ final class GroupDetailsViewModel {
         }
     }
 
-    /// Direct-chat details show every group both people share, including this
-    /// direct-message chat, derived from the recipient directory snapshots.
+    /// Load the shared and addable groups for this direct peer. The profile
+    /// group row excludes direct chats from its presentation.
     func loadSharedGroups(using appState: AppState, force: Bool = false) async {
         guard let conversation, conversation.groupDisplay.isDirectMessage,
               let otherMember = conversation.otherMember
         else {
+            groupsLoadState = SharedGroupsLoadState()
             sharedGroups = []
             addableGroups = []
             return
         }
+        let accountRef = appState.activeAccountRef
+        if groupsLoadState.prepare(accountRef: accountRef, peerAccountIdHex: otherMember) {
+            sharedGroups = []
+            addableGroups = []
+        }
+        let runtimeGeneration = appState.runtimeGeneration
+        let groupIdHex = conversation.group.groupIdHex
         await recipientDirectory.load(
             using: appState,
             force: force,
             includeAdminMetadata: true
         )
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled,
+              appState.activeAccountRef == accountRef,
+              appState.runtimeGeneration == runtimeGeneration,
+              self.conversation?.group.groupIdHex == groupIdHex,
+              self.conversation?.otherMember == otherMember
+        else { return }
+        guard recipientDirectory.loadError == nil else { return }
+        groupsLoadState.complete(accountRef: accountRef, peerAccountIdHex: otherMember)
         sharedGroups = SharedGroupsProjection.sharedGroups(
             snapshots: recipientDirectory.snapshots,
             targetAccountIdHex: otherMember,

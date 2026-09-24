@@ -28,25 +28,11 @@ struct DetailsActionButton: View {
             .wnSecondaryButtonStyle()
             .disabled(isDisabled || isLoading)
         case .circular:
-            VStack(spacing: 6) {
-                Button(action: action) {
-                    icon
-                        .frame(width: 44, height: 44)
-                        .compatibleInputCircleChrome()
-                        .contentShape(.circle)
-                }
-                .buttonStyle(.plain)
-                .disabled(isDisabled || isLoading)
-                .accessibilityLabel(title)
-
-                Text(title)
-                    .font(.footnote)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .accessibilityHidden(true)
+            DetailsQuickAction(title: title, size: .compact) {
+                Button(action: action) { icon }
+                    .disabled(isDisabled || isLoading)
             }
             .frame(maxWidth: .infinity)
-            .opacity(isDisabled ? 0.45 : 1)
         }
     }
 
@@ -72,5 +58,48 @@ struct DetailsActionButton: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+struct DetailsQuickAction<Control: View>: View {
+    enum Size {
+        case compact
+        case regular
+
+        var diameter: CGFloat { self == .compact ? 44 : 64 }
+        var font: Font { self == .compact ? .body.weight(.semibold) : .title3 }
+    }
+
+    let title: LocalizedStringKey
+    var size = Size.regular
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        VStack(spacing: 6) {
+            control()
+                .buttonStyle(DetailsQuickActionStyle(diameter: size.diameter, font: size.font))
+                .accessibilityLabel(title)
+            Text(title)
+                .font(.footnote)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct DetailsQuickActionStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    let diameter: CGFloat
+    let font: Font
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(font)
+            .foregroundStyle(.primary)
+            .frame(width: diameter, height: diameter)
+            .compatibleInputCircleChrome()
+            .contentShape(.circle)
+            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.45)
     }
 }

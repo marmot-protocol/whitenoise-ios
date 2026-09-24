@@ -517,37 +517,3 @@ private enum MembershipReadFailure: Error {
     case page
     case group
 }
-
-@MainActor
-struct ProfileFollowTests {
-    private let peer = String(repeating: "dd", count: 32)
-
-    @Test func profileLoadsFollowStatusFromTheBindingAdapter() async {
-        let model = ProfileViewModel()
-        model.applyResolvedAccount(peer)
-
-        await model.prepareFollowStatus(initialValue: false) {
-            true
-        }
-
-        #expect(model.isFollowing == true)
-        #expect(!model.isLoadingFollow)
-    }
-
-    @Test func profileTogglePublishesTheOppositeStateAndUsesReturnedResult() async throws {
-        let model = ProfileViewModel()
-        let appState = AppState(client: try MarmotClient.testClient())
-        model.applyResolvedAccount(peer)
-        await model.prepareFollowStatus(initialValue: true, load: nil)
-        var requestedState: Bool?
-
-        await model.toggleFollow(using: appState) { desired in
-            requestedState = desired
-            return desired
-        }
-
-        #expect(requestedState == false)
-        #expect(model.isFollowing == false)
-        #expect(!model.isUpdatingFollow)
-    }
-}

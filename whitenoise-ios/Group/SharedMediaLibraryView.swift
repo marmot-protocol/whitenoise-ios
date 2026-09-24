@@ -227,6 +227,14 @@ struct SharedMediaLibraryView: View {
         count: 3
     )
 
+    init(
+        conversation: ConversationViewModel,
+        initialCategory: SharedMediaLibraryPresentation.Category = .media
+    ) {
+        self.conversation = conversation
+        _category = State(initialValue: initialCategory)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Picker("Shared media type", selection: $category) {
