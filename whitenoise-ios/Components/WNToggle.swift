@@ -54,7 +54,7 @@ private struct WNTogglePreview: View {
             WNToggle(isOn: $isOn) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Share usage and telemetry")
-                    Text("A secondary line describing what the switch shares.")
+                    Text(verbatim: "A secondary line describing what the switch shares.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
