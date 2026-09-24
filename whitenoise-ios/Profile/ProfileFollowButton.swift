@@ -22,7 +22,7 @@ struct ProfileFollowButton: View {
                 HStack {
                     Label(
                         model.loadFailed ? L10n.string("Retry")
-                            : L10n.string(model.isFollowing == true ? "Remove Contact" : "Add Contact"),
+                            : L10n.string(model.isFollowing == true ? "Unfollow" : "Follow"),
                         systemImage: model.loadFailed ? "arrow.clockwise"
                             : (model.isFollowing == true ? "person.badge.minus" : "person.badge.plus")
                     )
@@ -34,8 +34,8 @@ struct ProfileFollowButton: View {
             }
             .disabled(context == nil || model.isLoading || model.isUpdating
                 || (model.isFollowing == nil && !model.loadFailed))
-            .accessibilityLabel(model.loadFailed ? L10n.string("Couldn't load contact status. Retry.")
-                : L10n.string(model.isFollowing == true ? "Remove Contact" : "Add Contact"))
+            .accessibilityLabel(model.loadFailed ? L10n.string("Couldn't load follow status. Retry.")
+                : L10n.string(model.isFollowing == true ? "Unfollow" : "Follow"))
             .task(id: context) { await load() }
         }
     }
@@ -81,7 +81,7 @@ struct ProfileFollowButton: View {
             guard self.context == context else { return }
             Haptics.error()
             appState.present(UserFacingError.toast(
-                title: L10n.string("Couldn't update contact"),
+                title: L10n.string("Couldn't update follow status"),
                 error: error,
                 fallbackMessage: L10n.string("Please try again.")
             ))

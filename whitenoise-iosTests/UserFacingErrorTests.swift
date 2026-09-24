@@ -10,7 +10,7 @@ struct UserFacingErrorTests {
 
     @Test func unavailableFollowListExplainsRecoveryInsteadOfGenericFallback() {
         let error = MarmotKitError.FollowListUnavailable
-        let expected = L10n.string("Your contact list is unavailable from relays. Check your connection and relay settings, then try again. No contacts were changed.")
+        let expected = L10n.string("Your follow list is unavailable from relays. Check your connection and relay settings, then try again. No follows were changed.")
         #expect(UserFacingError.message(for: error, fallbackMessage: "Please try again.") == expected)
         #expect(UserFacingError.sanitizedDiagnostic(for: error) == expected)
     }

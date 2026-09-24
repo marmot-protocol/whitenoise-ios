@@ -115,7 +115,7 @@ struct GroupDetailsView: View {
                 }
             }
 
-            if let actionError = model.actionError {
+            if let actionError = model.actionError ?? model.notifyModeError {
                 Section {
                     Label(actionError, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -312,7 +312,6 @@ struct GroupDetailsView: View {
                 didOpenRequestedAddMembers = true
                 model.showAddMembers = true
             }
-            model.loadMuteState(using: appState)
             await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState)
             while !Task.isCancelled {
@@ -320,7 +319,19 @@ struct GroupDetailsView: View {
                 await model.refreshSharedMediaVersion(using: appState)
             }
         }
+        .task(id: muteStateKey) {
+            model.loadMuteState(using: appState)
+        }
+        .task(id: model.muteExpiresAt) {
+            guard let deadline = model.muteExpiresAt else { return }
+            do {
+                try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+                try Task.checkCancellation()
+                model.loadMuteState(using: appState)
+            } catch { }
+        }
         .refreshable {
+            model.loadMuteState(using: appState)
             await model.loadSharedMedia(using: appState, force: true)
             await model.loadSharedGroups(using: appState, force: true)
         }
@@ -518,6 +529,7 @@ struct GroupDetailsView: View {
                             Button(model.isMuted ? "Unmute" : "Mute") {
                                 model.setMuted(!model.isMuted, using: appState)
                             }
+                            .disabled(!model.isMuteStateLoaded)
                             Button("Notifications") { showNotifications = true }
                         } label: {
                             Image(systemName: model.isMuted ? "bell" : "bell.slash")
@@ -626,6 +638,7 @@ struct GroupDetailsView: View {
                 DetailsActionButton(
                     title: model.isMuted ? "Unmute" : "Mute",
                     systemImage: model.isMuted ? "bell.fill" : "bell.slash",
+                    isDisabled: !model.isMuteStateLoaded,
                     appearance: .circular,
                     action: { model.setMuted(!model.isMuted, using: appState) }
                 )
@@ -727,7 +740,7 @@ struct GroupDetailsView: View {
             } label: {
                 settingsRow(title: "Notifications", systemImage: "bell") {
                     HStack(spacing: 6) {
-                        Text(notifyModeSummary)
+                        Text(model.notifyModeSummary)
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.tertiary)
@@ -1040,6 +1053,10 @@ struct GroupDetailsView: View {
         return peer
     }
 
+    private var muteStateKey: String {
+        "\(appState.activeAccountRef ?? ""):\(appState.isAppSceneActive):\(viewModel.group.groupIdHex)"
+    }
+
     private var blockSubscriptionKey: String {
         "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)/\(blockablePeer ?? "")/\(blockReload)"
     }
@@ -1162,14 +1179,6 @@ struct GroupDetailsView: View {
     private var contactNip05: String? {
         contactAccountIdHex.flatMap {
             ContentSanitizer.profileAddress(appState.profile(forAccountIdHex: $0)?.nip05)
-        }
-    }
-
-    private var notifyModeSummary: String {
-        switch model.notifyMode {
-        case .all: L10n.string("On")
-        case .mentionsOnly: L10n.string("Mentions")
-        case .nothing: L10n.string("Muted")
         }
     }
 

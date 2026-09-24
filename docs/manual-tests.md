@@ -552,7 +552,7 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] Compare public profiles from New Chat search, Chat Info → About, group
       members, blocked users, and QR/profile links with the prototype: one-third
       width avatar, name, centered bio card, verified address and compact npub,
-      then grouped Groups in Common/Add to Group, Add/Remove Contact, and Block.
+      then grouped Groups in Common/Add to Group, Follow/Unfollow, and Block.
       Message is a full-width primary action below, omitted in Chat Info → About.
       Nickname is editable in the action card; when set, the header also shows
       the published profile name. The own-profile edit form stays unchanged.
@@ -574,19 +574,19 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 - [ ] Review on iPhone and iPad in light/dark and large Dynamic Type: no clipping,
       readable names/bio, copyable npub, and reachable actions. Check VoiceOver
       order, action names, verified-address badge, and copy confirmation.
-- [ ] Add/remove a contact from each entry and from Chat Info. The action reflects
+- [ ] Follow/unfollow a person from each entry and from Chat Info. The action reflects
       the saved follow relationship after reopening; failed loads offer Retry and
       failed publishes retain the previous state. Other accounts stored on this
-      device still show the contact and Block rows, disabled under the current
+      device still show the Follow and Block rows, disabled under the current
       eligibility rules. Developer integration must enable these cases only after
       resolving that policy; UI visibility must not imply a successful mutation.
-- [ ] From a fresh account with no published follow list, try Add Contact and
+- [ ] From a fresh account with no published follow list, try Follow and
       reopen the profile to verify persistence. If MDK returns
-      `FollowListUnavailable`, the alert explains that the relay contact list is
+      `FollowListUnavailable`, the alert explains that the relay follow list is
       unavailable and suggests checking connection/relay settings; the previous
       relationship remains unchanged. Escalate a persistent fresh-account failure
       to MDK integration rather than treating the UI error copy as a backend fix.
-- [ ] A blocked peer retains the full action card: group/contact rows are disabled,
+- [ ] A blocked peer retains the full action card: group/follow rows are disabled,
       Unblock remains available, and Message stays hidden until unblocked.
 - [ ] Switch accounts or suspend/resume while follow state is loading or saving;
       an old completion must not change the new account's displayed relationship.
