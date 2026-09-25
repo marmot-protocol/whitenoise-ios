@@ -29,15 +29,14 @@ struct PasteAwareSecureField: UIViewRepresentable {
         field.autocorrectionType = .no
         field.spellCheckingType = .no
         field.smartInsertDeleteType = .no
-        field.textContentType = nil
+        field.textContentType = .password
         field.returnKeyType = .go
         field.adjustsFontForContentSizeCategory = true
         field.font = UIFont.preferredFont(forTextStyle: .body)
-        field.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.textChanged(_:)),
-            for: .editingChanged
-        )
+        field.onTextMutation = { [weak coordinator = context.coordinator] field in
+            coordinator?.textChanged(field)
+        }
+        context.coordinator.syncedText = text
         field.text = text
         return field
     }
@@ -53,23 +52,30 @@ struct PasteAwareSecureField: UIViewRepresentable {
     }
 
     func updateUIView(_ field: PasteInterceptingSecureTextField, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.update(text: $text, isFocused: $isFocused, onSubmit: onSubmit)
         field.onPaste = onPaste
-        if field.text != text {
-            field.text = text
-        }
-        if isFocused, !field.isFirstResponder {
-            field.becomeFirstResponder()
-        } else if !isFocused, field.isFirstResponder {
-            field.resignFirstResponder()
-        }
         field.onClear = onClear
-        field.updateAccessory(visible: showsAccessory)
+        if text != coordinator.syncedText {
+            coordinator.syncedText = text
+            if field.text != text { field.text = text }
+        }
+        coordinator.requestFocus(isFocused, for: field)
+        field.setAccessoryVisible(showsAccessory)
+    }
+
+    static func dismantleUIView(_ field: PasteInterceptingSecureTextField, coordinator: Coordinator) {
+        coordinator.cancelPendingFocus()
+        field.cancelPendingAccessoryUpdate()
     }
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         @Binding private var text: String
         @Binding private var isFocused: Bool
-        let onSubmit: () -> Void
+        private var onSubmit: () -> Void
+        var syncedText = ""
+        private var requestedFocus = false
+        private var pendingFocus: Task<Void, Never>?
 
         init(
             text: Binding<String>,
@@ -81,16 +87,53 @@ struct PasteAwareSecureField: UIViewRepresentable {
             self.onSubmit = onSubmit
         }
 
-        @objc func textChanged(_ field: UITextField) {
-            text = field.text ?? ""
+        func update(text: Binding<String>, isFocused: Binding<Bool>, onSubmit: @escaping () -> Void) {
+            _text = text
+            _isFocused = isFocused
+            self.onSubmit = onSubmit
+        }
+
+        func textChanged(_ field: UITextField) {
+            let value = field.text ?? ""
+            guard value != syncedText else { return }
+            syncedText = value
+            text = value
+        }
+
+        func requestFocus(_ wantsFocus: Bool, for field: UITextField) {
+            guard wantsFocus != requestedFocus else { return }
+            requestedFocus = wantsFocus
+            pendingFocus?.cancel()
+            pendingFocus = Task { @MainActor [weak self, weak field] in
+                guard let self, let field, !Task.isCancelled else { return }
+                pendingFocus = nil
+                if requestedFocus, !field.isFirstResponder {
+                    field.becomeFirstResponder()
+                } else if !requestedFocus, field.isFirstResponder {
+                    field.resignFirstResponder()
+                }
+                reportFocus(field.isFirstResponder)
+            }
+        }
+
+        func cancelPendingFocus() {
+            pendingFocus?.cancel()
+            pendingFocus = nil
+        }
+
+        private func reportFocus(_ focused: Bool) {
+            requestedFocus = focused
+            if isFocused != focused { isFocused = focused }
         }
 
         func textFieldDidBeginEditing(_ textField: UITextField) {
-            isFocused = true
+            textChanged(textField)
+            reportFocus(true)
         }
 
         func textFieldDidEndEditing(_ textField: UITextField) {
-            isFocused = false
+            textChanged(textField)
+            reportFocus(false)
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -103,10 +146,26 @@ struct PasteAwareSecureField: UIViewRepresentable {
 final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     var onPaste: ((SensitiveClipboard.Token?, String) -> Void)?
     var onClear: (() -> Void)?
+    var onTextMutation: ((PasteInterceptingSecureTextField) -> Void)?
     private var pendingPasteToken: SensitiveClipboard.Token?
     private static let pasteTokenAttribute = NSAttributedString.Key("WhiteNoisePasteToken")
     private var pasteControl: UIPasteControl?
     private let clearButton = UIButton(type: .system)
+    private var accessoryVisible = true
+    private var pendingAccessoryUpdate: Task<Void, Never>?
+
+    override var text: String? {
+        didSet { textDidMutate() }
+    }
+
+    override var attributedText: NSAttributedString? {
+        didSet { textDidMutate() }
+    }
+
+    @objc private func textDidMutate() {
+        scheduleAccessoryUpdate()
+        onTextMutation?(self)
+    }
 
     func configureAccessory() {
         rebuildPasteControl()
@@ -119,7 +178,14 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         clearButton.accessibilityLabel = L10n.string("Clear")
         clearButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         clearButton.addTarget(self, action: #selector(clearInput), for: .touchUpInside)
-        updateAccessory(visible: true)
+        addTarget(self, action: #selector(textDidMutate), for: .editingChanged)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(textDidMutate),
+            name: UITextField.textDidChangeNotification,
+            object: self
+        )
+        applyAccessory()
     }
 
     private func rebuildPasteControl() {
@@ -133,7 +199,7 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         control.accessibilityLabel = L10n.string("Paste")
         control.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         pasteControl = control
-        updateAccessory(visible: rightViewMode != .never)
+        scheduleAccessoryUpdate()
     }
 
     private var opaqueInputFill: UIColor {
@@ -149,11 +215,31 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
                        blue: blue * alpha + baseBlue * (1 - alpha), alpha: 1)
     }
 
-    func updateAccessory(visible: Bool) {
+    func setAccessoryVisible(_ visible: Bool) {
+        accessoryVisible = visible
+        scheduleAccessoryUpdate()
+    }
+
+    func cancelPendingAccessoryUpdate() {
+        pendingAccessoryUpdate?.cancel()
+        pendingAccessoryUpdate = nil
+    }
+
+    @objc private func scheduleAccessoryUpdate() {
+        guard pendingAccessoryUpdate == nil else { return }
+        pendingAccessoryUpdate = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            pendingAccessoryUpdate = nil
+            applyAccessory()
+        }
+    }
+
+    private func applyAccessory() {
         let accessory = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? pasteControl : clearButton
         if rightView !== accessory { rightView = accessory }
-        rightViewMode = visible ? .always : .never
+        let mode: UITextField.ViewMode = accessoryVisible ? .always : .never
+        if rightViewMode != mode { rightViewMode = mode }
     }
 
     override func rightViewRect(forBounds bounds: CGRect) -> CGRect {
