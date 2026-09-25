@@ -6,6 +6,15 @@ import UIKit
 @MainActor
 @Suite
 struct ChatListViewportTests {
+    enum Gesture: CaseIterable { case dragging, decelerating }
+
+    private final class GestureScrollView: UIScrollView {
+        var gesture: Gesture?
+        override var isTracking: Bool { gesture == .dragging }
+        override var isDragging: Bool { gesture == .dragging }
+        override var isDecelerating: Bool { gesture == .decelerating }
+    }
+
     private let rowHeight: CGFloat = 44
     private let viewportHeight: CGFloat = 700
 
@@ -19,12 +28,13 @@ struct ChatListViewportTests {
     private func makeList(
         ids: [String],
         viewport: ChatListViewport,
-        sequence: UInt64 = 0
+        sequence: UInt64 = 0,
+        scroll: UIScrollView = UIScrollView()
     ) throws -> (window: UIWindow, scroll: UIScrollView) {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 390, height: viewportHeight)
-        let scroll = UIScrollView(frame: window.bounds)
+        scroll.frame = window.bounds
         scroll.contentInsetAdjustmentBehavior = .never
         let host = UIViewController()
         host.view.addSubview(scroll)
@@ -111,6 +121,29 @@ struct ChatListViewportTests {
             #expect(abs(try offset(of: anchor, in: scroll) - oldOffset) < 0.5)
             #expect(scroll.contentOffset.y < scroll.contentSize.height - viewportHeight - rowHeight)
         }
+    }
+
+    @Test(arguments: Gesture.allCases)
+    func retainedRowFollowsTheReaderWhenAPageLandsMidGesture(gesture: Gesture) throws {
+        let viewport = ChatListViewport()
+        let gestureScroll = GestureScrollView()
+        let (window, scroll) = try makeList(ids: (0..<200).map(String.init), viewport: viewport, scroll: gestureScroll)
+        defer { window.isHidden = true; window.rootViewController = nil }
+        scroll.contentOffset = CGPoint(x: 0, y: 100 * rowHeight + 17)
+        scroll.layoutIfNeeded()
+
+        let anchor = try #require(viewport.visibleAnchor())
+        let oldOffset = try offset(of: anchor, in: scroll)
+        gestureScroll.gesture = gesture
+
+        viewport.prepare(for: snapshot(sequence: 1, anchor: .retained(groupIdHex: anchor, index: 0)))
+        let gestureTravel: CGFloat = 30
+        scroll.contentOffset.y += gestureTravel
+        layout(ids: (50..<250).map(String.init), in: scroll, viewport: viewport, sequence: 1)
+
+        let newOffset = try offset(of: anchor, in: scroll)
+        #expect(abs(newOffset - (oldOffset - gestureTravel)) < 0.5,
+                "Retained row moved \(newOffset - oldOffset)pt during a \(gesture) gesture")
     }
 
     @Test func recoveredRowTakesTheDeletedAnchorsOffset() throws {
