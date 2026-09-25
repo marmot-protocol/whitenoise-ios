@@ -170,3 +170,9 @@ Before a TestFlight build:
 3. Run `git diff --check`.
 4. Walk the relevant checks in `docs/manual-tests.md`.
 5. Confirm signing still includes APNS for the app and App Group access for both the app and extension.
+
+## License
+
+Copyright (c) 2024-2026 White Noise developers.
+
+White Noise iOS is licensed under the GNU Affero General Public License version 3.0 only (AGPL-3.0-only). See [LICENSE](LICENSE).
