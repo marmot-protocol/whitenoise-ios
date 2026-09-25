@@ -270,6 +270,24 @@ struct OutgoingSendResponsivenessTests {
         try await harness.shutdown()
     }
 
+    @Test func ownSendBytesRetainedAfterTheRowIsCachedAppearOnTheNextRead() async throws {
+        let harness = try SendHarness()
+        let plaintextSha256 = String(repeating: "e", count: 64)
+        var durable = harness.ownRecord(id: hexId(13), text: "", timelineAt: 70, delivered: true, token: "late")
+        durable.media = [.accepted(attachmentIndex: 0, reference: mediaReference(plaintextSha256: plaintextSha256))]
+        harness.installWindow([durable])
+        let row = try #require(harness.store.timeline.first)
+        #expect(harness.store.mediaItems(for: row).first?.localData == nil)
+
+        let draft = MediaDraftAttachment(fileName: "photo.jpg", mediaType: "image/jpeg", data: Data([7, 8]), dim: nil)
+        harness.store.mediaProjections.retainOwnSend(draft.displayItem, plaintextSha256: plaintextSha256)
+        #expect(harness.store.mediaItems(for: row).first?.localData == Data([7, 8]))
+
+        harness.store.mediaProjections.removeAllPending()
+        #expect(harness.store.mediaItems(for: row).first?.localData == nil)
+        try await harness.shutdown()
+    }
+
     @Test func anAmbiguousCompletionKeepsTheBubbleClaimableRatherThanFailed() async throws {
         let harness = try SendHarness()
         harness.installWindow([])

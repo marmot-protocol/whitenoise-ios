@@ -73,7 +73,11 @@ final class ConversationMediaProjectionCache {
         if let pending = pendingByRowId[item.id] {
             return pending
         }
-        return projectionsByRowId[item.id] ?? []
+        return (projectionsByRowId[item.id] ?? []).map(ownSends.overlay)
+    }
+
+    func items(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
+        build(for: record, ownerId: ownerId).map(ownSends.overlay)
     }
 
     func build(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
@@ -89,14 +93,12 @@ final class ConversationMediaProjectionCache {
 #endif
             return MessageMediaAttachment.displayItems(fromOutcomes: outcomes, ownerId: ownerId,
                 messageId: record.messageIdHex, sourceMessageId: sourceIDs[record.messageIdHex])
-                .map(ownSends.overlay)
         }
         guard case .media(let references) = MessageSemantics.classify(record) else { return [] }
 #if DEBUG
         buildCountForTesting += 1
 #endif
         return MessageMediaAttachment.displayItems(from: references, ownerId: ownerId)
-            .map(ownSends.overlay)
     }
 
     // MARK: Resolved references (ingest write-path)

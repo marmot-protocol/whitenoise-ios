@@ -615,7 +615,7 @@ final class TimelineStore {
 
     func mediaItems(for record: AppMessageRecordFfi) -> [MessageMediaAttachment] {
         _ = timelineProjectionGeneration
-        return mediaProjections.build(for: record, ownerId: record.messageIdHex)
+        return mediaProjections.items(for: record, ownerId: record.messageIdHex)
     }
 
     func groupSystemDisplayText(for record: AppMessageRecordFfi) -> String? {
