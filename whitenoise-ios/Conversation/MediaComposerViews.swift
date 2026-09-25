@@ -81,7 +81,7 @@ struct VideoPreviewPlayOverlay: View {
     }
 }
 
-enum DraftMediaUploadPresentation {
+nonisolated enum DraftMediaUploadPresentation {
     static func showsSpinner(for state: DraftMediaUploadState?) -> Bool {
         state == .uploading
     }
