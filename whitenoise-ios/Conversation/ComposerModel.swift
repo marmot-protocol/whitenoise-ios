@@ -40,6 +40,13 @@ struct StagedOutgoingSend {
     let attachments: [MediaDraftAttachment]
     let uploadEpoch: Int
     fileprivate let contentTokens: Task<MarkdownDocumentFfi, Never>
+    fileprivate let preparedUploads: [DraftMediaUpload?]
+
+    func cancelPreparedUploads() {
+        for upload in preparedUploads {
+            upload?.cancel()
+        }
+    }
 }
 
 /// Owns the conversation composer's send pipeline: the reply target and the
@@ -74,6 +81,8 @@ final class ComposerModel {
     @ObservationIgnored private let sendQueue = OutgoingSendQueue()
     @ObservationIgnored var canSendMessages: () -> Bool = { false }
     @ObservationIgnored var canSendMediaAttachments: () -> Bool = { false }
+    @ObservationIgnored var currentGroupEpoch: () -> UInt64? = { nil }
+    @ObservationIgnored private let draftMediaUploads: DraftMediaPreuploads
     /// Surfaces a send failure to the view model (sets its observable `error`).
     @ObservationIgnored var onError: (String) -> Void = { _ in }
 #if DEBUG
@@ -86,6 +95,32 @@ final class ComposerModel {
         self.appState = appState
         self.groupIdHex = groupIdHex
         self.timelineStore = timelineStore
+        self.draftMediaUploads = DraftMediaPreuploads { [weak appState] accountRef, attachment in
+            guard let client = try appState?.currentMarmotClient() else { return nil }
+            let result = try await client.uploadMedia(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                request: MediaUploadRequestFfi(
+                    attachments: [attachment.uploadRequest],
+                    caption: nil,
+                    send: false,
+                    blossomServer: nil
+                )
+            )
+            return result.attachments.first?.reference
+        }
+    }
+
+    func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
+        draftMediaUploads.reconcile(attachments, accountRef: appState?.activeAccountRef)
+    }
+
+    var draftMediaUploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] {
+        draftMediaUploads.states
+    }
+
+    func cancelDraftMediaUploads() {
+        draftMediaUploads.cancelAll()
     }
 
     func restoreReplyTarget(messageIdHex: String?, record: AppMessageRecordFfi?) {
@@ -216,7 +251,8 @@ final class ComposerModel {
             // Captured before the upload round-trip: a wipe completing while the
             // send is in flight must invalidate the post-upload cache store.
             uploadEpoch: MessageMediaCache.currentProducerEpoch(),
-            contentTokens: contentTokens
+            contentTokens: contentTokens,
+            preparedUploads: draftMediaUploads.take(attachments, accountRef: accountRef)
         )
     }
 
@@ -358,8 +394,12 @@ final class ComposerModel {
         await sendQueue.enqueue { [self] in
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
+                staged.cancelPreparedUploads()
                 await completion?(false)
                 return
+            }
+            if draftRevision == nil {
+                staged.cancelPreparedUploads()
             }
             _ = await staged.contentTokens.value
             let submission = appState.productAnalytics.beginTiming()
@@ -367,21 +407,35 @@ final class ComposerModel {
                 let client = try appState.currentMarmotClient()
                 // MDK may project its retained row before admission returns.
                 timelineStore.markLocalSendSubmitted(tempId: staged.tempId)
-                let submitted = try await client.uploadWithClientToken(
-                    accountRef: staged.accountRef,
-                    groupIdHex: groupIdHex,
-                    request: MediaUploadRequestFfi(
-                        attachments: staged.attachments.map(\.uploadRequest),
-                        caption: staged.text.isEmpty ? nil : staged.text,
-                        send: draftRevision == nil,
-                        blossomServer: nil
-                    ),
-                    clientToken: staged.clientToken
+                let prepared: [MediaAttachmentReferenceFfi?]
+                if draftRevision == nil {
+                    prepared = staged.attachments.map { _ in nil }
+                } else {
+                    prepared = await preparedReferences(for: staged)
+                }
+                let missing = zip(staged.attachments, prepared).filter { $0.1 == nil }.map(\.0)
+                var submitted: MediaUploadSubmissionFfi?
+                if !missing.isEmpty {
+                    submitted = try await client.uploadWithClientToken(
+                        accountRef: staged.accountRef,
+                        groupIdHex: groupIdHex,
+                        request: MediaUploadRequestFfi(
+                            attachments: missing.map(\.uploadRequest),
+                            caption: staged.text.isEmpty ? nil : staged.text,
+                            send: draftRevision == nil,
+                            blossomServer: nil
+                        ),
+                        clientToken: staged.clientToken
+                    )
+                }
+                let resolved = DraftMediaPreuploadResolution.merged(
+                    staged.attachments,
+                    prepared: prepared,
+                    uploaded: submitted?.upload.attachments.map(\.reference) ?? []
                 )
-                let result = submitted.upload
                 let verifiedAttachments = await MediaUploadIntegrity.verifiedAttachments(
-                    plaintexts: staged.attachments.map(\.data),
-                    references: result.attachments.map(\.reference)
+                    plaintexts: resolved.attachments.map(\.data),
+                    references: resolved.references
                 )
                 let references = verifiedAttachments.map(\.reference)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
@@ -389,12 +443,20 @@ final class ComposerModel {
                     await completion?(false)
                     return
                 }
+                let verifiedHashes = Set(references.map(\.plaintextSha256))
+                for (attachment, reference) in zip(resolved.attachments, resolved.references)
+                    where verifiedHashes.contains(reference.plaintextSha256) {
+                    timelineStore.mediaProjections.retainOwnSend(
+                        attachment.displayItem,
+                        plaintextSha256: reference.plaintextSha256
+                    )
+                }
                 let sent: LocalSendAcceptanceFfi?
                 if let draftRevision {
                     sent = try await client.sendDraftWithClientToken(accountRef: staged.accountRef, revision: draftRevision, attachments: references, clientToken: staged.clientToken)
                 } else {
                     // The upload admits the message when `send` is set.
-                    sent = submitted.acceptance
+                    sent = submitted?.acceptance
                 }
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
                 await completion?(true)
@@ -437,6 +499,15 @@ final class ComposerModel {
                 appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
             }
         }.value
+    }
+
+    private func preparedReferences(for staged: StagedOutgoingSend) async -> [MediaAttachmentReferenceFfi?] {
+        var references: [MediaAttachmentReferenceFfi?] = []
+        for upload in staged.preparedUploads {
+            let reference = await upload?.value
+            references.append(DraftMediaPreuploadResolution.reusable(reference, currentEpoch: currentGroupEpoch()))
+        }
+        return references
     }
 
     private func recoverSubmission(_ staged: StagedOutgoingSend, appState: AppState, error: Error) async -> Bool {

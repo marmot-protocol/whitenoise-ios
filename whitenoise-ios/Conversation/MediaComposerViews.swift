@@ -81,10 +81,22 @@ struct VideoPreviewPlayOverlay: View {
     }
 }
 
+enum DraftMediaUploadPresentation {
+    static func showsSpinner(for state: DraftMediaUploadState?) -> Bool {
+        state == .uploading
+    }
+
+    static func diagnosticBadge(for state: DraftMediaUploadState?, showsDiagnostics: Bool) -> DraftMediaUploadState? {
+        showsDiagnostics ? state : nil
+    }
+}
+
 struct MediaDraftStrip: View {
     let attachments: [MediaDraftAttachment]
     let onRemove: (MediaDraftAttachment.ID) -> Void
     let onPreviewVisual: (MediaDraftAttachment.ID) -> Void
+    var uploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] = [:]
+    var showsUploadDiagnostics = false
 
     private var containsVisualMedia: Bool {
         attachments.contains { $0.kind == .image || $0.kind == .video }
@@ -96,6 +108,20 @@ struct MediaDraftStrip: View {
                 ForEach(attachments) { attachment in
                     ZStack(alignment: .topTrailing) {
                         preview(for: attachment)
+                            .overlay {
+                                if DraftMediaUploadPresentation.showsSpinner(for: uploadStates[attachment.id]) {
+                                    DraftMediaUploadingOverlay(cornerRadius: previewCornerRadius(for: attachment))
+                                }
+                            }
+                            .overlay(alignment: .bottomLeading) {
+                                if let state = DraftMediaUploadPresentation.diagnosticBadge(
+                                    for: uploadStates[attachment.id],
+                                    showsDiagnostics: showsUploadDiagnostics
+                                ) {
+                                    DraftMediaUploadBadge(state: state)
+                                        .padding(4)
+                                }
+                            }
 
                         ComposerAttachmentRemoveButton(
                             accessibilityLabel: "Remove \(attachment.fileName)",
@@ -117,6 +143,13 @@ struct MediaDraftStrip: View {
                 Divider()
                     .padding(.horizontal, 12)
             }
+        }
+    }
+
+    private func previewCornerRadius(for attachment: MediaDraftAttachment) -> CGFloat {
+        switch attachment.kind {
+        case .image, .video: ComposerMediaDraftLayout.cornerRadius
+        case .audio, .document, .unsupported: 10
         }
     }
 
@@ -209,6 +242,62 @@ struct MediaDraftStrip: View {
                 Image(systemName: attachment.kind.systemImageName)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+private struct DraftMediaUploadingOverlay: View {
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+            ProgressView()
+                .controlSize(.small)
+                .tint(.white)
+        }
+        .clipShape(.rect(cornerRadius: cornerRadius))
+        .allowsHitTesting(false)
+    }
+}
+
+private struct DraftMediaUploadBadge: View {
+    let state: DraftMediaUploadState
+
+    var body: some View {
+        HStack(spacing: 3) {
+            switch state {
+            case .uploading:
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.white)
+            case .uploaded:
+                Image(systemName: "checkmark.icloud.fill")
+            case .failed:
+                Image(systemName: "exclamationmark.icloud.fill")
+            }
+            Text(verbatim: label)
+        }
+        .font(.system(size: 9, weight: .semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .background(tint.opacity(0.85), in: .capsule)
+    }
+
+    private var label: String {
+        switch state {
+        case .uploading: "Uploading"
+        case .uploaded: "Uploaded"
+        case .failed: "Failed"
+        }
+    }
+
+    private var tint: Color {
+        switch state {
+        case .uploading: .black
+        case .uploaded: .green
+        case .failed: .orange
         }
     }
 }

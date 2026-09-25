@@ -1106,6 +1106,7 @@ struct ConversationView: View {
                     cancelPendingBottomScroll()
                     viewport.prepare(for: snapshot, displayID: { model.displayID(for: $0) })
                 }
+                reconcileDraftMediaUploads()
                 await viewModel?.start()
             }
             .task(id: blockedPeerSubscriptionKey) {
@@ -1161,6 +1162,7 @@ struct ConversationView: View {
                 }
             }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
+                reconcileDraftMediaUploads()
                 if editSession == nil {
                     persistCurrentDraft()
                 }
@@ -1253,6 +1255,8 @@ struct ConversationView: View {
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
+                    preparedAttachmentUploadStates: viewModel?.draftMediaUploadStates ?? [:],
+                    showsPreparedAttachmentUploadDiagnostics: appState.developerMode,
                     replyPreview: editSession == nil
                         ? viewModel.flatMap(composerReplyPreview(viewModel:))
                         : nil,
@@ -2685,6 +2689,10 @@ struct ConversationView: View {
                 appState.present(UserFacingError.toast(title: L10n.string("Draft changed"), error: error))
             }
         }
+    }
+
+    private func reconcileDraftMediaUploads() {
+        viewModel?.reconcileDraftMediaUploads(mediaDrafts + (editSession?.preservedMediaDrafts ?? []))
     }
 
     private func persistCurrentDraft(text: String? = nil) {
