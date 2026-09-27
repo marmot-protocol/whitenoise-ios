@@ -1120,18 +1120,14 @@ struct GroupDetailsView: View {
     }
 
     private func copyableDeveloperValueRow(title: String, value: String) -> some View {
-        Button {
-            UIPasteboard.general.string = value
-            Haptics.selection()
-            appState.present(.success(L10n.string("Copied to clipboard"), message: title))
-        } label: {
+        WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
             LabeledContent(title) {
                 HStack(spacing: 6) {
                     Text(value)
                         .font(.system(.caption2, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Image(systemName: "doc.on.doc")
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
                         .font(.caption)
                         .foregroundStyle(.tint)
                 }

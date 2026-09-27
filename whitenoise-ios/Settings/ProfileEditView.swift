@@ -92,6 +92,15 @@ struct ProfileEditView: View {
                 Text("About").wnSectionHeader()
             }
 
+            if let saveError = model.saveError, isEditing {
+                Section {
+                    Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Button("Retry", action: saveProfile)
+                        .disabled(saveDisabled)
+                }
+            }
+
             if model.error != nil {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -104,6 +113,7 @@ struct ProfileEditView: View {
                 }
             }
         }
+        .disabled(model.isPublishing)
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -139,14 +149,7 @@ struct ProfileEditView: View {
                         size: .compact,
                         isLoading: model.isPublishing
                     ) {
-                        clearFocus()
-                        Task {
-                            await model.publish(using: appState)
-                            if model.error == nil {
-                                isEditing = false
-                                editSnapshot = nil
-                            }
-                        }
+                        saveProfile()
                     }
                     .disabled(saveDisabled)
                 } else {
@@ -227,6 +230,16 @@ struct ProfileEditView: View {
         )
     }
 
+    private func saveProfile() {
+        clearFocus()
+        Task {
+            if await model.publish(using: appState) {
+                isEditing = false
+                editSnapshot = nil
+            }
+        }
+    }
+
     private func beginEditing() {
         editSnapshot = ProfileEditDraftSnapshot(model: model)
         isEditing = true
@@ -235,7 +248,7 @@ struct ProfileEditView: View {
     private func cancelEditing() {
         clearFocus()
         editSnapshot?.restore(model)
-        model.error = nil
+        model.saveError = nil
         editSnapshot = nil
         photoError = nil
         isEditing = false

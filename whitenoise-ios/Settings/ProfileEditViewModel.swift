@@ -22,6 +22,7 @@ final class ProfileEditViewModel {
     var isPublishing = false
     var isUploadingPicture = false
     var error: String?
+    var saveError: String?
 
     private(set) var loadedAccountIdHex: String?
     // The reset detector must see every attempt: a failed load never moves
@@ -115,6 +116,7 @@ final class ProfileEditViewModel {
             picture = ""
             nip05 = ""
             error = nil
+            saveError = nil
         }
         return loadTicket
     }
@@ -202,42 +204,47 @@ final class ProfileEditViewModel {
         picture = normalizedURL
     }
 
-    func publish(using appState: AppState) async {
-        guard !isPublishing else { return }
+    func publish(using appState: AppState) async -> Bool {
         guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex,
-              // Never republish fields loaded for a now-inactive account.
-              loadedAccountIdHex == accountIdHex
-        else { return }
-
-        let draft = currentDraft
-        if draft.validationError != nil {
-            Haptics.error()
-            return
-        }
-        guard let normalizedMetadata = draft.normalizedMetadata else { return }
-
-        isPublishing = true
-        defer { isPublishing = false }
-        error = nil
-
-        do {
+              let accountIdHex = appState.activeAccount?.accountIdHex else { return false }
+        return await publish(accountIdHex: accountIdHex) { metadata in
             let client = try appState.currentMarmotClient()
             _ = try await client.publishUserProfileUsingAccountRelays(
-                accountRef: accountRef,
-                profile: normalizedMetadata.ffi
+                accountRef: accountRef, profile: metadata.ffi
             )
             await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)
-            Haptics.success()
-            appState.present(.success(
-                L10n.string("Profile published"),
-                message: L10n.string("Your kind:0 metadata is live on your account relays.")
-            ))
-        } catch {
-            Haptics.error()
-            appState.present(UserFacingError.toast(title: L10n.string("Couldn't publish profile"), error: error))
         }
     }
+
+    func publish(
+        accountIdHex: String,
+        operation: (ProfileEditMetadata) async throws -> Void
+    ) async -> Bool {
+        guard !isPublishing, loadedAccountIdHex == accountIdHex else { return false }
+        let draft = currentDraft
+        guard let metadata = draft.normalizedMetadata else {
+            Haptics.error()
+            return false
+        }
+        let ticket = loadTicket
+        isPublishing = true
+        saveError = nil
+        defer { isPublishing = false }
+        do {
+            try await operation(metadata)
+            guard !Task.isCancelled, loadTicket == ticket,
+                  loadedAccountIdHex == accountIdHex else { return false }
+            Haptics.success()
+            return true
+        } catch {
+            guard !Task.isCancelled, loadTicket == ticket,
+                  loadedAccountIdHex == accountIdHex else { return false }
+            Haptics.error()
+            saveError = L10n.string("Couldn't publish profile")
+            return false
+        }
+    }
+
 }
 
 nonisolated enum ProfileImageUploadError: LocalizedError {
