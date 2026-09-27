@@ -207,7 +207,10 @@ final class ProfileEditViewModel {
     func publish(using appState: AppState) async -> Bool {
         guard let accountRef = appState.activeAccountRef,
               let accountIdHex = appState.activeAccount?.accountIdHex else { return false }
-        return await publish(accountIdHex: accountIdHex) { metadata in
+        return await publish(
+            accountIdHex: accountIdHex,
+            isCurrentAccount: { appState.activeAccount?.accountIdHex == accountIdHex }
+        ) { metadata in
             let client = try appState.currentMarmotClient()
             _ = try await client.publishUserProfileUsingAccountRelays(
                 accountRef: accountRef, profile: metadata.ffi
@@ -218,9 +221,10 @@ final class ProfileEditViewModel {
 
     func publish(
         accountIdHex: String,
+        isCurrentAccount: () -> Bool,
         operation: (ProfileEditMetadata) async throws -> Void
     ) async -> Bool {
-        guard !isPublishing, loadedAccountIdHex == accountIdHex else { return false }
+        guard !isPublishing, loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
         let draft = currentDraft
         guard let metadata = draft.normalizedMetadata else {
             Haptics.error()
@@ -233,12 +237,12 @@ final class ProfileEditViewModel {
         do {
             try await operation(metadata)
             guard !Task.isCancelled, loadTicket == ticket,
-                  loadedAccountIdHex == accountIdHex else { return false }
+                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
             Haptics.success()
             return true
         } catch {
             guard !Task.isCancelled, loadTicket == ticket,
-                  loadedAccountIdHex == accountIdHex else { return false }
+                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
             Haptics.error()
             saveError = L10n.string("Couldn't publish profile")
             return false

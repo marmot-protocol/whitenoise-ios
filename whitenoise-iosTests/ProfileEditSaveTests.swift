@@ -15,7 +15,7 @@ struct ProfileEditSaveTests {
 
     @Test func failedSavePreservesDraftAndOnlySuccessfulRetryEndsEditing() async {
         let model = loadedModel()
-        let failed = await model.publish(accountIdHex: "account") { _ in
+        let failed = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in
             throw URLError(.notConnectedToInternet)
         }
         #expect(!failed)
@@ -25,7 +25,7 @@ struct ProfileEditSaveTests {
         #expect(model.about == "Unsaved about text")
         #expect(!model.isPublishing)
 
-        let saved = await model.publish(accountIdHex: "account") { metadata in
+        let saved = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { metadata in
             #expect(metadata.displayName == "Edited name")
             #expect(metadata.about == "Unsaved about text")
         }
@@ -36,21 +36,42 @@ struct ProfileEditSaveTests {
     @Test func invalidOrUnloadedDraftCannotReportSaveSuccess() async {
         let model = loadedModel()
         model.nip05 = "invalid address"
-        let invalid = await model.publish(accountIdHex: "account") { _ in
+        let invalid = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in
             Issue.record("Invalid draft was published")
         }
         #expect(!invalid)
         model.nip05 = ""
-        let wrongAccount = await model.publish(accountIdHex: "other") { _ in
+        let wrongAccount = await model.publish(accountIdHex: "other", isCurrentAccount: { true }) { _ in
             Issue.record("Draft was published to another account")
         }
         #expect(!wrongAccount)
     }
 
+    @Test(arguments: [false, true])
+    func accountSwitchBeforeEditorReloadIgnoresSaveCompletion(fails: Bool) async {
+        let model = loadedModel()
+        let originalTicket = model.loadTicket
+        var activeAccountID = "account"
+        let saved = await model.publish(
+            accountIdHex: "account",
+            isCurrentAccount: { activeAccountID == "account" }
+        ) { _ in
+            // AppState can change before SwiftUI starts the replacement load task.
+            activeAccountID = "other"
+            if fails { throw URLError(.notConnectedToInternet) }
+        }
+        #expect(model.loadTicket == originalTicket)
+        #expect(model.loadedAccountIdHex == "account")
+        #expect(!saved)
+        #expect(model.saveError == nil)
+        #expect(model.displayName == "Edited name")
+        #expect(!model.isPublishing)
+    }
+
     @Test func duplicateSaveAndStaleCompletionCannotExitEditing() async {
         let model = loadedModel()
-        let saved = await model.publish(accountIdHex: "account") { _ in
-            let duplicate = await model.publish(accountIdHex: "account") { _ in
+        let saved = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in
+            let duplicate = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in
                 Issue.record("Duplicate publication")
             }
             #expect(!duplicate)

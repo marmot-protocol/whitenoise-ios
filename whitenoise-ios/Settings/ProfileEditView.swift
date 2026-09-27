@@ -233,7 +233,9 @@ struct ProfileEditView: View {
     private func saveProfile() {
         clearFocus()
         Task {
-            if await model.publish(using: appState) {
+            guard let savingAccountID = appState.activeAccount?.accountIdHex else { return }
+            if await model.publish(using: appState),
+               appState.activeAccount?.accountIdHex == savingAccountID {
                 isEditing = false
                 editSnapshot = nil
             }
