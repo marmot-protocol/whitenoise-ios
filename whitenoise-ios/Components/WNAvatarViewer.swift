@@ -6,14 +6,15 @@ struct WNAvatarViewer<Avatar: View>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let diameter = max(0, min(geometry.size.width, geometry.size.height) - 32)
-            avatar(diameter)
-                .frame(width: diameter, height: diameter)
-                .clipShape(.circle)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(L10n.string("Photo"))
-                .accessibilityAddTraits(.isImage)
+            let side = min(geometry.size.width, geometry.size.height)
+            let diameter = max(0, side - 32)
+            WNZoomableContent(naturalSize: CGSize(width: side, height: side),
+                              accessibilityLabel: L10n.string("Photo")) {
+                avatar(diameter)
+                    .frame(width: diameter, height: diameter)
+                    .clipShape(.circle)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .overlay(alignment: .topLeading) {
             WNIconButton(title: "Close", systemImage: "xmark") { dismiss() }

@@ -52,7 +52,7 @@ final class MediaImageZoomTests: XCTestCase {
         for _ in 0..<10 { view.accessibilityIncrement() }
         XCTAssertEqual(view.zoomScale, 5)
         for _ in 0..<10 { view.accessibilityDecrement() }
-        XCTAssertFalse(view.isImageZoomed)
+        XCTAssertFalse(view.isZoomed)
         XCTAssertTrue(view.accessibilityTraits.contains(.adjustable))
     }
 
