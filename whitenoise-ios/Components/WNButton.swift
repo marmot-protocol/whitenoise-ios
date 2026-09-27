@@ -193,7 +193,7 @@ extension View {
 
     func wnAvatarActionButtonStyle() -> some View {
         wnSecondaryButtonStyle()
-            .controlSize(.large)
+            .controlSize(.regular)
             .wnButtonChrome(emphasis: .secondary)
     }
 

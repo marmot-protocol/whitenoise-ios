@@ -15,7 +15,8 @@ struct IdentityProfileSetupView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var model = CreateIdentityViewModel()
-    @State private var showPhotoMenu = false
+    @State private var photoError: PhotoSelectionFailure?
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var isKeyboardVisible = false
     @FocusState private var nameFocused: Bool
     @FocusState private var aboutFocused: Bool
@@ -87,21 +88,20 @@ struct IdentityProfileSetupView: View {
         .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: model.avatarDraft != nil,
+            selection: $photoMenuAction,
             confirmsPublicUpload: true,
-            onError: model.setAvatarPreparationError,
+            onError: { photoError = PhotoSelectionFailure.classify($0) },
             onRemove: { model.setAvatarDraft(nil) },
             onSelect: { selection in
-                Task {
-                    await model.prepareAvatar(
-                        data: selection.data,
-                        fileName: selection.fileName,
-                        typeIdentifier: selection.typeIdentifier
-                    )
-                }
+                model.setAvatarDraft(selection.preparedDraft)
             }
         )
+        .alert("Couldn’t add photo", isPresented: Binding(
+            get: { photoError != nil },
+            set: { if !$0 { photoError = nil } }
+        )) {
+            Button("Close", role: .cancel) { photoError = nil }
+        } message: { Text(photoError?.message ?? "") }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
@@ -196,7 +196,7 @@ struct IdentityProfileSetupView: View {
         VStack(spacing: 0) {
             WNAvatarPhotoMenu(
                 hasPhoto: model.avatarDraft != nil,
-                isPresented: $showPhotoMenu
+                selection: $photoMenuAction
             ) {
                 WNAvatarPreview(
                     name: model.displayName,
@@ -204,21 +204,7 @@ struct IdentityProfileSetupView: View {
                     pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
                 )
             }
-            .disabled(model.isPreparingAvatar)
 
-            if model.isPreparingAvatar {
-                ProgressView("Preparing Photo")
-                    .font(.footnote)
-                    .padding(.top)
-            }
-
-            if let avatarError = model.avatarError {
-                Text(avatarError)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.top)
-            }
         }
     }
 

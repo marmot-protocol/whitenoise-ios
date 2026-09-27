@@ -4,12 +4,29 @@ import UIKit
 
 /// Raw image data awaiting the same square crop treatment regardless of
 /// whether it came from Photos, Files, or a web-search result.
-struct AvatarImageCropSource: Identifiable, Sendable {
+nonisolated struct AvatarImageCropSource: Identifiable, Sendable, Hashable {
     let id = UUID()
     let data: Data
     let fileName: String?
     let typeIdentifier: String?
     let sourceURL: URL?
+    var preparedImage: UIImage? = nil
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
+    func prepared() async throws -> Self {
+        try Task.checkCancellation()
+        if preparedImage != nil { return self }
+        let image = await Task.detached(priority: .userInitiated) {
+            AvatarImageCropper.normalizedImage(from: data)
+        }.value
+        try Task.checkCancellation()
+        guard let image else { throw PhotoSelectionFailure.unsupported }
+        var source = self
+        source.preparedImage = image
+        return source
+    }
 }
 
 nonisolated enum AvatarImageCropper {
@@ -170,20 +187,39 @@ nonisolated enum AvatarImageCropper {
 }
 
 struct AvatarImageCropEditor: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
     let source: AvatarImageCropSource?
     var onClose: (() -> Void)?
-    let onCrop: (AvatarImageCropSource, Data) -> Void
+    var onChooseAnother: (() -> Void)?
+    let onCrop: (AvatarImageCropSource, Data) async throws -> Void
 
     @State private var image: UIImage?
     @State private var isDecoding = true
+    @State private var isPreparing = false
+    @State private var preparationTask: Task<Void, Never>?
+    @State private var failure: PhotoSelectionFailure?
     @State private var zoom: CGFloat = 1
     @State private var committedZoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var committedOffset: CGSize = .zero
 
     @State private var cropSide: CGFloat = AvatarImageCropper.maximumCropSide
+
+    init(
+        source: AvatarImageCropSource?,
+        onClose: (() -> Void)? = nil,
+        onChooseAnother: (() -> Void)? = nil,
+        onCrop: @escaping (AvatarImageCropSource, Data) async throws -> Void
+    ) {
+        self.source = source
+        self.onClose = onClose
+        self.onChooseAnother = onChooseAnother
+        self.onCrop = onCrop
+        _image = State(initialValue: source?.preparedImage)
+        _isDecoding = State(initialValue: source?.preparedImage == nil)
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -194,22 +230,31 @@ struct AvatarImageCropEditor: View {
                     ProgressView()
                         .controlSize(.large)
                 } else {
-                    ContentUnavailableView("Image", systemImage: "photo")
+                    ContentUnavailableView {
+                        Label("Couldn’t add photo", systemImage: "photo")
+                    } description: {
+                        Text(PhotoSelectionFailure.unsupported.message)
+                    } actions: {
+                        Button("Choose Another Photo", action: chooseAnother)
+                            .wnPrimaryButtonStyle()
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .frame(maxHeight: AvatarImageCropper.maximumCropSide)
+            .frame(maxHeight: image != nil || isDecoding ? AvatarImageCropper.maximumCropSide : nil)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 AvatarImageCropper.fittedCropSide(proxy.size)
             } action: { side in
                 resizeCrop(to: side)
             }
 
-            Text("Pinch to zoom, then drag to position the image.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
+            if image != nil {
+                Text("Pinch to zoom, then drag to position the image.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Crop image")
@@ -217,48 +262,100 @@ struct AvatarImageCropEditor: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button {
-                    close()
+                    chooseAnother()
                 } label: {
                     Image(systemName: "chevron.backward")
                         .imageScale(.large)
                 }
                 .accessibilityLabel(L10n.string("Back"))
+                .disabled(isPreparing)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            WNButton(title: "Done") {
-                guard let source,
-                      let image,
-                      let data = AvatarImageCropper.croppedJPEG(
-                        image: image,
-                        cropSide: cropSide,
-                        zoom: zoom,
-                        offset: offset
-                      )
-                else { return }
-                onCrop(source, data)
-                close()
+            if image != nil {
+                Button {
+                    guard !isPreparing else { return }
+                    prepareCrop()
+                } label: {
+                    Text("Done")
+                        .opacity(isPreparing ? 0 : 1)
+                        .overlay {
+                            if isPreparing { ProgressView().tint(WNButton.Metrics.contentColor(emphasis: .primary, colorScheme: colorScheme, isEnabled: true)) }
+                        }
+                        .wnButtonLabelSizing()
+                }
+                .wnPrimaryButtonStyle()
+                .wnButtonChrome()
+                .controlSize(.extraLarge)
+                .wnButtonSizing()
+                .safeAreaPadding(.horizontal)
+                .padding(.top)
             }
-            .disabled(image == nil)
-            .safeAreaPadding(.horizontal)
-            .padding(.vertical)
-            .safeAreaPadding(.bottom)
         }
         .background {
             Color(.systemBackground)
                 .ignoresSafeArea()
         }
+        .onDisappear { preparationTask?.cancel() }
+        .alert("Couldn’t add photo", isPresented: Binding(
+            get: { failure != nil }, set: { if !$0 { failure = nil } }
+        ), presenting: failure) { failure in
+            if failure.canRetry {
+                Button("Retry") { prepareCrop() }
+                Button("Close", role: .cancel) {}
+            } else {
+                Button("Choose Another Photo", action: chooseAnother)
+            }
+        } message: { failure in Text(failure.message) }
         .navigationBarBackButtonHidden()
         .interactiveDismissDisabled()
         .task(id: source?.id) {
-            guard let data = source?.data else { return }
+            image = source?.preparedImage
+            failure = nil
+            isDecoding = image == nil
+            guard image == nil else { return }
+            guard let data = source?.data else {
+                isDecoding = false
+                failure = .unsupported
+                return
+            }
             let prepared = await Task.detached(priority: .userInitiated) {
                 AvatarImageCropper.normalizedImage(from: data)
             }.value
             guard !Task.isCancelled else { return }
             image = prepared
             isDecoding = false
+            if prepared == nil { failure = .unsupported }
         }
+    }
+
+    private func prepareCrop() {
+        guard !isPreparing, let source, let image else { return }
+        isPreparing = true
+        failure = nil
+        let side = cropSide
+        let scale = zoom
+        let translation = offset
+        preparationTask = Task {
+            defer { isPreparing = false }
+            do {
+                let data = await Task.detached(priority: .userInitiated) {
+                    AvatarImageCropper.croppedJPEG(image: image, cropSide: side, zoom: scale, offset: translation)
+                }.value
+                try Task.checkCancellation()
+                guard let data else { throw PhotoSelectionFailure.preparation }
+                try await onCrop(source, data)
+                try Task.checkCancellation()
+                close()
+            } catch {
+                guard !Task.isCancelled else { return }
+                failure = PhotoSelectionFailure.classify(error)
+            }
+        }
+    }
+
+    private func chooseAnother() {
+        if let onChooseAnother { onChooseAnother() } else { close() }
     }
 
     private func close() {

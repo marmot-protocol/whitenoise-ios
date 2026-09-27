@@ -391,7 +391,7 @@ struct GroupImageURLSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { cancelWebImageLoad(); dismiss() }
                         .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -402,18 +402,17 @@ struct GroupImageURLSheet: View {
                 }
             }
             .navigationDestination(isPresented: isCropping) {
-                AvatarImageCropEditor(source: cropRequest?.source, onCrop: prepareCroppedImage)
+                if let source = cropRequest?.source {
+                    AvatarImageCropEditor(source: source, onCrop: prepareCroppedImage)
+                }
             }
         }
         .presentationDetents([.large])
         .interactiveDismissDisabled(isSaving)
+        .onDisappear { cancelWebImageLoad() }
         .sheet(isPresented: $showPhotoPicker) {
             WNPhotoLibraryCropFlow(
                 onCrop: prepareCroppedImage,
-                onError: { error in
-                    saveError = UserFacingError.message(for: error)
-                    Haptics.error()
-                },
                 onClose: { showPhotoPicker = false }
             )
         }
@@ -421,7 +420,7 @@ struct GroupImageURLSheet: View {
 
     private var isCropping: Binding<Bool> {
         Binding(
-            get: { cropRequest != nil },
+            get: { cropRequest?.source != nil },
             set: { isPresented in
                 guard !isPresented else { return }
                 cancelWebImageLoad()
@@ -676,20 +675,21 @@ struct GroupImageURLSheet: View {
         webImageLoad?.cancel()
         let request = GroupImageCropRequest.loading()
         cropRequest = request
+        isPreparing = true
+        progressPhase = .preparing
         webImageLoad = Task {
+            defer {
+                isPreparing = false
+                progressPhase = nil
+            }
             do {
-                let data = try await RemoteImageFetch.imageData(for: result.imageURL)
+                let data = try await RemoteImageFetch.imageData(for: result.imageURL, maximumBytes: AvatarImageCropper.maximumEncodedBytes)
                 try Task.checkCancellation()
-                cropRequest = GroupImageCropRequest.resolving(
-                    cropRequest,
-                    requestID: request.id,
-                    with: AvatarImageCropSource(
-                        data: data,
-                        fileName: result.imageURL.lastPathComponent,
-                        typeIdentifier: nil,
-                        sourceURL: result.imageURL
-                    )
-                )
+                let source = try await AvatarImageCropSource(
+                    data: data, fileName: result.imageURL.lastPathComponent,
+                    typeIdentifier: nil, sourceURL: result.imageURL
+                ).prepared()
+                cropRequest = GroupImageCropRequest.resolving(cropRequest, requestID: request.id, with: source)
             } catch {
                 guard !Task.isCancelled, cropRequest?.id == request.id else { return }
                 cropRequest = GroupImageCropRequest.failing(cropRequest, requestID: request.id)

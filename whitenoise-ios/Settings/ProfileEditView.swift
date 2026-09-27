@@ -8,7 +8,7 @@ struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var model = ProfileEditViewModel()
-    @State private var showPhotoMenu = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var photoError: String?
     @State private var photoProgressPhase: ProfileImageProgressPhase?
     @State private var isEditing = false
@@ -156,8 +156,7 @@ struct ProfileEditView: View {
             }
         }
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: !model.picture.isEmpty,
+            selection: $photoMenuAction,
             confirmsPublicUpload: true,
             onError: { photoError = UserFacingError.message(for: $0) },
             onRemove: { applyUpload(nil) },
@@ -182,7 +181,7 @@ struct ProfileEditView: View {
                     if isEditing {
                         WNAvatarPhotoMenu(
                             hasPhoto: !model.picture.isEmpty,
-                            isPresented: $showPhotoMenu
+                            selection: $photoMenuAction
                         ) {
                             avatarPreview(accountIdHex: active.accountIdHex)
                         }

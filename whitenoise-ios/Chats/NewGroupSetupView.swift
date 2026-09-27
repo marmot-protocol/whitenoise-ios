@@ -14,7 +14,7 @@ struct NewGroupSetupView: View {
     @State private var retentionSeconds: UInt64 = 0
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
-    @State private var showPhotoMenu = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var isPreparingImage = false
     @State private var imageError: String?
 
@@ -24,7 +24,7 @@ struct NewGroupSetupView: View {
                 VStack(spacing: 0) {
                     WNAvatarPhotoMenu(
                         hasPhoto: groupImage != nil,
-                        isPresented: $showPhotoMenu
+                        selection: $photoMenuAction
                     ) {
                         WNAvatarPreview(
                             name: name,
@@ -127,8 +127,7 @@ struct NewGroupSetupView: View {
             RetentionPresetPickerView(selection: $retentionSeconds)
         }
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: groupImage != nil,
+            selection: $photoMenuAction,
             // The selected bytes ride the encrypted group-image component, so
             // nothing here is published to a public host.
             confirmsPublicUpload: false,

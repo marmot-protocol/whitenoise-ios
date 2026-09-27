@@ -69,6 +69,30 @@ iOS 18 fallbacks. Reuse `WNSearchField`/`WNSearchBar` for custom search and
 44-point target; small artwork inside a larger target is fine. Native form rows,
 content cards, and media thumbnails retain their own presentation.
 
+- Inputs inside cards or other content containers must **never use glass**.
+  Use `WNInput(surface: .filled)` with the semantic gray `WNInputMetrics.fill`
+  in both light and dark appearances. Keep glass for floating controls and
+  standalone inputs; do not put a second glass surface inside a card.
+- Give image/input cards equal padding on all four sides of 20 points;
+  native Form row defaults have unequal
+  vertical/horizontal insets. Use the shared continuous corner radius for images.
+- Align an input's label and validation text with its editable text using
+  `WNInputMetrics.leadingInset`, not with the capsule's outer edge. Section
+  titles stay outside the card using the shared section-header style.
+- URL image pickers place the labeled gray URL input directly on the background,
+  without a surrounding card or clear-X button. Align its label with the input
+  text. Keep the beginning of a long URL visible after pasting and when editing
+  ends; allow manual cursor movement while editing. Keep validation/download
+  errors beside the field.
+- Show the Preview section title and a separate rounded white/semantic square
+  card while a valid image URL loads, with a centered spinner and “Loading image”.
+  Replace the loading content with the image in the same-sized card. The image
+  fills it edge to edge with no internal padding. Hide the card for an empty or
+  invalid URL and after a download failure.
+- Validate and decode selected images before navigating to Crop. Present failures
+  over the picker and preserve the selection/search. Only enter Crop with a
+  usable image, carrying the prepared image forward rather than decoding twice.
+
 ## Write for the person using the app
 
 Keep copy calm, direct, and useful, following Apple's

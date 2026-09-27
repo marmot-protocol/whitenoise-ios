@@ -60,7 +60,7 @@ private struct ControlFixture: View {
     @State private var empty = ""
     @State private var filled = "Message search"
     @State private var name = "Profile name"
-    @State private var showPhotos = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
 
     var body: some View {
         ScrollView {
@@ -77,7 +77,7 @@ private struct ControlFixture: View {
                 WNSearchBar(query: $filled, prompt: "Search Chats", focusesOnAppear: false) {}
                 measured("input") { WNInput(placeholder: "Name", text: $name, showsClear: true) }
                 measured("copy") { CopyableValueChip(display: "npub1exam…f4k2", copyValue: "example", valueName: "npub") }
-                measured("photo") { WNPhotoMenuButton(hasPhoto: false, isPresented: $showPhotos) }
+                measured("photo") { WNPhotoMenuButton(hasPhoto: false, selection: $photoMenuAction) }
                 WNButton(title: "Continue") {}
                 WNButton(title: "Cancel", emphasis: .secondary) {}
                 WNButton(title: "Delete", emphasis: .destructive, size: .standard) {}

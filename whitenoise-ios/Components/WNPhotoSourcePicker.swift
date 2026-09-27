@@ -8,6 +8,7 @@ nonisolated struct WNPhotoSourceSelection: Equatable {
     let fileName: String?
     let typeIdentifier: String?
     let sourceURL: URL?
+    var preparedDraft: GroupImageUploadDraft?
 }
 
 nonisolated enum WNPhotoSourceKind: Equatable {
@@ -42,18 +43,16 @@ nonisolated enum WNPhotoSourceRoute: Equatable {
     }
 }
 
-/// The editable avatar shared by Sign Up, Profile and New Group: the circle and
-/// the Add/Change Photo trigger open the same menu, so the whole avatar is the
-/// tap target. Both carry the trigger's own label, because they do one thing.
+/// Both avatar controls expose the same native photo-source actions.
 struct WNAvatarPhotoMenu<Preview: View>: View {
     let hasPhoto: Bool
-    @Binding var isPresented: Bool
+    @Binding var selection: WNPhotoMenuAction?
     @ViewBuilder var preview: () -> Preview
 
     var body: some View {
         VStack(spacing: 0) {
-            Button {
-                isPresented = true
+            Menu {
+                WNPhotoMenuActions(hasPhoto: hasPhoto, selection: $selection)
             } label: {
                 preview()
                     .accessibilityHidden(true)
@@ -62,29 +61,24 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
             .accessibilityLabel(hasPhoto ? "Change Photo" : "Add Photo")
 
-            WNPhotoMenuButton(hasPhoto: hasPhoto, isPresented: $isPresented)
+            WNPhotoMenuButton(hasPhoto: hasPhoto, selection: $selection)
                 .padding(.top)
         }
     }
 }
 
 extension View {
-    /// Draws the avatar photo menu over this container and wires its four
-    /// sources — Photos, Files, web search and removal — through the shared
-    /// square crop editor. Apply outside any `disabled` the form carries, so the
-    /// menu's own rows stay tappable.
+    /// Routes native menu selections through the shared pickers and crop editor.
     func wnPhotoSourceMenu(
-        isPresented: Binding<Bool>,
-        hasPhoto: Bool,
+        selection: Binding<WNPhotoMenuAction?>,
         confirmsPublicUpload: Bool,
         onError: @escaping (Error) -> Void,
         onRemove: @escaping () -> Void,
-        onSelect: @escaping (WNPhotoSourceSelection) -> Void
+        onSelect: @escaping (WNPhotoSourceSelection) async throws -> Void
     ) -> some View {
         modifier(
             WNPhotoSourceMenuModifier(
-                isPresented: isPresented,
-                hasPhoto: hasPhoto,
+                selection: selection,
                 confirmsPublicUpload: confirmsPublicUpload,
                 onError: onError,
                 onRemove: onRemove,
@@ -95,12 +89,12 @@ extension View {
 }
 
 private struct WNPhotoSourceMenuModifier: ViewModifier {
-    @Binding var isPresented: Bool
-    let hasPhoto: Bool
+    @State private var sourceTask: Task<Void, Never>?
+    @Binding var selection: WNPhotoMenuAction?
     let confirmsPublicUpload: Bool
     let onError: (Error) -> Void
     let onRemove: () -> Void
-    let onSelect: (WNPhotoSourceSelection) -> Void
+    let onSelect: (WNPhotoSourceSelection) async throws -> Void
 
     @State private var pendingSource: WNPhotoSourceKind?
     @State private var showDisclosure = false
@@ -108,10 +102,15 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
     @State private var showFileImporter = false
     @State private var showWebImagePicker = false
     @State private var cropSource: AvatarImageCropSource?
+    @State private var fileFailure: PhotoSelectionFailure?
+    @State private var failedFileURL: URL?
 
     func body(content: Content) -> some View {
         content
-            .wnPhotoMenu(isPresented: $isPresented, hasPhoto: hasPhoto) { action in
+            .onDisappear { sourceTask?.cancel() }
+            .onChange(of: selection) { _, action in
+                guard let action else { return }
+                selection = nil
                 switch WNPhotoSourceRoute.route(
                     for: action,
                     confirmsPublicUpload: confirmsPublicUpload
@@ -143,7 +142,6 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
             .sheet(isPresented: $showPhotoPicker) {
                 WNPhotoLibraryCropFlow(
                     onCrop: select,
-                    onError: onError,
                     onClose: { showPhotoPicker = false }
                 )
             }
@@ -155,10 +153,20 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
                 prepareImportedFile(result)
             }
             .sheet(isPresented: $showWebImagePicker) {
-                OnboardingAvatarWebImagePicker(onCrop: select, onError: onError)
+                OnboardingAvatarWebImagePicker(onCrop: select)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
+            .alert("Couldn’t add photo", isPresented: Binding(
+                get: { fileFailure != nil }, set: { if !$0 { fileFailure = nil } }
+            ), presenting: fileFailure) { failure in
+                if failure.canRetry, let failedFileURL {
+                    Button("Retry") { startImport(failedFileURL) }
+                    Button("Close", role: .cancel) {}
+                } else {
+                    Button("Choose Another Photo") { showFileImporter = true }
+                }
+            } message: { failure in Text(failure.message) }
             .fullScreenCover(item: $cropSource) { source in
                 NavigationStack {
                     AvatarImageCropEditor(source: source, onCrop: select)
@@ -166,13 +174,18 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
             }
     }
 
-    private func select(_ source: AvatarImageCropSource, _ croppedData: Data) {
-        onSelect(
+    private func select(_ source: AvatarImageCropSource, _ croppedData: Data) async throws {
+        let draft = try await ProfileImageDraftProcessor.prepare(
+            data: croppedData, fileName: source.fileName, typeIdentifier: "public.jpeg", sourceURL: source.sourceURL
+        )
+        try Task.checkCancellation()
+        try await onSelect(
             WNPhotoSourceSelection(
                 data: croppedData,
                 fileName: source.fileName,
                 typeIdentifier: "public.jpeg",
-                sourceURL: source.sourceURL
+                sourceURL: source.sourceURL,
+                preparedDraft: draft
             )
         )
     }
@@ -190,10 +203,17 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
-            Task { await loadImportedFile(url) }
+            startImport(url)
         case .failure(let error):
-            onError(error)
+            if (error as? CocoaError)?.code != .userCancelled {
+                fileFailure = PhotoSelectionFailure.classify(error)
+            }
         }
+    }
+
+    private func startImport(_ url: URL) {
+        sourceTask?.cancel()
+        sourceTask = Task { await loadImportedFile(url) }
     }
 
     private func loadImportedFile(_ url: URL) async {
@@ -205,25 +225,29 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
             let data = try await Task.detached(priority: .userInitiated) {
                 try AvatarImageCropper.boundedFileData(from: url)
             }.value
-            cropSource = AvatarImageCropSource(
+            let source = try await AvatarImageCropSource(
                 data: data,
                 fileName: url.lastPathComponent,
                 typeIdentifier: nil,
                 sourceURL: url
-            )
+            ).prepared()
+            try Task.checkCancellation()
+            cropSource = source
         } catch {
-            onError(error)
+            guard !Task.isCancelled else { return }
+            failedFileURL = url
+            fileFailure = PhotoSelectionFailure.classify(error)
         }
     }
 }
 
 struct WNPhotoLibraryCropFlow: View {
-    let onCrop: (AvatarImageCropSource, Data) -> Void
-    let onError: (Error) -> Void
+    let onCrop: (AvatarImageCropSource, Data) async throws -> Void
     let onClose: () -> Void
 
     @State private var item: PhotosPickerItem?
-    @State private var isCropping = false
+    @State private var isLoading = false
+    @State private var failure: PhotoSelectionFailure?
     @State private var source: AvatarImageCropSource?
 
     var body: some View {
@@ -242,34 +266,44 @@ struct WNPhotoLibraryCropFlow: View {
                     Button("Cancel", action: onClose)
                 }
             }
-            .navigationDestination(isPresented: $isCropping) {
-                AvatarImageCropEditor(source: source, onClose: onClose, onCrop: onCrop)
+            .overlay {
+                if isLoading { ProgressView("Loading…").allowsHitTesting(false) }
+            }
+            .navigationDestination(item: $source) { source in
+                AvatarImageCropEditor(source: source, onClose: onClose, onChooseAnother: { self.source = nil; item = nil }, onCrop: onCrop)
             }
         }
+        .alert("Couldn’t add photo", isPresented: Binding(
+            get: { failure != nil }, set: { if !$0 { failure = nil } }
+        ), presenting: failure) { _ in
+            Button("Choose Another Photo") { item = nil }
+        } message: { failure in Text(failure.message) }
         .task(id: item) {
             await load(item)
         }
     }
 
     private func load(_ item: PhotosPickerItem?) async {
-        guard let item else { return }
+        guard let item else { isLoading = false; return }
         source = nil
-        isCropping = true
+        isLoading = true
+        defer { if !Task.isCancelled, self.item == item { isLoading = false } }
         do {
             guard let file = try await item.loadTransferable(type: WNPhotoLibraryFile.self) else {
                 throw MediaDraftProcessor.Failure.unsupportedImage
             }
             try Task.checkCancellation()
-            source = AvatarImageCropSource(
+            let prepared = try await AvatarImageCropSource(
                 data: file.data,
                 fileName: file.fileName,
                 typeIdentifier: item.supportedContentTypes.first?.identifier,
                 sourceURL: nil
-            )
+            ).prepared()
+            guard self.item == item else { return }
+            source = prepared
         } catch {
             guard !Task.isCancelled else { return }
-            onError(error)
-            onClose()
+            failure = PhotoSelectionFailure.classify(error)
         }
     }
 }
