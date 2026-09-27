@@ -10,13 +10,12 @@ struct ShareAndConnectView: View {
     }
 
     @Environment(AppState.self) private var appState
-    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var mode = Mode.share
     @State private var qrImage: UIImage?
     @State private var scannedNpub: String?
     @State private var scanHint: String?
-    @State private var cameraFailure: String?
+    @State private var cameraFailure: QRScannerFailure?
     @State private var scanSession = UUID()
     @State private var pictureTask: Task<Void, Never>?
     @State private var pictureRequestID: UUID?
@@ -97,7 +96,7 @@ struct ShareAndConnectView: View {
             if newValue == .connect { restartScanner() }
         }
         .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active, mode == .connect, cameraFailure != nil { restartScanner() }
+            if newValue == .active, mode == .connect { restartScanner() }
         }
         .sheet(item: $sharedPicture) { picture in
             ActivityShareSheet(items: [picture.image])
@@ -176,30 +175,18 @@ struct ShareAndConnectView: View {
         }
     }
 
-    private var cameraFailureMessage: String? {
-        cameraFailure ?? Self.unavailableReason()
-    }
-
-    private static func unavailableReason() -> String? {
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .denied, .restricted:
-            return L10n.string("Camera access denied. Enable it in Settings to scan QR codes.")
-        default:
-            return AVCaptureDevice.default(for: .video) == nil
-                ? L10n.string("No camera available on this device.")
-                : nil
-        }
+    private var cameraFailureReason: QRScannerFailure? {
+        cameraFailure ?? QRScannerFailure.preflight(
+            authorization: AVCaptureDevice.authorizationStatus(for: .video),
+            hasCamera: AVCaptureDevice.default(for: .video) != nil
+        )
     }
 
     @ViewBuilder
     private var scannerContent: some View {
-        if let cameraFailureMessage {
-            ScannerUnavailableContent(
-                message: cameraFailureMessage,
-                offersSettings: AVCaptureDevice.authorizationStatus(for: .video) == .denied,
-                openSettings: openAppSettings
-            )
-        } else {
+        if let cameraFailureReason {
+            QRScannerUnavailableView(failure: cameraFailureReason, retry: restartScanner)
+        } else if scenePhase == .active {
             liveScanner
         }
     }
@@ -209,7 +196,7 @@ struct ShareAndConnectView: View {
             ShareAndConnectChrome.viewfinderBackdrop
             QRScannerView(
                 onScan: handleScan,
-                onError: { cameraFailure = ContentSanitizer.displayName($0) ?? L10n.string("Camera unavailable") }
+                onError: { cameraFailure = $0 }
             )
             .id(scanSession)
 
@@ -245,11 +232,6 @@ struct ShareAndConnectView: View {
         scanSession = UUID()
     }
 
-    private func openAppSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-        openURL(url)
-    }
-
     private var scannedProfileIsPresented: Binding<Bool> {
         Binding(
             get: { scannedNpub != nil },
@@ -265,25 +247,6 @@ nonisolated enum ShareAndConnectChrome {
 
     static let pageBackdrop = Color(uiColor: .systemGroupedBackground)
     static let barBackdrop = pageBackdrop
-}
-
-private struct ScannerUnavailableContent: View {
-    let message: String
-    let offersSettings: Bool
-    let openSettings: () -> Void
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("QR Scanning Unavailable", systemImage: "camera.fill")
-        } description: {
-            Text(message)
-        } actions: {
-            if offersSettings {
-                WNButton(title: "Open Settings", size: .standard, action: openSettings)
-                    .frame(maxWidth: 320)
-            }
-        }
-    }
 }
 
 private struct ShareProfileContent: View {
@@ -336,11 +299,7 @@ private struct ShareProfileQRCode: View {
 
 #Preview("Scanner unavailable") {
     NavigationStack {
-        ScannerUnavailableContent(
-            message: L10n.string("Camera access denied. Enable it in Settings to scan QR codes."),
-            offersSettings: true,
-            openSettings: {}
-        )
+        QRScannerUnavailableView(failure: .denied, retry: {})
         .navigationTitle("Share & Connect")
         .navigationBarTitleDisplayMode(.inline)
     }
