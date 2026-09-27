@@ -14,7 +14,7 @@ struct LaunchBrandLayoutTests {
         CGSize(width: 1194, height: 834),
         CGSize(width: 320, height: 1024),
     ])
-    func launchAndWelcomeKeepTheSameMarkFrame(size: CGSize) async throws {
+    func launchAndRuntimeLoadingKeepTheSameMarkFrame(size: CGSize) async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(origin: .zero, size: size)
@@ -31,19 +31,17 @@ struct LaunchBrandLayoutTests {
         #expect(abs(expected.midX - size.width / 2) < 1)
         #expect(abs(expected.midY - size.height / 2) < 1)
 
-        let appState = AppState(client: try MarmotClient.testClient())
         for textSize in [DynamicTypeSize.large, .accessibility5] {
-            let welcome = UIHostingController(rootView:
-                NavigationStack { WelcomeView() }
-                    .environment(appState)
+            let loading = UIHostingController(rootView:
+                LaunchBrandView().ignoresSafeArea()
                     .environment(\.dynamicTypeSize, textSize)
             )
-            window.rootViewController = welcome
-            welcome.view.layoutIfNeeded()
+            window.rootViewController = loading
+            loading.view.layoutIfNeeded()
             await Task.yield()
-            welcome.view.layoutIfNeeded()
-            let welcomeMark = try #require(mark(in: welcome.view))
-            let actual = welcomeMark.convert(welcomeMark.bounds, to: window)
+            loading.view.layoutIfNeeded()
+            let loadingMark = try #require(mark(in: loading.view))
+            let actual = loadingMark.convert(loadingMark.bounds, to: window)
             #expect(abs(actual.minX - expected.minX) < 1)
             #expect(abs(actual.minY - expected.minY) < 1)
             #expect(abs(actual.width - expected.width) < 1)

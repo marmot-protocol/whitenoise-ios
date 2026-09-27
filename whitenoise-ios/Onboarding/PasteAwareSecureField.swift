@@ -160,6 +160,7 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     private var pasteControl: UIPasteControl?
     private let visibilityButton = UIButton(type: .system)
     private var accessoryVisible = true
+    private var isRestoringSecureText = false
     private var pendingAccessoryUpdate: Task<Void, Never>?
 
     override var text: String? {
@@ -171,6 +172,7 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     }
 
     @objc private func textDidMutate() {
+        guard !isRestoringSecureText else { return }
         scheduleAccessoryUpdate()
         onTextMutation?(self)
     }
@@ -286,9 +288,12 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         let selection = selectedTextRange.map {
             (offset(from: beginningOfDocument, to: $0.start), offset(from: beginningOfDocument, to: $0.end))
         }
+        isRestoringSecureText = true
+        defer { isRestoringSecureText = false }
         isSecureTextEntry = !visible
-        // Reapply the value so changing secure-entry mode does not clear it on the next keystroke.
-        text = value
+        // Native insertion resets UIKit's clear-on-next-keystroke state after hiding the key.
+        text = ""
+        super.insertText(value ?? "")
         if let selection,
            let start = position(from: beginningOfDocument, offset: selection.0),
            let end = position(from: beginningOfDocument, offset: selection.1) {

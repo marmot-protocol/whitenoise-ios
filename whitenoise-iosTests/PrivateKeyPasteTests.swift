@@ -61,8 +61,14 @@ struct PrivateKeyPasteTests {
         field.insertText("X")
         #expect(field.text == "synXthetic-key")
 
+        var visibilityMutations: [String] = []
+        field.onTextMutation = { visibilityMutations.append($0.text ?? "") }
         button.sendActions(for: .touchUpInside)
         #expect(field.isSecureTextEntry)
+        #expect(field.text == "synXthetic-key")
+        #expect(visibilityMutations.isEmpty)
+        let hiddenSelection = try #require(field.selectedTextRange)
+        #expect(field.offset(from: field.beginningOfDocument, to: hiddenSelection.start) == 4)
         field.insertText("Y")
         #expect(field.text == "synXYthetic-key")
     }
