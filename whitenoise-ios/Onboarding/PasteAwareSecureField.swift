@@ -5,7 +5,7 @@ struct PasteAwareSecureField: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     let showsAccessory: Bool
-    let onClear: () -> Void
+    var onFocusRequest: () -> Void = {}
     let onPaste: (SensitiveClipboard.Token?, String) -> Void
     let onSubmit: () -> Void
 
@@ -13,7 +13,8 @@ struct PasteAwareSecureField: UIViewRepresentable {
         Coordinator(
             text: $text,
             isFocused: $isFocused,
-            onSubmit: onSubmit
+            onSubmit: onSubmit,
+            onFocusRequest: onFocusRequest
         )
     }
 
@@ -53,9 +54,8 @@ struct PasteAwareSecureField: UIViewRepresentable {
 
     func updateUIView(_ field: PasteInterceptingSecureTextField, context: Context) {
         let coordinator = context.coordinator
-        coordinator.update(text: $text, isFocused: $isFocused, onSubmit: onSubmit)
+        coordinator.update(text: $text, isFocused: $isFocused, onSubmit: onSubmit, onFocusRequest: onFocusRequest)
         field.onPaste = onPaste
-        field.onClear = onClear
         if text != coordinator.syncedText {
             coordinator.syncedText = text
             if field.text != text { field.text = text }
@@ -73,6 +73,7 @@ struct PasteAwareSecureField: UIViewRepresentable {
         @Binding private var text: String
         @Binding private var isFocused: Bool
         private var onSubmit: () -> Void
+        private var onFocusRequest: () -> Void
         var syncedText = ""
         private var requestedFocus = false
         private var pendingFocus: Task<Void, Never>?
@@ -80,17 +81,20 @@ struct PasteAwareSecureField: UIViewRepresentable {
         init(
             text: Binding<String>,
             isFocused: Binding<Bool>,
-            onSubmit: @escaping () -> Void
+            onSubmit: @escaping () -> Void,
+            onFocusRequest: @escaping () -> Void
         ) {
             _text = text
             _isFocused = isFocused
             self.onSubmit = onSubmit
+            self.onFocusRequest = onFocusRequest
         }
 
-        func update(text: Binding<String>, isFocused: Binding<Bool>, onSubmit: @escaping () -> Void) {
+        func update(text: Binding<String>, isFocused: Binding<Bool>, onSubmit: @escaping () -> Void, onFocusRequest: @escaping () -> Void) {
             _text = text
             _isFocused = isFocused
             self.onSubmit = onSubmit
+            self.onFocusRequest = onFocusRequest
         }
 
         func textChanged(_ field: UITextField) {
@@ -126,6 +130,11 @@ struct PasteAwareSecureField: UIViewRepresentable {
             if isFocused != focused { isFocused = focused }
         }
 
+        func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
+            onFocusRequest()
+            return true
+        }
+
         func textFieldDidBeginEditing(_ textField: UITextField) {
             textChanged(textField)
             reportFocus(true)
@@ -145,12 +154,11 @@ struct PasteAwareSecureField: UIViewRepresentable {
 
 final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     var onPaste: ((SensitiveClipboard.Token?, String) -> Void)?
-    var onClear: (() -> Void)?
     var onTextMutation: ((PasteInterceptingSecureTextField) -> Void)?
     private var pendingPasteToken: SensitiveClipboard.Token?
     private static let pasteTokenAttribute = NSAttributedString.Key("WhiteNoisePasteToken")
     private var pasteControl: UIPasteControl?
-    private let clearButton = UIButton(type: .system)
+    private let visibilityButton = UIButton(type: .system)
     private var accessoryVisible = true
     private var pendingAccessoryUpdate: Task<Void, Never>?
 
@@ -167,17 +175,23 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         onTextMutation?(self)
     }
 
-    func configureAccessory() {
+    func configureAccessory(notificationCenter: NotificationCenter = .default) {
+        isSecureTextEntry = true
+        notificationCenter.addObserver(self, selector: #selector(hidePrivateKey),
+                                       name: UIApplication.willResignActiveNotification, object: nil)
+        pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
         rebuildPasteControl()
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitUserInterfaceLevel.self]) {
             (field: PasteInterceptingSecureTextField, _: UITraitCollection) in
             field.rebuildPasteControl()
         }
-        clearButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        clearButton.tintColor = .label
-        clearButton.accessibilityLabel = L10n.string("Clear")
-        clearButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        clearButton.addTarget(self, action: #selector(clearInput), for: .touchUpInside)
+        visibilityButton.tintColor = .label
+        visibilityButton.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(textStyle: .body, scale: .medium),
+            forImageIn: .normal
+        )
+        visibilityButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        visibilityButton.addTarget(self, action: #selector(togglePrivateKeyVisibility), for: .touchUpInside)
         addTarget(self, action: #selector(textDidMutate), for: .editingChanged)
         NotificationCenter.default.addObserver(
             self,
@@ -235,22 +249,58 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
     }
 
     private func applyAccessory() {
-        let accessory = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? pasteControl : clearButton
+        updateAccessory(visible: accessoryVisible)
+    }
+
+    func updateAccessory(visible: Bool) {
+        accessoryVisible = visible
+        let isEmpty = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if isEmpty || !visible { setPrivateKeyVisible(false) }
+        updateVisibilityButton()
+        let accessory = isEmpty ? pasteControl : visibilityButton
         if rightView !== accessory { rightView = accessory }
-        let mode: UITextField.ViewMode = accessoryVisible ? .always : .never
-        if rightViewMode != mode { rightViewMode = mode }
+        rightViewMode = visible ? .always : .never
     }
 
     override func rightViewRect(forBounds bounds: CGRect) -> CGRect {
         CGRect(x: bounds.maxX - 44, y: bounds.midY - 22, width: 44, height: 44)
     }
 
-    @objc private func clearInput() {
-        text = ""
-        pendingPasteToken = nil
-        sendActions(for: .editingChanged)
-        onClear?()
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { hidePrivateKey() }
+    }
+
+    @objc private func togglePrivateKeyVisibility() {
+        guard !(text ?? "").isEmpty else { return }
+        setPrivateKeyVisible(isSecureTextEntry)
+    }
+
+    @objc private func hidePrivateKey() {
+        setPrivateKeyVisible(false)
+    }
+
+    private func setPrivateKeyVisible(_ visible: Bool) {
+        guard isSecureTextEntry == visible else { return }
+        let value = text
+        let selection = selectedTextRange.map {
+            (offset(from: beginningOfDocument, to: $0.start), offset(from: beginningOfDocument, to: $0.end))
+        }
+        isSecureTextEntry = !visible
+        // Reapply the value so changing secure-entry mode does not clear it on the next keystroke.
+        text = value
+        if let selection,
+           let start = position(from: beginningOfDocument, offset: selection.0),
+           let end = position(from: beginningOfDocument, offset: selection.1) {
+            selectedTextRange = textRange(from: start, to: end)
+        }
+        updateVisibilityButton()
+    }
+
+    private func updateVisibilityButton() {
+        visibilityButton.setImage(UIImage(systemName: isSecureTextEntry ? "eye" : "eye.slash"), for: .normal)
+        visibilityButton.accessibilityLabel = isSecureTextEntry
+            ? L10n.string("Show private key") : L10n.string("Hide private key")
     }
 
     override func paste(_ sender: Any?) {
