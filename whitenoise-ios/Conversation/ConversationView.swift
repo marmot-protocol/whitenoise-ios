@@ -594,6 +594,7 @@ struct ConversationView: View {
     @State private var reportTarget: ActionsTarget?
     @State private var deleteTarget: ActionsTarget?
     @State private var failedSendTarget: FailedSendTarget?
+    @State private var senderProfileTarget: SenderProfileTarget?
     @State private var rowFrames = RowFrameStore()
     @State private var conversationViewport = ChatListViewport()
     @State private var blockedUsers = BlockedUsersModel()
@@ -836,7 +837,13 @@ struct ConversationView: View {
             .onChange(of: appState.pendingChatId) { _, pending in
                 if pending != nil {
                     showDetails = false
+                    senderProfileTarget = nil
                 }
+            }
+            .navigationDestination(item: $senderProfileTarget) { target in
+                ProfileContentView(npub: target.npub)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarRole(.editor)
             }
             .navigationDestination(isPresented: $showDetails) {
                 if let viewModel {
@@ -2119,7 +2126,10 @@ struct ConversationView: View {
                 : nil,
             onFailedTap: status == .failed
                 ? { failedSendTarget = FailedSendTarget(rowId: item.id) }
-                : nil
+                : nil,
+            onSenderAvatarTap: isSelectingMessages || viewModel.search.isActive
+                ? nil
+                : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
         )
         .id(AttachmentPresentationState.shared.revision)
     }

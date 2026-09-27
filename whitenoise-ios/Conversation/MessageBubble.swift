@@ -146,6 +146,7 @@ struct MessageBubble: View {
     /// Set for a failed outgoing message; a tap on the bubble opens the
     /// retry/discard sheet.
     var onFailedTap: (() -> Void)? = nil
+    var onSenderAvatarTap: (() -> Void)? = nil
 
     @State private var mediaGallery: MessageMediaGallery?
     @State private var isBodyExpanded = false
@@ -248,7 +249,8 @@ struct MessageBubble: View {
                     projectedAvatar: identityAvatar?(record.sender),
                     usesProjection: identityAvatar != nil,
                     nativeAsset: identityAvatarAsset?(record.sender),
-                    usesNativeAsset: identityAvatarAsset != nil
+                    usesNativeAsset: identityAvatarAsset != nil,
+                    onTap: onSenderAvatarTap
                 )
             }
 
@@ -963,22 +965,58 @@ private struct GroupMessageIdentityLane: View {
     var usesProjection = false
     var nativeAsset: AvatarAssetFfi?
     var usesNativeAsset = false
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color.clear
-            if showsAvatar, usesNativeAsset {
-                NativeAvatarBubble(seed: accountIdHex, title: projectedName ?? L10n.string("Unknown user"), asset: nativeAsset)
+            if showsAvatar, let onTap {
+                Button(action: onTap) {
+                    avatar
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(title)
+                .accessibilityHint(L10n.string("View Profile"))
             } else if showsAvatar {
-                AvatarBubble(
-                    seed: accountIdHex,
-                    title: projectedName ?? appState.displayName(forAccountIdHex: accountIdHex),
-                    pictureURL: usesProjection ? projectedAvatar : appState.avatarURL(forAccountIdHex: accountIdHex)
-                )
+                avatar
+                    .accessibilityHidden(true)
             }
         }
         .frame(width: 30, height: 30)
-        .accessibilityHidden(true)
+    }
+
+    private var title: String {
+        if usesNativeAsset {
+            return projectedName ?? L10n.string("Unknown user")
+        }
+        return projectedName ?? appState.displayName(forAccountIdHex: accountIdHex)
+    }
+
+    private var avatar: GroupMessageAvatar {
+        GroupMessageAvatar(
+            accountIdHex: accountIdHex,
+            title: title,
+            pictureURL: usesNativeAsset ? nil
+                : usesProjection ? projectedAvatar : appState.avatarURL(forAccountIdHex: accountIdHex),
+            nativeAsset: nativeAsset,
+            usesNativeAsset: usesNativeAsset
+        )
+    }
+}
+
+private struct GroupMessageAvatar: View {
+    let accountIdHex: String
+    let title: String
+    let pictureURL: URL?
+    let nativeAsset: AvatarAssetFfi?
+    let usesNativeAsset: Bool
+
+    var body: some View {
+        if usesNativeAsset {
+            NativeAvatarBubble(seed: accountIdHex, title: title, asset: nativeAsset)
+        } else {
+            AvatarBubble(seed: accountIdHex, title: title, pictureURL: pictureURL)
+        }
     }
 }
 
