@@ -147,6 +147,7 @@ struct ProfileContentView: View {
                     profileAvatar.frame(width: size, height: size)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(L10n.string("Photo"))
                 .disabled(profilePictureURL == nil)
             }
             .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in

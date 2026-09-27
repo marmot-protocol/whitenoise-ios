@@ -49,6 +49,19 @@ struct NativeAvatarImageCacheTests {
         #expect(cache.image(account: "alice", generation: 1, reference: "avatar", revision: 3) == nil)
     }
 
+    @Test func viewerSizedPixelsAreCachedApartFromThumbnails() {
+        let cache = NativeAvatarImageCache()
+        let thumbnail = UIImage()
+        let viewer = UIImage()
+        cache.insert(thumbnail, account: "alice", generation: 1, reference: "avatar", revision: 2)
+        #expect(cache.image(account: "alice", generation: 1, reference: "avatar", revision: 2,
+                            maxPixelSize: 1_200) == nil)
+        cache.insert(viewer, account: "alice", generation: 1, reference: "avatar", revision: 2, maxPixelSize: 1_200)
+        #expect(cache.image(account: "alice", generation: 1, reference: "avatar", revision: 2) === thumbnail)
+        #expect(cache.image(account: "alice", generation: 1, reference: "avatar", revision: 2,
+                            maxPixelSize: 1_200) === viewer)
+    }
+
     @Test func visiblePixelsStayWarmWhileLeastRecentlyUsedPixelsAreEvicted() {
         let cache = NativeAvatarImageCache(capacity: 2)
         let image = UIImage()

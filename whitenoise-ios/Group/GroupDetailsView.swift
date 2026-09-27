@@ -33,6 +33,7 @@ enum GroupDetailsConfirmation: Identifiable {
 struct GroupDetailsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.displayScale) private var displayScale
     @Bindable var viewModel: ConversationViewModel
     var openAddMembersOnAppear = false
     var onGroupChanged: (AppGroupRecordFfi) -> Void = { _ in }
@@ -461,7 +462,8 @@ struct GroupDetailsView: View {
                     }
                 }
                 .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
-                    groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
+                    groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle,
+                                nativeMaxPixelSize: viewerPixelSize(for: size))
                         .frame(width: size, height: size)
                 }
 
@@ -499,7 +501,11 @@ struct GroupDetailsView: View {
         }
     }
 
-    private func groupAvatar(groupDisplay: GroupDisplay.Resolved, displayTitle: String) -> some View {
+    private func groupAvatar(
+        groupDisplay: GroupDisplay.Resolved,
+        displayTitle: String,
+        nativeMaxPixelSize: Int = NativeAvatarImageCache.thumbnailPixelSize
+    ) -> some View {
         GroupAvatarBubble(
             groupIdHex: viewModel.group.groupIdHex,
             imageHashHex: viewModel.selectedImageHash,
@@ -507,16 +513,22 @@ struct GroupDetailsView: View {
             title: displayTitle,
             pictureURL: viewModel.selectedAvatarURL,
             nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
-            usesNativeAsset: viewModel.conversationWindow != nil
+            usesNativeAsset: viewModel.conversationWindow != nil,
+            nativeMaxPixelSize: nativeMaxPixelSize
         )
     }
 
-    private var contactAvatar: some View {
+    private func contactAvatar(maxPixelSize: Int = NativeAvatarImageCache.thumbnailPixelSize) -> some View {
         NativeAvatarBubble(
             seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
             title: contactTitle,
-            asset: viewModel.conversationWindow?.header.avatarAsset
+            asset: viewModel.conversationWindow?.header.avatarAsset,
+            maxPixelSize: maxPixelSize
         )
+    }
+
+    private func viewerPixelSize(for size: CGFloat) -> Int {
+        max(NativeAvatarImageCache.thumbnailPixelSize, Int((size * max(displayScale, 1)).rounded(.up)))
     }
 
     private var hasContactImage: Bool {
@@ -537,13 +549,14 @@ struct GroupDetailsView: View {
                     Button {
                         showsAvatarViewer = true
                     } label: {
-                        contactAvatar.frame(width: size, height: size)
+                        contactAvatar().frame(width: size, height: size)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.string("Photo"))
                     .disabled(!hasContactImage)
                 }
                 .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
-                    contactAvatar.frame(width: size, height: size)
+                    contactAvatar(maxPixelSize: viewerPixelSize(for: size)).frame(width: size, height: size)
                 }
                 HStack(spacing: 12) {
                     DetailsQuickAction(title: "About") {
@@ -1090,7 +1103,11 @@ struct GroupDetailsView: View {
     }
 
     private var hasGroupImage: Bool {
-        viewModel.group.avatarUrl != nil || viewModel.group.imageHashHex != nil
+        if let window = viewModel.conversationWindow {
+            let availability = window.header.avatarAsset?.availability
+            return availability == .ready || availability == .stale
+        }
+        return viewModel.selectedAvatarURL != nil || viewModel.selectedImageHash != nil
     }
 
     private var shouldShowSelfDemoteAction: Bool {

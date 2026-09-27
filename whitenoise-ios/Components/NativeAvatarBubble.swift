@@ -7,6 +7,7 @@ struct NativeAvatarBubble: View {
     let seed: String
     let title: String
     let asset: AvatarAssetFfi?
+    var maxPixelSize = NativeAvatarImageCache.thumbnailPixelSize
     @State private var rendered: Rendered?
 
     private struct Request: Hashable {
@@ -16,6 +17,7 @@ struct NativeAvatarBubble: View {
         let erasing: Bool
         let runtimeReady: Bool
         let erasureGeneration: Int
+        let maxPixelSize: Int
     }
 
     private struct Rendered {
@@ -29,7 +31,7 @@ struct NativeAvatarBubble: View {
         Request(account: appState.activeAccountRef, generation: appState.runtimeGeneration,
                 asset: asset, erasing: appState.isErasingAppData || AvatarCacheErasure.isInProgress,
                 runtimeReady: appState.canUseRuntimeForLocalForegroundWork,
-                erasureGeneration: AvatarCacheErasure.generation)
+                erasureGeneration: AvatarCacheErasure.generation, maxPixelSize: maxPixelSize)
     }
 
     var body: some View {
@@ -53,8 +55,11 @@ struct NativeAvatarBubble: View {
         guard let account = current.account, let asset = current.asset,
               asset.availability == .ready || asset.availability == .stale,
               let reference = asset.reference else { return nil }
-        return NativeAvatarImageCache.shared.image(account: account, generation: current.generation,
-            reference: reference, revision: asset.contentRevision)
+        let cache = NativeAvatarImageCache.shared
+        return cache.image(account: account, generation: current.generation, reference: reference,
+                           revision: asset.contentRevision, maxPixelSize: current.maxPixelSize)
+            ?? cache.image(account: account, generation: current.generation, reference: reference,
+                           revision: asset.contentRevision)
     }
 
     private func load(_ current: Request) async {
@@ -66,11 +71,11 @@ struct NativeAvatarBubble: View {
             let assets = try await client.marmot.requestAvatarAssets(accountRef: account, targets: [asset.target])
             try Task.checkCancellation()
             guard request == current, !AvatarCacheErasure.isInProgress,
-                  let reference = assets.first?.reference else { return }
-            if let available = assets.first,
-               available.availability == .ready || available.availability == .stale,
-               let image = NativeAvatarImageCache.shared.image(account: account, generation: current.generation,
-                   reference: reference, revision: available.contentRevision) {
+                  let available = assets.first,
+                  available.availability == .ready || available.availability == .stale,
+                  let reference = available.reference else { return }
+            if let image = NativeAvatarImageCache.shared.image(account: account, generation: current.generation,
+                   reference: reference, revision: available.contentRevision, maxPixelSize: current.maxPixelSize) {
                 rendered = Rendered(request: current, reference: reference,
                                     revision: available.contentRevision, image: image)
                 return
@@ -79,11 +84,12 @@ struct NativeAvatarBubble: View {
                 references: [reference], maxBytes: 16 * 1024 * 1024)
             try Task.checkCancellation()
             guard let result = bytes.first, !result.deferred, !result.bytes.isEmpty else { return }
-            let image = await RemoteImageDecoder.downsampledImage(from: result.bytes, maxPixelSize: 384, scale: 1)
+            let image = await RemoteImageDecoder.downsampledImage(from: result.bytes,
+                maxPixelSize: current.maxPixelSize, scale: 1)
             try Task.checkCancellation()
             guard request == current, !AvatarCacheErasure.isInProgress, let image else { return }
             NativeAvatarImageCache.shared.insert(image, account: account, generation: current.generation,
-                reference: result.reference, revision: result.contentRevision)
+                reference: result.reference, revision: result.contentRevision, maxPixelSize: current.maxPixelSize)
             rendered = Rendered(request: current, reference: result.reference,
                                 revision: result.contentRevision, image: image)
         } catch {
