@@ -21,6 +21,8 @@ struct IdentityProfileSetupView: View {
     @State private var showPhotoMenu = false
     @State private var isKeyboardVisible = false
     @State private var confirmsStartOver = false
+    @State private var confirmsDiscardDraft = false
+    @State private var discardDraftFailed = false
     @State private var isRestarting = false
     @State private var restartError: String?
     @State private var signUpFailure: CreateIdentityViewModel.Failure?
@@ -73,12 +75,30 @@ struct IdentityProfileSetupView: View {
 
     private var presentedEditor: some View {
         Group {
-            if isFormReady {
+            if isFormReady, model.isRestorationBlocked {
+                restorationFailureView
+            } else if isFormReady {
                 profileEditor
             } else {
                 ProgressView("Loading…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
+        .alert("Discard sign-up draft?", isPresented: $confirmsDiscardDraft) {
+            Button("Discard draft", role: .destructive) {
+                discardDraftFailed = false
+                submissionTask = Task {
+                    if await model.discardUnrestorableDraft() {
+                        try? await appState.refreshAccounts(refreshUnreadSummaries: false)
+                        dismiss()
+                    } else {
+                        discardDraftFailed = true
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes only the saved sign-up form from this device. All accounts and anything already uploaded or published are kept.")
         }
         .alert(restartError == nil ? L10n.string("Start over?") : L10n.string("Couldn’t restart sign-up"),
                isPresented: $confirmsStartOver) {
@@ -88,7 +108,7 @@ struct IdentityProfileSetupView: View {
             Text(restartError ?? L10n.string("This will discard your name, bio, photo, and unfinished account from this device. Anything already uploaded or published may remain online."))
         }
         .onChange(of: model.failure, initial: true) {
-            if isFormReady, let failure = model.failure { presentFailure(failure) }
+            if isFormReady, !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
         }
         .alert("Couldn’t add photo", isPresented: Binding(
             get: { model.avatarError != nil }, set: { if !$0 { model.clearAvatarError() } }
@@ -104,6 +124,28 @@ struct IdentityProfileSetupView: View {
         } message: { failure in
             Text(failure.message)
         }
+    }
+
+    private var restorationFailureView: some View {
+        ContentUnavailableView {
+            Label("Couldn’t restore your unfinished sign-up. Please try again.", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("Retry to read the saved draft again, or discard the draft without deleting any accounts.")
+            if discardDraftFailed {
+                Text("Couldn’t save your sign-up progress on this device. Free up some space and try again.")
+            }
+        } actions: {
+            Button("Retry") {
+                submissionTask = Task {
+                    isRestarting = true
+                    defer { isRestarting = false }
+                    await appState.retrySignUpRestoration()
+                    await prepareForm()
+                }
+            }
+            Button("Discard draft", role: .destructive) { confirmsDiscardDraft = true }
+        }
+        .disabled(isBusy)
     }
 
     var body: some View {
@@ -130,7 +172,7 @@ struct IdentityProfileSetupView: View {
                     }
                 }
             }
-            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !model.isResetPending {
+            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !model.isResetPending, !model.isRestorationBlocked {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button("Start over", role: .destructive) {
@@ -148,7 +190,7 @@ struct IdentityProfileSetupView: View {
         }
         .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isFormReady && (accountSetup != nil || !isKeyboardVisible) {
+            if isFormReady && !model.isRestorationBlocked && (accountSetup != nil || !isKeyboardVisible) {
                 profileActions
                     .safeAreaPadding(.horizontal, 16)
                     .safeAreaPadding(.bottom)
@@ -190,7 +232,7 @@ struct IdentityProfileSetupView: View {
             // Reveal the model only after reset cleanup and name preparation settle.
             model = preparedModel
             isFormReady = true
-            if let failure = model.failure { presentFailure(failure) }
+            if !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
         }
     }
 
@@ -288,7 +330,7 @@ struct IdentityProfileSetupView: View {
                 await model.prepare(using: appState)
                 confirmsStartOver = false
                 restartError = nil
-            } else if !Task.isCancelled, let failure = model.failure {
+            } else if !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure {
                 restartError = failure.message
                 confirmsStartOver = true
             }
@@ -307,7 +349,7 @@ struct IdentityProfileSetupView: View {
                 await saveImportedProfile(using: accountSetup)
             } else {
                 await model.submit(using: appState, dismiss: { dismiss() })
-                guard !Task.isCancelled, let failure = model.failure else { return }
+                guard !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure else { return }
                 presentFailure(failure)
             }
         }

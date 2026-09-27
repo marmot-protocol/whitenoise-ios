@@ -34,10 +34,7 @@ nonisolated struct SignUpDraft: Codable, Equatable, Sendable {
     }
 
     func blocksActivation(accountID: String) -> Bool {
-        if let pendingID = self.accountID { return pendingID == accountID }
-        guard let baselineAccountIDs else { return false }
-        // Creation may have committed in MDK before its response reaches Swift.
-        return !baselineAccountIDs.contains(accountID)
+        self.accountID == accountID
     }
 
     func recoveredAccount(in accounts: [AccountSummaryFfi]) throws -> AccountSummaryFfi? {
@@ -49,9 +46,10 @@ nonisolated struct SignUpDraft: Codable, Equatable, Sendable {
             return account
         }
         guard let baselineAccountIDs else { return nil }
-        let candidates = accounts.filter { !baselineAccountIDs.contains($0.accountIdHex) && !$0.signedOut }
-        guard candidates.count <= 1 else { throw SignUpDraftStore.Failure.ambiguousAccount }
-        return candidates.first
+        guard accounts.contains(where: { !baselineAccountIDs.contains($0.accountIdHex) && !$0.signedOut }) else { return nil }
+        // A new account may have been imported after creation failed. A baseline
+        // cannot prove ownership, even when there is exactly one candidate.
+        throw SignUpDraftStore.Failure.ambiguousAccount
     }
 }
 
@@ -80,11 +78,12 @@ actor SignUpDraftStore {
     func load() throws -> SignUpDraft? {
         let file = directory.appendingPathComponent("draft.json")
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
-        let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-        guard size > 0, size <= 16 * 1024 * 1024 else { throw Failure.unreadable }
         let draft: SignUpDraft
-        do { draft = try JSONDecoder().decode(SignUpDraft.self, from: Data(contentsOf: file)) }
-        catch { throw Failure.unreadable }
+        do {
+            let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size > 0, size <= 16 * 1024 * 1024 else { throw Failure.unreadable }
+            draft = try JSONDecoder().decode(SignUpDraft.self, from: Data(contentsOf: file))
+        } catch { throw Failure.unreadable }
         guard draft.version == 1 else { throw Failure.unreadable }
         currentID = draft.id
         lastRevision = max(lastRevision, draft.revision)
@@ -111,6 +110,10 @@ actor SignUpDraftStore {
         try data.write(to: directory.appendingPathComponent("draft.json"), options: [.atomic, .completeFileProtection])
         currentID = draft.id
         lastRevision = draft.revision
+    }
+
+    func discardUnrestorableDraft() throws {
+        try clear(id: currentID ?? UUID())
     }
 
     func clear(id: UUID) throws {

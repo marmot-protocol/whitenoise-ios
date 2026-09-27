@@ -538,25 +538,94 @@ struct CreateIdentityOnboardingTests {
         #expect(try await store.load() == nil)
     }
 
-    @Test func lostCreationResponseRecoversExistingAccountWithoutCreatingAgain() async throws {
+    @Test func lostCreationResponseCannotPublishOrDeleteAnUnidentifiedAccount() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let service = CreateIdentityServiceStub()
         service.loseCreationReply = true
-        let first = CreateIdentityViewModel()
-        await first.configurePersistence(store: SignUpDraftStore(directory: directory))
-        first.displayName = "Alice"
-        await first.submit(using: service) {}
-        #expect(first.failure == .creation)
-        let store = SignUpDraftStore(directory: directory)
-        let saved = try #require(try await store.load())
-        #expect(saved.accountID == nil)
-        let recovered = try #require(try saved.recoveredAccount(in: service.storedAccounts))
-        let restored = CreateIdentityViewModel()
-        await restored.configurePersistence(store: store, restored: saved, identity: recovered)
-        await restored.submit(using: service) {}
+        let model = CreateIdentityViewModel()
+        await model.configurePersistence(store: SignUpDraftStore(directory: directory))
+        model.displayName = "Alice"
+        await model.submit(using: service) {}
+        #expect(model.failure == .creation)
+        await model.submit(using: service) {}
+        #expect(model.isRestorationBlocked)
         #expect(service.createCount == 1)
-        #expect(service.completeCount == 1)
+        #expect(service.publishCount == 0)
+        #expect(service.completeCount == 0)
+        #expect(await model.startOver(using: service) == false)
+        #expect(service.removeCount == 0)
+        #expect(await model.discardUnrestorableDraft())
+        #expect(service.storedAccounts == [service.identity])
+        #expect(try await SignUpDraftStore(directory: directory).load() == nil)
+    }
+
+    @Test func startOverCannotAdoptAnAccountImportedAfterFailedCreation() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = CreateIdentityServiceStub()
+        service.createFailuresRemaining = 1
+        let model = CreateIdentityViewModel()
+        await model.configurePersistence(store: SignUpDraftStore(directory: directory))
+        model.displayName = "Alice"
+        await model.submit(using: service) {}
+        service.storedAccounts = [service.identity]
+        #expect(await model.startOver(using: service) == false)
+        #expect(model.isRestorationBlocked)
+        #expect(service.removeCount == 0)
+        #expect(service.storedAccounts == [service.identity])
+        #expect(await model.discardUnrestorableDraft())
+        #expect(service.storedAccounts == [service.identity])
+    }
+
+    @Test func unreadableDraftDoesNotAbortAccountRefreshAndCanBeDiscarded() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("draft.json")
+        let invalid = Data("broken".utf8)
+        try invalid.write(to: file)
+        let client = try MarmotClient.testClient()
+        try await client.startRuntime()
+        let state = AppState(client: client, notifications: .shared,
+                             signUpDraftStore: SignUpDraftStore(directory: directory))
+        try await state.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(state.hasRestoredSignUp)
+        #expect(state.restoreSignUpPresentation)
+        #expect(state.signUpModel.isRestorationBlocked)
+        try await state.refreshAccounts(refreshUnreadSummaries: false)
+        await state.signUpModel.persistDraft()
+        #expect(try Data(contentsOf: file) == invalid)
+        let blocked = state.signUpModel
+        state.closeSignUpDraft()
+        #expect(state.signUpModel === blocked)
+        #expect(await state.signUpModel.discardUnrestorableDraft())
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test(arguments: [false, true])
+    func missingOrUnidentifiedAccountOffersRecoveryWithoutChangingAccounts(unknownID: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        var draft = SignUpDraft()
+        draft.stage = .creating
+        draft.baselineAccountIDs = []
+        draft.accountID = unknownID ? nil : "missing"
+        try await store.save(draft)
+        let client = try MarmotClient.testClient()
+        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
+        let unrelated = CreateIdentityServiceStub().identity
+        try await state.restoreSignUpIfNeeded(accounts: [unrelated], client: client)
+        #expect(state.hasRestoredSignUp)
+        #expect(state.restoreSignUpPresentation)
+        #expect(state.signUpModel.isRestorationBlocked)
+        #expect(!state.isUnfinishedSignUpAccount(unrelated.accountIdHex))
+        await state.signUpModel.persistDraft()
+        #expect(try await store.load() == draft)
+        #expect(await state.signUpModel.discardUnrestorableDraft())
+        #expect(try await store.load() == nil)
     }
 
     @Test func editingRestoredCompletionPublishesTheNewValuesBeforeOpeningChats() async throws {

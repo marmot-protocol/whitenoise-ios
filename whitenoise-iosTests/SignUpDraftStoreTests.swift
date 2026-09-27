@@ -72,28 +72,24 @@ struct SignUpDraftStoreTests {
         #expect(FileManager.default.fileExists(atPath: file.path))
     }
 
-    @Test func lostCreationReplyCanOnlyResolveOneNewAccount() throws {
+    @Test func recoveryNeverInfersOwnershipFromNewAccounts() throws {
         var draft = SignUpDraft()
         draft.baselineAccountIDs = ["existing"]
         #expect(try draft.recoveredAccount(in: [account("existing")]) == nil)
-        #expect(try draft.recoveredAccount(in: [account("existing"), account("new")])?.accountIdHex == "new")
-        #expect(throws: SignUpDraftStore.Failure.self) {
-            try draft.recoveredAccount(in: [account("new"), account("another")])
+        for accounts in [[account("existing"), account("imported")],
+                         [account("imported"), account("another")]] {
+            #expect(throws: SignUpDraftStore.Failure.ambiguousAccount) {
+                try draft.recoveredAccount(in: accounts)
+            }
         }
-        draft.accountID = "new"
-        #expect(throws: SignUpDraftStore.Failure.self) { try draft.recoveredAccount(in: [account("existing")]) }
-    }
-
-    @Test func creationResponseGapCannotExposeNewAccountForActivation() {
-        var draft = SignUpDraft()
-        #expect(!draft.blocksActivation(accountID: "new"))
-        draft.baselineAccountIDs = ["existing"]
-        draft.stage = .creating
-        #expect(!draft.blocksActivation(accountID: "existing"))
-        #expect(draft.blocksActivation(accountID: "new"))
-        draft.accountID = "new"
-        #expect(draft.blocksActivation(accountID: "new"))
-        #expect(!draft.blocksActivation(accountID: "unrelated"))
+        #expect(!draft.blocksActivation(accountID: "imported"))
+        draft.accountID = "created"
+        #expect(try draft.recoveredAccount(in: [account("created"), account("imported")])?.accountIdHex == "created")
+        #expect(draft.blocksActivation(accountID: "created"))
+        #expect(!draft.blocksActivation(accountID: "imported"))
+        #expect(throws: SignUpDraftStore.Failure.accountUnavailable) {
+            try draft.recoveredAccount(in: [account("imported")])
+        }
     }
 
     @Test func completionReconciliationRequiresAllEnteredDetails() {

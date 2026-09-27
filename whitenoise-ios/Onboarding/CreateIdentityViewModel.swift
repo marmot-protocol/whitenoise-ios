@@ -145,6 +145,7 @@ final class CreateIdentityViewModel {
     var failure: Failure?
     private(set) var isFinished = false
     private(set) var isResetting = false
+    private(set) var isRestorationBlocked = false
     var isResetPending: Bool { draft.stage == .resetting }
     private(set) var draft = SignUpDraft()
     private var draftStore: SignUpDraftStore?
@@ -202,8 +203,39 @@ final class CreateIdentityViewModel {
         phase = .editing
     }
 
+    func configureRestorationFailure(store: SignUpDraftStore, restored: SignUpDraft?) async {
+        await configurePersistence(store: store, restored: restored)
+        isRestorationBlocked = true
+        failure = .restore
+    }
+
+    func discardUnrestorableDraft() async -> Bool {
+        guard isRestorationBlocked, !isBusy else { return false }
+        isResetting = true
+        defer { isResetting = false }
+        do {
+            // Discard only host form data. No account identity can be inferred here.
+            try await draftStore?.discardUnrestorableDraft()
+            draft = SignUpDraft()
+            createdIdentity = nil
+            existingProfile = nil
+            displayName = ""
+            about = ""
+            avatarDraft = nil
+            uploadedAvatarURL = nil
+            hasSuggestedName = false
+            isRestorationBlocked = false
+            failure = nil
+            phase = .editing
+            return true
+        } catch {
+            failure = .restore
+            return false
+        }
+    }
+
     func persistDraft() async {
-        guard draftStore != nil, !isFinished, !isSubmitting, !isResetting else { return }
+        guard draftStore != nil, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return }
         do { try await checkpoint() }
         catch { failure = .draftStorage }
     }
@@ -217,6 +249,7 @@ final class CreateIdentityViewModel {
     }
 
     private func checkpoint(_ stage: SignUpDraft.Stage? = nil) async throws {
+        guard !isRestorationBlocked else { throw SignUpDraftStore.Failure.unreadable }
         invalidateCompletionAfterEdits()
         if let stage { draft.stage = stage }
         guard draft.requiresRecovery else { return }
@@ -294,7 +327,7 @@ final class CreateIdentityViewModel {
 
     /// Prepare the form without starting account creation.
     func prepare(using service: CreateIdentityServicing) async {
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, !isRestorationBlocked else { return }
         if isResetPending {
             // The persisted reset records consent; finish it before allowing another submission.
             guard failure != .restart, await startOver(using: service) else { return }
@@ -313,7 +346,7 @@ final class CreateIdentityViewModel {
         using service: CreateIdentityServicing,
         dismiss: () -> Void
     ) async {
-        guard !isBusy, !isResetPending, ContentSanitizer.displayName(displayName) != nil else { return }
+        guard !isBusy, !isRestorationBlocked, !isResetPending, ContentSanitizer.displayName(displayName) != nil else { return }
         let performance = HostActionPerformance.begin()
         invalidateCompletionAfterEdits()
         let retry = createdIdentity != nil || draft.baselineAccountIDs != nil
@@ -370,6 +403,7 @@ final class CreateIdentityViewModel {
             if error as? SignUpDraftStore.Failure == .writeFailed {
                 failure = .draftStorage
             } else if error is SignUpDraftStore.Failure {
+                isRestorationBlocked = true
                 failure = .restore
             } else {
                 switch phase {
@@ -390,7 +424,7 @@ final class CreateIdentityViewModel {
     }
 
     func startOver(using service: CreateIdentityServicing) async -> Bool {
-        guard !isBusy, !isFinished else { return false }
+        guard !isBusy, !isFinished, !isRestorationBlocked else { return false }
         isResetting = true
         failure = nil
         defer { isResetting = false }
@@ -416,7 +450,12 @@ final class CreateIdentityViewModel {
             phase = .editing
             return true
         } catch {
-            failure = Task.isCancelled ? nil : .restart
+            if let error = error as? SignUpDraftStore.Failure, error != .writeFailed {
+                isRestorationBlocked = true
+                failure = .restore
+            } else {
+                failure = Task.isCancelled ? nil : .restart
+            }
             return false
         }
     }

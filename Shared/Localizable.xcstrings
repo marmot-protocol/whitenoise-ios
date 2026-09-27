@@ -113834,6 +113834,242 @@
           }
         }
       }
+    },
+    "Discard sign-up draft?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrierungsentwurf verwerfen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Descartar el borrador de registro?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le brouillon d’inscription ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminare la bozza di registrazione?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar o rascunho de cadastro?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить черновик регистрации?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıt taslağı silinsin mi?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "丢弃注册草稿？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "捨棄註冊草稿？"
+          }
+        }
+      }
+    },
+    "Discard draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entwurf verwerfen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar borrador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le brouillon"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elimina bozza"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar rascunho"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалить черновик"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Taslağı sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "丢弃草稿"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "捨棄草稿"
+          }
+        }
+      }
+    },
+    "This removes only the saved sign-up form from this device. All accounts and anything already uploaded or published are kept." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch wird nur das gespeicherte Registrierungsformular von diesem Gerät entfernt. Alle Konten sowie bereits hochgeladene oder veröffentlichte Inhalte bleiben erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto solo elimina el formulario de registro guardado en este dispositivo. Se conservan todas las cuentas y todo lo que ya se haya subido o publicado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seul le formulaire d’inscription enregistré sur cet appareil sera supprimé. Tous les comptes et les contenus déjà téléversés ou publiés seront conservés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verrà rimosso solo il modulo di registrazione salvato su questo dispositivo. Tutti gli account e i contenuti già caricati o pubblicati verranno conservati."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isso remove apenas o formulário de cadastro salvo neste dispositivo. Todas as contas e tudo o que já foi enviado ou publicado serão mantidos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Будет удалена только сохранённая форма регистрации с этого устройства. Все аккаунты и уже загруженные или опубликованные данные сохранятся."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu işlem yalnızca bu cihazdaki kayıtlı kayıt formunu kaldırır. Tüm hesaplar ve daha önce yüklenen veya yayımlanan içerikler korunur."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这只会移除此设备上保存的注册表单。所有账户以及已上传或发布的内容都会保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這只會移除此裝置上儲存的註冊表單。所有帳號及已上傳或發布的內容都會保留。"
+          }
+        }
+      }
+    },
+    "Retry to read the saved draft again, or discard the draft without deleting any accounts." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche erneut, den gespeicherten Entwurf zu lesen, oder verwirf ihn, ohne Konten zu löschen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a intentar leer el borrador guardado o descártalo sin eliminar ninguna cuenta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réessayez de lire le brouillon enregistré ou supprimez-le sans supprimer de compte."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprova a leggere la bozza salvata oppure eliminala senza eliminare alcun account."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tente ler o rascunho salvo novamente ou descarte-o sem excluir nenhuma conta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробуйте снова прочитать сохранённый черновик или удалите его, не удаляя аккаунты."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıtlı taslağı okumayı yeniden deneyin veya hiçbir hesabı silmeden taslağı silin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试读取已保存的草稿，或丢弃草稿而不删除任何账户。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重試讀取已儲存的草稿，或捨棄草稿而不刪除任何帳號。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
