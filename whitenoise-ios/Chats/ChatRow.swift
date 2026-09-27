@@ -32,6 +32,7 @@ struct ChatRow: View {
                 HStack(spacing: 5) {
                     Text(title)
                         .font(.headline)
+                        .redacted(reason: item.isTitlePending ? .placeholder : [])
                         .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                         .fixedSize(horizontal: false, vertical: true)
                     if item.isMuted {

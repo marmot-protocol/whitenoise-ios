@@ -34,12 +34,20 @@ enum SelectedChatPresentation {
         nickname: String? = nil
     ) -> ChatsListViewModel.Display {
         let title: String
+        var isTitleFallback = false
         switch selected.title {
         case .literal(let text):
             let localTitle = row.conversationKind == .direct && selected.peerId != nil
                 ? ContentSanitizer.displayName(nickname)
                 : nil
-            title = localTitle ?? ContentSanitizer.groupName(text) ?? L10n.string("Unnamed group")
+            if let localTitle {
+                title = localTitle
+            } else if selected.titleSource == .peerFallback {
+                title = L10n.string("Unknown user")
+                isTitleFallback = true
+            } else {
+                title = ContentSanitizer.groupName(text) ?? L10n.string("Unnamed group")
+            }
         case .unnamedGroup:
             title = L10n.string("Unnamed group")
         case .unavailableConversation:
@@ -52,7 +60,8 @@ enum SelectedChatPresentation {
             avatarURL = nil
         }
         return ChatsListViewModel.Display(
-            title: title, avatarURL: avatarURL, avatarSeed: avatarSeed(for: selected),
+            title: title, isTitleFallback: isTitleFallback,
+            avatarURL: avatarURL, avatarSeed: avatarSeed(for: selected),
             isDirectMessage: row.conversationKind == .direct,
             directPeerAccountIdHex: selected.peerId
         )

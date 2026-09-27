@@ -82,6 +82,7 @@ final class ChatsListViewModel {
         let avatarAsset: AvatarAssetFfi?
         let avatarSeed: String
         let title: String
+        let isTitlePending: Bool
         let isDirectMessage: Bool?
         let directPeerAccountIdHex: String?
         /// Who invited this account, for rows still awaiting a reply. Marmot's
@@ -103,6 +104,7 @@ final class ChatsListViewModel {
             avatarAsset: AvatarAssetFfi? = nil,
             avatarSeed: String? = nil,
             title: String,
+            isTitlePending: Bool = false,
             isDirectMessage: Bool? = nil,
             directPeerAccountIdHex: String? = nil,
             inviterAccountIdHex: String? = nil,
@@ -129,6 +131,7 @@ final class ChatsListViewModel {
             self.avatarAsset = avatarAsset
             self.avatarSeed = avatarSeed ?? row.groupIdHex
             self.title = title
+            self.isTitlePending = isTitlePending
             self.isDirectMessage = isDirectMessage
             self.directPeerAccountIdHex = directPeerAccountIdHex
             self.inviterAccountIdHex = inviterAccountIdHex
@@ -291,6 +294,8 @@ final class ChatsListViewModel {
     private var chatListTask: Task<Void, Never>?
     @ObservationIgnored private var previewExpiryTask: Task<Void, Never>?
     @ObservationIgnored private var muteExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var titleFallbackGrace = ChatTitleFallbackGrace()
+    @ObservationIgnored private var titleFallbackGraceTask: Task<Void, Never>?
     private var chatListTaskID: UUID?
     private var avatarURLTask: Task<Void, Never>?
     private var avatarEnrichmentTaskID: UUID?
@@ -337,6 +342,7 @@ final class ChatsListViewModel {
     isolated deinit {
         previewExpiryTask?.cancel()
         muteExpiryTask?.cancel()
+        titleFallbackGraceTask?.cancel()
         chatListTask?.cancel()
         windowCommandTask?.cancel()
         avatarURLTask?.cancel()
@@ -362,6 +368,9 @@ final class ChatsListViewModel {
             archivedItems = []
             itemByGroupId = [:]
             destinationItems = [:]
+            titleFallbackGrace.reset()
+            titleFallbackGraceTask?.cancel()
+            titleFallbackGraceTask = nil
             visibleRowsRevision &+= 1
         }
         await previous?.value
@@ -1072,6 +1081,9 @@ final class ChatsListViewModel {
             avatarAsset: avatarAssetsByGroupId[row.groupIdHex],
             avatarSeed: display.avatarSeed,
             title: display.title,
+            isTitlePending: titleFallbackGrace.isPending(
+                groupIdHex: row.groupIdHex, isFallback: display.isTitleFallback
+            ),
             isDirectMessage: display.isDirectMessage,
             directPeerAccountIdHex: display.directPeerAccountIdHex,
             inviterAccountIdHex: Self.inviterAccountIdHex(
@@ -1182,6 +1194,7 @@ final class ChatsListViewModel {
 
     struct Display {
         let title: String
+        var isTitleFallback = false
         let avatarURL: URL?
         let avatarSeed: String
         let isDirectMessage: Bool?
@@ -1364,6 +1377,7 @@ final class ChatsListViewModel {
         defer {
             schedulePreviewExpiry()
             scheduleMuteExpiry()
+            scheduleTitleFallbackGrace()
         }
         let timing = appState?.productAnalytics.beginTiming()
         defer { appState?.productAnalytics.recordTiming(.inboxPublish, since: timing) }
@@ -1406,6 +1420,19 @@ final class ChatsListViewModel {
         let delay = max(0.01, min(next.timeIntervalSinceNow, 86_400))
         muteExpiryTask = Task { @MainActor [weak self] in
             do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            self?.refreshDisplayProjections()
+        }
+    }
+
+    private func scheduleTitleFallbackGrace() {
+        titleFallbackGraceTask?.cancel()
+        guard let deadline = titleFallbackGrace.nextDeadline() else {
+            titleFallbackGraceTask = nil
+            return
+        }
+        titleFallbackGraceTask = Task { @MainActor [weak self] in
+            do { try await Task.sleep(until: deadline, clock: .continuous) }
             catch { return }
             self?.refreshDisplayProjections()
         }
