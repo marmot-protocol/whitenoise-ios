@@ -112714,6 +112714,1126 @@
           }
         }
       }
+    },
+    "Finishing setup…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einrichtung wird abgeschlossen…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalizando la configuración…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalisation de la configuration…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completamento della configurazione…"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concluindo a configuração…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершаем настройку…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurulum tamamlanıyor…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在完成设置…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在完成設定…"
+          }
+        }
+      }
+    },
+    "Couldn't finish account setup. Check your connection and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kontoeinrichtung konnte nicht abgeschlossen werden. Prüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo completar la configuración de la cuenta. Comprueba tu conexión e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de terminer la configuration du compte. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile completare la configurazione dell’account. Controlla la connessione e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir a configuração da conta. Verifique sua conexão e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить настройку аккаунта. Проверьте подключение и попробуйте ещё раз."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hesap kurulumu tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法完成账户设置。请检查网络连接后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法完成帳號設定。請檢查網路連線後再試一次。"
+          }
+        }
+      }
+    },
+    "Couldn’t add photo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto konnte nicht hinzugefügt werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo añadir la foto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’ajouter la photo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile aggiungere la foto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível adicionar a foto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось добавить фото"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraf eklenemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法添加照片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法加入照片"
+          }
+        }
+      }
+    },
+    "Couldn’t create your account. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Konto konnte nicht erstellt werden. Bitte versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo crear tu cuenta. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de créer votre compte. Veuillez réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile creare il tuo account. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível criar sua conta. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось создать аккаунт. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hesabınız oluşturulamadı. Lütfen tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法创建你的账户。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法建立你的帳號。請重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t finish setting up your account. Check your connection and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Konto konnte nicht fertig eingerichtet werden. Prüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo terminar de configurar tu cuenta. Comprueba tu conexión e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de terminer la configuration de votre compte. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile completare la configurazione del tuo account. Controlla la connessione e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir a configuração da sua conta. Verifique sua conexão e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить настройку аккаунта. Проверьте подключение и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hesabınızın kurulumu tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法完成账户设置。请检查网络连接并重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法完成帳號設定。請檢查網路連線並重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t finish sign-up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrierung konnte nicht abgeschlossen werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo completar el registro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de terminer l’inscription"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile completare la registrazione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir o cadastro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить регистрацию"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıt tamamlanamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法完成注册"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法完成註冊"
+          }
+        }
+      }
+    },
+    "Couldn’t restore your unfinished sign-up. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine unvollständige Registrierung konnte nicht wiederhergestellt werden. Bitte versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo restaurar tu registro pendiente. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de restaurer votre inscription inachevée. Veuillez réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile ripristinare la registrazione incompleta. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível restaurar seu cadastro incompleto. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось восстановить незавершённую регистрацию. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamamlanmamış kaydınız geri yüklenemedi. Lütfen tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法恢复尚未完成的注册。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法還原尚未完成的註冊。請重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t save your profile details. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Profildaten konnten nicht gespeichert werden. Bitte versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar los datos de tu perfil. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer les informations de votre profil. Veuillez réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i dati del tuo profilo. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar os dados do seu perfil. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить данные профиля. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil bilgileriniz kaydedilemedi. Lütfen tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的个人资料。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法儲存你的個人資料。請重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t save your sign-up progress on this device. Free up some space and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Registrierungsfortschritt konnte nicht auf diesem Gerät gespeichert werden. Gib Speicherplatz frei und versuche es erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar el progreso de tu registro en este dispositivo. Libera espacio e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer la progression de votre inscription sur cet appareil. Libérez de l’espace et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i progressi della registrazione su questo dispositivo. Libera spazio e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar o progresso do cadastro neste dispositivo. Libere espaço e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить ход регистрации на этом устройстве. Освободите место и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıt ilerlemeniz bu cihaza kaydedilemedi. Yer açıp tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法在此设备上保存注册进度。请释放一些空间后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法在此裝置上儲存註冊進度。請釋放一些空間後重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t upload your photo. Please try again or choose another photo." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Foto konnte nicht hochgeladen werden. Versuche es erneut oder wähle ein anderes Foto."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo subir tu foto. Inténtalo de nuevo o elige otra foto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’envoyer votre photo. Réessayez ou choisissez une autre photo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare la tua foto. Riprova o scegli un’altra foto."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar sua foto. Tente novamente ou escolha outra foto."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить фото. Повторите попытку или выберите другое фото."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğrafınız yüklenemedi. Tekrar deneyin veya başka bir fotoğraf seçin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法上传你的照片。请重试或选择其他照片。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法上傳你的照片。請重試或選擇其他照片。"
+          }
+        }
+      }
+    },
+    "Finish signing up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrierung abschließen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Termina de registrarte"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminer l’inscription"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completa la registrazione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Concluir cadastro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Завершите регистрацию"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydı tamamla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成注册"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成註冊"
+          }
+        }
+      }
+    },
+    "Your sign-up was interrupted.\nTap Retry to finish." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Registrierung wurde unterbrochen.\nTippe auf „Erneut versuchen“, um sie abzuschließen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu registro se interrumpió.\nToca Reintentar para terminar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre inscription a été interrompue.\nTouchez Réessayer pour la terminer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La registrazione è stata interrotta.\nTocca Riprova per completarla."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu cadastro foi interrompido.\nToque em Tentar novamente para concluir."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Регистрация была прервана.\nНажмите «Повторить», чтобы завершить её."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydınız kesintiye uğradı.\nTamamlamak için Tekrar dene’ye dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "注册已中断。\n轻点“重试”以完成注册。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "註冊已中斷。\n點一下「重試」以完成註冊。"
+          }
+        }
+      }
+    },
+    "Start over" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu anfangen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar de nuevo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommencer"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricomincia"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recomeçar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать заново"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baştan başla"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新开始"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新開始"
+          }
+        }
+      }
+    },
+    "Start over?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neu anfangen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Empezar de nuevo?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommencer ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricominciare?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recomeçar?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Начать заново?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baştan başlansın mı?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新开始？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新開始？"
+          }
+        }
+      }
+    },
+    "This will discard your name, bio, photo, and unfinished account from this device. Anything already uploaded or published may remain online." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch werden dein Name, deine Beschreibung, dein Foto und dein unvollständiges Konto von diesem Gerät entfernt. Bereits hochgeladene oder veröffentlichte Inhalte können online bleiben."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se eliminarán de este dispositivo tu nombre, biografía, foto y cuenta sin terminar. Lo que ya se haya subido o publicado podría permanecer en línea."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre nom, votre biographie, votre photo et votre compte inachevé seront supprimés de cet appareil. Les éléments déjà téléversés ou publiés peuvent rester en ligne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il nome, la biografia, la foto e l’account incompleto verranno rimossi da questo dispositivo. I contenuti già caricati o pubblicati potrebbero restare online."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu nome, biografia, foto e conta inacabada serão removidos deste dispositivo. O que já foi enviado ou publicado pode permanecer online."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваше имя, описание, фото и незавершённый аккаунт будут удалены с этого устройства. Уже загруженные или опубликованные данные могут остаться в интернете."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adınız, biyografiniz, fotoğrafınız ve tamamlanmamış hesabınız bu cihazdan kaldırılacak. Önceden yüklenen veya yayınlanan içerikler internette kalabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这将从此设备中移除你的姓名、简介、照片和未完成注册的账号。已上传或发布的内容可能仍会保留在网上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這會從此裝置移除你的姓名、簡介、照片及尚未完成註冊的帳號。已上傳或發佈的內容可能仍會保留在線上。"
+          }
+        }
+      }
+    },
+    "Couldn’t restart sign-up" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrierung konnte nicht neu gestartet werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo reiniciar el registro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de recommencer l’inscription"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile ricominciare la registrazione"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível reiniciar o cadastro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось начать регистрацию заново"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıt yeniden başlatılamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法重新开始注册"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法重新開始註冊"
+          }
+        }
+      }
+    },
+    "Couldn’t restart sign-up. Please try again to finish clearing your progress." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Registrierung konnte nicht neu gestartet werden. Versuche es erneut, um das Löschen deines Fortschritts abzuschließen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo reiniciar el registro. Inténtalo de nuevo para terminar de borrar tu progreso."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de recommencer l’inscription. Réessayez pour terminer la suppression de votre progression."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile ricominciare la registrazione. Riprova per completare la cancellazione dei progressi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível reiniciar o cadastro. Tente novamente para concluir a remoção do seu progresso."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось начать регистрацию заново. Повторите попытку, чтобы завершить удаление сохранённых данных."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kayıt yeniden başlatılamadı. İlerlemenizi silmeyi tamamlamak için tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法重新开始注册。请重试以完成清除注册进度。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法重新開始註冊。請重試以完成清除註冊進度。"
+          }
+        }
+      }
+    },
+    "Restarting sign-up wasn’t finished.\nTap Retry to start fresh." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Neustart der Registrierung wurde nicht abgeschlossen.\nTippe auf „Erneut versuchen“, um neu anzufangen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se terminó de reiniciar el registro.\nToca Reintentar para empezar de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le redémarrage de l’inscription n’est pas terminé.\nTouchez Réessayer pour repartir de zéro."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il riavvio della registrazione non è stato completato.\nTocca Riprova per ricominciare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O reinício do cadastro não foi concluído.\nToque em Tentar novamente para recomeçar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Перезапуск регистрации не завершён.\nНажмите «Повторить», чтобы начать заново."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydı yeniden başlatma tamamlanmadı.\nBaştan başlamak için Tekrar dene’ye dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未完成重新开始注册。\n轻点“重试”以重新开始。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未完成重新開始註冊。\n點一下「重試」以重新開始。"
+          }
+        }
+      }
+    },
+    "Couldn’t upload photo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foto konnte nicht hochgeladen werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo subir la foto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’envoyer la photo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile caricare la foto"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar a foto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить фото"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fotoğraf yüklenemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法上传照片"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法上傳照片"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"

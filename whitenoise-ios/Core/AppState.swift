@@ -379,6 +379,12 @@ final class AppState {
     /// reactivation awaits so rapid repeated taps cannot start duplicate sign-ins.
     /// MainActor-owned; mutated only by `activateAccount`.
     private var activatingAccountRefs = Set<String>()
+    @ObservationIgnored let signUpDraftStore: SignUpDraftStore
+    @ObservationIgnored var hasRestoredSignUp = false
+    @ObservationIgnored var signUpRestorationTask: Task<Void, Error>?
+    var signUpModel = CreateIdentityViewModel()
+    var restoreSignUpPresentation = false
+
     @ObservationIgnored private var pendingAccountSetupReadiness: [String: AccountSetupReadinessFfi] = [:]
     /// Scene-phase flag. Owned here (not on `RuntimeLifecycle`) because many
     /// non-lifecycle gates read it (notification presentation, settings reads,
@@ -499,6 +505,7 @@ final class AppState {
         client: MarmotClient?,
         notifications: AppNotifications,
         conversationDraftStore: ConversationDraftStore? = nil,
+        signUpDraftStore: SignUpDraftStore? = nil,
         accountDefaults: UserDefaults = .standard,
         // Default arguments evaluate in a nonisolated context and `UserDefaults`
         // is not Sendable, so the MainActor store is resolved in the body.
@@ -520,6 +527,7 @@ final class AppState {
         )
         self.accountStore = AccountStore(defaults: accountDefaults)
         self.notifications = notifications
+        self.signUpDraftStore = signUpDraftStore ?? SignUpDraftStore()
         self.conversationDraftStore = conversationDraftStore ?? ConversationDraftStore()
         self.erasureState = AppDataErasureState(
             defaults: erasureDefaults ?? AppDataErasureState.persistentDefaults,
@@ -1055,6 +1063,8 @@ final class AppState {
         do {
             pendingAccountSetup?.suspend()
             await pendingAccountSetup?.drain()
+            signUpRestorationTask?.cancel()
+            _ = try? await signUpRestorationTask?.value
             await runtimeLifecycle.prepareForAppErasure()
             let stored = try await erasingClient.listAccounts()
             for account in stored {
@@ -1073,6 +1083,10 @@ final class AppState {
                 throw ForegroundRuntimeMutationError.runtimeUnavailable
             }
             try await runtimeLifecycle.closeForAppErasure()
+            try await signUpDraftStore.clear(id: signUpModel.draft.id)
+            signUpModel = CreateIdentityViewModel()
+            hasRestoredSignUp = false
+            restoreSignUpPresentation = false
             await RemoteAvatarImageLoader.clearCachesAndDrain()
             await GroupAvatarImageLoader.clearCachesAndDrain()
             let root = URL(fileURLWithPath: erasingClient.rootPath, isDirectory: true)
@@ -1367,6 +1381,7 @@ final class AppState {
         let attemptRevision = signInAttempts.revision
         let client = try runtimeClient()
         let localAccounts = try await client.listAccounts()
+        try await restoreSignUpIfNeeded(accounts: localAccounts, client: client)
         var readyAccounts: [AccountSummaryFfi] = []
         var unfinished: [OnboardingSnapshotFfi] = []
         var recoveryAccounts: [AccountSummaryFfi] = []
@@ -1401,6 +1416,7 @@ final class AppState {
         // An older account read must not discard a sign-in begun while it awaited storage.
         guard pendingAccountSetup === setupAtReadStart, signInAttempts.revision == attemptRevision else { return }
         // Stage the usable accounts; neither guess readiness nor synthesize missing checkpoints.
+        readyAccounts.removeAll { isUnfinishedSignUpAccount($0.accountIdHex) }
         accountStore.accounts = readyAccounts
         if let activeAccountRef, !readyAccounts.contains(where: { $0.label == activeAccountRef }) {
             self.activeAccountRef = nil
@@ -1650,7 +1666,46 @@ final class AppState {
     }
 
     @MainActor
+    func waitForIdentityProfileSetup(accountRef: String, retry: Bool) async throws {
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        let client = lease.client
+        let readiness = try await client.accountSetupReadiness(accountRef: accountRef)
+        if retry, readiness == .localReady || readiness == .publishing {
+            // MDK start resumes journaled setup after its bounded retries stop.
+            // Calling creation again could create another account if setup just finished.
+            try Task.checkCancellation()
+            try await client.marmot.start()
+        }
+        try await IdentitySetupReadinessWaiter.wait {
+            try await client.accountSetupReadiness(accountRef: accountRef)
+        }
+        pendingAccountSetupReadiness[accountRef] = .networkReady
+    }
+
+    @MainActor
+    func removeUnfinishedSignUpAccount(_ account: AccountSummaryFfi) async throws {
+        guard !isSigningOut, account.localSigning,
+              activeAccountRef != account.label,
+              isUnfinishedSignUpAccount(account.accountIdHex) else {
+            throw SignUpDraftStore.Failure.accountUnavailable
+        }
+        let lease = try runtimeLifecycle.beginForegroundRuntimeMutation()
+        defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
+        isSigningOut = true
+        defer {
+            finishAccountExit()
+            scheduleNativePushRegistrationIfEnabled()
+        }
+        await notificationCoordinator.cancelNativePushRegistrationTask()
+        _ = try? await lease.client.marmot.clearPushRegistration(accountRef: account.label)
+        try await lease.client.marmot.removeAccount(accountRef: account.label)
+        pendingAccountSetupReadiness.removeValue(forKey: account.label)
+    }
+
+    @MainActor
     func completeIdentityProfileSetup(_ summary: AccountSummaryFfi) async {
+        restoreSignUpPresentation = false
         await productAnalytics.record(.onboarding(.complete, .create, .success), ticket: productOnboardingTicket)?.value
         productOnboardingTicket = nil
         productOnboardingPath = nil

@@ -20,7 +20,7 @@ struct ChatsListView: View {
                     activeAccountRef: appState.activeAccountRef,
                     runtimeReady: appState.canUseRuntimeForLocalForegroundWork
                 )
-                || appState.pendingWipeReport != nil,
+                || appState.pendingWipeReport != nil || appState.restoreSignUpPresentation,
             runtimeReady: appState.canUseRuntimeForLocalForegroundWork && appState.activeAccountRef != nil,
             chatNavigationPending: appState.pendingChatId != nil
         )

@@ -36,6 +36,18 @@ struct RootView: View {
         rootContent(presentation)
         .animation(.smooth(duration: 0.25), value: presentation)
         .toastHost()
+        .sheet(isPresented: Binding(
+            get: { appState.restoreSignUpPresentation && appState.phaseOwnsLiveRuntime },
+            set: { presented in
+                appState.restoreSignUpPresentation = presented
+                if !presented { appState.closeSignUpDraft() }
+            }
+        )) {
+            NavigationStack { CreateIdentityView() }
+                .appAppearance()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .task(id: appState.runtimeEventsGeneration) {
             await appState.observeRuntimeEvents()
         }

@@ -13,10 +13,17 @@ struct CreateIdentityView: View {
 struct IdentityProfileSetupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var model = CreateIdentityViewModel()
+    @State private var isFormReady: Bool
+    @State private var submissionTask: Task<Void, Never>?
     @State private var showPhotoMenu = false
     @State private var isKeyboardVisible = false
+    @State private var confirmsStartOver = false
+    @State private var isRestarting = false
+    @State private var restartError: String?
+    @State private var signUpFailure: CreateIdentityViewModel.Failure?
     @FocusState private var nameFocused: Bool
     @FocusState private var aboutFocused: Bool
 
@@ -28,64 +35,24 @@ struct IdentityProfileSetupView: View {
     init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
         self.isPushed = isPushed
         self.accountSetup = accountSetup
+        _isFormReady = State(initialValue: accountSetup != nil)
+    }
+
+    private var importedProfileStatus: OnboardingStatusFfi? {
+        accountSetup?.snapshot.steps.first { $0.step == .profile }?.status
     }
 
     private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
-    private var isBusy: Bool { model.isBusy || (accountSetup?.isBusy ?? false) }
+    private var isBusy: Bool { isRestarting || model.isBusy || (accountSetup?.isBusy ?? false) }
     private var allowsBackNavigation: Bool {
-        accountSetup == nil ? model.allowsBackNavigation : !isSaving
+        !isRestarting && (accountSetup == nil ? model.allowsBackNavigation : !isSaving)
     }
 
-    var body: some View {
-        @Bindable var model = model
-
-        Form {
-            avatarSection
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-            Section {
-                WNInput(
-                    placeholder: L10n.string("Name"),
-                    text: $model.displayName,
-                    submitLabel: .next,
-                    autocapitalization: .words,
-                    disablesAutocorrection: false,
-                    focus: $nameFocused,
-                    onSubmit: { aboutFocused = true }
-                )
-                .textContentType(.name)
-                .wnInputRow()
-            } header: {
-                Text("Name").wnSectionHeader()
-            }
-
-            Section {
-                WNInput(
-                    placeholder: L10n.string("A little about you"),
-                    text: $model.about,
-                    kind: .multiline(3 ... 6),
-                    autocapitalization: .sentences,
-                    disablesAutocorrection: false,
-                    focus: $aboutFocused
-                )
-                .accessibilityLabel("About")
-                .wnInputRow()
-            } header: {
-                Text("About").wnSectionHeader()
-            }
-
-            if let failureMessage = setupSaveError ?? model.failureMessage {
-                Section {
-                    Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.callout)
-                }
-            }
-        }
-        .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
+    private var profileEditor: some View {
+        profileForm
+        .disabled(isRestarting || model.isSubmitting || model.isResetting || isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
         .wnPhotoSourceMenu(
             isPresented: $showPhotoMenu,
             hasPhoto: model.avatarDraft != nil,
@@ -102,6 +69,48 @@ struct IdentityProfileSetupView: View {
                 }
             }
         )
+    }
+
+    private var presentedEditor: some View {
+        Group {
+            if isFormReady {
+                profileEditor
+            } else {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .alert(restartError == nil ? L10n.string("Start over?") : L10n.string("Couldn’t restart sign-up"),
+               isPresented: $confirmsStartOver) {
+            Button(restartError == nil ? L10n.string("Start over") : L10n.string("Retry"), role: .destructive, action: restartSignUp)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(restartError ?? L10n.string("This will discard your name, bio, photo, and unfinished account from this device. Anything already uploaded or published may remain online."))
+        }
+        .onChange(of: model.failure, initial: true) {
+            if isFormReady, let failure = model.failure { presentFailure(failure) }
+        }
+        .alert("Couldn’t add photo", isPresented: Binding(
+            get: { model.avatarError != nil }, set: { if !$0 { model.clearAvatarError() } }
+        )) {
+            Button("Close", role: .cancel) {}
+        } message: { Text(model.avatarError ?? "") }
+        .alert(signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"), isPresented: Binding(
+            get: { signUpFailure != nil },
+            set: { if !$0 { signUpFailure = nil } }
+        ), presenting: signUpFailure) { failure in
+            Button("Retry") { submitProfile() }
+            Button(failure == .photoUpload ? L10n.string("Cancel") : L10n.string("Close"), role: .cancel) {}
+        } message: { failure in
+            Text(failure.message)
+        }
+    }
+
+    var body: some View {
+        presentedEditor
+        .onChange(of: model.displayName) { saveDraftChanges() }
+        .onChange(of: model.about) { saveDraftChanges() }
+        .onChange(of: model.avatarDraft) { saveDraftChanges() }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()
@@ -109,86 +118,198 @@ struct IdentityProfileSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            if allowsBackNavigation {
+            if isFormReady && allowsBackNavigation {
                 ToolbarItem(placement: .cancellationAction) {
                     WNIconButton(
                         title: isPushed ? "Back" : "Close",
                         systemImage: isPushed ? "chevron.backward" : "xmark",
                         chrome: .container
                     ) {
+                        if accountSetup == nil { appState.closeSignUpDraft() }
                         dismiss()
                     }
                 }
             }
-        }
-        .interactiveDismissDisabled(!allowsBackNavigation)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if accountSetup != nil || !isKeyboardVisible {
-                VStack(spacing: 8) {
-                    WNButton(
-                        title: LocalizedStringKey(primaryActionTitle),
-                        isLoading: isSaving || model.isSubmitting
-                    ) {
-                        nameFocused = false
-                        aboutFocused = false
-                        Task {
-                            if let accountSetup {
-                                await saveImportedProfile(using: accountSetup)
-                            } else if model.phase == .creationFailed {
-                                await model.prepare(using: appState)
-                            } else {
-                                await model.submit(using: appState, dismiss: { dismiss() })
-                            }
+            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !model.isResetPending {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Start over", role: .destructive) {
+                            nameFocused = false; aboutFocused = false
+                            restartError = nil
+                            confirmsStartOver = true
                         }
+                    } label: {
+                        Image(systemName: "ellipsis")
                     }
-                    .disabled(isBusy || !hasValidName || (accountSetup != nil && accountSetup?.isConnected != true))
-                    .accessibilityLabel(primaryActionTitle)
-                    .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
-                    .accessibilityValue(isSaving || model.isSubmitting ? "In progress" : "")
-
-                    if accountSetup != nil {
-                        Text("Saving publishes these details to your public profile.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-
-                    if accountSetup == nil && model.phase == .profileSaveFailed {
-                        Button("Continue") {
-                            Task {
-                                await model.continueWithoutSaving(
-                                    using: appState,
-                                    dismiss: { dismiss() }
-                                )
-                            }
-                        }
-                        .controlSize(.large)
-                        .disabled(model.isBusy)
-                    }
+                    .accessibilityLabel("More")
+                    .disabled(isBusy)
                 }
-                .safeAreaPadding(.horizontal)
-                .padding(.vertical)
-                .safeAreaPadding(.bottom)
-                .background(Color(.systemBackground))
             }
         }
+        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isFormReady && (accountSetup != nil || !isKeyboardVisible) {
+                profileActions
+                    .safeAreaPadding(.horizontal, 16)
+                    .safeAreaPadding(.bottom)
+            }
+        }
+        // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
+        .onDisappear { submissionTask?.cancel() }
+        .onChange(of: scenePhase) {
+            if scenePhase == .background { submissionTask?.cancel() }
+        }
         .trackKeyboardVisibility($isKeyboardVisible)
-        .onChange(of: accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status) {
-            if hasSubmittedProfile, accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status == .passed {
+        .onChange(of: importedProfileStatus) {
+            if hasSubmittedProfile, importedProfileStatus == .passed {
                 dismiss()
             }
         }
-        .task {
-            if let profile = accountSetup?.snapshot.proposal?.profile {
-                model.displayName = profile.displayName ?? profile.name ?? ""
-                model.about = profile.about ?? ""
-            } else if accountSetup == nil {
-                await model.prepare(using: appState)
-            }
+        .task(id: accountSetup == nil ? scenePhase : .active) {
+            await prepareForm()
         }
         .background {
             Color(.systemBackground)
                 .ignoresSafeArea()
+        }
+    }
+
+    private func prepareForm() async {
+        guard accountSetup != nil || scenePhase == .active else { return }
+        if let profile = accountSetup?.snapshot.proposal?.profile {
+            model.displayName = profile.displayName ?? profile.name ?? ""
+            model.about = profile.about ?? ""
+        } else if accountSetup == nil {
+            await appState.openSignUpDraft()
+            let preparedModel = appState.signUpModel
+            if preparedModel.isResetPending { isFormReady = false }
+            await preparedModel.prepare(using: appState)
+            guard !Task.isCancelled else { return }
+            await preparedModel.persistDraft()
+            guard !Task.isCancelled else { return }
+            // Reveal the model only after reset cleanup and name preparation settle.
+            model = preparedModel
+            isFormReady = true
+            if let failure = model.failure { presentFailure(failure) }
+        }
+    }
+
+    private var profileForm: some View {
+        @Bindable var model = model
+        return Form {
+            avatarSection
+                .disabled(model.isResetPending)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+
+            Section {
+                WNInput(
+                    placeholder: L10n.string("Name"),
+                    text: $model.displayName,
+                    submitLabel: .next,
+                    autocapitalization: .words,
+                    disablesAutocorrection: false,
+                    focus: $nameFocused,
+                    onSubmit: { aboutFocused = true }
+                )
+                .textContentType(.name)
+                .disabled(model.isResetPending)
+                .wnInputRow()
+            } header: {
+                Text("Name").wnSectionHeader()
+            }
+
+            Section {
+                WNInput(
+                    placeholder: L10n.string("A little about you"),
+                    text: $model.about,
+                    kind: .multiline(3 ... 6),
+                    autocapitalization: .sentences,
+                    disablesAutocorrection: false,
+                    focus: $aboutFocused
+                )
+                .accessibilityLabel("About")
+                .disabled(model.isResetPending)
+                .wnInputRow()
+            } header: {
+                Text("About").wnSectionHeader()
+            }
+
+            if let failureMessage = setupSaveError {
+                Section {
+                    Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                }
+            }
+        }
+    }
+
+    private var profileActions: some View {
+        VStack(spacing: 8) {
+            WNButton(
+                title: LocalizedStringKey(primaryActionTitle),
+                isLoading: isSaving || model.isSubmitting
+            ) {
+                submitProfile()
+            }
+            .disabled(isBusy || (!hasValidName && !model.isResetPending) || (accountSetup != nil && accountSetup?.isConnected != true))
+            .accessibilityLabel(primaryActionTitle)
+            .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
+            .accessibilityValue(isSaving || model.isSubmitting ? "In progress" : "")
+        }
+    }
+
+    private func saveDraftChanges() {
+        guard isFormReady, accountSetup == nil else { return }
+        Task { await model.persistDraft() }
+    }
+
+    private func presentFailure(_ failure: CreateIdentityViewModel.Failure) {
+        if failure == .restart {
+            if !isRestarting {
+                restartError = failure.message
+                confirmsStartOver = true
+            }
+        } else {
+            signUpFailure = failure
+        }
+    }
+
+    private func restartSignUp() {
+        guard !isBusy else { return }
+        confirmsStartOver = false
+        isRestarting = true
+        nameFocused = false; aboutFocused = false
+        submissionTask = Task {
+            defer { isRestarting = false }
+            if await model.startOver(using: appState) {
+                await model.prepare(using: appState)
+                confirmsStartOver = false
+                restartError = nil
+            } else if !Task.isCancelled, let failure = model.failure {
+                restartError = failure.message
+                confirmsStartOver = true
+            }
+        }
+    }
+
+    private func submitProfile() {
+        if model.isResetPending {
+            restartError = model.failure?.message
+            confirmsStartOver = true
+            return
+        }
+        nameFocused = false; aboutFocused = false
+        submissionTask = Task {
+            if let accountSetup {
+                await saveImportedProfile(using: accountSetup)
+            } else {
+                await model.submit(using: appState, dismiss: { dismiss() })
+                guard !Task.isCancelled, let failure = model.failure else { return }
+                presentFailure(failure)
+            }
         }
     }
 
@@ -203,21 +324,6 @@ struct IdentityProfileSetupView: View {
                     image: model.avatarDraft?.thumbnail,
                     pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
                 )
-            }
-            .disabled(model.isPreparingAvatar)
-
-            if model.isPreparingAvatar {
-                ProgressView("Preparing Photo")
-                    .font(.footnote)
-                    .padding(.top)
-            }
-
-            if let avatarError = model.avatarError {
-                Text(avatarError)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.top)
             }
         }
     }
@@ -244,10 +350,10 @@ struct IdentityProfileSetupView: View {
             if isSaving { return L10n.string("Saving…") }
             return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save")
         }
+        if model.isResetPending { return L10n.string("Start over") }
+        if model.phase == .finishingSetup { return L10n.string("Finishing setup…") }
+        if model.phase == .savingProfile { return L10n.string("Saving…") }
         if model.isSubmitting { return L10n.string("Signing Up…") }
-        if model.phase == .creationFailed || model.phase == .profileSaveFailed {
-            return L10n.string("Retry")
-        }
         return L10n.string("Sign Up")
     }
 
