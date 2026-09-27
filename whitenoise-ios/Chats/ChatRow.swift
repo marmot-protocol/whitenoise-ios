@@ -312,12 +312,13 @@ struct GroupAvatarBubble: View {
     var loadPriority: GroupAvatarLoadPriority = .foreground
     var nativeAsset: AvatarAssetFfi?
     var usesNativeAsset = false
+    var nativeMaxPixelSize = NativeAvatarImageCache.thumbnailPixelSize
 
     @State private var phase = Phase.idle
 
     var body: some View {
         if usesNativeAsset {
-            NativeAvatarBubble(seed: seed, title: title, asset: nativeAsset)
+            NativeAvatarBubble(seed: seed, title: title, asset: nativeAsset, maxPixelSize: nativeMaxPixelSize)
         } else {
             legacyBody
         }
