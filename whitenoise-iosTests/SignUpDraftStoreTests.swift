@@ -20,12 +20,28 @@ struct SignUpDraftStoreTests {
         try await store.save(old)
         let reopened = SignUpDraftStore(directory: directory)
         #expect(try await reopened.load() == draft)
-        let attributes = try FileManager.default.attributesOfItem(atPath: directory.appendingPathComponent("draft.json").path)
-        #expect(attributes[.protectionKey] as? FileProtectionType == .complete)
         try await store.clear(id: draft.id)
         draft.revision = 3
         try await store.save(draft)
         #expect(try await reopened.load() == nil)
+    }
+
+    #if targetEnvironment(simulator)
+    @Test(.disabled("Data Protection attributes require a physical iOS device."))
+    #else
+    @Test
+    #endif
+    func submittedDraftAndDirectoryUseCompleteFileProtection() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        var draft = SignUpDraft()
+        draft.stage = .creating
+        try await store.save(draft)
+        for url in [directory, directory.appendingPathComponent("draft.json")] {
+            let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+            #expect(attributes[.protectionKey] as? FileProtectionType == .complete)
+        }
     }
 
     @Test func unsubmittedFormIsNotSavedAndLegacyDraftIsDiscarded() async throws {
