@@ -68,6 +68,51 @@ struct ProfileEditSaveTests {
         #expect(!model.isPublishing)
     }
 
+    @Test(arguments: [false, true])
+    func stalePhotoUploadCannotReplaceAnotherAccountsPicture(reloadsEditor: Bool) async throws {
+        let model = loadedModel()
+        var activeAccount = "account"
+        let draft = GroupImageUploadDraft(data: Data([1]), mediaType: "image/jpeg", sourceURL: nil,
+                                          dim: nil, thumbhash: nil, thumbnail: nil)
+        await #expect(throws: CancellationError.self) {
+            try await model.updatePicture(with: draft, accountIdHex: "account",
+                                          isCurrentAccount: { activeAccount == "account" }) { _ in
+                activeAccount = "other"
+                if reloadsEditor { model.beginLoadAttempt(accountIdHex: "other") }
+                model.picture = "https://example.com/other.jpg"
+                return "https://example.com/stale.jpg"
+            }
+        }
+        #expect(model.picture == "https://example.com/other.jpg")
+        #expect(!model.isUploadingPicture)
+    }
+
+    @Test func successfulPhotoUploadUpdatesOnlyTheLoadedAccount() async throws {
+        let model = loadedModel()
+        let draft = GroupImageUploadDraft(data: Data([1]), mediaType: "image/jpeg", sourceURL: nil,
+                                          dim: nil, thumbhash: nil, thumbnail: nil)
+        try await model.updatePicture(with: draft, accountIdHex: "account", isCurrentAccount: { true }) { _ in
+            "https://example.com/selected.jpg"
+        }
+        #expect(model.picture == "https://example.com/selected.jpg")
+        #expect(!model.isUploadingPicture)
+    }
+
+    @Test func cancelEditingRestoresOnlyItsOriginalAccountAndLoad() {
+        let model = loadedModel()
+        let snapshot = ProfileEditDraftSnapshot(model: model)
+        model.displayName = "New edit"
+        snapshot.restore(model, activeAccountID: "other")
+        #expect(model.displayName == "New edit")
+        snapshot.restore(model, activeAccountID: "account")
+        #expect(model.displayName == "Edited name")
+        let ticket = model.beginLoadAttempt(accountIdHex: "account")
+        model.applyLoadOutcome(.enableFirstPublish, accountIdHex: "account", profile: nil, ticket: ticket)
+        model.displayName = "Fresh draft"
+        snapshot.restore(model, activeAccountID: "account")
+        #expect(model.displayName == "Fresh draft")
+    }
+
     @Test func duplicateSaveAndStaleCompletionCannotExitEditing() async {
         let model = loadedModel()
         let saved = await model.publish(accountIdHex: "account", isCurrentAccount: { true }) { _ in

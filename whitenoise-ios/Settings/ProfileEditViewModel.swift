@@ -174,30 +174,45 @@ final class ProfileEditViewModel {
         with draft: GroupImageUploadDraft?,
         using appState: AppState
     ) async throws {
-        guard !isUploadingPicture, !isPublishing else {
-            throw ProfileImageUploadError.unavailable
-        }
         guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex,
-              loadedAccountIdHex == accountIdHex
-        else {
+              let accountIdHex = appState.activeAccount?.accountIdHex else {
             throw ProfileImageUploadError.unavailable
         }
+        try await updatePicture(
+            with: draft,
+            accountIdHex: accountIdHex,
+            isCurrentAccount: { appState.activeAccount?.accountIdHex == accountIdHex }
+        ) { draft in
+            let client = try appState.currentMarmotClient()
+            return try await client.uploadProfileImage(
+                accountRef: accountRef, data: draft.data, mediaType: draft.mediaType, blossomServer: nil
+            )
+        }
+    }
 
+    func updatePicture(
+        with draft: GroupImageUploadDraft?,
+        accountIdHex: String,
+        isCurrentAccount: () -> Bool,
+        upload: (GroupImageUploadDraft) async throws -> String
+    ) async throws {
+        guard !isUploadingPicture, !isPublishing,
+              loadedAccountIdHex == accountIdHex, isCurrentAccount() else {
+            throw ProfileImageUploadError.unavailable
+        }
+        try Task.checkCancellation()
         guard let draft else {
             picture = ""
             return
         }
-
+        let ticket = loadTicket
         isUploadingPicture = true
         defer { isUploadingPicture = false }
-        let client = try appState.currentMarmotClient()
-        let uploadedURL = try await client.uploadProfileImage(
-            accountRef: accountRef,
-            data: draft.data,
-            mediaType: draft.mediaType,
-            blossomServer: nil
-        )
+        let uploadedURL = try await upload(draft)
+        try Task.checkCancellation()
+        guard loadTicket == ticket, loadedAccountIdHex == accountIdHex, isCurrentAccount() else {
+            throw CancellationError()
+        }
         guard let normalizedURL = ContentSanitizer.imageURL(uploadedURL)?.absoluteString else {
             throw ProfileImageUploadError.invalidReturnedURL
         }
