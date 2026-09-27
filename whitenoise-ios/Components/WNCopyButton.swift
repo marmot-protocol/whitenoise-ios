@@ -26,6 +26,7 @@ struct WNCopyButton<Label: View>: View {
             label(copied)
         }
         .accessibilityLabel(copied ? L10n.string("Copied") : accessibilityTitle)
+        .accessibilityInputLabels([Text(accessibilityTitle)])
         .onChange(of: value) { clearFeedback() }
         .onDisappear(perform: clearFeedback)
     }
