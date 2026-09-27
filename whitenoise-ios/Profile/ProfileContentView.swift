@@ -51,6 +51,7 @@ struct ProfileContentView: View {
     @State private var showAddToGroup = false
     @State private var blockedUsers = BlockedUsersModel()
     @State private var blockReload = 0
+    @State private var showsAvatarViewer = false
 
     var body: some View {
         List {
@@ -140,12 +141,16 @@ struct ProfileContentView: View {
                 bottomPadding: 0,
                 showsIdentityValues: about == nil
             ) { size in
-                AvatarBubble(
-                    seed: model.hex ?? npub,
-                    title: title,
-                    pictureURL: ContentSanitizer.imageURL(effectiveProfile?.picture)
-                )
-                .frame(width: size, height: size)
+                Button {
+                    showsAvatarViewer = true
+                } label: {
+                    profileAvatar.frame(width: size, height: size)
+                }
+                .buttonStyle(.plain)
+                .disabled(profilePictureURL == nil)
+            }
+            .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
+                profileAvatar.frame(width: size, height: size)
             }
             if model.hex == nil {
                 Label("Couldn't read this profile code.", systemImage: "exclamationmark.triangle")
@@ -155,6 +160,14 @@ struct ProfileContentView: View {
         }
         .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets())
+    }
+
+    private var profilePictureURL: URL? {
+        ContentSanitizer.imageURL(effectiveProfile?.picture)
+    }
+
+    private var profileAvatar: some View {
+        AvatarBubble(seed: model.hex ?? npub, title: title, pictureURL: profilePictureURL)
     }
 
     // MARK: - Actions

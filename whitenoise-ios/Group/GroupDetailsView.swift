@@ -50,6 +50,7 @@ struct GroupDetailsView: View {
     @State private var showMediaLibrary = false
     @State private var showRelays = false
     @State private var showContactProfile = false
+    @State private var showsAvatarViewer = false
     @State private var showAddContactToGroup = false
     @State private var didOpenRequestedAddMembers = false
     @State private var memberProjectionCache = GroupMemberListProjectionCache()
@@ -436,21 +437,32 @@ struct GroupDetailsView: View {
         return Section {
             VStack(spacing: 10) {
                 Group {
-                    if isAdmin {
+                    if hasGroupImage {
+                        Button {
+                            showsAvatarViewer = true
+                        } label: {
+                            groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
+                                .frame(width: 104, height: 104)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.string("Photo"))
+                    } else if isAdmin {
                         Button {
                             model.showGroupImageEditor = true
                         } label: {
                             groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
+                                .frame(width: 104, height: 104)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            !hasGroupImage
-                                ? L10n.string("Set group image")
-                                : L10n.string("Edit group image")
-                        )
+                        .accessibilityLabel(L10n.string("Set group image"))
                     } else {
                         groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
+                            .frame(width: 104, height: 104)
                     }
+                }
+                .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
+                    groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
+                        .frame(width: size, height: size)
                 }
 
                 Text(displayTitle)
@@ -497,7 +509,19 @@ struct GroupDetailsView: View {
             nativeAsset: viewModel.conversationWindow?.header.avatarAsset,
             usesNativeAsset: viewModel.conversationWindow != nil
         )
-        .frame(width: 104, height: 104)
+    }
+
+    private var contactAvatar: some View {
+        NativeAvatarBubble(
+            seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
+            title: contactTitle,
+            asset: viewModel.conversationWindow?.header.avatarAsset
+        )
+    }
+
+    private var hasContactImage: Bool {
+        guard let asset = viewModel.conversationWindow?.header.avatarAsset else { return false }
+        return asset.availability == .ready || asset.availability == .stale
     }
 
     private var contactIdentitySection: some View {
@@ -510,12 +534,16 @@ struct GroupDetailsView: View {
                     nostrAddress: contactNip05,
                     isAddressVerified: contactIdentity.verifiedNip05 == contactNip05
                 ) { size in
-                    NativeAvatarBubble(
-                        seed: contactAccountIdHex ?? viewModel.group.groupIdHex,
-                        title: contactTitle,
-                        asset: viewModel.conversationWindow?.header.avatarAsset
-                    )
-                    .frame(width: size, height: size)
+                    Button {
+                        showsAvatarViewer = true
+                    } label: {
+                        contactAvatar.frame(width: size, height: size)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!hasContactImage)
+                }
+                .wnAvatarViewer(isPresented: $showsAvatarViewer) { size in
+                    contactAvatar.frame(width: size, height: size)
                 }
                 HStack(spacing: 12) {
                     DetailsQuickAction(title: "About") {
