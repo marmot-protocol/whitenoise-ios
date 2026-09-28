@@ -27,6 +27,9 @@ extension AppState {
             if let identity, draft.stage != .resetting {
                 draft.accountID = identity.accountIdHex
                 draft.accountRef = identity.label
+#if DEBUG
+                try await beforeSignUpRestorationReadForTesting?()
+#endif
                 profile = try await client.userProfileForEditing(accountIdHex: identity.accountIdHex)
                 let readiness = try await client.accountSetupReadiness(accountRef: identity.label)
                 try Task.checkCancellation()
@@ -48,7 +51,11 @@ extension AppState {
             await signUpModel.configurePersistence(store: signUpDraftStore, restored: draft, identity: identity, profile: profile)
             restoreSignUpPresentation = true
             hasRestoredSignUp = true
-        } catch is SignUpDraftStore.Failure {
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as MarmotKitError where error.isTransientStartupReadinessFailure {
+            throw error
+        } catch {
             try Task.checkCancellation()
             guard self.client === client else { throw CancellationError() }
             await signUpModel.configureRestorationFailure(store: signUpDraftStore, restored: saved)

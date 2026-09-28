@@ -628,6 +628,109 @@ struct CreateIdentityOnboardingTests {
         #expect(try await store.load() == nil)
     }
 
+    @Test func restorationReadFailureBlocksOnlyTheRecordedSignUpAccount() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        let identity = CreateIdentityServiceStub().identity
+        var draft = SignUpDraft()
+        draft.stage = .setup
+        draft.accountID = identity.accountIdHex
+        draft.accountRef = identity.label
+        try await store.save(draft)
+        let client = try MarmotClient.testClient()
+        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
+        state.beforeSignUpRestorationReadForTesting = { throw MarmotKitError.Io(details: "Unreadable profile") }
+
+        try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
+
+        #expect(state.hasRestoredSignUp)
+        #expect(state.restoreSignUpPresentation)
+        #expect(state.signUpModel.isRestorationBlocked)
+        #expect(state.isUnfinishedSignUpAccount(identity.accountIdHex))
+        #expect(!state.isUnfinishedSignUpAccount("unrelated"))
+        await state.signUpModel.persistDraft()
+        #expect(try await store.load() == draft)
+    }
+
+    @Test(arguments: [false, true])
+    func restorationPropagatesCancellationAndTransientStartupErrors(cancelled: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        let identity = CreateIdentityServiceStub().identity
+        var draft = SignUpDraft()
+        draft.stage = .setup
+        draft.accountID = identity.accountIdHex
+        try await store.save(draft)
+        let client = try MarmotClient.testClient()
+        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
+        state.beforeSignUpRestorationReadForTesting = {
+            if cancelled { throw CancellationError() }
+            throw MarmotKitError.RuntimeBusy
+        }
+
+        do {
+            try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
+            Issue.record("Restoration must propagate lifecycle errors so startup can retry")
+        } catch is CancellationError {
+            #expect(cancelled)
+        } catch let error as MarmotKitError {
+            #expect(!cancelled && error.isTransientStartupReadinessFailure)
+        }
+        #expect(!state.hasRestoredSignUp)
+        #expect(!state.signUpModel.isRestorationBlocked)
+        #expect(try await store.load() == draft)
+    }
+
+    @Test func pendingTextEditsFlushTogetherAndPreserveThePhoto() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        var draft = SignUpDraft()
+        draft.stage = .setup
+        draft.displayName = "Alice"
+        draft.photo = .init(data: Self.avatarDraft.data, mediaType: Self.avatarDraft.mediaType,
+                            dim: Self.avatarDraft.dim, thumbhash: Self.avatarDraft.thumbhash)
+        try await store.save(draft)
+        let model = CreateIdentityViewModel()
+        await model.configurePersistence(store: store, restored: draft)
+        for name in ["B", "Bo", "Bob"] {
+            model.displayName = name
+            model.scheduleDraftPersistence(delay: .seconds(60))
+        }
+        model.about = "Updated bio"
+        model.scheduleDraftPersistence(delay: .seconds(60))
+        #expect(try await store.load() == draft)
+
+        await model.persistDraft()
+
+        let saved = try #require(try await store.load())
+        #expect(saved.displayName == "Bob")
+        #expect(saved.about == "Updated bio")
+        #expect(saved.photo == draft.photo)
+    }
+
+    @Test func scheduledTextEditsPersistWithoutClosingTheForm() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        var draft = SignUpDraft()
+        draft.stage = .setup
+        draft.displayName = "Alice"
+        try await store.save(draft)
+        let model = CreateIdentityViewModel()
+        await model.configurePersistence(store: store, restored: draft)
+        model.displayName = "Bob"
+        model.scheduleDraftPersistence(delay: .zero)
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while try await store.load()?.displayName != "Bob", ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(try await store.load()?.displayName == "Bob")
+    }
+
     @Test func editingRestoredCompletionPublishesTheNewValuesBeforeOpeningChats() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

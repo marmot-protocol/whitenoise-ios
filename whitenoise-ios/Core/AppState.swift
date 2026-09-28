@@ -177,6 +177,7 @@ final class AppState {
 #if DEBUG
     @ObservationIgnored var beforeAccountRefreshForTesting: (() async throws -> Void)?
     @ObservationIgnored var beforeOnboardingSnapshotReadForTesting: ((String) async throws -> Void)?
+    @ObservationIgnored var beforeSignUpRestorationReadForTesting: (() async throws -> Void)?
 #endif
 
     func cancelAccountSetup() async -> Bool {

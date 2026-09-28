@@ -150,6 +150,7 @@ final class CreateIdentityViewModel {
     private(set) var draft = SignUpDraft()
     private var draftStore: SignUpDraftStore?
     private var didConfigurePersistence = false
+    @ObservationIgnored private var draftPersistenceTask: Task<Void, Never>?
 
     var displayName = ""
     var about = ""
@@ -234,7 +235,22 @@ final class CreateIdentityViewModel {
         }
     }
 
+    func scheduleDraftPersistence(delay: Duration = .milliseconds(350)) {
+        draftPersistenceTask?.cancel()
+        draftPersistenceTask = nil
+        guard draft.requiresRecovery, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return }
+        draftPersistenceTask = Task { [weak self] in
+            do { try await Task.sleep(for: delay) }
+            catch { return }
+            guard let self, !Task.isCancelled else { return }
+            draftPersistenceTask = nil
+            await persistDraft()
+        }
+    }
+
     func persistDraft() async {
+        draftPersistenceTask?.cancel()
+        draftPersistenceTask = nil
         guard draftStore != nil, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return }
         do { try await checkpoint() }
         catch { failure = .draftStorage }

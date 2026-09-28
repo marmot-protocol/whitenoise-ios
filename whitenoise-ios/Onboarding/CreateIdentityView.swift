@@ -197,9 +197,15 @@ struct IdentityProfileSetupView: View {
             }
         }
         // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
-        .onDisappear { submissionTask?.cancel() }
+        .onDisappear {
+            submissionTask?.cancel()
+            flushDraftChanges()
+        }
         .onChange(of: scenePhase) {
-            if scenePhase == .background { submissionTask?.cancel() }
+            if scenePhase == .background {
+                submissionTask?.cancel()
+                flushDraftChanges()
+            }
         }
         .trackKeyboardVisibility($isKeyboardVisible)
         .onChange(of: importedProfileStatus) {
@@ -305,7 +311,13 @@ struct IdentityProfileSetupView: View {
 
     private func saveDraftChanges() {
         guard isFormReady, accountSetup == nil else { return }
-        Task { await model.persistDraft() }
+        model.scheduleDraftPersistence()
+    }
+
+    private func flushDraftChanges() {
+        guard accountSetup == nil else { return }
+        let draftModel = model
+        Task { await draftModel.persistDraft() }
     }
 
     private func presentFailure(_ failure: CreateIdentityViewModel.Failure) {
