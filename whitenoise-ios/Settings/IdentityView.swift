@@ -192,38 +192,26 @@ private struct EncryptedNsecExportSheet: View {
 /// short form; copies the full value. Gives haptic feedback and a brief
 /// inline "Copied" + checkmark affordance.
 private struct CopyableValueRow: View {
-    let label: String
+    let label: String.LocalizationValue
     let display: String
     let copyValue: String
 
-    @State private var justCopied = false
-
     var body: some View {
-        Button(action: copy) {
+        WNCopyButton(value: copyValue, accessibilityTitle: L10n.formatted("Copy %@", L10n.string(label))) { justCopied in
             LabeledContent {
                 HStack(spacing: 8) {
                     Text(justCopied ? L10n.string("Copied") : display)
                         .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(justCopied ? Color.green : Color.secondary)
-                    Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(justCopied ? Color.primary : Color.secondary)
+                    WNCopyIcon(copied: justCopied)
                         .font(.caption)
-                        .foregroundStyle(justCopied ? Color.green : Color.accentColor)
+                        .foregroundStyle(Color.primary)
                 }
                 .contentShape(.rect)
             } label: {
-                Text(LocalizedStringKey(label))
+                Text(L10n.string(label))
             }
         }
         .buttonStyle(.plain)
-    }
-
-    private func copy() {
-        UIPasteboard.general.string = copyValue
-        Haptics.selection()
-        withAnimation(.smooth(duration: 0.15)) { justCopied = true }
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            withAnimation(.smooth(duration: 0.2)) { justCopied = false }
-        }
     }
 }

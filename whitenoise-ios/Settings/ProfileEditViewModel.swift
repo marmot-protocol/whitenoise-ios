@@ -22,6 +22,7 @@ final class ProfileEditViewModel {
     var isPublishing = false
     var isUploadingPicture = false
     var error: String?
+    var saveError: String?
 
     private(set) var loadedAccountIdHex: String?
     // The reset detector must see every attempt: a failed load never moves
@@ -115,6 +116,7 @@ final class ProfileEditViewModel {
             picture = ""
             nip05 = ""
             error = nil
+            saveError = nil
         }
         return loadTicket
     }
@@ -172,72 +174,96 @@ final class ProfileEditViewModel {
         with draft: GroupImageUploadDraft?,
         using appState: AppState
     ) async throws {
-        guard !isUploadingPicture, !isPublishing else {
-            throw ProfileImageUploadError.unavailable
-        }
         guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex,
-              loadedAccountIdHex == accountIdHex
-        else {
+              let accountIdHex = appState.activeAccount?.accountIdHex else {
             throw ProfileImageUploadError.unavailable
         }
+        try await updatePicture(
+            with: draft,
+            accountIdHex: accountIdHex,
+            isCurrentAccount: { appState.activeAccount?.accountIdHex == accountIdHex }
+        ) { draft in
+            let client = try appState.currentMarmotClient()
+            return try await client.uploadProfileImage(
+                accountRef: accountRef, data: draft.data, mediaType: draft.mediaType, blossomServer: nil
+            )
+        }
+    }
 
+    func updatePicture(
+        with draft: GroupImageUploadDraft?,
+        accountIdHex: String,
+        isCurrentAccount: () -> Bool,
+        upload: (GroupImageUploadDraft) async throws -> String
+    ) async throws {
+        guard !isUploadingPicture, !isPublishing,
+              loadedAccountIdHex == accountIdHex, isCurrentAccount() else {
+            throw ProfileImageUploadError.unavailable
+        }
+        try Task.checkCancellation()
         guard let draft else {
             picture = ""
             return
         }
-
+        let ticket = loadTicket
         isUploadingPicture = true
         defer { isUploadingPicture = false }
-        let client = try appState.currentMarmotClient()
-        let uploadedURL = try await client.uploadProfileImage(
-            accountRef: accountRef,
-            data: draft.data,
-            mediaType: draft.mediaType,
-            blossomServer: nil
-        )
+        let uploadedURL = try await upload(draft)
+        try Task.checkCancellation()
+        guard loadTicket == ticket, loadedAccountIdHex == accountIdHex, isCurrentAccount() else {
+            throw CancellationError()
+        }
         guard let normalizedURL = ContentSanitizer.imageURL(uploadedURL)?.absoluteString else {
             throw ProfileImageUploadError.invalidReturnedURL
         }
         picture = normalizedURL
     }
 
-    func publish(using appState: AppState) async {
-        guard !isPublishing else { return }
+    func publish(using appState: AppState) async -> Bool {
         guard let accountRef = appState.activeAccountRef,
-              let accountIdHex = appState.activeAccount?.accountIdHex,
-              // Never republish fields loaded for a now-inactive account.
-              loadedAccountIdHex == accountIdHex
-        else { return }
-
-        let draft = currentDraft
-        if draft.validationError != nil {
-            Haptics.error()
-            return
-        }
-        guard let normalizedMetadata = draft.normalizedMetadata else { return }
-
-        isPublishing = true
-        defer { isPublishing = false }
-        error = nil
-
-        do {
+              let accountIdHex = appState.activeAccount?.accountIdHex else { return false }
+        return await publish(
+            accountIdHex: accountIdHex,
+            isCurrentAccount: { appState.activeAccount?.accountIdHex == accountIdHex }
+        ) { metadata in
             let client = try appState.currentMarmotClient()
             _ = try await client.publishUserProfileUsingAccountRelays(
-                accountRef: accountRef,
-                profile: normalizedMetadata.ffi
+                accountRef: accountRef, profile: metadata.ffi
             )
             await appState.reloadProfileProjection(forAccountIdHex: accountIdHex)
-            Haptics.success()
-            appState.present(.success(
-                L10n.string("Profile published"),
-                message: L10n.string("Your kind:0 metadata is live on your account relays.")
-            ))
-        } catch {
-            Haptics.error()
-            appState.present(UserFacingError.toast(title: L10n.string("Couldn't publish profile"), error: error))
         }
     }
+
+    func publish(
+        accountIdHex: String,
+        isCurrentAccount: () -> Bool,
+        operation: (ProfileEditMetadata) async throws -> Void
+    ) async -> Bool {
+        guard !isPublishing, loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
+        let draft = currentDraft
+        guard let metadata = draft.normalizedMetadata else {
+            Haptics.error()
+            return false
+        }
+        let ticket = loadTicket
+        isPublishing = true
+        saveError = nil
+        defer { isPublishing = false }
+        do {
+            try await operation(metadata)
+            guard !Task.isCancelled, loadTicket == ticket,
+                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
+            Haptics.success()
+            return true
+        } catch {
+            guard !Task.isCancelled, loadTicket == ticket,
+                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
+            Haptics.error()
+            saveError = L10n.string("Couldn't publish profile")
+            return false
+        }
+    }
+
 }
 
 nonisolated enum ProfileImageUploadError: LocalizedError {
