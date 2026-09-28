@@ -26,8 +26,10 @@ final class KeyboardInputRegion: UIView {
     }
 
     static func contains(_ point: CGPoint, in window: UIWindow) -> Bool {
-        regions.allObjects.contains { region in
+        let touchedPresentation = presentationOwner(of: window.hitTest(point, with: nil))
+        return regions.allObjects.contains { region in
             guard region.window === window,
+                  presentationOwner(of: region) === touchedPresentation,
                   region.bounds.contains(region.convert(point, from: window)) else { return false }
             var ancestor: UIView? = region
             while let view = ancestor {
@@ -37,6 +39,19 @@ final class KeyboardInputRegion: UIView {
             }
             return true
         }
+    }
+
+    private static func presentationOwner(of view: UIView?) -> UIViewController? {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if var controller = current as? UIViewController {
+                // Child hosting controllers belong to the same presentation; sheets do not.
+                while let parent = controller.parent { controller = parent }
+                return controller
+            }
+            responder = current.next
+        }
+        return nil
     }
 }
 

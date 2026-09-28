@@ -51,4 +51,24 @@ struct KeyboardDismissTapTests {
         region.removeFromSuperview()
         #expect(!KeyboardInputRegion.contains(CGPoint(x: 25, y: 105), in: window))
     }
+
+    @Test func coveredInputDoesNotProtectBackgroundInAnotherPresentation() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        let presenter = UIViewController()
+        window.rootViewController = presenter
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let region = KeyboardInputRegion(frame: CGRect(x: 20, y: 100, width: 280, height: 50))
+        region.isUserInteractionEnabled = false
+        presenter.view.addSubview(region)
+        let point = CGPoint(x: 25, y: 105)
+        #expect(KeyboardInputRegion.contains(point, in: window))
+
+        let sheet = UIViewController()
+        sheet.view.frame = window.bounds
+        window.addSubview(sheet.view)
+        #expect(!KeyboardInputRegion.contains(point, in: window))
+        sheet.view.removeFromSuperview()
+        #expect(KeyboardInputRegion.contains(point, in: window))
+    }
 }
