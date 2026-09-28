@@ -90,6 +90,7 @@ final class ChatsListViewModel {
         let inviterAccountIdHex: String?
         let isMuted: Bool
         let previewText: String?
+        let previewSymbolName: String?
         let previewExpired: Bool
         let draftPreview: String?
         let selectedPreview: SelectedChatPreviewFfi?
@@ -138,6 +139,9 @@ final class ChatsListViewModel {
             self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
+            self.previewSymbolName = isBlockedDirectPeer || previewExpired
+                ? nil
+                : row.lastMessage.flatMap(ChatListAttachmentPresentation.systemImageName(for:))
             self.previewExpired = previewExpired
             self.selectedPreview = prepared?.preview
             var actions = prepared?.actions

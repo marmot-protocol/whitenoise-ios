@@ -140,6 +140,12 @@ enum MessagePreview {
                 mentionDisplayName: mentionDisplayName
             )
         }
+        if let label = ChatListAttachmentPresentation.label(
+            kind: preview.attachmentKind,
+            count: preview.attachmentCount
+        ) {
+            return label
+        }
         return L10n.string("New message")
     }
 
@@ -201,6 +207,41 @@ enum MessagePreview {
             }
         }
         return fileNames
+    }
+}
+
+nonisolated enum ChatListAttachmentPresentation {
+    static func label(kind: ChatListAttachmentKindFfi?, count: UInt32) -> String? {
+        guard kind != nil || count > 0 else { return nil }
+        if count > 1 {
+            let count = Int64(count)
+            switch kind {
+            case .photo: return L10n.plural("%lld images", count)
+            case .video: return L10n.plural("%lld videos", count)
+            case .audio, .file, .mixed, nil: return L10n.plural("%lld media files", count)
+            }
+        }
+        switch kind {
+        case .photo: return L10n.string("Image")
+        case .video: return L10n.string("Video")
+        case .audio: return L10n.string("Audio")
+        case .file, .mixed, nil: return L10n.string("Attachment")
+        }
+    }
+
+    static func systemImageName(kind: ChatListAttachmentKindFfi?, count: UInt32) -> String? {
+        guard kind != nil || count > 0 else { return nil }
+        switch kind {
+        case .photo: return count > 1 ? "photo.on.rectangle" : "photo"
+        case .video: return "video"
+        case .audio: return "waveform"
+        case .file, .mixed, nil: return "paperclip"
+        }
+    }
+
+    static func systemImageName(for preview: ChatListMessagePreviewFfi) -> String? {
+        guard !preview.deleted, preview.kind != MessageSemantics.kindGroupSystem else { return nil }
+        return systemImageName(kind: preview.attachmentKind, count: preview.attachmentCount)
     }
 }
 
