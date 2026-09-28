@@ -34,7 +34,6 @@ nonisolated enum WNPhotoSourceRoute: Equatable {
     }
 }
 
-/// Both avatar controls expose the same native photo-source actions.
 struct WNAvatarPhotoMenu<Preview: View>: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
@@ -59,7 +58,6 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
 }
 
 extension View {
-    /// Routes native menu selections through the shared pickers and crop editor.
     func wnPhotoSourceMenu(
         selection: Binding<WNPhotoMenuAction?>,
         confirmsPublicUpload: Bool,
@@ -128,7 +126,9 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
                     pendingSource = nil
                 }
             } message: {
-                Text("The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy.")
+                Text(
+                    "The photo is uploaded to a public service, and removing it from your profile may not delete the uploaded copy."
+                )
             }
             .sheet(isPresented: $showPhotoPicker) {
                 WNPhotoLibraryCropFlow(
@@ -148,16 +148,11 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
-            .alert("Couldn’t add photo", isPresented: Binding(
-                get: { fileFailure != nil }, set: { if !$0 { fileFailure = nil } }
-            ), presenting: fileFailure) { failure in
-                if failure.canRetry, let failedFileURL {
-                    Button("Retry") { startImport(failedFileURL) }
-                    Button("Close", role: .cancel) {}
-                } else {
-                    Button("Choose Another Photo") { showFileImporter = true }
-                }
-            } message: { failure in Text(failure.message) }
+            .photoSelectionFailureAlert(
+                $fileFailure,
+                retry: failedFileURL.map { url in { startImport(url) } },
+                chooseAnother: { showFileImporter = true }
+            )
             .fullScreenCover(item: $cropSource) { source in
                 NavigationStack {
                     AvatarImageCropEditor(source: source, onCrop: select)
@@ -206,12 +201,7 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
             let data = try await Task.detached(priority: .userInitiated) {
                 try AvatarImageCropper.boundedFileData(from: url)
             }.value
-            let source = try await AvatarImageCropSource(
-                data: data,
-                fileName: url.lastPathComponent,
-                typeIdentifier: nil,
-                sourceURL: url
-            ).prepared()
+            let source = try await AvatarImageCropSource.prepared(data: data, from: url)
             try Task.checkCancellation()
             cropSource = source
         } catch {
@@ -251,14 +241,22 @@ struct WNPhotoLibraryCropFlow: View {
                 if isLoading { ProgressView("Loading…").allowsHitTesting(false) }
             }
             .navigationDestination(item: $source) { source in
-                AvatarImageCropEditor(source: source, onClose: onClose, onChooseAnother: { self.source = nil; item = nil }, onCrop: onCrop)
+                AvatarImageCropEditor(
+                    source: source,
+                    onClose: onClose,
+                    onChooseAnother: {
+                        self.source = nil
+                        item = nil
+                    },
+                    onCrop: onCrop
+                )
             }
         }
-        .alert("Couldn’t add photo", isPresented: Binding(
-            get: { failure != nil }, set: { if !$0 { failure = nil } }
-        ), presenting: failure) { _ in
-            Button("Choose Another Photo") { item = nil }
-        } message: { failure in Text(failure.message) }
+        .photoSelectionFailureAlert(
+            $failure,
+            retry: nil,
+            chooseAnother: { item = nil }
+        )
         .task(id: item) {
             await load(item)
         }
