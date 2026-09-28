@@ -3,6 +3,18 @@ import Testing
 @testable import whitenoise_ios
 
 struct QRScannerFailureTests {
+    @Test func interruptionsExplainTheConditionThatMustChangeBeforeRetry() {
+        let busy = QRScannerFailure.interruption(reason: AVCaptureSession.InterruptionReason.videoDeviceInUseByAnotherClient.rawValue)
+        let multitasking = QRScannerFailure.interruption(reason: AVCaptureSession.InterruptionReason.videoDeviceNotAvailableWithMultipleForegroundApps.rawValue)
+        #expect(busy == .cameraInUse)
+        #expect(multitasking == .requiresFullScreen)
+        #expect(busy.recovery == .retry)
+        #expect(multitasking.recovery == .retry)
+        #expect(QRScannerFailure.interruption(reason: nil) == .interrupted)
+        #expect(QRScannerFailure.interruption(reason: nil).recovery == .retry)
+        #expect(QRScannerFailure.interruption(reason: Int.max) == .interrupted)
+    }
+
     @Test(arguments: [true, false])
     func deniedPermissionOffersSettingsEvenWhenCameraDiscoveryFails(hasCamera: Bool) {
         let failure = QRScannerFailure.preflight(authorization: .denied, hasCamera: hasCamera)

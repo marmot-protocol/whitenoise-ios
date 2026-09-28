@@ -44,6 +44,12 @@ struct QRScannerUnavailableView: View {
             L10n.string("No camera available on this device.")
         case .configurationFailed:
             L10n.string("Couldn't start the camera.")
+        case .cameraInUse:
+            L10n.string("Another app is using the camera. Close it, then try again.")
+        case .requiresFullScreen:
+            L10n.string("Use White Noise full screen, then try scanning again.")
+        case .interrupted:
+            L10n.string("Camera use was interrupted. Wait a moment, then try again.")
         }
     }
 

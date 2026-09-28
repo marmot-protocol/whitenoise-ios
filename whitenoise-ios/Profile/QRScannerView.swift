@@ -96,7 +96,7 @@ final class ScannerViewController: UIViewController {
             self, selector: #selector(captureFailed), name: AVCaptureSession.runtimeErrorNotification, object: session
         )
         NotificationCenter.default.addObserver(
-            self, selector: #selector(captureFailed), name: AVCaptureSession.wasInterruptedNotification, object: session
+            self, selector: #selector(captureInterrupted(_:)), name: AVCaptureSession.wasInterruptedNotification, object: session
         )
     }
 
@@ -129,6 +129,15 @@ final class ScannerViewController: UIViewController {
         Task { @MainActor [weak self] in
             guard let self, viewIfLoaded?.window != nil else { return }
             coordinator?.onError(.configurationFailed)
+        }
+    }
+
+    @objc private func captureInterrupted(_ notification: Notification) {
+        let reason = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
+        let failure = QRScannerFailure.interruption(reason: reason)
+        Task { @MainActor [weak self] in
+            guard let self, viewIfLoaded?.window != nil else { return }
+            coordinator?.onError(failure)
         }
     }
 
