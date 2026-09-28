@@ -15,7 +15,6 @@ struct OnboardingAvatarWebImagePicker: View {
     }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.displayScale) private var displayScale
     @State private var mode = Mode.search
     @State private var query = ""
     @State private var imageURL = ""
@@ -106,9 +105,7 @@ struct OnboardingAvatarWebImagePicker: View {
         } message: { failure in Text(failure.message) }
         .task(id: download.request?.id) {
             guard let request = download.request else { return }
-            await download.load(request) { url in
-                return try await RemoteImageFetch.imageData(for: url, maximumBytes: AvatarImageCropper.maximumEncodedBytes)
-            }
+            await download.load(request)
         }
         .onChange(of: selectedURL) { download.cancel() }
         .onChange(of: imageURL) { download.cancel() }
@@ -314,9 +311,9 @@ struct OnboardingAvatarWebImagePicker: View {
         }
         do {
             try await Task.sleep(for: .milliseconds(350))
-            let image = try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: AvatarImageCropper.maximumEditorPixelSize, scale: displayScale)
+            let source = try await AvatarImageCropSource.downloaded(from: url)
             try Task.checkCancellation()
-            guard url == validatedURL else { return }
+            guard url == validatedURL, let image = source.preparedImage else { return }
             urlPreview = (url, image)
         } catch {
             guard !Task.isCancelled, url == validatedURL else { return }
@@ -346,11 +343,11 @@ struct OnboardingAvatarWebImagePicker: View {
             return
         }
         let issuedQuery = normalizedQuery
-        isSearching = true
-        searchError = nil
         do {
             try await Task.sleep(for: .milliseconds(350))
             try Task.checkCancellation()
+            isSearching = true
+            searchError = nil
             let fetched = try await DuckDuckGoImageSearchClient().search(issuedQuery)
             try Task.checkCancellation()
             guard issuedQuery == normalizedQuery else { return }

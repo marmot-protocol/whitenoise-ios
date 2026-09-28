@@ -548,7 +548,7 @@ struct GroupImageURLSheet: View {
                 Button {
                     startSearch()
                 } label: {
-                    if isSearching || isPreparing {
+                    if isSearching || isPreparing || isDownloading {
                         ProgressView()
                             .controlSize(.small)
                     } else {
@@ -566,6 +566,14 @@ struct GroupImageURLSheet: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+
+            if isDownloading {
+                HStack {
+                    Text("Downloading")
+                    Spacer()
+                    Button("Cancel", action: cancelWebImageLoad)
+                }
+            }
 
             if let searchError {
                 Label(searchError, systemImage: "exclamationmark.triangle.fill")
@@ -594,14 +602,16 @@ struct GroupImageURLSheet: View {
     }
 
     private var isBusy: Bool {
-        isSearching || isPreparing || isSaving
+        isSearching || isPreparing || isDownloading || isSaving
     }
+
+    private var isDownloading: Bool { cropRequest != nil && cropRequest?.source == nil }
 
     private var searchButtonDisabled: Bool {
         Self.preparedSearchQuery(
             searchQuery,
             isSearching: isSearching,
-            isSaving: isPreparing || isSaving
+            isSaving: isPreparing || isDownloading || isSaving
         ) == nil
     }
 
@@ -675,23 +685,16 @@ struct GroupImageURLSheet: View {
         webImageLoad?.cancel()
         let request = GroupImageCropRequest.loading()
         cropRequest = request
-        isPreparing = true
-        progressPhase = .preparing
         webImageLoad = Task {
-            defer {
-                isPreparing = false
-                progressPhase = nil
-            }
             do {
-                let data = try await RemoteImageFetch.imageData(for: result.imageURL, maximumBytes: AvatarImageCropper.maximumEncodedBytes)
+                let source = try await AvatarImageCropSource.downloaded(from: result.imageURL)
                 try Task.checkCancellation()
-                let source = try await AvatarImageCropSource(
-                    data: data, fileName: result.imageURL.lastPathComponent,
-                    typeIdentifier: nil, sourceURL: result.imageURL
-                ).prepared()
+                guard cropRequest?.id == request.id else { return }
+                webImageLoad = nil
                 cropRequest = GroupImageCropRequest.resolving(cropRequest, requestID: request.id, with: source)
             } catch {
                 guard !Task.isCancelled, cropRequest?.id == request.id else { return }
+                webImageLoad = nil
                 cropRequest = GroupImageCropRequest.failing(cropRequest, requestID: request.id)
                 saveError = UserFacingError.message(for: error)
                 Haptics.error()
@@ -702,6 +705,7 @@ struct GroupImageURLSheet: View {
     private func cancelWebImageLoad() {
         webImageLoad?.cancel()
         webImageLoad = nil
+        if isDownloading { cropRequest = nil }
     }
 
     private func prepare(

@@ -31,21 +31,16 @@ final class OnboardingImageDownloadModel {
         failedURL = nil
     }
 
-    func load(_ issued: Request, fetch: @MainActor (URL) async throws -> Data) async {
+    func load(
+        _ issued: Request,
+        fetch: @MainActor (URL, Int) async throws -> Data = { try await RemoteImageFetch.imageData(for: $0, maximumBytes: $1) }
+    ) async {
         guard request?.id == issued.id else { return }
         defer {
             if request?.id == issued.id { request = nil }
         }
         do {
-            let data = try await fetch(issued.url)
-            try Task.checkCancellation()
-            guard request?.id == issued.id else { return }
-            let prepared = try await AvatarImageCropSource(
-                data: data,
-                fileName: issued.url.lastPathComponent,
-                typeIdentifier: nil,
-                sourceURL: issued.url
-            ).prepared()
+            let prepared = try await AvatarImageCropSource.downloaded(from: issued.url, fetch: fetch)
             guard request?.id == issued.id else { return }
             source = prepared
         } catch {

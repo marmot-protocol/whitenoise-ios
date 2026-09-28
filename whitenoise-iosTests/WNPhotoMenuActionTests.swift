@@ -32,6 +32,22 @@ struct WNPhotoMenuActionTests {
     }
 
     @MainActor
+    @Test func destructiveSymbolUsesTheCurrentContrastVariant() throws {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(traitsFrom: [
+                UITraitCollection(userInterfaceStyle: style),
+                UITraitCollection(accessibilityContrast: .high)
+            ])
+            let expected = try #require(UIImage(systemName: "trash"))
+                .withTintColor(UIColor.systemRed.resolvedColor(with: traits), renderingMode: .alwaysOriginal)
+            traits.performAsCurrent {
+                let actual = WNPhotoMenuAction.removePhoto.symbol(for: style == .dark ? .dark : .light, contrast: .increased)
+                #expect(actual.pngData() == expected.pngData())
+            }
+        }
+    }
+
+    @MainActor
     @Test func sourceSymbolsStayNeutralWhenTheNativeHostUsesBlueTint() throws {
         for scheme in [ColorScheme.light, .dark] {
             for action in WNPhotoMenuAction.available(hasPhoto: false) {

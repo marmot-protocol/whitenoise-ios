@@ -19,17 +19,35 @@ struct OnboardingImageDownloadModelTests {
         let model = OnboardingImageDownloadModel()
         model.start(url)
         let request = try #require(model.request)
-        await model.load(request) { _ in Data("not an image".utf8) }
+        await model.load(request) { _, _ in Data("not an image".utf8) }
         #expect(model.request == nil)
         #expect(model.source == nil)
         #expect(model.failure == .unsupported)
+    }
+
+    @Test func previewAndSelectionAcceptAnOriginalLargerThanTwoMegabytes() async throws {
+        var bytes = try validImageData()
+        // A valid image may carry trailing data; downloading still counts every byte.
+        bytes.append(Data(repeating: 0, count: 3 * 1024 * 1024))
+        let fetch: (URL, Int) async throws -> Data = { _, maximumBytes in
+            guard bytes.count <= maximumBytes else { throw URLError(.dataLengthExceedsMaximum) }
+            return bytes
+        }
+        let preview = try await AvatarImageCropSource.downloaded(from: url, fetch: fetch)
+        #expect(preview.preparedImage != nil)
+        let model = OnboardingImageDownloadModel()
+        model.start(url)
+        await model.load(try #require(model.request), fetch: fetch)
+        #expect(model.failure == nil)
+        #expect(model.source?.data == preview.data)
+        #expect(model.source?.preparedImage != nil)
     }
 
     @Test func retryPublishesDownloadedBytesBeforeOpeningCrop() async throws {
         let model = OnboardingImageDownloadModel()
         model.start(url)
         let first = try #require(model.request)
-        await model.load(first) { _ in throw URLError(.notConnectedToInternet) }
+        await model.load(first) { _, _ in throw URLError(.notConnectedToInternet) }
         #expect(model.request == nil)
         #expect(model.source == nil)
         #expect(model.failure == .connection)
@@ -41,7 +59,7 @@ struct OnboardingImageDownloadModelTests {
         #expect(model.failure == nil)
         #expect(model.source == nil)
         let downloadedBytes = try validImageData()
-        await model.load(retry) { _ in downloadedBytes }
+        await model.load(retry) { _, _ in downloadedBytes }
 
         #expect(model.request == nil)
         #expect(model.failure == nil)
@@ -54,11 +72,11 @@ struct OnboardingImageDownloadModelTests {
         let model = OnboardingImageDownloadModel()
         model.start(url)
         let first = try #require(model.request)
-        await model.load(first) { _ in throw URLError(.timedOut) }
+        await model.load(first) { _, _ in throw URLError(.timedOut) }
 
         model.retry()
         let retry = try #require(model.request)
-        await model.load(retry) { _ in throw URLError(.networkConnectionLost) }
+        await model.load(retry) { _, _ in throw URLError(.networkConnectionLost) }
         #expect(model.request == nil)
         #expect(model.source == nil)
         #expect(model.failure == .connection)
@@ -76,7 +94,7 @@ struct OnboardingImageDownloadModelTests {
         let (started, signal) = AsyncStream<Void>.makeStream()
         var completion: CheckedContinuation<Data, any Error>?
         let pending = Task {
-            await model.load(old) { _ in
+            await model.load(old) { _, _ in
                 try await withCheckedThrowingContinuation { continuation in
                     completion = continuation
                     signal.yield(())
@@ -90,7 +108,7 @@ struct OnboardingImageDownloadModelTests {
         model.start(nextURL)
         let next = try #require(model.request)
         let newBytes = try validImageData()
-        await model.load(next) { _ in newBytes }
+        await model.load(next) { _, _ in newBytes }
         if fails {
             completion?.resume(throwing: URLError(.timedOut))
         } else {

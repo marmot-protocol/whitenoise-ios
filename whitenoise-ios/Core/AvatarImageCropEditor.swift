@@ -15,6 +15,18 @@ nonisolated struct AvatarImageCropSource: Identifiable, Sendable, Hashable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 
+    @MainActor
+    static func downloaded(
+        from url: URL,
+        fetch: (URL, Int) async throws -> Data = { try await RemoteImageFetch.imageData(for: $0, maximumBytes: $1) }
+    ) async throws -> Self {
+        let data = try await fetch(url, AvatarImageCropper.maximumEncodedBytes)
+        try Task.checkCancellation()
+        return try await Self(
+            data: data, fileName: url.lastPathComponent, typeIdentifier: nil, sourceURL: url
+        ).prepared()
+    }
+
     func prepared() async throws -> Self {
         try Task.checkCancellation()
         if preparedImage != nil { return self }

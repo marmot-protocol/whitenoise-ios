@@ -37,8 +37,11 @@ nonisolated enum WNPhotoMenuAction: Hashable, CaseIterable {
         self == .removePhoto
     }
 
-    func symbol(for colorScheme: ColorScheme) -> UIImage {
-        let traits = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+    func symbol(for colorScheme: ColorScheme, contrast: ColorSchemeContrast = .standard) -> UIImage {
+        let traits = UITraitCollection(traitsFrom: [
+            UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light),
+            UITraitCollection(accessibilityContrast: contrast == .increased ? .high : .normal)
+        ])
         let color = (isDestructive ? UIColor.systemRed : .label).resolvedColor(with: traits)
         // Native menus can retint template symbols independently of their titles.
         return UIImage(systemName: systemImage)?.withTintColor(color, renderingMode: .alwaysOriginal) ?? UIImage()
@@ -62,6 +65,7 @@ struct WNPhotoMenuButton: View {
 
 struct WNPhotoMenuActions: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var contrast
 
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
@@ -77,7 +81,7 @@ struct WNPhotoMenuActions: View {
                 Label {
                     Text(action.title)
                 } icon: {
-                    Image(uiImage: action.symbol(for: colorScheme))
+                    Image(uiImage: action.symbol(for: colorScheme, contrast: contrast))
                 }
             }
         }
