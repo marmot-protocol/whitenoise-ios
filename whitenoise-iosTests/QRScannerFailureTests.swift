@@ -26,14 +26,14 @@ struct QRScannerFailureTests {
     func restrictionsNeverOfferSettingsOrRetry(hasCamera: Bool) {
         let failure = QRScannerFailure.preflight(authorization: .restricted, hasCamera: hasCamera)
         #expect(failure == .restricted)
-        #expect(failure?.recovery == QRScannerFailure.Recovery.none)
+        #expect(failure?.recovery == .unavailable)
     }
 
     @Test(arguments: [AVAuthorizationStatus.authorized, .notDetermined])
     func missingHardwareDoesNotOfferAnIneffectiveRetry(authorization: AVAuthorizationStatus) {
         let failure = QRScannerFailure.preflight(authorization: authorization, hasCamera: false)
         #expect(failure == .noCamera)
-        #expect(failure?.recovery == QRScannerFailure.Recovery.none)
+        #expect(failure?.recovery == .unavailable)
         #expect(QRScannerFailure.preflight(authorization: authorization, hasCamera: true) == nil)
     }
 }

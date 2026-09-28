@@ -19,7 +19,7 @@ struct QRScannerUnavailableView: View {
                     WNButton(title: "Open Settings", size: .standard, action: openSettings)
                 case .retry:
                     WNButton(title: "Try Again", size: .standard, action: retry)
-                case .none:
+                case .unavailable:
                     EmptyView()
                 }
                 if let settingsFeedback {

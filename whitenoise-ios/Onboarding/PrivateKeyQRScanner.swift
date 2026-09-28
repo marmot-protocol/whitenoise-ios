@@ -1,87 +1,51 @@
-import AVFoundation
 import SwiftUI
-
-private enum PrivateKeyCameraState {
-    case checking, scanning
-    case failed(QRScannerFailure)
-}
 
 struct PrivateKeyQRScanner: View {
     @Environment(\.scenePhase) private var scenePhase
-    @State private var state = PrivateKeyCameraState.checking
+    @State private var failure: QRScannerFailure?
+    @State private var scanSession = UUID()
     @State private var showInvalidCode = false
     @State private var scanAttempt = 0
-    @State private var cameraAttempt = 0
     let onScan: (String) -> Void
 
     var body: some View {
-        cameraContent
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .task(id: scenePhase == .active ? cameraAttempt : nil) {
-                guard scenePhase == .active else {
-                    state = .checking
-                    return
+        Group {
+            if let failure {
+                QRScannerUnavailableView(failure: failure, retry: restartScanner)
+            } else if QRScannerScenePolicy.mountsCamera(in: scenePhase) {
+                PrivateKeyLiveScanner(
+                    scanSession: scanSession,
+                    scanAttempt: scanAttempt,
+                    onScan: onScan,
+                    onError: { failure = $0 },
+                    onInvalidPayload: { showInvalidCode = true }
+                )
+                .overlay {
+                    if QRScannerScenePolicy.coversPreview(in: scenePhase) {
+                        Color.black.ignoresSafeArea()
+                    }
                 }
-                await prepareCamera()
+            } else {
+                ProgressView("Preparing Camera")
             }
-            .alert("Can’t Use This QR Code", isPresented: $showInvalidCode) {
-                Button("Try Again") { scanAttempt += 1 }
-            } message: {
-                Text("This QR code doesn’t contain a private key.")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: scenePhase) { oldPhase, _ in
+            if QRScannerScenePolicy.restartsScanner(leavingPhase: oldPhase, showingFailure: failure != nil) {
+                restartScanner()
             }
-    }
-
-    @ViewBuilder
-    private var cameraContent: some View {
-        switch state {
-        case .checking:
-            ProgressView("Preparing Camera")
-        case .scanning:
-            QRScannerView(
-                onScan: onScan,
-                onError: { state = .failed($0) },
-                validate: ImportIdentityView.isPlausibleNsec,
-                onInvalidPayload: { showInvalidCode = true },
-                scanAttempt: scanAttempt
-            )
-            .ignoresSafeArea()
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-        case .failed(let failure):
-            QRScannerUnavailableView(
-                failure: failure,
-                retry: {
-                    state = .checking
-                    cameraAttempt += 1
-                }
-            )
+        }
+        .alert("Can’t Use This QR Code", isPresented: $showInvalidCode) {
+            Button("Try Again") { scanAttempt += 1 }
+        } message: {
+            Text("This QR code doesn’t contain a private key.")
         }
     }
 
-    private func prepareCamera() async {
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        if let failure = QRScannerFailure.preflight(
-            authorization: status, hasCamera: AVCaptureDevice.default(for: .video) != nil
-        ) {
-            state = .failed(failure)
-            return
-        }
-        switch status {
-        case .authorized:
-            state = .scanning
-        case .notDetermined:
-            let granted = await AVCaptureDevice.requestAccess(for: .video)
-            guard !Task.isCancelled, scenePhase == .active else { return }
-            state = granted ? .scanning : .failed(
-                AVCaptureDevice.authorizationStatus(for: .video) == .restricted ? .restricted : .denied
-            )
-        case .denied:
-            state = .failed(.denied)
-        case .restricted:
-            state = .failed(.restricted)
-        @unknown default:
-            state = .failed(.configurationFailed)
-        }
+    private func restartScanner() {
+        failure = nil
+        scanSession = UUID()
     }
 }

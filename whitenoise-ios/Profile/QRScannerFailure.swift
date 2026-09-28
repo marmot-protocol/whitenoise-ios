@@ -5,14 +5,14 @@ nonisolated enum QRScannerFailure: Equatable {
     case cameraInUse, requiresFullScreen, interrupted
 
     enum Recovery: Equatable {
-        case settings, retry, none
+        case settings, retry, unavailable
     }
 
     var recovery: Recovery {
         switch self {
         case .denied: .settings
         case .configurationFailed, .cameraInUse, .requiresFullScreen, .interrupted: .retry
-        case .restricted, .noCamera: .none
+        case .restricted, .noCamera: .unavailable
         }
     }
 

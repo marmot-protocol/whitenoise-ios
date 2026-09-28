@@ -37,8 +37,8 @@ struct QRScannerView: UIViewControllerRepresentable {
         init(
             onScan: @escaping (String) -> Void,
             onError: @escaping (QRScannerFailure) -> Void,
-            validate: @escaping (String) -> Bool = { _ in true },
-            onInvalidPayload: @escaping () -> Void = {}
+            validate: @escaping (String) -> Bool,
+            onInvalidPayload: @escaping () -> Void
         ) {
             self.onScan = onScan
             self.onError = onError
@@ -73,7 +73,6 @@ struct QRScannerView: UIViewControllerRepresentable {
             scanAttempt = attempt
             didScan = false
         }
-
     }
 }
 

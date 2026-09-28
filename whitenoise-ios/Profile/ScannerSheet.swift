@@ -12,7 +12,7 @@ struct ScannerSheet: View {
             Group {
                 if let failure {
                     QRScannerUnavailableView(failure: failure, retry: restartScanner)
-                } else if scenePhase == .active {
+                } else if QRScannerScenePolicy.mountsCamera(in: scenePhase) {
                     liveScanner
                 } else {
                     ProgressView("Preparing Camera")
@@ -27,8 +27,10 @@ struct ScannerSheet: View {
                 }
             }
             .toolbarBackground(.visible, for: .navigationBar)
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { restartScanner() }
+            .onChange(of: scenePhase) { oldPhase, _ in
+                if QRScannerScenePolicy.restartsScanner(leavingPhase: oldPhase, showingFailure: failure != nil) {
+                    restartScanner()
+                }
             }
         }
     }

@@ -27,7 +27,7 @@ struct OnboardingQRScannerTests {
 
     @Test func defaultScannerStillAcceptsRawProfilePayloads() {
         var accepted: [String] = []
-        let scanner = QRScannerView.Coordinator(onScan: { accepted.append($0) }, onError: { _ in })
+        let scanner = QRScannerView(onScan: { accepted.append($0) }, onError: { _ in }).makeCoordinator()
         scanner.receive("nostr:profile-reference")
         #expect(accepted == ["nostr:profile-reference"])
     }

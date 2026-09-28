@@ -1,4 +1,3 @@
-import AVFoundation
 import SwiftUI
 
 struct ShareAndConnectView: View {
@@ -95,8 +94,11 @@ struct ShareAndConnectView: View {
             cancelPicture()
             if newValue == .connect { restartScanner() }
         }
-        .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active, mode == .connect { restartScanner() }
+        .onChange(of: scenePhase) { oldPhase, _ in
+            if mode == .connect,
+               QRScannerScenePolicy.restartsScanner(leavingPhase: oldPhase, showingFailure: cameraFailure != nil) {
+                restartScanner()
+            }
         }
         .sheet(item: $sharedPicture) { picture in
             ActivityShareSheet(items: [picture.image])
@@ -175,19 +177,15 @@ struct ShareAndConnectView: View {
         }
     }
 
-    private var cameraFailureReason: QRScannerFailure? {
-        cameraFailure ?? QRScannerFailure.preflight(
-            authorization: AVCaptureDevice.authorizationStatus(for: .video),
-            hasCamera: AVCaptureDevice.default(for: .video) != nil
-        )
-    }
-
     @ViewBuilder
     private var scannerContent: some View {
-        if let cameraFailureReason {
-            QRScannerUnavailableView(failure: cameraFailureReason, retry: restartScanner)
-        } else if scenePhase == .active {
+        if let cameraFailure {
+            QRScannerUnavailableView(failure: cameraFailure, retry: restartScanner)
+        } else if QRScannerScenePolicy.mountsCamera(in: scenePhase) {
             liveScanner
+        } else {
+            ProgressView("Preparing Camera")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
