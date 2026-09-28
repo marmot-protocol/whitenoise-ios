@@ -298,7 +298,7 @@ struct ChatDeveloperToolsView: View {
                 HStack(spacing: 6) {
                     Text(IdentityFormatter.short(value, head: 12, tail: 6))
                         .font(.caption.monospaced())
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    WNCopyIcon(copied: copied)
                 }
             }
             .contentShape(.rect)

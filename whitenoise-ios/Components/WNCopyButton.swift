@@ -1,6 +1,33 @@
 import SwiftUI
 import UIKit
 
+nonisolated enum WNCopyFeedback {
+    static let resetDelay = Duration.seconds(2)
+
+    static func symbolName(isCopied: Bool) -> String {
+        isCopied ? "checkmark" : "doc.on.doc"
+    }
+
+    static func accessibilityLabel(isCopied: Bool, copyTitle: String) -> String {
+        isCopied ? L10n.string("Copied") : copyTitle
+    }
+}
+
+/// Reserve the copy glyph's space while showing its confirmation.
+struct WNCopyIcon: View {
+    let copied: Bool
+
+    var body: some View {
+        Image(systemName: "doc.on.doc")
+            .hidden()
+            .overlay {
+                Image(systemName: WNCopyFeedback.symbolName(isCopied: copied))
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 /// Keeps copy confirmation on the initiating control, including for VoiceOver.
 struct WNCopyButton<Label: View>: View {
     let value: String
@@ -17,7 +44,7 @@ struct WNCopyButton<Label: View>: View {
             AccessibilityNotification.Announcement(L10n.string("Copied")).post()
             resetTask?.cancel()
             resetTask = Task {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: WNCopyFeedback.resetDelay)
                 guard !Task.isCancelled else { return }
                 copied = false
                 resetTask = nil
@@ -25,7 +52,7 @@ struct WNCopyButton<Label: View>: View {
         } label: {
             label(copied)
         }
-        .accessibilityLabel(copied ? L10n.string("Copied") : accessibilityTitle)
+        .accessibilityLabel(WNCopyFeedback.accessibilityLabel(isCopied: copied, copyTitle: accessibilityTitle))
         .accessibilityInputLabels([Text(accessibilityTitle)])
         .onChange(of: value) { clearFeedback() }
         .onDisappear(perform: clearFeedback)

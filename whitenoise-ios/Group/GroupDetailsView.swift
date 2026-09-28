@@ -1127,7 +1127,7 @@ struct GroupDetailsView: View {
                         .font(.system(.caption2, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    WNCopyIcon(copied: copied)
                         .font(.caption)
                         .foregroundStyle(.tint)
                 }

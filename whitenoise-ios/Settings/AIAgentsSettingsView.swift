@@ -47,7 +47,7 @@ struct AIAgentsSettingsView: View {
                                     .font(.subheadline.monospaced())
                                     .lineLimit(1)
                                     .truncationMode(.middle)
-                                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                                WNCopyIcon(copied: copied)
                                     .font(.footnote)
                             }
                             .foregroundStyle(.secondary)
@@ -126,7 +126,7 @@ private struct AIAgentConnectorRow: View {
                     value: npub.map { connector.prompt(npub: $0) } ?? "",
                     accessibilityTitle: L10n.formatted("Copy %@ setup prompt", connector.name)
                 ) { copied in
-                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    WNCopyIcon(copied: copied)
                         .frame(width: 44, height: 44)
                         .contentShape(.rect)
                 }
