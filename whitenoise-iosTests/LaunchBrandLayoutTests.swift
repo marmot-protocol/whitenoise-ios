@@ -77,9 +77,9 @@ struct LaunchBrandLayoutTests {
                     .overlayPreferenceValue(WelcomeBrandBoundsKey.self) { anchor in
                         GeometryReader { geometry in
                             Color.clear
-                                .onGeometryChange(for: CGRect?.self) { _ in
-                                    anchor.map { geometry[$0] }
-                                } action: { markFrame = $0 }
+                                .onChange(of: anchor.map { geometry[$0] }, initial: true) { _, frame in
+                                    markFrame = frame
+                                }
                         }
                         .allowsHitTesting(false)
                     }
@@ -87,7 +87,8 @@ struct LaunchBrandLayoutTests {
             window.rootViewController = welcome
             window.makeKeyAndVisible()
             let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-            while markFrame == nil, ContinuousClock.now < deadline {
+            // Navigation can publish a zero-size frame before its first usable layout.
+            while markFrame?.isEmpty != false, ContinuousClock.now < deadline {
                 welcome.view.layoutIfNeeded()
                 try await Task.sleep(for: .milliseconds(10))
             }
