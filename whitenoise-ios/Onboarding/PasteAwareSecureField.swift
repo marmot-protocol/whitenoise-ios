@@ -24,7 +24,6 @@ struct PasteAwareSecureField: UIViewRepresentable {
         field.pasteDelegate = field
         field.configureAccessory()
         field.onPaste = onPaste
-        field.isSecureTextEntry = true
         field.placeholder = L10n.string("Enter private key")
         field.autocapitalizationType = .none
         field.autocorrectionType = .no
@@ -195,13 +194,13 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         visibilityButton.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
         visibilityButton.addTarget(self, action: #selector(togglePrivateKeyVisibility), for: .touchUpInside)
         addTarget(self, action: #selector(textDidMutate), for: .editingChanged)
-        NotificationCenter.default.addObserver(
+        notificationCenter.addObserver(
             self,
             selector: #selector(textDidMutate),
             name: UITextField.textDidChangeNotification,
             object: self
         )
-        applyAccessory()
+        updateAccessory(visible: accessoryVisible)
     }
 
     private func rebuildPasteControl() {
@@ -246,12 +245,8 @@ final class PasteInterceptingSecureTextField: UITextField, UITextPasteDelegate {
         pendingAccessoryUpdate = Task { @MainActor [weak self] in
             guard let self, !Task.isCancelled else { return }
             pendingAccessoryUpdate = nil
-            applyAccessory()
+            updateAccessory(visible: accessoryVisible)
         }
-    }
-
-    private func applyAccessory() {
-        updateAccessory(visible: accessoryVisible)
     }
 
     func updateAccessory(visible: Bool) {

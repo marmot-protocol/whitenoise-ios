@@ -38,6 +38,8 @@ struct IdentityProfileSetupView: View {
         self.accountSetup = accountSetup
     }
 
+    private var showsInlineActions: Bool { accountSetup == nil && isKeyboardVisible }
+
     private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
     private var isBusy: Bool { model.isBusy || (accountSetup?.isBusy ?? false) }
     private var allowsBackNavigation: Bool {
@@ -114,7 +116,7 @@ struct IdentityProfileSetupView: View {
         }
         .interactiveDismissDisabled(!allowsBackNavigation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if accountSetup != nil || !isKeyboardVisible {
+            if !showsInlineActions {
                 profileActions
                     .safeAreaPadding(.horizontal, 16)
                     .safeAreaPadding(.bottom)
@@ -189,7 +191,7 @@ struct IdentityProfileSetupView: View {
                 }
             }
 
-            if accountSetup == nil && isKeyboardVisible {
+            if showsInlineActions {
                 Section {
                     profileActions
                         .listRowInsets(EdgeInsets())
