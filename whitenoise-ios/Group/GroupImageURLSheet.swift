@@ -130,8 +130,6 @@ struct DuckDuckGoImageSearchClient {
                   (200..<300).contains(http.statusCode)
             else { throw DuckDuckGoImageSearchError.badResponse }
             return data
-        } catch let error as URLError where error.code == .badServerResponse {
-            throw DuckDuckGoImageSearchError.badResponse
         } catch PinnedHTTPSFetcher.FetchError.httpStatus {
             throw DuckDuckGoImageSearchError.badResponse
         }

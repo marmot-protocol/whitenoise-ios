@@ -187,7 +187,6 @@ nonisolated enum AvatarImageCropper {
 }
 
 struct AvatarImageCropEditor: View {
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
     let source: AvatarImageCropSource?
@@ -273,21 +272,9 @@ struct AvatarImageCropEditor: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if image != nil {
-                Button {
-                    guard !isPreparing else { return }
+                WNButton(title: "Done", isLoading: isPreparing) {
                     prepareCrop()
-                } label: {
-                    Text("Done")
-                        .opacity(isPreparing ? 0 : 1)
-                        .overlay {
-                            if isPreparing { ProgressView().tint(WNButton.Metrics.contentColor(emphasis: .primary, colorScheme: colorScheme, isEnabled: true)) }
-                        }
-                        .wnButtonLabelSizing()
                 }
-                .wnPrimaryButtonStyle()
-                .wnButtonChrome()
-                .controlSize(.extraLarge)
-                .wnButtonSizing()
                 .safeAreaPadding(.horizontal)
                 .padding(.top)
             }

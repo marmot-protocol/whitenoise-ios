@@ -158,10 +158,14 @@ struct ProfileEditView: View {
         .wnPhotoSourceMenu(
             selection: $photoMenuAction,
             confirmsPublicUpload: true,
-            onError: { photoError = UserFacingError.message(for: $0) },
+            prepareDraft: { data, fileName, sourceURL in
+                try await ProfileImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+            },
             onRemove: { applyUpload(nil) },
             onSelect: { selection in
-                applyUpload(selection.preparedDraft)
+                applyUpload(selection)
             }
         )
         .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
@@ -451,13 +455,10 @@ nonisolated struct ProfileEditMetadata: Equatable {
 }
 
 enum ProfileImageProgressPhase: Equatable {
-    case preparing
     case uploading
 
     var label: String {
         switch self {
-        case .preparing:
-            L10n.string("Preparing image…")
         case .uploading:
             L10n.string("Uploading profile image…")
         }

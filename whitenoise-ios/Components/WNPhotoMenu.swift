@@ -36,6 +36,13 @@ nonisolated enum WNPhotoMenuAction: Hashable, CaseIterable {
     var isDestructive: Bool {
         self == .removePhoto
     }
+
+    func symbol(for colorScheme: ColorScheme) -> UIImage {
+        let traits = UITraitCollection(userInterfaceStyle: colorScheme == .dark ? .dark : .light)
+        let color = (isDestructive ? UIColor.systemRed : .label).resolvedColor(with: traits)
+        // Native menus can retint template symbols independently of their titles.
+        return UIImage(systemName: systemImage)?.withTintColor(color, renderingMode: .alwaysOriginal) ?? UIImage()
+    }
 }
 
 /// Native menu chrome and presentation match the prototype and adapt to accessibility settings.
@@ -54,9 +61,7 @@ struct WNPhotoMenuButton: View {
 }
 
 struct WNPhotoMenuActions: View {
-    // Native menus can tint template icons independently of destructive titles.
-    private static let destructiveTrashSymbol = UIImage(systemName: "trash")?
-        .withTintColor(.systemRed, renderingMode: .alwaysOriginal) ?? UIImage()
+    @Environment(\.colorScheme) private var colorScheme
 
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
@@ -72,11 +77,7 @@ struct WNPhotoMenuActions: View {
                 Label {
                     Text(action.title)
                 } icon: {
-                    if action.isDestructive {
-                        Image(uiImage: Self.destructiveTrashSymbol)
-                    } else {
-                        Image(systemName: action.systemImage)
-                    }
+                    Image(uiImage: action.symbol(for: colorScheme))
                 }
             }
         }

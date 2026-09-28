@@ -2,15 +2,6 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// A cropped image chosen through the avatar photo menu.
-nonisolated struct WNPhotoSourceSelection: Equatable {
-    let data: Data
-    let fileName: String?
-    let typeIdentifier: String?
-    let sourceURL: URL?
-    let preparedDraft: GroupImageUploadDraft
-}
-
 nonisolated enum WNPhotoSourceKind: Equatable {
     case photos
     case files
@@ -72,15 +63,15 @@ extension View {
     func wnPhotoSourceMenu(
         selection: Binding<WNPhotoMenuAction?>,
         confirmsPublicUpload: Bool,
-        onError: @escaping (Error) -> Void,
+        prepareDraft: @escaping (Data, String?, URL?) async throws -> GroupImageUploadDraft,
         onRemove: @escaping () -> Void,
-        onSelect: @escaping (WNPhotoSourceSelection) async throws -> Void
+        onSelect: @escaping (GroupImageUploadDraft) async throws -> Void
     ) -> some View {
         modifier(
             WNPhotoSourceMenuModifier(
                 selection: selection,
                 confirmsPublicUpload: confirmsPublicUpload,
-                onError: onError,
+                prepareDraft: prepareDraft,
                 onRemove: onRemove,
                 onSelect: onSelect
             )
@@ -92,9 +83,9 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
     @State private var sourceTask: Task<Void, Never>?
     @Binding var selection: WNPhotoMenuAction?
     let confirmsPublicUpload: Bool
-    let onError: (Error) -> Void
+    let prepareDraft: (Data, String?, URL?) async throws -> GroupImageUploadDraft
     let onRemove: () -> Void
-    let onSelect: (WNPhotoSourceSelection) async throws -> Void
+    let onSelect: (GroupImageUploadDraft) async throws -> Void
 
     @State private var pendingSource: WNPhotoSourceKind?
     @State private var showDisclosure = false
@@ -175,19 +166,9 @@ private struct WNPhotoSourceMenuModifier: ViewModifier {
     }
 
     private func select(_ source: AvatarImageCropSource, _ croppedData: Data) async throws {
-        let draft = try await ProfileImageDraftProcessor.prepare(
-            data: croppedData, fileName: source.fileName, typeIdentifier: "public.jpeg", sourceURL: source.sourceURL
-        )
+        let draft = try await prepareDraft(croppedData, source.fileName, source.sourceURL)
         try Task.checkCancellation()
-        try await onSelect(
-            WNPhotoSourceSelection(
-                data: croppedData,
-                fileName: source.fileName,
-                typeIdentifier: "public.jpeg",
-                sourceURL: source.sourceURL,
-                preparedDraft: draft
-            )
-        )
+        try await onSelect(draft)
     }
 
     private func open(_ kind: WNPhotoSourceKind) {

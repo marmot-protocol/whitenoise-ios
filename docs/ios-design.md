@@ -124,6 +124,13 @@ Keep copy calm, direct, and useful, following Apple's
 - Inspect the current build at relevant iPhone and iPad sizes, in light and dark
   appearance, and at large and accessibility Dynamic Type sizes. Check clipping,
   contrast, keyboard/focus behavior, and whether primary actions remain reachable.
+- At the same Dynamic Type and accessibility settings, switching light/dark may
+  change colors and materials, never control dimensions, padding, typography, or
+  placement. Compare matching states in light and dark,
+  including switching appearance while a form or sheet stays open. Check normal
+  and Increased Contrast; measure rendered text against its actual background
+  (4.5:1 for ordinary text). Test native menu symbols under the presented menu's
+  tint as well as the app's accent. Asset-color checks alone are insufficient.
 - Check VoiceOver labels, values, traits, grouping, order, and actions, plus Voice
   Control names where relevant. Aim for at least 44-by-44-point touch targets with
   adequate separation. Keep essential commands available beyond gestures, and

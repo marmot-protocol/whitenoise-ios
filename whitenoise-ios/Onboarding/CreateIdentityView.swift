@@ -15,7 +15,6 @@ struct IdentityProfileSetupView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var model = CreateIdentityViewModel()
-    @State private var photoError: PhotoSelectionFailure?
     @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var isKeyboardVisible = false
     @FocusState private var nameFocused: Bool
@@ -90,18 +89,16 @@ struct IdentityProfileSetupView: View {
         .wnPhotoSourceMenu(
             selection: $photoMenuAction,
             confirmsPublicUpload: true,
-            onError: { photoError = PhotoSelectionFailure.classify($0) },
+            prepareDraft: { data, fileName, sourceURL in
+                try await ProfileImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+            },
             onRemove: { model.setAvatarDraft(nil) },
             onSelect: { selection in
-                model.setAvatarDraft(selection.preparedDraft)
+                model.setAvatarDraft(selection)
             }
         )
-        .alert("Couldn’t add photo", isPresented: Binding(
-            get: { photoError != nil },
-            set: { if !$0 { photoError = nil } }
-        )) {
-            Button("Close", role: .cancel) { photoError = nil }
-        } message: { Text(photoError?.message ?? "") }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .dismissesKeyboardOnTap()

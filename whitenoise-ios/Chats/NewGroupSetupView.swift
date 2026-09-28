@@ -124,7 +124,11 @@ struct NewGroupSetupView: View {
             // The selected bytes ride the encrypted group-image component, so
             // nothing here is published to a public host.
             confirmsPublicUpload: false,
-            onError: { imageError = UserFacingError.message(for: $0) },
+            prepareDraft: { data, fileName, sourceURL in
+                try await GroupImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+            },
             onRemove: {
                 imageError = nil
                 groupImage = nil
@@ -155,9 +159,9 @@ struct NewGroupSetupView: View {
         .navigationBarBackButtonHidden(model.isCreatingGroup)
     }
 
-    private func acceptImage(_ selection: WNPhotoSourceSelection) {
+    private func acceptImage(_ selection: GroupImageUploadDraft) {
         imageError = nil
-        groupImage = selection.preparedDraft
+        groupImage = selection
         Haptics.selection()
     }
 
