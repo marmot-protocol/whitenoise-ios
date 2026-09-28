@@ -8,11 +8,61 @@ enum KeyboardDismissTap {
     static func resignsKeyboard(touching view: UIView?) -> Bool {
         var candidate = view
         while let current = candidate {
-            if current is UITextField || current is UITextView { return false }
+            if current is UIControl || current is UITextView { return false }
             candidate = current.superview
         }
         return true
     }
+}
+
+/// Includes SwiftUI input padding/accessories, which sit outside the UIKit text field.
+final class KeyboardInputRegion: UIView {
+    private static let regions = NSHashTable<KeyboardInputRegion>.weakObjects()
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { Self.regions.remove(self) }
+        else { Self.regions.add(self) }
+    }
+
+    static func contains(_ point: CGPoint, in window: UIWindow) -> Bool {
+        let touchedPresentation = presentationOwner(of: window.hitTest(point, with: nil))
+        return regions.allObjects.contains { region in
+            guard region.window === window,
+                  presentationOwner(of: region) === touchedPresentation,
+                  region.bounds.contains(region.convert(point, from: window)) else { return false }
+            var ancestor: UIView? = region
+            while let view = ancestor {
+                if view.isHidden || view.alpha == 0 { return false }
+                if view.clipsToBounds, !view.bounds.contains(view.convert(point, from: window)) { return false }
+                ancestor = view.superview
+            }
+            return true
+        }
+    }
+
+    private static func presentationOwner(of view: UIView?) -> UIViewController? {
+        var responder: UIResponder? = view
+        while let current = responder {
+            if var controller = current as? UIViewController {
+                // Child hosting controllers belong to the same presentation; sheets do not.
+                while let parent = controller.parent { controller = parent }
+                return controller
+            }
+            responder = current.next
+        }
+        return nil
+    }
+}
+
+private struct KeyboardInputRegionProbe: UIViewRepresentable {
+    func makeUIView(context: Context) -> KeyboardInputRegion {
+        let view = KeyboardInputRegion()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: KeyboardInputRegion, context: Context) {}
 }
 
 private final class KeyboardDismissProbeView: UIView {
@@ -72,7 +122,9 @@ private struct KeyboardDismissOnTap: UIViewRepresentable {
             _ gestureRecognizer: UIGestureRecognizer,
             shouldReceive touch: UITouch
         ) -> Bool {
-            KeyboardDismissTap.resignsKeyboard(touching: touch.view)
+            guard KeyboardDismissTap.resignsKeyboard(touching: touch.view) else { return false }
+            guard let window else { return false }
+            return !KeyboardInputRegion.contains(touch.location(in: window), in: window)
         }
 
         func gestureRecognizer(
@@ -85,6 +137,10 @@ private struct KeyboardDismissOnTap: UIViewRepresentable {
 }
 
 extension View {
+    func preservesKeyboardOnTap() -> some View {
+        background(KeyboardInputRegionProbe())
+    }
+
     func dismissesKeyboardOnTap() -> some View {
         background(KeyboardDismissOnTap())
     }

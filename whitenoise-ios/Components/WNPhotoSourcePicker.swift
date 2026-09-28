@@ -16,9 +16,9 @@ nonisolated enum WNPhotoSourceKind: Equatable {
 }
 
 /// What a photo-menu action opens. Photos and Files are the only sources whose
-/// bytes can end up on a public host, so only they go behind the disclosure;
-/// screens whose image stays inside the encrypted group pass
-/// `confirmsPublicUpload: false` and reach the picker directly.
+/// bytes can end up on a public host, so only they can require this disclosure.
+/// Private group images and Sign Up's persistent public-profile disclosure use
+/// `confirmsPublicUpload: false`. Profile Edit retains the dialog.
 nonisolated enum WNPhotoSourceRoute: Equatable {
     case open(WNPhotoSourceKind)
     case confirmPublicUpload(WNPhotoSourceKind)

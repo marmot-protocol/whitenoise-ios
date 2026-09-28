@@ -115,6 +115,7 @@ struct whitenoise_iosApp: App {
                     AppLanguage.setCurrentRawValue(AppLanguage.system.rawValue)
                 }
                 .appAppearance(appearance)
+                .dismissesKeyboardOnTap()
                 .task {
                     // The path monitor lives in this lazy singleton; touch it
                     // at launch so connectivity-restored events fire even in

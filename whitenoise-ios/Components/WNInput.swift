@@ -168,6 +168,7 @@ struct WNInput<Trailing: View>: View {
         .frame(minHeight: WNInputMetrics.fixesHeight(for: kind) ? height : nil)
         .wnInputSurface(fill: fill, shape: shape)
         .contentShape(shape)
+        .preservesKeyboardOnTap()
         // Tapping the chrome, not just the glyphs, has to focus the field.
         .onTapGesture { activeFocus.wrappedValue = true }
     }

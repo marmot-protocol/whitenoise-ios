@@ -136,7 +136,8 @@ struct ImportIdentityView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Sign In", isLoading: model.isImporting) {
+            WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
+                isKeyFocused = false
                 Task {
                     await model.runImport(using: appState, dismiss: { dismiss() })
                 }
@@ -196,7 +197,7 @@ struct ImportIdentityView: View {
                 text: identity,
                 isFocused: $isKeyFocused,
                 showsAccessory: !model.isImporting,
-                onClear: { model.clearPastedClipboardToken() },
+                onFocusRequest: { onPreferredSheetExpansionChange(true) },
                 onPaste: { token, resultingIdentity in
                     model.recordPastedClipboardToken(
                         token,
@@ -205,6 +206,7 @@ struct ImportIdentityView: View {
                 },
                 onSubmit: {
                     guard canSubmit else { return }
+                    isKeyFocused = false
                     Task {
                         await model.runImport(using: appState, dismiss: { dismiss() })
                     }
@@ -214,12 +216,8 @@ struct ImportIdentityView: View {
         }
         .padding(.leading)
         .frame(height: 50)
-        .compatibleInputCapsuleChrome(interactive: false)
+        .background(Color(uiColor: .secondarySystemFill), in: .capsule)
+        .preservesKeyboardOnTap()
         .disabled(model.isImporting)
-        .contentShape(.capsule)
-        .onTapGesture {
-            guard !model.isImporting else { return }
-            isKeyFocused = true
-        }
     }
 }
