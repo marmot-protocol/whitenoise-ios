@@ -92,6 +92,15 @@ struct ProfileEditView: View {
                 Text("About").wnSectionHeader()
             }
 
+            if let saveError = model.saveError, isEditing {
+                Section {
+                    Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Button("Retry", action: saveProfile)
+                        .disabled(saveDisabled)
+                }
+            }
+
             if model.error != nil {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
@@ -104,6 +113,7 @@ struct ProfileEditView: View {
                 }
             }
         }
+        .disabled(model.isPublishing)
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
@@ -139,14 +149,7 @@ struct ProfileEditView: View {
                         size: .compact,
                         isLoading: model.isPublishing
                     ) {
-                        clearFocus()
-                        Task {
-                            await model.publish(using: appState)
-                            if model.error == nil {
-                                isEditing = false
-                                editSnapshot = nil
-                            }
-                        }
+                        saveProfile()
                     }
                     .disabled(saveDisabled)
                 } else {
@@ -170,7 +173,13 @@ struct ProfileEditView: View {
                 )
             }
         )
-        .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
+        .task(id: appState.activeAccount?.accountIdHex) {
+            clearFocus()
+            isEditing = false
+            editSnapshot = nil
+            photoError = nil
+            await model.loadExisting(using: appState)
+        }
         .background(.background)
     }
 
@@ -227,6 +236,18 @@ struct ProfileEditView: View {
         )
     }
 
+    private func saveProfile() {
+        clearFocus()
+        Task {
+            guard let savingAccountID = appState.activeAccount?.accountIdHex else { return }
+            if await model.publish(using: appState),
+               appState.activeAccount?.accountIdHex == savingAccountID {
+                isEditing = false
+                editSnapshot = nil
+            }
+        }
+    }
+
     private func beginEditing() {
         editSnapshot = ProfileEditDraftSnapshot(model: model)
         isEditing = true
@@ -234,8 +255,8 @@ struct ProfileEditView: View {
 
     private func cancelEditing() {
         clearFocus()
-        editSnapshot?.restore(model)
-        model.error = nil
+        editSnapshot?.restore(model, activeAccountID: appState.activeAccount?.accountIdHex)
+        model.saveError = nil
         editSnapshot = nil
         photoError = nil
         isEditing = false
@@ -256,6 +277,8 @@ struct ProfileEditView: View {
         typeIdentifier: String?,
         sourceURL: URL?
     ) {
+        let accountID = appState.activeAccount?.accountIdHex
+        let ticket = model.loadTicket
         photoError = nil
         photoProgressPhase = .preparing
         Task {
@@ -266,10 +289,17 @@ struct ProfileEditView: View {
                     typeIdentifier: typeIdentifier,
                     sourceURL: sourceURL
                 )
+                guard !Task.isCancelled, model.loadTicket == ticket,
+                      appState.activeAccount?.accountIdHex == accountID else {
+                    photoProgressPhase = nil
+                    return
+                }
                 photoProgressPhase = .uploading
                 await save(draft)
             } catch {
                 photoProgressPhase = nil
+                guard !Task.isCancelled, model.loadTicket == ticket,
+                      appState.activeAccount?.accountIdHex == accountID else { return }
                 photoError = UserFacingError.message(for: error)
                 Haptics.error()
             }
@@ -282,11 +312,15 @@ struct ProfileEditView: View {
     }
 
     private func save(_ draft: GroupImageUploadDraft?) async {
+        let accountID = appState.activeAccount?.accountIdHex
+        let ticket = model.loadTicket
         defer { photoProgressPhase = nil }
         do {
             try await model.updatePicture(with: draft, using: appState)
             Haptics.selection()
         } catch {
+            guard !(error is CancellationError), !Task.isCancelled, model.loadTicket == ticket,
+                  appState.activeAccount?.accountIdHex == accountID else { return }
             photoError = UserFacingError.message(for: error)
             Haptics.error()
         }
@@ -305,20 +339,26 @@ struct ProfileEditView: View {
     }
 }
 
-private struct ProfileEditDraftSnapshot {
+struct ProfileEditDraftSnapshot {
+    private let accountID: String?
+    private let loadTicket: Int
     let displayName: String
     let about: String
     let picture: String
     let nip05: String
 
     init(model: ProfileEditViewModel) {
+        accountID = model.loadedAccountIdHex
+        loadTicket = model.loadTicket
         displayName = model.displayName
         about = model.about
         picture = model.picture
         nip05 = model.nip05
     }
 
-    func restore(_ model: ProfileEditViewModel) {
+    func restore(_ model: ProfileEditViewModel, activeAccountID: String?) {
+        guard let accountID, accountID == activeAccountID,
+              model.loadedAccountIdHex == accountID, model.loadTicket == loadTicket else { return }
         model.displayName = displayName
         model.about = about
         model.picture = picture

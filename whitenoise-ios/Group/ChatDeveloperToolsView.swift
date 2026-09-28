@@ -293,22 +293,17 @@ struct ChatDeveloperToolsView: View {
     }
 
     private func copyableValue(_ title: String, value: String) -> some View {
-        Button {
-            UIPasteboard.general.string = value
-            Haptics.selection()
-            appState.present(.success(L10n.string("Copied to clipboard"), message: title))
-        } label: {
+        WNCopyButton(value: value, accessibilityTitle: L10n.formatted("Copy %@", title)) { copied in
             LabeledContent(title) {
                 HStack(spacing: 6) {
                     Text(IdentityFormatter.short(value, head: 12, tail: 6))
                         .font(.caption.monospaced())
-                    Image(systemName: "doc.on.doc")
+                    WNCopyIcon(copied: copied)
                 }
             }
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.formatted("Copy %@", title))
         .accessibilityValue(value)
     }
 
