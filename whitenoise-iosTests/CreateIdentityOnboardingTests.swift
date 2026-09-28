@@ -722,12 +722,11 @@ struct CreateIdentityOnboardingTests {
         let model = CreateIdentityViewModel()
         await model.configurePersistence(store: store, restored: draft)
         model.displayName = "Bob"
-        model.scheduleDraftPersistence(delay: .zero)
+        // The view normally owns the model while its weakly captured save runs.
+        defer { withExtendedLifetime(model) {} }
+        let save = try #require(model.scheduleDraftPersistence(delay: .zero))
+        await save.value
 
-        let deadline = ContinuousClock.now + .seconds(5)
-        while try await store.load()?.displayName != "Bob", ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
         #expect(try await store.load()?.displayName == "Bob")
     }
 

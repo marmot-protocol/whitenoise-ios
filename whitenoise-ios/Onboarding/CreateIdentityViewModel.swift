@@ -235,10 +235,11 @@ final class CreateIdentityViewModel {
         }
     }
 
-    func scheduleDraftPersistence(delay: Duration = .milliseconds(350)) {
+    @discardableResult
+    func scheduleDraftPersistence(delay: Duration = .milliseconds(350)) -> Task<Void, Never>? {
         draftPersistenceTask?.cancel()
         draftPersistenceTask = nil
-        guard draft.requiresRecovery, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return }
+        guard draft.requiresRecovery, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return nil }
         draftPersistenceTask = Task { [weak self] in
             do { try await Task.sleep(for: delay) }
             catch { return }
@@ -246,6 +247,7 @@ final class CreateIdentityViewModel {
             draftPersistenceTask = nil
             await persistDraft()
         }
+        return draftPersistenceTask
     }
 
     func persistDraft() async {
