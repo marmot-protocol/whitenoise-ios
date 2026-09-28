@@ -8,7 +8,7 @@ nonisolated struct WNPhotoSourceSelection: Equatable {
     let fileName: String?
     let typeIdentifier: String?
     let sourceURL: URL?
-    var preparedDraft: GroupImageUploadDraft?
+    let preparedDraft: GroupImageUploadDraft
 }
 
 nonisolated enum WNPhotoSourceKind: Equatable {

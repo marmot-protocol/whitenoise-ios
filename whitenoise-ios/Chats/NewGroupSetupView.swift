@@ -15,7 +15,6 @@ struct NewGroupSetupView: View {
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
     @State private var photoMenuAction: WNPhotoMenuAction?
-    @State private var isPreparingImage = false
     @State private var imageError: String?
 
     var body: some View {
@@ -32,13 +31,7 @@ struct NewGroupSetupView: View {
                             emptySystemImage: "person.2"
                         )
                     }
-                    .disabled(model.isCreatingGroup || isPreparingImage)
-
-                    if isPreparingImage {
-                        ProgressView(GroupImageProgressPhase.preparing.label)
-                            .font(.footnote)
-                            .padding(.top)
-                    }
+                    .disabled(model.isCreatingGroup)
 
                     if let imageError {
                         Text(imageError)
@@ -136,7 +129,7 @@ struct NewGroupSetupView: View {
                 imageError = nil
                 groupImage = nil
             },
-            onSelect: prepareImage
+            onSelect: acceptImage
         )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -162,24 +155,10 @@ struct NewGroupSetupView: View {
         .navigationBarBackButtonHidden(model.isCreatingGroup)
     }
 
-    private func prepareImage(_ selection: WNPhotoSourceSelection) {
+    private func acceptImage(_ selection: WNPhotoSourceSelection) {
         imageError = nil
-        isPreparingImage = true
-        Task {
-            defer { isPreparingImage = false }
-            do {
-                groupImage = try await GroupImageDraftProcessor.prepare(
-                    data: selection.data,
-                    fileName: selection.fileName,
-                    typeIdentifier: selection.typeIdentifier,
-                    sourceURL: selection.sourceURL
-                )
-                Haptics.selection()
-            } catch {
-                imageError = UserFacingError.message(for: error)
-                Haptics.error()
-            }
-        }
+        groupImage = selection.preparedDraft
+        Haptics.selection()
     }
 
     private var canCreate: Bool {
@@ -187,7 +166,7 @@ struct NewGroupSetupView: View {
             stagedCount: model.groupSelection.count,
             hasUsableName: !NewGroupPresentation.normalizedName(name).isEmpty,
             isCreating: model.isCreatingGroup,
-            isPreparingImage: isPreparingImage,
+            isPreparingImage: false,
             hasActiveAccount: appState.activeAccountRef != nil
         )
     }

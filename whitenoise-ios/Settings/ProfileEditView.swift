@@ -161,12 +161,7 @@ struct ProfileEditView: View {
             onError: { photoError = UserFacingError.message(for: $0) },
             onRemove: { applyUpload(nil) },
             onSelect: { selection in
-                upload(
-                    data: selection.data,
-                    fileName: selection.fileName,
-                    typeIdentifier: selection.typeIdentifier,
-                    sourceURL: selection.sourceURL
-                )
+                applyUpload(selection.preparedDraft)
             }
         )
         .task(id: appState.activeAccount?.accountIdHex) { await model.loadExisting(using: appState) }
@@ -246,37 +241,9 @@ struct ProfileEditView: View {
         aboutFocused = false
     }
 
-    /// Unlike Sign Up, which holds the avatar until the account exists, an edit
-    /// has an account to upload against now: the public URL is fetched here and
-    /// only the kind:0 republish waits for Done.
-    private func upload(
-        data: Data,
-        fileName: String?,
-        typeIdentifier: String?,
-        sourceURL: URL?
-    ) {
-        photoError = nil
-        photoProgressPhase = .preparing
-        Task {
-            do {
-                let draft = try await GroupImageDraftProcessor.prepare(
-                    data: data,
-                    fileName: fileName,
-                    typeIdentifier: typeIdentifier,
-                    sourceURL: sourceURL
-                )
-                photoProgressPhase = .uploading
-                await save(draft)
-            } catch {
-                photoProgressPhase = nil
-                photoError = UserFacingError.message(for: error)
-                Haptics.error()
-            }
-        }
-    }
-
     private func applyUpload(_ draft: GroupImageUploadDraft?) {
         photoError = nil
+        photoProgressPhase = draft == nil ? nil : .uploading
         Task { await save(draft) }
     }
 

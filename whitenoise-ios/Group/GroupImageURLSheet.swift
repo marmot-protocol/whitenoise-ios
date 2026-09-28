@@ -132,6 +132,8 @@ struct DuckDuckGoImageSearchClient {
             return data
         } catch let error as URLError where error.code == .badServerResponse {
             throw DuckDuckGoImageSearchError.badResponse
+        } catch PinnedHTTPSFetcher.FetchError.httpStatus {
+            throw DuckDuckGoImageSearchError.badResponse
         }
     }
 
