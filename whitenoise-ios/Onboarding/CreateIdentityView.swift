@@ -21,7 +21,7 @@ struct IdentityProfileSetupView: View {
     }
 
     @State private var model = CreateIdentityViewModel()
-    @State private var showPhotoMenu = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var isKeyboardVisible = false
     @State private var showPrivacyDetails = false
     @FocusState private var focusedField: ProfileField?
@@ -74,19 +74,16 @@ struct IdentityProfileSetupView: View {
         .formStyle(.grouped)
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: model.avatarDraft != nil,
+            selection: $photoMenuAction,
             confirmsPublicUpload: false,
-            onError: model.setAvatarPreparationError,
+            prepareDraft: { data, fileName, sourceURL in
+                try await ProfileImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+            },
             onRemove: { model.setAvatarDraft(nil) },
             onSelect: { selection in
-                Task {
-                    await model.prepareAvatar(
-                        data: selection.data,
-                        fileName: selection.fileName,
-                        typeIdentifier: selection.typeIdentifier
-                    )
-                }
+                model.setAvatarDraft(selection)
             }
         )
         .sheet(isPresented: $showPrivacyDetails) {
@@ -280,7 +277,7 @@ struct IdentityProfileSetupView: View {
         VStack(spacing: 0) {
             WNAvatarPhotoMenu(
                 hasPhoto: model.avatarDraft != nil,
-                isPresented: $showPhotoMenu
+                selection: $photoMenuAction
             ) {
                 WNAvatarPreview(
                     name: model.displayName,
@@ -288,21 +285,7 @@ struct IdentityProfileSetupView: View {
                     pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
                 )
             }
-            .disabled(model.isPreparingAvatar)
 
-            if model.isPreparingAvatar {
-                ProgressView("Preparing Photo")
-                    .font(.footnote)
-                    .padding(.top)
-            }
-
-            if let avatarError = model.avatarError {
-                Text(avatarError)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.top)
-            }
         }
     }
 

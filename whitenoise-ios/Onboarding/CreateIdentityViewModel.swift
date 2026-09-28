@@ -98,8 +98,6 @@ final class CreateIdentityViewModel {
     var displayName = ""
     var about = ""
     private(set) var avatarDraft: GroupImageUploadDraft?
-    private(set) var avatarError: String?
-    private(set) var isPreparingAvatar = false
     private(set) var phase: Phase = .editing
 
     private(set) var createdIdentity: AccountSummaryFfi?
@@ -117,7 +115,7 @@ final class CreateIdentityViewModel {
     }
 
     var isBusy: Bool {
-        isPreparingAvatar || isSubmitting
+        isSubmitting
     }
 
     var allowsBackNavigation: Bool {
@@ -139,45 +137,6 @@ final class CreateIdentityViewModel {
         guard !isSavingProfile else { return }
         avatarDraft = draft
         uploadedAvatarURL = nil
-        avatarError = nil
-    }
-
-    func prepareAvatar(from selection: PhotoLibrarySelection) async {
-        await prepareAvatar(
-            data: selection.data,
-            fileName: selection.fileName,
-            typeIdentifier: selection.typeIdentifier
-        )
-    }
-
-    func prepareAvatar(
-        data: Data,
-        fileName: String?,
-        typeIdentifier: String?
-    ) async {
-        guard !isPreparingAvatar, !isSavingProfile else { return }
-        avatarError = nil
-        isPreparingAvatar = true
-        defer { isPreparingAvatar = false }
-        do {
-            setAvatarDraft(try await ProfileImageDraftProcessor.prepare(
-                data: data,
-                fileName: fileName,
-                typeIdentifier: typeIdentifier
-            ))
-            Haptics.selection()
-        } catch {
-            setAvatarPreparationError(error)
-        }
-    }
-
-    func setAvatarPreparationError(_ error: Error) {
-        if case MediaDraftProcessor.Failure.attachmentTooLarge = error {
-            avatarError = L10n.string("That photo is too large. Choose a different photo.")
-        } else {
-            avatarError = L10n.string("That photo can't be used. Choose a different photo.")
-        }
-        Haptics.error()
     }
 
     /// Creates the identity and loads Marmot's generated profile before the
@@ -294,7 +253,8 @@ enum ProfileImageDraftProcessor {
     static func prepare(
         data: Data,
         fileName: String?,
-        typeIdentifier: String?
+        typeIdentifier: String?,
+        sourceURL: URL? = nil
     ) async throws -> GroupImageUploadDraft {
         guard !data.isEmpty, data.count <= MediaDraftProcessor.maxAttachmentBytes else {
             throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
@@ -312,7 +272,7 @@ enum ProfileImageDraftProcessor {
         return GroupImageUploadDraft(
             data: attachment.data,
             mediaType: attachment.mediaType,
-            sourceURL: nil,
+            sourceURL: ContentSanitizer.imageURL(sourceURL?.absoluteString)?.absoluteString,
             dim: attachment.dim,
             thumbhash: attachment.thumbhash,
             thumbnail: attachment.thumbnail

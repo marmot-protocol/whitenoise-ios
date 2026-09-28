@@ -178,6 +178,18 @@ struct CreateIdentityOnboardingTests {
         #expect(dismissed)
     }
 
+    @Test func photoPreparationRejectsUndecodableBytes() async {
+        await #expect {
+            try await ProfileImageDraftProcessor.prepare(
+                data: Data([0]), fileName: "broken.jpg", typeIdentifier: nil
+            )
+        } throws: { error in
+            guard let failure = error as? MediaDraftProcessor.Failure,
+                  case .unsupportedImage = failure else { return false }
+            return true
+        }
+    }
+
     @Test func avatarPreparationUsesTheFixedStandardImageContract() async throws {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
@@ -193,9 +205,11 @@ struct CreateIdentityOnboardingTests {
         let draft = try await ProfileImageDraftProcessor.prepare(
             data: png,
             fileName: "avatar.png",
-            typeIdentifier: "public.png"
+            typeIdentifier: "public.png",
+            sourceURL: URL(string: "https://example.com/avatar.png")
         )
 
+        #expect(draft.sourceURL == "https://example.com/avatar.png")
         #expect(draft.mediaType == "image/jpeg")
         #expect(draft.dim == "2048x1024")
         #expect(draft.data.count <= MediaDraftProcessor.maxImageAttachmentBytes)

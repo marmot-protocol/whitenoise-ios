@@ -8,6 +8,14 @@ struct UserFacingErrorTests {
         let errorDescription: String?
     }
 
+    @Test(arguments: [403, 404, 503])
+    func httpStatusFailuresPreserveLocalizedServerErrorPresentation(status: Int) {
+        let presentation = UserFacingError.present(
+            title: "Couldn’t add photo", error: PinnedHTTPSFetcher.FetchError.httpStatus(status)
+        )
+        #expect(presentation.message == URLError(.badServerResponse).localizedDescription)
+    }
+
     @Test func unavailableFollowListExplainsRecoveryInsteadOfGenericFallback() {
         let error = MarmotKitError.FollowListUnavailable
         let expected = L10n.string("Your follow list is unavailable from relays. Check your connection and relay settings, then try again. No follows were changed.")

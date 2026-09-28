@@ -1,5 +1,9 @@
 import SwiftUI
 
+nonisolated enum WNInputSurface: Equatable {
+    case glass, filled
+}
+
 nonisolated enum WNInputKind: Equatable {
     case text
     case secure
@@ -88,8 +92,10 @@ extension View {
 
 private extension View {
     @ViewBuilder
-    func wnInputSurface(fill: Color, shape: AnyShape) -> some View {
-        if #available(iOS 26.0, *) {
+    func wnInputSurface(fill: Color, shape: AnyShape, surface: WNInputSurface) -> some View {
+        if surface == .filled {
+            background(fill, in: shape)
+        } else if #available(iOS 26.0, *) {
             compatibleControlChrome(in: shape)
         } else {
             background(fill, in: shape)
@@ -105,10 +111,12 @@ struct WNInput<Trailing: View>: View {
     var kind = WNInputKind.text
     var icon: String?
     var fill = WNInputMetrics.fill
+    var surface = WNInputSurface.glass
     var submitLabel = SubmitLabel.return
     var autocapitalization = TextInputAutocapitalization.never
     var disablesAutocorrection = true
     var showsClear = false
+    var showsTextFromBeginning = false
     var clearLabel = L10n.string("Clear")
     var focus: FocusState<Bool>.Binding?
     var onSubmit: (() -> Void)?
@@ -141,6 +149,7 @@ struct WNInput<Trailing: View>: View {
                 autocapitalization: autocapitalization,
                 disablesAutocorrection: disablesAutocorrection,
                 focus: activeFocus,
+                showsTextFromBeginning: showsTextFromBeginning,
                 onSubmit: onSubmit
             )
 
@@ -166,7 +175,7 @@ struct WNInput<Trailing: View>: View {
         .padding(.trailing, WNInputMetrics.trailingInset)
         .padding(.vertical, WNInputMetrics.verticalInset(for: kind))
         .frame(minHeight: WNInputMetrics.fixesHeight(for: kind) ? height : nil)
-        .wnInputSurface(fill: fill, shape: shape)
+        .wnInputSurface(fill: fill, shape: shape, surface: surface)
         .contentShape(shape)
         .preservesKeyboardOnTap()
         // Tapping the chrome, not just the glyphs, has to focus the field.
@@ -181,10 +190,12 @@ extension WNInput where Trailing == EmptyView {
         kind: WNInputKind = .text,
         icon: String? = nil,
         fill: Color = WNInputMetrics.fill,
+        surface: WNInputSurface = .glass,
         submitLabel: SubmitLabel = .return,
         autocapitalization: TextInputAutocapitalization = .never,
         disablesAutocorrection: Bool = true,
         showsClear: Bool = false,
+        showsTextFromBeginning: Bool = false,
         clearLabel: String = L10n.string("Clear"),
         focus: FocusState<Bool>.Binding? = nil,
         onSubmit: (() -> Void)? = nil
@@ -195,10 +206,12 @@ extension WNInput where Trailing == EmptyView {
             kind: kind,
             icon: icon,
             fill: fill,
+            surface: surface,
             submitLabel: submitLabel,
             autocapitalization: autocapitalization,
             disablesAutocorrection: disablesAutocorrection,
             showsClear: showsClear,
+            showsTextFromBeginning: showsTextFromBeginning,
             clearLabel: clearLabel,
             focus: focus,
             onSubmit: onSubmit,
@@ -215,6 +228,8 @@ private struct WNInputTextEntry: View {
     let autocapitalization: TextInputAutocapitalization
     let disablesAutocorrection: Bool
     let focus: FocusState<Bool>.Binding
+    let showsTextFromBeginning: Bool
+    @State private var selection: TextSelection?
     let onSubmit: (() -> Void)?
 
     var body: some View {
@@ -226,14 +241,38 @@ private struct WNInputTextEntry: View {
             .autocorrectionDisabled(disablesAutocorrection)
             .focused(focus)
             .onSubmit { onSubmit?() }
+            .onAppear { revealBeginning() }
+            .onChange(of: focus.wrappedValue) { _, focused in
+                if !focused { revealBeginning() }
+            }
+            .onChange(of: text) { oldValue, newValue in
+                guard showsTextFromBeginning else { return }
+                // A paste/replacement can change the middle without growing the URL.
+                let prefix = zip(oldValue, newValue).prefix { $0 == $1 }.count
+                let oldTail = oldValue.dropFirst(prefix)
+                let newTail = newValue.dropFirst(prefix)
+                let suffix = zip(oldTail.reversed(), newTail.reversed()).prefix { $0 == $1 }.count
+                if newTail.count - suffix > 1 { revealBeginning() }
+            }
+    }
+
+    private func revealBeginning() {
+        guard showsTextFromBeginning else { return }
+        selection = TextSelection(insertionPoint: text.startIndex)
     }
 
     @ViewBuilder
     private var field: some View {
         switch kind {
         case .text:
-            TextField(placeholder, text: $text)
-                .modifier(WNInputSingleLine())
+            if showsTextFromBeginning {
+                TextField(placeholder, text: $text, selection: $selection)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                TextField(placeholder, text: $text)
+                    .modifier(WNInputSingleLine())
+            }
         case .secure:
             SecureField(placeholder, text: $text)
                 .modifier(WNInputSingleLine())

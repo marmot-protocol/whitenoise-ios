@@ -125,14 +125,12 @@ private struct AvatarFormFrame: Equatable {
 private struct AvatarFormFixture: View {
     @Environment(\.colorScheme) private var scheme
     let record: (String, CGRect, ColorScheme) -> Void
-    @State private var isPresented = false
+    @State private var selection: WNPhotoMenuAction?
 
     var body: some View {
         Form {
-            VStack(spacing: 0) {
+            WNAvatarPhotoMenu(hasPhoto: false, selection: $selection) {
                 WNAvatarPreview(name: "Example")
-                    .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-                WNPhotoMenuButton(hasPhoto: false, isPresented: $isPresented).padding(.top)
             }
             .frame(maxWidth: .infinity)
             .listRowBackground(Color.clear)
@@ -140,11 +138,11 @@ private struct AvatarFormFixture: View {
             .onGeometryChange(for: AvatarFormFrame.self) {
                     AvatarFormFrame(rect: $0.frame(in: .global), scheme: scheme)
                 } action: { record("avatar", $0.rect, $0.scheme) }
-            WNPhotoMenuButton(hasPhoto: false, isPresented: $isPresented)
+            WNPhotoMenuButton(hasPhoto: false, selection: $selection)
                 .onGeometryChange(for: AvatarFormFrame.self) {
                     AvatarFormFrame(rect: $0.frame(in: .global), scheme: scheme)
                 } action: { record("add", $0.rect, $0.scheme) }
-            WNPhotoMenuButton(hasPhoto: true, isPresented: $isPresented)
+            WNPhotoMenuButton(hasPhoto: true, selection: $selection)
                 .onGeometryChange(for: AvatarFormFrame.self) {
                     AvatarFormFrame(rect: $0.frame(in: .global), scheme: scheme)
                 } action: { record("change", $0.rect, $0.scheme) }
@@ -160,7 +158,7 @@ private struct ControlFixture: View {
     @State private var empty = ""
     @State private var filled = "Message search"
     @State private var name = "Profile name"
-    @State private var isPresented = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
 
     var body: some View {
         ScrollView {
@@ -177,9 +175,9 @@ private struct ControlFixture: View {
                 WNSearchBar(query: $filled, prompt: "Search Chats", focusesOnAppear: false) {}
                 measured("input") { WNInput(placeholder: "Name", text: $name, showsClear: true) }
                 measured("copy") { CopyableValueChip(display: "npub1exam…f4k2", copyValue: "example", valueName: "npub") }
-                measured("photo") { WNPhotoMenuButton(hasPhoto: false, isPresented: $isPresented) }
-                measured("changePhoto") { WNPhotoMenuButton(hasPhoto: true, isPresented: $isPresented) }
-                measured("disabledPhoto") { WNPhotoMenuButton(hasPhoto: false, isPresented: $isPresented).disabled(true) }
+                measured("photo") { WNPhotoMenuButton(hasPhoto: false, selection: $photoMenuAction) }
+                measured("changePhoto") { WNPhotoMenuButton(hasPhoto: true, selection: $photoMenuAction) }
+                measured("disabledPhoto") { WNPhotoMenuButton(hasPhoto: false, selection: $photoMenuAction).disabled(true) }
                 measured("primary") { WNButton(title: "Continue") {} }
                 measured("secondary") { WNButton(title: "Cancel", emphasis: .secondary) {} }
                 measured("destructive") { WNButton(title: "Delete", emphasis: .destructive, size: .standard) {} }

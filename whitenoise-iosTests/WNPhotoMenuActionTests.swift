@@ -1,6 +1,7 @@
-import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
+import UIKit
 @testable import whitenoise_ios
 
 struct WNPhotoMenuActionTests {
@@ -29,70 +30,51 @@ struct WNPhotoMenuActionTests {
             #expect(!action.systemImage.isEmpty)
         }
     }
-}
 
-struct WNPhotoMenuPlacementTests {
-    private let container = CGSize(width: 402, height: 874)
-
-    private func origin(anchor: CGRect, hasPhoto: Bool = true, in size: CGSize? = nil) -> CGPoint {
-        WNPhotoMenuMetrics.panelOrigin(
-            anchor: anchor,
-            panelHeight: WNPhotoMenuMetrics.panelHeight(hasPhoto: hasPhoto),
-            container: size ?? container
-        )
-    }
-
-    @Test func removeRowAddsItsOwnDividerToTheHeight() {
-        let withoutPhoto = WNPhotoMenuMetrics.panelHeight(hasPhoto: false)
-        let withPhoto = WNPhotoMenuMetrics.panelHeight(hasPhoto: true)
-        #expect(withoutPhoto == 3 * WNPhotoMenuMetrics.rowHeight)
-        #expect(withPhoto == withoutPhoto + WNPhotoMenuMetrics.rowHeight + 1)
-    }
-
-    @Test func opensBelowTheAnchorCenteredOnIt() {
-        let anchor = CGRect(x: 151, y: 300, width: 100, height: 44)
-        let placed = origin(anchor: anchor)
-
-        #expect(placed.y == anchor.maxY + WNPhotoMenuMetrics.anchorGap)
-        #expect(placed.x + WNPhotoMenuMetrics.menuWidth / 2 == anchor.midX)
-    }
-
-    @Test func staysInsideTheContainerForAnchorsNearAnEdge() {
-        for anchor in [
-            CGRect(x: 0, y: 300, width: 60, height: 44),
-            CGRect(x: 342, y: 300, width: 60, height: 44),
-        ] {
-            let placed = origin(anchor: anchor)
-            #expect(placed.x >= WNPhotoMenuMetrics.screenMargin)
-            #expect(
-                placed.x + WNPhotoMenuMetrics.menuWidth
-                    <= container.width - WNPhotoMenuMetrics.screenMargin
-            )
+    @MainActor
+    @Test func destructiveSymbolUsesTheCurrentContrastVariant() throws {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            let traits = UITraitCollection(traitsFrom: [
+                UITraitCollection(userInterfaceStyle: style),
+                UITraitCollection(accessibilityContrast: .high)
+            ])
+            let expected = try #require(UIImage(systemName: "trash"))
+                .withTintColor(UIColor.systemRed.resolvedColor(with: traits), renderingMode: .alwaysOriginal)
+            traits.performAsCurrent {
+                let actual = WNPhotoMenuAction.removePhoto.symbol(for: style == .dark ? .dark : .light, contrast: .increased)
+                #expect(actual.pngData() == expected.pngData())
+            }
         }
     }
 
-    @Test func flipsAboveTheAnchorWhenItWouldNotFitBelow() {
-        let anchor = CGRect(x: 151, y: 780, width: 100, height: 44)
-        let placed = origin(anchor: anchor)
-        let height = WNPhotoMenuMetrics.panelHeight(hasPhoto: true)
-
-        #expect(placed.y + height < anchor.minY)
-        #expect(placed.y == anchor.minY - WNPhotoMenuMetrics.anchorGap - height)
-    }
-
-    @Test func keepsThePanelAtItsButtonWhenTheContainerIsDegenerate() {
-        // A fullScreenCover presented from inside a sheet reports a zero-size
-        // GeometryReader; clamping against that put the panel in the corner.
-        let anchor = CGRect(x: 151, y: 300, width: 100, height: 44)
-        let placed = origin(anchor: anchor, in: .zero)
-
-        #expect(placed.y == anchor.maxY + WNPhotoMenuMetrics.anchorGap)
-        #expect(placed.x + WNPhotoMenuMetrics.menuWidth / 2 == anchor.midX)
-    }
-
-    @Test func neverPlacesThePanelOffTheTopWhenNothingFits() {
-        let tiny = CGSize(width: 402, height: 200)
-        let placed = origin(anchor: CGRect(x: 151, y: 150, width: 100, height: 44), in: tiny)
-        #expect(placed.y >= WNPhotoMenuMetrics.screenMargin)
+    @MainActor
+    @Test func sourceSymbolsStayNeutralWhenTheNativeHostUsesBlueTint() throws {
+        for scheme in [ColorScheme.light, .dark] {
+            for action in WNPhotoMenuAction.available(hasPhoto: false) {
+                let view = UIImageView(image: action.symbol(for: scheme))
+                view.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+                view.contentMode = .center
+                view.tintColor = .systemBlue
+                let rendered = UIGraphicsImageRenderer(size: view.bounds.size).image { context in
+                    view.layer.render(in: context.cgContext)
+                }
+                let image = try #require(rendered.cgImage)
+                var pixels = [UInt8](repeating: 0, count: 44 * 44 * 4)
+                let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+                let context = try #require(CGContext(
+                    data: &pixels, width: 44, height: 44, bitsPerComponent: 8, bytesPerRow: 44 * 4,
+                    space: colorSpace,
+                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                ))
+                context.draw(image, in: CGRect(x: 0, y: 0, width: 44, height: 44))
+                let opaque = stride(from: 0, to: pixels.count, by: 4).filter { pixels[$0 + 3] == 255 }
+                #expect(!opaque.isEmpty)
+                for offset in opaque {
+                    #expect(pixels[offset] == pixels[offset + 1])
+                    #expect(pixels[offset] == pixels[offset + 2])
+                    #expect(scheme == .dark ? pixels[offset] > 245 : pixels[offset] < 10)
+                }
+            }
+        }
     }
 }

@@ -8,7 +8,7 @@ struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var model = ProfileEditViewModel()
-    @State private var showPhotoMenu = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var photoError: String?
     @State private var photoProgressPhase: ProfileImageProgressPhase?
     @State private var isEditing = false
@@ -159,18 +159,22 @@ struct ProfileEditView: View {
             }
         }
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: !model.picture.isEmpty,
+            selection: $photoMenuAction,
             confirmsPublicUpload: true,
-            onError: { photoError = UserFacingError.message(for: $0) },
+            prepareDraft: { data, fileName, sourceURL in
+                let accountID = appState.activeAccount?.accountIdHex
+                let ticket = model.loadTicket
+                let draft = try await ProfileImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+                try Task.checkCancellation()
+                guard model.loadTicket == ticket,
+                      appState.activeAccount?.accountIdHex == accountID else { throw CancellationError() }
+                return draft
+            },
             onRemove: { applyUpload(nil) },
             onSelect: { selection in
-                upload(
-                    data: selection.data,
-                    fileName: selection.fileName,
-                    typeIdentifier: selection.typeIdentifier,
-                    sourceURL: selection.sourceURL
-                )
+                applyUpload(selection)
             }
         )
         .task(id: appState.activeAccount?.accountIdHex) {
@@ -191,7 +195,7 @@ struct ProfileEditView: View {
                     if isEditing {
                         WNAvatarPhotoMenu(
                             hasPhoto: !model.picture.isEmpty,
-                            isPresented: $showPhotoMenu
+                            selection: $photoMenuAction
                         ) {
                             avatarPreview(accountIdHex: active.accountIdHex)
                         }
@@ -268,47 +272,19 @@ struct ProfileEditView: View {
         aboutFocused = false
     }
 
-    /// Unlike Sign Up, which holds the avatar until the account exists, an edit
-    /// has an account to upload against now: the public URL is fetched here and
-    /// only the kind:0 republish waits for Done.
-    private func upload(
-        data: Data,
-        fileName: String?,
-        typeIdentifier: String?,
-        sourceURL: URL?
-    ) {
+    private func applyUpload(_ draft: GroupImageUploadDraft?) {
         let accountID = appState.activeAccount?.accountIdHex
         let ticket = model.loadTicket
         photoError = nil
-        photoProgressPhase = .preparing
+        photoProgressPhase = draft == nil ? nil : .uploading
         Task {
-            do {
-                let draft = try await GroupImageDraftProcessor.prepare(
-                    data: data,
-                    fileName: fileName,
-                    typeIdentifier: typeIdentifier,
-                    sourceURL: sourceURL
-                )
-                guard !Task.isCancelled, model.loadTicket == ticket,
-                      appState.activeAccount?.accountIdHex == accountID else {
-                    photoProgressPhase = nil
-                    return
-                }
-                photoProgressPhase = .uploading
-                await save(draft)
-            } catch {
+            guard !Task.isCancelled, model.loadTicket == ticket,
+                  appState.activeAccount?.accountIdHex == accountID else {
                 photoProgressPhase = nil
-                guard !Task.isCancelled, model.loadTicket == ticket,
-                      appState.activeAccount?.accountIdHex == accountID else { return }
-                photoError = UserFacingError.message(for: error)
-                Haptics.error()
+                return
             }
+            await save(draft)
         }
-    }
-
-    private func applyUpload(_ draft: GroupImageUploadDraft?) {
-        photoError = nil
-        Task { await save(draft) }
     }
 
     private func save(_ draft: GroupImageUploadDraft?) async {
@@ -525,13 +501,10 @@ nonisolated struct ProfileEditMetadata: Equatable {
 }
 
 enum ProfileImageProgressPhase: Equatable {
-    case preparing
     case uploading
 
     var label: String {
         switch self {
-        case .preparing:
-            L10n.string("Preparing image…")
         case .uploading:
             L10n.string("Uploading profile image…")
         }
