@@ -7,10 +7,13 @@ import AVFoundation
 /// the caller, so it works without any OS-level URL-scheme registration.
 struct QRScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
-    let onError: (String) -> Void
+    let onError: (QRScannerFailure) -> Void
+    var validate: (String) -> Bool = { _ in true }
+    var onInvalidPayload: () -> Void = {}
+    var scanAttempt = 0
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onScan: onScan, onError: onError)
+        Coordinator(onScan: onScan, onError: onError, validate: validate, onInvalidPayload: onInvalidPayload)
     }
 
     func makeUIViewController(context: Context) -> ScannerViewController {
@@ -19,16 +22,28 @@ struct QRScannerView: UIViewControllerRepresentable {
         return controller
     }
 
-    func updateUIViewController(_ uiViewController: ScannerViewController, context: Context) {}
+    func updateUIViewController(_ uiViewController: ScannerViewController, context: Context) {
+        context.coordinator.resumeScanning(attempt: scanAttempt)
+    }
 
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         let onScan: (String) -> Void
-        let onError: (String) -> Void
+        let onError: (QRScannerFailure) -> Void
         private var didScan = false
+        private var scanAttempt = 0
+        private let validate: (String) -> Bool
+        private let onInvalidPayload: () -> Void
 
-        init(onScan: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
+        init(
+            onScan: @escaping (String) -> Void,
+            onError: @escaping (QRScannerFailure) -> Void,
+            validate: @escaping (String) -> Bool = { _ in true },
+            onInvalidPayload: @escaping () -> Void = {}
+        ) {
             self.onScan = onScan
             self.onError = onError
+            self.validate = validate
+            self.onInvalidPayload = onInvalidPayload
         }
 
         func metadataOutput(
@@ -40,9 +55,25 @@ struct QRScannerView: UIViewControllerRepresentable {
                   let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
                   let value = object.stringValue
             else { return }
-            didScan = true
-            DispatchQueue.main.async { self.onScan(value) }
+            DispatchQueue.main.async { self.receive(value) }
         }
+
+        func receive(_ payload: String) {
+            guard !didScan else { return }
+            didScan = true
+            if validate(payload) {
+                onScan(payload)
+            } else {
+                onInvalidPayload()
+            }
+        }
+
+        func resumeScanning(attempt: Int) {
+            guard scanAttempt != attempt else { return }
+            scanAttempt = attempt
+            didScan = false
+        }
+
     }
 }
 
@@ -56,38 +87,84 @@ final class ScannerViewController: UIViewController {
     /// the stop because `isRunning` hasn't flipped to `true` yet.
     private let sessionQueue = DispatchQueue(label: "dev.ipf.whitenoise.qr-scanner.session")
 
+    private var permissionTask: Task<Void, Never>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if granted {
-                    self.configureSession()
-                } else {
-                    self.coordinator?.onError(L10n.string("Camera access denied. Enable it in Settings to scan QR codes."))
-                }
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(captureFailed), name: AVCaptureSession.runtimeErrorNotification, object: session
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(captureInterrupted(_:)), name: AVCaptureSession.wasInterruptedNotification, object: session
+        )
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        permissionTask?.cancel()
+        permissionTask = Task { @MainActor [weak self] in
+            let authorization = AVCaptureDevice.authorizationStatus(for: .video)
+            if let failure = QRScannerFailure.preflight(
+                authorization: authorization, hasCamera: AVCaptureDevice.default(for: .video) != nil
+            ) {
+                guard !Task.isCancelled else { return }
+                self?.coordinator?.onError(failure)
+                return
             }
+            let granted = authorization == .authorized ? true : await AVCaptureDevice.requestAccess(for: .video)
+            guard !Task.isCancelled, let self else { return }
+            guard granted else {
+                coordinator?.onError(
+                    AVCaptureDevice.authorizationStatus(for: .video) == .restricted ? .restricted : .denied
+                )
+                return
+            }
+            if preview == nil { configureSession() }
+            else { sessionQueue.async { [session] in session.startRunning() } }
+        }
+    }
+
+    @objc private func captureFailed() {
+        Task { @MainActor [weak self] in
+            guard let self, viewIfLoaded?.window != nil else { return }
+            coordinator?.onError(.configurationFailed)
+        }
+    }
+
+    @objc private func captureInterrupted(_ notification: Notification) {
+        let reason = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? NSNumber)?.intValue
+        let failure = QRScannerFailure.interruption(reason: reason)
+        Task { @MainActor [weak self] in
+            guard let self, viewIfLoaded?.window != nil else { return }
+            coordinator?.onError(failure)
         }
     }
 
     private func configureSession() {
-        guard let device = AVCaptureDevice.default(for: .video),
-              let input = try? AVCaptureDeviceInput(device: device),
+        guard let device = AVCaptureDevice.default(for: .video) else {
+            coordinator?.onError(.noCamera)
+            return
+        }
+        guard let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input)
         else {
-            coordinator?.onError(L10n.string("No camera available on this device."))
+            coordinator?.onError(.configurationFailed)
             return
         }
         session.addInput(input)
 
         let output = AVCaptureMetadataOutput()
         guard session.canAddOutput(output) else {
-            coordinator?.onError(L10n.string("Couldn't start the camera."))
+            coordinator?.onError(.configurationFailed)
             return
         }
         session.addOutput(output)
         output.setMetadataObjectsDelegate(coordinator, queue: .main)
+        guard output.availableMetadataObjectTypes.contains(.qr) else {
+            coordinator?.onError(.configurationFailed)
+            return
+        }
         output.metadataObjectTypes = [.qr]
 
         let layer = AVCaptureVideoPreviewLayer(session: session)
@@ -108,6 +185,7 @@ final class ScannerViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        permissionTask?.cancel()
         // Serialize the stop behind any in-flight `startRunning()` on the same
         // queue, so the camera is always released even on a fast dismiss that
         // races the asynchronous start. By the time this runs the start has
@@ -120,6 +198,7 @@ final class ScannerViewController: UIViewController {
     }
 
     deinit {
+        permissionTask?.cancel()
         // Backstop: ensure the capture session is torn down even if a lifecycle
         // callback is skipped, so the camera hardware never leaks.
         sessionQueue.async { [session] in
