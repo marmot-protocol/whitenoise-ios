@@ -49,6 +49,49 @@ struct LaunchBrandLayoutTests {
         }
     }
 
+    @Test(arguments: [
+        CGSize(width: 320, height: 568),
+        CGSize(width: 912, height: 420),
+        CGSize(width: 834, height: 1194),
+        CGSize(width: 1194, height: 834),
+    ])
+    func welcomeMarkRemainsVisibleAndBounded(size: CGSize) async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
+        let previousKeyWindow = scene.keyWindow
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            previousKeyWindow?.makeKey()
+        }
+
+        let appState = AppState(client: try MarmotClient.testClient())
+        for textSize in [DynamicTypeSize.large, .accessibility5] {
+            let welcome = UIHostingController(rootView:
+                NavigationStack { WelcomeView() }
+                    .environment(appState)
+                    .environment(\.dynamicTypeSize, textSize)
+                    .environment(\.verticalSizeClass, size.height < 500 ? .compact : .regular)
+            )
+            window.rootViewController = welcome
+            window.makeKeyAndVisible()
+            welcome.view.layoutIfNeeded()
+            await Task.yield()
+            welcome.view.layoutIfNeeded()
+
+            let welcomeMark = try #require(mark(in: welcome.view))
+            let actual = welcomeMark.convert(welcomeMark.bounds, to: window)
+            #expect(!welcomeMark.isHidden)
+            #expect(welcomeMark.alpha > 0)
+            #expect(actual.width > 0)
+            #expect(actual.height > 0)
+            #expect(actual.width <= window.bounds.width * 0.5 + 1)
+            #expect(actual.height <= window.bounds.height * 0.3 + 1)
+            #expect(window.bounds.insetBy(dx: -1, dy: -1).contains(actual))
+        }
+    }
+
     private func mark(in view: UIView) -> UIImageView? {
         if let image = view as? UIImageView, image.image?.size == CGSize(width: 598, height: 460) {
             return image
