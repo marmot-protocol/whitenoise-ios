@@ -614,7 +614,7 @@ struct MessageDeletionTests {
     }
 
     private func appState(accountRef: String, accountIdHex: String) throws -> AppState {
-        let state = AppState(client: try MarmotClient.testClient())
+        let state = AppState.test(client: try MarmotClient.testClient())
         state.accountStore.accounts = [
             AccountSummaryFfi(
                 label: accountRef,

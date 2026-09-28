@@ -1,5 +1,6 @@
 import SwiftUI
 import Testing
+import UIKit
 @testable import whitenoise_ios
 
 struct WNButtonTests {
@@ -150,23 +151,19 @@ struct WNButtonTests {
         }
     }
 
-    /// The red fill is the same red in both schemes, so unlike the monochrome
-    /// emphases the label cannot flip with the scheme or it loses contrast.
-    @Test func destructiveLabelStaysLightOnTheRedFillInBothSchemes() {
-        #expect(
-            WNButton.Metrics.contentColor(
-                emphasis: .destructive,
-                colorScheme: .light,
-                isEnabled: true
-            ) == .white
-        )
-        #expect(
-            WNButton.Metrics.contentColor(
-                emphasis: .destructive,
-                colorScheme: .dark,
-                isEnabled: true
-            ) == .white
-        )
+    @MainActor
+    @Test func destructiveLabelsMeetTextContrastAcrossAppearanceAndContrastSettings() {
+        for style in [UIUserInterfaceStyle.light, .dark] {
+            for contrast in [UIAccessibilityContrast.normal, .high] {
+                let scheme: ColorScheme = style == .dark ? .dark : .light
+                #expect(ContrastProbe.ratio(
+                    foreground: WNButton.Metrics.contentColor(emphasis: .destructive, colorScheme: scheme, isEnabled: true),
+                    background: WNButton.Metrics.tint(for: .destructive, colorScheme: scheme),
+                    style: style,
+                    contrast: contrast
+                ) >= 4.5)
+            }
+        }
     }
 
     @Test func disabledDestructiveDimsLikeEveryOtherEmphasis() {

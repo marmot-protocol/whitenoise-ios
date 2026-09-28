@@ -16,8 +16,11 @@ enum ContrastProbe {
         let alpha: Double
     }
 
-    static func channels(_ color: Color, style: UIUserInterfaceStyle) -> Channels {
-        let resolved = UIColor(color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+    static func channels(_ color: Color, style: UIUserInterfaceStyle, contrast: UIAccessibilityContrast = .normal) -> Channels {
+        let traits = UITraitCollection(traitsFrom: [
+            UITraitCollection(userInterfaceStyle: style), UITraitCollection(accessibilityContrast: contrast),
+        ])
+        let resolved = UIColor(color).resolvedColor(with: traits)
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
@@ -40,10 +43,11 @@ enum ContrastProbe {
     static func ratio(
         foreground: Color,
         background: Color,
-        style: UIUserInterfaceStyle
+        style: UIUserInterfaceStyle,
+        contrast: UIAccessibilityContrast = .normal
     ) -> Double {
-        let base = channels(background, style: style)
-        let tint = channels(foreground, style: style)
+        let base = channels(background, style: style, contrast: contrast)
+        let tint = channels(foreground, style: style, contrast: contrast)
         let composited = Channels(
             red: tint.red * tint.alpha + base.red * (1 - tint.alpha),
             green: tint.green * tint.alpha + base.green * (1 - tint.alpha),

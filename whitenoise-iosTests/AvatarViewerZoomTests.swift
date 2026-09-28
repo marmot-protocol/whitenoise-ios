@@ -9,7 +9,7 @@ struct AvatarViewerZoomTests {
         let host = UIHostingController(rootView: WNAvatarViewer { size in
             NativeAvatarBubble(seed: "Marmota", title: "Marmota", asset: nil)
                 .frame(width: size, height: size)
-        }.environment(AppState()))
+        }.environment(AppState.test()))
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.keyWindow
         let window = UIWindow(windowScene: scene)

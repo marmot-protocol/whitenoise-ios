@@ -93,7 +93,7 @@ final class MediaImageZoomTests: XCTestCase {
             return data
         }
         let host = UIHostingController(rootView: MessageMediaFullscreenGalleryView(
-            gallery: gallery, onLoadMedia: loader, onDismiss: {}).environment(AppState()))
+            gallery: gallery, onLoadMedia: loader, onDismiss: {}).environment(AppState.test()))
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let previousKeyWindow = scene.keyWindow
         let window = UIWindow(windowScene: scene)

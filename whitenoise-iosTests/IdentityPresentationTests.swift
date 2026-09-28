@@ -327,7 +327,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func memberRowNamesUnknownMembersByNpub() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let member = GroupMemberDetailsFfi(
             memberIdHex: Fixture.hex,
             account: Fixture.hex,
@@ -344,7 +344,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func stagedRecipientNamesUnknownMembersByNpub() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let member = MemberRefFfi(
             memberRef: Fixture.npub,
             accountIdHex: Fixture.hex,
@@ -357,7 +357,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func directMessageChatTitleNamesUnknownPeerByNpub() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let title = appState.displayName(forAccountIdHex: Fixture.hex)
 
         #expect(title == IdentityFormatter.short(Fixture.npub))
@@ -365,7 +365,7 @@ struct IdentityPresentationAdapterTests {
     }
 
     @Test func copyableNpubIsWithheldRatherThanFallingBackToHex() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
 
         #expect(appState.npub(forAccountIdHex: Fixture.hex) == Fixture.npub)
         #expect(appState.npub(forAccountIdHex: "not-a-key") == nil)
@@ -376,7 +376,7 @@ struct IdentityPresentationAdapterTests {
     /// (the cold/relaunch/notification-extension case) and must render an npub;
     /// a later profile promotes the same call to a name and never regresses.
     @Test func presentationUpgradesFromNpubToNameWithoutEverShowingHex() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
 
         let firstFrame = appState.displayName(forAccountIdHex: Fixture.hex)
         #expect(firstFrame.hasPrefix("npub1"))

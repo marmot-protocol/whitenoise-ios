@@ -11,7 +11,7 @@ struct GroupDetailsArchiveActionTests {
     /// `membershipActionInFlight`; `setArchived` must take that gate before the
     /// awaited publish so a fast double-tap cannot start a second archive publish.
     @Test func setArchivedRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -58,7 +58,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func profileUpdateRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -108,7 +108,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func updateGroupImageRejectsConcurrentPublishUntilFirstCompletes() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -173,7 +173,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func encryptedImageUploadClearsLegacyURLOnlyAfterUploadSucceeds() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -210,7 +210,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func legacyURLClearRetryDoesNotUploadEncryptedImageAgain() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -254,7 +254,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func clearingDescriptionPublishesTheExplicitEmptyStringSentinel() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -287,7 +287,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -312,7 +312,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func leaveMarksConversationInactiveAndNotifiesParent() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -347,7 +347,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func endGroupRecordsDurableIntentAndDisablesMessagingImmediately() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -385,7 +385,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func endGroupEnablesLifecycleAndDisbandsFromOneConfirmation() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let group = archiveTestGroup(groupIdHex: groupIdHex, archived: false)
@@ -423,7 +423,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func alreadyRequestedLeaveIsPresentedAsDurableProgress() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -452,7 +452,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func developerResetAllowsAnActiveGroupAndRemovesItOnlyAfterSuccess() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.setPhase(.ready)
         appState.isAppSceneActive = true
         appState.activeAccountRef = "account-1"
@@ -482,7 +482,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func resetFailureKeepsTheGroupAndDeveloperModeIsRequired() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.setPhase(.ready)
         appState.isAppSceneActive = true
         appState.activeAccountRef = "account-1"
@@ -511,7 +511,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func deleteLocalIsGatedUntilMembershipIsInactive() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -534,7 +534,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func deleteLocalRemovesInactiveGroupFromParent() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -563,7 +563,7 @@ struct GroupDetailsArchiveActionTests {
     }
 
     @Test func deleteLocalIsUnavailableWhileStillAMemberWithALeaveInFlight() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(
@@ -594,7 +594,7 @@ struct GroupDetailsArchiveActionTests {
     /// commits the removal, which may never happen. Withholding the local delete
     /// there left the chat with no action that could clear its "Leaving" state.
     @Test func deleteLocalStaysAvailableAfterDepartureWithAnUncommittedLeave() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
         let groupIdHex = String(repeating: "ab", count: 32)
         let conversation = ConversationViewModel(

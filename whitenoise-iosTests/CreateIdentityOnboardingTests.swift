@@ -358,7 +358,7 @@ struct CreateIdentityOnboardingTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
-        let appState = AppState(client: nil, notifications: .shared, signUpDraftStore: store)
+        let appState = AppState.test(client: nil, notifications: .shared, signUpDraftStore: store)
         await appState.openSignUpDraft()
         let model = appState.signUpModel
         model.displayName = "Alice"
@@ -383,7 +383,7 @@ struct CreateIdentityOnboardingTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
-        let appState = AppState(client: nil, notifications: .shared, signUpDraftStore: store)
+        let appState = AppState.test(client: nil, notifications: .shared, signUpDraftStore: store)
         await appState.openSignUpDraft()
         let model = appState.signUpModel
         model.displayName = "Alice"
@@ -587,7 +587,7 @@ struct CreateIdentityOnboardingTests {
         try invalid.write(to: file)
         let client = try MarmotClient.testClient()
         try await client.startRuntime()
-        let state = AppState(client: client, notifications: .shared,
+        let state = AppState.test(client: client, notifications: .shared,
                              signUpDraftStore: SignUpDraftStore(directory: directory))
         try await state.refreshAccounts(refreshUnreadSummaries: false)
         #expect(state.hasRestoredSignUp)
@@ -615,7 +615,7 @@ struct CreateIdentityOnboardingTests {
         draft.accountID = unknownID ? nil : "missing"
         try await store.save(draft)
         let client = try MarmotClient.testClient()
-        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
+        let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
         let unrelated = CreateIdentityServiceStub().identity
         try await state.restoreSignUpIfNeeded(accounts: [unrelated], client: client)
         #expect(state.hasRestoredSignUp)
@@ -639,8 +639,12 @@ struct CreateIdentityOnboardingTests {
         draft.accountRef = identity.label
         try await store.save(draft)
         let client = try MarmotClient.testClient()
-        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
-        state.beforeSignUpRestorationReadForTesting = { throw MarmotKitError.Io(details: "Unreadable profile") }
+        let state = AppState.test(client: client, notifications: .shared, signUpDraftStore: store)
+        try await client.startRuntime()
+        // The stale account list names an identity absent from this runtime's store.
+        await #expect(throws: (any Error).self) {
+            try await client.accountSetupReadiness(accountRef: identity.label)
+        }
 
         try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
 
@@ -651,34 +655,24 @@ struct CreateIdentityOnboardingTests {
         #expect(!state.isUnfinishedSignUpAccount("unrelated"))
         await state.signUpModel.persistDraft()
         #expect(try await store.load() == draft)
+        try await client.marmot.shutdownAndClose()
     }
 
-    @Test(arguments: [false, true])
-    func restorationPropagatesCancellationAndTransientStartupErrors(cancelled: Bool) async throws {
+    @Test func restorationFromAReplacedRuntimePreservesTheDraftForRetry() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = SignUpDraftStore(directory: directory)
-        let identity = CreateIdentityServiceStub().identity
         var draft = SignUpDraft()
         draft.stage = .setup
-        draft.accountID = identity.accountIdHex
         try await store.save(draft)
-        let client = try MarmotClient.testClient()
-        let state = AppState(client: client, notifications: .shared, signUpDraftStore: store)
-        state.beforeSignUpRestorationReadForTesting = {
-            if cancelled { throw CancellationError() }
-            throw MarmotKitError.RuntimeBusy
-        }
+        let previousClient = try MarmotClient.testClient()
+        let state = AppState.test(client: try MarmotClient.testClient(), signUpDraftStore: store)
 
-        do {
-            try await state.restoreSignUpIfNeeded(accounts: [identity], client: client)
-            Issue.record("Restoration must propagate lifecycle errors so startup can retry")
-        } catch is CancellationError {
-            #expect(cancelled)
-        } catch let error as MarmotKitError {
-            #expect(!cancelled && error.isTransientStartupReadinessFailure)
+        await #expect(throws: CancellationError.self) {
+            try await state.restoreSignUpIfNeeded(accounts: [], client: previousClient)
         }
         #expect(!state.hasRestoredSignUp)
+        #expect(!state.restoreSignUpPresentation)
         #expect(!state.signUpModel.isRestorationBlocked)
         #expect(try await store.load() == draft)
     }
@@ -758,17 +752,56 @@ struct CreateIdentityOnboardingTests {
         #expect(service.completeCount == 1)
     }
 
-    @Test func failedPhotoPersistenceRetainsThePreviouslyAcceptedPhoto() async throws {
+    @Test(arguments: [false, true])
+    func failedPhotoChangePreservesAcceptedPhotoAndCheckpoint(removing: Bool) async throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try Data([0]).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
         let model = CreateIdentityViewModel()
         var submitted = SignUpDraft()
-        submitted.stage = .setup
+        submitted.stage = .publishing
+        submitted.accountID = CreateIdentityServiceStub().identity.accountIdHex
+        submitted.displayName = "Alice"
+        submitted.photo = .init(data: Self.avatarDraft.data, mediaType: Self.avatarDraft.mediaType,
+                                dim: Self.avatarDraft.dim, thumbhash: nil)
+        submitted.uploadedPhotoURL = "https://example.com/accepted.jpg"
         await model.configurePersistence(store: SignUpDraftStore(directory: file), restored: submitted)
-        model.setAvatarDraft(Self.avatarDraft)
-        await #expect(throws: CocoaError.self) { try await model.acceptPreparedAvatar(nil) }
-        #expect(model.avatarDraft == Self.avatarDraft)
+        let accepted = model.avatarDraft
+        let replacement = GroupImageUploadDraft(data: Data([4, 5, 6]), mediaType: "image/jpeg",
+                                                sourceURL: nil, dim: "1x1", thumbhash: nil)
+
+        await #expect(throws: CocoaError(.fileWriteUnknown)) {
+            try await model.acceptPreparedAvatar(removing ? nil : replacement)
+        }
+        #expect(model.avatarDraft == accepted)
+        #expect(model.draft == submitted)
+        #expect(!model.isBusy)
+        #expect(model.allowsBackNavigation)
+    }
+
+    @Test func acceptedPhotoChangesSurviveRestorationAndInvalidateOldUploads() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = SignUpDraftStore(directory: directory)
+        var submitted = SignUpDraft()
+        submitted.stage = .publishing
+        submitted.accountID = CreateIdentityServiceStub().identity.accountIdHex
+        submitted.uploadedPhotoURL = "https://example.com/old.jpg"
+        let model = CreateIdentityViewModel()
+        await model.configurePersistence(store: store, restored: submitted)
+
+        try await model.acceptPreparedAvatar(Self.avatarDraft)
+        let saved = try #require(try await store.load())
+        #expect(saved.photo?.data == Self.avatarDraft.data)
+        #expect(saved.uploadedPhotoURL == nil)
+        #expect(saved.stage != .publishing)
+        let restored = CreateIdentityViewModel()
+        await restored.configurePersistence(store: store, restored: saved)
+        #expect(restored.avatarDraft?.data == Self.avatarDraft.data)
+        try await restored.acceptPreparedAvatar(nil)
+        let removed = try #require(try await store.load())
+        #expect(removed.photo == nil)
+        #expect(removed.accountID == saved.accountID)
     }
 
     @Test func diskFailurePreventsCreatingAnAccount() async throws {
@@ -811,9 +844,11 @@ struct CreateIdentityOnboardingTests {
         let draft = try await ProfileImageDraftProcessor.prepare(
             data: png,
             fileName: "avatar.png",
-            typeIdentifier: "public.png"
+            typeIdentifier: "public.png",
+            sourceURL: URL(string: "https://example.com/avatar.png")
         )
 
+        #expect(draft.sourceURL == "https://example.com/avatar.png")
         #expect(draft.mediaType == "image/jpeg")
         #expect(draft.dim == "2048x1024")
         #expect(draft.data.count <= MediaDraftProcessor.maxImageAttachmentBytes)

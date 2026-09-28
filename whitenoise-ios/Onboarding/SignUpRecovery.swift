@@ -27,9 +27,6 @@ extension AppState {
             if let identity, draft.stage != .resetting {
                 draft.accountID = identity.accountIdHex
                 draft.accountRef = identity.label
-#if DEBUG
-                try await beforeSignUpRestorationReadForTesting?()
-#endif
                 profile = try await client.userProfileForEditing(accountIdHex: identity.accountIdHex)
                 let readiness = try await client.accountSetupReadiness(accountRef: identity.label)
                 try Task.checkCancellation()

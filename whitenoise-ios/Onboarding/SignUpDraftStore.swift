@@ -67,12 +67,7 @@ actor SignUpDraftStore {
 
     init(directory: URL? = nil) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-            || NSClassFromString("XCTestCase") != nil
-        let defaultDirectory = isTesting
-            ? FileManager.default.temporaryDirectory.appendingPathComponent("SignUpDraft-\(UUID())")
-            : base.appendingPathComponent("SignUpDraft", isDirectory: true)
-        self.directory = directory ?? defaultDirectory
+        self.directory = directory ?? base.appendingPathComponent("SignUpDraft", isDirectory: true)
     }
 
     func load() throws -> SignUpDraft? {

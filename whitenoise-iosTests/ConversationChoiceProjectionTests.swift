@@ -101,7 +101,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func startNewConversationCreatesEvenWhenExistingChoicesArePresent() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         model.conversationChooser = chooser()
@@ -122,7 +122,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func openingAChoiceNeverCreatesAnotherGroup() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         let chooser = chooser()
@@ -145,7 +145,7 @@ struct ConversationChoiceProjectionTests {
     }
 
     @Test func retryAfterStartNewFailureRetriesTheExactCreateIntent() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         model.conversationChooser = chooser()

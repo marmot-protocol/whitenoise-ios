@@ -3,6 +3,10 @@ import UIKit
 @testable import whitenoise_ios
 
 struct AvatarImageCropperTests {
+    @Test func undecodableDownloadIsRejected() {
+        #expect(AvatarImageCropper.normalizedImage(from: Data("not an image".utf8)) == nil)
+    }
+
     @Test func cropOffsetNeverExposesEmptyCanvas() {
         let offset = AvatarImageCropper.clampedOffset(
             CGSize(width: 500, height: -500),

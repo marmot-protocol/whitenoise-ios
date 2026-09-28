@@ -780,6 +780,7 @@ struct MediaApprovalView: View {
                     .padding(.horizontal, 15)
                     .padding(.vertical, 11)
                     .compatibleInputRoundedChrome(cornerRadius: 22, interactive: false)
+                    .preservesKeyboardOnTap()
 
                 Button(action: onSend) {
                     Group {

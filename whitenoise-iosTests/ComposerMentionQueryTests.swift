@@ -43,7 +43,7 @@ struct ComposerMentionQueryTests {
 
     @MainActor
     @Test func detailedRosterCandidatePrefersLocalContactNickname() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let suiteName = "dev.ipf.WhiteNoise.mention-nickname.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -511,7 +511,7 @@ struct ComposerMentionQueryTests {
             local: false
         )
 
-        let candidate = try #require(ComposerMentionCandidate(member: member, appState: AppState()))
+        let candidate = try #require(ComposerMentionCandidate(member: member, appState: AppState.test()))
 
         #expect(candidate.npub == npub)
         #expect(candidate.displayName == IdentityFormatter.short(npub))
@@ -524,7 +524,7 @@ struct ComposerMentionQueryTests {
             local: false
         )
 
-        #expect(ComposerMentionCandidate(member: member, appState: AppState()) == nil)
+        #expect(ComposerMentionCandidate(member: member, appState: AppState.test()) == nil)
     }
 
     @Test func mentionCandidateCacheKeyTreatsSameGenerationsAsEqual() {
@@ -565,6 +565,6 @@ private func mentionCandidate(name: String, npub: String, hex: String) -> Compos
             npub: npub,
             displayName: name
         ),
-        appState: AppState()
+        appState: AppState.test()
     )
 }

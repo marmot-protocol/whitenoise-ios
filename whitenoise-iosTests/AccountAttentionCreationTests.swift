@@ -12,7 +12,7 @@ struct AccountAttentionCreationTests {
     )
     func generatedAccountReadinessWithAndWithoutAttention(useAttention: Bool) async throws {
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.accountAttentionEnabledForTesting = useAttention
         await appState.bootstrap()
         var stage = "first identity"

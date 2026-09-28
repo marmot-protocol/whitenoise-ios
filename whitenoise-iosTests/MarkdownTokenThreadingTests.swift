@@ -55,7 +55,7 @@ struct MarkdownTokenThreadingTests {
     /// optimistically and snapped back to plain text on send confirmation.
     @Test func confirmSentKeepsContentTokensOnTheTimelineRecord() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let pending = AppMessageRecordFfi(
@@ -84,7 +84,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func durableTimelineUpsertPublishesPinnedRetentionMetadata() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         viewModel.applyTimelinePage(
@@ -125,7 +125,7 @@ struct MarkdownTokenThreadingTests {
 
     @Test func timelinePagePrecomputesMarkdownBlocksForMessageRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let record = TimelineMessageRecordFfi(

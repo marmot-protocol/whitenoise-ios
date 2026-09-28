@@ -41,6 +41,7 @@ nonisolated enum PinnedHTTPSFetcher {
 
     enum FetchError: Error, Equatable {
         case invalidRequest
+        case httpStatus(Int)
         case malformedResponse
         case responseHeadersTooLarge
         case tooManyRedirects
@@ -71,7 +72,7 @@ nonisolated enum PinnedHTTPSFetcher {
             )
             guard (300..<400).contains(response.statusCode) else {
                 guard (200..<300).contains(response.statusCode) else {
-                    throw URLError(.badServerResponse)
+                    throw FetchError.httpStatus(response.statusCode)
                 }
                 return (data, response)
             }

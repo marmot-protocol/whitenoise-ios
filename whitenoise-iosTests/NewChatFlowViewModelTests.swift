@@ -8,7 +8,7 @@ struct NewChatFlowViewModelTests {
     @Test func finalCreateFailureKeepsSelectionAndAllowsRetry() async throws {
         let client = try MarmotClient.testClient()
         defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account"
         let model = NewChatFlowViewModel()
         let member = MemberRefFfi(memberRef: "npub1alice", accountIdHex: String(repeating: "a", count: 64), npub: "npub1alice")

@@ -1,5 +1,13 @@
 import SwiftUI
 
+nonisolated struct WelcomeBrandBoundsKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// First-launch and add-profile entry point. First launch presents bounded
 /// sheets; Add Profile pushes into the sheet's existing navigation stack.
 struct WelcomeView: View {
@@ -44,47 +52,40 @@ struct WelcomeView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
+            ScrollView {
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Image("WhiteNoiseMark")
+                        .resizable()
+                        .scaledToFit()
+                        .containerRelativeFrame(.horizontal, count: 2, span: 1, spacing: 0)
+                        .frame(maxHeight: geometry.size.height * 0.3)
+                        .accessibilityLabel("White Noise")
+                        .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
+                    Spacer(minLength: 0)
 
-                ScrollView {
-                    VStack(spacing: 12) {
+                    VStack {
                         actionLayout {
-                            WNButton(title: "Sign In", emphasis: .secondary) {
-                                open(.signIn)
-                            }
-                            .accessibilityIdentifier("welcome.sign-in")
-
-                            WNButton(title: "Sign Up") {
-                                open(.signUp)
-                            }
-                            .accessibilityIdentifier("welcome.sign-up")
+                            WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
+                                .accessibilityIdentifier("welcome.sign-in")
+                            WNButton(title: "Sign Up") { open(.signUp) }
+                                .accessibilityIdentifier("welcome.sign-up")
                         }
-                        .padding(.vertical, 4)
-
                         Text("By signing up or signing in, you agree to our [Terms of Service](https://whitenoise.chat/terms).")
-                            .font(.footnote)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("welcome.terms")
                     }
                 }
-                .defaultScrollAnchor(.bottom, for: .alignment)
-                .defaultScrollAnchor(.top, for: .sizeChanges)
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(height: geometry.size.height * 0.3)
+                .frame(minHeight: geometry.size.height)
             }
-            .safeAreaPadding(.horizontal)
-            .safeAreaPadding(.bottom)
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .background {
-            LaunchBrandView()
-                .ignoresSafeArea()
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("White Noise")
-                .accessibilitySortPriority(1)
-        }
+        .safeAreaPadding(.horizontal)
+        .safeAreaPadding(.bottom)
+        .background(.background)
         .tint(accentColor)
         .navigationDestination(isPresented: $showSignIn) {
             ImportIdentityView(

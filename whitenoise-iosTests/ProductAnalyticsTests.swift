@@ -216,7 +216,7 @@ struct ProductAnalyticsTests {
         let defaultsName = "AccountFreeConsent.\(UUID())"
         let defaults = try #require(UserDefaults(suiteName: defaultsName))
         defer { defaults.removePersistentDomain(forName: defaultsName) }
-        let appState = AppState(client: client, notifications: AppNotifications(), accountDefaults: defaults, erasureDefaults: defaults)
+        let appState = AppState.test(client: client, notifications: AppNotifications(), accountDefaults: defaults, erasureDefaults: defaults)
         appState.setPhase(.onboarding)
         appState.setAppSceneActive(true)
         let original = try #require(try await appState.deviceDiagnosticsSnapshot())

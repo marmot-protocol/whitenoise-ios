@@ -22,7 +22,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func schedulingTailRefreshCancelsPreviousTaskAndClearsLatestOnCompletion() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let probe = TailRefreshTaskProbe()
@@ -55,7 +55,7 @@ struct TimelineTailRefreshTaskLifetimeTests {
     @MainActor
     @Test func cancellingTailRefreshDropsStoredTask() async throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
 

@@ -12,7 +12,7 @@ private final class SendOrderRecorder {
 struct ComposerSendHandOffTests {
     @Test func admittedTimeoutKeepsAnUnresolvedBubbleWithoutFreshSendRetry() async throws {
         let client = try MarmotClient.testClient()
-        let state = AppState(client: client)
+        let state = AppState.test(client: client)
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
@@ -29,7 +29,7 @@ struct ComposerSendHandOffTests {
 
     @Test func lateSendResultAfterTeardownCannotRecreateItsBubble() async throws {
         let client = try MarmotClient.testClient()
-        let state = AppState(client: client)
+        let state = AppState.test(client: client)
         state.activeAccountRef = "account-ref"
         let store = TimelineStore(appState: state, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: state, groupIdHex: hex("aa"), timelineStore: store)
@@ -46,7 +46,7 @@ struct ComposerSendHandOffTests {
 
     @Test func queuedSendFailureUsesReadableInlineAndToastMessages() async throws {
         let client = try MarmotClient.testClient()
-        let appState = AppState(client: client)
+        let appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(appState: appState, groupIdHex: hex("aa"), timelineStore: timelineStore)
@@ -105,7 +105,7 @@ struct ComposerSendHandOffTests {
     }
 
     @Test func composerIsFreeToStageAgainWhileTheRelayRoundTripIsStillRunning() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-ref"
         let timelineStore = TimelineStore(appState: appState, groupIdHex: hex("aa"))
         let composer = ComposerModel(

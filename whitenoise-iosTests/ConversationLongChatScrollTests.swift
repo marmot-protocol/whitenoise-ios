@@ -349,7 +349,7 @@ struct ConversationLongChatScrollTests {
         #expect(MessageBodyCollapsePresentation.shouldCollapse(fixture.rows.last?.initialRecord.plaintext ?? ""))
 
         let model = LongChatStressModel()
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         var lastViewport: TimelineBottomViewport?
         var visibleTargets = Set<String>()
         var olderPageRequests = 0

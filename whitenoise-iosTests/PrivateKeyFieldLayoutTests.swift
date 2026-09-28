@@ -8,7 +8,7 @@ import UIKit
 struct PrivateKeyFieldLayoutTests {
     @Test(arguments: [320.0, 402.0], [63, 512])
     func pastedKeyStaysWithinTheSignInForm(width: Double, keyLength: Int) async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let controller = UIHostingController(rootView:
             NavigationStack { ImportIdentityView() }
                 .environment(appState)

@@ -21,6 +21,7 @@ private struct KeyboardAdaptiveBottomPadding: ViewModifier {
 
 private struct KeyboardVisibilityTracking: ViewModifier {
     @Binding var isVisible: Bool
+    var animatesChanges = true
 
     func body(content: Content) -> some View {
         content
@@ -29,7 +30,11 @@ private struct KeyboardVisibilityTracking: ViewModifier {
             ) { notification in
                 let visible = KeyboardFrameChange.isVisible(from: notification)
                 guard KeyboardFrameChange.shouldUpdateVisibility(current: isVisible, next: visible) else { return }
-                withAnimation(KeyboardFrameChange.animation(from: notification)) {
+                var transaction = Transaction(
+                    animation: animatesChanges ? KeyboardFrameChange.animation(from: notification) : nil
+                )
+                transaction.disablesAnimations = !animatesChanges
+                withTransaction(transaction) {
                     isVisible = visible
                 }
             }
@@ -56,8 +61,11 @@ extension View {
         modifier(KeyboardAdaptiveBottomPadding())
     }
 
-    func trackKeyboardVisibility(_ isVisible: Binding<Bool>) -> some View {
-        modifier(KeyboardVisibilityTracking(isVisible: isVisible))
+    func trackKeyboardVisibility(
+        _ isVisible: Binding<Bool>,
+        animatesChanges: Bool = true
+    ) -> some View {
+        modifier(KeyboardVisibilityTracking(isVisible: isVisible, animatesChanges: animatesChanges))
     }
 
     func keyboardAdaptiveHorizontalPadding(isKeyboardVisible: Binding<Bool>) -> some View {

@@ -5,32 +5,6 @@ import Testing
 
 @MainActor
 struct AuditV4AdoptionTests {
-    private static let auditSettleTimeout = Duration.seconds(10)
-    private static let minimumAuditSchedulingOpportunities = 400
-
-    private func waitForRecordedAuditBytes(
-        _ client: MarmotClient,
-        sourceLocation: SourceLocation = #_sourceLocation
-    ) async throws {
-        let deadline = ContinuousClock.now.advanced(by: Self.auditSettleTimeout)
-        var schedulingOpportunities = 0
-        while true {
-            if try await client.auditLogFiles().contains(where: { $0.sizeBytes > 0 }) { return }
-            guard schedulingOpportunities < Self.minimumAuditSchedulingOpportunities
-                    || ContinuousClock.now < deadline
-            else { break }
-            schedulingOpportunities += 1
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        Issue.record(
-            """
-            native recorder wrote no audit bytes within \(Self.auditSettleTimeout) or \
-            \(schedulingOpportunities) main-actor scheduling opportunities
-            """,
-            sourceLocation: sourceLocation
-        )
-    }
-
     @Test func nativeStartupDeletesLegacyAuditFilesWithRecordingDisabled() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -99,11 +73,12 @@ struct AuditV4AdoptionTests {
                                       cursorPersistence: .advance, telemetryConfig: config)
         do {
             try await client.startRuntime()
+            // Local identity preparation opens the recorder before returning;
+            // enabling afterward depends on the background account worker.
+            _ = try await client.marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: true))
             _ = try await client.marmot.createIdentityWithProfile(
                 defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
             )
-            _ = try await client.marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: true))
-            try await waitForRecordedAuditBytes(client)
             _ = try await client.marmot.setAuditLogSettings(settings: AuditLogSettingsFfi(enabled: false))
             let files = try await client.auditLogFiles()
             let file = try DiagnosticLogExport.fileForExport(in: files)

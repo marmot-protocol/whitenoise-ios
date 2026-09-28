@@ -14,8 +14,7 @@ struct NewGroupSetupView: View {
     @State private var retentionSeconds: UInt64 = 0
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
-    @State private var showPhotoMenu = false
-    @State private var isPreparingImage = false
+    @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var imageError: String?
 
     var body: some View {
@@ -24,7 +23,7 @@ struct NewGroupSetupView: View {
                 VStack(spacing: 0) {
                     WNAvatarPhotoMenu(
                         hasPhoto: groupImage != nil,
-                        isPresented: $showPhotoMenu
+                        selection: $photoMenuAction
                     ) {
                         WNAvatarPreview(
                             name: name,
@@ -32,13 +31,7 @@ struct NewGroupSetupView: View {
                             emptySystemImage: "person.2"
                         )
                     }
-                    .disabled(model.isCreatingGroup || isPreparingImage)
-
-                    if isPreparingImage {
-                        ProgressView(GroupImageProgressPhase.preparing.label)
-                            .font(.footnote)
-                            .padding(.top)
-                    }
+                    .disabled(model.isCreatingGroup)
 
                     if let imageError {
                         Text(imageError)
@@ -127,17 +120,20 @@ struct NewGroupSetupView: View {
             RetentionPresetPickerView(selection: $retentionSeconds)
         }
         .wnPhotoSourceMenu(
-            isPresented: $showPhotoMenu,
-            hasPhoto: groupImage != nil,
+            selection: $photoMenuAction,
             // The selected bytes ride the encrypted group-image component, so
             // nothing here is published to a public host.
             confirmsPublicUpload: false,
-            onError: { imageError = UserFacingError.message(for: $0) },
+            prepareDraft: { data, fileName, sourceURL in
+                try await GroupImageDraftProcessor.prepare(
+                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                )
+            },
             onRemove: {
                 imageError = nil
                 groupImage = nil
             },
-            onSelect: prepareImage
+            onSelect: acceptImage
         )
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -163,24 +159,10 @@ struct NewGroupSetupView: View {
         .navigationBarBackButtonHidden(model.isCreatingGroup)
     }
 
-    private func prepareImage(_ selection: WNPhotoSourceSelection) {
+    private func acceptImage(_ selection: GroupImageUploadDraft) {
         imageError = nil
-        isPreparingImage = true
-        Task {
-            defer { isPreparingImage = false }
-            do {
-                groupImage = try await GroupImageDraftProcessor.prepare(
-                    data: selection.data,
-                    fileName: selection.fileName,
-                    typeIdentifier: selection.typeIdentifier,
-                    sourceURL: selection.sourceURL
-                )
-                Haptics.selection()
-            } catch {
-                imageError = UserFacingError.message(for: error)
-                Haptics.error()
-            }
-        }
+        groupImage = selection
+        Haptics.selection()
     }
 
     private var canCreate: Bool {
@@ -188,7 +170,7 @@ struct NewGroupSetupView: View {
             stagedCount: model.groupSelection.count,
             hasUsableName: !NewGroupPresentation.normalizedName(name).isEmpty,
             isCreating: model.isCreatingGroup,
-            isPreparingImage: isPreparingImage,
+            isPreparingImage: false,
             hasActiveAccount: appState.activeAccountRef != nil
         )
     }

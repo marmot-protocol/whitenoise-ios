@@ -37,6 +37,9 @@ struct UserFacingError: Equatable {
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
         if let mediaMessage = mediaMessage(for: error) { return mediaMessage }
+        if let fetchError = error as? PinnedHTTPSFetcher.FetchError, case .httpStatus = fetchError {
+            return URLError(.badServerResponse).localizedDescription
+        }
         let message = sanitizedText(fallbackMessage ?? raw ?? "")
         return message.isEmpty ? L10n.string("Please try again.") : message
     }

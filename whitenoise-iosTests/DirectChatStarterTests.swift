@@ -7,7 +7,7 @@ struct DirectChatStarterTests {
     private let alice = String(repeating: "bb", count: 32)
 
     @Test func reopensAnExistingDirectChatWithoutCreating() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
         starter.createGroupForTesting = { _, _ in
@@ -28,7 +28,7 @@ struct DirectChatStarterTests {
     }
 
     @Test func createsWhenNoDirectChatExistsAndClearsRowScopedProgress() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
         var observedRefs: [String] = []
@@ -78,7 +78,7 @@ struct DirectChatStarterTests {
     }
 
     @Test func secondTapIsIgnoredWhileTheFirstCreateIsInFlight() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account"
         let starter = DirectChatStarter()
         let gate = CreateGate()
@@ -112,7 +112,7 @@ struct DirectChatStarterTests {
     }
 
     @Test func failsWithoutAnActiveAccount() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = nil
         let starter = DirectChatStarter()
 

@@ -145,6 +145,7 @@ final class CreateIdentityViewModel {
     var failure: Failure?
     private(set) var isFinished = false
     private(set) var isResetting = false
+    private var isSavingAvatar = false
     private(set) var isRestorationBlocked = false
     var isResetPending: Bool { draft.stage == .resetting }
     private(set) var draft = SignUpDraft()
@@ -155,8 +156,6 @@ final class CreateIdentityViewModel {
     var displayName = ""
     var about = ""
     private(set) var avatarDraft: GroupImageUploadDraft?
-    private(set) var avatarError: String?
-    private(set) var isPreparingAvatar = false
     private(set) var phase: Phase = .editing
 
     private(set) var createdIdentity: AccountSummaryFfi?
@@ -174,11 +173,11 @@ final class CreateIdentityViewModel {
     }
 
     var isBusy: Bool {
-        isPreparingAvatar || isSubmitting || isResetting
+        isSubmitting || isResetting || isSavingAvatar
     }
 
     var allowsBackNavigation: Bool {
-        !isSubmitting && !isResetting
+        !isBusy
     }
 
     func configurePersistence(
@@ -239,7 +238,7 @@ final class CreateIdentityViewModel {
     func scheduleDraftPersistence(delay: Duration = .milliseconds(350)) -> Task<Void, Never>? {
         draftPersistenceTask?.cancel()
         draftPersistenceTask = nil
-        guard draft.requiresRecovery, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return nil }
+        guard draft.requiresRecovery, !isRestorationBlocked, !isFinished, !isBusy else { return nil }
         draftPersistenceTask = Task { [weak self] in
             do { try await Task.sleep(for: delay) }
             catch { return }
@@ -253,7 +252,7 @@ final class CreateIdentityViewModel {
     func persistDraft() async {
         draftPersistenceTask?.cancel()
         draftPersistenceTask = nil
-        guard draftStore != nil, !isRestorationBlocked, !isFinished, !isSubmitting, !isResetting else { return }
+        guard draftStore != nil, !isRestorationBlocked, !isFinished, !isBusy else { return }
         do { try await checkpoint() }
         catch { failure = .draftStorage }
     }
@@ -285,15 +284,24 @@ final class CreateIdentityViewModel {
     }
 
     func acceptPreparedAvatar(_ prepared: GroupImageUploadDraft?) async throws {
+        try Task.checkCancellation()
+        guard !isBusy, !isResetPending, !isRestorationBlocked, !isFinished else { throw CancellationError() }
+        draftPersistenceTask?.cancel()
+        draftPersistenceTask = nil
+        isSavingAvatar = true
+        defer { isSavingAvatar = false }
         let previous = avatarDraft
         let previousURL = uploadedAvatarURL
+        let previousDraft = draft
         setAvatarDraft(prepared)
         do { try await checkpoint() }
         catch {
             avatarDraft = previous
             uploadedAvatarURL = previousURL
+            draft = previousDraft
             throw CocoaError(.fileWriteUnknown)
         }
+        if failure == .draftStorage { failure = nil }
         if prepared == nil, failure == .photoUpload {
             failure = nil
             phase = .editing
@@ -304,43 +312,6 @@ final class CreateIdentityViewModel {
         guard !isSubmitting else { return }
         avatarDraft = draft
         uploadedAvatarURL = nil
-        avatarError = nil
-    }
-
-    func prepareAvatar(from selection: PhotoLibrarySelection) async {
-        await prepareAvatar(
-            data: selection.data,
-            fileName: selection.fileName,
-            typeIdentifier: selection.typeIdentifier
-        )
-    }
-
-    func prepareAvatar(
-        data: Data,
-        fileName: String?,
-        typeIdentifier: String?
-    ) async {
-        guard !isPreparingAvatar, !isSubmitting else { return }
-        avatarError = nil
-        isPreparingAvatar = true
-        defer { isPreparingAvatar = false }
-        do {
-            setAvatarDraft(try await ProfileImageDraftProcessor.prepare(
-                data: data,
-                fileName: fileName,
-                typeIdentifier: typeIdentifier
-            ))
-            Haptics.selection()
-        } catch {
-            setAvatarPreparationError(error)
-        }
-    }
-
-    func clearAvatarError() { avatarError = nil }
-
-    func setAvatarPreparationError(_ error: Error) {
-        avatarError = UserFacingError.message(for: error)
-        Haptics.error()
     }
 
     /// Prepare the form without starting account creation.
@@ -462,7 +433,6 @@ final class CreateIdentityViewModel {
             displayName = ""
             about = ""
             avatarDraft = nil
-            avatarError = nil
             uploadedAvatarURL = nil
             hasSuggestedName = false
             phase = .editing
@@ -566,7 +536,8 @@ enum ProfileImageDraftProcessor {
     static func prepare(
         data: Data,
         fileName: String?,
-        typeIdentifier: String?
+        typeIdentifier: String?,
+        sourceURL: URL? = nil
     ) async throws -> GroupImageUploadDraft {
         guard !data.isEmpty, data.count <= MediaDraftProcessor.maxAttachmentBytes else {
             throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
@@ -584,7 +555,7 @@ enum ProfileImageDraftProcessor {
         return GroupImageUploadDraft(
             data: attachment.data,
             mediaType: attachment.mediaType,
-            sourceURL: nil,
+            sourceURL: ContentSanitizer.imageURL(sourceURL?.absoluteString)?.absoluteString,
             dim: attachment.dim,
             thumbhash: attachment.thumbhash,
             thumbnail: attachment.thumbnail
