@@ -68,22 +68,32 @@ struct LaunchBrandLayoutTests {
 
         let appState = AppState(client: try MarmotClient.testClient())
         for textSize in [DynamicTypeSize.large, .accessibility5] {
+            var markFrame: CGRect?
             let welcome = UIHostingController(rootView:
                 NavigationStack { WelcomeView() }
                     .environment(appState)
                     .environment(\.dynamicTypeSize, textSize)
                     .environment(\.verticalSizeClass, size.height < 500 ? .compact : .regular)
+                    .overlayPreferenceValue(WelcomeBrandBoundsKey.self) { anchor in
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onGeometryChange(for: CGRect?.self) { _ in
+                                    anchor.map { geometry[$0] }
+                                } action: { markFrame = $0 }
+                        }
+                        .allowsHitTesting(false)
+                    }
             )
             window.rootViewController = welcome
             window.makeKeyAndVisible()
-            welcome.view.layoutIfNeeded()
-            await Task.yield()
-            welcome.view.layoutIfNeeded()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while markFrame == nil, ContinuousClock.now < deadline {
+                welcome.view.layoutIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
 
-            let welcomeMark = try #require(mark(in: welcome.view))
-            let actual = welcomeMark.convert(welcomeMark.bounds, to: window)
-            #expect(!welcomeMark.isHidden)
-            #expect(welcomeMark.alpha > 0)
+            // SwiftUI Image need not create a UIImageView; measure its rendered layout instead.
+            let actual = try #require(markFrame, "Welcome logo did not report layout for \(size), \(textSize)")
             #expect(actual.width > 0)
             #expect(actual.height > 0)
             #expect(actual.width <= window.bounds.width * 0.5 + 1)

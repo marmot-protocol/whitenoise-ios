@@ -1,5 +1,13 @@
 import SwiftUI
 
+nonisolated struct WelcomeBrandBoundsKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = nextValue() ?? value
+    }
+}
+
 /// First-launch and add-profile entry point. First launch presents bounded
 /// sheets; Add Profile pushes into the sheet's existing navigation stack.
 struct WelcomeView: View {
@@ -53,6 +61,7 @@ struct WelcomeView: View {
                         .containerRelativeFrame(.horizontal, count: 2, span: 1, spacing: 0)
                         .frame(maxHeight: geometry.size.height * 0.3)
                         .accessibilityLabel("White Noise")
+                        .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
                     Spacer(minLength: 0)
 
                     VStack {
