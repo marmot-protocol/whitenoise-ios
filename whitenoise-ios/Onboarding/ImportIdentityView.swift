@@ -207,6 +207,9 @@ struct ImportIdentityView: View {
         .padding(.leading)
         .frame(height: 50)
         .background(Color(uiColor: .secondarySystemFill), in: .capsule)
+        .contentShape(.capsule)
+        .onTapGesture { isKeyFocused = true }
+        .preservesKeyboardOnTap()
         .disabled(model.isImporting)
     }
 }
