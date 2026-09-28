@@ -16,15 +16,15 @@ struct IdentityView: View {
             if let active = appState.activeAccount {
                 Section {
                     CopyableValueRow(
-                        label: "Hex",
-                        display: IdentityFormatter.short(active.accountIdHex),
-                        copyValue: active.accountIdHex
+                        title: "Hex",
+                        value: active.accountIdHex,
+                        display: IdentityFormatter.short(active.accountIdHex)
                     )
                     if let npub = appState.npub(forAccountIdHex: active.accountIdHex) {
                         CopyableValueRow(
-                            label: "npub",
-                            display: IdentityFormatter.short(npub),
-                            copyValue: npub
+                            title: "npub",
+                            value: npub,
+                            display: IdentityFormatter.short(npub)
                         )
                     }
                 } header: {
@@ -185,33 +185,5 @@ private struct EncryptedNsecExportSheet: View {
             }
         }
         .interactiveDismissDisabled(isExporting)
-    }
-}
-
-/// A LabeledContent row whose value copies to the clipboard on tap. Shows a
-/// short form; copies the full value. Gives haptic feedback and a brief
-/// inline "Copied" + checkmark affordance.
-private struct CopyableValueRow: View {
-    let label: String.LocalizationValue
-    let display: String
-    let copyValue: String
-
-    var body: some View {
-        WNCopyButton(value: copyValue, accessibilityTitle: L10n.formatted("Copy %@", L10n.string(label))) { justCopied in
-            LabeledContent {
-                HStack(spacing: 8) {
-                    Text(justCopied ? L10n.string("Copied") : display)
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(justCopied ? Color.primary : Color.secondary)
-                    WNCopyIcon(copied: justCopied)
-                        .font(.caption)
-                        .foregroundStyle(Color.primary)
-                }
-                .contentShape(.rect)
-            } label: {
-                Text(L10n.string(label))
-            }
-        }
-        .buttonStyle(.plain)
     }
 }

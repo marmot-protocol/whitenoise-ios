@@ -18,7 +18,7 @@ struct WNCopyIcon: View {
     let copied: Bool
 
     var body: some View {
-        Image(systemName: "doc.on.doc")
+        Image(systemName: WNCopyFeedback.symbolName(isCopied: false))
             .hidden()
             .overlay {
                 Image(systemName: WNCopyFeedback.symbolName(isCopied: copied))
@@ -62,5 +62,29 @@ struct WNCopyButton<Label: View>: View {
         resetTask?.cancel()
         resetTask = nil
         copied = false
+    }
+}
+
+#Preview("WNCopyButton") {
+    Form {
+        WNCopyButton(value: "npub1example", accessibilityTitle: "Copy npub") { copied in
+            WNCopyIcon(copied: copied)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .tint(.primary)
+
+        WNCopyButton(value: "a1b2c3d4e5f60718", accessibilityTitle: "Copy Group ID") { copied in
+            LabeledContent("Group ID") {
+                HStack {
+                    Text("a1b2c3d4e5f60718")
+                        .font(.callout.monospaced())
+                    WNCopyIcon(copied: copied)
+                }
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
     }
 }
