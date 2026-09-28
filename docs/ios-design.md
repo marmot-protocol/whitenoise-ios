@@ -106,6 +106,28 @@ Keep copy calm, direct, and useful, following Apple's
   translations and right-to-left layouts; keep visible and spoken action names
   consistent. Use non-sensitive sample content in review captures.
 
+## Feedback and errors
+
+Follow Apple's [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback)
+and [Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts)
+guidance. Feedback is a design principle, not a native toast component.
+
+- Show fixable errors inline near the field or action. Keep them visible until
+  resolved or retried; a disappearing banner must not be the only explanation.
+- Use native alerts for blocking problems that require an explicit decision.
+  Give each action a clear outcome; do not use alerts for routine confirmations.
+- Confirm copying on the initiating control with a temporary checkmark or
+  “Copied” label and a VoiceOver announcement. Keep the control usable for
+  repeated copies and cancel delayed feedback when it disappears.
+- Let successful navigation or updated content confirm completion. Do not add a
+  success toast when the resulting screen already communicates success.
+- During saves, show progress and prevent duplicate submissions. Exit editing
+  only after confirmed success. On failure, preserve the draft, keep the editor
+  open, and offer retry beside a persistent error. Keep field validation beside
+  its field, separate from loading and saving failures.
+- Apply these patterns per flow; do not globally suppress existing errors or
+  remove feedback without providing an appropriate replacement.
+
 ## Review the running experience
 
 - Check the applicable loading, disabled, empty, success, error, offline,

@@ -25,11 +25,7 @@ struct AIAgentsSettingsView: View {
                     .foregroundStyle(.secondary)
 
                 ForEach(AIAgentConnector.allCases) { connector in
-                    AIAgentConnectorRow(connector: connector, npub: npub) { prompt in
-                        UIPasteboard.general.string = prompt
-                        Haptics.selection()
-                        appState.present(.success(L10n.string("Prompt copied — paste it into your agent.")))
-                    }
+                    AIAgentConnectorRow(connector: connector, npub: npub)
                 }
             } header: {
                 Text("Connectors")
@@ -45,17 +41,13 @@ struct AIAgentsSettingsView: View {
 
                 if let npub {
                     LabeledContent("npub") {
-                        Button {
-                            UIPasteboard.general.string = npub
-                            Haptics.selection()
-                            appState.present(.success(L10n.string("Copied")))
-                        } label: {
+                        WNCopyButton(value: npub, accessibilityTitle: L10n.formatted("Copy %@", L10n.string("npub"))) { copied in
                             HStack(spacing: 8) {
                                 Text(npub)
                                     .font(.subheadline.monospaced())
                                     .lineLimit(1)
                                     .truncationMode(.middle)
-                                Image(systemName: "doc.on.doc")
+                                WNCopyIcon(copied: copied)
                                     .font(.footnote)
                             }
                             .foregroundStyle(.secondary)
@@ -63,7 +55,6 @@ struct AIAgentsSettingsView: View {
                             .contentShape(.rect)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel(L10n.formatted("Copy %@", L10n.string("npub")))
                     }
                     .accessibilityIdentifier("aiAgents.copyNpub")
                 } else {
@@ -100,7 +91,6 @@ struct AIAgentsSettingsView: View {
 private struct AIAgentConnectorRow: View {
     let connector: AIAgentConnector
     let npub: String?
-    let onCopy: (String) -> Void
     @State private var isExpanded = false
 
     var body: some View {
@@ -132,16 +122,16 @@ private struct AIAgentConnectorRow: View {
                     : L10n.formatted("Show %@ setup prompt", connector.name))
                 .accessibilityIdentifier("aiAgents.\(connector.rawValue).toggle")
 
-                Button {
-                    if let npub { onCopy(connector.prompt(npub: npub)) }
-                } label: {
-                    Image(systemName: "doc.on.doc")
+                WNCopyButton(
+                    value: npub.map { connector.prompt(npub: $0) } ?? "",
+                    accessibilityTitle: L10n.formatted("Copy %@ setup prompt", connector.name)
+                ) { copied in
+                    WNCopyIcon(copied: copied)
                         .frame(width: 44, height: 44)
                         .contentShape(.rect)
                 }
                 .buttonStyle(.borderless)
                 .tint(.primary)
-                .accessibilityLabel(L10n.formatted("Copy %@ setup prompt", connector.name))
                 .accessibilityIdentifier("aiAgents.\(connector.rawValue).copy")
             }
             .disabled(npub == nil)

@@ -43,7 +43,7 @@ struct ImportIdentityView: View {
     }
 
     /// Accept only a checksum-valid NIP-19 encoding of a 32-byte private key.
-    static func isPlausibleNsec(_ raw: String) -> Bool {
+    nonisolated static func isPlausibleNsec(_ raw: String) -> Bool {
         NostrProfileReference.normalizedNsec(raw) != nil
     }
 
@@ -148,18 +148,28 @@ struct ImportIdentityView: View {
             .safeAreaPadding(.horizontal)
             .safeAreaPadding(.bottom)
         }
-        .navigationDestination(isPresented: $showScanner) {
-            PrivateKeyQRScanner { payload in
-                model.clearPastedClipboardToken()
-                model.identity = payload.trimmingCharacters(in: .whitespacesAndNewlines)
-                showScanner = false
+        .sheet(isPresented: $showScanner) {
+            NavigationStack {
+                PrivateKeyQRScanner { payload in
+                    model.clearPastedClipboardToken()
+                    model.identity = payload.trimmingCharacters(in: .whitespacesAndNewlines)
+                    showScanner = false
+                }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
+                            showScanner = false
+                        }
+                        .accessibilityIdentifier("sign-in.scanner.close")
+                    }
+                }
             }
-        }
-        .onChange(of: showScanner) {
-            onPreferredSheetExpansionChange(showScanner || isKeyFocused)
+            .appAppearance()
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .onChange(of: isKeyFocused) {
-            onPreferredSheetExpansionChange(showScanner || isKeyFocused)
+            onPreferredSheetExpansionChange(isKeyFocused)
         }
         .interactiveDismissDisabled(model.isImporting)
         .alert(
@@ -209,38 +219,5 @@ struct ImportIdentityView: View {
         .background(Color(uiColor: .secondarySystemFill), in: .capsule)
         .preservesKeyboardOnTap()
         .disabled(model.isImporting)
-    }
-}
-
-private struct PrivateKeyQRScanner: View {
-    @State private var error: String?
-
-    let onScan: (String) -> Void
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            QRScannerView(
-                onScan: { payload in
-                    onScan(payload)
-                },
-                onError: { error = $0 }
-            )
-            .ignoresSafeArea()
-
-            if let error {
-                ContentUnavailableView {
-                    Label("QR Scanning Unavailable", systemImage: "camera.fill")
-                } description: {
-                    Text(error)
-                }
-                .foregroundStyle(.white)
-                .padding()
-            }
-        }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
     }
 }
