@@ -154,6 +154,7 @@ struct WNSearchField: View {
         .padding(.trailing, BottomInputChromeLayout.fieldTrailingPadding)
         .frame(minHeight: height)
         .compatibleInputCapsuleChrome(interactive: false)
+        .preservesKeyboardOnTap()
     }
 }
 

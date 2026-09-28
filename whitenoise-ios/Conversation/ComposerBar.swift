@@ -292,6 +292,7 @@ struct ComposerBar: View {
             .padding(.vertical, ComposerInputChrome.verticalInset)
         }
         .fixedSize(horizontal: false, vertical: true)
+        .preservesKeyboardOnTap()
         .fullScreenCover(isPresented: $showExpandedEditor) {
             ExpandedComposerEditor(
                 draft: $draft,

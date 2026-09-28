@@ -93,6 +93,20 @@ content cards, and media thumbnails retain their own presentation.
   over the picker and preserve the selection/search. Only enter Crop with a
   usable image, carrying the prepared image forward rather than decoding twice.
 
+## Keyboard and focus
+
+- Across the app, tapping empty/background surfaces outside an input dismisses
+  the keyboard and clears input focus, including inside sheets and forms.
+- Install `dismissesKeyboardOnTap()` once at the app root so its window-level
+  gesture covers presented screens. Do not add competing screen-wide SwiftUI
+  tap gestures or duplicate per-screen installations.
+- Custom input chrome and accessories use `preservesKeyboardOnTap()` so tapping
+  the field’s padding or clear control does not dismiss its keyboard.
+- Keep taps within text fields/text views working, including switching directly
+  between inputs. Background dismissal must not consume button/row taps or
+  interfere with scrolling. Custom UIKit inputs must report end-editing back
+  to their SwiftUI focus binding; dismissing the keyboard alone is insufficient.
+
 ## Write for the person using the app
 
 Keep copy calm, direct, and useful, following Apple's

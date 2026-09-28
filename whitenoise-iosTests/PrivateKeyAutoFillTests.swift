@@ -172,7 +172,6 @@ private struct HarnessView: View {
                     text: $model.text,
                     isFocused: $model.isFocused,
                     showsAccessory: model.showsAccessory,
-                    onClear: {},
                     onPaste: { _, _ in model.pastes += 1 },
                     onSubmit: { model.submits += 1 }
                 )

@@ -343,14 +343,23 @@ struct AppStateBootstrapTests {
         .StorageBusy(details: "test contention"), .KeystoreUnavailable(details: "test contention"),
     ])
     func transientCheckpointFailureStillRetriesAtLaunchAndResume(error: MarmotKitError) async throws {
+        let seedClient = try MarmotClient.testClient()
+        do {
+            try await seedClient.startRuntime()
+            _ = try await seedClient.marmot.createIdentityWithProfile(
+                defaultRelays: seedClient.relayUrls, bootstrapRelays: seedClient.relayUrls
+            )
+        } catch {
+            try? await seedClient.marmot.shutdownAndClose()
+            throw error
+        }
+        // Cold launch must not restart a live runtime while its setup worker writes the journal.
+        try await seedClient.marmot.shutdownAndClose()
         let appState = AppState(
-            client: try MarmotClient.testClient(), notifications: deniedNotifications(),
+            client: try seedClient.freshRuntime(), notifications: deniedNotifications(),
             accountDefaults: accountDefaults, runtimeRetrySleeper: { _ in },
             runtimeConstructionRetryPolicy: RuntimeConstructionRetryPolicy(delays: [.zero])
         )
-        let client = try #require(appState.client)
-        try await client.startRuntime()
-        _ = try await client.marmot.createIdentityWithProfile(defaultRelays: client.relayUrls, bootstrapRelays: client.relayUrls)
         var attempts = 0
         appState.beforeOnboardingSnapshotReadForTesting = { _ in
             attempts += 1
