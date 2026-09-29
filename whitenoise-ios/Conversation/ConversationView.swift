@@ -779,8 +779,6 @@ struct ConversationView: View {
 
     private var conversationChromeView: some View {
         timeline
-            .compatibleTopScrollEdgeEffectHidden()
-            .safeAreaInset(edge: .top, spacing: 0) { searchBarInset }
             .bottomInputChromeAccessory {
                 // `onGeometryChange`'s transform is nonisolated and @Sendable, so
                 // the observable reads happen here in `body` — which also makes
@@ -826,9 +824,18 @@ struct ConversationView: View {
                 )
                     .accessibilityHidden(true)
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if viewModel?.search.isActive != true {
-                    conversationHeaderBar
+            .compatibleTopSafeAreaBar {
+                VStack(spacing: 0) {
+                    if viewModel?.search.isActive != true {
+                        conversationHeaderBar
+                    }
+                    searchBarInset
+                    if let viewModel {
+                        GroupRecoveryView(model: viewModel.recovery, groupID: chat.groupIdHex) {
+                            _ = await viewModel.refreshGroupManagement()
+                            await viewModel.refreshTimelineWindowAfterLocalPrune()
+                        }
+                    }
                 }
             }
             .overlay { messageActionsOverlay }
@@ -1088,14 +1095,6 @@ struct ConversationView: View {
 
     private var conversationRuntimeTasks: some View {
         conversationAttachmentSheets
-            .safeAreaInset(edge: .top, spacing: 0) {
-                if let viewModel {
-                    GroupRecoveryView(model: viewModel.recovery, groupID: chat.groupIdHex) {
-                        _ = await viewModel.refreshGroupManagement()
-                        await viewModel.refreshTimelineWindowAfterLocalPrune()
-                    }
-                }
-            }
             .task(id: ConversationRuntimeStartToken(
                 accountRef: appState.activeAccountRef,
                 runtimeGeneration: appState.runtimeGeneration,

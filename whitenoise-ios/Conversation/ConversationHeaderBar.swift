@@ -51,6 +51,5 @@ struct ConversationHeaderBar<Title: View>: View {
         .padding(.horizontal, ConversationHeaderMetrics.horizontalPadding)
         .padding(.vertical, ConversationHeaderMetrics.verticalPadding)
         .frame(maxWidth: .infinity)
-        .wnFadingHeader()
     }
 }

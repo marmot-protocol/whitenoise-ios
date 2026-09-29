@@ -67,7 +67,6 @@ struct GroupRecoveryView: View {
                  || model.status?.historyMayBeIncomplete == true
                  || (model.status?.pendingReinvites ?? 0) > 0 || (model.status?.failedReinvites ?? 0) > 0
                  || model.errorMessage != nil ? 12 : 0)
-        .background(.background)
         .onChange(of: appState.activeAccountRef) { selection = nil }
         .onChange(of: appState.runtimeGeneration) { selection = nil }
         .sheet(item: $selection) { selected in
