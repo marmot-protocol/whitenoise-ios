@@ -228,10 +228,25 @@ struct ChatsListView: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
+                    // Account-wide notices; group-scoped ones show in their conversation.
+                    ForEach(appState.historyNotices.accountNotices, id: \.noticeId) { notice in
+                        HistoryNoticeBanner(
+                            message: HistoryNoticePresentation.message(for: notice.cause),
+                            isDismissing: appState.historyNotices.dismissing.contains(notice.noticeId)
+                        ) {
+                            Task { _ = await appState.historyNotices.dismiss([notice.noticeId], using: appState) }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 6)
+                    }
+
                     Color.clear
                         .frame(height: 6)
                 }
                 .wnFadingHeader()
+                .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
+                    await appState.historyNotices.refresh(using: appState)
+                }
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
             // Registered at a stable level so navigation works even when the

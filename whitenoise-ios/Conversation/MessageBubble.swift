@@ -322,11 +322,22 @@ struct MessageBubble: View {
     private var messageSurface: some View {
         if isDeleted {
             deletedBubble
-        } else if let poll, showsStandardBody {
-            PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote)
-                .background { bubbleBackground }
-                .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
-                .opacity(status == .sending ? 0.7 : 1)
+        } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
+            Group {
+                if let poll {
+                    PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote)
+                } else {
+                    // MDK projects no tally for a malformed poll; never show its raw question.
+                    Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")
+                        .font(.subheadline)
+                        .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
+                        .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
+                        .padding(.vertical, ChatBubbleMetrics.verticalInset)
+                }
+            }
+            .background { bubbleBackground }
+            .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+            .opacity(status == .sending ? 0.7 : 1)
         } else if let remoteGiphyMedia, showsStandardBody {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {
@@ -1971,6 +1982,7 @@ private struct MessageFullscreenVideo: Identifiable {
 }
 
 private struct MessageMediaTile: View {
+    @Environment(AppState.self) private var appState
     let item: MessageMediaAttachment
     let isFromMe: Bool
     let size: CGSize
@@ -2124,14 +2136,25 @@ private struct MessageMediaTile: View {
         isLoading = true
         didFail = false
         defer { isLoading = false }
+        // host_media_prepare: bytes through decode, before the UI assignment.
+        let analytics = appState.productAnalytics
+        let prepareTiming = analytics.beginTiming()
         do {
             let data = try await onLoadMedia.data(for: item, explicit: force)
-            guard !Task.isCancelled else { return nil }
-            guard let decoded = await MessageMediaThumbnailDecoder.image(
+            guard !Task.isCancelled else {
+                analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
+                return nil
+            }
+            let decodeTiming = analytics.beginTiming()
+            let decoded = await MessageMediaThumbnailDecoder.image(
                 data: data,
                 maxPixelSize: maxPixelSize,
                 scale: scale
-            ) else {
+            )
+            analytics.recordStage(.mediaDecode, since: decodeTiming, outcome: decoded == nil ? .failure : .success)
+            analytics.recordStage(.mediaPrepare, since: prepareTiming,
+                                  outcome: decoded == nil ? .failure : Task.isCancelled ? .cancelled : .success)
+            guard let decoded else {
                 image = nil
                 loadedImageID = item.id
                 didFail = true
@@ -2148,6 +2171,8 @@ private struct MessageMediaTile: View {
             )
             return data
         } catch {
+            analytics.recordStage(.mediaPrepare, since: prepareTiming,
+                                  outcome: error is CancellationError ? .cancelled : .failure)
             image = nil
             loadedImageID = item.id
             didFail = true

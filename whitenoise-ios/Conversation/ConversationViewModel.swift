@@ -1394,12 +1394,21 @@ final class ConversationViewModel {
         let groupIdHex = group.groupIdHex
         let lifetime = windowLifetime
         timelineTask = Task { [weak self, weak appState] in
+            // host_timeline_open per attempt: subscription open to initial snapshot.
+            var openTiming: ProductAnalyticsRecorder.Timing??
+            func finishOpen(_ outcome: HostPerformanceOutcomeFfi) {
+                guard let timing = openTiming else { return }
+                openTiming = nil
+                appState?.productAnalytics.recordStage(.timelineOpen, since: timing, outcome: outcome)
+            }
+            defer { finishOpen(.cancelled) }
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
                     guard let appState, appState.canUseRuntimeForLocalForegroundWork,
                           appState.activeAccountRef == accountRef else { return }
                     let client = try appState.currentMarmotClient()
+                    openTiming = .some(appState.productAnalytics.beginTiming())
                     let window: ConversationWindowSubscription
                     var targetUnavailable = false
                     do {
@@ -1427,7 +1436,9 @@ final class ConversationViewModel {
                         self?.viewportIntent = .followingLatest
                     }
                     do {
-                        if let initial = await Task.detached(priority: .utility, operation: { window.snapshot() }).value {
+                        let initialSnapshot = await Task.detached(priority: .utility, operation: { window.snapshot() }).value
+                        finishOpen(Task.isCancelled ? .cancelled : initialSnapshot == nil ? .unavailable : .success)
+                        if let initial = initialSnapshot {
                             guard !Task.isCancelled, self?.windowLifetime == lifetime,
                                   appState.activeAccountRef == accountRef else {
                                 await window.cancel()
@@ -1468,6 +1479,7 @@ final class ConversationViewModel {
                 } catch is CancellationError {
                     return
                 } catch {
+                    finishOpen(.failure)
                     guard !Task.isCancelled, self?.windowLifetime == lifetime else { return }
                     self?.windowSubscription = nil
                     self?.windowCursor = nil
@@ -1490,7 +1502,7 @@ final class ConversationViewModel {
                 wasAtTail: !previous.hasMoreAfter, isAtTail: !snapshot.hasMoreAfter)
             for message in snapshot.messages where appended.contains(message.timeline.messageIdHex) {
                 let record = Self.appMessageRecord(from: message.timeline)
-                if record.direction == "received", record.kind == MessageSemantics.kindChat {
+                if record.direction == "received", MessageSemantics.isUserMessageKind(record.kind) {
                     timelineStore.beginMessageVisibility(rowID: "msg:\(record.messageIdHex)", operation: .inboundMessageVisible)
                 }
             }
@@ -1499,6 +1511,8 @@ final class ConversationViewModel {
     }
 
     func installConversationWindow(_ snapshot: ConversationWindowSnapshotFfi) {
+        let applyTiming = appState?.productAnalytics.beginTiming()
+        defer { appState?.productAnalytics.recordStage(.timelineApply, since: applyTiming) }
         let nextIdentities = Dictionary(snapshot.identities.map { ($0.accountIdHex, $0) }, uniquingKeysWith: { _, latest in latest })
         let changedNames = Set(windowIdentities.keys).union(nextIdentities.keys).filter {
             windowIdentities[$0]?.displayName != nextIdentities[$0]?.displayName
@@ -1616,6 +1630,15 @@ final class ConversationViewModel {
         windowCommandTask = Task { @MainActor [weak self] in
             await previous?.value
             guard let self else { return }
+            // host_timeline_page: one page request through MDK's result; installing it is timeline_apply.
+            var pageTiming: ProductAnalyticsRecorder.Timing??
+            if case .page = command { pageTiming = .some(self.appState?.productAnalytics.beginTiming()) }
+            var pageOutcome = HostPerformanceOutcomeFfi.cancelled
+            defer {
+                if let timing = pageTiming {
+                    self.appState?.productAnalytics.recordStage(.timelinePage, since: timing, outcome: pageOutcome)
+                }
+            }
             var attemptedRevision: ConversationWindowRevisionFfi?
             let result = await ConversationCommandRunner.run(isCurrent: {
                 guard self.windowSubscription === window, self.appState?.activeAccountRef == account,
@@ -1637,6 +1660,12 @@ final class ConversationViewModel {
                 attemptedRevision = revision
                 return try await command.execute(on: window, revision: revision)
             })
+            switch result {
+            case .applied: pageOutcome = .success
+            case .superseded: pageOutcome = .cancelled
+            case .awaitingProjection: pageOutcome = .unavailable
+            case .rejected: pageOutcome = .failure
+            }
             guard !Task.isCancelled, self.windowSubscription === window else { return }
             switch result {
             case .applied(let snapshot):
@@ -2896,6 +2925,18 @@ final class ConversationViewModel {
         return MessageForwardResult(successfulGroupIds: successful, failedGroupIds: failed)
     }
 
+    /// Unsettled token-aware text or replies use MDK's durable pending-edit queue.
+    nonisolated static func pendingEditOriginalToken(
+        for message: AppMessageRecordFfi,
+        unsettledClientToken: String?
+    ) -> String? {
+        guard let unsettledClientToken, !unsettledClientToken.isEmpty else { return nil }
+        switch MessageSemantics.classify(message) {
+        case .chat, .reply: return unsettledClientToken
+        default: return nil
+        }
+    }
+
     func editMessage(_ message: AppMessageRecordFfi, content: String) async -> Bool {
         guard MessageEditingPolicy.canEdit(
                 message,
@@ -2917,12 +2958,26 @@ final class ConversationViewModel {
         )
         do {
             let client = try appState.currentMarmotClient()
-            _ = try await client.editMessage(
-                accountRef: accountRef,
-                groupIdHex: group.groupIdHex,
-                targetMessageId: message.messageIdHex,
-                content: outgoing
-            )
+            if let originalToken = Self.pendingEditOriginalToken(
+                for: message,
+                unsettledClientToken: timelineStore.unsettledClientToken(forMessageId: message.messageIdHex)
+            ) {
+                // A fresh token per revision; MDK publishes it after the original settles.
+                _ = try await client.editLocalMessageWithClientToken(
+                    accountRef: accountRef,
+                    groupIdHex: group.groupIdHex,
+                    originalClientToken: originalToken,
+                    content: outgoing,
+                    editClientToken: UUID().uuidString
+                )
+            } else {
+                _ = try await client.editMessage(
+                    accountRef: accountRef,
+                    groupIdHex: group.groupIdHex,
+                    targetMessageId: message.messageIdHex,
+                    content: outgoing
+                )
+            }
             Haptics.tap()
             return true
         } catch {

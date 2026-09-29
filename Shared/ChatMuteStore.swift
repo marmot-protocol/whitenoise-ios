@@ -241,13 +241,15 @@ nonisolated enum ChatMuteStore {
         defaults: UserDefaults
     ) {
         guard let key = key(accountIdHex: accountIdHex, groupIdHex: groupIdHex) else { return }
-        var modes = (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:]
-        modes[key] = mode.rawValue
-        defaults.set(modes, forKey: notifyModeStorageKey)
-        writeLegacyMuted(mode == .nothing, key: key, defaults: defaults)
-        var deadlines = mutedUntilByChatKey(defaults: defaults)
-        deadlines.removeValue(forKey: key)
-        defaults.set(deadlines, forKey: mutedUntilStorageKey)
+        HostSettingsSaveTiming.measure {
+            var modes = (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:]
+            modes[key] = mode.rawValue
+            defaults.set(modes, forKey: notifyModeStorageKey)
+            writeLegacyMuted(mode == .nothing, key: key, defaults: defaults)
+            var deadlines = mutedUntilByChatKey(defaults: defaults)
+            deadlines.removeValue(forKey: key)
+            defaults.set(deadlines, forKey: mutedUntilStorageKey)
+        }
     }
 
     static func setTimedMute(
@@ -257,16 +259,18 @@ nonisolated enum ChatMuteStore {
         defaults: UserDefaults
     ) {
         guard let key = key(accountIdHex: accountIdHex, groupIdHex: groupIdHex) else { return }
-        var deadlines = mutedUntilByChatKey(defaults: defaults)
-        deadlines[key] = deadline.timeIntervalSince1970
-        defaults.set(deadlines, forKey: mutedUntilStorageKey)
-        // Preserve mentions-only after expiry; an indefinite mute is replaced.
-        var modes = (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:]
-        if modes[key] != ChatNotifyMode.mentionsOnly.rawValue {
-            modes[key] = ChatNotifyMode.all.rawValue
+        HostSettingsSaveTiming.measure {
+            var deadlines = mutedUntilByChatKey(defaults: defaults)
+            deadlines[key] = deadline.timeIntervalSince1970
+            defaults.set(deadlines, forKey: mutedUntilStorageKey)
+            // Preserve mentions-only after expiry; an indefinite mute is replaced.
+            var modes = (defaults.dictionary(forKey: notifyModeStorageKey) as? [String: String]) ?? [:]
+            if modes[key] != ChatNotifyMode.mentionsOnly.rawValue {
+                modes[key] = ChatNotifyMode.all.rawValue
+            }
+            defaults.set(modes, forKey: notifyModeStorageKey)
+            writeLegacyMuted(false, key: key, defaults: defaults)
         }
-        defaults.set(modes, forKey: notifyModeStorageKey)
-        writeLegacyMuted(false, key: key, defaults: defaults)
     }
 
     static func muteExpiry(

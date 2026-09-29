@@ -18,6 +18,20 @@ struct GroupRecoveryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let status = model.status {
+                if status.historyMayBeIncomplete, !status.historyNoticeIds.isEmpty {
+                    HistoryNoticeBanner(
+                        message: HistoryNoticePresentation.groupMessage(
+                            noticeIDs: status.historyNoticeIds,
+                            notices: appState.historyNotices.notices
+                        ),
+                        isDismissing: !appState.historyNotices.dismissing.isDisjoint(with: status.historyNoticeIds)
+                    ) {
+                        Task {
+                            _ = await appState.historyNotices.dismiss(status.historyNoticeIds, using: appState)
+                            await model.refresh(using: appState, groupID: groupID)
+                        }
+                    }
+                }
                 if status.automaticRecoveryFailed {
                     Label("Unable to restore group synchronization.", systemImage: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90")
                         .foregroundStyle(.orange)
@@ -50,6 +64,7 @@ struct GroupRecoveryView: View {
         .font(.callout)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(model.status?.rejoinInvitations.isEmpty == false || model.status?.automaticRecoveryFailed == true
+                 || model.status?.historyMayBeIncomplete == true
                  || (model.status?.pendingReinvites ?? 0) > 0 || (model.status?.failedReinvites ?? 0) > 0
                  || model.errorMessage != nil ? 12 : 0)
         .background(.background)

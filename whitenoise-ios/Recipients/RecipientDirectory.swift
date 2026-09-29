@@ -202,7 +202,11 @@ final class RecipientDirectory {
         ) else { return }
         isLoading = true
         loadError = nil
+        // The recipients directory is the app's contact list: MDK's host_contacts_load.
+        let timing = appState.productAnalytics.beginTiming()
+        var outcome = HostPerformanceOutcomeFfi.cancelled
         defer {
+            appState.productAnalytics.recordStage(.contactsLoad, since: timing, outcome: outcome)
             if loadTaskID == taskID {
                 isLoading = false
             }
@@ -232,9 +236,11 @@ final class RecipientDirectory {
             for candidate in derived.prefix(Self.profileWarmupLimit) {
                 _ = appState.profile(forAccountIdHex: candidate.accountIdHex)
             }
+            outcome = .success
         } catch is CancellationError {
             return
         } catch {
+            outcome = .failure
             guard Self.loadRequestIsCurrent(
                 currentTaskID: loadTaskID,
                 currentAccountRef: loadAccountRef,

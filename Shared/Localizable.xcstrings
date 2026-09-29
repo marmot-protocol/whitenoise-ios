@@ -60,6 +60,66 @@
         }
       }
     },
+    "A message couldn’t be retrieved." : {
+      "comment" : "History notice: one known message could not be fetched.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Nachricht konnte nicht abgerufen werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo recuperar un mensaje."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de récupérer un message."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile recuperare un messaggio."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível recuperar uma mensagem."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось получить сообщение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir mesaj alınamadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法获取一条消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法取得一則訊息。"
+          }
+        }
+      }
+    },
     "Anthropic Claude Code coding agent" : {
       "comment" : "Subtitle for the Claude Code AI agent connector.",
       "extractionState" : "manual",
@@ -176,6 +236,306 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude Code"
+          }
+        }
+      }
+    },
+    "Couldn’t dismiss notice" : {
+      "comment" : "Toast title when dismissing a history notice fails.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweis konnte nicht ausgeblendet werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo descartar el aviso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’ignorer l’avis"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile ignorare l’avviso"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível dispensar o aviso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось скрыть уведомление"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildirim kapatılamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法忽略此提示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法忽略此提示"
+          }
+        }
+      }
+    },
+    "History may be incomplete" : {
+      "comment" : "Title of a notice that some message history could not be confirmed complete.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verlauf möglicherweise unvollständig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que el historial esté incompleto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’historique est peut-être incomplet"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La cronologia potrebbe essere incompleta"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O histórico pode estar incompleto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "История может быть неполной"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçmiş eksik olabilir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史记录可能不完整"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歷史記錄可能不完整"
+          }
+        }
+      }
+    },
+    "History repair couldn’t confirm that every message was restored." : {
+      "comment" : "History notice: a manual history repair ended without proof of completeness.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Verlaufsreparatur konnte nicht bestätigen, dass alle Nachrichten wiederhergestellt wurden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La reparación del historial no pudo confirmar que se restauraran todos los mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La réparation de l’historique n’a pas pu confirmer que tous les messages ont été restaurés."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La riparazione della cronologia non ha potuto confermare il ripristino di tutti i messaggi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O reparo do histórico não conseguiu confirmar que todas as mensagens foram restauradas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Восстановление истории не подтвердило, что все сообщения восстановлены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçmiş onarımı tüm mesajların geri yüklendiğini doğrulayamadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史修复无法确认所有消息都已恢复。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歷史修復無法確認所有訊息都已還原。"
+          }
+        }
+      }
+    },
+    "Messages from around when you joined may be incomplete." : {
+      "comment" : "History notice: history around joining a group could not be confirmed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachrichten aus der Zeit deines Beitritts sind möglicherweise unvollständig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que los mensajes de cuando te uniste estén incompletos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages de la période où vous avez rejoint sont peut-être incomplets."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I messaggi del periodo in cui ti sei unito potrebbero essere incompleti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mensagens de quando você entrou podem estar incompletas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сообщения времени вашего вступления могут быть неполными."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Katıldığınız döneme ait mesajlar eksik olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你加入前后的消息可能不完整。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你加入前後的訊息可能不完整。"
+          }
+        }
+      }
+    },
+    "Messages from while you were away may be incomplete." : {
+      "comment" : "History notice: history since the device was last up to date could not be confirmed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachrichten aus der Zeit deiner Abwesenheit sind möglicherweise unvollständig."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que los mensajes de mientras no estabas estén incompletos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les messages reçus pendant votre absence sont peut-être incomplets."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I messaggi ricevuti mentre eri assente potrebbero essere incompleti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mensagens de quando você estava fora podem estar incompletas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сообщения за время вашего отсутствия могут быть неполными."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siz yokken gelen mesajlar eksik olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你离开期间的消息可能不完整。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你離開期間的訊息可能不完整。"
           }
         }
       }
@@ -300,6 +660,126 @@
         }
       }
     },
+    "Some messages in this chat may be missing." : {
+      "comment" : "History notice for one conversation whose history could not be confirmed complete.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In diesem Chat fehlen möglicherweise einige Nachrichten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que falten algunos mensajes en este chat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il manque peut-être des messages dans cette discussion."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In questa chat potrebbero mancare alcuni messaggi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algumas mensagens desta conversa podem estar faltando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В этом чате могут отсутствовать некоторые сообщения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu sohbette bazı mesajlar eksik olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天中可能缺少部分消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此聊天中可能缺少部分訊息。"
+          }
+        }
+      }
+    },
+    "Some messages may not have reached this device." : {
+      "comment" : "History notice: deliveries were lost and could not be recovered.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einige Nachrichten haben dieses Gerät möglicherweise nicht erreicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es posible que algunos mensajes no hayan llegado a este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains messages ne sont peut-être pas arrivés sur cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni messaggi potrebbero non essere arrivati su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algumas mensagens podem não ter chegado a este dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторые сообщения могли не дойти до этого устройства."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bazı mesajlar bu cihaza ulaşmamış olabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分消息可能未送达此设备。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分訊息可能未送達此裝置。"
+          }
+        }
+      }
+    },
     "This is an installation prompt for connecting this Claude Code setup to White Noise through Marmot. Read the authoritative Claude Code harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Claude Code is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-claude-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-claude --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-claude returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required." : {
       "comment" : "Copyable prompt that asks an AI agent to install the White Noise connector for Claude Code; the argument is the user's npub.",
       "extractionState" : "manual",
@@ -416,6 +896,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這是一條安裝提示，用於透過 Marmot 將此 Pi 設定連接到 White Noise。請閱讀權威 Pi harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md，以及長期有效的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。確認前提條件：Pi 已安裝、已驗證並可在 PATH 中使用，且此機器使用與手機相同的公共中繼集合。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請使用經過總和檢查碼驗證的 install-pi-marmot.sh 發布流程，為該 npub 引導 wn-agent 並使用允許的 welcomer，然後驗證 wn-pi --version。接下來回覆你的代理 npub，請我在 White Noise 中邀請它，並透過已設定的中繼從這個允許的 npub 傳送測試訊息。在 wn-pi 透過 White Noise 回覆之前，不要聲稱設定已完成；如果無法自動驗證這一往返流程，請明確標記仍需裝置驗證。"
+          }
+        }
+      }
+    },
+    "This poll can’t be displayed." : {
+      "comment" : "Shown in place of a poll message that could not be read.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Umfrage kann nicht angezeigt werden."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede mostrar esta encuesta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’afficher ce sondage."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile visualizzare questo sondaggio."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não é possível exibir esta enquete."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удаётся показать этот опрос."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu anket görüntülenemiyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法显示此投票。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法顯示此投票。"
           }
         }
       }
@@ -47257,7 +47797,64 @@
     },
     "Hex" : {
       "comment" : "Label for the public key's hex representation.",
-      "isCommentAutoGenerated" : true
+      "isCommentAutoGenerated" : true,
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hex"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十六进制"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "十六進位"
+          }
+        }
+      }
     },
     "Hide %@ setup prompt" : {
       "extractionState" : "manual",

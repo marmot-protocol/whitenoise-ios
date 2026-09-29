@@ -132,6 +132,11 @@ nonisolated enum MessageSemantics {
         classify(kind: message.kind, tags: message.tags)
     }
 
+    /// Kinds a person sends as their own conversation message: chat and polls.
+    static func isUserMessageKind(_ kind: UInt64) -> Bool {
+        kind == kindChat || kind == kindPoll
+    }
+
     static func isTypedAgentEventKind(_ kind: UInt64) -> Bool {
         kind == kindAgentActivity
             || kind == kindAgentOperation

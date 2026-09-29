@@ -81,7 +81,7 @@ final class AppLockController {
 
     var gracePeriod: AppLockGracePeriod {
         didSet {
-            defaults.set(gracePeriod.rawValue, forKey: Self.gracePeriodKey)
+            HostSettingsSaveTiming.measure { defaults.set(gracePeriod.rawValue, forKey: Self.gracePeriodKey) }
         }
     }
 
@@ -133,7 +133,7 @@ final class AppLockController {
             guard await runAuthentication() else { return }
         }
         isEnabled = enabled
-        defaults.set(enabled, forKey: Self.enabledKey)
+        HostSettingsSaveTiming.measure { defaults.set(enabled, forKey: Self.enabledKey) }
         if !enabled {
             isLocked = false
             backgroundedAt = nil

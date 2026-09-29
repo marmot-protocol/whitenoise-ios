@@ -225,8 +225,12 @@ before every release tag.
 
 - [ ] Open an existing 0.10.4 installation. Accounts, chats and history load;
       catch-up and background/foreground cycles leave no chat stuck behind.
-- [ ] Settings → Developer Tools → Open Diagnostics shows "history notices
-      changed" rows when MDK parks recovery; no other UI is expected yet.
+- [ ] An upgraded 0.10.4 account with an overflow marker shows a "History may be
+      incomplete" banner at the top of Chats shortly after upgrade. Dismiss
+      removes it and it stays gone across relaunch. A group epoch-gap notice
+      shows in that conversation's recovery banner instead. A second device's
+      dismissal or new evidence refreshes the list; relaunch with an existing
+      notice still shows it. Diagnostics logs "history notices changed".
 - [ ] In a group, **+** → Poll opens New Poll. Validation stays inline (empty
       question, fewer than two options, duplicates, over-long text) and the sheet
       closes only after the send succeeds. Poll is absent in direct messages.
@@ -235,11 +239,26 @@ before every release tag.
       live on both devices. A single-choice tap on the current answer does
       nothing; a multiple-choice poll never lets the last selection be removed.
 - [ ] A poll with an end time shows "Ends …", then "Final results" after the
-      deadline, and no longer accepts votes. Relaunch before and after expiry.
+      deadline, and no longer accepts votes, including while it stays on
+      screen across the deadline. Relaunch before and after expiry.
+- [ ] A malformed kind-1068 row shows "This poll can’t be displayed." rather
+      than its raw question.
+- [ ] Edit a text or reply while it is still sending (relays offline). The edit
+      appears at once, survives relaunch, and publishes after the original.
+      Rapid repeated edits that hit MDK's rate limit keep the edit text for a
+      retry.
 - [ ] Chat list and reply previews read "📊 Poll: <question>". Polls offer no
       Edit or Forward. Check a group with media disabled for the Poll entry.
 - [ ] Existing users with usage sharing on see the consent sheet once, because
       the metrics destination changed; declined users are not re-prompted.
+- [ ] With usage sharing on, launch, switch profiles, open chats (including
+      Archived), page history, send text and media, open a profile, open New
+      Chat, view images, and change a preference. Developer Tools → Diagnostics
+      then lists `[runtime] host_*` rows for window/runtime init, account
+      load/switch, chat list, archived chat list, contacts, profile load/read,
+      timeline open/page/apply, message send, media load/cache read/prepare/
+      decode and settings save. Frame, fonts, search, media queue, handoff and
+      media apply stay at zero.
 
 ## Onboarding
 

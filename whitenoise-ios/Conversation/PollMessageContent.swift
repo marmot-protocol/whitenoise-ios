@@ -8,12 +8,24 @@ struct PollMessageContent: View {
     /// Nil when the viewer cannot vote here (inactive group, pending row).
     let onVote: ((String) -> Void)?
 
-    private var isOpen: Bool { PollPresentation.isOpen(poll, now: .now) }
     private var isMultipleChoice: Bool { poll.pollType == .multipleChoice }
     private var foreground: Color { MessageBubblePalette.foreground(isFromMe: isFromMe) }
     private var secondaryForeground: Color { MessageBubblePalette.secondaryForeground(isFromMe: isFromMe) }
 
+    /// Redraws once at the deadline so an on-screen poll closes on time.
+    private var deadlineSchedule: [Date] {
+        guard let endsAt = poll.endsAt, PollPresentation.isOpen(poll, now: .now) else { return [] }
+        return [Date(timeIntervalSince1970: TimeInterval(endsAt) + 1)]
+    }
+
     var body: some View {
+        // The context date can be a future schedule entry, so read the real clock.
+        TimelineView(.explicit(deadlineSchedule)) { _ in
+            content(isOpen: PollPresentation.isOpen(poll, now: .now))
+        }
+    }
+
+    private func content(isOpen: Bool) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(ContentSanitizer.messageBody(poll.question))
@@ -29,10 +41,10 @@ struct PollMessageContent: View {
             }
 
             ForEach(poll.options, id: \.id) { option in
-                optionRow(option)
+                optionRow(option, isOpen: isOpen)
             }
 
-            Text(footerText)
+            Text(footerText(isOpen: isOpen))
                 .font(.caption)
                 .foregroundStyle(secondaryForeground)
         }
@@ -41,7 +53,7 @@ struct PollMessageContent: View {
         .frame(width: MessageBubbleReplyLayout.richContentWidth, alignment: .leading)
     }
 
-    private func optionRow(_ option: PollOptionResultFfi) -> some View {
+    private func optionRow(_ option: PollOptionResultFfi, isOpen: Bool) -> some View {
         let selected = poll.localSelection.contains(option.id)
         let fraction = PollPresentation.fraction(votes: option.votes, participants: poll.participants)
         return Button {
@@ -93,7 +105,7 @@ struct PollMessageContent: View {
         }
     }
 
-    private var footerText: String {
+    private func footerText(isOpen: Bool) -> String {
         let votes = L10n.plural("%lld votes", Int64(clamping: poll.participants))
         if !isOpen {
             return "\(votes) · \(L10n.string("Final results"))"

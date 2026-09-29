@@ -29,6 +29,16 @@ extension MarmotClient {
         try await marmot.recoverOnboarding(accountRef: accountRef, acknowledgeLatestOnlyEvidence: true)
     }
 
+    /// Durable local reads; no network I/O.
+    func historyNotices(accountRef: String) async throws -> [HistoryNoticeFfi] {
+        try await marmot.historyNotices(accountRef: accountRef)
+    }
+
+    /// False for a stale id: re-read the list.
+    func dismissHistoryNotice(accountRef: String, noticeId: String) async throws -> Bool {
+        try await marmot.dismissHistoryNotice(accountRef: accountRef, noticeId: noticeId)
+    }
+
     func groupRecoveryStatus(accountRef: String, groupIdHex: String) async throws -> GroupRecoveryStatusFfi {
         try await marmot.groupRecoveryStatus(accountRef: accountRef, groupIdHex: groupIdHex)
     }

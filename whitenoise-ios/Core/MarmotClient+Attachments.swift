@@ -30,9 +30,15 @@ nonisolated enum AttachmentReadError: Error {
 }
 
 extension MarmotClient {
+    /// `onLocalHit` receives the elapsed milliseconds of a successful retained-byte read.
     func acquireAttachmentData(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
-                               explicit: Bool) async throws -> Data? {
-        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) { return data }
+                               explicit: Bool,
+                               onLocalHit: (@Sendable (UInt64) -> Void)? = nil) async throws -> Data? {
+        let localReadStartedAt = ContinuousClock.now
+        if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) {
+            onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
+            return data
+        }
         if explicit {
             guard try await marmot.downloadAttachmentAgain(accountRef: accountRef, groupIdHex: groupID,
                 target: target) != nil else { throw AttachmentReadError.unavailable }

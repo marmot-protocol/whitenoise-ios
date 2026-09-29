@@ -27,7 +27,7 @@ final class RemoteGIFLoadingStore {
 
     func setAutomaticallyLoads(_ enabled: Bool) {
         automaticallyLoads = enabled
-        defaults.set(enabled, forKey: Self.storageKey)
+        HostSettingsSaveTiming.measure { defaults.set(enabled, forKey: Self.storageKey) }
     }
 }
 

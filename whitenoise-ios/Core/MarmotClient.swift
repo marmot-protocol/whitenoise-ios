@@ -920,6 +920,13 @@ nonisolated final class MarmotClient: Sendable {
         )
     }
 
+    /// Durably queues an edit behind an original that has not settled yet.
+    func editLocalMessageWithClientToken(accountRef: String, groupIdHex: String, originalClientToken: String,
+                                         content: String, editClientToken: String) async throws -> LocalSendAcceptanceFfi {
+        try await marmot.editLocalMessageWithClientToken(accountRef: accountRef, groupIdHex: groupIdHex,
+            originalClientToken: originalClientToken, content: content, editClientToken: editClientToken)
+    }
+
     func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String) async throws -> SendSummaryFfi {
         try await marmot.reactToMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId, emoji: emoji)
     }

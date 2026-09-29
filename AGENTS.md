@@ -186,6 +186,26 @@ App-defined preparation stages use `ProductTimingStage.registry` and MDK's
 `recordHostTiming`; keep them separate from visible-message milestones. Register
 only finite aggregate elapsed/outcome schemas, require renewed consent when the
 registry expands, and capture elapsed time before the bounded recorder queue.
+Surface MDK's "history may be incomplete" notices: account-wide ones at the top
+of Chats and group ones in that conversation's recovery banner, each with an
+explicit Dismiss. Never dismiss on the user's behalf or persist a notice id
+(it changes when recovery re-arms). A `false` dismissal is stale: re-read the
+list. Parked loss keeps MDK's transport cursor fenced until dismissed. Keep
+notices out of analytics.
+Edit an own text or reply that MDK has not delivered through
+`editLocalMessageWithClientToken` with a fresh edit token per revision, not
+`editMessage`. Render a malformed kind-1068 row as unsupported, never as its
+raw question, and close poll controls at `endsAt` while on screen.
+Report MDK's shared `host_*` stages (`HostPerformanceOperationFfi`) with the
+boundaries in MDK's runtime-latency telemetry catalog, through
+`ProductAnalyticsRecorder.recordStage`. Lifecycle stages that run before or
+across a consent sink (window/runtime init, account load/switch) record
+directly on the client. Report only observable stages: SwiftUI has no frame,
+font, cross-conversation search, media-queue, handoff or media-apply
+boundaries, so those stay zero rather than being approximated. Time
+per-profile reads only for single-profile requests. Preference writes report
+`host_settings_save` through `HostSettingsSaveTiming`, which the extension
+never installs.
 
 ## Notifications
 

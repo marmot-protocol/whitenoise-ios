@@ -1249,6 +1249,57 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
+    @Test func coldBootstrapReportsSharedHostStagesToMDK() async throws {
+        let appState = try testAppState()
+        appState.hostWindowInitStartedAt = .now
+        appState.noteHostWindowInitialized()
+
+        await appState.bootstrap()
+
+        let operations = try #require(appState.client).appPerformanceSnapshot().runtimeOperations
+        func successes(_ name: String) -> UInt64? { operations.first { $0.operation == name }?.successes }
+        #expect(successes("host_window_init") == 1)
+        #expect(successes("host_runtime_init") == 1)
+        #expect(successes("host_account_load") == 1)
+        #expect(successes("host_fonts_init") == 0)
+
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func foregroundRebuildReportsRuntimeAndAccountStagesAgain() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        await appState.startRuntimeSuspension().value
+
+        var stages: [(HostPerformanceOperationFfi, HostPerformanceOutcomeFfi)] = []
+        appState.runtimeLifecycle.hostPerformanceObserverForTesting = { operation, _, outcome in
+            stages.append((operation, outcome))
+        }
+        await appState.startForegroundActivation().value
+        appState.runtimeLifecycle.hostPerformanceObserverForTesting = nil
+
+        #expect(stages.contains { $0.0 == .runtimeInit && $0.1 == .success })
+        #expect(stages.contains { $0.0 == .accountLoad && $0.1 == .success })
+
+        await appState.notificationCoordinator.drainConnectivityCatchUpTaskForTesting()
+        await stopReadyRuntime(appState)
+    }
+
+    @Test func accountSwitchReportsSharedHostStage() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let target = try #require(seeded.accounts.first).label
+        #expect(await appState.signOut())
+
+        await appState.activateAccount(target)
+
+        #expect(appState.activeAccountRef == target)
+        let operations = try #require(appState.client).appPerformanceSnapshot().runtimeOperations
+        #expect(operations.first { $0.operation == "host_account_switch" }?.successes == 1)
+
+        await stopReadyRuntime(appState)
+    }
+
     @Test func foregroundCatchUpFailureDoesNotFailOrReblockReadyRuntime() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
@@ -7838,6 +7889,7 @@ struct ConversationTimelineProjectionTests {
 
     @Test func readWatermarkAcceptsOnlyUserVisibleRowKinds() {
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindChat))
+        #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindPoll))
         #expect(ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindGroupSystem))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindReaction))
         #expect(!ConversationReadMarker.canAdvanceWatermark(kind: MessageSemantics.kindDelete))

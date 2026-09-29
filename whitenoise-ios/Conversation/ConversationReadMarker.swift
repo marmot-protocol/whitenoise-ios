@@ -92,7 +92,7 @@ final class ConversationReadMarker {
     /// another row rather than occupying one, and agent stream events are
     /// developer-mode only.
     nonisolated static func canAdvanceWatermark(kind: UInt64) -> Bool {
-        kind == MessageSemantics.kindChat || kind == MessageSemantics.kindGroupSystem
+        MessageSemantics.isUserMessageKind(kind) || kind == MessageSemantics.kindGroupSystem
     }
 
     /// The accepted watermark position, or nil when the candidate is ineligible

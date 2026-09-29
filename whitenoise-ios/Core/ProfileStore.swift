@@ -451,6 +451,8 @@ final class ProfileStore {
         forAccountIdsHex ids: [String]
     ) async -> [String: ProfileDisplayProjection] {
         guard let appState, let client = try? appState.currentMarmotClient() else { return [:] }
+        // host_profile_read is per profile, so only single reads are timed.
+        let timing = ids.count == 1 ? appState.productAnalytics.beginTiming() : nil
         let requests = ids.map(profileProjectionRequest(forAccountIdHex:))
         var projections = await client.profileProjections(for: requests)
         for id in ids {
@@ -458,6 +460,10 @@ final class ProfileStore {
             projection.localAccountLabel = localAccountLabel(forAccountIdHex: id)
             projections[id] = projection
         }
+        appState.productAnalytics.recordStage(
+            .profileRead, since: timing,
+            outcome: Task.isCancelled ? .cancelled : projections.isEmpty ? .unavailable : .success
+        )
         return projections
     }
 
