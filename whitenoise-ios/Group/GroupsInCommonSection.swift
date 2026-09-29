@@ -266,21 +266,21 @@ struct AddToGroupSheet: View {
             Haptics.success()
             appState.present(.success(L10n.string("Added to group"), message: group.title))
             dismiss()
-        } catch let marmotError as MarmotKitError {
-            guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
-            Haptics.error()
-            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: marmotError) {
-                error = MissingKeyPackageInvitationPresentation.message(
-                    accountIdHex: account,
-                    knownName: appState.knownDisplayName(forAccountIdHex: account)
-                )
-            } else {
-                error = UserFacingError.message(for: marmotError)
-            }
         } catch {
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             Haptics.error()
-            self.error = UserFacingError.message(for: error)
+            let title = L10n.string("Invite failed")
+            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: error) {
+                let message = MissingKeyPackageInvitationPresentation.message(
+                    accountIdHex: account,
+                    knownName: appState.knownDisplayName(forAccountIdHex: account)
+                )
+                self.error = message
+                appState.present(.error(title, message: message))
+            } else {
+                self.error = UserFacingError.message(for: error)
+                appState.present(UserFacingError.toast(title: title, error: error))
+            }
         }
     }
 

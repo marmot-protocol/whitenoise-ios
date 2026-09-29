@@ -72,7 +72,7 @@ struct NewGroupMissingKeyPackageTests {
         return (model, member)
     }
 
-    @Test func namedMissingKeyPackageKeepsSelectionAndAllowsRetry() async throws {
+    @Test func namedMissingKeyPackageToastsAndKeepsSelectionForRetry() async throws {
         let client = try MarmotClient.testClient()
         defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         let suiteName = "MissingKeyPackage.\(UUID().uuidString)"
@@ -86,7 +86,8 @@ struct NewGroupMissingKeyPackageTests {
         #expect(opened == nil)
         #expect(!model.isCreatingGroup)
         #expect(model.groupCreateError == "Alex isn't on White Noise yet.")
-        #expect(appState.activeToast == nil)
+        #expect(appState.activeToast?.title == "Couldn't create chat")
+        #expect(appState.activeToast?.message == "Alex isn't on White Noise yet.")
         #expect(model.groupSelection.memberRefs == [member.memberRef])
 
         model.createGroupForTesting = { _, _, refs, _ in
@@ -110,7 +111,8 @@ struct NewGroupMissingKeyPackageTests {
 
         await model.createGroup(name: "Test", description: "", retentionSeconds: 0, using: appState) { _ in }
         #expect(model.groupCreateError == "This user isn't on White Noise yet.")
-        #expect(appState.activeToast == nil)
+        #expect(appState.activeToast?.title == "Couldn't create chat")
+        #expect(appState.activeToast?.message == "This user isn't on White Noise yet.")
         #expect(model.groupSelection.memberRefs == [member.memberRef])
         try await client.marmot.shutdownAndClose()
     }
