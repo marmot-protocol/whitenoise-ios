@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+@testable import whitenoise_ios
 
 /// Resolves a SwiftUI `Color` for one appearance so a palette's light and
 /// dark values can be asserted separately.
@@ -30,14 +31,9 @@ enum ContrastProbe {
     }
 
     static func relativeLuminance(_ channels: Channels) -> Double {
-        func linear(_ component: Double) -> Double {
-            component <= 0.03928
-                ? component / 12.92
-                : pow((component + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * linear(channels.red)
-            + 0.7152 * linear(channels.green)
-            + 0.0722 * linear(channels.blue)
+        Double(WCAGContrast.relativeLuminance(
+            UIColor(red: channels.red, green: channels.green, blue: channels.blue, alpha: 1)
+        ))
     }
 
     static func ratio(
@@ -54,8 +50,9 @@ enum ContrastProbe {
             blue: tint.blue * tint.alpha + base.blue * (1 - tint.alpha),
             alpha: 1
         )
-        let lighter = max(relativeLuminance(composited), relativeLuminance(base))
-        let darker = min(relativeLuminance(composited), relativeLuminance(base))
-        return (lighter + 0.05) / (darker + 0.05)
+        return Double(WCAGContrast.ratio(
+            CGFloat(relativeLuminance(composited)),
+            CGFloat(relativeLuminance(base))
+        ))
     }
 }

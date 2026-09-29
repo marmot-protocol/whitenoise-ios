@@ -165,7 +165,10 @@ struct ProfileEditView: View {
                 let accountID = appState.activeAccount?.accountIdHex
                 let ticket = model.loadTicket
                 let draft = try await ProfileImageDraftProcessor.prepare(
-                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                    data: data,
+                    fileName: fileName,
+                    typeIdentifier: AvatarImageCropper.outputTypeIdentifier,
+                    sourceURL: sourceURL
                 )
                 guard isCurrent(ticket: ticket, accountID: accountID) else { throw CancellationError() }
                 return draft

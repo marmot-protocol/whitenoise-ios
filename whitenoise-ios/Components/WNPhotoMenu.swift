@@ -43,12 +43,10 @@ nonisolated enum WNPhotoMenuAction: Hashable, CaseIterable {
             UITraitCollection(accessibilityContrast: contrast == .increased ? .high : .normal)
         ])
         let color = (isDestructive ? UIColor.systemRed : .label).resolvedColor(with: traits)
-        // Native menus can retint template symbols independently of their titles.
         return UIImage(systemName: systemImage)?.withTintColor(color, renderingMode: .alwaysOriginal) ?? UIImage()
     }
 }
 
-/// Native menu chrome and presentation match the prototype and adapt to accessibility settings.
 struct WNPhotoMenuButton: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?

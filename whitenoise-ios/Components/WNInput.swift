@@ -247,7 +247,6 @@ private struct WNInputTextEntry: View {
             }
             .onChange(of: text) { oldValue, newValue in
                 guard showsTextFromBeginning else { return }
-                // A paste/replacement can change the middle without growing the URL.
                 let prefix = zip(oldValue, newValue).prefix { $0 == $1 }.count
                 let oldTail = oldValue.dropFirst(prefix)
                 let newTail = newValue.dropFirst(prefix)
