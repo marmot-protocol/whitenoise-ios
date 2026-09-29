@@ -960,12 +960,9 @@ final class GroupDetailsViewModel {
         case .NotAdmin:
             return L10n.string("That member is not an admin.")
         case .MissingKeyPackage(let account):
-            return L10n.formatted(
-                "%@ hasn't published a compatible key package yet.",
-                IdentityPresentation.text(
-                    accountIdHex: account,
-                    knownName: appState.knownDisplayName(forAccountIdHex: account)
-                )
+            return MissingKeyPackageInvitationPresentation.message(
+                accountIdHex: account,
+                knownName: appState.knownDisplayName(forAccountIdHex: account)
             )
         default:
             return UserFacingError.message(for: marmotError)
