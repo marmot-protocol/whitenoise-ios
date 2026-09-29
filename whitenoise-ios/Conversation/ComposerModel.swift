@@ -39,6 +39,7 @@ struct StagedOutgoingSend {
     let text: String
     let attachments: [MediaDraftAttachment]
     let uploadEpoch: Int
+    let reportsSizeRejection: Bool
     fileprivate let contentTokens: Task<MarkdownDocumentFfi, Never>
     fileprivate let preparedUploads: [DraftMediaUpload?]
 
@@ -183,7 +184,8 @@ final class ComposerModel {
         text: String,
         attachments: [MediaDraftAttachment] = [],
         replyTargetId overrideReplyTargetId: String? = nil,
-        retryTempId: String? = nil
+        retryTempId: String? = nil,
+        reportsSizeRejection: Bool = false
     ) -> StagedOutgoingSend? {
         guard let appState, let accountRef = appState.activeAccountRef else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -251,23 +253,24 @@ final class ComposerModel {
             // Captured before the upload round-trip: a wipe completing while the
             // send is in flight must invalidate the post-upload cache store.
             uploadEpoch: MessageMediaCache.currentProducerEpoch(),
+            reportsSizeRejection: reportsSizeRejection,
             contentTokens: contentTokens,
             preparedUploads: draftMediaUploads.take(attachments, accountRef: accountRef)
         )
     }
 
     /// Admits staged sends in tap order; MDK owns publication after acceptance.
+    @discardableResult
     func submit(
         _ staged: StagedOutgoingSend,
         draftRevision: MessageDraftRevisionFfi? = nil,
         completion: (@MainActor (Bool) async -> Void)? = nil
-    ) async {
-        guard let appState else { await completion?(false); return }
+    ) async -> OutgoingSendSizeRejection? {
+        guard let appState else { await completion?(false); return nil }
         if staged.attachments.isEmpty {
-            await submitText(staged, appState: appState, draftRevision: draftRevision, completion: completion)
-        } else {
-            await submitMedia(staged, appState: appState, draftRevision: draftRevision, completion: completion)
+            return await submitText(staged, appState: appState, draftRevision: draftRevision, completion: completion)
         }
+        return await submitMedia(staged, appState: appState, draftRevision: draftRevision, completion: completion)
     }
 
     /// Stage-and-submit for sends with no draft revision behind them (Giphy,
@@ -287,13 +290,31 @@ final class ComposerModel {
         await submit(staged, draftRevision: draftRevision, completion: completion)
     }
 
+    private func settleRejectedSubmission(
+        _ staged: StagedOutgoingSend,
+        appState: AppState,
+        error: Error,
+        phase: OutgoingSendPhase
+    ) -> OutgoingSendSizeRejection? {
+        timelineStore.markFailed(tempId: staged.tempId)
+        if staged.reportsSizeRejection,
+           let rejection = OutgoingSendSizePolicy.rejection(for: error, phase: phase) {
+            Haptics.error()
+            return rejection
+        }
+        onError(UserFacingError.message(for: error))
+        Haptics.error()
+        appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+        return nil
+    }
+
     private func submitText(
         _ staged: StagedOutgoingSend,
         appState: AppState,
         draftRevision: MessageDraftRevisionFfi?,
         completion: (@MainActor (Bool) async -> Void)?
-    ) async {
-        await sendQueue.enqueue { [self] in
+    ) async -> OutgoingSendSizeRejection? {
+        await sendQueue.enqueue { [self] () -> OutgoingSendSizeRejection? in
             // host_message_send: the send task itself, from dequeue; queue wait excluded.
             let sendTask = appState.productAnalytics.beginTiming()
             var sendOutcome = HostPerformanceOutcomeFfi.cancelled
@@ -301,13 +322,13 @@ final class ComposerModel {
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
-                return
+                return nil
             }
             _ = await staged.contentTokens.value
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
-                return
+                return nil
             }
             let submission = appState.productAnalytics.beginTiming()
             do {
@@ -324,7 +345,7 @@ final class ComposerModel {
                 sendOutcome = .success
                 await completion?(true)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
-                      appState.activeAccountRef == staged.accountRef else { return }
+                      appState.activeAccountRef == staged.accountRef else { return nil }
                 timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: summary.clientToken)
             } catch {
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
@@ -333,17 +354,15 @@ final class ComposerModel {
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
-                      appState.activeAccountRef == staged.accountRef else { return }
+                      appState.activeAccountRef == staged.accountRef else { return nil }
                 if ambiguous {
                     timelineStore.markSendCompletionUnknown(tempId: staged.tempId)
                     onError(UserFacingError.message(for: error))
-                    return
+                    return nil
                 }
-                timelineStore.markFailed(tempId: staged.tempId)
-                onError(UserFacingError.message(for: error))
-                Haptics.error()
-                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                return settleRejectedSubmission(staged, appState: appState, error: error, phase: .admission)
             }
+            return nil
         }.value
     }
 
@@ -396,8 +415,8 @@ final class ComposerModel {
         appState: AppState,
         draftRevision: MessageDraftRevisionFfi?,
         completion: (@MainActor (Bool) async -> Void)?
-    ) async {
-        await sendQueue.enqueue { [self] in
+    ) async -> OutgoingSendSizeRejection? {
+        await sendQueue.enqueue { [self] () -> OutgoingSendSizeRejection? in
             // host_message_send: the send task itself, from dequeue; queue wait excluded.
             let sendTask = appState.productAnalytics.beginTiming()
             var sendOutcome = HostPerformanceOutcomeFfi.cancelled
@@ -406,13 +425,14 @@ final class ComposerModel {
                   appState.activeAccountRef == staged.accountRef else {
                 staged.cancelPreparedUploads()
                 await completion?(false)
-                return
+                return nil
             }
             if draftRevision == nil {
                 staged.cancelPreparedUploads()
             }
             _ = await staged.contentTokens.value
             let submission = appState.productAnalytics.beginTiming()
+            var phase = OutgoingSendPhase.admission
             do {
                 let client = try appState.currentMarmotClient()
                 // MDK may project its retained row before admission returns.
@@ -426,6 +446,7 @@ final class ComposerModel {
                 let missing = zip(staged.attachments, prepared).filter { $0.1 == nil }.map(\.0)
                 var submitted: MediaUploadSubmissionFfi?
                 if !missing.isEmpty {
+                    phase = .upload(candidates: missing)
                     submitted = try await client.uploadWithClientToken(
                         accountRef: staged.accountRef,
                         groupIdHex: groupIdHex,
@@ -437,6 +458,7 @@ final class ComposerModel {
                         ),
                         clientToken: staged.clientToken
                     )
+                    phase = .admission
                 }
                 let resolved = DraftMediaPreuploadResolution.merged(
                     staged.attachments,
@@ -452,7 +474,7 @@ final class ComposerModel {
                       appState.activeAccountRef == staged.accountRef else {
                     appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .cancelled)
                     await completion?(false)
-                    return
+                    return nil
                 }
                 let verifiedHashes = Set(references.map(\.plaintextSha256))
                 for (attachment, reference) in zip(resolved.attachments, resolved.references)
@@ -473,7 +495,7 @@ final class ComposerModel {
                 sendOutcome = .success
                 await completion?(true)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
-                      appState.activeAccountRef == staged.accountRef else { return }
+                      appState.activeAccountRef == staged.accountRef else { return nil }
                 for attachment in verifiedAttachments {
                     await MessageMediaCache.store(
                         attachment.data,
@@ -482,7 +504,7 @@ final class ComposerModel {
                     )
                 }
                 guard timelineStore.outgoingLifetime == staged.lifetime,
-                      appState.activeAccountRef == staged.accountRef else { return }
+                      appState.activeAccountRef == staged.accountRef else { return nil }
                 if let sent {
                     timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: sent.clientToken)
                     let id = sent.messageIdHex
@@ -500,17 +522,15 @@ final class ComposerModel {
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
-                      appState.activeAccountRef == staged.accountRef else { return }
+                      appState.activeAccountRef == staged.accountRef else { return nil }
                 if ambiguous {
                     timelineStore.markSendCompletionUnknown(tempId: staged.tempId)
                     onError(UserFacingError.message(for: error))
-                    return
+                    return nil
                 }
-                timelineStore.markFailed(tempId: staged.tempId)
-                onError(UserFacingError.message(for: error))
-                Haptics.error()
-                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                return settleRejectedSubmission(staged, appState: appState, error: error, phase: phase)
             }
+            return nil
         }.value
     }
 

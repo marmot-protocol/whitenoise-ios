@@ -277,6 +277,20 @@ enum ConversationSendPreparation {
         mediaDrafts = []
         return ConversationSendPayload(viewModel: viewModel, text: text, attachments: attachments)
     }
+
+    static func removeOversizedAttachments(from mediaDrafts: inout [MediaDraftAttachment]) -> OutgoingSendSizeRejection? {
+        let oversized = OutgoingSendSizePolicy.oversizedAttachmentIDs(in: mediaDrafts)
+        guard !oversized.isEmpty else { return nil }
+        mediaDrafts.removeAll { oversized.contains($0.id) }
+        return .attachments(oversized)
+    }
+
+    static func draftRejection(for error: Error, attachments: [MediaDraftAttachment]) -> OutgoingSendSizeRejection? {
+        OutgoingSendSizePolicy.rejection(
+            for: error,
+            phase: attachments.isEmpty ? .admission : .upload(candidates: attachments)
+        )
+    }
 }
 
 enum TimelineInitialScroll {
@@ -2593,6 +2607,13 @@ struct ConversationView: View {
             return
         }
         guard let viewModel, let accountRef = draftAccountRef, viewModel.canSendMessages else { return }
+        if let rejection = ConversationSendPreparation.removeOversizedAttachments(from: &mediaDrafts) {
+            persistCurrentDraft()
+            Haptics.error()
+            let notice = ConversationSendRecovery.notice(for: rejection, restored: true)
+            appState.present(.error(notice.title, message: notice.message))
+            return
+        }
         let originalAttachments = mediaDrafts
         let originalReply = viewModel.replyTargetMessageIdHex
         let mentionState = viewModel.composerMentionDraftState(for: draft)
@@ -2606,6 +2627,11 @@ struct ConversationView: View {
         // draft the queued submission still has to claim by revision.
         let tapped = appState.productAnalytics.beginTiming()
         let composerState = (draft: draft, mediaDrafts: mediaDrafts)
+        let tappedContents = ConversationComposerContents(
+            draft: draft,
+            mediaDrafts: mediaDrafts,
+            replyTargetMessageIdHex: originalReply
+        )
         guard let payload = ConversationSendPreparation.prepare(draft: &draft, mediaDrafts: &mediaDrafts, viewModel: viewModel),
               let staged = viewModel.stagePreparedSend(
                   text: payload.text,
@@ -2636,8 +2662,11 @@ struct ConversationView: View {
             do {
                 let revision = try await store.prepareSend(saved, accountRef: accountRef, groupIdHex: chat.groupIdHex)
                 appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped)
-                await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
+                let rejection = await viewModel.submitStagedSend(staged, draftRevision: revision) { accepted in
                     await store.finishSend(accountRef: accountRef, groupIdHex: chat.groupIdHex, accepted: accepted)
+                }
+                if let rejection {
+                    recoverSizeRejectedSend(staged, rejection: rejection, tapped: tappedContents, mentionState: mentionState)
                 }
             } catch {
                 // The draft never reached a revision, so the submission was
@@ -2646,7 +2675,11 @@ struct ConversationView: View {
                 // or clobbering whatever the composer holds by now.
                 appState.productAnalytics.recordTiming(.sendDraftReady, since: tapped, outcome: .failure)
                 viewModel.failStagedSend(staged)
-                appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                if let rejection = ConversationSendPreparation.draftRejection(for: error, attachments: staged.attachments) {
+                    recoverSizeRejectedSend(staged, rejection: rejection, tapped: tappedContents, mentionState: mentionState)
+                } else {
+                    appState.present(UserFacingError.toast(title: L10n.string("Send failed"), error: error))
+                }
             }
             // A newer draft typed while this send was queued may have been
             // overwritten by its submitted snapshot; re-persist what's in the
@@ -2655,6 +2688,32 @@ struct ConversationView: View {
                 persistCurrentDraft()
             }
         }
+    }
+
+    private func recoverSizeRejectedSend(
+        _ staged: StagedOutgoingSend,
+        rejection: OutgoingSendSizeRejection,
+        tapped: ConversationComposerContents,
+        mentionState: ComposerMentionDraftState
+    ) {
+        guard let viewModel else { return }
+        let restored = ConversationSendRecovery.restoredContents(
+            after: rejection,
+            tapped: tapped,
+            current: ConversationComposerContents(
+                draft: draft,
+                mediaDrafts: mediaDrafts,
+                replyTargetMessageIdHex: viewModel.replyTargetMessageIdHex
+            ),
+            isEditing: editSession != nil
+        )
+        if let restored {
+            viewModel.restoreComposerMentionDraftState(mentionState)
+            viewModel.restoreReplyTarget(messageIdHex: restored.replyTargetMessageIdHex)
+            mediaDrafts = restored.mediaDrafts
+            draft = restored.draft
+        }
+        viewModel.settleSizeRejectedSend(staged, rejection: rejection, restoredToComposer: restored != nil)
     }
 
     private func handleComposerAvailabilityChange(canSendMessages: Bool) {

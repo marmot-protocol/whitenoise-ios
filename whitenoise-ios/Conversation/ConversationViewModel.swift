@@ -2762,7 +2762,12 @@ final class ConversationViewModel {
         attachments: [MediaDraftAttachment],
         replyTargetMessageIdHex: String?
     ) -> StagedOutgoingSend? {
-        composer.stage(text: text, attachments: attachments, replyTargetId: replyTargetMessageIdHex)
+        composer.stage(
+            text: text,
+            attachments: attachments,
+            replyTargetId: replyTargetMessageIdHex,
+            reportsSizeRejection: true
+        )
     }
 
     /// Runs the draft-bound half of a staged send behind every submission
@@ -2782,8 +2787,17 @@ final class ConversationViewModel {
         _ staged: StagedOutgoingSend,
         draftRevision: MessageDraftRevisionFfi? = nil,
         completion: (@MainActor (Bool) async -> Void)? = nil
-    ) async {
+    ) async -> OutgoingSendSizeRejection? {
         await composer.submit(staged, draftRevision: draftRevision, completion: completion)
+    }
+
+    func settleSizeRejectedSend(_ staged: StagedOutgoingSend, rejection: OutgoingSendSizeRejection, restoredToComposer: Bool) {
+        if restoredToComposer {
+            timelineStore.discardTransientRow(rowId: "msg:\(staged.tempId)")
+        }
+        let notice = ConversationSendRecovery.notice(for: rejection, restored: restoredToComposer)
+        error = notice.message
+        appState?.present(.error(notice.title, message: notice.message))
     }
 
     /// Settles a staged send that never reached MDK — the bubble stays as the

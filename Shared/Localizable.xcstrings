@@ -14749,7 +14749,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Datei anhängen"
           }
         },
         "en" : {
@@ -14761,49 +14761,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Adjuntar archivo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Joindre un fichier"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Allega file"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Anexar arquivo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Прикрепить файл"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "Dosya ekle"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "附加文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Attach File"
+            "value" : "附加檔案"
           }
         }
       }
@@ -23523,7 +23523,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Anhang konnte nicht hinzugefügt werden"
           }
         },
         "en" : {
@@ -23535,49 +23535,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "No se pudo agregar el archivo adjunto"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Impossible d’ajouter la pièce jointe"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Impossibile aggiungere l’allegato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Não foi possível adicionar o anexo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Не удалось добавить вложение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "Ek eklenemedi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "无法添加附件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't add attachment"
+            "value" : "無法新增附件"
           }
         }
       }
@@ -27159,7 +27159,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Audio konnte nicht aufgenommen werden"
           }
         },
         "en" : {
@@ -27171,49 +27171,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "No se pudo grabar el audio"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Impossible d’enregistrer l’audio"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Impossibile registrare l’audio"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Não foi possível gravar o áudio"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Не удалось записать аудио"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "Ses kaydedilemedi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "无法录制音频"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't record audio"
+            "value" : "無法錄製音訊"
           }
         }
       }
@@ -59579,7 +59579,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "Für Sprachnachrichten wird Zugriff auf das Mikrofon benötigt."
           }
         },
         "en" : {
@@ -59591,49 +59591,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "Se necesita acceso al micrófono para grabar mensajes de voz."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "L’accès au micro est nécessaire pour enregistrer des messages vocaux."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "È necessario l’accesso al microfono per registrare messaggi vocali."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "É necessário acesso ao microfone para gravar mensagens de voz."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "Для записи голосовых сообщений нужен доступ к микрофону."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "Sesli mesaj kaydetmek için mikrofon erişimi gerekiyor."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "录制语音消息需要麦克风访问权限。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Microphone access is needed to record voice messages."
+            "value" : "錄製語音訊息需要麥克風取用權限。"
           }
         }
       }
@@ -68489,7 +68489,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Anhang öffnen"
           }
         },
         "en" : {
@@ -68501,49 +68501,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Abrir archivo adjunto"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Ouvrir la pièce jointe"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Apri allegato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Abrir anexo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Открыть вложение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "Eki aç"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "打开附件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open attachment"
+            "value" : "打開附件"
           }
         }
       }
@@ -68862,7 +68862,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Mediengalerie öffnen"
           }
         },
         "en" : {
@@ -68874,49 +68874,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Abrir galería multimedia"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Ouvrir la galerie multimédia"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Apri galleria multimediale"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Abrir galeria de mídia"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Открыть медиагалерею"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "Medya galerisini aç"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "打开媒体库"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open media gallery"
+            "value" : "打開媒體庫"
           }
         }
       }
@@ -71045,7 +71045,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Sprachnachricht pausieren"
           }
         },
         "en" : {
@@ -71057,49 +71057,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Pausar mensaje de audio"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Mettre en pause le message audio"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Metti in pausa il messaggio audio"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Pausar mensagem de áudio"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Приостановить аудиосообщение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "Sesli mesajı duraklat"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "暂停语音消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pause audio message"
+            "value" : "暫停語音訊息"
           }
         }
       }
@@ -72697,7 +72697,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Sprachnachricht abspielen"
           }
         },
         "en" : {
@@ -72709,49 +72709,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Reproducir mensaje de audio"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Lire le message audio"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Riproduci messaggio audio"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Reproduzir mensagem de áudio"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Воспроизвести аудиосообщение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "Sesli mesajı oynat"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "播放语音消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play audio message"
+            "value" : "播放語音訊息"
           }
         }
       }
@@ -72762,7 +72762,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Video abspielen"
           }
         },
         "en" : {
@@ -72780,43 +72780,43 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Lire la vidéo"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Riproduci video"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Reproduzir vídeo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Воспроизвести видео"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "Videoyu oynat"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "播放视频"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Play video"
+            "value" : "播放影片"
           }
         }
       }
@@ -80171,7 +80171,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Anhang entfernen"
           }
         },
         "en" : {
@@ -80183,49 +80183,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Quitar archivo adjunto"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Retirer la pièce jointe"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Rimuovi allegato"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Remover anexo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Удалить вложение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "Eki kaldır"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "移除附件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remove attachment"
+            "value" : "移除附件"
           }
         }
       }
@@ -96934,7 +96934,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Dieser Anhang konnte nicht geöffnet werden."
           }
         },
         "en" : {
@@ -96946,49 +96946,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "No se pudo abrir ese archivo adjunto."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Impossible d’ouvrir cette pièce jointe."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Impossibile aprire l’allegato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Não foi possível abrir esse anexo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Не удалось открыть это вложение."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "Bu ek açılamadı."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "无法打开该附件。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be opened."
+            "value" : "無法打開該附件。"
           }
         }
       }
@@ -96999,7 +96999,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Dieser Anhang konnte nicht vorbereitet werden."
           }
         },
         "en" : {
@@ -97011,49 +97011,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "No se pudo preparar ese archivo adjunto."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Impossible de préparer cette pièce jointe."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Impossibile preparare l’allegato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Não foi possível preparar esse anexo."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Не удалось подготовить это вложение."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "Bu ek hazırlanamadı."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "无法准备该附件。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment could not be prepared."
+            "value" : "無法準備該附件。"
           }
         }
       }
@@ -97064,7 +97064,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Dieser Anhang ist zu groß zum Senden."
           }
         },
         "en" : {
@@ -97076,49 +97076,439 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Ese archivo adjunto es demasiado grande para enviarlo."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Cette pièce jointe est trop volumineuse pour être envoyée."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "L’allegato è troppo grande per essere inviato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Esse anexo é grande demais para enviar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Это вложение слишком большое для отправки."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "Bu ek gönderilemeyecek kadar büyük."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "该附件过大，无法发送。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That attachment is too large to send."
+            "value" : "該附件過大，無法傳送。"
+          }
+        }
+      }
+    },
+    "Attachment too large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anhang zu groß"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachment too large"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo adjunto demasiado grande"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pièce jointe trop volumineuse"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allegato troppo grande"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anexo muito grande"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложение слишком большое"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ek çok büyük"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件过大"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件過大"
+          }
+        }
+      }
+    },
+    "Message too long" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nachricht zu lang"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message too long"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje demasiado largo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message trop long"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messaggio troppo lungo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensagem muito longa"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сообщение слишком длинное"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesaj çok uzun"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消息过长"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "訊息過長"
+          }
+        }
+      }
+    },
+    "Remove the attachment that is too large for the media server, then send again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entferne den Anhang, der für den Medienserver zu groß ist, und sende erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove the attachment that is too large for the media server, then send again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quita el archivo adjunto que es demasiado grande para el servidor de medios y vuelve a enviar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirez la pièce jointe trop volumineuse pour le serveur de médias, puis renvoyez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi l'allegato troppo grande per il server multimediale, poi invia di nuovo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remova o anexo que é grande demais para o servidor de mídia e envie novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Удалите вложение, слишком большое для медиасервера, и отправьте снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medya sunucusu için çok büyük olan eki kaldırın, ardından yeniden gönderin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请移除对媒体服务器来说过大的附件，然后重新发送。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請移除對媒體伺服器來說過大的附件，然後重新傳送。"
+          }
+        }
+      }
+    },
+    "Shorten your message, then send again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kürze deine Nachricht und sende sie erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shorten your message, then send again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acorta tu mensaje y vuelve a enviarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raccourcissez votre message, puis renvoyez-le."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accorcia il messaggio, poi invialo di nuovo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encurte sua mensagem e envie novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сократите сообщение и отправьте снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesajınızı kısaltın, ardından yeniden gönderin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请缩短消息，然后重新发送。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請縮短訊息，然後重新傳送。"
+          }
+        }
+      }
+    },
+    "The attachment was removed. The rest of your message is back in the composer." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Anhang wurde entfernt. Der Rest deiner Nachricht ist wieder im Eingabefeld."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The attachment was removed. The rest of your message is back in the composer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se quitó el archivo adjunto. El resto de tu mensaje volvió al editor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La pièce jointe a été retirée. Le reste de votre message est de retour dans la zone de saisie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'allegato è stato rimosso. Il resto del messaggio è di nuovo nel campo di scrittura."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O anexo foi removido. O restante da sua mensagem voltou para o campo de texto."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вложение удалено. Остальная часть сообщения возвращена в поле ввода."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ek kaldırıldı. Mesajınızın geri kalanı yazma alanına geri döndü."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件已移除。消息的其余内容已放回输入框。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "附件已移除。訊息的其餘內容已放回輸入框。"
+          }
+        }
+      }
+    },
+    "Your message was kept in the failed bubble." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Nachricht bleibt in der fehlgeschlagenen Sprechblase erhalten."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your message was kept in the failed bubble."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu mensaje se conservó en la burbuja con error."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre message a été conservé dans la bulle en échec."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo messaggio è stato conservato nel fumetto non inviato."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sua mensagem foi mantida no balão com falha."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваше сообщение сохранено в неотправленном сообщении."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mesajınız başarısız balonda korundu."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的消息已保留在发送失败的气泡中。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的訊息已保留在傳送失敗的氣泡中。"
           }
         }
       }
@@ -97129,7 +97519,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Dieser Dateityp wird nicht unterstützt."
           }
         },
         "en" : {
@@ -97141,49 +97531,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Ese tipo de archivo no es compatible."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Ce type de fichier n’est pas pris en charge."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Questo tipo di file non è supportato."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Esse tipo de arquivo não é compatível."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Этот тип файла не поддерживается."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "Bu dosya türü desteklenmiyor."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "不支持该文件类型。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "That file type is not supported."
+            "value" : "不支援該檔案類型。"
           }
         }
       }
@@ -109188,7 +109578,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Videoanhang"
           }
         },
         "en" : {
@@ -109206,43 +109596,43 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Pièce jointe vidéo"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Allegato video"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Anexo de vídeo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Видеовложение"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "Video eki"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "视频附件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Video attachment"
+            "value" : "影片附件"
           }
         }
       }
@@ -109697,7 +110087,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Die Sprachaufnahme konnte nicht gestartet werden."
           }
         },
         "en" : {
@@ -109709,49 +110099,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "No se pudo iniciar la grabación de voz."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Impossible de démarrer l’enregistrement vocal."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Impossibile avviare la registrazione vocale."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Não foi possível iniciar a gravação de voz."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Не удалось начать запись голоса."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "Ses kaydı başlatılamadı."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "无法开始录音。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voice recording could not start."
+            "value" : "無法開始錄音。"
           }
         }
       }
@@ -113044,7 +113434,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Du kannst bis zu %lld Anhänge gleichzeitig senden"
           }
         },
         "en" : {
@@ -113056,49 +113446,49 @@
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Puedes enviar hasta %lld archivos adjuntos a la vez"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Vous pouvez envoyer jusqu’à %lld pièces jointes à la fois"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Puoi inviare fino a %lld allegati alla volta"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Você pode enviar até %lld anexos de uma vez"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Можно отправить не более %lld вложений за раз"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "Tek seferde en fazla %lld ek gönderebilirsiniz"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "一次最多可发送 %lld 个附件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "You can send up to %lld attachments at once"
+            "value" : "一次最多可傳送 %lld 個附件"
           }
         }
       }
