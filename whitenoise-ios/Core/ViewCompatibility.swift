@@ -90,46 +90,26 @@ extension View {
         }
     }
 
-    /// Uses a crisp boundary below top chrome instead of the default soft fade.
-    @ViewBuilder
-    func compatibleTopScrollEdgeEffect() -> some View {
-        if #available(iOS 26.0, *) {
-            scrollEdgeEffectStyle(.hard, for: .top)
-        } else {
-            self
-        }
-    }
-
-    /// Custom fading headers supply their own scroll-edge treatment.
-    @ViewBuilder
-    func compatibleTopScrollEdgeEffectHidden() -> some View {
-        if #available(iOS 26.0, *) {
-            scrollEdgeEffectHidden(true, for: .top)
-        } else {
-            self
-        }
-    }
-
-    /// Uses the platform's context-sensitive treatment beneath top navigation chrome.
-    @ViewBuilder
-    func compatibleAutomaticTopScrollEdgeEffect() -> some View {
-        if #available(iOS 26.0, *) {
-            scrollEdgeEffectStyle(.automatic, for: .top)
-        } else {
-            self
-        }
-    }
-
-    /// Extends the native top scroll-edge treatment through inset content on iOS 26.
+    /// Top chrome the platform's scroll-edge treatment extends beneath on
+    /// iOS 26+. Earlier systems get the standard bar material; a bar standing
+    /// in for a navigation bar also covers the status bar and draws its hairline.
     @ViewBuilder
     func compatibleTopSafeAreaBar<BarContent: View>(
-        spacing: CGFloat? = nil,
+        belowNavigationBar: Bool = false,
         @ViewBuilder content: () -> BarContent
     ) -> some View {
         if #available(iOS 26.0, *) {
-            safeAreaBar(edge: .top, spacing: spacing, content: content)
+            safeAreaBar(edge: .top, spacing: 0, content: content)
         } else {
-            safeAreaInset(edge: .top, spacing: spacing, content: content)
+            safeAreaInset(edge: .top, spacing: 0) {
+                content()
+                    .background(.bar, ignoresSafeAreaEdges: belowNavigationBar ? [] : .top)
+                    .overlay(alignment: .bottom) {
+                        if !belowNavigationBar {
+                            Divider()
+                        }
+                    }
+            }
         }
     }
 

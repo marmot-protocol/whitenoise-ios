@@ -171,7 +171,6 @@ struct ChatsListView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackgroundVisibility(.hidden, for: .navigationBar)
             .toolbar {
                 if selectionMode {
                     ToolbarItem(placement: .topBarLeading) {
@@ -213,7 +212,7 @@ struct ChatsListView: View {
                     }
                 }
             }
-            .safeAreaInset(edge: .top, spacing: 0) {
+            .compatibleTopSafeAreaBar(belowNavigationBar: true) {
                 VStack(spacing: 0) {
                     if appState.isConnectivityCatchUpInProgress {
                         HStack(spacing: 8) {
@@ -240,13 +239,14 @@ struct ChatsListView: View {
                         .padding(.top, 6)
                     }
 
-                    Color.clear
-                        .frame(height: 6)
+                    if !appState.historyNotices.accountNotices.isEmpty {
+                        Color.clear
+                            .frame(height: 6)
+                    }
                 }
-                .wnFadingHeader()
-                .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
-                    await appState.historyNotices.refresh(using: appState)
-                }
+            }
+            .task(id: "\(appState.activeAccountRef ?? "")/\(appState.runtimeGeneration)/\(appState.canUseRuntimeForForegroundWork)") {
+                await appState.historyNotices.refresh(using: appState)
             }
             .animation(.smooth(duration: 0.2), value: appState.isConnectivityCatchUpInProgress)
             // Registered at a stable level so navigation works even when the
@@ -613,7 +613,6 @@ struct ChatsListView: View {
             }
             .environment(\.editMode, $chatListEditMode)
             .listStyle(.plain)
-            .compatibleTopScrollEdgeEffectHidden()
             .compatibleBottomScrollEdgeEffect()
             .overlay {
                 if rows.isEmpty { emptyState }
