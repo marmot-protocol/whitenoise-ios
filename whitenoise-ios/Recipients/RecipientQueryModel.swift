@@ -43,6 +43,14 @@ final class RecipientQueryModel {
         self.startLookup = startLookup
     }
 
+#if DEBUG
+    /// Test hook: swaps the Namecoin resolver for a stub so query-model tests
+    /// never touch the ElectrumX network. nil uses the real resolver.
+    @ObservationIgnored var namecoinResolverForTesting: (
+        (String) async -> NamecoinResolver.Resolution
+    )?
+#endif
+
     var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -89,6 +97,49 @@ final class RecipientQueryModel {
                     using: appState
                 )
             }
+        case .namecoin(let identifier):
+            resolution = .resolving
+            resolveTask = startLookup { [weak self] in
+                await self?.resolveNamecoin(
+                    identifier: identifier,
+                    generation: generation,
+                    using: appState
+                )
+            }
+        }
+    }
+
+    private func resolveNamecoin(
+        identifier: String,
+        generation: Int,
+        using appState: AppState
+    ) async {
+        try? await debounce()
+        guard !Task.isCancelled else { return }
+#if DEBUG
+        let resolve = namecoinResolverForTesting ?? { await NamecoinResolver.resolve($0) }
+#else
+        let resolve = { await NamecoinResolver.resolve($0) }
+#endif
+        let result = await resolve(identifier)
+        guard !Task.isCancelled else { return }
+        switch result {
+        case .resolved(let resolved):
+            warmProfile(resolved.pubkeyHex, using: appState)
+            adopt(
+                .resolved(ResolvedRecipient(
+                    accountIdHex: resolved.pubkeyHex,
+                    memberRef: resolved.pubkeyHex,
+                    // No NIP-05 round trip backs a .bit resolution, so the
+                    // row does not earn the verified badge from it.
+                    queriedNip05: nil
+                )),
+                generation: generation
+            )
+        case .notFound:
+            adopt(.noProfile, generation: generation)
+        case .unavailable:
+            adopt(.failed, generation: generation)
         }
     }
 
@@ -126,6 +177,12 @@ final class RecipientQueryModel {
         guard resolveGeneration == generation else { return }
         resolution = state
     }
+
+#if DEBUG
+    func awaitResolutionForTesting() async {
+        await resolveTask?.value
+    }
+#endif
 
     private func warmProfile(_ accountIdHex: String, using appState: AppState) {
         _ = appState.profile(forAccountIdHex: accountIdHex)

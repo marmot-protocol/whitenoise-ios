@@ -2,11 +2,17 @@ import Foundation
 
 /// Classifies what the person typed or pasted into the recipient search
 /// field: a plain name (browse the known-people list), a profile reference
-/// (npub / nprofile / hex / nostr: URI / profile link), or a NIP-05 address.
-/// Profile references win over NIP-05 when both could apply.
+/// (npub / nprofile / hex / nostr: URI / profile link), a Namecoin `.bit` /
+/// `d/` / `id/` identifier, or a NIP-05 address. Profile references win over
+/// NIP-05 when both could apply; Namecoin identifiers win over NIP-05 because
+/// a `.bit` domain is resolved through ElectrumX, not DNS.
 nonisolated enum RecipientIdentifierQuery: Equatable {
     case none
     case profileReference(String)
+    /// A Namecoin identifier (`alice@example.bit`, `example.bit`, `d/example`,
+    /// `id/alice`) to route through `NamecoinResolver`. The payload is the
+    /// trimmed raw input; the resolver owns parsing.
+    case namecoin(String)
     case nip05(name: String, domain: String)
 
     static func classify(_ raw: String) -> RecipientIdentifierQuery {
@@ -14,6 +20,9 @@ nonisolated enum RecipientIdentifierQuery: Equatable {
         guard !trimmed.isEmpty else { return .none }
         if let reference = AddMembersPresentation.memberRef(fromScannedPayload: trimmed) {
             return .profileReference(reference)
+        }
+        if NamecoinResolver.isBitIdentifier(trimmed) {
+            return .namecoin(trimmed)
         }
         if let address = nip05Address(trimmed) {
             return .nip05(name: address.name, domain: address.domain)
