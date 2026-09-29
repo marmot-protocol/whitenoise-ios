@@ -779,7 +779,6 @@ struct ConversationView: View {
 
     private var conversationChromeView: some View {
         timeline
-            .compatibleTopSafeAreaBar { searchBarInset }
             .bottomInputChromeAccessory {
                 // `onGeometryChange`'s transform is nonisolated and @Sendable, so
                 // the observable reads happen here in `body` — which also makes
@@ -830,6 +829,7 @@ struct ConversationView: View {
                     if viewModel?.search.isActive != true {
                         conversationHeaderBar
                     }
+                    searchBarInset
                     if let viewModel {
                         GroupRecoveryView(model: viewModel.recovery, groupID: chat.groupIdHex) {
                             _ = await viewModel.refreshGroupManagement()
