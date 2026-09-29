@@ -1836,124 +1836,6 @@
         }
       }
     },
-    "%@ hasn't published a compatible key package yet." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat noch kein kompatibles Schlüsselpaket veröffentlicht."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ aún no ha publicado un paquete de llaves compatible."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ n’a pas encore publié de package de clé compatible."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ non ha ancora pubblicato un pacchetto di chiavi compatibile."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ ainda não publicou um pacote de chaves compatível."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ еще не опубликовал совместимый пакет ключей."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ henüz uyumlu bir anahtar paketi yayınlamadı."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@尚未发布兼容的密钥包。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@尚未發布相容的金鑰包。"
-          }
-        }
-      }
-    },
-    "%@ hasn't published a compatible key package, so they can't be added yet." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ hat kein kompatibles Schlüsselpaket veröffentlicht und kann daher noch nicht hinzugefügt werden."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ no ha publicado un paquete de llaves compatible, por lo que no se pueden agregar todavía."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ n’a pas publié de package de clés compatible, il ne peut donc pas encore être ajouté."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ non ha pubblicato un pacchetto di chiavi compatibile, quindi non è ancora possibile aggiungerlo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ não publicou um pacote de chaves compatível, portanto eles ainda não podem ser adicionados."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ не опубликовал совместимый пакет ключей, поэтому его пока нельзя добавить."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ uyumlu bir anahtar paketi yayınlamadığından henüz eklenemiyor."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@尚未发布兼容的密钥包，因此尚无法添加。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@尚未發布相容的金鑰包，因此尚無法新增。"
-          }
-        }
-      }
-    },
     "%@ hasn't published a compatible key package, so they can't be messaged yet." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2317,6 +2199,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 不是有效的中繼伺服器 URL。"
+          }
+        }
+      }
+    },
+    "%@ isn't on White Noise yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ist noch nicht bei White Noise."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ isn't on White Noise yet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ aún no está en White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ n'est pas encore sur White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ non è ancora su White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ainda não está no White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ ещё не в White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ henüz White Noise'ta değil."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@还没有使用 White Noise。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@還沒有使用 White Noise。"
           }
         }
       }
@@ -103777,6 +103723,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此計時器同樣適用於聊天中已有的訊息。超過 %@ 的內容將立即刪除。"
+          }
+        }
+      }
+    },
+    "This user isn't on White Noise yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Person ist noch nicht bei White Noise."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta persona aún no está en White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette personne n'est pas encore sur White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa persona non è ancora su White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta pessoa ainda não está no White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот пользователь ещё не в White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişi henüz White Noise'ta değil."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此用户还没有使用 White Noise。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此使用者還沒有使用 White Noise。"
           }
         }
       }

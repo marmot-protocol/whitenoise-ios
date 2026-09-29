@@ -442,11 +442,10 @@ final class NewChatFlowViewModel {
             onOpen(groupIdHex)
         } catch let marmotError as MarmotKitError {
             Haptics.error()
-            if case .MissingKeyPackage(let account) = marmotError {
-                // Soft validation — keep the flow open and name who can't be added.
-                groupCreateError = L10n.formatted(
-                    "%@ hasn't published a compatible key package, so they can't be added yet.",
-                    IdentityPresentation.text(accountIdHex: account)
+            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: marmotError) {
+                groupCreateError = MissingKeyPackageInvitationPresentation.message(
+                    accountIdHex: account,
+                    knownName: appState.knownDisplayName(forAccountIdHex: account)
                 )
             } else {
                 groupCreateError = UserFacingError.message(for: marmotError)

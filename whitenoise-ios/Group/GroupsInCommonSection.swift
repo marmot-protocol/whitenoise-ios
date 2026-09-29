@@ -269,10 +269,10 @@ struct AddToGroupSheet: View {
         } catch let marmotError as MarmotKitError {
             guard isCurrent(accountRef: accountRef, runtimeGeneration: runtimeGeneration) else { return }
             Haptics.error()
-            if case .MissingKeyPackage(let account) = marmotError {
-                error = L10n.formatted(
-                    "%@ hasn't published a compatible key package yet.",
-                    IdentityPresentation.text(accountIdHex: account)
+            if let account = MissingKeyPackageInvitationPresentation.accountIdHex(for: marmotError) {
+                error = MissingKeyPackageInvitationPresentation.message(
+                    accountIdHex: account,
+                    knownName: appState.knownDisplayName(forAccountIdHex: account)
                 )
             } else {
                 error = UserFacingError.message(for: marmotError)
