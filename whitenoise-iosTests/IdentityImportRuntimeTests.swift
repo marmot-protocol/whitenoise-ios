@@ -10,7 +10,7 @@ struct IdentityImportRuntimeTests {
     private let accountDefaults = IsolatedAccountDefaults.make()
 
     @Test func userInitiatedMutationJoinsForegroundRuntimeRebuild() async throws {
-        let appState = AppState(
+        let appState = AppState.test(
             client: try MarmotClient.testClient(),
             notifications: AppNotifications(
                 requestAuthorizationHandler: { false },

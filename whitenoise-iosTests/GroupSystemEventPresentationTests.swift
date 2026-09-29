@@ -508,7 +508,7 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let row = timelineRecord(
@@ -549,7 +549,7 @@ struct GroupSystemEventPresentationTests {
     @MainActor
     @Test func groupSystemTimelineDisplayTextIsCachedPerProjectionGeneration() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let row = timelineRecord(

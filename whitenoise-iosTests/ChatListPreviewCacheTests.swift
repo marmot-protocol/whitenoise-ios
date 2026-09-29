@@ -7,7 +7,7 @@ import Testing
 struct ChatListPreviewCacheTests {
 
     @Test func pendingLeaveKeepsMembershipAndWithholdsDelete() throws {
-        let model = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let model = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
         let activeRow = row()
         model.applyChatListSnapshot([activeRow])
         model.markGroupLeavePending(groupIdHex: activeRow.groupIdHex)
@@ -19,7 +19,7 @@ struct ChatListPreviewCacheTests {
     }
 
     @Test func latePendingResultDoesNotOverwriteEndedMembership() throws {
-        let model = ChatsListViewModel(appState: AppState(client: try MarmotClient.testClient()))
+        let model = ChatsListViewModel(appState: AppState.test(client: try MarmotClient.testClient()))
         let removedRow = row(selfMembership: .removed)
         model.applyChatListSnapshot([removedRow])
         model.markGroupLeavePending(groupIdHex: removedRow.groupIdHex)

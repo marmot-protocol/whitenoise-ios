@@ -50,7 +50,7 @@ struct SystemTimelineItemsTests {
 
     @Test func resetOptimisticStateClearsSessionSystemTimelineRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
 
@@ -70,7 +70,7 @@ struct SystemTimelineItemsTests {
 
     @Test func consecutiveSameKindSystemEventPublishesUpdatedTimestamp() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
 
@@ -89,7 +89,7 @@ struct SystemTimelineItemsTests {
 
     @Test func resetOptimisticStateClearsTransientMessageRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let pending = AppMessageRecordFfi(

@@ -145,6 +145,11 @@ guidance. Feedback is a design principle, not a native toast component.
   repeated copies and cancel delayed feedback when it disappears.
 - Let successful navigation or updated content confirm completion. Do not add a
   success toast when the resulting screen already communicates success.
+- Keep progress inside the initiating button for longer operations, preserving
+  its size and the surrounding layout. Brief sign-in/reset alert actions dismiss
+  immediately; disable the underlying form until completion without a spinner or
+  layout change. Present a retry alert if reset fails. Do not replace short alerts
+  with sheets just to show progress, or insert a separate progress footer.
 - During saves, show progress and prevent duplicate submissions. Exit editing
   only after confirmed success. On failure, preserve the draft, keep the editor
   open, and offer retry beside a persistent error. Keep field validation beside

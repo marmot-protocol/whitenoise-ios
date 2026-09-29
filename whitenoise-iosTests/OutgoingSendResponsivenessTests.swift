@@ -368,7 +368,7 @@ private final class SendHarness {
 
     init() throws {
         client = try MarmotClient.testClient()
-        appState = AppState(client: client)
+        appState = AppState.test(client: client)
         appState.activeAccountRef = "account-ref"
         viewModel = ConversationViewModel(appState: appState, group: harnessGroup())
         store = viewModel.timelineStore

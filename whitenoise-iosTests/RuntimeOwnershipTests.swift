@@ -281,7 +281,7 @@ struct RuntimeOwnershipTests {
 
     @Test func inactiveLaunchBootstrapsWithoutTreatingInactiveAsCancellation() async {
         let factory = ScriptedRuntimeFactory(busyFailures: 0)
-        let appState = AppState(
+        let appState = AppState.test(
             client: nil,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
@@ -315,7 +315,7 @@ struct RuntimeOwnershipTests {
         var injectedClient: MarmotClient? = try MarmotClient.testClient()
         let marmot = try #require(injectedClient?.marmot)
         weak let releasedClient = injectedClient
-        let appState = AppState(
+        let appState = AppState.test(
             client: injectedClient,
             notifications: runtimeOwnershipDeniedNotifications()
         )
@@ -333,7 +333,7 @@ struct RuntimeOwnershipTests {
 
     @Test func bootstrapRetriesRuntimeBusySeriallyAndInstallsOneClient() async {
         let factory = ScriptedRuntimeFactory(busyFailures: 2)
-        let appState = AppState(
+        let appState = AppState.test(
             client: nil,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
@@ -368,7 +368,7 @@ struct RuntimeOwnershipTests {
             .StorageBusy(details: "database is locked"),
             .KeystoreUnavailable(details: "protected data unavailable"),
         ])
-        let appState = AppState(
+        let appState = AppState.test(
             client: nil,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
@@ -397,7 +397,7 @@ struct RuntimeOwnershipTests {
     @Test func bootstrapStopsRetryingWhenAppBackgrounds() async {
         let factory = ScriptedRuntimeFactory(busyFailures: .max)
         let retryGate = RuntimeRetryGate()
-        let appState = AppState(
+        let appState = AppState.test(
             client: nil,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
@@ -429,7 +429,7 @@ struct RuntimeOwnershipTests {
 
     @Test func exhaustedContentionIsRecoverableAndASecondBootstrapCanSucceed() async {
         let factory = ScriptedRuntimeFactory(busyFailures: 2)
-        let appState = AppState(
+        let appState = AppState.test(
             client: nil,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { rootPath, relayUrls, cursorPersistence, telemetryConfig in
@@ -465,7 +465,7 @@ struct RuntimeOwnershipTests {
         var injectedClient: MarmotClient? = try MarmotClient.testClient()
         let marmot = try #require(injectedClient?.marmot)
         weak let releasedClient = injectedClient
-        let appState = AppState(
+        let appState = AppState.test(
             client: injectedClient,
             notifications: runtimeOwnershipDeniedNotifications()
         )
@@ -484,7 +484,7 @@ struct RuntimeOwnershipTests {
         var injectedClient: MarmotClient? = try MarmotClient.testClient()
         let marmot = try #require(injectedClient?.marmot)
         let gate = RuntimeRetryGate()
-        let appState = AppState(
+        let appState = AppState.test(
             client: injectedClient,
             notifications: runtimeOwnershipDeniedNotifications()
         )
@@ -551,7 +551,7 @@ struct RuntimeOwnershipTests {
 
     @Test func notificationActionContentionFailsImmediatelyAndReleasesSuspensionGate() async throws {
         var initialClient: MarmotClient? = try MarmotClient.testClient()
-        let appState = AppState(
+        let appState = AppState.test(
             client: initialClient,
             notifications: runtimeOwnershipDeniedNotifications(),
             runtimeClientFactory: { _, _, _, _ in

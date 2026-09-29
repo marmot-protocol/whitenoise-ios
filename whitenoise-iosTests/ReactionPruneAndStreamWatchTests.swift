@@ -278,7 +278,7 @@ struct ReactionTargetTallyTests {
     @MainActor
     @Test func projectionDeltaRecomputeMatchesFullRebuildAndKeepsUnrelatedTarget() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let unrelatedTally = [ConversationViewModel.ReactionTally(emoji: "👀", count: 1, mine: false)]
@@ -335,7 +335,7 @@ struct ReactionTargetTallyTests {
 
     @MainActor
     @Test func toggleRecomputesOnlyItsOwnTargetNotUnrelatedSummaries() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "no-such-account"
         let viewModel = ConversationViewModel(appState: appState, group: testGroup())
 
@@ -364,7 +364,7 @@ struct ReactionTargetTallyTests {
     @MainActor
     @Test func multiRecordProjectionUpdateRebuildsTimelineOnce() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         viewModel.applyTimelinePage(

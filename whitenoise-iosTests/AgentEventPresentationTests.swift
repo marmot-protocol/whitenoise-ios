@@ -135,7 +135,7 @@ struct AgentEventPresentationTests {
     @MainActor
     @Test func agentOperationTimelineRowIsVisibleWithoutStreamingDebug() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testAgentGroup()
         )
         let operation = timelineRecord(

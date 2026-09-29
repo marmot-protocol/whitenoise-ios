@@ -24,7 +24,7 @@ struct PreparedConversationLiveUpdateTests {
             await window.cancel()
             let groupSubscription = try await client.subscribeGroupState(accountRef: account.label, groupIdHex: group.groupIdHex)
             let groupRecord = try #require(await client.groupStateSubscriptionSnapshot(groupSubscription))
-            let state = AppState(client: client)
+            let state = AppState.test(client: client)
             let model = ConversationViewModel(appState: state, group: groupRecord)
             func record(_ id: String, _ time: UInt64, text: String = "OK") -> TimelineMessageRecordFfi {
                 TimelineMessageRecordFfi(messageIdHex: id, sourceMessageIdHex: id, direction: "sent",

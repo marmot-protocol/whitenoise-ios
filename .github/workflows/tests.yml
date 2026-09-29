@@ -65,6 +65,10 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-xcode26-
 
+      - name: Isolate simulator clipboard
+        # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
+        run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
+
       # Restoring the compiler CAS exhausts runner disk space during extraction.
       # Keep dependency caching above and compile from source on each run.
       - name: Run tests

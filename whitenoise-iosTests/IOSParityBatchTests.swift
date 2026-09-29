@@ -55,7 +55,7 @@ struct IOSParityBatchTests {
     }
 
     @Test func namedEmptyGroupCreationSendsSanitizedRequestWithoutMemberRefs() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active-account"
         let model = NewChatFlowViewModel()
         var capturedAccountRef: String?
@@ -87,7 +87,7 @@ struct IOSParityBatchTests {
     }
 
     @Test func newGroupCreationPassesEncryptedInitialImageInput() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active-account"
         let model = NewChatFlowViewModel()
         let draft = GroupImageUploadDraft(
@@ -120,7 +120,7 @@ struct IOSParityBatchTests {
     }
 
     @Test func newGroupCreationIncludesFoundingRetentionBeforeOpening() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active-account"
         let model = NewChatFlowViewModel()
         var events: [String] = []

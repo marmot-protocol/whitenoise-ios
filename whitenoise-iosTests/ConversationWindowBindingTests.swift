@@ -57,7 +57,7 @@ struct ConversationWindowBindingTests {
         let client = try MarmotClient.testClient()
         let defaults = try #require(UserDefaults(suiteName: "DraftWindowTests.\(UUID())"))
         let store = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState(client: client, notifications: .shared, conversationDraftStore: store,
+        let state = AppState.test(client: client, notifications: .shared, conversationDraftStore: store,
             accountDefaults: defaults, erasureDefaults: defaults)
         state.setPhase(.ready)
         let watchdog = MarmotFixtureWatchdog.start(
@@ -109,7 +109,7 @@ struct ConversationWindowBindingTests {
         let client = try MarmotClient.testClient()
         let defaults = try #require(UserDefaults(suiteName: "DraftSendFailureTests.\(UUID())"))
         let drafts = ConversationDraftStore(legacyFileURL: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
-        let state = AppState(client: client, notifications: .shared, conversationDraftStore: drafts,
+        let state = AppState.test(client: client, notifications: .shared, conversationDraftStore: drafts,
             accountDefaults: defaults, erasureDefaults: defaults)
         state.setPhase(.ready)
         let watchdog = MarmotFixtureWatchdog.start("Draft send recovery did not complete", breaking: client)

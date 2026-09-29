@@ -46,7 +46,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func timelineDoesNotRenderTagMediaWhenRowProjectionIsEmpty() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let reference = mediaReference(sourceEpoch: 7)
@@ -69,7 +69,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mirroredNilReplyTargetDoesNotFallBackToTags() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let target = timelineRecord(messageIdHex: hexId(3), plaintext: "target body")
@@ -97,7 +97,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func projectedReplyTargetCanUseLoadedTargetAsPreviewFallback() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let target = timelineRecord(messageIdHex: hexId(5), plaintext: "target body")
@@ -120,7 +120,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func projectedReplyPreviewCarriesResolvedMediaWithoutAnotherLookup() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let targetID = hexId(11)
@@ -155,7 +155,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func markdownProjectionCacheSkipsUnchangedWindowRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let tokens = doc([.paragraph(inlines: [.text(content: "hello **world**")])])
@@ -191,7 +191,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func mediaProjectionCacheSkipsUnchangedWindowRows() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let reference = mediaReference(sourceEpoch: 7)
@@ -230,7 +230,7 @@ struct TimelineProjectionBoundaryTests {
 
     @Test func authoritativeWindowSkipsDiscardedReactionTargetCollection() throws {
         let viewModel = ConversationViewModel(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             group: testGroup()
         )
         let record = timelineRecord(messageIdHex: hexId(9), plaintext: "hello")
@@ -287,7 +287,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
@@ -328,7 +328,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: ConversationMediaDownloader.MediaDataError.plaintextHashMismatch) {
@@ -365,7 +365,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: ConversationMediaDownloader.MediaDataError.unsafeLocator) {
@@ -400,7 +400,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: ConversationMediaDownloader.MediaDataError.unsafeLocator) {
@@ -452,7 +452,7 @@ struct TimelineProjectionBoundaryTests {
                 )
             }
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         let data = try await downloader.data(for: media, groupIdHex: testGroupId, appState: appState)
@@ -520,7 +520,7 @@ struct TimelineProjectionBoundaryTests {
             locatorResolver: { _ in ["93.184.216.34"] },
             downloadMedia: downloaded.download
         )
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-a"
 
         await #expect(throws: CancellationError.self) {

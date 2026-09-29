@@ -290,6 +290,12 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    func randomProfilePseudonym() async -> String {
+        await Task.detached(priority: .userInitiated) { [marmot] in
+            marmot.randomProfilePseudonym()
+        }.value
+    }
+
     /// Parses markdown off the main actor. `Marmot.parseMarkdown(text:)` is a
     /// synchronous `rustCall()` binding whose cost scales with message length,
     /// so running it inline on MainActor stalls the composer/send animation for

@@ -10,7 +10,7 @@ struct NativeAvatarImageCacheTests {
         let suite = "NativeAvatarImageCacheTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        let state = AppState(client: nil, notifications: .shared, accountDefaults: defaults, erasureDefaults: defaults)
+        let state = AppState.test(client: nil, notifications: .shared, accountDefaults: defaults, erasureDefaults: defaults)
         state.activeAccountRef = "avatar-first-frame"
         let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40)).image { context in
             UIColor.cyan.setFill()

@@ -12,7 +12,7 @@ struct SupportChatTests {
     }
 
     @Test func existingSupportChatOpensWithoutCreatingADuplicate() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
         flow.starter.createGroupForTesting = { _, _ in
@@ -31,7 +31,7 @@ struct SupportChatTests {
     }
 
     @Test func missingSupportChatCreatesThroughTheNormalDirectChatPath() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var createdAccountRef: String?
@@ -55,7 +55,7 @@ struct SupportChatTests {
     }
 
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         var attempt = 0
@@ -91,7 +91,7 @@ struct SupportChatTests {
     }
 
     @Test func failedExistingChatLookupNeverCreatesADuplicate() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         var lookupAttempt = 0
@@ -177,7 +177,7 @@ struct SupportChatTests {
     }
 
     @Test func supportChatReportsLoadingWhileCreationIsInFlight() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: nil)
         let gate = SupportChatCreateGate()
@@ -201,7 +201,7 @@ struct SupportChatTests {
     }
 
     @Test func cancellingWhileLookingForAnExistingChatDoesNotCreateOne() async throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = NewChatFlowViewModel()
         let gate = SupportChatCreateGate()

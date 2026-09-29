@@ -46,7 +46,7 @@ struct DeviceSettingsFlowTests {
             accounts.removePersistentDomain(forName: accountSuite)
             journal.removePersistentDomain(forName: journalSuite)
         }
-        let appState = AppState(client: try MarmotClient.testClient(), notifications: .shared,
+        let appState = AppState.test(client: try MarmotClient.testClient(), notifications: .shared,
                                 accountDefaults: accounts, erasureDefaults: journal)
         appState.erasureState.begin()
         accounts.removePersistentDomain(forName: accountSuite)

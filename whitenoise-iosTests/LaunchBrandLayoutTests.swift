@@ -66,7 +66,7 @@ struct LaunchBrandLayoutTests {
             previousKeyWindow?.makeKey()
         }
 
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         for textSize in [DynamicTypeSize.large, .accessibility5] {
             var markFrame: CGRect?
             let welcome = UIHostingController(rootView:

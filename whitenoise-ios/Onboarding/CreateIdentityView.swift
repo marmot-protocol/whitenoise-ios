@@ -13,6 +13,7 @@ struct CreateIdentityView: View {
 struct IdentityProfileSetupView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum ProfileField: Hashable {
@@ -21,8 +22,16 @@ struct IdentityProfileSetupView: View {
     }
 
     @State private var model = CreateIdentityViewModel()
+    @State private var isFormReady: Bool
+    @State private var submissionTask: Task<Void, Never>?
     @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var isKeyboardVisible = false
+    @State private var confirmsStartOver = false
+    @State private var confirmsDiscardDraft = false
+    @State private var discardDraftFailed = false
+    @State private var isRestarting = false
+    @State private var restartError: String?
+    @State private var signUpFailure: CreateIdentityViewModel.Failure?
     @State private var showPrivacyDetails = false
     @FocusState private var focusedField: ProfileField?
     @State private var nameFieldHeight: CGFloat = 0
@@ -36,17 +45,22 @@ struct IdentityProfileSetupView: View {
     init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
         self.isPushed = isPushed
         self.accountSetup = accountSetup
+        _isFormReady = State(initialValue: accountSetup != nil)
+    }
+
+    private var importedProfileStatus: OnboardingStatusFfi? {
+        accountSetup?.snapshot.steps.first { $0.step == .profile }?.status
     }
 
     private var showsInlineActions: Bool { accountSetup == nil && isKeyboardVisible }
 
     private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
-    private var isBusy: Bool { model.isBusy || (accountSetup?.isBusy ?? false) }
+    private var isBusy: Bool { isRestarting || model.isBusy || (accountSetup?.isBusy ?? false) }
     private var allowsBackNavigation: Bool {
-        accountSetup == nil ? model.allowsBackNavigation : !isSaving
+        !isRestarting && (accountSetup == nil ? model.allowsBackNavigation : !isSaving)
     }
 
-    var body: some View {
+    private var profileEditor: some View {
         ScrollViewReader { proxy in
             profileForm
                 .onChange(of: focusedField) {
@@ -70,7 +84,7 @@ struct IdentityProfileSetupView: View {
                     if focusedField == .about { revealFocusedField(using: proxy) }
                 }
         }
-        .disabled(isSaving || accountSetup?.isResumingProfilePublication == true)
+        .disabled(isBusy || isSaving || accountSetup?.isResumingProfilePublication == true)
         .formStyle(.grouped)
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .wnPhotoSourceMenu(
@@ -84,11 +98,93 @@ struct IdentityProfileSetupView: View {
                     sourceURL: sourceURL
                 )
             },
-            onRemove: { model.setAvatarDraft(nil) },
+            onRemove: {
+                submissionTask = Task {
+                    do { try await model.acceptPreparedAvatar(nil) }
+                    catch is CancellationError { return }
+                    catch { model.failure = .draftStorage }
+                }
+            },
             onSelect: { selection in
-                model.setAvatarDraft(selection)
+                try await model.acceptPreparedAvatar(selection)
             }
         )
+    }
+
+    private var presentedEditor: some View {
+        Group {
+            if isFormReady, model.isRestorationBlocked {
+                restorationFailureView
+            } else if isFormReady {
+                profileEditor
+            } else {
+                ProgressView("Loading…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .alert("Discard sign-up draft?", isPresented: $confirmsDiscardDraft) {
+            Button("Discard draft", role: .destructive) {
+                discardDraftFailed = false
+                submissionTask = Task {
+                    if await model.discardUnrestorableDraft() {
+                        try? await appState.refreshAccounts(refreshUnreadSummaries: false)
+                        dismiss()
+                    } else {
+                        discardDraftFailed = true
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes only the saved sign-up form from this device. All accounts and anything already uploaded or published are kept.")
+        }
+        .alert(restartError == nil ? L10n.string("Start over?") : L10n.string("Couldn’t restart sign-up"),
+               isPresented: $confirmsStartOver) {
+            Button(restartError == nil ? L10n.string("Start over") : L10n.string("Retry"), role: .destructive, action: restartSignUp)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(restartError ?? L10n.string("This will discard your name, bio, photo, and unfinished account from this device. Anything already uploaded or published may remain online."))
+        }
+        .onChange(of: model.failure, initial: true) {
+            if isFormReady, !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
+        }
+        .alert(signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"), isPresented: Binding(
+            get: { signUpFailure != nil },
+            set: { if !$0 { signUpFailure = nil } }
+        ), presenting: signUpFailure) { failure in
+            Button("Retry") { submitProfile() }
+            Button(failure == .photoUpload ? L10n.string("Cancel") : L10n.string("Close"), role: .cancel) {}
+        } message: { failure in
+            Text(failure.message)
+        }
+    }
+
+    private var restorationFailureView: some View {
+        ContentUnavailableView {
+            Label("Couldn’t restore your unfinished sign-up. Please try again.", systemImage: "exclamationmark.triangle")
+        } description: {
+            Text("Retry to read the saved draft again, or discard the draft without deleting any accounts.")
+            if discardDraftFailed {
+                Text("Couldn’t save your sign-up progress on this device. Free up some space and try again.")
+            }
+        } actions: {
+            Button("Retry") {
+                submissionTask = Task {
+                    isRestarting = true
+                    defer { isRestarting = false }
+                    await appState.retrySignUpRestoration()
+                    await prepareForm()
+                }
+            }
+            Button("Discard draft", role: .destructive) { confirmsDiscardDraft = true }
+        }
+        .disabled(isBusy)
+    }
+
+    var body: some View {
+        presentedEditor
+        .onChange(of: model.displayName) { saveDraftChanges() }
+        .onChange(of: model.about) { saveDraftChanges() }
         .sheet(isPresented: $showPrivacyDetails) {
             ProfilePrivacyDetailsView()
                 .presentationDetents([.medium])
@@ -102,40 +198,61 @@ struct IdentityProfileSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            if allowsBackNavigation {
+            if isFormReady && allowsBackNavigation {
                 ToolbarItem(placement: .cancellationAction) {
                     WNIconButton(
                         title: isPushed ? "Back" : "Close",
                         systemImage: isPushed ? "chevron.backward" : "xmark",
                         chrome: .container
                     ) {
+                        if accountSetup == nil { appState.closeSignUpDraft() }
                         dismiss()
                     }
                 }
             }
+            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !model.isResetPending, !model.isRestorationBlocked {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Start over", role: .destructive) {
+                            focusedField = nil
+                            restartError = nil
+                            confirmsStartOver = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }
+                    .accessibilityLabel("More")
+                    .disabled(isBusy)
+                }
+            }
         }
-        .interactiveDismissDisabled(!allowsBackNavigation)
+        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !showsInlineActions {
+            if isFormReady && !model.isRestorationBlocked && !showsInlineActions {
                 profileActions
                     .safeAreaPadding(.horizontal, 16)
                     .safeAreaPadding(.bottom)
             }
         }
+        .onDisappear {
+            submissionTask?.cancel()
+            flushDraftChanges()
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .background {
+                submissionTask?.cancel()
+                flushDraftChanges()
+            }
+        }
         // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
         .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
-        .onChange(of: accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status) {
-            if hasSubmittedProfile, accountSetup?.snapshot.steps.first(where: { $0.step == .profile })?.status == .passed {
+        .onChange(of: importedProfileStatus) {
+            if hasSubmittedProfile, importedProfileStatus == .passed {
                 dismiss()
             }
         }
-        .task {
-            if let profile = accountSetup?.snapshot.proposal?.profile {
-                model.displayName = profile.displayName ?? profile.name ?? ""
-                model.about = profile.about ?? ""
-            } else if accountSetup == nil {
-                await model.prepare(using: appState)
-            }
+        .task(id: accountSetup == nil ? scenePhase : .active) {
+            await prepareForm()
         }
         .background {
             Color(.systemBackground)
@@ -143,17 +260,38 @@ struct IdentityProfileSetupView: View {
         }
     }
 
+    private func prepareForm() async {
+        guard accountSetup != nil || scenePhase == .active else { return }
+        if let profile = accountSetup?.snapshot.proposal?.profile {
+            model.displayName = profile.displayName ?? profile.name ?? ""
+            model.about = profile.about ?? ""
+        } else if accountSetup == nil {
+            await appState.openSignUpDraft()
+            let preparedModel = appState.signUpModel
+            if preparedModel.isResetPending { isFormReady = false }
+            await preparedModel.prepare(using: appState)
+            guard !Task.isCancelled else { return }
+            await preparedModel.persistDraft()
+            guard !Task.isCancelled else { return }
+            // Reveal the model only after reset cleanup and name preparation settle.
+            model = preparedModel
+            isFormReady = true
+            if !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
+        }
+    }
+
     private var profileForm: some View {
         @Bindable var model = model
-
         return Form {
             avatarSection
+                .disabled(model.isResetPending)
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
 
             Section("Name") {
                 TextField("Name", text: $model.displayName)
+                    .disabled(model.isResetPending)
                     .textContentType(.name)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.next)
@@ -166,6 +304,7 @@ struct IdentityProfileSetupView: View {
 
             Section {
                 TextField("A little about you", text: $model.about, axis: .vertical)
+                    .disabled(model.isResetPending)
                     .lineLimit(3 ... 6)
                     .textInputAutocapitalization(.sentences)
                     .focused($focusedField, equals: .about)
@@ -183,7 +322,7 @@ struct IdentityProfileSetupView: View {
                     .listRowBackground(Color(uiColor: .quaternarySystemFill))
             }
 
-            if let failureMessage = setupSaveError ?? model.failureMessage {
+            if let failureMessage = setupSaveError {
                 Section {
                     Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -245,33 +384,69 @@ struct IdentityProfileSetupView: View {
                 layoutTitle: accountSetup == nil ? "Sign Up" : "Save",
                 isLoading: isSaving || model.isSubmitting
             ) {
-                focusedField = nil
-                Task {
-                    if let accountSetup {
-                        await saveImportedProfile(using: accountSetup)
-                    } else if model.phase == .creationFailed {
-                        await model.prepare(using: appState)
-                    } else {
-                        await model.submit(using: appState, dismiss: { dismiss() })
-                    }
-                }
+                submitProfile()
             }
-            .disabled(isBusy || !hasValidName || (accountSetup != nil && accountSetup?.isConnected != true))
+            .disabled(isBusy || (!hasValidName && !model.isResetPending) || (accountSetup != nil && accountSetup?.isConnected != true))
             .accessibilityLabel(primaryActionTitle)
             .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
             .accessibilityValue(isSaving || model.isSubmitting ? "In progress" : "")
+        }
+    }
 
-            if accountSetup == nil && model.phase == .profileSaveFailed {
-                Button("Continue") {
-                    Task {
-                        await model.continueWithoutSaving(
-                            using: appState,
-                            dismiss: { dismiss() }
-                        )
-                    }
-                }
-                .controlSize(.large)
-                .disabled(model.isBusy)
+    private func saveDraftChanges() {
+        guard isFormReady, accountSetup == nil else { return }
+        model.scheduleDraftPersistence()
+    }
+
+    private func flushDraftChanges() {
+        guard accountSetup == nil else { return }
+        let draftModel = model
+        Task { await draftModel.persistDraft() }
+    }
+
+    private func presentFailure(_ failure: CreateIdentityViewModel.Failure) {
+        if failure == .restart {
+            if !isRestarting {
+                restartError = failure.message
+                confirmsStartOver = true
+            }
+        } else {
+            signUpFailure = failure
+        }
+    }
+
+    private func restartSignUp() {
+        guard !isBusy else { return }
+        confirmsStartOver = false
+        isRestarting = true
+        focusedField = nil
+        submissionTask = Task {
+            defer { isRestarting = false }
+            if await model.startOver(using: appState) {
+                await model.prepare(using: appState)
+                confirmsStartOver = false
+                restartError = nil
+            } else if !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure {
+                restartError = failure.message
+                confirmsStartOver = true
+            }
+        }
+    }
+
+    private func submitProfile() {
+        if model.isResetPending {
+            restartError = model.failure?.message
+            confirmsStartOver = true
+            return
+        }
+        focusedField = nil
+        submissionTask = Task {
+            if let accountSetup {
+                await saveImportedProfile(using: accountSetup)
+            } else {
+                await model.submit(using: appState, dismiss: { dismiss() })
+                guard !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure else { return }
+                presentFailure(failure)
             }
         }
     }
@@ -288,7 +463,6 @@ struct IdentityProfileSetupView: View {
                     pictureURL: ContentSanitizer.imageURL(accountSetup?.snapshot.proposal?.profile?.picture)
                 )
             }
-
         }
     }
 
@@ -314,10 +488,10 @@ struct IdentityProfileSetupView: View {
             if isSaving { return L10n.string("Saving…") }
             return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save")
         }
+        if model.isResetPending { return L10n.string("Start over") }
+        if model.phase == .finishingSetup { return L10n.string("Finishing setup…") }
+        if model.phase == .savingProfile { return L10n.string("Saving…") }
         if model.isSubmitting { return L10n.string("Signing Up…") }
-        if model.phase == .creationFailed || model.phase == .profileSaveFailed {
-            return L10n.string("Retry")
-        }
         return L10n.string("Sign Up")
     }
 

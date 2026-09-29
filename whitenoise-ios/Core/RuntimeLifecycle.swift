@@ -449,7 +449,7 @@ final class RuntimeLifecycle {
                 reconcileBackgroundSuspensionAfterBootstrap()
             } else {
                 if !appState.accounts.contains(where: { $0.label == appState.activeAccountRef && !$0.signedOut }) {
-                    appState.activeAccountRef = appState.accountStore.prefersProfileSelection
+                    appState.activeAccountRef = appState.accountStore.prefersProfileSelection || appState.signUpModel.isRestorationBlocked
                         ? nil : appState.accounts.first(where: { !$0.signedOut })?.label
                 }
                 appState.setPhase(appState.accounts.contains(where: { !$0.signedOut }) ? .ready : .onboarding)

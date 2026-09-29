@@ -86,7 +86,7 @@ struct StreamDebugTimelineWindowTests {
 
     @Test func appendingDebugRowsBoundsBackingMapAndPublishedTimeline() throws {
         let store = TimelineStore(
-            appState: AppState(client: try MarmotClient.testClient()),
+            appState: AppState.test(client: try MarmotClient.testClient()),
             groupIdHex: String(repeating: "bb", count: 32)
         )
         let cap = TimelineStore.maxStreamDebugTimelineItems

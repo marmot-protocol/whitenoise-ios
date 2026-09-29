@@ -213,7 +213,7 @@ struct ContactNicknameResolutionTests {
     }
 
     @Test func nicknameOverridesResolvedProfileNameEverywhere() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let (defaults, suiteName) = try nicknameDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         appState.profileStore.contactNicknameDefaults = defaults
@@ -253,7 +253,7 @@ struct ContactNicknameResolutionTests {
     }
 
     @Test func cannotSetNicknameForOwnAccount() throws {
-        let appState = AppState(client: try MarmotClient.testClient())
+        let appState = AppState.test(client: try MarmotClient.testClient())
         let (defaults, suiteName) = try nicknameDefaults()
         defer { defaults.removePersistentDomain(forName: suiteName) }
         appState.profileStore.contactNicknameDefaults = defaults

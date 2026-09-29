@@ -126,8 +126,14 @@ struct WelcomeView: View {
                 onSignInExpansionChange(false)
             }
         }
+        .onChange(of: sheetRoute) { previous, current in
+            if previous == .signUp && current == nil {
+                appState.closeSignUpDraft()
+            }
+        }
         .onChange(of: showSignUp) {
             if !showSignUp {
+                appState.closeSignUpDraft()
                 appState.cancelProductOnboardingIfAbandoned()
                 onSheetContentChange(.welcome)
             }
