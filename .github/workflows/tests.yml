@@ -37,6 +37,7 @@ jobs:
     env:
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
+      WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
 
     steps:
       - name: Checkout
@@ -48,6 +49,22 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: "26"
+
+      # Extracting the compiler cache ran out of disk alongside the image's
+      # unused Xcodes, simulator runtimes and toolchains, so drop them first.
+      - name: Free runner disk
+        run: |
+          df -h /
+          keep="$(dirname "$(dirname "$(xcode-select -p)")")"
+          for x in /Applications/Xcode*.app; do
+            [ "$(cd "$x" && pwd -P)" = "$(cd "$keep" && pwd -P)" ] || sudo rm -rf "$x" &
+          done
+          xcrun simctl runtime list -j \
+            | python3 -c 'import json,sys; [print(k) for k,v in json.load(sys.stdin).items() if not v["platformIdentifier"].endswith("iphonesimulator") or not v["version"].startswith("26")]' \
+            | xargs -n1 xcrun simctl runtime delete || true
+          sudo rm -rf ~/Library/Android /usr/local/share/dotnet ~/.ghcup &
+          wait
+          df -h /
 
       - name: Verify published MarmotKit provenance
         run: python3 scripts/check-marmotkit-bindings.py
@@ -69,12 +86,30 @@ jobs:
         # Host clipboard sync can stall UIPasteboard reads and block MainActor tests.
         run: defaults write com.apple.iphonesimulator PasteboardAutomaticSync -bool false
 
-      # Restoring the compiler CAS exhausts runner disk space during extraction.
-      # Keep dependency caching above and compile from source on each run.
+      # Compiler cache keys hash compiler inputs rather than file mtimes, so a
+      # fresh checkout still replays cached objects. Only master writes the
+      # cache; pull requests read master's copy and never evict each other.
+      # To disable, drop WN_TEST_COMPILATION_CACHE from the job env above.
+      - name: Restore compilation cache
+        id: compilation-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build/CompilationCache
+          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
+          restore-keys: |
+            cas-${{ runner.os }}-xcode26-
+
       - name: Run tests
         # End the step before the job deadline so failure artifacts can upload.
         timeout-minutes: 40
         run: ./scripts/test.sh
+
+      - name: Save compilation cache
+        if: always() && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v4
+        with:
+          path: build/CompilationCache
+          key: cas-${{ runner.os }}-xcode26-${{ github.sha }}
 
       - name: Upload test results
         if: failure()
