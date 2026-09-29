@@ -75,7 +75,7 @@ struct BlockedUsersView: View {
         let isUnblocking = model.publishingDirection(for: row.accountIdHex) != nil
         if let npub = row.npub {
             NavigationLink {
-                ProfileContentView(npub: npub).wnBackButton()
+                ProfileContentView(npub: npub)
             } label: {
                 BlockedUserRow(row: row, isUnblocking: isUnblocking)
             }

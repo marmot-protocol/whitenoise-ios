@@ -274,7 +274,6 @@ struct DonateView: View {
 
                 NavigationLink {
                     DonationHistoryView(model: model)
-                        .wnBackButton()
                 } label: {
                     Text("See all billing activity")
                 }

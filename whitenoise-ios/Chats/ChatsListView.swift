@@ -316,7 +316,6 @@ struct ChatsListView: View {
             }
             .navigationDestination(isPresented: $showSettings) {
                 SettingsView()
-                    .wnBackButton()
             }
             .task(id: subscriptionScope) {
                 // The inbox needs the block list so a direct chat with a
