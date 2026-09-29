@@ -52,8 +52,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
     @State private var showAddProfile = false
-    @State private var showAccountActions = false
-    @State private var showDeleteProfile = false
 
     var body: some View {
         Form {
@@ -76,26 +74,24 @@ struct SettingsView: View {
             destinationSection([.support, .donate, .developerTools])
 
             Section {
-                Button {
-                    showAccountActions = true
+                NavigationLink {
+                    SignOutView()
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
                 .disabled(appState.activeAccount == nil)
 
-                Button(role: .destructive) {
-                    showDeleteProfile = true
+                NavigationLink {
+                    DeleteProfileView()
                 } label: {
                     Label("Delete Profile", systemImage: "trash")
                         .foregroundStyle(.red)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
-                .buttonStyle(.plain)
                 .disabled(appState.activeAccount == nil)
                 .accessibilityIdentifier("settings.deleteProfile")
             } footer: {
@@ -118,12 +114,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAddProfile) {
             AddProfileSheet()
-        }
-        .sheet(isPresented: $showAccountActions) {
-            AccountActionsSheet().appAppearance()
-        }
-        .sheet(isPresented: $showDeleteProfile) {
-            DeleteProfileSheet().appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
@@ -332,7 +322,7 @@ nonisolated enum MarmotKitBuildLabel {
     }
 }
 
-private struct AccountActionsSheet: View {
+private struct SignOutView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var isBusy = false
@@ -341,44 +331,29 @@ private struct AccountActionsSheet: View {
     @State private var error: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    profileSummaryRow
-                } footer: {
-                    Text("This profile and its local data will stay on this device.")
-                }
-                if let error { Text(error).foregroundStyle(.orange) }
-                Section {
-                    WNButton(
-                        title: busyTitle,
-                        emphasis: .destructive,
-                        size: .standard,
-                        isLoading: isBusy,
-                        action: signOut
-                    )
-                    .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                    .disabled(isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef)
-                }
+        Form {
+            Section {
+                profileSummaryRow
+            } footer: {
+                Text("This profile and its local data will stay on this device.")
             }
-            .disabled(isBusy)
-            .navigationTitle("Sign Out")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(
-                        title: "Close",
-                        systemImage: "xmark",
-                        chrome: .container
-                    ) {
-                        dismiss()
-                    }
-                    .disabled(isBusy)
-                }
+            if let error { Text(error).foregroundStyle(.orange) }
+            Section {
+                WNButton(
+                    title: busyTitle,
+                    emphasis: .destructive,
+                    size: .standard,
+                    isLoading: isBusy,
+                    action: signOut
+                )
+                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+                .disabled(isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef)
             }
         }
-        .presentationDetents([.large])
-        .interactiveDismissDisabled(isBusy)
+        .disabled(isBusy)
+        .navigationTitle("Sign Out")
+        .navigationBarTitleDisplayMode(.inline)
+        .wnBackButton(isDisabled: isBusy)
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
@@ -416,7 +391,7 @@ private struct AccountActionsSheet: View {
     }
 }
 
-private struct DeleteProfileSheet: View {
+private struct DeleteProfileView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation = ""
@@ -427,80 +402,65 @@ private struct DeleteProfileSheet: View {
     @FocusState private var confirmationFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    profileSummaryRow
-                    Text("This permanently removes this profile from this device.")
-                }
-
-                Section {
-                    deletionRow("The local message database and MLS group state for this profile.")
-                    deletionRow("This profile's key material stored on this device.")
-                    deletionRow("Outstanding key packages published for this profile on relays.")
-                } header: {
-                    Text("What gets destroyed").wnSectionHeader()
-                } footer: {
-                    Text("Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups.")
-                }
-
-                Section {
-                    Text("White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays.")
-                }
-
-                Section {
-                    WNInput(
-                        placeholder: L10n.string("Profile name"),
-                        text: $confirmation,
-                        fill: WNInputMetrics.groupedFill,
-                        submitLabel: .done,
-                        focus: $confirmationFocused
-                    )
-                    .wnInputRow()
-                } header: {
-                    Text("Enter Profile Name").wnSectionHeader()
-                } footer: {
-                    Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
-                }
-
-                if let error {
-                    Text(error).foregroundStyle(.orange)
-                }
-
-                Section {
-                    WNButton(
-                        title: isBusy ? "Deleting…" : "Delete Profile",
-                        emphasis: .destructive,
-                        size: .standard,
-                        isLoading: isBusy,
-                        action: deleteProfile
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                    .disabled(!ProfileExitConfirmation.matches(confirmation, expected: profileName)
-                              || isBusy
-                              || appState.isAccountExitInProgress
-                              || profileRef != appState.activeAccountRef)
-                }
+        Form {
+            Section {
+                profileSummaryRow
+                Text("This permanently removes this profile from this device.")
             }
-            .disabled(isBusy)
-            .navigationTitle("Delete Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(
-                        title: "Close",
-                        systemImage: "xmark",
-                        chrome: .container
-                    ) {
-                        dismiss()
-                    }
-                    .disabled(isBusy)
-                }
+
+            Section {
+                deletionRow("The local message database and MLS group state for this profile.")
+                deletionRow("This profile's key material stored on this device.")
+                deletionRow("Outstanding key packages published for this profile on relays.")
+            } header: {
+                Text("What gets destroyed").wnSectionHeader()
+            } footer: {
+                Text("Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups.")
+            }
+
+            Section {
+                Text("White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays.")
+            }
+
+            Section {
+                WNInput(
+                    placeholder: L10n.string("Profile name"),
+                    text: $confirmation,
+                    fill: WNInputMetrics.groupedFill,
+                    submitLabel: .done,
+                    focus: $confirmationFocused
+                )
+                .wnInputRow()
+            } header: {
+                Text("Enter Profile Name").wnSectionHeader()
+            } footer: {
+                Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
+            }
+
+            if let error {
+                Text(error).foregroundStyle(.orange)
+            }
+
+            Section {
+                WNButton(
+                    title: isBusy ? "Deleting…" : "Delete Profile",
+                    emphasis: .destructive,
+                    size: .standard,
+                    isLoading: isBusy,
+                    action: deleteProfile
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .disabled(!ProfileExitConfirmation.matches(confirmation, expected: profileName)
+                          || isBusy
+                          || appState.isAccountExitInProgress
+                          || profileRef != appState.activeAccountRef)
             }
         }
-        .presentationDetents([.large])
-        .interactiveDismissDisabled(isBusy)
+        .disabled(isBusy)
+        .navigationTitle("Delete Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .wnBackButton(isDisabled: isBusy)
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {

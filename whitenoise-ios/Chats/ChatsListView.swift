@@ -14,8 +14,8 @@ struct ChatsListView: View {
 
     private var canPresentDiagnostics: Bool {
         appState.diagnosticsConsent.canPresent(
-            chatsVisible: chatsVisible && path.isEmpty,
-            anotherSheetVisible: showSettings || showNewChat || secondarySheetVisible || showBulkLeaveConfirmation
+            chatsVisible: chatsVisible && path.isEmpty && !showSettings,
+            anotherSheetVisible: showNewChat || secondarySheetVisible || showBulkLeaveConfirmation
                 || appState.erasureState.shouldPresentRecovery(
                     activeAccountRef: appState.activeAccountRef,
                     runtimeReady: appState.canUseRuntimeForLocalForegroundWork
@@ -314,13 +314,9 @@ struct ChatsListView: View {
                     .onAppear { secondarySheetVisible = true }
                     .appAppearance()
             }
-            .sheet(isPresented: $showSettings, onDismiss: { secondarySheetVisible = false }) {
-                NavigationStack {
-                    SettingsView()
-                        .onAppear { secondarySheetVisible = true }
-                        .wnBackButton()
-                }
-                .appAppearance()
+            .navigationDestination(isPresented: $showSettings) {
+                SettingsView()
+                    .wnBackButton()
             }
             .task(id: subscriptionScope) {
                 // The inbox needs the block list so a direct chat with a
