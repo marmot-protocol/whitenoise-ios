@@ -153,6 +153,7 @@ struct SettingsView: View {
             } label: {
                 Label("Add Profile", systemImage: "person.crop.circle.badge.plus")
                     .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(.rect)
             }
             .buttonStyle(.plain)
