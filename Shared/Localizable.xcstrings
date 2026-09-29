@@ -60,6 +60,366 @@
         }
       }
     },
+    "Anthropic Claude Code coding agent" : {
+      "comment" : "Subtitle for the Claude Code AI agent connector.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coding-Agent Claude Code von Anthropic"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de codificación Claude Code de Anthropic"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent de codage Claude Code d’Anthropic"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente di codifica Claude Code di Anthropic"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de codificação Claude Code da Anthropic"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Агент для кодирования Claude Code от Anthropic"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anthropic Claude Code kodlama ajanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anthropic Claude Code 编码代理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anthropic Claude Code 程式設計代理"
+          }
+        }
+      }
+    },
+    "Claude Code" : {
+      "comment" : "AI agent connector name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code"
+          }
+        }
+      }
+    },
+    "Minimal terminal coding agent" : {
+      "comment" : "Subtitle for the Pi AI agent connector.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimalistischer Coding-Agent fürs Terminal"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de programación minimalista para la terminal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent de code minimaliste pour le terminal"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente di coding minimale per il terminale"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agente de código minimalista para o terminal"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Минималистичный агент программирования для терминала"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimal terminal kodlama ajanı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "极简终端编程代理"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "極簡終端機程式設計代理"
+          }
+        }
+      }
+    },
+    "Pi" : {
+      "comment" : "AI agent connector name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this Claude Code setup to White Noise through Marmot. Read the authoritative Claude Code harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Claude Code is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-claude-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-claude --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-claude returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required." : {
+      "comment" : "Copyable prompt that asks an AI agent to install the White Noise connector for Claude Code; the argument is the user's npub.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese Claude-Code-Einrichtung über Marmot mit White Noise zu verbinden. Lies den maßgeblichen Claude-Code-Harness-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md und den dauerhaften Konnektor-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Bestätige die Voraussetzungen: Die Claude Code ist installiert, authentifiziert und auf PATH verfügbar, und dieser Rechner nutzt dasselbe öffentliche Relay-Set wie mein Telefon. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, verwende den checksummenverifizierten install-claude-marmot.sh-Release-Flow, bootstrap wn-agent für diese npub mit dem zugelassenen Welcomer und überprüfe wn-claude --version. Antworte dann mit deiner Agenten-npub und bitte mich, sie in White Noise einzuladen und von dieser zugelassenen npub über die konfigurierten Relays eine Testnachricht zu senden. Melde die Einrichtung erst dann als abgeschlossen, wenn wn-claude über White Noise geantwortet hat; falls dieser Rundlauf nicht automatisch verifiziert werden kann, kennzeichne klar, dass eine Geräteverifizierung erforderlich ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta configuración de Claude Code a White Noise mediante Marmot. Lee la guía autorizada del harness de Claude Code en https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md y la guía permanente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Confirma los requisitos previos: la CLI de Claude Code está instalada, autenticada y disponible en PATH, y esta máquina usa el mismo conjunto de relays públicos que mi teléfono. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, usa el flujo de release install-claude-marmot.sh verificado por checksum, inicializa wn-agent para esa npub con el welcomer permitido y verifica wn-claude --version. A continuación, responde con la npub de tu agente y pídeme que lo invite desde White Noise y envíe un mensaje de prueba desde esta npub permitida mediante los relays configurados. No informes que la configuración está completa hasta que wn-claude responda a través de White Noise; si no se puede verificar automáticamente este recorrido, indica claramente que se requiere verificación en el dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette configuration Claude Code à White Noise via Marmot. Lisez le guide officiel du harness Claude Code à l’adresse https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md et le guide permanent du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Confirmez les prérequis : la CLI Claude Code est installée, authentifiée et disponible dans PATH, et cette machine utilise le même ensemble de relais publics que mon téléphone. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, utilisez le flux de release install-claude-marmot.sh vérifié par somme de contrôle, initialisez wn-agent pour cette npub avec le welcomer autorisé et vérifiez wn-claude --version. Répondez ensuite avec la npub de votre agent et demandez-moi de l’inviter depuis White Noise puis d’envoyer un message de test depuis cette npub autorisée via les relais configurés. Ne déclarez pas la configuration terminée tant que wn-claude n’a pas répondu via White Noise ; si cet aller-retour ne peut pas être vérifié automatiquement, indiquez clairement qu’une vérification sur l’appareil est requise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa configurazione Claude Code a White Noise tramite Marmot. Leggi la guida autorevole del harness Claude Code all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md e la guida permanente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Conferma i prerequisiti: la CLI Claude Code è installata, autenticata e disponibile in PATH, e questa macchina usa lo stesso set di relay pubblici del mio telefono. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, usa il flusso di release install-claude-marmot.sh verificato tramite checksum, avvia wn-agent per quella npub con il welcomer consentito e verifica wn-claude --version. Quindi rispondi con la npub del tuo agente e chiedimi di invitarlo da White Noise e inviare un messaggio di prova da questa npub consentita tramite i relay configurati. Non dichiarare completata la configurazione finché wn-claude non risponde tramite White Noise; se non è possibile verificare automaticamente questo percorso di andata e ritorno, indica chiaramente che è necessaria la verifica sul dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta configuração do Claude Code ao White Noise pelo Marmot. Leia o guia oficial do harness Claude Code em https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md e o guia permanente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Confirme os pré-requisitos: a CLI do Claude Code está instalada, autenticada e disponível no PATH, e esta máquina usa o mesmo conjunto de relays públicos do meu telefone. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, use o fluxo de release install-claude-marmot.sh verificado por checksum, inicialize wn-agent para essa npub com o welcomer permitido e verifique wn-claude --version. Em seguida, responda com a npub do seu agente e peça que eu o convide pelo White Noise e envie uma mensagem de teste desta npub permitida pelos relays configurados. Não informe que a configuração foi concluída até que o wn-claude responda pelo White Noise; se não for possível verificar esse percurso automaticamente, indique claramente que a verificação no dispositivo é necessária."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этой конфигурации Claude Code к White Noise через Marmot. Прочитайте авторитетное руководство по harness Claude Code: https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md и постоянное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Подтвердите предварительные требования: CLI Claude Code установлена, аутентифицирована и доступна в PATH, а эта машина использует тот же набор публичных релеев, что и мой телефон. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения используйте релизный поток install-claude-marmot.sh с проверкой контрольной суммы, выполните bootstrap wn-agent для этой npub с разрешенным welcomer и проверьте wn-claude --version. Затем ответьте npub вашего агента и попросите меня пригласить его из White Noise и отправить тестовое сообщение с этой разрешенной npub через настроенные реле. Не сообщайте о завершении настройки, пока wn-claude не ответит через White Noise; если этот обмен нельзя проверить автоматически, явно укажите, что требуется проверка на устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu Claude Code kurulumunu Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md adresindeki yetkili Claude Code harness kılavuzunu ve https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki kalıcı bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Önkoşulları doğrulayın: Claude Code kurulu, kimliği doğrulanmış ve PATH üzerinde kullanılabilir durumda; bu makine telefonumla aynı genel relay kümesini kullanıyor. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra sağlama toplamıyla doğrulanmış install-claude-marmot.sh sürüm akışını kullanın, izin verilen welcomer ile o npub için wn-agent önyüklemesini yapın ve wn-claude --version komutunu doğrulayın. Ardından ajan npub’ınızla yanıt verin; benden onu White Noise üzerinden davet etmemi ve yapılandırılmış relay’ler aracılığıyla bu izin verilen npub’dan bir test mesajı göndermemi isteyin. wn-claude White Noise üzerinden yanıt verene kadar kurulumun tamamlandığını bildirmeyin; bu gidiş dönüş otomatik olarak doğrulanamıyorsa cihaz doğrulaması gerektiğini açıkça belirtin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 Claude Code 设置连接到 White Noise。请阅读权威 Claude Code harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md，以及长期有效的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。确认前提条件：Claude Code 已安装、已认证并可在 PATH 中使用，且此机器使用与手机相同的公共中继集合。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请使用经过校验和验证的 install-claude-marmot.sh 发布流程，为该 npub 引导 wn-agent 并使用允许的 welcomer，然后验证 wn-claude --version。接下来回复你的代理 npub，请我在 White Noise 中邀请它，并通过已配置的中继从这个允许的 npub 发送测试消息。在 wn-claude 通过 White Noise 回复之前，不要声称设置已完成；如果无法自动验证这一往返流程，请明确标记仍需设备验证。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 Claude Code 設定連接到 White Noise。請閱讀權威 Claude Code harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md，以及長期有效的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。確認前提條件：Claude Code 已安裝、已驗證並可在 PATH 中使用，且此機器使用與手機相同的公共中繼集合。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請使用經過總和檢查碼驗證的 install-claude-marmot.sh 發布流程，為該 npub 引導 wn-agent 並使用允許的 welcomer，然後驗證 wn-claude --version。接下來回覆你的代理 npub，請我在 White Noise 中邀請它，並透過已設定的中繼從這個允許的 npub 傳送測試訊息。在 wn-claude 透過 White Noise 回覆之前，不要聲稱設定已完成；如果無法自動驗證這一往返流程，請明確標記仍需裝置驗證。"
+          }
+        }
+      }
+    },
+    "This is an installation prompt for connecting this Pi setup to White Noise through Marmot. Read the authoritative Pi harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Pi is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-pi-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-pi --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-pi returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required." : {
+      "comment" : "Copyable prompt that asks an AI agent to install the White Noise connector for Pi; the argument is the user's npub.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist eine Installationsanweisung, um diese Pi-Einrichtung über Marmot mit White Noise zu verbinden. Lies den maßgeblichen Pi-Harness-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md und den dauerhaften Konnektor-Leitfaden unter https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Erkläre mir, wie der Konnektor funktioniert und was die Installation ändern wird. Bestätige die Voraussetzungen: Die Pi ist installiert, authentifiziert und auf PATH verfügbar, und dieser Rechner nutzt dasselbe öffentliche Relay-Set wie mein Telefon. Schlage dann die Installationsschritte für meine öffentliche npub vor: %@, und bitte um meine Zustimmung, bevor du Änderungen vornimmst. Sobald ich zugestimmt habe, verwende den checksummenverifizierten install-pi-marmot.sh-Release-Flow, bootstrap wn-agent für diese npub mit dem zugelassenen Welcomer und überprüfe wn-pi --version. Antworte dann mit deiner Agenten-npub und bitte mich, sie in White Noise einzuladen und von dieser zugelassenen npub über die konfigurierten Relays eine Testnachricht zu senden. Melde die Einrichtung erst dann als abgeschlossen, wenn wn-pi über White Noise geantwortet hat; falls dieser Rundlauf nicht automatisch verifiziert werden kann, kennzeichne klar, dass eine Geräteverifizierung erforderlich ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta es una instrucción de instalación para conectar esta configuración de Pi a White Noise mediante Marmot. Lee la guía autorizada del harness de Pi en https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md y la guía permanente del conector en https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explícame cómo funciona el conector y qué cambiará la instalación. Confirma los requisitos previos: la CLI de Pi está instalada, autenticada y disponible en PATH, y esta máquina usa el mismo conjunto de relays públicos que mi teléfono. Después, propón los pasos de instalación para mi npub pública: %@, y pide mi aprobación antes de realizar cualquier cambio. Una vez que lo apruebe, usa el flujo de release install-pi-marmot.sh verificado por checksum, inicializa wn-agent para esa npub con el welcomer permitido y verifica wn-pi --version. A continuación, responde con la npub de tu agente y pídeme que lo invite desde White Noise y envíe un mensaje de prueba desde esta npub permitida mediante los relays configurados. No informes que la configuración está completa hasta que wn-pi responda a través de White Noise; si no se puede verificar automáticamente este recorrido, indica claramente que se requiere verificación en el dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ceci est une invite d’installation pour connecter cette configuration Pi à White Noise via Marmot. Lisez le guide officiel du harness Pi à l’adresse https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md et le guide permanent du connecteur à l’adresse https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Expliquez-moi comment le connecteur fonctionne et ce que l’installation va modifier. Confirmez les prérequis : la CLI Pi est installée, authentifiée et disponible dans PATH, et cette machine utilise le même ensemble de relais publics que mon téléphone. Proposez ensuite les étapes d’installation pour ma npub publique : %@, et demandez mon approbation avant d’apporter la moindre modification. Une fois mon approbation donnée, utilisez le flux de release install-pi-marmot.sh vérifié par somme de contrôle, initialisez wn-agent pour cette npub avec le welcomer autorisé et vérifiez wn-pi --version. Répondez ensuite avec la npub de votre agent et demandez-moi de l’inviter depuis White Noise puis d’envoyer un message de test depuis cette npub autorisée via les relais configurés. Ne déclarez pas la configuration terminée tant que wn-pi n’a pas répondu via White Noise ; si cet aller-retour ne peut pas être vérifié automatiquement, indiquez clairement qu’une vérification sur l’appareil est requise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo è un prompt di installazione per collegare questa configurazione Pi a White Noise tramite Marmot. Leggi la guida autorevole del harness Pi all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md e la guida permanente del connettore all’indirizzo https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Spiegami come funziona il connettore e cosa cambierà l’installazione. Conferma i prerequisiti: la CLI Pi è installata, autenticata e disponibile in PATH, e questa macchina usa lo stesso set di relay pubblici del mio telefono. Quindi proponi i passaggi di installazione per la mia npub pubblica: %@ e chiedi la mia approvazione prima di apportare qualsiasi modifica. Dopo la mia approvazione, usa il flusso di release install-pi-marmot.sh verificato tramite checksum, avvia wn-agent per quella npub con il welcomer consentito e verifica wn-pi --version. Quindi rispondi con la npub del tuo agente e chiedimi di invitarlo da White Noise e inviare un messaggio di prova da questa npub consentita tramite i relay configurati. Non dichiarare completata la configurazione finché wn-pi non risponde tramite White Noise; se non è possibile verificare automaticamente questo percorso di andata e ritorno, indica chiaramente che è necessaria la verifica sul dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este é um prompt de instalação para conectar esta configuração do Pi ao White Noise pelo Marmot. Leia o guia oficial do harness Pi em https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md e o guia permanente do conector em https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explique como o conector funciona e o que a instalação alterará. Confirme os pré-requisitos: a CLI do Pi está instalada, autenticada e disponível no PATH, e esta máquina usa o mesmo conjunto de relays públicos do meu telefone. Em seguida, proponha as etapas de instalação para minha npub pública: %@ e peça minha aprovação antes de fazer qualquer alteração. Depois que eu aprovar, use o fluxo de release install-pi-marmot.sh verificado por checksum, inicialize wn-agent para essa npub com o welcomer permitido e verifique wn-pi --version. Em seguida, responda com a npub do seu agente e peça que eu o convide pelo White Noise e envie uma mensagem de teste desta npub permitida pelos relays configurados. Não informe que a configuração foi concluída até que o wn-pi responda pelo White Noise; se não for possível verificar esse percurso automaticamente, indique claramente que a verificação no dispositivo é necessária."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это запрос на установку для подключения этой конфигурации Pi к White Noise через Marmot. Прочитайте авторитетное руководство по harness Pi: https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md и постоянное руководство по коннектору: https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Объясните мне, как работает коннектор и что изменит установка. Подтвердите предварительные требования: CLI Pi установлена, аутентифицирована и доступна в PATH, а эта машина использует тот же набор публичных релеев, что и мой телефон. Затем предложите шаги установки для моей публичной npub: %@ и запросите мое одобрение, прежде чем вносить какие-либо изменения. После моего одобрения используйте релизный поток install-pi-marmot.sh с проверкой контрольной суммы, выполните bootstrap wn-agent для этой npub с разрешенным welcomer и проверьте wn-pi --version. Затем ответьте npub вашего агента и попросите меня пригласить его из White Noise и отправить тестовое сообщение с этой разрешенной npub через настроенные реле. Не сообщайте о завершении настройки, пока wn-pi не ответит через White Noise; если этот обмен нельзя проверить автоматически, явно укажите, что требуется проверка на устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu bir kurulum istemidir; bu Pi kurulumunu Marmot üzerinden White Noise’a bağlar. https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md adresindeki yetkili Pi harness kılavuzunu ve https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md adresindeki kalıcı bağlayıcı kılavuzunu okuyun. Bağlayıcının nasıl çalıştığını ve kurulumun neleri değiştireceğini bana açıklayın. Önkoşulları doğrulayın: Pi kurulu, kimliği doğrulanmış ve PATH üzerinde kullanılabilir durumda; bu makine telefonumla aynı genel relay kümesini kullanıyor. Ardından genel npub’ım için kurulum adımlarını önerin: %@ ve herhangi bir değişiklik yapmadan önce onayımı isteyin. Ben onayladıktan sonra sağlama toplamıyla doğrulanmış install-pi-marmot.sh sürüm akışını kullanın, izin verilen welcomer ile o npub için wn-agent önyüklemesini yapın ve wn-pi --version komutunu doğrulayın. Ardından ajan npub’ınızla yanıt verin; benden onu White Noise üzerinden davet etmemi ve yapılandırılmış relay’ler aracılığıyla bu izin verilen npub’dan bir test mesajı göndermemi isteyin. wn-pi White Noise üzerinden yanıt verene kadar kurulumun tamamlandığını bildirmeyin; bu gidiş dönüş otomatik olarak doğrulanamıyorsa cihaz doğrulaması gerektiğini açıkça belirtin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这是一条安装提示，用于通过 Marmot 将此 Pi 设置连接到 White Noise。请阅读权威 Pi harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md，以及长期有效的连接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。请向我解释连接器的工作方式以及安装会带来哪些更改。确认前提条件：Pi 已安装、已认证并可在 PATH 中使用，且此机器使用与手机相同的公共中继集合。然后针对我的公开 npub 提出安装步骤：%@，并在进行任何更改之前请求我的批准。我批准后，请使用经过校验和验证的 install-pi-marmot.sh 发布流程，为该 npub 引导 wn-agent 并使用允许的 welcomer，然后验证 wn-pi --version。接下来回复你的代理 npub，请我在 White Noise 中邀请它，并通过已配置的中继从这个允许的 npub 发送测试消息。在 wn-pi 通过 White Noise 回复之前，不要声称设置已完成；如果无法自动验证这一往返流程，请明确标记仍需设备验证。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這是一條安裝提示，用於透過 Marmot 將此 Pi 設定連接到 White Noise。請閱讀權威 Pi harness 指南：https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md，以及長期有效的連接器指南：https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md。請向我解釋連接器的運作方式以及安裝會帶來哪些變更。確認前提條件：Pi 已安裝、已驗證並可在 PATH 中使用，且此機器使用與手機相同的公共中繼集合。然後針對我的公開 npub 提出安裝步驟：%@，並在進行任何變更之前請求我的批准。我批准後，請使用經過總和檢查碼驗證的 install-pi-marmot.sh 發布流程，為該 npub 引導 wn-agent 並使用允許的 welcomer，然後驗證 wn-pi --version。接下來回覆你的代理 npub，請我在 White Noise 中邀請它，並透過已設定的中繼從這個允許的 npub 傳送測試訊息。在 wn-pi 透過 White Noise 回覆之前，不要聲稱設定已完成；如果無法自動驗證這一往返流程，請明確標記仍需裝置驗證。"
+          }
+        }
+      }
+    },
     "·" : {
       "comment" : "A period.",
       "isCommentAutoGenerated" : true,
