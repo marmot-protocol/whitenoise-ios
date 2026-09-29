@@ -209,8 +209,7 @@ final class ProfileEditViewModel {
         isUploadingPicture = true
         defer { isUploadingPicture = false }
         let uploadedURL = try await upload(draft)
-        try Task.checkCancellation()
-        guard loadTicket == ticket, loadedAccountIdHex == accountIdHex, isCurrentAccount() else {
+        guard isCurrent(ticket: ticket, accountIdHex: accountIdHex, isCurrentAccount: isCurrentAccount) else {
             throw CancellationError()
         }
         guard let normalizedURL = ContentSanitizer.imageURL(uploadedURL)?.absoluteString else {
@@ -251,19 +250,24 @@ final class ProfileEditViewModel {
         defer { isPublishing = false }
         do {
             try await operation(metadata)
-            guard !Task.isCancelled, loadTicket == ticket,
-                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
+            guard isCurrent(ticket: ticket, accountIdHex: accountIdHex, isCurrentAccount: isCurrentAccount) else {
+                return false
+            }
             Haptics.success()
             return true
         } catch {
-            guard !Task.isCancelled, loadTicket == ticket,
-                  loadedAccountIdHex == accountIdHex, isCurrentAccount() else { return false }
+            guard isCurrent(ticket: ticket, accountIdHex: accountIdHex, isCurrentAccount: isCurrentAccount) else {
+                return false
+            }
             Haptics.error()
             saveError = L10n.string("Couldn't publish profile")
             return false
         }
     }
 
+    func isCurrent(ticket: Int, accountIdHex: String?, isCurrentAccount: () -> Bool) -> Bool {
+        !Task.isCancelled && loadTicket == ticket && loadedAccountIdHex == accountIdHex && isCurrentAccount()
+    }
 }
 
 nonisolated enum ProfileImageUploadError: LocalizedError {

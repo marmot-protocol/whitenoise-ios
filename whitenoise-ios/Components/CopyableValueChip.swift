@@ -1,10 +1,8 @@
 import SwiftUI
-import UIKit
 
 /// Tap-to-copy value pill (npub, group id, donation address). The value stays
 /// middle-truncated and monospaced; only the trailing glyph confirms the copy.
 struct CopyableValueChip: View {
-
     let display: String
     let copyValue: String
     let valueName: String
