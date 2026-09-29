@@ -64,6 +64,14 @@ final class RecipientQueryModel {
         return true
     }
 
+    /// True while the current query is a Namecoin `.bit` / `d/` / `id/`
+    /// identifier, so the resolution row can show Namecoin-specific copy for
+    /// the resolving / not-found / failed states.
+    var isNamecoinQuery: Bool {
+        if case .namecoin = RecipientIdentifierQuery.classify(text) { return true }
+        return false
+    }
+
     func clear() {
         resolveTask?.cancel()
         resolveTask = nil

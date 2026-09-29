@@ -560,19 +560,50 @@ struct RecipientResolutionSection: View {
         Section {
             switch query.resolution {
             case .idle, .resolving:
-                RecipientResolvingRow()
+                if query.isNamecoinQuery {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .frame(width: 44, height: 44)
+                        Text(L10n.string("Looking up the Namecoin name."))
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 2)
+                    .accessibilityElement(children: .combine)
+                } else {
+                    RecipientResolvingRow()
+                }
             case .resolved(let resolved):
                 resolvedRow(resolved)
             case .noProfile:
-                Label("No profile found for that address.", systemImage: "person.crop.circle.badge.questionmark")
+                if query.isNamecoinQuery {
+                    Label(
+                        L10n.formatted(
+                            "Couldn't resolve %@ on Namecoin. Double-check it and try again.",
+                            query.trimmedText
+                        ),
+                        systemImage: "person.crop.circle.badge.questionmark"
+                    )
                     .foregroundStyle(.secondary)
+                } else {
+                    Label("No profile found for that address.", systemImage: "person.crop.circle.badge.questionmark")
+                        .foregroundStyle(.secondary)
+                }
             case .failed:
-                Label("Couldn't check that address.", systemImage: "wifi.exclamationmark")
+                if query.isNamecoinQuery {
+                    Label(
+                        L10n.string("Couldn't reach the Namecoin resolvers. Please try again."),
+                        systemImage: "wifi.exclamationmark"
+                    )
                     .foregroundStyle(.secondary)
+                } else {
+                    Label("Couldn't check that address.", systemImage: "wifi.exclamationmark")
+                        .foregroundStyle(.secondary)
+                }
                 Button("Retry", action: onRetry)
             case .invalid:
                 Label(
-                    L10n.string("Enter a valid npub, nprofile, hex public key, or name@domain address."),
+                    L10n.string("Enter a valid npub, nprofile, hex public key, name@domain address, or .bit name."),
                     systemImage: "exclamationmark.triangle"
                 )
                 .foregroundStyle(.secondary)

@@ -140053,6 +140053,140 @@
           }
         }
       }
+    },
+    "Couldn't reach the Namecoin resolvers. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't reach the Namecoin resolvers. Please try again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Namecoin-Resolver konnten nicht erreicht werden. Bitte versuche es erneut."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile raggiungere i resolver Namecoin. Riprova."
+          }
+        }
+      }
+    },
+    "Couldn't resolve %@ on Namecoin. Double-check it and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't resolve %@ on Namecoin. Double-check it and try again."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte auf Namecoin nicht aufgelöst werden. Überprüfe es und versuche es erneut."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile risolvere %@ su Namecoin. Controlla e riprova."
+          }
+        }
+      }
+    },
+    "Enter a valid npub, nprofile, hex public key, name@domain address, or .bit name." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid npub, nprofile, hex public key, name@domain address, or .bit name."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib ein gültiges npub, nprofile, einen Hex-Schlüssel, eine name@domain-Adresse oder einen .bit-Namen ein."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce un npub, nprofile, llave pública hexadecimal, dirección name@domain o nombre .bit válidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez un npub, un nprofile, une clé publique hexadécimale, une adresse name@domain ou un nom .bit valide."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci un npub, nprofile, una chiave pubblica esadecimale, un indirizzo name@domain o un nome .bit validi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insira um npub, nprofile, chave pública hexadecimal, endereço name@domain ou nome .bit válidos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите корректный npub, nprofile, публичный ключ в hex, адрес name@domain или имя .bit."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geçerli bir npub, nprofile, onaltılık genel anahtar, name@domain adresi veya .bit adı gir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入有效的 npub、nprofile、十六进制公钥、name@domain 地址或 .bit 名称。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請輸入有效的 npub、nprofile、十六進位公鑰、name@domain 地址或 .bit 名稱。"
+          }
+        }
+      }
+    },
+    "Looking up the Namecoin name." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looking up the Namecoin name."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Namecoin-Name wird nachgeschlagen."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ricerca del nome Namecoin in corso."
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
