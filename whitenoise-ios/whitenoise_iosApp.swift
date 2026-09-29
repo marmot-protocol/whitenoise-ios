@@ -97,7 +97,12 @@ struct whitenoise_iosApp: App {
     @State private var appLockOverlay = AppLockOverlayPresenter()
 
     init() {
+        let windowInitStartedAt = ContinuousClock.now
         let appState = AppState()
+        appState.hostWindowInitStartedAt = windowInitStartedAt
+        HostSettingsSaveTiming.install { [recorder = appState.productAnalytics] milliseconds in
+            recorder.recordPerformance(.settingsSave, milliseconds: milliseconds, ticket: recorder.ticket())
+        }
         let appearance = AppAppearanceStore()
         _appState = State(initialValue: appState)
         _appearance = State(initialValue: appearance)
@@ -117,6 +122,7 @@ struct whitenoise_iosApp: App {
                 .appAppearance(appearance)
                 .dismissesKeyboardOnTap()
                 .task {
+                    appState.noteHostWindowInitialized()
                     // The path monitor lives in this lazy singleton; touch it
                     // at launch so connectivity-restored events fire even in
                     // sessions that never read a media setting.

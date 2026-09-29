@@ -37,7 +37,7 @@ nonisolated enum NotificationPreviewStore {
     }
 
     static func setMode(_ mode: NotificationPreviewMode, defaults: UserDefaults) {
-        defaults.set(mode.rawValue, forKey: storageKey)
+        HostSettingsSaveTiming.measure { defaults.set(mode.rawValue, forKey: storageKey) }
     }
 
     /// Resolving write. No-op when the shared suite can't be resolved.

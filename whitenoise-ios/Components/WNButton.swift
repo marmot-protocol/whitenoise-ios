@@ -41,17 +41,10 @@ struct WNButton: View {
                 return accent(for: colorScheme)
             case .destructive:
                 return Color(uiColor: UIColor { traits in
-                    let red = UIColor.systemRed.resolvedColor(with: traits)
-                    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, alpha: CGFloat = 0
-                    red.getRed(&r, green: &g, blue: &b, alpha: &alpha)
-                    func linear(_ value: CGFloat) -> CGFloat {
-                        value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-                    }
-                    let luminance = 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
-                    // System red changes with appearance and Increased Contrast.
-                    let whiteContrast = 1.05 / (luminance + 0.05)
-                    let blackContrast = (luminance + 0.05) / 0.05
-                    return whiteContrast > blackContrast ? .white : .black
+                    let red = WCAGContrast.relativeLuminance(UIColor.systemRed.resolvedColor(with: traits))
+                    let white = WCAGContrast.relativeLuminance(.white)
+                    let black = WCAGContrast.relativeLuminance(.black)
+                    return WCAGContrast.ratio(white, red) > WCAGContrast.ratio(red, black) ? .white : .black
                 })
             }
         }

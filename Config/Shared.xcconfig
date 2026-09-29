@@ -9,9 +9,11 @@
 // single-slash helper that expands after comment parsing; otherwise these URLs
 // truncate to `https:` / `wss:`.
 WN_SLASH = /
-WHITENOISE_OTLP_ENDPOINT = https:$(WN_SLASH)$(WN_SLASH)otlp.ipf.dev/v1/metrics
+WHITENOISE_OTLP_ENDPOINT = https:$(WN_SLASH)$(WN_SLASH)otlp.whitenoise.chat/v1/metrics
+WHITENOISE_OTLP_BEARER_TOKEN = $(OTLP_TOKEN_WHITENOISE_IOS)
 WHITENOISE_PUSH_RELAY_HINT = wss:$(WN_SLASH)$(WN_SLASH)relay.eu.whitenoise.chat
 // Shared vs flavor-specific token/endpoint rules: Config/AGENTS.md.
+WHITENOISE_AUDIT_OTLP_ENDPOINT = https:$(WN_SLASH)$(WN_SLASH)otlp.whitenoise.chat/v1/logs
 WHITENOISE_AUDIT_LOG_BEARER_TOKEN = $(AUDIT_LOG_TOKEN_WHITENOISE_IOS)
 WHITENOISE_GIPHY_API_KEY = $(GIPHY_API_KEY_WHITENOISE_IOS)
 

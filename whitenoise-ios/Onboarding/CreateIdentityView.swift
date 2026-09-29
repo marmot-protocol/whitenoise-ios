@@ -92,7 +92,10 @@ struct IdentityProfileSetupView: View {
             confirmsPublicUpload: false,
             prepareDraft: { data, fileName, sourceURL in
                 try await ProfileImageDraftProcessor.prepare(
-                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                    data: data,
+                    fileName: fileName,
+                    typeIdentifier: AvatarImageCropper.outputTypeIdentifier,
+                    sourceURL: sourceURL
                 )
             },
             onRemove: {

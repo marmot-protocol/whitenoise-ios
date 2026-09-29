@@ -24,15 +24,19 @@ enum AuditLogActionError: LocalizedError {
 }
 
 nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
-    static let defaultOtlpEndpoint = "https://otlp.ipf.dev/v1/metrics"
+    static let defaultOtlpEndpoint = "https://otlp.whitenoise.chat/v1/metrics"
+    static let defaultAuditOtlpEndpoint = "https://otlp.whitenoise.chat/v1/logs"
+    /// Stable identity for MDK's v5 delivery cursor; keep it across token rotation.
+    static let auditOtlpDestination = "whitenoise-audit-receiver"
 
     let otlpEndpoint: String
     let bearerToken: String?
-    /// Bearer token for the forensic audit-log tracker (Goggles) upload API.
-    /// Deliberately separate from `bearerToken`: the audit tracker and the OTLP
+    /// Write token for the v5 audit receiver at `auditOtlpEndpoint`.
+    /// Deliberately separate from `bearerToken`: the audit receiver and the OTLP
     /// metrics collector are different services with different credentials, so
     /// reusing the OTLP token here would authenticate against the wrong API.
     let auditLogBearerToken: String?
+    var auditOtlpEndpoint: String = Self.defaultAuditOtlpEndpoint
     let deploymentEnvironment: String
     let serviceVersion: String
     let osVersion: String
@@ -69,9 +73,7 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
             bearerToken: stringValue(
                 for: "WhiteNoiseTelemetryBearerToken",
                 in: info,
-                environmentKeys: otlpBearerEnvironmentKeys(
-                    deploymentEnvironment: deploymentEnvironment
-                ),
+                environmentKeys: ["WHITENOISE_OTLP_BEARER_TOKEN", "OTLP_TOKEN_WHITENOISE_IOS"],
                 environment: environment
             ),
             auditLogBearerToken: stringValue(
@@ -83,6 +85,12 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
                 ],
                 environment: environment
             ),
+            auditOtlpEndpoint: stringValue(
+                for: "WhiteNoiseAuditOTLPEndpoint",
+                in: info,
+                environmentKeys: ["WHITENOISE_AUDIT_OTLP_ENDPOINT"],
+                environment: environment
+            ) ?? defaultAuditOtlpEndpoint,
             deploymentEnvironment: deploymentEnvironment,
             serviceVersion: serviceVersion(from: info),
             osVersion: osVersion ?? currentOSVersion(processInfo: processInfo),
@@ -114,15 +122,19 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         )
     }
 
-    func auditTrackerConfig() -> AuditLogTrackerConfigV4Ffi {
-        AuditLogTrackerConfigV4Ffi(
-            endpoint: nil,
+    /// v5 OTLP delivery config. Without a token the sender is disabled and
+    /// recordings stay local; recording itself is the separate user setting.
+    func auditOtlpConfig() -> AuditOtlpConfigV5Ffi {
+        guard let auditLogBearerToken else {
+            return AuditOtlpConfigV5Ffi(enabled: false, destination: nil, endpoint: nil,
+                                        authorizationBearerToken: nil, allowLoopbackDev: false)
+        }
+        return AuditOtlpConfigV5Ffi(
+            enabled: true,
+            destination: Self.auditOtlpDestination,
+            endpoint: auditOtlpEndpoint,
             authorizationBearerToken: auditLogBearerToken,
-            source: AuditLogUploadSourceV4Ffi(
-                hardwareModel: deviceModelIdentifier,
-                platform: "ios",
-                appVersion: serviceVersion
-            )
+            allowLoopbackDev: false
         )
     }
 
@@ -146,17 +158,6 @@ nonisolated struct TelemetryBuildConfig: Equatable, Sendable {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !isUnresolvedBuildSetting(trimmed) else { return nil }
         return trimmed
-    }
-
-    nonisolated private static func otlpBearerEnvironmentKeys(deploymentEnvironment: String) -> [String] {
-        let flavorTokenKey = deploymentEnvironment == "production"
-            ? "PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS"
-            : "STAGING_OTLP_TOKEN_WHITENOISE_IOS"
-        return [
-            "WHITENOISE_OTLP_BEARER_TOKEN",
-            flavorTokenKey,
-            "OTLP_TOKEN_WHITENOISE_IOS"
-        ]
     }
 
     nonisolated private static func deploymentEnvironment(from raw: String?) -> String {

@@ -140,12 +140,16 @@ struct ChatRow: View {
     }
 
     private var previewText: Text {
+        var body = Text(verbatim: preview.body)
+        if let symbolName = preview.systemImageName {
+            body = Text(Image(systemName: symbolName)) + Text(verbatim: " ") + body
+        }
         if let prefix = preview.prefix {
             return Text(verbatim: prefix + ": ")
                 .bold()
-                + Text(verbatim: preview.body)
+                + body
         }
-        return Text(verbatim: preview.body)
+        return body
     }
 
     static func previewPresentation(
@@ -186,21 +190,23 @@ struct ChatRow: View {
                 body: body.isEmpty ? L10n.string("Group membership updated") : body
             )
         }
+        let symbolName = body.isEmpty ? nil : item.previewSymbolName
         if latest.sender == activeAccountIdHex {
             return body.isEmpty
                 ? ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You sent a message"))
-                : ChatRowPreviewPresentation(prefix: L10n.string("You"), body: body)
+                : ChatRowPreviewPresentation(prefix: L10n.string("You"), body: body, systemImageName: symbolName)
         }
         if item.isDirectMessage == false, !body.isEmpty {
             let projectedName = ContentSanitizer.displayName(latest.senderDisplayName)
             let fallbackName = ContentSanitizer.displayName(senderName(latest.sender))
             if let name = projectedName ?? fallbackName {
-                return ChatRowPreviewPresentation(prefix: name, body: body)
+                return ChatRowPreviewPresentation(prefix: name, body: body, systemImageName: symbolName)
             }
         }
         return ChatRowPreviewPresentation(
             prefix: nil,
-            body: body.isEmpty ? L10n.string("New message") : body
+            body: body.isEmpty ? L10n.string("New message") : body,
+            systemImageName: symbolName
         )
     }
 
@@ -218,6 +224,13 @@ struct ChatRow: View {
 nonisolated struct ChatRowPreviewPresentation: Equatable {
     let prefix: String?
     let body: String
+    let systemImageName: String?
+
+    init(prefix: String?, body: String, systemImageName: String? = nil) {
+        self.prefix = prefix
+        self.body = body
+        self.systemImageName = systemImageName
+    }
 }
 
 struct MentionBadge: View {

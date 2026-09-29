@@ -189,14 +189,33 @@ nonisolated final class ProductAnalyticsRecorder: Sendable {
         at now: ContinuousClock.Instant = .now
     ) -> Task<Void, Never>? {
         guard let timing else { return nil }
-        let elapsed = timing.startedAt.duration(to: max(timing.startedAt, now)).components
+        let milliseconds = Self.elapsedMilliseconds(from: timing.startedAt, to: now)
+        return enqueue(ticket: timing.ticket) {
+            try $0.timingSink?(stage, milliseconds, outcome)
+        }
+    }
+
+    /// Reports one of MDK's fixed shared host stages (`host_*`), measured with the
+    /// stage boundaries in MDK's runtime-latency telemetry catalog.
+    @discardableResult
+    func recordStage(
+        _ operation: HostPerformanceOperationFfi,
+        since timing: Timing?,
+        outcome: HostPerformanceOutcomeFfi = .success,
+        at now: ContinuousClock.Instant = .now
+    ) -> Task<Void, Never>? {
+        guard let timing else { return nil }
+        let milliseconds = Self.elapsedMilliseconds(from: timing.startedAt, to: now)
+        return recordPerformance(operation, milliseconds: milliseconds, ticket: timing.ticket, outcome: outcome)
+    }
+
+    static func elapsedMilliseconds(from start: ContinuousClock.Instant, to end: ContinuousClock.Instant) -> UInt64 {
+        let elapsed = start.duration(to: max(start, end)).components
         let seconds = UInt64(elapsed.seconds)
         let fractionalMilliseconds = UInt64(elapsed.attoseconds) / 1_000_000_000_000_000
         let (wholeMilliseconds, overflow) = seconds.multipliedReportingOverflow(by: 1_000)
         let (milliseconds, additionOverflow) = wholeMilliseconds.addingReportingOverflow(fractionalMilliseconds)
-        return enqueue(ticket: timing.ticket) {
-            try $0.timingSink?(stage, overflow || additionOverflow ? .max : milliseconds, outcome)
-        }
+        return overflow || additionOverflow ? .max : milliseconds
     }
 
     func record(_ event: ProductEvent) {

@@ -153,13 +153,14 @@ The script verifies the published manifest, SwiftPM checksum, generated Swift so
 
 Telemetry is compiled into the published MarmotKit bundle with the `otlp-export` feature. The app reads these Xcode build settings through `Info.plist`:
 
-- `WHITENOISE_OTLP_ENDPOINT` - default `https://otlp.ipf.dev/v1/metrics`
-- `WHITENOISE_OTLP_BEARER_TOKEN` - production uses `$(PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS)`; staging uses `$(STAGING_OTLP_TOKEN_WHITENOISE_IOS)`
+- `WHITENOISE_OTLP_ENDPOINT` - default `https://otlp.whitenoise.chat/v1/metrics`
+- `WHITENOISE_OTLP_BEARER_TOKEN` - the metrics write token, `$(OTLP_TOKEN_WHITENOISE_IOS)` for both flavors
 - `WHITENOISE_TELEMETRY_ENVIRONMENT` - `staging` or `production`, selected by the build flavor (not by TestFlight distribution)
-- `WHITENOISE_AUDIT_LOG_BEARER_TOKEN` - defaults to `$(AUDIT_LOG_TOKEN_WHITENOISE_IOS)` for both flavors
+- `WHITENOISE_AUDIT_OTLP_ENDPOINT` - v5 audit receiver, `https://otlp.whitenoise.chat/v1/logs` for both flavors
+- `WHITENOISE_AUDIT_LOG_BEARER_TOKEN` - the audit receiver's write token, `$(AUDIT_LOG_TOKEN_WHITENOISE_IOS)` for both flavors
 - `WHITENOISE_GIPHY_API_KEY` - defaults to `$(GIPHY_API_KEY_WHITENOISE_IOS)`
 
-Put local secrets in `Config/TelemetrySecrets.xcconfig` and do not commit real tokens or API keys. Production and staging OTLP tokens are distinct so each flavor identifies the correct tenant. Audit-log uploads use the endpoint compiled into MarmotKit and one shared token, because the audit tracker and metrics collector are different services. GIF search remains unavailable when no GIPHY key is configured.
+Put local secrets in `Config/TelemetrySecrets.xcconfig` and do not commit real tokens or API keys. Metrics use one shared token; the flavor is reported through the `deployment.environment.name` resource attribute. Opt-in audit recordings are delivered as MDK audit v5 over OTLP logs with one shared audit token; the audit and metrics tokens are not interchangeable. Without an audit token, recordings stay on the device for manual export. GIF search remains unavailable when no GIPHY key is configured.
 
 ## Release Checks
 

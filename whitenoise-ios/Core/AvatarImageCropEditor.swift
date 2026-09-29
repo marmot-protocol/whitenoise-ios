@@ -1,6 +1,7 @@
 import ImageIO
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Raw image data awaiting the same square crop treatment regardless of
 /// whether it came from Photos, Files, or a web-search result.
@@ -22,8 +23,15 @@ nonisolated struct AvatarImageCropSource: Identifiable, Sendable, Hashable {
     ) async throws -> Self {
         let data = try await fetch(url, AvatarImageCropper.maximumEncodedBytes)
         try Task.checkCancellation()
-        return try await Self(
-            data: data, fileName: url.lastPathComponent, typeIdentifier: nil, sourceURL: url
+        return try await prepared(data: data, from: url)
+    }
+
+    static func prepared(data: Data, from url: URL) async throws -> Self {
+        try await Self(
+            data: data,
+            fileName: url.lastPathComponent,
+            typeIdentifier: nil,
+            sourceURL: url
         ).prepared()
     }
 
@@ -47,6 +55,7 @@ nonisolated enum AvatarImageCropper {
     static let maximumSourcePixelCount = 80_000_000
     static let maximumEditorPixelSize = 2_048
     static let outputPixelSize = 1_024
+    static let outputTypeIdentifier = UTType.jpeg.identifier
     static let maximumCropSide: CGFloat = 300
     static let minimumCropSide: CGFloat = 140
 
@@ -296,16 +305,11 @@ struct AvatarImageCropEditor: View {
                 .ignoresSafeArea()
         }
         .onDisappear { preparationTask?.cancel() }
-        .alert("Couldn’t add photo", isPresented: Binding(
-            get: { failure != nil }, set: { if !$0 { failure = nil } }
-        ), presenting: failure) { failure in
-            if failure.canRetry {
-                Button("Retry") { prepareCrop() }
-                Button("Close", role: .cancel) {}
-            } else {
-                Button("Choose Another Photo", action: chooseAnother)
-            }
-        } message: { failure in Text(failure.message) }
+        .photoSelectionFailureAlert(
+            $failure,
+            retry: { prepareCrop() },
+            chooseAnother: { chooseAnother() }
+        )
         .navigationBarBackButtonHidden()
         .interactiveDismissDisabled()
         .task(id: source?.id) {
@@ -313,18 +317,11 @@ struct AvatarImageCropEditor: View {
             failure = nil
             isDecoding = image == nil
             guard image == nil else { return }
-            guard let data = source?.data else {
-                isDecoding = false
-                failure = .unsupported
-                return
-            }
-            let prepared = await Task.detached(priority: .userInitiated) {
-                AvatarImageCropper.normalizedImage(from: data)
-            }.value
+            let prepared = try? await source?.prepared()
             guard !Task.isCancelled else { return }
-            image = prepared
+            image = prepared?.preparedImage
             isDecoding = false
-            if prepared == nil { failure = .unsupported }
+            if image == nil { failure = .unsupported }
         }
     }
 

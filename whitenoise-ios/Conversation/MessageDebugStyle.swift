@@ -49,7 +49,7 @@ extension MessageSemantics {
 
     static func isUserVisibleBubble(_ kind: Kind) -> Bool {
         switch kind {
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media, .streamFinal, .poll:
             return true
         case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
@@ -68,7 +68,7 @@ extension MessageSemantics {
 
     private static func debugCategory(for kind: Kind) -> MessageDebugCategory {
         switch kind {
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media, .streamFinal, .poll:
             return .userVisible
         case .agentStreamStart:
             return .streamSignaling
@@ -93,6 +93,7 @@ extension MessageSemantics {
         case .reaction: name = "reaction"
         case .delete: name = "delete"
         case .edit: name = "edit"
+        case .poll: name = "poll"
         case .agentStreamStart: name = "agent-stream-start"
         case .agentActivity: name = "agent-activity"
         case .agentOperation: name = "agent-operation"
@@ -140,7 +141,7 @@ extension MessageSemantics {
             return "media attachment(s)"
         case .agentActivity, .agentOperation, .groupSystem:
             return formattedPlaintext(record.plaintext)
-        case .chat:
+        case .chat, .poll:
             return formattedPlaintext(record.plaintext)
         case .unknown:
             return formattedPlaintext(record.plaintext)

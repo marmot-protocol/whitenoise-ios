@@ -73,6 +73,6 @@ nonisolated enum MediaQualityStore {
     }
 
     static func setQuality(_ quality: MediaQuality, defaults: UserDefaults = .standard) {
-        defaults.set(quality.rawValue, forKey: storageKey)
+        HostSettingsSaveTiming.measure { defaults.set(quality.rawValue, forKey: storageKey) }
     }
 }

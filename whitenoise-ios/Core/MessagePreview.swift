@@ -24,7 +24,7 @@ enum MessagePreview {
         switch MessageSemantics.classify(record) {
         case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media, .streamFinal, .poll:
             return true
         }
     }
@@ -48,6 +48,8 @@ enum MessagePreview {
             return mediaFallback(attachments)
         case .agentActivity, .agentOperation:
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
+        case .poll:
+            return pollPreview(question: record.plaintext)
         case .groupSystem:
             return GroupSystemEventPresentation.displayText(
                 from: record.plaintext,
@@ -95,6 +97,9 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
+            if preview.kind == MessageSemantics.kindPoll {
+                return pollPreview(question: preview.plaintext)
+            }
             if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
                 return label
             }
@@ -131,6 +136,9 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
+            if preview.kind == MessageSemantics.kindPoll {
+                return pollPreview(question: preview.plaintext)
+            }
             if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
                 return label
             }
@@ -139,6 +147,12 @@ enum MessagePreview {
                 tokens: preview.contentTokens,
                 mentionDisplayName: mentionDisplayName
             )
+        }
+        if let label = ChatListAttachmentPresentation.label(
+            kind: preview.attachmentKind,
+            count: preview.attachmentCount
+        ) {
+            return label
         }
         return L10n.string("New message")
     }
@@ -157,6 +171,12 @@ enum MessagePreview {
             }.text
         }
         return MarkdownPlainText.flatten(tokens, mentionDisplayName: mentionDisplayName) ?? plaintext
+    }
+
+    /// The question is peer-controlled poll text; keep it to one line.
+    static func pollPreview(question: String) -> String {
+        let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) ?? ""
+        return L10n.formatted("📊 Poll: %@", line)
     }
 
     static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {
@@ -201,6 +221,41 @@ enum MessagePreview {
             }
         }
         return fileNames
+    }
+}
+
+nonisolated enum ChatListAttachmentPresentation {
+    static func label(kind: ChatListAttachmentKindFfi?, count: UInt32) -> String? {
+        guard kind != nil || count > 0 else { return nil }
+        if count > 1 {
+            let count = Int64(count)
+            switch kind {
+            case .photo: return L10n.plural("%lld images", count)
+            case .video: return L10n.plural("%lld videos", count)
+            case .audio, .file, .mixed, nil: return L10n.plural("%lld media files", count)
+            }
+        }
+        switch kind {
+        case .photo: return L10n.string("Image")
+        case .video: return L10n.string("Video")
+        case .audio: return L10n.string("Audio")
+        case .file, .mixed, nil: return L10n.string("Attachment")
+        }
+    }
+
+    static func systemImageName(kind: ChatListAttachmentKindFfi?, count: UInt32) -> String? {
+        guard kind != nil || count > 0 else { return nil }
+        switch kind {
+        case .photo: return count > 1 ? "photo.on.rectangle" : "photo"
+        case .video: return "video"
+        case .audio: return "waveform"
+        case .file, .mixed, nil: return "paperclip"
+        }
+    }
+
+    static func systemImageName(for preview: ChatListMessagePreviewFfi) -> String? {
+        guard !preview.deleted, preview.kind != MessageSemantics.kindGroupSystem else { return nil }
+        return systemImageName(kind: preview.attachmentKind, count: preview.attachmentCount)
     }
 }
 

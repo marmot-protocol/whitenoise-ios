@@ -230,13 +230,13 @@ final class MediaAutoDownloadStore {
 
     func setLevel(_ level: MediaAutoDownloadLevel, for type: MediaAutoDownloadType) {
         matrix = matrix.setting(type, to: level)
-        defaults.set(matrix.toPreference(), forKey: Self.storageKey(accountIdHex: accountIdHex))
+        HostSettingsSaveTiming.measure { defaults.set(matrix.toPreference(), forKey: Self.storageKey(accountIdHex: accountIdHex)) }
         self.onPolicyChange()
     }
 
     func resetToDefaults() {
         matrix = .defaultMatrix
-        defaults.removeObject(forKey: Self.storageKey(accountIdHex: accountIdHex))
+        HostSettingsSaveTiming.measure { defaults.removeObject(forKey: Self.storageKey(accountIdHex: accountIdHex)) }
         self.onPolicyChange()
     }
 

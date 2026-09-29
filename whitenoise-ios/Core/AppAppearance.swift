@@ -54,7 +54,7 @@ final class AppAppearanceStore {
     func setTheme(_ theme: AppearanceTheme) {
         guard self.theme != theme else { return }
         self.theme = theme
-        defaults.set(theme.rawValue, forKey: AppearanceTheme.storageKey)
+        HostSettingsSaveTiming.measure { defaults.set(theme.rawValue, forKey: AppearanceTheme.storageKey) }
         themeApplier(theme)
     }
 

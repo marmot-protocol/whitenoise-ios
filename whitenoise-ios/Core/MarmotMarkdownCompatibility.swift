@@ -692,6 +692,7 @@ extension TimelineMessageRecordFfi {
         media: [MediaAttachmentReferenceFfi],
         agentTextStreamJson: String?,
         groupSystem: GroupSystemEventFfi?,
+        poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
@@ -703,6 +704,7 @@ extension TimelineMessageRecordFfi {
         self.init(
             clientToken: nil,
             hasReports: hasReports,
+            poll: poll,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
             sourceEpoch: nil,
@@ -749,6 +751,7 @@ extension TimelineMessageRecordFfi {
         media: [MediaAttachmentReferenceFfi] = [],
         agentTextStreamJson: String?,
         groupSystem: GroupSystemEventFfi? = nil,
+        poll: PollProjectionFfi? = nil,
         reactions: TimelineReactionSummaryFfi,
         edit: TimelineEditSummaryFfi? = nil,
         hasReports: Bool = false,
@@ -760,6 +763,7 @@ extension TimelineMessageRecordFfi {
         self.init(
             clientToken: nil,
             hasReports: hasReports,
+            poll: poll,
             messageIdHex: messageIdHex,
             sourceMessageIdHex: sourceMessageIdHex,
             sourceEpoch: nil,

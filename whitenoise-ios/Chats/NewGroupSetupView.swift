@@ -15,7 +15,6 @@ struct NewGroupSetupView: View {
     @State private var showRetentionPicker = false
     @State private var groupImage: GroupImageUploadDraft?
     @State private var photoMenuAction: WNPhotoMenuAction?
-    @State private var imageError: String?
 
     var body: some View {
         Form {
@@ -32,14 +31,6 @@ struct NewGroupSetupView: View {
                         )
                     }
                     .disabled(model.isCreatingGroup)
-
-                    if let imageError {
-                        Text(imageError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                            .multilineTextAlignment(.center)
-                            .padding(.top)
-                    }
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -126,13 +117,13 @@ struct NewGroupSetupView: View {
             confirmsPublicUpload: false,
             prepareDraft: { data, fileName, sourceURL in
                 try await GroupImageDraftProcessor.prepare(
-                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                    data: data,
+                    fileName: fileName,
+                    typeIdentifier: AvatarImageCropper.outputTypeIdentifier,
+                    sourceURL: sourceURL
                 )
             },
-            onRemove: {
-                imageError = nil
-                groupImage = nil
-            },
+            onRemove: { groupImage = nil },
             onSelect: acceptImage
         )
         .toolbar {
@@ -160,7 +151,6 @@ struct NewGroupSetupView: View {
     }
 
     private func acceptImage(_ selection: GroupImageUploadDraft) {
-        imageError = nil
         groupImage = selection
         Haptics.selection()
     }
@@ -170,7 +160,6 @@ struct NewGroupSetupView: View {
             stagedCount: model.groupSelection.count,
             hasUsableName: !NewGroupPresentation.normalizedName(name).isEmpty,
             isCreating: model.isCreatingGroup,
-            isPreparingImage: false,
             hasActiveAccount: appState.activeAccountRef != nil
         )
     }

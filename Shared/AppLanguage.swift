@@ -76,7 +76,7 @@ nonisolated enum AppLanguage: String, CaseIterable, Identifiable {
         notificationCenter: NotificationCenter = .default
     ) {
         let resolved = resolved(rawValue: rawValue).rawValue
-        defaults.set(resolved, forKey: storageKey)
+        HostSettingsSaveTiming.measure { defaults.set(resolved, forKey: storageKey) }
         notificationCenter.post(
             name: didChangeNotification,
             object: nil,

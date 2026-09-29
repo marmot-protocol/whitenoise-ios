@@ -143,6 +143,7 @@ struct AccountSummaryRow: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder

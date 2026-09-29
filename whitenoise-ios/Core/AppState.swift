@@ -276,7 +276,7 @@ final class AppState {
     /// on the chat-details screen). Off by default; toggled in Settings.
     var developerMode: Bool {
         didSet {
-            UserDefaults.standard.set(developerMode, forKey: Self.developerModeKey)
+            HostSettingsSaveTiming.measure { UserDefaults.standard.set(developerMode, forKey: Self.developerModeKey) }
         }
     }
 
@@ -284,7 +284,7 @@ final class AppState {
     /// conversation timeline with debug styling (kinds 1200+, reactions, etc.).
     var streamingDebugMode: Bool {
         didSet {
-            UserDefaults.standard.set(streamingDebugMode, forKey: Self.streamingDebugModeKey)
+            HostSettingsSaveTiming.measure { UserDefaults.standard.set(streamingDebugMode, forKey: Self.streamingDebugModeKey) }
         }
     }
 
@@ -298,7 +298,7 @@ final class AppState {
     /// Off by default; toggled in Settings → Privacy & Security.
     var blockScreenshots: Bool {
         didSet {
-            UserDefaults.standard.set(blockScreenshots, forKey: Self.blockScreenshotsKey)
+            HostSettingsSaveTiming.measure { UserDefaults.standard.set(blockScreenshots, forKey: Self.blockScreenshotsKey) }
         }
     }
 
@@ -352,6 +352,22 @@ final class AppState {
     /// unchanged. Not observed (it forwards to `RuntimeLifecycle`'s
     /// `@ObservationIgnored client`), matching the original raw-handle semantics.
     var client: MarmotClient? { runtimeLifecycle.client }
+
+    /// Launch-to-root-surface timing, held until the first runtime can record it.
+    @ObservationIgnored var hostWindowInitStartedAt: ContinuousClock.Instant?
+    @ObservationIgnored private var pendingHostWindowInitMilliseconds: UInt64?
+
+    func noteHostWindowInitialized() {
+        guard let startedAt = hostWindowInitStartedAt else { return }
+        hostWindowInitStartedAt = nil
+        pendingHostWindowInitMilliseconds = ProductAnalyticsRecorder.elapsedMilliseconds(from: startedAt, to: .now)
+    }
+
+    func flushHostWindowInit(to client: MarmotClient) {
+        guard let milliseconds = pendingHostWindowInitMilliseconds else { return }
+        pendingHostWindowInitMilliseconds = nil
+        client.recordHostPerformance(operation: .windowInit, durationMs: milliseconds, outcome: .success)
+    }
     let notifications: AppNotifications
     @ObservationIgnored let notificationCoordinator = NotificationCoordinator()
     let appReviewDemo = AppReviewDemoCoordinator()
@@ -434,6 +450,7 @@ final class AppState {
 
     var groupRecoveryUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
+    let historyNotices = HistoryNoticeStore()
     // Review is a separate destination; timeline visibility ends when it is pushed.
     @ObservationIgnored var moderationProjectionRoute: GroupRecoveryUpdate?
 
@@ -455,6 +472,9 @@ final class AppState {
            activeAccount?.accountIdHex == accountID,
            visibleChat?.groupIdHex == groupID {
             groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
+        }
+        if case .historyNoticesChanged(let accountID, _) = event, activeAccount?.accountIdHex == accountID {
+            Task { await historyNotices.refresh(using: self) }
         }
         guard runtimeEventsGeneration == generation,
               case .groupChangeSuperseded(let accountID, _, _, _, _, _, _) = event,
@@ -745,6 +765,16 @@ final class AppState {
         guard let account = accounts.first(where: { $0.label == accountRef }) else { return }
         guard activatingAccountRefs.insert(accountRef).inserted else { return }
         defer { activatingAccountRefs.remove(accountRef) }
+        // The switch invalidates the product-analytics sink, so this stage goes
+        // straight to the runtime like the other lifecycle stages.
+        let switchStartedAt = ContinuousClock.now
+        func recordSwitch(_ outcome: HostPerformanceOutcomeFfi) {
+            client?.recordHostPerformance(
+                operation: .accountSwitch,
+                durationMs: ProductAnalyticsRecorder.elapsedMilliseconds(from: switchStartedAt, to: .now),
+                outcome: outcome
+            )
+        }
 
         if account.signedOut {
             do {
@@ -752,16 +782,21 @@ final class AppState {
                 _ = try await activationClient.signInAccount(accountRef: accountRef)
                 try await refreshAccounts()
             } catch {
+                recordSwitch(error is CancellationError ? .cancelled : .failure)
                 present(UserFacingError.toast(title: L10n.string("Couldn't sign in"), error: error))
                 return
             }
         }
 
-        guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else { return }
+        guard accounts.contains(where: { $0.label == accountRef && !$0.signedOut }) else {
+            recordSwitch(.unavailable)
+            return
+        }
         activeAccountRef = accountRef
 
         restartReadyForegroundMaintenanceIfStopped()
         scheduleNativePushRegistrationIfEnabled()
+        recordSwitch(.success)
     }
 
     /// Set after a destructive Sign Out & Wipe finished with best-effort

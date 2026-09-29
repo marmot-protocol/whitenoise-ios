@@ -165,11 +165,12 @@ struct ProfileEditView: View {
                 let accountID = appState.activeAccount?.accountIdHex
                 let ticket = model.loadTicket
                 let draft = try await ProfileImageDraftProcessor.prepare(
-                    data: data, fileName: fileName, typeIdentifier: "public.jpeg", sourceURL: sourceURL
+                    data: data,
+                    fileName: fileName,
+                    typeIdentifier: AvatarImageCropper.outputTypeIdentifier,
+                    sourceURL: sourceURL
                 )
-                try Task.checkCancellation()
-                guard model.loadTicket == ticket,
-                      appState.activeAccount?.accountIdHex == accountID else { throw CancellationError() }
+                guard isCurrent(ticket: ticket, accountID: accountID) else { throw CancellationError() }
                 return draft
             },
             onRemove: { applyUpload(nil) },
@@ -278,8 +279,7 @@ struct ProfileEditView: View {
         photoError = nil
         photoProgressPhase = draft == nil ? nil : .uploading
         Task {
-            guard !Task.isCancelled, model.loadTicket == ticket,
-                  appState.activeAccount?.accountIdHex == accountID else {
+            guard isCurrent(ticket: ticket, accountID: accountID) else {
                 photoProgressPhase = nil
                 return
             }
@@ -295,11 +295,14 @@ struct ProfileEditView: View {
             try await model.updatePicture(with: draft, using: appState)
             Haptics.selection()
         } catch {
-            guard !(error is CancellationError), !Task.isCancelled, model.loadTicket == ticket,
-                  appState.activeAccount?.accountIdHex == accountID else { return }
+            guard !(error is CancellationError), isCurrent(ticket: ticket, accountID: accountID) else { return }
             photoError = UserFacingError.message(for: error)
             Haptics.error()
         }
+    }
+
+    private func isCurrent(ticket: Int, accountID: String?) -> Bool {
+        !Task.isCancelled && model.loadTicket == ticket && appState.activeAccount?.accountIdHex == accountID
     }
 
     /// Stays in the view because it also reads `appState.activeAccountRef`; the
@@ -312,33 +315,6 @@ struct ProfileEditView: View {
             || model.loadedAccountIdHex != appState.activeAccount?.accountIdHex
             || ContentSanitizer.displayName(model.displayName) == nil
             || model.currentDraft.validationError != nil
-    }
-}
-
-struct ProfileEditDraftSnapshot {
-    private let accountID: String?
-    private let loadTicket: Int
-    let displayName: String
-    let about: String
-    let picture: String
-    let nip05: String
-
-    init(model: ProfileEditViewModel) {
-        accountID = model.loadedAccountIdHex
-        loadTicket = model.loadTicket
-        displayName = model.displayName
-        about = model.about
-        picture = model.picture
-        nip05 = model.nip05
-    }
-
-    func restore(_ model: ProfileEditViewModel, activeAccountID: String?) {
-        guard let accountID, accountID == activeAccountID,
-              model.loadedAccountIdHex == accountID, model.loadTicket == loadTicket else { return }
-        model.displayName = displayName
-        model.about = about
-        model.picture = picture
-        model.nip05 = nip05
     }
 }
 

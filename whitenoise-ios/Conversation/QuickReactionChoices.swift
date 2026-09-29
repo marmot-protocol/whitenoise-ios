@@ -85,7 +85,7 @@ enum QuickReactionPreferences {
     @discardableResult
     static func save(_ choices: [String], to defaults: UserDefaults) -> [String] {
         let normalized = QuickReactionChoices.normalize(choices)
-        defaults.set(normalized, forKey: key)
+        HostSettingsSaveTiming.measure { defaults.set(normalized, forKey: key) }
         return normalized
     }
 }

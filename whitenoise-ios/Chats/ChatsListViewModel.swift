@@ -90,6 +90,7 @@ final class ChatsListViewModel {
         let inviterAccountIdHex: String?
         let isMuted: Bool
         let previewText: String?
+        let previewSymbolName: String?
         let previewExpired: Bool
         let draftPreview: String?
         let selectedPreview: SelectedChatPreviewFfi?
@@ -138,6 +139,9 @@ final class ChatsListViewModel {
             self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
             self.previewText = previewText
+            self.previewSymbolName = isBlockedDirectPeer || previewExpired
+                ? nil
+                : row.lastMessage.flatMap(ChatListAttachmentPresentation.systemImageName(for:))
             self.previewExpired = previewExpired
             self.selectedPreview = prepared?.preview
             var actions = prepared?.actions
@@ -443,12 +447,26 @@ final class ChatsListViewModel {
         let taskID = UUID()
         chatListTaskID = taskID
         chatListTask = Task { @MainActor [weak self, weak appState] in
-            defer { self?.finishChatListTask(taskID: taskID) }
+            // One host load stage per open attempt: subscription open to first installed rows.
+            var loadStage: (operation: HostPerformanceOperationFfi, timing: ProductAnalyticsRecorder.Timing?)?
+            func finishLoad(_ outcome: HostPerformanceOutcomeFfi) {
+                guard let stage = loadStage else { return }
+                loadStage = nil
+                appState?.productAnalytics.recordStage(stage.operation, since: stage.timing, outcome: outcome)
+            }
+            defer {
+                finishLoad(.cancelled)
+                self?.finishChatListTask(taskID: taskID)
+            }
             var retryDelay = Self.liveSubscriptionInitialRetryDelayNanoseconds
             while !Task.isCancelled {
                 do {
                     guard let appState, appState.canUseRuntimeForForegroundWork else { return }
                     let client = try appState.currentMarmotClient()
+                    loadStage = (
+                        self?.listMode == .window(.archived) ? .archivedChatListLoad : .chatListLoad,
+                        appState.productAnalytics.beginTiming()
+                    )
                     if case .window(let view) = self?.listMode {
                         let subscription = try await client.openChatListWindow(accountRef: accountRef, view: view)
                         guard let initial = await Task.detached(priority: .utility, operation: {
@@ -466,6 +484,7 @@ final class ChatsListViewModel {
                             generation: initial.subscriptionGeneration, sequence: initial.sequence
                         )
                         self?.installWindowSnapshot(initial)
+                        finishLoad(.success)
                         while let update = try await subscription.nextCancellable() {
                             guard !Task.isCancelled,
                                   self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true else { return }
@@ -497,6 +516,7 @@ final class ChatsListViewModel {
                     self?.presentedCursor = PresentedChatListCursor(initial: snapshot)
                     self?.applyPresentedSnapshot(snapshot.snapshot)
                     self?.isLoading = false
+                    finishLoad(.success)
 
                     while let update = try await chatListSub.nextCancellable() {
                         guard !Task.isCancelled,
@@ -512,6 +532,7 @@ final class ChatsListViewModel {
                 } catch is CancellationError {
                     return
                 } catch {
+                    finishLoad(.failure)
                     guard !Task.isCancelled,
                           appState?.canUseRuntimeForForegroundWork == true,
                           self?.ownsChatListTask(taskID: taskID, accountRef: accountRef) == true

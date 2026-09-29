@@ -38,8 +38,17 @@ nonisolated struct AuditFileRow: Identifiable, Equatable, Sendable {
 }
 
 nonisolated enum AuditFileRowProjection {
+    /// Newest capture first; undated files last; path breaks ties so order is stable.
     static func rows(from files: [AuditLogFileFfi]) -> [AuditFileRow] {
-        files.map(row)
+        files.sorted { left, right in
+            switch (left.modifiedAtMs, right.modifiedAtMs) {
+            case let (leftTime?, rightTime?) where leftTime != rightTime: leftTime > rightTime
+            case (.some, nil): true
+            case (nil, .some): false
+            default: left.path < right.path
+            }
+        }
+        .map(row)
     }
 
     private static func row(from file: AuditLogFileFfi) -> AuditFileRow {

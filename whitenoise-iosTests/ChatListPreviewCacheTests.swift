@@ -135,6 +135,113 @@ struct ChatListPreviewCacheTests {
         ) == ChatRowPreviewPresentation(prefix: nil, body: "hello"))
     }
 
+    @Test func mediaOnlyGroupPreviewShowsAttachmentLabelAndIcon() {
+        let item = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: .photo, count: 1, senderDisplayName: "Alice")),
+            avatarURL: nil,
+            title: "Room",
+            isDirectMessage: false
+        )
+
+        #expect(ChatRow.previewPresentation(
+            for: item,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ) == ChatRowPreviewPresentation(prefix: "Alice", body: L10n.string("Image"), systemImageName: "photo"))
+    }
+
+    @Test(arguments: [
+        (ChatListAttachmentKindFfi.photo, UInt32(1), L10n.string("Image"), "photo"),
+        (.photo, 3, L10n.plural("%lld images", Int64(3)), "photo.on.rectangle"),
+        (.video, 1, L10n.string("Video"), "video"),
+        (.video, 2, L10n.plural("%lld videos", Int64(2)), "video"),
+        (.audio, 1, L10n.string("Audio"), "waveform"),
+        (.file, 1, L10n.string("Attachment"), "paperclip"),
+        (.mixed, 4, L10n.plural("%lld media files", Int64(4)), "paperclip"),
+    ])
+    func mediaOnlyPreviewNamesTheAttachmentKindAndCount(
+        kind: ChatListAttachmentKindFfi,
+        count: UInt32,
+        expectedBody: String,
+        expectedSymbol: String
+    ) {
+        let item = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: kind, count: count)),
+            avatarURL: nil,
+            title: "Alice",
+            isDirectMessage: true
+        )
+
+        #expect(item.previewText == expectedBody)
+        #expect(ChatRow.previewPresentation(
+            for: item,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ) == ChatRowPreviewPresentation(prefix: nil, body: expectedBody, systemImageName: expectedSymbol))
+    }
+
+    @Test func ownMediaOnlyPreviewKeepsTheYouPrefix() {
+        let item = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: .video, count: 1, sender: "self")),
+            avatarURL: nil,
+            title: "Room"
+        )
+
+        #expect(ChatRow.previewPresentation(
+            for: item,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ) == ChatRowPreviewPresentation(prefix: L10n.string("You"), body: L10n.string("Video"), systemImageName: "video"))
+    }
+
+    @Test func captionedMediaPreviewKeepsTheCaptionBesideTheIcon() {
+        let item = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: .photo, count: 2, plaintext: "Beach day")),
+            avatarURL: nil,
+            title: "Alice",
+            isDirectMessage: true
+        )
+
+        #expect(ChatRow.previewPresentation(
+            for: item,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ) == ChatRowPreviewPresentation(prefix: nil, body: "Beach day", systemImageName: "photo.on.rectangle"))
+    }
+
+    @Test func deletedOrBlockedMediaPreviewShowsNoAttachmentIcon() {
+        let deleted = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: .photo, count: 1, deleted: true)),
+            avatarURL: nil,
+            title: "Alice",
+            isDirectMessage: true
+        )
+        let blocked = ChatsListViewModel.Item(
+            row: row(lastMessage: mediaPreview(kind: .photo, count: 1)),
+            avatarURL: nil,
+            title: "Alice",
+            isDirectMessage: true,
+            isBlockedDirectPeer: true
+        )
+
+        #expect(ChatRow.previewPresentation(
+            for: deleted,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ).systemImageName == nil)
+        #expect(ChatRow.previewPresentation(
+            for: blocked,
+            activeAccountIdHex: "self",
+            senderName: { _ in "Fallback" }
+        ) == ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You blocked this user")))
+    }
+
+    @Test func textOnlyPreviewShowsNoAttachmentIcon() {
+        let item = ChatsListViewModel.Item(row: row(lastMessage: preview()), avatarURL: nil, title: "Room")
+
+        #expect(item.previewSymbolName == nil)
+    }
+
     @Test func groupSystemActivityDoesNotAddASenderPrefix() {
         let item = ChatsListViewModel.Item(
             row: row(lastMessage: preview(
@@ -627,6 +734,25 @@ struct ChatListPreviewCacheTests {
             timelineAt: timelineAt,
             deleted: deleted
         )
+    }
+
+    private func mediaPreview(
+        kind: ChatListAttachmentKindFfi,
+        count: UInt32,
+        sender: String = "sender",
+        senderDisplayName: String? = nil,
+        plaintext: String = "",
+        deleted: Bool = false
+    ) -> ChatListMessagePreviewFfi {
+        var message = preview(
+            sender: sender,
+            senderDisplayName: senderDisplayName,
+            plaintext: plaintext,
+            deleted: deleted
+        )
+        message.attachmentKind = kind
+        message.attachmentCount = count
+        return message
     }
 
     private func hex(_ byte: String) -> String {

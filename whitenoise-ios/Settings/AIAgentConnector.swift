@@ -5,6 +5,8 @@ enum AIAgentConnector: String, CaseIterable, Identifiable {
     case openclaw
     case opencode
     case codex
+    case claude
+    case pi
 
     var id: Self { self }
 
@@ -14,6 +16,8 @@ enum AIAgentConnector: String, CaseIterable, Identifiable {
         case .openclaw: L10n.string("OpenClaw")
         case .opencode: L10n.string("OpenCode")
         case .codex: L10n.string("Codex")
+        case .claude: L10n.string("Claude Code")
+        case .pi: L10n.string("Pi")
         }
     }
 
@@ -23,6 +27,8 @@ enum AIAgentConnector: String, CaseIterable, Identifiable {
         case .openclaw: L10n.string("Self-hosted personal AI assistant")
         case .opencode: L10n.string("Open-source coding agent")
         case .codex: L10n.string("OpenAI Codex CLI coding agent")
+        case .claude: L10n.string("Anthropic Claude Code coding agent")
+        case .pi: L10n.string("Minimal terminal coding agent")
         }
     }
 
@@ -46,6 +52,16 @@ enum AIAgentConnector: String, CaseIterable, Identifiable {
         case .codex:
             L10n.formatted(
                 "This is an installation prompt for connecting this Codex setup to White Noise through Marmot. Read the authoritative Codex harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/codex/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Codex CLI is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-codex-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-codex --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-codex returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required.",
+                npub
+            )
+        case .claude:
+            L10n.formatted(
+                "This is an installation prompt for connecting this Claude Code setup to White Noise through Marmot. Read the authoritative Claude Code harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/claude/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Claude Code is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-claude-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-claude --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-claude returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required.",
+                npub
+            )
+        case .pi:
+            L10n.formatted(
+                "This is an installation prompt for connecting this Pi setup to White Noise through Marmot. Read the authoritative Pi harness guide at https://github.com/marmot-protocol/mdk/blob/master/integrations/pi/marmot/README.md and the evergreen connector guide at https://github.com/marmot-protocol/mdk/blob/master/crates/agent-connector/README.md. Explain to me how the connector works and what the installation will change. Confirm prerequisites: Pi is installed, authenticated, and available on PATH, and this machine uses the same public relay set as my phone. Then propose the installation steps for my public npub: %@, and ask for my approval before making any changes. Once I approve, use the checksum-verified install-pi-marmot.sh release flow, bootstrap wn-agent for that npub with the allowed welcomer, and verify wn-pi --version. Then reply with your agent npub and ask me to invite it from White Noise and send a test message from this allowed npub over the configured relays. Do not report setup complete until wn-pi returns a reply through White Noise; if that round trip cannot be verified automatically, clearly mark device verification required.",
                 npub
             )
         }

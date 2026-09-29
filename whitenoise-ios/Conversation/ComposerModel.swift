@@ -294,6 +294,10 @@ final class ComposerModel {
         completion: (@MainActor (Bool) async -> Void)?
     ) async {
         await sendQueue.enqueue { [self] in
+            // host_message_send: the send task itself, from dequeue; queue wait excluded.
+            let sendTask = appState.productAnalytics.beginTiming()
+            var sendOutcome = HostPerformanceOutcomeFfi.cancelled
+            defer { appState.productAnalytics.recordStage(.messageSend, since: sendTask, outcome: sendOutcome) }
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
                 await completion?(false)
@@ -317,12 +321,14 @@ final class ComposerModel {
                     clientToken: staged.clientToken
                 )
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
+                sendOutcome = .success
                 await completion?(true)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
                       appState.activeAccountRef == staged.accountRef else { return }
                 timelineStore.acceptLocalSend(tempId: staged.tempId, clientToken: summary.clientToken)
             } catch {
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
+                sendOutcome = .failure
                 let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)
@@ -392,6 +398,10 @@ final class ComposerModel {
         completion: (@MainActor (Bool) async -> Void)?
     ) async {
         await sendQueue.enqueue { [self] in
+            // host_message_send: the send task itself, from dequeue; queue wait excluded.
+            let sendTask = appState.productAnalytics.beginTiming()
+            var sendOutcome = HostPerformanceOutcomeFfi.cancelled
+            defer { appState.productAnalytics.recordStage(.messageSend, since: sendTask, outcome: sendOutcome) }
             guard timelineStore.outgoingLifetime == staged.lifetime,
                   appState.activeAccountRef == staged.accountRef else {
                 staged.cancelPreparedUploads()
@@ -440,6 +450,7 @@ final class ComposerModel {
                 let references = verifiedAttachments.map(\.reference)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
                       appState.activeAccountRef == staged.accountRef else {
+                    appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .cancelled)
                     await completion?(false)
                     return
                 }
@@ -459,6 +470,7 @@ final class ComposerModel {
                     sent = submitted?.acceptance
                 }
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission)
+                sendOutcome = .success
                 await completion?(true)
                 guard timelineStore.outgoingLifetime == staged.lifetime,
                       appState.activeAccountRef == staged.accountRef else { return }
@@ -483,6 +495,7 @@ final class ComposerModel {
                 }
             } catch {
                 appState.productAnalytics.recordTiming(.sendSubmission, since: submission, outcome: .failure)
+                sendOutcome = .failure
                 let ambiguous = await recoverSubmission(staged, appState: appState, error: error)
                 // Refresh the selected revision after uncertain admission before releasing draft writes.
                 await completion?(ambiguous)

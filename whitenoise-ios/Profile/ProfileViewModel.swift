@@ -33,6 +33,10 @@ final class ProfileViewModel {
         guard !Task.isCancelled else { return }
         resolutionGeneration &+= 1
         let generation = resolutionGeneration
+        // host_profile_load: resolve the identity through its auxiliary group data.
+        let timing = appState.productAnalytics.beginTiming()
+        var outcome = HostPerformanceOutcomeFfi.cancelled
+        defer { appState.productAnalytics.recordStage(.profileLoad, since: timing, outcome: outcome) }
         // Resolve before awaiting directory reads; keep a completed badge only
         // when this is still the same identity.
         startPrompt = nil
@@ -45,7 +49,10 @@ final class ProfileViewModel {
         }
         guard !Task.isCancelled, generation == resolutionGeneration else { return }
         applyResolvedAccount(resolvedHex)
-        guard let resolvedHex else { return }
+        guard let resolvedHex else {
+            outcome = .failure
+            return
+        }
         if refreshProfile {
             // Trigger enrichment (cached read + background relay fetch).
             _ = appState.profile(forAccountIdHex: resolvedHex)
@@ -55,6 +62,8 @@ final class ProfileViewModel {
               hex == resolvedHex
         else { return }
         await reloadGroups(using: appState)
+        guard !Task.isCancelled, generation == resolutionGeneration, hex == resolvedHex else { return }
+        outcome = directory.loadError == nil ? .success : .failure
     }
 
     func reloadGroups(using appState: AppState, force: Bool = false) async {

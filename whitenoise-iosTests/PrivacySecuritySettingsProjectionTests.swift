@@ -22,4 +22,28 @@ struct PrivacySecuritySettingsProjectionTests {
         #expect(row.path == "/tmp/audit-1.jsonl")
         #expect(row.detailText == "\(ByteCountFormatter.string(fromByteCount: 1_536, countStyle: .file)) - 12345678...abcdef")
     }
+
+    @Test func auditRowsListNewestCaptureFirstRegardlessOfFileName() {
+        func file(_ name: String, _ modifiedAtMs: UInt64?) -> AuditLogFileFfi {
+            AuditLogFileFfi(accountRef: "account", path: "/tmp/\(name)", fileName: name,
+                            sizeBytes: 1, modifiedAtMs: modifiedAtMs)
+        }
+        let files = [
+            file("audit-a-v5.jsonl", 1_000),
+            file("audit-z-v5.jsonl", 3_000),
+            file("audit-undated.jsonl", nil),
+            file("audit-m-v5-seg000002.jsonl", 2_000),
+            file("audit-b-v5.jsonl", 2_000)
+        ]
+
+        let names = AuditFileRowProjection.rows(from: files).map(\.fileName)
+
+        #expect(names == [
+            "audit-z-v5.jsonl",
+            "audit-b-v5.jsonl",
+            "audit-m-v5-seg000002.jsonl",
+            "audit-a-v5.jsonl",
+            "audit-undated.jsonl"
+        ])
+    }
 }

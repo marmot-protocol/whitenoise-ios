@@ -382,8 +382,11 @@ final class RuntimeLifecycle {
             && !bootstrapNeedsBackgroundSuspensionRecheck
         var runtimeStartMilliseconds = 0.0
         var accountLoadMilliseconds = 0.0
+        // The shared host stage in flight, so failure and cancellation close it.
+        var openStage: (operation: HostPerformanceOperationFfi, startedAt: ContinuousClock.Instant)?
         do {
             let runtimeStartStartedAt = ContinuousClock.now
+            openStage = (.runtimeInit, runtimeStartStartedAt)
             try await startCurrentRuntime {
                 self.bootstrapTaskID == id
                     && !Task.isCancelled
@@ -393,6 +396,11 @@ final class RuntimeLifecycle {
                         || self.bootstrapNeedsBackgroundSuspensionRecheck)
             }
             runtimeStartMilliseconds = Self.elapsedMilliseconds(since: runtimeStartStartedAt)
+            if let client {
+                recordHostPerformance(using: client, operation: .runtimeInit, since: runtimeStartStartedAt, outcome: .success)
+                appState.flushHostWindowInit(to: client)
+            }
+            openStage = nil
 #if DEBUG
             if let afterBootstrapRuntimeStartForTesting {
                 await afterBootstrapRuntimeStartForTesting()
@@ -401,6 +409,7 @@ final class RuntimeLifecycle {
             noteRuntimeForegroundReadyAfterSuspension()
             await appState.refreshProductAnalytics()
             let accountLoadStartedAt = ContinuousClock.now
+            openStage = (.accountLoad, accountLoadStartedAt)
             // Routing needs the durable account list, but unread badges do not
             // gate local conversation display. Refresh them after `.ready`.
             try await refreshAccountsForBootstrap(appState, stillOwnsWork: {
@@ -412,6 +421,10 @@ final class RuntimeLifecycle {
                         || self.bootstrapNeedsBackgroundSuspensionRecheck)
             })
             accountLoadMilliseconds = Self.elapsedMilliseconds(since: accountLoadStartedAt)
+            if let client {
+                recordHostPerformance(using: client, operation: .accountLoad, since: accountLoadStartedAt, outcome: .success)
+            }
+            openStage = nil
             if appState.accounts.isEmpty {
                 appState.activeAccountRef = nil
                 appState.setPhase(.onboarding)
@@ -472,11 +485,17 @@ final class RuntimeLifecycle {
                 appState.startReadyForegroundMaintenance()
             }
         } catch is CancellationError {
+            if let openStage, let client {
+                recordHostPerformance(using: client, operation: openStage.operation, since: openStage.startedAt, outcome: .cancelled)
+            }
             // Backgrounding or losing bootstrap ownership is expected
             // lifecycle control flow. Leave the phase bootstrapping so the
             // next active transition can build a fresh runtime.
             await releaseRuntimeAfterStartupFailure()
         } catch {
+            if let openStage, let client {
+                recordHostPerformance(using: client, operation: openStage.operation, since: openStage.startedAt, outcome: .failure)
+            }
             if !(error is CancellationError),
                appState.sceneHasReportedPhase,
                appState.isAppSceneActive,
@@ -832,7 +851,10 @@ final class RuntimeLifecycle {
                         }
                     }
                     startMilliseconds = Self.elapsedMilliseconds(since: startStartedAt)
+                    recordHostPerformance(using: restored, operation: .runtimeInit, since: constructionStartedAt, outcome: .success)
                 } catch {
+                    recordHostPerformance(using: restored, operation: .runtimeInit, since: constructionStartedAt,
+                                          outcome: error is CancellationError ? .cancelled : .failure)
                     if !(error is CancellationError), ownsForegroundActivation(id: activationID) {
                         recordHostPerformance(
                             using: restored,
@@ -856,6 +878,7 @@ final class RuntimeLifecycle {
                 client = restored
                 // An import may have persisted its identity just before suspension.
                 // Recover its checkpoint before restarting account maintenance.
+                let accountLoadStartedAt = ContinuousClock.now
                 do {
                     if let appState {
                         try await refreshAccountsForBootstrap(appState, stillOwnsWork: {
@@ -863,7 +886,10 @@ final class RuntimeLifecycle {
                         })
                     }
                     guard ownsForegroundActivation(id: activationID) else { throw CancellationError() }
+                    recordHostPerformance(using: restored, operation: .accountLoad, since: accountLoadStartedAt, outcome: .success)
                 } catch {
+                    recordHostPerformance(using: restored, operation: .accountLoad, since: accountLoadStartedAt,
+                                          outcome: error is CancellationError ? .cancelled : .failure)
                     // Close this activation's handle even if ownership changed during refresh.
                     if client === restored { client = nil }
                     try? await restored.marmot.shutdownAndClose()

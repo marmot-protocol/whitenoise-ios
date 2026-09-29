@@ -10,7 +10,7 @@ nonisolated enum MessageForwardingPolicy {
             return record.plaintext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil
                 : record.plaintext
-        case .streamFinal, .reaction, .delete, .edit, .agentStreamStart,
+        case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
              .agentActivity, .agentOperation, .groupSystem, .unknown:
             return nil
         }
@@ -32,7 +32,7 @@ nonisolated enum MessageEditingPolicy {
         switch MessageSemantics.classify(record) {
         case .chat, .reply, .media:
             return true
-        case .streamFinal, .reaction, .delete, .edit, .agentStreamStart,
+        case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart,
              .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
         }

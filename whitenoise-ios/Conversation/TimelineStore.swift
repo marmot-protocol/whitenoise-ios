@@ -204,6 +204,11 @@ final class TimelineStore {
     @ObservationIgnored private var replyPreviewsByMessageId: [String: TimelineReplyPreviewFfi] = [:]
     @ObservationIgnored private var replyPreviewDisplayCache: [String: ReplyPreviewDisplayCacheEntry] = [:]
     @ObservationIgnored private var groupSystemByMessageId: [String: GroupSystemEventFfi] = [:]
+    /// MDK's validated tally for kind-1068 rows; absent means not a valid poll.
+    @ObservationIgnored private var pollByMessageId: [String: PollProjectionFfi] = [:]
+    /// Client tokens of own rows MDK has not yet delivered; edits of these go
+    /// through MDK's durable pending-edit queue.
+    @ObservationIgnored private var unsettledClientTokenByMessageId: [String: String] = [:]
     @ObservationIgnored private var groupSystemDisplayCache: [String: GroupSystemDisplayCacheEntry] = [:]
     @ObservationIgnored private var transientTimelineItems: [String: TimelineItem] = [:]
     @ObservationIgnored private var systemTimelineItems: [TimelineItem] = []
@@ -413,6 +418,29 @@ final class TimelineStore {
     func reactionDetails(for messageIdHex: String) -> ConversationViewModel.ReactionDetails {
         _ = timelineProjectionGeneration
         return reactionProjections.details(forMessageId: messageIdHex)
+    }
+
+    /// The row's poll with any in-flight local vote applied.
+    func poll(for messageIdHex: String) -> PollProjectionFfi? {
+        _ = timelineProjectionGeneration
+        guard let poll = pollByMessageId[messageIdHex] else { return nil }
+        guard let pending = pendingPollSelections[messageIdHex] else { return poll }
+        return PollPresentation.applyingLocalSelection(pending, to: poll)
+    }
+
+    @ObservationIgnored private var pendingPollSelections: [String: [String]] = [:]
+
+    func unsettledClientToken(forMessageId messageIdHex: String) -> String? {
+        unsettledClientTokenByMessageId[messageIdHex]
+    }
+
+    func setPendingPollSelection(_ selection: [String]?, forMessageId messageIdHex: String) {
+        pendingPollSelections[messageIdHex] = selection
+        noteProjectionChanged()
+    }
+
+    func pendingPollSelection(forMessageId messageIdHex: String) -> [String]? {
+        pendingPollSelections[messageIdHex]
     }
 
     func messageClusterPresentation(for item: TimelineItem) -> MessageClusterPresentation {
@@ -783,7 +811,7 @@ final class TimelineStore {
             switch change {
             case .upsert(let trigger, let record):
                 let appRecord = ConversationViewModel.appMessageRecord(from: record)
-                if trigger == .newMessage, appRecord.direction == "received", appRecord.kind == MessageSemantics.kindChat,
+                if trigger == .newMessage, appRecord.direction == "received", MessageSemantics.isUserMessageKind(appRecord.kind),
                    !appRecord.messageIdHex.isEmpty, messageById[appRecord.messageIdHex] == nil {
                     beginMessageVisibility(rowID: "msg:\(appRecord.messageIdHex)", operation: .inboundMessageVisible)
                 }
@@ -896,6 +924,13 @@ final class TimelineStore {
         replyPreviewDisplayCache[appRecord.messageIdHex] = nil
         groupSystemDisplayCache[appRecord.messageIdHex] = nil
         groupSystemByMessageId[appRecord.messageIdHex] = record.groupSystem
+        pollByMessageId[appRecord.messageIdHex] = record.poll
+        unsettledClientTokenByMessageId[appRecord.messageIdHex] =
+            appRecord.direction == "sent" && record.sourceMessageIdHex == nil ? record.clientToken : nil
+        if let pending = pendingPollSelections[appRecord.messageIdHex],
+           let poll = record.poll, Set(poll.localSelection) == Set(pending) {
+            pendingPollSelections[appRecord.messageIdHex] = nil
+        }
         messageById[appRecord.messageIdHex] = appRecord
         // `sourceMessageIdHex` is the durable delivery marker. A nil-source
         // projection means committed but unresolved, except while a successful
@@ -1175,6 +1210,9 @@ final class TimelineStore {
             let item = row(record)
             guard agentEventProjections.display(for: item) != nil else { return nil }
             return item
+        case .poll:
+            // A malformed poll has no projection; the bubble shows the unsupported state.
+            return row(record)
         case .groupSystem:
             if preparedOrder != nil,
                groupSystemByMessageId[record.messageIdHex]?.provenance != .authenticatedGroupState {

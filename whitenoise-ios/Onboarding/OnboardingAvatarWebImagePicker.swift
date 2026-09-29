@@ -93,16 +93,12 @@ struct OnboardingAvatarWebImagePicker: View {
                     )
                 }
         }
-        .alert("Couldn’t add photo", isPresented: Binding(
-            get: { download.failure != nil }, set: { if !$0 { download.failure = nil } }
-        ), presenting: download.failure) { failure in
-            if failure.canRetry {
-                Button("Retry") { download.retry() }
-                Button("Back", role: .cancel) {}
-            } else {
-                Button("Choose Another Photo", role: .cancel) {}
-            }
-        } message: { failure in Text(failure.message) }
+        .photoSelectionFailureAlert(
+            $download.failure,
+            retry: { download.retry() },
+            dismissTitle: "Back",
+            chooseAnother: nil
+        )
         .task(id: download.request?.id) {
             guard let request = download.request else { return }
             await download.load(request)
@@ -185,7 +181,6 @@ struct OnboardingAvatarWebImagePicker: View {
         Form {
             Section { searchPrivacyDisclosure }
             Section {
-                // Native rows avoid nested lazy-collection sizing with asynchronous thumbnails.
                 ForEach(resultRows.indices, id: \.self) { rowIndex in
                     HStack(spacing: 1) {
                         ForEach(resultRows[rowIndex]) { result in resultButton(result) }

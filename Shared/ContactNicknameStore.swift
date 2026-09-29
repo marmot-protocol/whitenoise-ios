@@ -74,13 +74,15 @@ nonisolated enum ContactNicknameStore {
         else {
             return
         }
-        var nicknames = nicknamesByKey(defaults: defaults)
-        if let nickname = ContentSanitizer.displayName(rawNickname) {
-            nicknames[key] = nickname
-        } else {
-            nicknames.removeValue(forKey: key)
+        HostSettingsSaveTiming.measure {
+            var nicknames = nicknamesByKey(defaults: defaults)
+            if let nickname = ContentSanitizer.displayName(rawNickname) {
+                nicknames[key] = nickname
+            } else {
+                nicknames.removeValue(forKey: key)
+            }
+            defaults.set(nicknames, forKey: storageKey)
         }
-        defaults.set(nicknames, forKey: storageKey)
     }
 
     /// Removes every nickname authored by one owner account (sign-out cleanup).

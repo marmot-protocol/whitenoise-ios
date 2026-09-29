@@ -207,7 +207,7 @@ final class StreamWatcher {
                 streamSenderById: streamSenderById
             ) else { return }
             endStream(streamId: streamId)
-        case .streamFinal, .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
+        case .streamFinal, .reaction, .delete, .edit, .poll, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return
         }
     }

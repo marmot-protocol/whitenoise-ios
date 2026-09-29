@@ -97,6 +97,8 @@ struct DiagnosticsView: View {
             return "[\(label)] group \(IdentityFormatter.short(groupIdHex)) cannot catch up at epoch \(stalledEpoch) after \(arms) recovery attempts; re-sync recommended"
         case .groupChangeSuperseded(_, let label, let groupIdHex, let commitIdHex, let kind, let outcome, let reason):
             return "[\(label)] group \(IdentityFormatter.short(groupIdHex)) change \(kind) superseded commit \(IdentityFormatter.short(commitIdHex)): \(outcome) (\(reason))"
+        case .historyNoticesChanged(_, let label):
+            return "[\(label)] history notices changed"
         }
     }
 

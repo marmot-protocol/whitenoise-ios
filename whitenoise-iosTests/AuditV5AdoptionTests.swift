@@ -4,7 +4,7 @@ import Testing
 @testable import whitenoise_ios
 
 @MainActor
-struct AuditV4AdoptionTests {
+struct AuditV5AdoptionTests {
     @Test func nativeStartupDeletesLegacyAuditFilesWithRecordingDisabled() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -38,22 +38,38 @@ struct AuditV4AdoptionTests {
         }
     }
 
-    @Test func trackerMetadataRoundTripsThroughNativeV4BindingsWithOptionalHardware() async throws {
+    @Test func auditOtlpConfigIsDisabledWithoutAToken() {
+        let config = Self.telemetry(auditToken: nil).auditOtlpConfig()
+        #expect(config.enabled == false)
+        #expect(config.destination == nil)
+        #expect(config.endpoint == nil)
+        #expect(config.authorizationBearerToken == nil)
+    }
+
+    @Test func auditOtlpConfigTargetsTheV5ReceiverWithTheSharedAuditToken() {
+        let config = Self.telemetry(auditToken: "audit-token").auditOtlpConfig()
+        #expect(config.enabled)
+        #expect(config.destination == TelemetryBuildConfig.auditOtlpDestination)
+        #expect(config.endpoint == "https://otlp.whitenoise.chat/v1/logs")
+        #expect(config.authorizationBearerToken == "audit-token")
+        #expect(config.allowLoopbackDev == false)
+    }
+
+    @Test func auditOtlpConfigRoundTripsThroughNativeV5BindingsWithTheTokenRedacted() async throws {
         let client = try MarmotClient.testClient()
         defer { try? FileManager.default.removeItem(atPath: client.rootPath) }
         do {
-            for hardware: String? in ["iPhone17,3", nil] {
-                let config = TelemetryBuildConfig(
-                    otlpEndpoint: "https://collector.invalid.test/v1/metrics", bearerToken: nil, auditLogBearerToken: nil,
-                    deploymentEnvironment: "test", serviceVersion: "test-v4", osVersion: "18.0",
-                    deviceModelIdentifier: hardware
-                )
-                let tracker = try client.marmot.setAuditLogTrackerConfig(config: config.auditTrackerConfig())
-                let source = tracker.source
-                #expect(source.hardwareModel == hardware)
-                #expect(source.platform == "ios")
-                #expect(source.appVersion == "test-v4")
-            }
+            let enabled = try client.marmot.setAuditOtlpConfigV5(
+                config: Self.telemetry(auditToken: "audit-token").auditOtlpConfig()
+            )
+            #expect(enabled.enabled)
+            #expect(enabled.destination == TelemetryBuildConfig.auditOtlpDestination)
+            #expect(enabled.endpoint == "https://otlp.whitenoise.chat/v1/logs")
+            #expect(enabled.authorizationBearerToken == nil)
+            let disabled = try client.marmot.setAuditOtlpConfigV5(
+                config: Self.telemetry(auditToken: nil).auditOtlpConfig()
+            )
+            #expect(disabled.enabled == false)
             try await client.marmot.shutdownAndClose()
         } catch {
             try? await client.marmot.shutdownAndClose()
@@ -61,16 +77,21 @@ struct AuditV4AdoptionTests {
         }
     }
 
-    @Test func nativeRecorderProducesV4AndExportsItsOriginalBytes() async throws {
+    @Test func runtimeStartsWhenTheAuditDestinationIsRejected() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let config = TelemetryBuildConfig(
-            otlpEndpoint: "https://collector.invalid.test/v1/metrics", bearerToken: nil, auditLogBearerToken: nil,
-            deploymentEnvironment: "test", serviceVersion: "test-v4", osVersion: "18.0",
-            deviceModelIdentifier: "iPhone17,3"
-        )
+        var config = Self.telemetry(auditToken: "audit-token")
+        config.auditOtlpEndpoint = "http://collector.invalid.test/not-logs"
         let client = try MarmotClient(rootPath: root.path, relayUrls: ["wss://relay.invalid.test"],
                                       cursorPersistence: .advance, telemetryConfig: config)
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func nativeRecorderProducesV5AndExportsItsOriginalBytes() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = try MarmotClient(rootPath: root.path, relayUrls: ["wss://relay.invalid.test"],
+                                      cursorPersistence: .advance, telemetryConfig: Self.telemetry(auditToken: nil))
         do {
             try await client.startRuntime()
             // Local identity preparation opens the recorder before returning;
@@ -83,29 +104,27 @@ struct AuditV4AdoptionTests {
             let files = try await client.auditLogFiles()
             let file = try DiagnosticLogExport.fileForExport(in: files)
             let snapshot = try await Task.detached { try DiagnosticLogExport.snapshot(file: file) }.value
-            #expect(file.fileName.hasSuffix("-v4.jsonl"))
+            #expect(file.fileName.contains("-v5"))
             #expect(snapshot.fileName == file.fileName)
             #expect(snapshot.data == (try Data(contentsOf: URL(fileURLWithPath: file.path))))
-            var sources = [[String: Any]]()
-            for line in snapshot.data.split(separator: 0x0A) {
+            let lines = snapshot.data.split(separator: 0x0A)
+            #expect(!lines.isEmpty)
+            for line in lines {
                 let event = try #require(JSONSerialization.jsonObject(with: Data(line)) as? [String: Any])
-                #expect(event["schema_version"] as? String == "marmot-forensics-audit/v4")
-                if let kind = event["kind"] as? [String: Any], kind["type"] as? String == "source_context",
-                   let source = kind["source"] as? [String: Any] {
-                    sources.append(source)
-                }
-            }
-            let source = try #require(sources.first)
-            #expect(source["hardware_model"] as? String == "iPhone17,3")
-            #expect(source["platform"] as? String == "ios")
-            #expect(source["app_version"] as? String == "test-v4")
-            for field in ["device_label", "device_name", "account_label"] {
-                #expect(source[field] == nil)
+                #expect(event["schema_version"] as? String == "marmot-forensics-audit/v5")
             }
             try await client.marmot.shutdownAndClose()
         } catch {
             try? await client.marmot.shutdownAndClose()
             throw error
         }
+    }
+
+    private static func telemetry(auditToken: String?) -> TelemetryBuildConfig {
+        TelemetryBuildConfig(
+            otlpEndpoint: "https://collector.invalid.test/v1/metrics", bearerToken: nil, auditLogBearerToken: auditToken,
+            deploymentEnvironment: "test", serviceVersion: "test-v5", osVersion: "18.0",
+            deviceModelIdentifier: "iPhone17,3"
+        )
     }
 }
