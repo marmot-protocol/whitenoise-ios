@@ -36,6 +36,32 @@ struct ConversationDraftStoreTests {
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "after rejoin")
     }
 
+    @Test func runtimeUnavailableDraftLoadIsTransientAndSilent() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = ForegroundRuntimeMutationError.runtimeUnavailable
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
+        #expect(store.loadErrorKeys.isEmpty)
+
+        persistence.loadError = nil
+        store.setDraft(textSnapshot("saved"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        let retried = ConversationDraftStore(persistence: persistence)
+        #expect(
+            await retried.loadSnapshot(accountRef: "account", groupIdHex: "group")
+                == .loaded(textSnapshot("saved"))
+        )
+    }
+
+    @Test func otherDraftLoadFailuresAreRecordedAsErrors() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = URLError(.cannotOpenFile)
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .failed)
+        #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
+        #expect(ConversationDraftLoadResult.classify(CancellationError()) == .cancelled)
+    }
+
     @Test func failedGroupResetResumesTheUnsavedDraft() async {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
@@ -296,6 +322,7 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
     private(set) var summaryLoadCount = 0
     private(set) var persistCount = 0
     var beforePersist: (() async -> Void)?
+    var loadError: Error?
     private(set) var deleteCount = 0
     private var clock: Int64 = 0
 
@@ -325,7 +352,8 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
         accountRef: String,
         groupIdHex: String
     ) async throws -> MessageDraftFfi? {
-        draft(accountRef: accountRef, groupIdHex: groupIdHex)
+        if let loadError { throw loadError }
+        return draft(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     func persistMessageDraft(

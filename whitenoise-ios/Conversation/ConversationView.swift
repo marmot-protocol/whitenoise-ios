@@ -253,6 +253,10 @@ private struct ConversationDraftLoadToken: Equatable {
     let accountRef: String?
     let groupIdHex: String
     let isViewModelReady: Bool
+    /// A notification tap can open the conversation while the runtime is still
+    /// resuming; the draft load waits for it rather than failing.
+    let runtimeGeneration: Int
+    let isRuntimeReady: Bool
 }
 
 struct ConversationSendPayload {
@@ -566,6 +570,7 @@ struct ConversationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ConversationViewModel?
     @State private var draft: String = ""
+    @State private var didRestorePersistedDraft = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
     @State private var showCameraCapture = false
@@ -1142,8 +1147,11 @@ struct ConversationView: View {
             .task(id: ConversationDraftLoadToken(
                 accountRef: draftAccountRef,
                 groupIdHex: chat.groupIdHex,
-                isViewModelReady: viewModel != nil
+                isViewModelReady: viewModel != nil,
+                runtimeGeneration: appState.runtimeGeneration,
+                isRuntimeReady: isRuntimeReadyForDraftLoad
             )) {
+                guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad else { return }
                 await restorePersistedDraft()
             }
             .task(id: appState.groupRecoveryUpdate) {
@@ -2673,17 +2681,25 @@ struct ConversationView: View {
         dismissKeyboard()
     }
 
+    private var isRuntimeReadyForDraftLoad: Bool {
+        appState.canUseRuntimeForLocalForegroundWork && !appState.isRuntimeWarmingUp
+    }
+
     private func restorePersistedDraft() async {
         guard let draftAccountRef, let viewModel else { return }
         let draftBeforeLoad = draft
         let mediaIDsBeforeLoad = mediaDrafts.map(\.id)
         let replyBeforeLoad = viewModel.replyTargetMessageIdHex
-        guard let snapshot = await appState.conversationDraftStore.snapshot(
+        let result = await appState.conversationDraftStore.loadSnapshot(
             accountRef: draftAccountRef,
             groupIdHex: chat.groupIdHex
-        ) else {
-            guard !appState.conversationDraftStore.loadErrorKeys.contains(ConversationDraftKey(accountRef: draftAccountRef, groupIdHex: chat.groupIdHex)),
-                  !Task.isCancelled,
+        )
+        // Retry silently when the runtime becomes ready; a real failure has
+        // already been surfaced and is not retried automatically.
+        guard result != .runtimeUnavailable, result != .cancelled, !Task.isCancelled else { return }
+        didRestorePersistedDraft = true
+        guard case .loaded(let loaded) = result, let snapshot = loaded else {
+            guard result != .failed,
                   draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
                   viewModel.replyTargetMessageIdHex == replyBeforeLoad

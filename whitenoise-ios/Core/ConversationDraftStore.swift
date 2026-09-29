@@ -14,6 +14,26 @@ nonisolated struct ConversationDraftSnapshot: Equatable {
     let mediaAttachments: [MediaDraftAttachment]
 }
 
+/// Outcome of hydrating one conversation's persisted composer draft.
+/// `runtimeUnavailable` is transient (e.g. a notification tap that opens the
+/// conversation while the runtime is still resuming) and is retried silently
+/// once the runtime is ready.
+nonisolated enum ConversationDraftLoadResult: Equatable {
+    case loaded(ConversationDraftSnapshot?)
+    case runtimeUnavailable
+    case failed
+    case cancelled
+
+    static func classify(_ error: Error) -> ConversationDraftLoadResult {
+        if error is CancellationError { return .cancelled }
+        if case ForegroundRuntimeMutationError.runtimeUnavailable = error { return .runtimeUnavailable }
+        if let error = error as? MarmotKitError, error.isTransientStartupReadinessFailure {
+            return .runtimeUnavailable
+        }
+        return .failed
+    }
+}
+
 nonisolated enum ConversationDraftPreview {
     static let maximumLength = 140
 
@@ -334,18 +354,24 @@ final class ConversationDraftStore {
     }
 
     func snapshot(accountRef: String, groupIdHex: String) async -> ConversationDraftSnapshot? {
+        guard case .loaded(let snapshot) = await loadSnapshot(accountRef: accountRef, groupIdHex: groupIdHex)
+        else { return nil }
+        return snapshot
+    }
+
+    func loadSnapshot(accountRef: String, groupIdHex: String) async -> ConversationDraftLoadResult {
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
-        guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
+        guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
         if let pending = pendingWrites[key] {
             switch pending.operation {
             case .save(let snapshot):
-                return snapshot
+                return .loaded(snapshot)
             case .delete:
-                return nil
+                return .loaded(nil)
             }
         }
-        guard let persistence else { return nil }
+        guard let persistence else { return .loaded(nil) }
         loadErrorKeys.remove(key)
         do {
             let loaded: MessageDraftFfi?
@@ -357,25 +383,30 @@ final class ConversationDraftStore {
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }
-            guard let draft = loaded else { return nil }
+            guard let draft = loaded else { return .loaded(nil) }
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
                 from: draft.mediaAttachments
             )
-            guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
-            return Self.normalizedSnapshot(ConversationDraftSnapshot(
+            guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
+            return .loaded(Self.normalizedSnapshot(ConversationDraftSnapshot(
                 canonicalText: draft.content,
                 replyToMessageIdHex: draft.replyToMessageIdHex,
                 mediaAttachments: attachments
-            ))
-        } catch is CancellationError {
-            return nil
+            )))
         } catch {
+            let result = ConversationDraftLoadResult.classify(error)
+            guard result == .failed else {
+                if result == .runtimeUnavailable {
+                    Self.logger.info("Deferred composer draft hydration until the runtime is ready")
+                }
+                return result
+            }
             loadErrorKeys.insert(key)
             if let state = persistence as? AppState {
                 state.present(UserFacingError.toast(title: L10n.string("Couldn't load draft"), error: error))
             }
             Self.logger.error("Failed to hydrate encrypted composer draft")
-            return nil
+            return .failed
         }
     }
 
