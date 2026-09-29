@@ -221,6 +221,26 @@ before every release tag.
 - [ ] On a signed staging build, repeat Native Push off/on after optimization,
       foreground/background receipt, and Notification Service Extension checks.
 
+## MarmotKit 0.11.0 upgrade and polls
+
+- [ ] Open an existing 0.10.4 installation. Accounts, chats and history load;
+      catch-up and background/foreground cycles leave no chat stuck behind.
+- [ ] Settings → Developer Tools → Open Diagnostics shows "history notices
+      changed" rows when MDK parks recovery; no other UI is expected yet.
+- [ ] In a group, **+** → Poll opens New Poll. Validation stays inline (empty
+      question, fewer than two options, duplicates, over-long text) and the sheet
+      closes only after the send succeeds. Poll is absent in direct messages.
+- [ ] Send single-choice and multiple-choice polls. On a second account, vote,
+      change the vote, and confirm tallies, voter count and your selection update
+      live on both devices. A single-choice tap on the current answer does
+      nothing; a multiple-choice poll never lets the last selection be removed.
+- [ ] A poll with an end time shows "Ends …", then "Final results" after the
+      deadline, and no longer accepts votes. Relaunch before and after expiry.
+- [ ] Chat list and reply previews read "📊 Poll: <question>". Polls offer no
+      Edit or Forward. Check a group with media disabled for the Poll entry.
+- [ ] Existing users with usage sharing on see the consent sheet once, because
+      the metrics destination changed; declined users are not re-prompted.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.
@@ -670,12 +690,16 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       retains files; **Clear Diagnostic Logs** clears them independently.
 - [ ] Switch profiles and background/relaunch: both diagnostics choices remain
       device-wide. Enable/disable each independently without restarting the runtime.
-- [ ] With configured credentials and logging enabled, verify sealed log segments
-      reach Goggles after MDK's batching window. Toggle off and verify subsequent
-      automatic upload passes stop; local preference tests do not prove ingestion.
-- [ ] Verify production/staging OTLP tenant routing and separate Aptabase
-      applications. Audit uploads retain their separate shared token. Inspect
-      persisted synthetic staging events, not just HTTP success; never copy keys.
+- [ ] With configured credentials and logging enabled, verify v5 audit records
+      reach Loki (`{service_name="whitenoise-audit"}`) via
+      `otlp.whitenoise.chat/v1/logs` after MDK's batching window. The receiver's
+      v5 contract pin must match the bundled MDK, or batches are refused and
+      retried. Toggle off and verify later automatic passes stop.
+- [ ] Verify metrics reach `otlp.whitenoise.chat/v1/metrics` with the shared
+      metrics token and the correct `deployment.environment.name` per flavor, and
+      separate Aptabase applications. The audit and metrics tokens are separate.
+      Inspect persisted synthetic staging events, not just HTTP success; never
+      copy keys.
 - [ ] Verify operator/retention disclosure against the deployment and run
       `scripts/check-analytics-release-config.py <built-app/Info.plist>` for each
       flavor. The development fallback text is not a distribution-ready policy.

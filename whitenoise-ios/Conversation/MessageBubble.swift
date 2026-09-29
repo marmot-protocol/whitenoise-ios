@@ -127,6 +127,8 @@ struct MessageBubble: View {
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
+    var poll: PollProjectionFfi? = nil
+    var onPollVote: ((String) -> Void)? = nil
     var reactions: [ConversationViewModel.ReactionTally] = []
     var omittedReactionKinds: UInt64 = 0
     var projectedReactionTotal: UInt64? = nil
@@ -320,6 +322,11 @@ struct MessageBubble: View {
     private var messageSurface: some View {
         if isDeleted {
             deletedBubble
+        } else if let poll, showsStandardBody {
+            PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote)
+                .background { bubbleBackground }
+                .clipShape(.rect(cornerRadius: ChatBubbleMetrics.cornerRadius, style: .continuous))
+                .opacity(status == .sending ? 0.7 : 1)
         } else if let remoteGiphyMedia, showsStandardBody {
             remoteGiphyMessageContent(remoteGiphyMedia)
         } else if !mediaItems.isEmpty, showsStandardBody {

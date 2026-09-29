@@ -28,10 +28,12 @@
 	<string>$(WN_LEGACY_URL_SCHEME)</string>
 	<key>WNURLScheme</key>
 	<string>$(WN_URL_SCHEME)</string>
-	<key>WhiteNoiseAuditLogBearerToken</key>
-	<string>$(WHITENOISE_AUDIT_LOG_BEARER_TOKEN)</string>
 	<key>WhiteNoiseApplePayMerchantIdentifier</key>
 	<string>$(WHITENOISE_APPLE_PAY_MERCHANT_IDENTIFIER)</string>
+	<key>WhiteNoiseAuditLogBearerToken</key>
+	<string>$(WHITENOISE_AUDIT_LOG_BEARER_TOKEN)</string>
+	<key>WhiteNoiseAuditOTLPEndpoint</key>
+	<string>$(WHITENOISE_AUDIT_OTLP_ENDPOINT)</string>
 	<key>WhiteNoiseDonationEnvironment</key>
 	<string>$(WN_FLAVOR)</string>
 	<key>WhiteNoiseDonationServiceURL</key>

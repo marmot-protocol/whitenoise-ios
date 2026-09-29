@@ -215,6 +215,8 @@ struct ComposerBar: View {
     var voiceMessagesEnabled = true
     var cameraAvailable = true
     var gifsAvailable = true
+    var pollsAvailable = false
+    var onCreatePoll: () -> Void = {}
     let onTakePhoto: () -> Void
     let onPhotoLibrary: () -> Void
     let onAttachFile: () -> Void
@@ -346,7 +348,8 @@ struct ComposerBar: View {
             WNDropdown(
                 items: ComposerAttachmentOption.dropdownItems(
                     cameraAvailable: cameraAvailable,
-                    gifsAvailable: gifsAvailable
+                    gifsAvailable: gifsAvailable,
+                    pollsAvailable: pollsAvailable
                 ),
                 onSelect: selectAttachmentOption
             ) {
@@ -642,6 +645,8 @@ struct ComposerBar: View {
             onShareLocation()
         case .contact:
             onShareContact()
+        case .poll:
+            onCreatePoll()
         }
     }
 

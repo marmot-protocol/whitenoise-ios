@@ -574,6 +574,7 @@ struct ConversationView: View {
     @State private var composerMediaSelection: ComposerMediaSelection?
     @State private var showFileImporter = false
     @State private var showLocationPicker = false
+    @State private var showPollComposer = false
     @State private var showContactPicker = false
     @State private var showGiphySearch = false
     @State private var showDetails = false
@@ -1048,6 +1049,17 @@ struct ConversationView: View {
                 )
                 .appAppearance()
             }
+            .sheet(isPresented: $showPollComposer) {
+                PollComposerView(
+                    onSend: { submission in
+                        guard let viewModel else { throw PollActionError.unavailable }
+                        try await viewModel.createPoll(submission)
+                        showPollComposer = false
+                    },
+                    onCancel: { showPollComposer = false }
+                )
+                .appAppearance()
+            }
             .sheet(isPresented: $showContactPicker) {
                 ContactCardPicker(
                     onPick: { contact in
@@ -1284,6 +1296,8 @@ struct ConversationView: View {
                     voiceMessagesEnabled: editSession == nil,
                     cameraAvailable: ComposerAttachmentCapabilities.cameraAvailable,
                     gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
+                    pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
+                    onCreatePoll: openPollComposer,
                     onTakePhoto: takePhoto,
                     onPhotoLibrary: openPhotoLibrary,
                     onAttachFile: openFileImporter,
@@ -2090,6 +2104,10 @@ struct ConversationView: View {
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
+            poll: viewModel.poll(for: record.messageIdHex),
+            onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
+                ? { optionId in Task { await viewModel.votePoll(option: optionId, on: record) } }
+                : nil,
             reactions: viewModel.reactions(for: record.messageIdHex),
             omittedReactionKinds: viewModel.windowReactions[record.messageIdHex]?.omittedKinds ?? 0,
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
@@ -2649,6 +2667,7 @@ struct ConversationView: View {
         composerMediaSelection = nil
         showFileImporter = false
         showLocationPicker = false
+        showPollComposer = false
         showContactPicker = false
         showGiphySearch = false
         dismissKeyboard()
@@ -2760,6 +2779,11 @@ struct ConversationView: View {
         guard editSession == nil else { return }
         guard viewModel?.canSendMessages == true else { return }
         showLocationPicker = true
+    }
+
+    private func openPollComposer() {
+        guard editSession == nil, viewModel?.canCreatePolls == true else { return }
+        showPollComposer = true
     }
 
     private func openContactPicker() {

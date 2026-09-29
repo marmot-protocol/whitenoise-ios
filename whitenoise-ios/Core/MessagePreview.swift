@@ -24,7 +24,7 @@ enum MessagePreview {
         switch MessageSemantics.classify(record) {
         case .reaction, .delete, .edit, .agentStreamStart, .agentActivity, .agentOperation, .groupSystem, .unknown:
             return false
-        case .chat, .reply, .media, .streamFinal:
+        case .chat, .reply, .media, .streamFinal, .poll:
             return true
         }
     }
@@ -48,6 +48,8 @@ enum MessagePreview {
             return mediaFallback(attachments)
         case .agentActivity, .agentOperation:
             return AgentEventPresentation.previewText(from: record.plaintext) ?? ""
+        case .poll:
+            return pollPreview(question: record.plaintext)
         case .groupSystem:
             return GroupSystemEventPresentation.displayText(
                 from: record.plaintext,
@@ -95,6 +97,9 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
+            if preview.kind == MessageSemantics.kindPoll {
+                return pollPreview(question: preview.plaintext)
+            }
             if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
                 return label
             }
@@ -131,6 +136,9 @@ enum MessagePreview {
             if MessageSemantics.isTypedAgentEventKind(preview.kind) {
                 return AgentEventPresentation.previewText(from: preview.plaintext) ?? ""
             }
+            if preview.kind == MessageSemantics.kindPoll {
+                return pollPreview(question: preview.plaintext)
+            }
             if let label = RemoteGiphyMedia.envelopePreviewText(for: preview.plaintext) {
                 return label
             }
@@ -163,6 +171,12 @@ enum MessagePreview {
             }.text
         }
         return MarkdownPlainText.flatten(tokens, mentionDisplayName: mentionDisplayName) ?? plaintext
+    }
+
+    /// The question is peer-controlled poll text; keep it to one line.
+    static func pollPreview(question: String) -> String {
+        let line = ContentSanitizer.compactSingleLine(question, maxLength: 1_024) ?? ""
+        return L10n.formatted("📊 Poll: %@", line)
     }
 
     static func mediaFallback(_ attachments: [MediaAttachmentReferenceFfi]) -> String {

@@ -12,42 +12,41 @@ must differ.
 
 These stay the same for production, staging, Debug, and Release:
 
-- **Audit-log endpoint** — compiled into MarmotKit. Do not add a per-flavor
-  audit URL in xcconfig.
-- **Audit-log bearer token** — one `AUDIT_LOG_TOKEN_WHITENOISE_IOS` value
-  becomes `WHITENOISE_AUDIT_LOG_BEARER_TOKEN` for every scheme.
-- **OTLP endpoint** — `WHITENOISE_OTLP_ENDPOINT` is the same collector for
-  every flavor (`https://otlp.ipf.dev/v1/metrics`).
+- **Audit v5 endpoint** — `WHITENOISE_AUDIT_OTLP_ENDPOINT` is the audit
+  receiver's OTLP logs route (`https://otlp.whitenoise.chat/v1/logs`) for every
+  flavor.
+- **Audit write token** — one `AUDIT_LOG_TOKEN_WHITENOISE_IOS` value (the
+  receiver's audit write token) becomes `WHITENOISE_AUDIT_LOG_BEARER_TOKEN` for
+  every scheme.
+- **OTLP metrics endpoint** — `WHITENOISE_OTLP_ENDPOINT` is the same collector
+  for every flavor (`https://otlp.whitenoise.chat/v1/metrics`).
+- **OTLP metrics token** — one `OTLP_TOKEN_WHITENOISE_IOS` value becomes
+  `WHITENOISE_OTLP_BEARER_TOKEN` for every scheme. The flavor is reported
+  through the `deploymentEnvironment` resource attribute, not the token.
 - **Native-push relay hint** — `WHITENOISE_PUSH_RELAY_HINT` is shared because
   production and staging currently use the same relays. Split it only if the
   flavors start using different relays.
 
 ## Flavor-specific
 
-- **OTLP bearer token** — production uses
-  `PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS`; staging uses
-  `STAGING_OTLP_TOKEN_WHITENOISE_IOS`. Each token already encodes the tenant.
-  Do not add a separate tenant name, extra OTLP resource field, or
-  flavor-specific collector URL to distinguish tenants. Pick the matching
-  flavor token.
-  Preserve the existing `tenant: "whitenoise-ios"` resource metadata and
-  `deploymentEnvironment` value; token selection controls collector routing.
 - **Native-push server pubkey** — `WHITENOISE_PUSH_SERVER_PUBKEY_HEX` differs
   between production and staging. Do not share or swap those keys.
 
 ## Rules
 
-- Do not reuse an OTLP token for Goggles audit-log uploads. The audit tracker
-  and the metrics collector are different services.
+- Do not reuse the metrics OTLP token for audit delivery, or the audit token
+  for metrics. The two write tokens are not interchangeable.
 - Do not invent a second audit token or audit endpoint per flavor.
 - Do not split the OTLP endpoint by flavor.
 - Keep the push relay hint shared unless the relays themselves diverge.
 - Keep the push server pubkey flavor-specific.
-- Audit v4 uses `AuditLogTrackerConfigV4Ffi` and `AuditLogUploadSourceV4Ffi`.
-  Supply optional `hardwareModel` from system model information, never a
-  user-assigned device name. Continue supplying `platform` and `appVersion`.
-  MDK owns schema eligibility and any legacy-log cleanup; the app exports
-  original files without migrating or filtering their contents.
+- Audit delivery is v5 only, through `setAuditOtlpConfigV5` with the fixed
+  `TelemetryBuildConfig.auditOtlpDestination`; keep that identity stable across
+  token rotation because MDK's delivery cursor is bound to it. The v4 whole-file
+  tracker is not configured. A rejected audit config must not block runtime
+  startup. Recording stays the user's opt-in setting. MDK owns schema
+  eligibility and legacy-log cleanup; the app exports original files without
+  migrating or filtering their contents.
 
 ## Product analytics
 

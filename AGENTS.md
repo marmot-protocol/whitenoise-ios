@@ -123,7 +123,7 @@ Install a formal release using its version:
 ./scripts/sync-bindings.sh 0.9.21
 ```
 
-The app now pins the formal MarmotKit 0.10.4 release. For local reproduction only,
+The app now pins the formal MarmotKit 0.11.0 release. For local reproduction only,
 `scripts/sync-local-bindings.sh <clean-mdk-checkout> <full-master-sha>` builds
 matching artifacts with both exporters; restore the published pin before committing.
 Keep the XCFramework ignored. `CancellablePresentedChatList.swift` is a handwritten
@@ -260,11 +260,11 @@ Do not add a second storage path for data Marmot already owns.
 - Audit-log settings hot-swap against the running Marmot runtime; do not restart the runtime for a settings toggle.
 - Erase App Data removes every stored profile through MDK before closing the runtime. Acquire its `.marmot-runtime.lock` lease before removing remaining root contents, and never unlink or replace the lock inode. Preserve an unfinished-erasure marker for retry after interruption.
 - Sign Out confirms a wipe by matching the displayed profile name exactly in the same sheet. Remaining signed-in profiles go to the profile chooser; with none remaining, return to Welcome.
-- Audit-log uploads and OTLP metrics use separate bearer-token settings. Do not reuse the OTLP token for Goggles audit-log uploads.
+- Audit (v5 OTLP logs) and OTLP metrics use separate bearer-token settings. The two write tokens are not interchangeable.
 - Erasure recovery lives in a dedicated preferences suite outside the erased domains; clear its marker only after completion. Keep a recovery retry presented through runtime restart and failure handling.
 - Block new avatar loads and writes during cache drains and throughout app-data erasure. Concurrent drains must await the same work before reopening the caches.
 - After sign-out, clear profile projections when no signed-in profile remains and return to Welcome. Only surviving signed-in profiles enter the chooser; opening Settings after selection is an in-session hand-off, not a persisted navigation request.
-- The audit-log endpoint and audit-log token are shared by every flavor. The OTLP endpoint is also shared. Production and staging OTLP tokens differ because the token itself encodes the tenant; do not pass a separate tenant name to distinguish them. Native-push pubkeys are flavor-specific; the push relay hint is currently shared. See `Config/AGENTS.md`.
+- The audit endpoint and token, and the metrics endpoint and token, are each shared by every flavor; the flavor is reported through the `deploymentEnvironment` resource attribute. Native-push pubkeys are flavor-specific; the push relay hint is currently shared. See `Config/AGENTS.md`.
 - Privacy/audit settings screens should load Marmot settings and audit-file details through off-main projection helpers, then render precomputed row strings from SwiftUI body.
 - Normalize optional group metadata before handing it to Marmot. Group names and descriptions go through `ContentSanitizer`; blank descriptions pass `nil`, unnamed group creates use MarmotKit's empty-string sentinel, and blank renames are rejected.
 - Sanitize peer-controlled group names with `ContentSanitizer.groupName` before storing or rendering timeline/system-event display strings, and use static `L10n.formatted` keys for dynamic text.

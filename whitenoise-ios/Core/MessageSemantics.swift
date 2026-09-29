@@ -5,7 +5,7 @@ import MarmotKit
 /// semantic shapes the UI cares about.
 ///
 /// Inner MLS messages are unsigned Nostr events: the FFI record carries the
-/// Nostr `kind` (9 chat, 7 reaction, 5 delete, 1009 edit, 1200 stream-start) and the raw
+/// Nostr `kind` (9 chat, 7 reaction, 5 delete, 1009 edit, 1068 poll, 1200 stream-start) and the raw
 /// `tags`. Host apps branch on those instead of a fixed payload enum — this
 /// type is that branch, kept in one place so the timeline, chat-list preview,
 /// and bubble all classify a record identically.
@@ -18,6 +18,7 @@ nonisolated enum MessageSemantics {
     static let kindReaction: UInt64 = 7
     static let kindChat: UInt64 = 9
     static let kindEdit: UInt64 = 1009
+    static let kindPoll: UInt64 = 1068
     static let kindAgentStreamStart: UInt64 = 1200
     static let kindAgentActivity: UInt64 = 1201
     static let kindAgentOperation: UInt64 = 1202
@@ -59,6 +60,9 @@ nonisolated enum MessageSemantics {
         case delete(targetMessageId: String)
         /// A kind-1009 replacement body for the `e`-tag target.
         case edit(targetMessageId: String)
+        /// A kind-1068 poll. MDK validates it and projects the tally onto the
+        /// timeline row; the question is the plaintext.
+        case poll
         /// A kind-1200 agent-stream start (opens the live QUIC preview).
         case agentStreamStart(StreamStart)
         /// Durable agent activity/status chrome; not a chat bubble.
@@ -99,6 +103,8 @@ nonisolated enum MessageSemantics {
             return .agentOperation
         case kindGroupSystem:
             return .groupSystem
+        case kindPoll:
+            return .poll
         case kindChat:
             // Order matters: a stream-final is a kind-9 with a `stream` tag; a
             // reply has both `e` and `q`; media has an `imeta` tag.

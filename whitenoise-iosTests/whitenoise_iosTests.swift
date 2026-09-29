@@ -2807,49 +2807,27 @@ struct TelemetryBuildConfigTests {
         }
     }
 
-    @Test func auditTrackerConfigDefersEndpointToMarmotAndCarriesCredentialsAndSource() {
-        let config = TelemetryBuildConfig(
-            otlpEndpoint: "https://collector.example/v1/metrics",
-            bearerToken: "otlp-token",
-            auditLogBearerToken: "audit-token",
-            deploymentEnvironment: "staging",
-            serviceVersion: "2.0+9",
-            osVersion: "Version 18.0",
-            deviceModelIdentifier: "iPhone99,9"
-        )
-
-        let tracker = config.auditTrackerConfig()
-
-        #expect(tracker.endpoint == nil)
-        // Must carry the dedicated audit-log token, NOT the OTLP/telemetry token.
-        #expect(tracker.authorizationBearerToken == "audit-token")
-        #expect(tracker.source.hardwareModel == "iPhone99,9")
-        #expect(tracker.source.platform == "ios")
-        #expect(tracker.source.appVersion == "2.0+9")
-    }
-
-    @Test func unresolvedBuildSettingsPickFlavorOtlpTokenFromDeploymentEnvironment() {
+    @Test func oneMetricsTokenAndOneAuditTokenServeBothFlavors() {
+        let environment = [
+            "OTLP_TOKEN_WHITENOISE_IOS": "metrics-token",
+            "AUDIT_LOG_TOKEN_WHITENOISE_IOS": "shared-audit-token"
+        ]
         let production = TelemetryBuildConfig.current(infoDictionary: [
             "WhiteNoiseTelemetryBearerToken": "$(WHITENOISE_OTLP_BEARER_TOKEN)",
             "WhiteNoiseTelemetryEnvironment": "production"
-        ], environment: [
-            "PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS": "production-otlp-token",
-            "STAGING_OTLP_TOKEN_WHITENOISE_IOS": "staging-otlp-token",
-            "AUDIT_LOG_TOKEN_WHITENOISE_IOS": "shared-audit-token"
-        ])
+        ], environment: environment)
         let staging = TelemetryBuildConfig.current(infoDictionary: [
             "WhiteNoiseTelemetryBearerToken": "$(WHITENOISE_OTLP_BEARER_TOKEN)",
             "WhiteNoiseTelemetryEnvironment": "staging"
-        ], environment: [
-            "PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS": "production-otlp-token",
-            "STAGING_OTLP_TOKEN_WHITENOISE_IOS": "staging-otlp-token",
-            "AUDIT_LOG_TOKEN_WHITENOISE_IOS": "shared-audit-token"
-        ])
+        ], environment: environment)
 
-        #expect(production.bearerToken == "production-otlp-token")
-        #expect(staging.bearerToken == "staging-otlp-token")
+        #expect(production.bearerToken == "metrics-token")
+        #expect(staging.bearerToken == "metrics-token")
         #expect(production.auditLogBearerToken == "shared-audit-token")
         #expect(staging.auditLogBearerToken == "shared-audit-token")
+        // The flavor stays distinguishable through the resource attribute.
+        #expect(production.runtimeConfig(installId: "i").resource?.deploymentEnvironment == "production")
+        #expect(staging.runtimeConfig(installId: "i").resource?.deploymentEnvironment == "staging")
     }
 
     @Test func auditTokenIsReadFromDedicatedKeyAndDoesNotFallBackToOtlpToken() {
@@ -2865,7 +2843,7 @@ struct TelemetryBuildConfigTests {
 
         #expect(config.bearerToken == "otlp-env-token")
         #expect(config.auditLogBearerToken == "audit-env-token")
-        #expect(config.auditTrackerConfig().authorizationBearerToken == "audit-env-token")
+        #expect(config.auditOtlpConfig().authorizationBearerToken == "audit-env-token")
     }
 
     @Test func auditTokenStaysNilWhenOnlyOtlpTokenIsConfigured() {
@@ -2878,11 +2856,11 @@ struct TelemetryBuildConfigTests {
             "OTLP_TOKEN_WHITENOISE_IOS": "otlp-env-token"
         ])
 
-        // No dedicated audit token => audit uploads stay unconfigured rather than
-        // borrowing the OTLP token and authenticating against the wrong API.
+        // No dedicated audit token => audit delivery stays disabled rather than
+        // borrowing the metrics token and authenticating against the wrong route.
         #expect(config.bearerToken == "otlp-env-token")
         #expect(config.auditLogBearerToken == nil)
-        #expect(config.auditTrackerConfig().authorizationBearerToken == nil)
+        #expect(config.auditOtlpConfig().enabled == false)
     }
 }
 

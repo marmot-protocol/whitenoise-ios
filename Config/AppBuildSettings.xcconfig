@@ -1,8 +1,7 @@
 // App target build settings shared by Debug and Release.
 // Put local secrets in Config/TelemetrySecrets.xcconfig (see TelemetrySecrets.xcconfig.example). That file is ignored.
 
-PRODUCTION_OTLP_TOKEN_WHITENOISE_IOS =
-STAGING_OTLP_TOKEN_WHITENOISE_IOS =
+OTLP_TOKEN_WHITENOISE_IOS =
 AUDIT_LOG_TOKEN_WHITENOISE_IOS =
 GIPHY_API_KEY_WHITENOISE_IOS =
 

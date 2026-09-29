@@ -1078,6 +1078,68 @@ final class ConversationViewModel {
         timelineStore.reportedMessageIDs.contains(messageID)
     }
 
+    func poll(for messageIdHex: String) -> PollProjectionFfi? {
+        timelineStore.poll(for: messageIdHex)
+    }
+
+    /// MDK only accepts polls in group conversations, never direct messages.
+    var canCreatePolls: Bool {
+        canSendMessages && !groupDisplay.isDirectMessage
+    }
+
+    var canVoteInPolls: Bool {
+        canSendMessages
+    }
+
+    func createPoll(_ submission: PollDraft.Submission) async throws {
+        guard canCreatePolls, let appState, let accountRef = appState.activeAccountRef else {
+            throw PollActionError.unavailable
+        }
+        let client = try appState.currentMarmotClient()
+        _ = try await client.createPoll(
+            accountRef: accountRef,
+            groupIdHex: group.groupIdHex,
+            question: submission.question,
+            options: submission.options,
+            pollType: submission.pollType,
+            endsAt: submission.endsAt
+        )
+    }
+
+    func votePoll(option optionId: String, on message: AppMessageRecordFfi) async {
+        let messageId = message.messageIdHex
+        guard canVoteInPolls, let appState, let accountRef = appState.activeAccountRef,
+              !messageId.isEmpty,
+              let poll = timelineStore.poll(for: messageId),
+              PollPresentation.isOpen(poll, now: .now),
+              let selection = PollPresentation.toggledSelection(
+                current: poll.localSelection,
+                option: optionId,
+                pollType: poll.pollType,
+                optionOrder: poll.options.map(\.id)
+              )
+        else { return }
+        let previous = timelineStore.pendingPollSelection(forMessageId: messageId)
+        timelineStore.setPendingPollSelection(selection, forMessageId: messageId)
+        Haptics.tap()
+        do {
+            let client = try appState.currentMarmotClient()
+            _ = try await client.castPollVote(
+                accountRef: accountRef,
+                groupIdHex: group.groupIdHex,
+                pollEventId: messageId,
+                optionIds: selection
+            )
+        } catch {
+            // A newer tap owns the overlay; only roll back our own.
+            if timelineStore.pendingPollSelection(forMessageId: messageId) == selection {
+                timelineStore.setPendingPollSelection(previous, forMessageId: messageId)
+            }
+            Haptics.error()
+            appState.present(UserFacingError.toast(title: L10n.string("Vote failed"), error: error))
+        }
+    }
+
     var canReadReports: Bool {
         moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
             && !groupDisplay.isDirectMessage
