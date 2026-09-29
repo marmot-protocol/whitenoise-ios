@@ -127,7 +127,6 @@ struct SettingsView: View {
         if let active = appState.activeAccount {
             NavigationLink {
                 ShareAndConnectView(accountIdHex: active.accountIdHex)
-                    .wnBackButton()
             } label: {
                 HStack(spacing: 12) {
                     AccountIdentitySummary(account: active, avatarSize: 56)
@@ -213,17 +212,17 @@ struct SettingsView: View {
     private func destinationView(_ destination: SettingsDestination) -> some View {
         switch destination {
         case .profile: ProfileEditView()
-        case .profileKeys: IdentityView().wnBackButton()
-        case .notifications: NotificationSettingsView().wnBackButton()
-        case .appearance: AppearanceSettingsView().wnBackButton()
-        case .privacyAndSecurity: PrivacySecuritySettingsView().wnBackButton()
-        case .dataUsage: DataAndStorageView().wnBackButton()
-        case .relays: RelaysView().wnBackButton()
-        case .aiAgents: AIAgentsSettingsView().wnBackButton()
-        case .support: SupportChatView().wnBackButton()
+        case .profileKeys: IdentityView()
+        case .notifications: NotificationSettingsView()
+        case .appearance: AppearanceSettingsView()
+        case .privacyAndSecurity: PrivacySecuritySettingsView()
+        case .dataUsage: DataAndStorageView()
+        case .relays: RelaysView()
+        case .aiAgents: AIAgentsSettingsView()
+        case .support: SupportChatView()
         case .donate:
-            DonateView().wnBackButton()
-        case .developerTools: DeveloperToolsSettingsView().wnBackButton()
+            DonateView()
+        case .developerTools: DeveloperToolsSettingsView()
         }
     }
 
@@ -353,7 +352,7 @@ private struct SignOutView: View {
         .disabled(isBusy)
         .navigationTitle("Sign Out")
         .navigationBarTitleDisplayMode(.inline)
-        .wnBackButton(isDisabled: isBusy)
+        .navigationBarBackButtonHidden(isBusy)
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
@@ -460,7 +459,7 @@ private struct DeleteProfileView: View {
         .disabled(isBusy)
         .navigationTitle("Delete Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .wnBackButton(isDisabled: isBusy)
+        .navigationBarBackButtonHidden(isBusy)
         .onAppear {
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {

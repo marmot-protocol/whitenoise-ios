@@ -44,13 +44,12 @@ struct PrivacySecuritySettingsView: View {
             Section {
                 NavigationLink {
                     DiagnosticsAndImprovementsView()
-                        .wnBackButton()
                 } label: {
                     LabeledContent("Diagnostics & Improvements", value: diagnostics.diagnosticsSummary)
                 }
             } header: { Text("Diagnostics") }
             Section {
-                NavigationLink("Blocked Users") { BlockedUsersView().wnBackButton() }
+                NavigationLink("Blocked Users") { BlockedUsersView() }
             }
             Section {
                 Button("Erase App Data", role: .destructive) { showEraseData = true }
