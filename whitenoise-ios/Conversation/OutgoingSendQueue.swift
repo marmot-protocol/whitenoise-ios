@@ -10,15 +10,15 @@ final class OutgoingSendQueue {
     /// `operation` once every send queued before it has finished. The work is
     /// unstructured, so a caller that goes away mid-flight still gets its
     /// message published.
-    func enqueue(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+    func enqueue<Value: Sendable>(_ operation: @escaping @MainActor () async -> Value) -> Task<Value, Never> {
         let predecessor = tail
         let task = Task { @MainActor in
             // A failed predecessor releases its successor just like a
             // successful one; it only leaves a failed row behind it.
             await predecessor?.value
-            await operation()
+            return await operation()
         }
-        tail = task
+        tail = Task { @MainActor in _ = await task.value }
         return task
     }
 }

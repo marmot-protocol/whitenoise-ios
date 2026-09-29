@@ -433,6 +433,27 @@ before every release tag.
       conversation: an unaccepted draft remains available; an accepted message
       stays in the timeline without restoring its submitted composer.
 
+### Oversized attachments and text
+
+Generate fixtures with `python3 scripts/make-size-limit-fixtures.py <dir>`,
+then AirDrop or drag them into Files on the device or simulator.
+
+- [ ] Attach `at-limit-exactly-50MiB.pdf` with a caption and send. It uploads.
+- [ ] Try to attach `over-limit-50MiB-plus-1-byte.pdf`. The picker rejects it
+      with “That attachment is too large to send.” and the typed text stays.
+- [ ] Attach `under-local-limit-45MiB.pdf` with a caption, on a media server
+      whose upload cap is lower. On rejection, “Attachment too large” explains
+      it was removed; the caption is back in the composer with any other
+      attachments, no failed bubble remains, and a text-only Send works once.
+- [ ] Repeat the previous step, but type a new message before the upload fails.
+      The new text is untouched and the failed bubble keeps the original.
+- [ ] After a restored rejection, leave and reopen the conversation. The
+      caption is still in the composer and the rejected file is not.
+- [ ] Paste `message-over-limit-8001-chars.txt` into the composer. It is capped
+      at 8000 characters; `message-at-limit-8000-chars.txt` sends as-is.
+- [ ] Interrupt connectivity during an attachment send. An uncertain outcome
+      never restores the composer, so no duplicate can be sent.
+
 ## Conversation keyboard avoidance
 
 - [ ] Open a conversation at the latest message and tap the composer. The

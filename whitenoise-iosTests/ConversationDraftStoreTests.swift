@@ -268,6 +268,29 @@ struct ConversationDraftStoreTests {
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "second message")
     }
 
+    @Test func textRestoredAfterAnAttachmentRejectionSurvivesReopeningTheConversation() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        let rejected = MediaDraftAttachment(fileName: "big.pdf", mediaType: "application/pdf", data: Data(count: 1_024), dim: nil)
+        store.setDraft(
+            ConversationDraftSnapshot(canonicalText: "caption", replyToMessageIdHex: nil, mediaAttachments: [rejected]),
+            accountRef: "account",
+            groupIdHex: "group"
+        )
+        await store.flush()
+
+        store.beginQueuedSend(accountRef: "account", groupIdHex: "group")
+        store.setDraft(textSnapshot(""), accountRef: "account", groupIdHex: "group")
+        await store.finishSend(accountRef: "account", groupIdHex: "group", accepted: false)
+        store.setDraft(textSnapshot("caption"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+
+        let reopened = await ConversationDraftStore(persistence: persistence)
+            .snapshot(accountRef: "account", groupIdHex: "group")
+        #expect(reopened?.canonicalText == "caption")
+        #expect(reopened?.mediaAttachments.isEmpty == true)
+    }
+
     private func textSnapshot(_ text: String) -> ConversationDraftSnapshot {
         ConversationDraftSnapshot(
             canonicalText: text,
