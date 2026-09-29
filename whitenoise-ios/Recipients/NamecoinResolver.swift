@@ -197,7 +197,7 @@ nonisolated enum NamecoinResolver {
     static func resolve(
         _ identifier: String,
         servers: [ElectrumXTransport.Server] = defaultServers,
-        roundTrip: RoundTrip = pinnedRoundTrip
+        roundTrip: @escaping RoundTrip = pinnedRoundTrip
     ) async -> Resolution {
         guard let parsed = parse(identifier) else { return .notFound }
         let key = normalize(identifier)
@@ -233,7 +233,7 @@ nonisolated enum NamecoinResolver {
 
         func resolveOnce(
             _ key: String,
-            perform: @Sendable () async -> Resolution
+            perform: @escaping @Sendable () async -> Resolution
         ) async -> Resolution {
             if let existing = inflight[key] {
                 return await existing.value
