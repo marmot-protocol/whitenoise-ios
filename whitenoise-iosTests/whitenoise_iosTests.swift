@@ -16,7 +16,7 @@ private let notificationDefaultsTestGate = AsyncTestGate()
 /// `marmot-uniffi`'s Rust integration tests). These tests just exercise the
 /// boundary between MarmotKit and the iOS code, plus pure-Swift helpers.
 @MainActor
-@Suite(.serialized)
+@Suite(.marmotRuntimeConcurrencyLimit)
 struct AppStateBootstrapTests {
 
     private let accountDefaults = IsolatedAccountDefaults.make()
@@ -15142,8 +15142,12 @@ private actor AsyncTestCheckpoint {
 }
 
 private actor AsyncTestGate {
-    private var isLocked = false
+    private var availablePermits: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(permits: Int = 1) {
+        availablePermits = permits
+    }
 
     func withLock<T>(_ operation: () async throws -> T) async throws -> T {
         await acquire()
@@ -15152,8 +15156,8 @@ private actor AsyncTestGate {
     }
 
     private func acquire() async {
-        if !isLocked {
-            isLocked = true
+        if availablePermits > 0 {
+            availablePermits -= 1
             return
         }
         await withCheckedContinuation { continuation in
@@ -15163,11 +15167,34 @@ private actor AsyncTestGate {
 
     private func release() {
         guard !waiters.isEmpty else {
-            isLocked = false
+            availablePermits += 1
             return
         }
         waiters.removeFirst().resume()
     }
+}
+
+private let marmotRuntimeTestGate = AsyncTestGate(
+    permits: max(1, ProcessInfo.processInfo.activeProcessorCount / 4)
+)
+
+private struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {
+    var isRecursive: Bool { true }
+
+    func provideScope(
+        for test: Test,
+        testCase: Test.Case?,
+        performing function: @concurrent @Sendable () async throws -> Void
+    ) async throws {
+        guard testCase != nil, !test.traits.contains(where: { $0 is TimeLimitTrait }) else {
+            return try await function()
+        }
+        try await marmotRuntimeTestGate.withLock { try await function() }
+    }
+}
+
+extension Trait where Self == MarmotRuntimeConcurrencyLimit {
+    fileprivate static var marmotRuntimeConcurrencyLimit: Self { Self() }
 }
 
 extension MarmotClient {
