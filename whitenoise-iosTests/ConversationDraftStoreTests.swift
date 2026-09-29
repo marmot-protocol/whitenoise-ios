@@ -62,6 +62,73 @@ struct ConversationDraftStoreTests {
         #expect(ConversationDraftLoadResult.classify(CancellationError()) == .cancelled)
     }
 
+    @Test func startupReadinessFailuresStaySilentUntilTheFinalAttempt() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = MarmotKitError.RuntimeBusy
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
+        #expect(store.loadErrorKeys.isEmpty)
+        #expect(
+            await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
+                == .failed
+        )
+        #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
+
+        // A missing client is left to the readiness gate even on the final attempt.
+        persistence.loadError = ForegroundRuntimeMutationError.runtimeUnavailable
+        #expect(
+            await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
+                == .runtimeUnavailable
+        )
+    }
+
+    @Test func draftLoadRetryIsBoundedAndFlagsTheFinalAttempt() async {
+        var finalFlags: [Bool] = []
+        var sleeps: [Duration] = []
+        let exhausted = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1), .milliseconds(2)],
+            sleep: { sleeps.append($0) },
+            attempt: { isFinal in
+                finalFlags.append(isFinal)
+                return .runtimeUnavailable
+            }
+        )
+        #expect(exhausted == .runtimeUnavailable)
+        #expect(finalFlags == [false, false, true])
+        #expect(sleeps == [.milliseconds(1), .milliseconds(2)])
+
+        var attempts = 0
+        let recovered = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1), .milliseconds(2)],
+            sleep: { _ in },
+            attempt: { _ in
+                attempts += 1
+                return attempts == 2 ? .loaded(nil) : .runtimeUnavailable
+            }
+        )
+        #expect(recovered == .loaded(nil))
+        #expect(attempts == 2)
+
+        let cancelled = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1)],
+            sleep: { _ in throw CancellationError() },
+            attempt: { _ in .runtimeUnavailable }
+        )
+        #expect(cancelled == .cancelled)
+
+        var ineligibleAttempts = 0
+        let ineligible = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1)],
+            sleep: { _ in },
+            attempt: { _ in
+                ineligibleAttempts += 1
+                return nil
+            }
+        )
+        #expect(ineligible == nil)
+        #expect(ineligibleAttempts == 1)
+    }
+
     @Test func failedGroupResetResumesTheUnsavedDraft() async {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)

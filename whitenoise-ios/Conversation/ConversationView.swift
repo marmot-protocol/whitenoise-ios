@@ -571,6 +571,7 @@ struct ConversationView: View {
     @State private var viewModel: ConversationViewModel?
     @State private var draft: String = ""
     @State private var didRestorePersistedDraft = false
+    @State private var composerChangedBeforeDraftRestore = false
     @State private var mediaDrafts: [MediaDraftAttachment] = []
     @StateObject private var voiceRecorder = VoiceMessageRecorder()
     @State private var showCameraCapture = false
@@ -1151,8 +1152,10 @@ struct ConversationView: View {
                 runtimeGeneration: appState.runtimeGeneration,
                 isRuntimeReady: isRuntimeReadyForDraftLoad
             )) {
-                guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad else { return }
-                await restorePersistedDraft()
+                _ = await ConversationDraftLoadRetry.run { isFinalAttempt in
+                    guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad else { return nil }
+                    return await restorePersistedDraft(surfacesTransientFailures: isFinalAttempt)
+                }
             }
             .task(id: appState.groupRecoveryUpdate) {
                 guard let update = appState.groupRecoveryUpdate, update.groupID == chat.groupIdHex,
@@ -1185,18 +1188,18 @@ struct ConversationView: View {
         conversationStateObservers
             .onChange(of: draft) { _, draft in
                 if editSession == nil {
-                    persistCurrentDraft(text: draft)
+                    persistComposerChange(text: draft)
                 }
             }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
                 if editSession == nil {
-                    persistCurrentDraft()
+                    persistComposerChange()
                 }
             }
             .onChange(of: viewModel?.replyTargetMessageIdHex) { _, _ in
                 if editSession == nil {
-                    persistCurrentDraft()
+                    persistComposerChange()
                 }
             }
             .onAppear {
@@ -2685,35 +2688,37 @@ struct ConversationView: View {
         appState.canUseRuntimeForLocalForegroundWork && !appState.isRuntimeWarmingUp
     }
 
-    private func restorePersistedDraft() async {
-        guard let draftAccountRef, let viewModel else { return }
+    @discardableResult
+    private func restorePersistedDraft(surfacesTransientFailures: Bool = true) async -> ConversationDraftLoadResult? {
+        guard let draftAccountRef, let viewModel else { return nil }
         let draftBeforeLoad = draft
         let mediaIDsBeforeLoad = mediaDrafts.map(\.id)
         let replyBeforeLoad = viewModel.replyTargetMessageIdHex
         let result = await appState.conversationDraftStore.loadSnapshot(
             accountRef: draftAccountRef,
-            groupIdHex: chat.groupIdHex
+            groupIdHex: chat.groupIdHex,
+            surfacesTransientFailures: surfacesTransientFailures
         )
-        // Retry silently when the runtime becomes ready; a real failure has
-        // already been surfaced and is not retried automatically.
-        guard result != .runtimeUnavailable, result != .cancelled, !Task.isCancelled else { return }
+        // Transient results are retried by the caller or on the next readiness
+        // change; a surfaced failure is not retried automatically.
+        guard result != .runtimeUnavailable, result != .cancelled, !Task.isCancelled else { return result }
         didRestorePersistedDraft = true
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
             guard result != .failed,
                   draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
                   viewModel.replyTargetMessageIdHex == replyBeforeLoad
-            else { return }
+            else { return result }
             draft = ""
             mediaDrafts.removeAll()
             viewModel.restoreReplyTarget(messageIdHex: nil)
-            return
+            return result
         }
         guard !Task.isCancelled,
               draft == draftBeforeLoad,
               mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
               viewModel.replyTargetMessageIdHex == replyBeforeLoad
-        else { return }
+        else { return result }
         let mentionState = ComposerMentionDraftState(
             canonicalText: snapshot.canonicalText,
             mentionDisplayName: { appState.mentionDisplayName(for: $0) }
@@ -2722,6 +2727,7 @@ struct ConversationView: View {
         viewModel.restoreReplyTarget(messageIdHex: snapshot.replyToMessageIdHex)
         mediaDrafts = snapshot.mediaAttachments
         draft = mentionState.draft
+        return result
     }
 
     private func resolveDraftConflict(keepLocal: Bool) {
@@ -2738,6 +2744,11 @@ struct ConversationView: View {
 
     private func reconcileDraftMediaUploads() {
         viewModel?.reconcileDraftMediaUploads(mediaDrafts + (editSession?.preservedMediaDrafts ?? []))
+    }
+
+    private func persistComposerChange(text: String? = nil) {
+        if !didRestorePersistedDraft { composerChangedBeforeDraftRestore = true }
+        persistCurrentDraft(text: text)
     }
 
     private func persistCurrentDraft(text: String? = nil) {
@@ -2757,6 +2768,9 @@ struct ConversationView: View {
         replyToMessageIdHex: String?
     ) {
         guard viewModel?.isLocallyReset != true, let draftAccountRef else { return }
+        // An untouched composer that never hydrated (runtime still resuming)
+        // must not overwrite or delete the saved draft.
+        guard didRestorePersistedDraft || composerChangedBeforeDraftRestore else { return }
         appState.conversationDraftStore.setDraft(
             ConversationDraftSnapshot(
                 canonicalText: mentionState.canonicalText,

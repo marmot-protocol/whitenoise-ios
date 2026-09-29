@@ -34,6 +34,34 @@ nonisolated enum ConversationDraftLoadResult: Equatable {
     }
 }
 
+/// Bounded retry for a draft load that reported `runtimeUnavailable` after the
+/// host already considered the runtime ready (e.g. a transient startup-readiness
+/// error). The final attempt surfaces such failures instead of staying silent.
+/// Readiness changes restart the load through the view's task token.
+@MainActor
+enum ConversationDraftLoadRetry {
+    static let delays: [Duration] = [
+        .milliseconds(250),
+        .milliseconds(500),
+        .seconds(1),
+        .seconds(2),
+    ]
+
+    static func run(
+        delays: [Duration] = delays,
+        sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        attempt: (_ isFinalAttempt: Bool) async -> ConversationDraftLoadResult?
+    ) async -> ConversationDraftLoadResult? {
+        var result = await attempt(delays.isEmpty)
+        for (index, delay) in delays.enumerated() {
+            guard result == .runtimeUnavailable else { return result }
+            do { try await sleep(delay) } catch { return .cancelled }
+            result = await attempt(index == delays.count - 1)
+        }
+        return result
+    }
+}
+
 nonisolated enum ConversationDraftPreview {
     static let maximumLength = 140
 
@@ -359,7 +387,11 @@ final class ConversationDraftStore {
         return snapshot
     }
 
-    func loadSnapshot(accountRef: String, groupIdHex: String) async -> ConversationDraftLoadResult {
+    func loadSnapshot(
+        accountRef: String,
+        groupIdHex: String,
+        surfacesTransientFailures: Bool = false
+    ) async -> ConversationDraftLoadResult {
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
         guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
@@ -395,7 +427,10 @@ final class ConversationDraftStore {
             )))
         } catch {
             let result = ConversationDraftLoadResult.classify(error)
-            guard result == .failed else {
+            // A missing client is covered by the view's readiness gate; only a
+            // startup-readiness error that outlives the retry budget surfaces.
+            let surfacesTransient = surfacesTransientFailures && error is MarmotKitError
+            guard result == .failed || (result == .runtimeUnavailable && surfacesTransient) else {
                 if result == .runtimeUnavailable {
                     Self.logger.info("Deferred composer draft hydration until the runtime is ready")
                 }
