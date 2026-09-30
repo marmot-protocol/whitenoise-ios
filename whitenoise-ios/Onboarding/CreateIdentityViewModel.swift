@@ -511,11 +511,11 @@ final class CreateIdentityViewModel {
 enum IdentitySetupReadinessWaiter {
     enum Failure: Error { case timedOut, recoveryRequired }
 
-    static func wait(
+    static func wait<C: Clock<Duration>>(
         timeout: Duration = .seconds(60),
+        clock: C = ContinuousClock(),
         readiness: () async throws -> AccountSetupReadinessFfi
     ) async throws {
-        let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: timeout)
         while true {
             try Task.checkCancellation()
@@ -527,7 +527,7 @@ enum IdentitySetupReadinessWaiter {
             case .initializing, .localReady, .publishing: break
             }
             guard clock.now < deadline else { throw Failure.timedOut }
-            try await clock.sleep(until: min(deadline, clock.now.advanced(by: .milliseconds(250))))
+            try await clock.sleep(until: min(deadline, clock.now.advanced(by: .milliseconds(250))), tolerance: nil)
         }
     }
 }
