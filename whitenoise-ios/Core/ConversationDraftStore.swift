@@ -14,6 +14,74 @@ nonisolated struct ConversationDraftSnapshot: Equatable {
     let mediaAttachments: [MediaDraftAttachment]
 }
 
+/// Outcome of hydrating one conversation's persisted composer draft.
+/// `runtimeUnavailable` is transient (e.g. a notification tap that opens the
+/// conversation while the runtime is still resuming) and is retried silently
+/// once the runtime is ready.
+nonisolated enum ConversationDraftLoadResult: Equatable {
+    case loaded(ConversationDraftSnapshot?)
+    case runtimeUnavailable
+    case failed
+    case cancelled
+
+    /// Only an authoritative read may mark the composer hydrated; until then an
+    /// untouched composer must not be persisted over the saved draft.
+    var hydratesComposer: Bool {
+        if case .loaded = self { return true }
+        return false
+    }
+
+    static func classify(_ error: Error) -> ConversationDraftLoadResult {
+        if error is CancellationError { return .cancelled }
+        if case ForegroundRuntimeMutationError.runtimeUnavailable = error { return .runtimeUnavailable }
+        if let error = error as? MarmotKitError, error.isTransientStartupReadinessFailure {
+            return .runtimeUnavailable
+        }
+        return .failed
+    }
+}
+
+nonisolated enum ConversationDraftHydrationGate {
+    /// Before the saved draft is hydrated, only a real edit may be persisted.
+    /// An empty composer (e.g. one restored when a message edit ends) is not an
+    /// edit, and writing it would delete the draft that has not loaded yet.
+    static func countsAsComposerChange(
+        isHydrated: Bool,
+        alreadyChanged: Bool,
+        composerIsEmpty: Bool
+    ) -> Bool {
+        isHydrated || alreadyChanged || !composerIsEmpty
+    }
+}
+
+/// Bounded retry for a draft load that reported `runtimeUnavailable` after the
+/// host already considered the runtime ready (e.g. a transient startup-readiness
+/// error). The final attempt surfaces such failures instead of staying silent.
+/// Readiness changes restart the load through the view's task token.
+@MainActor
+enum ConversationDraftLoadRetry {
+    static let delays: [Duration] = [
+        .milliseconds(250),
+        .milliseconds(500),
+        .seconds(1),
+        .seconds(2),
+    ]
+
+    static func run(
+        delays: [Duration] = delays,
+        sleep: (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        attempt: (_ isFinalAttempt: Bool) async -> ConversationDraftLoadResult?
+    ) async -> ConversationDraftLoadResult? {
+        var result = await attempt(delays.isEmpty)
+        for (index, delay) in delays.enumerated() {
+            guard result == .runtimeUnavailable else { return result }
+            do { try await sleep(delay) } catch { return .cancelled }
+            result = await attempt(index == delays.count - 1)
+        }
+        return result
+    }
+}
+
 nonisolated enum ConversationDraftPreview {
     static let maximumLength = 140
 
@@ -334,18 +402,28 @@ final class ConversationDraftStore {
     }
 
     func snapshot(accountRef: String, groupIdHex: String) async -> ConversationDraftSnapshot? {
+        guard case .loaded(let snapshot) = await loadSnapshot(accountRef: accountRef, groupIdHex: groupIdHex)
+        else { return nil }
+        return snapshot
+    }
+
+    func loadSnapshot(
+        accountRef: String,
+        groupIdHex: String,
+        surfacesTransientFailures: Bool = false
+    ) async -> ConversationDraftLoadResult {
         await loadIfNeeded(accountRef: accountRef)
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
-        guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
+        guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
         if let pending = pendingWrites[key] {
             switch pending.operation {
             case .save(let snapshot):
-                return snapshot
+                return .loaded(snapshot)
             case .delete:
-                return nil
+                return .loaded(nil)
             }
         }
-        guard let persistence else { return nil }
+        guard let persistence else { return .loaded(nil) }
         loadErrorKeys.remove(key)
         do {
             let loaded: MessageDraftFfi?
@@ -357,25 +435,33 @@ final class ConversationDraftStore {
             } else {
                 loaded = try await persistence.loadMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex)
             }
-            guard let draft = loaded else { return nil }
+            guard let draft = loaded else { return .loaded(nil) }
             let attachments = await MediaDraftProcessor.restoredDraftAttachments(
                 from: draft.mediaAttachments
             )
-            guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return nil }
-            return Self.normalizedSnapshot(ConversationDraftSnapshot(
+            guard !resetPausedKeys.contains(key), !resetKeys.contains(key) else { return .loaded(nil) }
+            return .loaded(Self.normalizedSnapshot(ConversationDraftSnapshot(
                 canonicalText: draft.content,
                 replyToMessageIdHex: draft.replyToMessageIdHex,
                 mediaAttachments: attachments
-            ))
-        } catch is CancellationError {
-            return nil
+            )))
         } catch {
+            let result = ConversationDraftLoadResult.classify(error)
+            // A missing client is covered by the view's readiness gate; only a
+            // startup-readiness error that outlives the retry budget surfaces.
+            let surfacesTransient = surfacesTransientFailures && error is MarmotKitError
+            guard result == .failed || (result == .runtimeUnavailable && surfacesTransient) else {
+                if result == .runtimeUnavailable {
+                    Self.logger.info("Deferred composer draft hydration until the runtime is ready")
+                }
+                return result
+            }
             loadErrorKeys.insert(key)
             if let state = persistence as? AppState {
                 state.present(UserFacingError.toast(title: L10n.string("Couldn't load draft"), error: error))
             }
             Self.logger.error("Failed to hydrate encrypted composer draft")
-            return nil
+            return .failed
         }
     }
 

@@ -36,6 +36,124 @@ struct ConversationDraftStoreTests {
         #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "after rejoin")
     }
 
+    @Test func runtimeUnavailableDraftLoadIsTransientAndSilent() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = ForegroundRuntimeMutationError.runtimeUnavailable
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
+        #expect(store.loadErrorKeys.isEmpty)
+
+        persistence.loadError = nil
+        store.setDraft(textSnapshot("saved"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        let retried = ConversationDraftStore(persistence: persistence)
+        #expect(
+            await retried.loadSnapshot(accountRef: "account", groupIdHex: "group")
+                == .loaded(textSnapshot("saved"))
+        )
+    }
+
+    @Test func otherDraftLoadFailuresAreRecordedAsErrors() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = URLError(.cannotOpenFile)
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .failed)
+        #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
+        #expect(ConversationDraftLoadResult.classify(CancellationError()) == .cancelled)
+    }
+
+    @Test func anUntouchedEmptyComposerIsNotAChangeBeforeHydration() {
+        // Ending a message edit restores the empty pre-hydration composer.
+        #expect(!ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: false, composerIsEmpty: true
+        ))
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: false, composerIsEmpty: false
+        ))
+        // Clearing text the user typed before hydration is still their edit.
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: true, composerIsEmpty: true
+        ))
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: true, alreadyChanged: false, composerIsEmpty: true
+        ))
+    }
+
+    @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
+        #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
+        #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)
+        #expect(!ConversationDraftLoadResult.failed.hydratesComposer)
+        #expect(!ConversationDraftLoadResult.runtimeUnavailable.hydratesComposer)
+        #expect(!ConversationDraftLoadResult.cancelled.hydratesComposer)
+    }
+
+    @Test func startupReadinessFailuresStaySilentUntilTheFinalAttempt() async {
+        let persistence = DraftPersistenceProbe()
+        persistence.loadError = MarmotKitError.RuntimeBusy
+        let store = ConversationDraftStore(persistence: persistence)
+        #expect(await store.loadSnapshot(accountRef: "account", groupIdHex: "group") == .runtimeUnavailable)
+        #expect(store.loadErrorKeys.isEmpty)
+        #expect(
+            await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
+                == .failed
+        )
+        #expect(store.loadErrorKeys == [ConversationDraftKey(accountRef: "account", groupIdHex: "group")])
+
+        // A missing client is left to the readiness gate even on the final attempt.
+        persistence.loadError = ForegroundRuntimeMutationError.runtimeUnavailable
+        #expect(
+            await store.loadSnapshot(accountRef: "account", groupIdHex: "group", surfacesTransientFailures: true)
+                == .runtimeUnavailable
+        )
+    }
+
+    @Test func draftLoadRetryIsBoundedAndFlagsTheFinalAttempt() async {
+        var finalFlags: [Bool] = []
+        var sleeps: [Duration] = []
+        let exhausted = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1), .milliseconds(2)],
+            sleep: { sleeps.append($0) },
+            attempt: { isFinal in
+                finalFlags.append(isFinal)
+                return .runtimeUnavailable
+            }
+        )
+        #expect(exhausted == .runtimeUnavailable)
+        #expect(finalFlags == [false, false, true])
+        #expect(sleeps == [.milliseconds(1), .milliseconds(2)])
+
+        var attempts = 0
+        let recovered = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1), .milliseconds(2)],
+            sleep: { _ in },
+            attempt: { _ in
+                attempts += 1
+                return attempts == 2 ? .loaded(nil) : .runtimeUnavailable
+            }
+        )
+        #expect(recovered == .loaded(nil))
+        #expect(attempts == 2)
+
+        let cancelled = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1)],
+            sleep: { _ in throw CancellationError() },
+            attempt: { _ in .runtimeUnavailable }
+        )
+        #expect(cancelled == .cancelled)
+
+        var ineligibleAttempts = 0
+        let ineligible = await ConversationDraftLoadRetry.run(
+            delays: [.milliseconds(1)],
+            sleep: { _ in },
+            attempt: { _ in
+                ineligibleAttempts += 1
+                return nil
+            }
+        )
+        #expect(ineligible == nil)
+        #expect(ineligibleAttempts == 1)
+    }
+
     @Test func failedGroupResetResumesTheUnsavedDraft() async {
         let persistence = DraftPersistenceProbe()
         let store = ConversationDraftStore(persistence: persistence)
@@ -319,6 +437,7 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
     private(set) var summaryLoadCount = 0
     private(set) var persistCount = 0
     var beforePersist: (() async -> Void)?
+    var loadError: Error?
     private(set) var deleteCount = 0
     private var clock: Int64 = 0
 
@@ -348,7 +467,8 @@ private final class DraftPersistenceProbe: ConversationDraftPersistence {
         accountRef: String,
         groupIdHex: String
     ) async throws -> MessageDraftFfi? {
-        draft(accountRef: accountRef, groupIdHex: groupIdHex)
+        if let loadError { throw loadError }
+        return draft(accountRef: accountRef, groupIdHex: groupIdHex)
     }
 
     func persistMessageDraft(
