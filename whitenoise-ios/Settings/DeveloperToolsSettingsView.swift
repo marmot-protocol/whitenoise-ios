@@ -111,7 +111,6 @@ struct DeveloperToolsSettingsView: View {
 
                     NavigationLink {
                         DiagnosticsView()
-                            .wnBackButton()
                     } label: {
                         Label("Debug Events", systemImage: "stethoscope")
                     }
@@ -124,14 +123,12 @@ struct DeveloperToolsSettingsView: View {
                 Section {
                     NavigationLink {
                         KeyPackagesView()
-                            .wnBackButton()
                     } label: {
                         Label("Key Packages", systemImage: "shippingbox")
                     }
 
                     NavigationLink {
                         QuarantinedGroupsView(model: quarantinedGroupsModel)
-                            .wnBackButton()
                     } label: {
                         HStack {
                             Label("Quarantined Groups", systemImage: "exclamationmark.shield")

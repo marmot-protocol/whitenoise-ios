@@ -6,7 +6,6 @@ import UIKit
 /// chooses the account relay lists; iOS only supplies the edited metadata.
 struct ProfileEditView: View {
     @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
     @State private var model = ProfileEditViewModel()
     @State private var photoMenuAction: WNPhotoMenuAction?
     @State private var photoError: String?
@@ -120,10 +119,10 @@ struct ProfileEditView: View {
         .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
+        .navigationBarBackButtonHidden(isEditing)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                if isEditing {
+            if isEditing {
+                ToolbarItem(placement: .cancellationAction) {
                     WNButton(
                         title: "Cancel",
                         emphasis: .secondary,
@@ -131,14 +130,6 @@ struct ProfileEditView: View {
                         action: cancelEditing
                     )
                     .disabled(model.isPublishing || model.isUploadingPicture)
-                } else {
-                    WNIconButton(
-                        title: "Back",
-                        systemImage: "chevron.backward",
-                        chrome: .container
-                    ) {
-                        dismiss()
-                    }
                 }
             }
 
