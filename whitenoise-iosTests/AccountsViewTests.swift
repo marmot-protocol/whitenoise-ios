@@ -96,4 +96,35 @@ struct AccountsViewTests {
             ) == .unmarked
         )
     }
+
+    private func account(_ label: String, signedOut: Bool = false) -> AccountSummaryFfi {
+        AccountSummaryFfi(
+            label: label,
+            accountIdHex: label,
+            localSigning: true,
+            signedOut: signedOut,
+            running: !signedOut
+        )
+    }
+
+    @Test func switcherHidesSignedOutProfiles() {
+        let accounts = [account("a"), account("b", signedOut: true), account("c")]
+        #expect(
+            AccountsView.switcherAccounts(accounts, activeAccountRef: "a").map(\.label) == ["a", "c"]
+        )
+    }
+
+    @Test func switcherListsActiveProfileFirst() {
+        let accounts = [account("a"), account("b"), account("c")]
+        #expect(
+            AccountsView.switcherAccounts(accounts, activeAccountRef: "c").map(\.label) == ["c", "a", "b"]
+        )
+    }
+
+    @Test func switcherKeepsOrderWithoutActiveProfile() {
+        let accounts = [account("a", signedOut: true), account("b"), account("c")]
+        #expect(
+            AccountsView.switcherAccounts(accounts, activeAccountRef: nil).map(\.label) == ["b", "c"]
+        )
+    }
 }
