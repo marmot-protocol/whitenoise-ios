@@ -168,18 +168,21 @@ struct AccountSetupTests {
 
     @Test func quietSnapshotPollerCancelsWithoutEmitting() async {
         let quiet = snapshot(revision: 3)
+        let readGate = SetupOperationGate()
         let (reads, readSignal) = AsyncStream.makeStream(of: Void.self)
         let poller = AccountSetupSnapshotPoller(snapshot: quiet) {
             readSignal.yield()
-            // A poller that ignored cancellation would return this newer revision instead of hanging.
+            await readGate.wait()
+            // Cancelled mid-read: dropping this newer revision is the post-read check's job.
             var read = quiet
-            if Task.isCancelled { read.revision += 1 }
+            read.revision += 1
             return read
         }
         let waiting = Task { try await poller.next() }
         var iterator = reads.makeAsyncIterator()
         await iterator.next()
         waiting.cancel()
+        await readGate.release()
         await #expect(throws: CancellationError.self) { _ = try await waiting.value }
     }
 
