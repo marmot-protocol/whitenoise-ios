@@ -62,6 +62,14 @@ struct ConversationDraftStoreTests {
         #expect(ConversationDraftLoadResult.classify(CancellationError()) == .cancelled)
     }
 
+    @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
+        #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
+        #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)
+        #expect(!ConversationDraftLoadResult.failed.hydratesComposer)
+        #expect(!ConversationDraftLoadResult.runtimeUnavailable.hydratesComposer)
+        #expect(!ConversationDraftLoadResult.cancelled.hydratesComposer)
+    }
+
     @Test func startupReadinessFailuresStaySilentUntilTheFinalAttempt() async {
         let persistence = DraftPersistenceProbe()
         persistence.loadError = MarmotKitError.RuntimeBusy

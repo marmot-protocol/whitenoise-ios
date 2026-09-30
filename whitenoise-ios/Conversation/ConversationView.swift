@@ -2699,13 +2699,13 @@ struct ConversationView: View {
             groupIdHex: chat.groupIdHex,
             surfacesTransientFailures: surfacesTransientFailures
         )
-        // Transient results are retried by the caller or on the next readiness
-        // change; a surfaced failure is not retried automatically.
-        guard result != .runtimeUnavailable, result != .cancelled, !Task.isCancelled else { return result }
+        // Transient results are retried by the caller; a failure stays
+        // unhydrated so leaving can't delete the draft, and retries on the next
+        // readiness change.
+        guard result.hydratesComposer, !Task.isCancelled else { return result }
         didRestorePersistedDraft = true
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
-            guard result != .failed,
-                  draft == draftBeforeLoad,
+            guard draft == draftBeforeLoad,
                   mediaDrafts.map(\.id) == mediaIDsBeforeLoad,
                   viewModel.replyTargetMessageIdHex == replyBeforeLoad
             else { return result }

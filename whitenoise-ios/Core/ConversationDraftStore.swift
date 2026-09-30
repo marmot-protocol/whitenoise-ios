@@ -24,6 +24,13 @@ nonisolated enum ConversationDraftLoadResult: Equatable {
     case failed
     case cancelled
 
+    /// Only an authoritative read may mark the composer hydrated; until then an
+    /// untouched composer must not be persisted over the saved draft.
+    var hydratesComposer: Bool {
+        if case .loaded = self { return true }
+        return false
+    }
+
     static func classify(_ error: Error) -> ConversationDraftLoadResult {
         if error is CancellationError { return .cancelled }
         if case ForegroundRuntimeMutationError.runtimeUnavailable = error { return .runtimeUnavailable }
