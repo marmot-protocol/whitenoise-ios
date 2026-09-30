@@ -257,6 +257,8 @@ private struct ConversationDraftLoadToken: Equatable {
     /// resuming; the draft load waits for it rather than failing.
     let runtimeGeneration: Int
     let isRuntimeReady: Bool
+    /// Restoration waits for a message edit to end so it never replaces edit text.
+    let isEditingMessage: Bool
 }
 
 struct ConversationSendPayload {
@@ -1150,10 +1152,11 @@ struct ConversationView: View {
                 groupIdHex: chat.groupIdHex,
                 isViewModelReady: viewModel != nil,
                 runtimeGeneration: appState.runtimeGeneration,
-                isRuntimeReady: isRuntimeReadyForDraftLoad
+                isRuntimeReady: isRuntimeReadyForDraftLoad,
+                isEditingMessage: editSession != nil
             )) {
                 _ = await ConversationDraftLoadRetry.run { isFinalAttempt in
-                    guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad else { return nil }
+                    guard !didRestorePersistedDraft, isRuntimeReadyForDraftLoad, editSession == nil else { return nil }
                     return await restorePersistedDraft(surfacesTransientFailures: isFinalAttempt)
                 }
             }
@@ -2702,7 +2705,7 @@ struct ConversationView: View {
         // Transient results are retried by the caller; a failure stays
         // unhydrated so leaving can't delete the draft, and retries on the next
         // readiness change.
-        guard result.hydratesComposer, !Task.isCancelled else { return result }
+        guard result.hydratesComposer, !Task.isCancelled, editSession == nil else { return result }
         didRestorePersistedDraft = true
         guard case .loaded(let loaded) = result, let snapshot = loaded else {
             guard draft == draftBeforeLoad,
@@ -2747,6 +2750,12 @@ struct ConversationView: View {
     }
 
     private func persistComposerChange(text: String? = nil) {
+        guard ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: didRestorePersistedDraft,
+            alreadyChanged: composerChangedBeforeDraftRestore,
+            composerIsEmpty: (text ?? draft).isEmpty && mediaDrafts.isEmpty
+                && viewModel?.replyTargetMessageIdHex == nil
+        ) else { return }
         if !didRestorePersistedDraft { composerChangedBeforeDraftRestore = true }
         persistCurrentDraft(text: text)
     }

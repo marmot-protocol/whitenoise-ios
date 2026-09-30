@@ -41,6 +41,19 @@ nonisolated enum ConversationDraftLoadResult: Equatable {
     }
 }
 
+nonisolated enum ConversationDraftHydrationGate {
+    /// Before the saved draft is hydrated, only a real edit may be persisted.
+    /// An empty composer (e.g. one restored when a message edit ends) is not an
+    /// edit, and writing it would delete the draft that has not loaded yet.
+    static func countsAsComposerChange(
+        isHydrated: Bool,
+        alreadyChanged: Bool,
+        composerIsEmpty: Bool
+    ) -> Bool {
+        isHydrated || alreadyChanged || !composerIsEmpty
+    }
+}
+
 /// Bounded retry for a draft load that reported `runtimeUnavailable` after the
 /// host already considered the runtime ready (e.g. a transient startup-readiness
 /// error). The final attempt surfaces such failures instead of staying silent.

@@ -62,6 +62,23 @@ struct ConversationDraftStoreTests {
         #expect(ConversationDraftLoadResult.classify(CancellationError()) == .cancelled)
     }
 
+    @Test func anUntouchedEmptyComposerIsNotAChangeBeforeHydration() {
+        // Ending a message edit restores the empty pre-hydration composer.
+        #expect(!ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: false, composerIsEmpty: true
+        ))
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: false, composerIsEmpty: false
+        ))
+        // Clearing text the user typed before hydration is still their edit.
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: false, alreadyChanged: true, composerIsEmpty: true
+        ))
+        #expect(ConversationDraftHydrationGate.countsAsComposerChange(
+            isHydrated: true, alreadyChanged: false, composerIsEmpty: true
+        ))
+    }
+
     @Test func onlyAnAuthoritativeReadHydratesTheComposer() {
         #expect(ConversationDraftLoadResult.loaded(nil).hydratesComposer)
         #expect(ConversationDraftLoadResult.loaded(textSnapshot("saved")).hydratesComposer)
