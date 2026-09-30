@@ -228,7 +228,8 @@ struct SettingsView: View {
     }
 
     private var inactiveAccounts: [AccountSummaryFfi] {
-        appState.accounts.filter { $0.label != appState.activeAccountRef }
+        AccountsView.switcherAccounts(appState.accounts, activeAccountRef: appState.activeAccountRef)
+            .filter { $0.label != appState.activeAccountRef }
     }
 
     private var appVersion: String {

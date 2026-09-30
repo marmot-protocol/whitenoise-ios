@@ -76,17 +76,22 @@ struct AccountsView: View {
     }
 
     private var accountSheetDetents: Set<PresentationDetent> {
-        Self.prefersFullHeight(accountCount: appState.accounts.count)
+        Self.prefersFullHeight(accountCount: orderedAccounts.count)
             ? [.large]
             : [.medium, .large]
     }
 
     private var orderedAccounts: [AccountSummaryFfi] {
-        guard let activeAccountRef = appState.activeAccountRef else {
-            return appState.accounts
-        }
-        return appState.accounts.filter { $0.label == activeAccountRef }
-            + appState.accounts.filter { $0.label != activeAccountRef }
+        Self.switcherAccounts(appState.accounts, activeAccountRef: appState.activeAccountRef)
+    }
+
+    static func switcherAccounts(
+        _ accounts: [AccountSummaryFfi],
+        activeAccountRef: String?
+    ) -> [AccountSummaryFfi] {
+        let signedIn = accounts.filter { !$0.signedOut }
+        return signedIn.filter { $0.label == activeAccountRef }
+            + signedIn.filter { $0.label != activeAccountRef }
     }
 
     /// The unread count a Profiles row shows for an account, or `nil` when the
