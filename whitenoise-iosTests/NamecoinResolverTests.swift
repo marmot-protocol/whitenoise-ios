@@ -533,8 +533,15 @@ struct NamecoinResolverTests {
     }
 
     /// A round trip that answers the nameShow pipeline for a fixed name ->
-    /// value map; every other name is a definitive miss.
+    /// value map; every other name is a definitive miss. The history reply
+    /// tags each name with a deterministic per-name tx_hash marker so the
+    /// verbose-tx reply can serve the same name's vout without mutable
+    /// state.
     private func stubbedNameValues(_ values: [String: String]) -> NamecoinResolver.RoundTrip {
+        func txMarker(for name: String) -> String {
+            let script = NamecoinScript.buildNameIndexScript(name: Array(name.utf8))
+            return String(NamecoinScript.electrumScriptHash(script: script).prefix(16))
+        }
         return { _, request, wantId in
             switch wantId {
             case 1:
@@ -546,18 +553,21 @@ struct NamecoinResolverTests {
                     let script = NamecoinScript.buildNameIndexScript(name: Array(name.utf8))
                     let hash = NamecoinScript.electrumScriptHash(script: script)
                     if request.contains(hash) {
-                        return Data("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":[{\"tx_hash\":\"ab\",\"height\":1}]}".utf8)
+                        let marker = txMarker(for: name)
+                        return Data("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":[{\"tx_hash\":\"\(marker)\",\"height\":1}]}".utf8)
                     }
                 }
                 return Data("{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":[]}".utf8)
             case 3:
-                // Fixtures that reach id 3 carry exactly one entry.
-                let (name, value) = values.first!
-                let vout = nameVoutScript(name: name, value: value)
-                return Data("""
-                {"jsonrpc":"2.0","id":3,"result":{"vout":[\
-                {"scriptPubKey":{"hex":"\(vout)"}}]}}
-                """.utf8)
+                // Serve the vout of whichever name this tx marker belongs to.
+                for (name, value) in values where request.contains(txMarker(for: name)) {
+                    let vout = nameVoutScript(name: name, value: value)
+                    return Data("""
+                    {"jsonrpc":"2.0","id":3,"result":{"vout":[\
+                    {"scriptPubKey":{"hex":"\(vout)"}}]}}
+                    """.utf8)
+                }
+                throw ElectrumXTransport.TransportError.noMatchingReply
             case 4:
                 return Data("{\"jsonrpc\":\"2.0\",\"id\":4,\"result\":{\"height\":2}}".utf8)
             default:
