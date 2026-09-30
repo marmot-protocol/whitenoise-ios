@@ -166,21 +166,24 @@ struct AccountSetupTests {
         await model.drain()
     }
 
-    @Test(.timeLimit(.minutes(3))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
-        let initial = try await client.marmot.beginOnboarding(
-            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
-            options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
-        )
-        let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
-        let waiting = Task { try await subscription.next() }
-        await Task.yield()
+    @Test func quietSnapshotPollerCancelsWithoutEmitting() async {
+        let quiet = snapshot(revision: 3)
+        let readGate = SetupOperationGate()
+        let (reads, readSignal) = AsyncStream.makeStream(of: Void.self)
+        let poller = AccountSetupSnapshotPoller(snapshot: quiet) {
+            readSignal.yield()
+            await readGate.wait()
+            // Cancelled mid-read: dropping this newer revision is the post-read check's job.
+            var read = quiet
+            read.revision += 1
+            return read
+        }
+        let waiting = Task { try await poller.next() }
+        var iterator = reads.makeAsyncIterator()
+        await iterator.next()
         waiting.cancel()
+        await readGate.release()
         await #expect(throws: CancellationError.self) { _ = try await waiting.value }
-        // Cancellation must finish without closing the live runtime or emitting another snapshot.
-        #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
-        try await client.marmot.shutdownAndClose()
     }
 
     @Test func missingFollowsAreSkippedWithoutPublishing() async {
@@ -443,6 +446,31 @@ struct AccountSetupTests {
             if await predicate() { return }
             await Task.yield()
         }
+    }
+}
+
+/// Runs off the MainActor so the real runtime's hops do not queue behind the
+/// rest of the in-process parallel suite on a starved CI runner.
+struct AccountSetupRuntimeTests {
+    // The poller's cancellation semantics are covered deterministically above;
+    // this limit only turns an uncancellable wait into a failure instead of a
+    // stalled job. Starved CI runners have taken 357s for a single real-runtime
+    // test, so keep it well above that.
+    @Test(.timeLimit(.minutes(10))) func realSnapshotSubscriptionCancelsWhileMDKIsQuiet() async throws {
+        let client = try MarmotClient.testClient()
+        try await client.startRuntime()
+        let initial = try await client.marmot.beginOnboarding(
+            nsec: "nsec1afh3nysthqh47awpdewcw59wvvp499f8dvlyclmnv4gvpxdk56dsa6eqsn",
+            options: OnboardingOptionsFfi(defaultRelays: ["wss://relay.invalid.test"], discoveryRelays: ["wss://relay.invalid.test"])
+        )
+        let subscription = try await MarmotAccountSetupClient(client: client, accountID: initial.accountIdHex).subscribe()
+        let waiting = Task { try await subscription.next() }
+        await Task.yield()
+        waiting.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await waiting.value }
+        // Cancellation must finish without closing the live runtime or emitting another snapshot.
+        #expect(try await client.onboardingSnapshot(accountID: initial.accountIdHex)?.revision == initial.revision)
+        try await client.marmot.shutdownAndClose()
     }
 }
 

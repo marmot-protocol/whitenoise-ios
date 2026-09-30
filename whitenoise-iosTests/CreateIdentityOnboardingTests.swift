@@ -1,4 +1,5 @@
 import MarmotKit
+import Synchronization
 import Testing
 import UIKit
 
@@ -328,10 +329,25 @@ struct CreateIdentityOnboardingTests {
 
     @Test func readinessWaiterRequiresNetworkReady() async throws {
         var states: [AccountSetupReadinessFfi] = [.initializing, .localReady, .publishing, .networkReady]
-        try await IdentitySetupReadinessWaiter.wait {
+        let clock = ImmediateTestClock()
+        try await IdentitySetupReadinessWaiter.wait(clock: clock) {
             states.removeFirst()
         }
         #expect(states.isEmpty)
+        #expect(clock.now == .init(offset: .milliseconds(750)))
+    }
+
+    @Test func readinessWaiterPollsEveryQuarterSecondUntilTheDefaultDeadline() async {
+        let clock = ImmediateTestClock()
+        var polls = 0
+        await #expect(throws: IdentitySetupReadinessWaiter.Failure.timedOut) {
+            try await IdentitySetupReadinessWaiter.wait(clock: clock) {
+                polls += 1
+                return .publishing
+            }
+        }
+        #expect(polls == 241)
+        #expect(clock.now == .init(offset: .seconds(60)))
     }
 
     @Test func readinessWaiterStopsOnTimeoutRecoveryAndCancellation() async {
@@ -987,6 +1003,25 @@ private final class CreateIdentityServiceStub: CreateIdentityServicing {
 
     private enum StubError: Error {
         case failed
+    }
+}
+
+/// Advances to each sleep deadline immediately, so polling loops run without wall time.
+private nonisolated final class ImmediateTestClock: Clock {
+    nonisolated struct Instant: InstantProtocol {
+        var offset: Duration
+        func advanced(by duration: Duration) -> Instant { Instant(offset: offset + duration) }
+        func duration(to other: Instant) -> Duration { other.offset - offset }
+        static func < (lhs: Instant, rhs: Instant) -> Bool { lhs.offset < rhs.offset }
+    }
+
+    private let current = Mutex(Instant(offset: .zero))
+    var now: Instant { current.withLock { $0 } }
+    var minimumResolution: Duration { .zero }
+
+    func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+        try Task.checkCancellation()
+        current.withLock { $0 = max($0, deadline) }
     }
 }
 
