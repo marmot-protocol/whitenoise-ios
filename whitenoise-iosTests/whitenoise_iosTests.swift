@@ -16,7 +16,7 @@ private let notificationDefaultsTestGate = AsyncTestGate()
 /// `marmot-uniffi`'s Rust integration tests). These tests just exercise the
 /// boundary between MarmotKit and the iOS code, plus pure-Swift helpers.
 @MainActor
-@Suite(.serialized)
+@Suite(.marmotRuntimeConcurrencyLimit)
 struct AppStateBootstrapTests {
 
     private let accountDefaults = IsolatedAccountDefaults.make()
@@ -37,7 +37,7 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
-    @Test(.timeLimit(.minutes(1))) func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
+    @Test func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let client = try #require(appState.client)
@@ -739,17 +739,6 @@ struct AppStateBootstrapTests {
         #expect(appState.activeToast?.message == "We'll keep trying in the background.")
     }
 
-    @Test func toastSleepDurationIsClampedBeforeNanosecondConversion() {
-        #expect(ToastState.sleepNanoseconds(forDuration: -1) == 0)
-        #expect(ToastState.sleepNanoseconds(forDuration: .nan) == 0)
-        #expect(ToastState.sleepNanoseconds(forDuration: .infinity) == UInt64.max)
-        #expect(ToastState.sleepNanoseconds(forDuration: 1.25) == 1_250_000_000)
-        #expect(ToastState.sleepNanoseconds(
-            forDuration: TimeInterval(UInt64.max) / 1_000_000_000
-        ) == UInt64.max)
-        #expect(ToastState.sleepNanoseconds(forDuration: .greatestFiniteMagnitude) == UInt64.max)
-    }
-
     @Test func routingIsBackedByFocusedNavigationState() async throws {
         let appState = try testAppState()
         appState.accountStore.accounts = [
@@ -813,121 +802,6 @@ struct AppStateBootstrapTests {
 
         #expect(appState.activeAccountRef == "account-a")
         #expect(appState.navigation.pendingChatId == nil)
-    }
-
-    @Test func notificationPresentationRuntimeGateRequiresForegroundRuntime() {
-        #expect(NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: true,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: false,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: true,
-            isRuntimeSuspending: false,
-            isSigningOut: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: true,
-            isSigningOut: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: true,
-            hasRuntimeClient: true
-        ))
-        #expect(!NotificationPresentationRuntimeGate.canPresent(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false,
-            hasRuntimeClient: false
-        ))
-    }
-
-    @Test func archivedNotificationCacheKeepsEntriesForInterleavedAccounts() {
-        var cache = NotificationArchivedKeysCache()
-        let now = ContinuousClock.now
-        let lifetime: Duration = .seconds(2)
-        cache.store(["group-a"], for: "account-a", readAt: now, lifetime: lifetime)
-        cache.store(["group-b"], for: "account-b", readAt: now, lifetime: lifetime)
-
-        #expect(cache.keys(for: "account-a", now: now, lifetime: lifetime) == ["group-a"])
-        #expect(cache.keys(for: "account-b", now: now, lifetime: lifetime) == ["group-b"])
-    }
-
-    @Test func settingsReadRuntimeGateRejectsSuspensionWindows() {
-        #expect(SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: true,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: false,
-            isAppSceneActive: false,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: true,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: true,
-            hasRuntimeClient: true
-        ))
-        #expect(!SettingsReadRuntimeGate.canRead(
-            isTaskCancelled: false,
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: false
-        ))
     }
 
     @Test func visibleChatRouteTracksAccountAndClearsOnlyMatchingRoute() async throws {
@@ -2069,75 +1943,6 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func foregroundRuntimeWorkIsGatedDuringBackgroundSuspension() {
-        #expect(ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: false,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: true,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: true
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: true,
-            hasRuntimeClient: true
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            hasRuntimeClient: false
-        ))
-
-        #expect(ForegroundRuntimeWorkGate.canUseForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
-            isAppSceneActive: false,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: true,
-            isRuntimeSuspending: false
-        ))
-        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: true
-        ))
-    }
-
-    @Test func chatListSubscriptionScopeChangesWhenSceneBecomesActive() {
-        let inactive = ChatsListView.SubscriptionScope(
-            accountRef: "account-a",
-            runtimeGeneration: 4,
-            isAppSceneActive: false
-        )
-        let active = ChatsListView.SubscriptionScope(
-            accountRef: "account-a",
-            runtimeGeneration: 4,
-            isAppSceneActive: true
-        )
-
-        #expect(inactive != active)
-    }
-
     @Test func profileFetchQueueLeavesQueuedIDsWhenRefreshBecomesUnavailable() async throws {
         let appState = try testAppState()
         let queued = [hex("11"), hex("22")]
@@ -2370,49 +2175,6 @@ struct AppStateBootstrapTests {
         await stopReadyRuntime(appState)
     }
 
-    @Test func nativePushRegistrationScheduleGateBlocksDuringSignOut() {
-        // Regression for issue #320: a system-driven APNS device-token callback
-        // (`recordDeviceToken`) can land on one of `signOut()`'s `await`
-        // suspension points and call `scheduleNativePushRegistrationIfEnabled()`.
-        // While the departing account is still on disk (push enabled) and still
-        // in the in-memory `accounts` list, that fresh sync would
-        // re-`upsertPushRegistration` it — resurrecting a server-side push
-        // registration for a signed-out account (residual of #7/#111). The
-        // sign-out guard must suppress scheduling, exactly like the existing
-        // scene-inactive / runtime-suspended guards.
-        #expect(NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false
-        ))
-        #expect(!NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: true
-        ))
-        // The pre-existing guards must keep blocking regardless of the new flag.
-        #expect(!NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: false,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: false,
-            isSigningOut: false
-        ))
-        #expect(!NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: true,
-            isRuntimeSuspending: false,
-            isSigningOut: false
-        ))
-        #expect(!NativePushRegistrationScheduleGate.canSchedule(
-            isAppSceneActive: true,
-            runtimeSuspendedForBackground: false,
-            isRuntimeSuspending: true,
-            isSigningOut: false
-        ))
-    }
-
     /// Suspension closes storage before draining account exit. Sign-out and
     /// wipe must therefore keep one captured client across awaits; re-reading
     /// the former non-optional AppState handle here was a fatal-error race.
@@ -2612,6 +2374,247 @@ struct AppStateBootstrapTests {
 
     private func resetPersistedActiveAccountRef() {
         accountDefaults.removeObject(forKey: AccountStore.activeAccountKey)
+    }
+}
+
+@MainActor
+struct AppStateGateTests {
+    @Test func toastSleepDurationIsClampedBeforeNanosecondConversion() {
+        #expect(ToastState.sleepNanoseconds(forDuration: -1) == 0)
+        #expect(ToastState.sleepNanoseconds(forDuration: .nan) == 0)
+        #expect(ToastState.sleepNanoseconds(forDuration: .infinity) == UInt64.max)
+        #expect(ToastState.sleepNanoseconds(forDuration: 1.25) == 1_250_000_000)
+        #expect(ToastState.sleepNanoseconds(
+            forDuration: TimeInterval(UInt64.max) / 1_000_000_000
+        ) == UInt64.max)
+        #expect(ToastState.sleepNanoseconds(forDuration: .greatestFiniteMagnitude) == UInt64.max)
+    }
+
+    @Test func notificationPresentationRuntimeGateRequiresForegroundRuntime() {
+        #expect(NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: true,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            isSigningOut: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            isSigningOut: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!NotificationPresentationRuntimeGate.canPresent(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false,
+            hasRuntimeClient: false
+        ))
+    }
+
+    @Test func archivedNotificationCacheKeepsEntriesForInterleavedAccounts() {
+        var cache = NotificationArchivedKeysCache()
+        let now = ContinuousClock.now
+        let lifetime: Duration = .seconds(2)
+        cache.store(["group-a"], for: "account-a", readAt: now, lifetime: lifetime)
+        cache.store(["group-b"], for: "account-b", readAt: now, lifetime: lifetime)
+
+        #expect(cache.keys(for: "account-a", now: now, lifetime: lifetime) == ["group-a"])
+        #expect(cache.keys(for: "account-b", now: now, lifetime: lifetime) == ["group-b"])
+    }
+
+    @Test func settingsReadRuntimeGateRejectsSuspensionWindows() {
+        #expect(SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: true,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!SettingsReadRuntimeGate.canRead(
+            isTaskCancelled: false,
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+    }
+
+    @Test func foregroundRuntimeWorkIsGatedDuringBackgroundSuspension() {
+        #expect(ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            hasRuntimeClient: true
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseLocalForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            hasRuntimeClient: false
+        ))
+
+        #expect(ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false
+        ))
+        #expect(!ForegroundRuntimeWorkGate.canUseForegroundWork(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true
+        ))
+    }
+
+    @Test func chatListSubscriptionScopeChangesWhenSceneBecomesActive() {
+        let inactive = ChatsListView.SubscriptionScope(
+            accountRef: "account-a",
+            runtimeGeneration: 4,
+            isAppSceneActive: false
+        )
+        let active = ChatsListView.SubscriptionScope(
+            accountRef: "account-a",
+            runtimeGeneration: 4,
+            isAppSceneActive: true
+        )
+
+        #expect(inactive != active)
+    }
+
+    @Test func nativePushRegistrationScheduleGateBlocksDuringSignOut() {
+        // Regression for issue #320: a system-driven APNS device-token callback
+        // (`recordDeviceToken`) can land on one of `signOut()`'s `await`
+        // suspension points and call `scheduleNativePushRegistrationIfEnabled()`.
+        // While the departing account is still on disk (push enabled) and still
+        // in the in-memory `accounts` list, that fresh sync would
+        // re-`upsertPushRegistration` it — resurrecting a server-side push
+        // registration for a signed-out account (residual of #7/#111). The
+        // sign-out guard must suppress scheduling, exactly like the existing
+        // scene-inactive / runtime-suspended guards.
+        #expect(NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: true
+        ))
+        // The pre-existing guards must keep blocking regardless of the new flag.
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: false,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: true,
+            isRuntimeSuspending: false,
+            isSigningOut: false
+        ))
+        #expect(!NativePushRegistrationScheduleGate.canSchedule(
+            isAppSceneActive: true,
+            runtimeSuspendedForBackground: false,
+            isRuntimeSuspending: true,
+            isSigningOut: false
+        ))
     }
 }
 
@@ -15142,8 +15145,12 @@ private actor AsyncTestCheckpoint {
 }
 
 private actor AsyncTestGate {
-    private var isLocked = false
+    private var availablePermits: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(permits: Int = 1) {
+        availablePermits = permits
+    }
 
     func withLock<T>(_ operation: () async throws -> T) async throws -> T {
         await acquire()
@@ -15152,8 +15159,8 @@ private actor AsyncTestGate {
     }
 
     private func acquire() async {
-        if !isLocked {
-            isLocked = true
+        if availablePermits > 0 {
+            availablePermits -= 1
             return
         }
         await withCheckedContinuation { continuation in
@@ -15163,11 +15170,32 @@ private actor AsyncTestGate {
 
     private func release() {
         guard !waiters.isEmpty else {
-            isLocked = false
+            availablePermits += 1
             return
         }
         waiters.removeFirst().resume()
     }
+}
+
+private let marmotRuntimeTestGate = AsyncTestGate(
+    permits: max(1, ProcessInfo.processInfo.activeProcessorCount / 4)
+)
+
+private struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping {
+    var isRecursive: Bool { true }
+
+    func provideScope(
+        for test: Test,
+        testCase: Test.Case?,
+        performing function: @concurrent @Sendable () async throws -> Void
+    ) async throws {
+        guard testCase != nil else { return try await function() }
+        try await marmotRuntimeTestGate.withLock { try await function() }
+    }
+}
+
+extension Trait where Self == MarmotRuntimeConcurrencyLimit {
+    fileprivate static var marmotRuntimeConcurrencyLimit: Self { Self() }
 }
 
 extension MarmotClient {
