@@ -1684,8 +1684,9 @@ final class AppState {
         let relays = lease.client.relayUrls
         let existingAccountLabels = Set(accounts.map(\.label))
         let creation = try await lease.client.marmot.createIdentityWithProfile(
-            defaultRelays: relays,
-            bootstrapRelays: relays
+            defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
+            bootstrapRelays: relays,
+            inboxRelays: relays
         )
         // MDK deliberately coalesces generated-identity calls while an earlier
         // account is still publishing. Never let a second-account flow edit or
@@ -1790,12 +1791,17 @@ final class AppState {
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = lease.client.relayUrls
+        let options = OnboardingOptionsFfi(
+            defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
+            discoveryRelays: AppContainerConfig.discoveryRelays,
+            inboxRelays: relays
+        )
         var snapshot: OnboardingSnapshotFfi
         do {
             let existing = try await lease.client.listAccounts()
             snapshot = try await lease.client.marmot.beginOnboarding(
                 nsec: identity,
-                options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: AppContainerConfig.discoveryRelays)
+                options: options
             )
             if !snapshot.ready, existing.contains(where: { $0.accountIdHex == snapshot.accountIdHex }) {
                 snapshot = try await AccountSetupRecovery.restartIfPossible(
@@ -1804,7 +1810,7 @@ final class AppState {
                     begin: {
                         try await lease.client.marmot.beginOnboarding(
                             nsec: identity,
-                            options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: AppContainerConfig.discoveryRelays)
+                            options: options
                         )
                     }
                 )
@@ -1813,7 +1819,10 @@ final class AppState {
             // Legacy active/pending accounts keep their existing recovery path.
             // MDK's login gate refuses an unfinished interactive checkpoint.
             let summary = try await lease.client.marmot.login(
-                identity: identity, defaultRelays: relays, bootstrapRelays: relays
+                identity: identity,
+                defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
+                bootstrapRelays: relays,
+                inboxRelays: relays
             )
             imported = true
             productAnalytics.record(.onboarding(.localReady, .import, .success), ticket: ticket)
@@ -1860,9 +1869,10 @@ final class AppState {
         do {
             summary = try await lease.client.marmot.loginRecoveringIncompleteSetup(
                 nsec: identity,
-                defaultRelays: relays,
+                defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
                 bootstrapRelays: relays,
-                acknowledgePossibleKeyPackageOrphan: true
+                acknowledgePossibleKeyPackageOrphan: true,
+                inboxRelays: relays
             )
         } catch let error as MarmotKitError {
             switch error {
@@ -1872,8 +1882,9 @@ final class AppState {
                 // again or resetting recoverable KeyPackage material.
                 summary = try await lease.client.marmot.login(
                     identity: identity,
-                    defaultRelays: relays,
-                    bootstrapRelays: relays
+                    defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
+                    bootstrapRelays: relays,
+                    inboxRelays: relays
                 )
             default:
                 throw error

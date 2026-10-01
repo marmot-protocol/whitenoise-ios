@@ -5,6 +5,15 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {
+        #expect(AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays) == [
+            "wss://relay.eu.whitenoise.chat", "wss://relay.us.whitenoise.chat",
+            "wss://nos.lol", "wss://relay.primal.net", "wss://whitenoise.nostrdev.com"
+        ])
+        let local = ["ws://127.0.0.1:7777"]
+        #expect(AppContainerConfig.accountRelays(runtimeRelays: local) == local)
+    }
+
     @Test func failedRestartCannotReuseACancelledCheckpoint() async {
         let original = snapshot()
         await #expect(throws: MarmotKitError.OnboardingActionUnavailable) {

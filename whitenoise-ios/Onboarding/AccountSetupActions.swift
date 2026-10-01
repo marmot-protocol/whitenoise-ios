@@ -16,7 +16,11 @@ struct AccountSetupActions: View {
     }
 
     private var relays: [String]? {
-        guard let proposal else { return MarmotClient.seedRelays }
+        guard let proposal else {
+            return selectedStep == .relays
+                ? AppContainerConfig.accountRelays(runtimeRelays: MarmotClient.seedRelays)
+                : MarmotClient.seedRelays
+        }
         guard let reads = AccountSetupInput.proposalRelays(proposal.readRelays),
               let writes = AccountSetupInput.proposalRelays(proposal.writeRelays),
               !reads.isEmpty || !writes.isEmpty,
