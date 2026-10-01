@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppearanceSettingsView: View {
     @Environment(AppAppearanceStore.self) private var appearance
+    @AppStorage(ComposerReturnKeyBehavior.storageKey) private var sendsOnReturn = false
     @State private var languageRawValue = AppLanguage.currentRawValue
 
     var body: some View {
@@ -36,6 +37,12 @@ struct AppearanceSettingsView: View {
                 .pickerStyle(.navigationLink)
             } footer: {
                 Text("System follows your device language. Other choices update White Noise immediately.")
+            }
+
+            Section {
+                WNToggle("Return Key Sends", isOn: $sendsOnReturn)
+            } footer: {
+                Text("When on, the Return key sends your message instead of starting a new line.")
             }
         }
         .localizedNavigationTitle("Appearance")
