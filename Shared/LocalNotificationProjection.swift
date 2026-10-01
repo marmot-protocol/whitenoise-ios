@@ -101,6 +101,7 @@ nonisolated enum LocalNotificationProjection {
         let preview = previewMode.revealsMessageContent
             ? notificationPreview(update.previewText)
             : nil
+        let reaction = previewMode.revealsMessageContent ? reactionContent(for: update) : nil
         let content = previewMode.revealsSenderIdentity
             ? contentText(
                 trigger: update.trigger,
@@ -108,7 +109,8 @@ nonisolated enum LocalNotificationProjection {
                 isMention: update.isMention,
                 senderName: senderName,
                 groupName: ContentSanitizer.groupName(update.groupName),
-                preview: preview
+                preview: preview,
+                reaction: reaction
             )
             : genericContentText()
 
@@ -204,7 +206,8 @@ nonisolated enum LocalNotificationProjection {
         isMention: Bool,
         senderName: String,
         groupName: String?,
-        preview: String?
+        preview: String?,
+        reaction: (emoji: String, target: String?)?
     ) -> (title: String, body: String) {
         switch trigger {
         case .groupInvite:
@@ -229,6 +232,14 @@ nonisolated enum LocalNotificationProjection {
                 body: L10n.string("You are no longer an admin.")
             )
         case .newMessage:
+            if let reaction {
+                return reactionContentText(
+                    isDm: isDm,
+                    senderName: senderName,
+                    groupName: groupName,
+                    reaction: reaction
+                )
+            }
             if isDm {
                 return (title: senderName, body: preview ?? L10n.string("New encrypted message"))
             }
@@ -245,6 +256,34 @@ nonisolated enum LocalNotificationProjection {
                     ?? L10n.formatted("%@ sent a message", senderName)
             )
         }
+    }
+
+    private static func reactionContentText(
+        isDm: Bool,
+        senderName: String,
+        groupName: String?,
+        reaction: (emoji: String, target: String?)
+    ) -> (title: String, body: String) {
+        if isDm {
+            return (
+                title: senderName,
+                body: reaction.target.map { L10n.formatted("Reacted %@ to: “%@”", reaction.emoji, $0) }
+                    ?? L10n.formatted("Reacted %@", reaction.emoji)
+            )
+        }
+        return (
+            title: groupName ?? L10n.string("Group message"),
+            body: reaction.target.map {
+                L10n.formatted("%@ reacted %@ to: “%@”", senderName, reaction.emoji, $0)
+            } ?? L10n.formatted("%@ reacted %@", senderName, reaction.emoji)
+        )
+    }
+
+    private static func reactionContent(for update: NotificationUpdateFfi) -> (emoji: String, target: String?)? {
+        guard let raw = update.reactionEmoji else { return nil }
+        let emoji = ContentSanitizer.reactionEmoji(raw)
+        guard !emoji.isEmpty else { return nil }
+        return (emoji: emoji, target: notificationPreview(update.reactedToPreview))
     }
 
     private static func displayName(for user: NotificationUserFfi, nickname: String?) -> String {
