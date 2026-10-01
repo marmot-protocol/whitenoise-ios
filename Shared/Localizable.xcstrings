@@ -326,6 +326,71 @@
         }
       }
     },
+    "Enter one address per line. This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib eine Adresse pro Zeile ein. Dies ersetzt deine Relay-Liste für den Nachrichteneingang, einschließlich weggelassener Einträge. Nichts wird veröffentlicht, bevor du es überprüfst und bestätigst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter one address per line. This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce una dirección por línea. Esto reemplaza tu lista de relés de la bandeja de mensajes, incluidas las entradas que omitas. No se publica nada hasta que lo revises y lo apruebes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez une adresse par ligne. Cela remplace votre liste de relais de boîte de réception, y compris les entrées que vous omettez. Rien n’est publié avant que vous l’ayez vérifié et approuvé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci un indirizzo per riga. Questo sostituisce l’elenco dei relay della casella dei messaggi, comprese le voci che ometti. Nulla viene pubblicato finché non lo controlli e approvi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduza um endereço por linha. Isto substitui a sua lista de relays da caixa de mensagens, incluindo as entradas que omitir. Nada é publicado até que reveja e aprove."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вводите по одному адресу в строке. Это заменит ваш список реле для входящих сообщений, включая пропущенные записи. Ничего не будет опубликовано, пока вы не проверите и не подтвердите изменения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her satıra bir adres girin. Bu, atladığınız girdiler dahil mesaj gelen kutusu relay listenizi değiştirir. Siz inceleyip onaylayana kadar hiçbir şey yayınlanmaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行输入一个地址。这将替换你的消息收件中继列表，包括你未填写的条目。在你检查并批准之前，不会发布任何内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行輸入一個位址。這將取代你的訊息收件中繼清單，包括你未填寫的項目。在你檢查並核准之前，不會發布任何內容。"
+          }
+        }
+      }
+    },
     "Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it." : {
       "extractionState": "manual",
       "localizations": {

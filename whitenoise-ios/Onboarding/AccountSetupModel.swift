@@ -259,6 +259,11 @@ nonisolated enum AccountSetupInput {
         return result
     }
 
+    // MDK caps an explicit selection at 16 unique addresses across both roles.
+    static func exceedsSelectionLimit(reads: [String], writes: [String]) -> Bool {
+        Set(reads + writes).count > 16
+    }
+
     static func proposalRelays(_ relays: [String]) -> [String]? {
         guard relays.count <= 16 else { return nil }
         var result: [String] = []

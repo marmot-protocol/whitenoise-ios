@@ -127,6 +127,12 @@ struct AccountSetupTests {
         #expect(AccountSetupInput.relays(String(repeating: "x", count: 16_385)) == nil)
     }
 
+    @Test func editorSelectionLimitCountsSharedAddressesOnce() {
+        let sixteen = (1...16).map { "wss://relay\($0).example" }
+        #expect(!AccountSetupInput.exceedsSelectionLimit(reads: sixteen, writes: sixteen))
+        #expect(AccountSetupInput.exceedsSelectionLimit(reads: sixteen, writes: ["wss://relay17.example"]))
+    }
+
     @Test func proposalValidationRejectsTheWholeListInsteadOfHidingUnsafeEntries() {
         #expect(AccountSetupInput.proposalRelays(["wss://RELAY.example/"]) == ["wss://relay.example/"])
         for unsafe in ["ws://relay.example", "wss://user@relay.example", "wss://127.0.0.1",

@@ -201,8 +201,13 @@ private struct AccountSetupRelaySheet: View {
                 }
             }
             Section {
-                Text("Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it.")
-                    .foregroundStyle(.secondary)
+                if step == .inboxRelays {
+                    Text("Enter one address per line. This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it.")
+                        .foregroundStyle(.secondary)
+                }
             }
             if let error { Text(error).foregroundStyle(.orange) }
         }
@@ -220,6 +225,10 @@ private struct AccountSetupRelaySheet: View {
                 let writeValues = step == .inboxRelays ? [] : AccountSetupInput.relays(writes)
                 guard let readValues, let writeValues else {
                     error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
+                    return
+                }
+                guard !AccountSetupInput.exceedsSelectionLimit(reads: readValues, writes: writeValues) else {
+                    error = L10n.string("The relay list is too large.")
                     return
                 }
                 guard let operation = model.send(.editRelays(step, reads: readValues, writes: writeValues)) else { return }
