@@ -109,8 +109,14 @@ struct AccountSetupActions: View {
                         } else {
                             ForEach(relays, id: \.self) { Text($0).font(.callout.monospaced()).textSelection(.enabled) }
                         }
-                        Text("Continuing publishes these addresses to your public profile.")
-                            .foregroundStyle(.secondary)
+                        if proposal == nil {
+                            // MDK appends missing defaults to an existing list rather than replacing it.
+                            Text("Continuing adds any of these addresses that are missing to your public profile. Relays already listed there are kept.")
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Continuing publishes these addresses to your public profile.")
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         Text("A relay address is invalid. Go back and check the settings.").foregroundStyle(.orange)
                     }
