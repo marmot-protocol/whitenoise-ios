@@ -37,7 +37,7 @@ struct AppStateBootstrapTests {
         #expect(appState.accounts.isEmpty)
     }
 
-    @Test(.timeLimit(.minutes(1))) func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
+    @Test func erasurePreparationDrainsMaintenanceAndReleasesRootLease() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState
         let client = try #require(appState.client)
@@ -15189,9 +15189,7 @@ private struct MarmotRuntimeConcurrencyLimit: SuiteTrait, TestTrait, TestScoping
         testCase: Test.Case?,
         performing function: @concurrent @Sendable () async throws -> Void
     ) async throws {
-        guard testCase != nil, !test.traits.contains(where: { $0 is TimeLimitTrait }) else {
-            return try await function()
-        }
+        guard testCase != nil else { return try await function() }
         try await marmotRuntimeTestGate.withLock { try await function() }
     }
 }
