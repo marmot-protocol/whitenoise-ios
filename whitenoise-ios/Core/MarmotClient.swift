@@ -1184,6 +1184,16 @@ struct RelaySettingsSaveFailure: LocalizedError {
     }
 }
 
+/// The account relay list a Relays settings edit publishes.
+nonisolated enum RelayListTarget: String, Identifiable, Sendable {
+    /// The NIP-65 (kind 10002) list other Nostr clients read and publish to.
+    case nip65
+    /// The inbox (kind 10050) list where invitations arrive.
+    case inbox
+
+    var id: String { rawValue }
+}
+
 enum RelaySettings {
     /// Shown for a published list whose relays are empty, or whose every entry
     /// sanitized entirely away (e.g. relays made only of control/bidi
@@ -1197,6 +1207,10 @@ enum RelaySettings {
 
     static func editableRelays(from lists: AccountRelayListsFfi) -> [String] {
         normalizedRelayURLs(lists.defaultRelays.isEmpty ? lists.nip65.relays : lists.defaultRelays)
+    }
+
+    static func editableInboxRelays(from lists: AccountRelayListsFfi) -> [String] {
+        normalizedRelayURLs(lists.inbox.relays)
     }
 
     /// Display string for one editable account-relay row. Same sanitizer as
@@ -1257,9 +1271,12 @@ enum RelaySettings {
         return normalized
     }
 
+    /// Publishes one edited relay list: the NIP-65 (kind 10002) list or the
+    /// inbox (kind 10050) list. The other list is left as published.
     static func saveAccountRelays(
         accountRef: String,
         relays: [String],
+        target: RelayListTarget,
         currentLists: AccountRelayListsFfi?,
         manager: AccountRelayListManaging
     ) async throws -> AccountRelayListsFfi {
@@ -1267,16 +1284,20 @@ enum RelaySettings {
         let bootstrap = currentLists.map(bootstrapRelays(from:)) ?? MarmotClient.seedRelays
 
         do {
-            _ = try await manager.setAccountInboxRelays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
-            )
-            return try await manager.setAccountNip65Relays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
-            )
+            switch target {
+            case .nip65:
+                return try await manager.setAccountNip65Relays(
+                    accountRef: accountRef,
+                    relays: normalized,
+                    bootstrapRelays: bootstrap
+                )
+            case .inbox:
+                return try await manager.setAccountInboxRelays(
+                    accountRef: accountRef,
+                    relays: normalized,
+                    bootstrapRelays: bootstrap
+                )
+            }
         } catch {
             let reloadedLists = try? manager.accountRelayLists(accountRef: accountRef)
             throw RelaySettingsSaveFailure(

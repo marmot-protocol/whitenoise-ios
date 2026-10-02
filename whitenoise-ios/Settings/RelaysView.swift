@@ -4,17 +4,18 @@ import MarmotKit
 /// Account relay configuration + diagnostics.
 ///
 /// Marmot owns the account relay lists. This screen reads the current
-/// projection and sends edits back through Marmot, which publishes the updated
-/// NIP-65 and inbox lists. All load/save/validation lives in `RelaysViewModel`;
-/// this view is pure rendering.
+/// projection and sends edits back through Marmot. The account (NIP-65) and
+/// inbox lists are edited and published separately. All load/save/validation
+/// lives in `RelaysViewModel`; this view is pure rendering.
 struct RelaysView: View {
     @Environment(AppState.self) private var appState
     @State private var model = RelaysViewModel()
-    @State private var isShowingAddRelay = false
+    @State private var addRelayTarget: RelayListTarget?
 
     var body: some View {
         Form {
             accountRelaysSection
+            inboxRelaysSection
             publishedListsSection
         }
         .localizedNavigationTitle("Relays")
@@ -28,10 +29,10 @@ struct RelaysView: View {
         }
         .task(id: appState.activeAccountRef) { await model.reload(using: appState) }
         .refreshable { await model.reload(using: appState) }
-        .sheet(isPresented: $isShowingAddRelay) {
-            AddRelaySettingsSheet(existingRelays: model.currentRelays) { url in
+        .sheet(item: $addRelayTarget) { target in
+            AddRelaySettingsSheet(existingRelays: model.relays(for: target)) { url in
                 model.pendingUrl = url
-                model.addPending(using: appState)
+                model.addPending(to: target, using: appState)
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
@@ -61,31 +62,64 @@ struct RelaysView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(Array(model.currentRelays.enumerated()), id: \.offset) { _, url in
-                    Text(RelaySettings.editableRelayDisplay(url))
-                        .font(.system(.body, design: .monospaced))
-                }
-                .onDelete { model.deleteRelays(at: $0, using: appState) }
-
-                Button {
-                    isShowingAddRelay = true
-                } label: {
-                    Label("Add Relay", systemImage: "plus.circle")
-                }
-                .disabled(model.isSaving || model.lists == nil)
+                editableRelayRows(.nip65)
             }
 
-            if model.saveError == L10n.string("Keep at least one relay."),
-               let saveError = model.saveError {
-                Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-                    .font(.callout)
-            }
+            keepOneRelayError(.nip65)
         } header: {
             Text("Account Relays")
         } footer: {
-            Text("Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists.")
+            Text("Other Nostr apps find your posts and profile on these relays. Edits are published as your NIP-65 relay list.")
                 .font(.footnote)
+        }
+    }
+
+    // MARK: - Inbox relays
+
+    @ViewBuilder
+    private var inboxRelaysSection: some View {
+        if model.lists != nil {
+            Section {
+                if model.currentInboxRelays.isEmpty {
+                    Text("No relays published")
+                        .foregroundStyle(.secondary)
+                }
+
+                editableRelayRows(.inbox)
+                keepOneRelayError(.inbox)
+            } header: {
+                Text("Inbox Relays")
+            } footer: {
+                Text("People send you chat invitations on these relays. Edits are published as your inbox relay list.")
+                    .font(.footnote)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func editableRelayRows(_ target: RelayListTarget) -> some View {
+        ForEach(Array(model.relays(for: target).enumerated()), id: \.offset) { _, url in
+            Text(RelaySettings.editableRelayDisplay(url))
+                .font(.system(.body, design: .monospaced))
+        }
+        .onDelete { model.deleteRelays(at: $0, from: target, using: appState) }
+
+        Button {
+            addRelayTarget = target
+        } label: {
+            Label("Add Relay", systemImage: "plus.circle")
+        }
+        .disabled(model.isSaving || model.lists == nil)
+    }
+
+    @ViewBuilder
+    private func keepOneRelayError(_ target: RelayListTarget) -> some View {
+        if model.saveErrorTarget == target,
+           model.saveError == L10n.string("Keep at least one relay."),
+           let saveError = model.saveError {
+            Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.callout)
         }
     }
 

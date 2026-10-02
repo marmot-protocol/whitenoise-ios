@@ -45,6 +45,22 @@ nonisolated enum AppContainerConfig {
         "wss://relay.ditto.pub", "wss://relay.primal.net"
     ]
 
+    /// General-purpose relays added to new accounts' NIP-65 (kind 10002) lists.
+    /// White Noise relays accept only the event kinds White Noise needs, so other
+    /// Nostr clients need these to publish and read the account's other events.
+    static let generalPurposeRelays = [
+        "wss://nos.lol",
+        "wss://relay.primal.net",
+        "wss://whitenoise.nostrdev.com"
+    ]
+
+    /// NIP-65 defaults for new accounts and onboarding relay repairs. The inbox
+    /// (kind 10050) list keeps the runtime relays. A custom (development or test)
+    /// runtime relay set is used as given.
+    static func accountRelays(runtimeRelays: [String]) -> [String] {
+        runtimeRelays == seedRelays ? seedRelays + generalPurposeRelays : runtimeRelays
+    }
+
     /// MIP-05 notification-server inbox relay stamped into push registrations.
     /// Kind-446 triggers publish here; keep aligned with `seedRelays`.
     static let pushNotificationRelayHint = seedRelays[0]

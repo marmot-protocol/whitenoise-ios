@@ -1,14 +1,14 @@
-mdk-sha: 946e0547485c9a2c393c2048ec3a968fd50fb441
+mdk-sha: 122bd90ffac60bb6311346e228d0f609a18521ee
 mdk-branch: master
-mdk-tag: marmotkit-v0.11.0
-published-at: 2026-09-29T06:06:56Z
+mdk-tag: marmotkit-v0.12.0
+published-at: 2026-10-02T10:33:26Z
 uniffi-version: 0.29.4
 features: otlp-export,product-analytics-export
 ios-targets: aarch64-apple-ios, aarch64-apple-ios-sim
 ios-deployment-target: 18.0
 rust-release-opt-level: 3
 rust-release-codegen-units: 1
-swiftpm-checksum: c342c3b5a42c79c4fbd9fbe7fe06a27ac6267da4731319239b2af0cb11e9f96d
+swiftpm-checksum: 5dba446f174fffb6c035d4fa65f2a88f7e63ea5b64a51f3b1a7ddfb89b39bbfc
 distribution: static-library-and-privacy-v1
 privacy-sha256: 3759ff2493741386342599b39673989a461f491ad1fb207a7133a2b0035140f7
 

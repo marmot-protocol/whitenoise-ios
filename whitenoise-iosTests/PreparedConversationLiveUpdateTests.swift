@@ -102,7 +102,8 @@ struct PreparedConversationLiveUpdateTests {
             #expect(model.timelineStore.timelineProjectionGeneration == generation)
             #expect(model.timelineStore.timelineRebuildCountForTesting == rebuilds)
             let tallies = ConversationReactionsFfi(totalCount: 1, totalKinds: 1,
-                items: [.init(emoji: "👍", count: 1, reactors: ["peer"], viewerReacted: false)], omittedKinds: 0)
+                items: [.init(emoji: "👍", count: 1, reactors: ["peer"], viewerReacted: false, reactionMessageIdHex: nil)],
+                omittedKinds: 0)
             install([old, new, second], reactions: ["new": tallies])
             #expect(model.reactions(for: "new").first?.count == 1)
             #expect(model.reactions(for: "old").isEmpty)
@@ -225,7 +226,8 @@ struct PreparedConversationLiveUpdateTests {
     @Test func preparedReactionOverlayUsesViewerFlagEvenOutsideReactorPreview() {
         let cache = ConversationReactionProjectionCache()
         let value = ConversationReactionsFfi(totalCount: 35, totalKinds: 2, items: [ConversationReactionFfi(
-            emoji: "👍", count: 30, reactors: ["someone"], viewerReacted: true)], omittedKinds: 1)
+            emoji: "👍", count: 30, reactors: ["someone"], viewerReacted: true, reactionMessageIdHex: nil)],
+            omittedKinds: 1)
         cache.insertRemoval(ReactionRemoval(targetMessageIdHex: "target", emoji: "👍", sender: "me"))
         let effective = cache.preparedDetails(value, target: "target", me: "me")
         #expect(effective.groups.first?.count == 29)

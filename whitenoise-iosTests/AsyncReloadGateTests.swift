@@ -54,6 +54,28 @@ struct AsyncReloadGateTests {
         #expect(model.currentRelays == ["wss://new.example"])
     }
 
+    @Test func inboxRelayEditsPublishOnlyTheInboxList() async {
+        let model = RelaysViewModel()
+        let dataSource = RelaysViewModelDataSourceStub()
+        model.lists = AccountRelayListsFfi(
+            complete: true,
+            missing: [],
+            defaultRelays: ["wss://wn.example", "wss://general.example"],
+            bootstrapRelays: ["wss://wn.example"],
+            nip65: RelayListFfi(kind: 10_002, relays: ["wss://wn.example", "wss://general.example"]),
+            inbox: RelayListFfi(kind: 10_050, relays: ["wss://wn.example"])
+        )
+        #expect(model.currentInboxRelays == ["wss://wn.example"])
+        model.pendingUrl = "wss://general.example"
+        #expect(model.canAdd(to: .inbox))
+        #expect(!model.canAdd(to: .nip65))
+
+        let saved = await model.save(["wss://wn.example", "wss://inbox.example"], to: .inbox, using: dataSource)
+        #expect(saved)
+        #expect(dataSource.saveTargets == [.inbox])
+        #expect(dataSource.saveRequests == [["wss://wn.example", "wss://inbox.example"]])
+    }
+
     @Test func relaySaveRejectsRetiredEndpointBeforePublishing() async {
         let model = RelaysViewModel()
         let dataSource = RelaysViewModelDataSourceStub()
@@ -293,6 +315,7 @@ private final class RelaysViewModelDataSourceStub: RelaysViewModelDataSource {
     private(set) var saveCallCount = 0
     private(set) var classificationRequests: [[String]] = []
     private(set) var saveRequests: [[String]] = []
+    private(set) var saveTargets: [RelayListTarget] = []
     private(set) var presentedToasts: [Toast] = []
 
     private var loadWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
@@ -334,10 +357,12 @@ private final class RelaysViewModelDataSourceStub: RelaysViewModelDataSource {
     func saveAccountRelayLists(
         accountRef _: String,
         relays: [String],
+        target: RelayListTarget,
         currentLists _: AccountRelayListsFfi?
     ) async throws -> AccountRelayListsFfi {
         saveCallCount += 1
         saveRequests.append(relays)
+        saveTargets.append(target)
         resumeSaveWaiters()
         guard !saveResponses.isEmpty else { return relayLists(relays) }
         switch saveResponses.removeFirst() {

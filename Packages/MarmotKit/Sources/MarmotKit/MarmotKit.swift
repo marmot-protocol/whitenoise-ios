@@ -3449,8 +3449,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * and an explicit readiness state. Public indexers receive best-effort
      * copies of both relay lists and kind-0 metadata; KeyPackages remain on
      * the advertised write relays.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func createIdentity(defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
+    func createIdentity(defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
     /**
      * Create a generated identity and return at durable local readiness with
@@ -3458,8 +3461,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * authority for whether relay publication has completed; `LocalReady`
      * must not be presented as invite-receivable. Account setup copies both
      * relay lists and the default kind-0 profile to public indexers.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func createIdentityWithProfile(defaultRelays: [String], bootstrapRelays: [String]) async throws  -> IdentityCreationResultFfi
+    func createIdentityWithProfile(defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> IdentityCreationResultFfi
 
     /**
      * Create an encrypted NIP-88 poll in a group conversation. Option ids use
@@ -3675,6 +3681,14 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func getBlockedUsers(accountRef: String) throws  -> [BlockedUserFfi]
 
     /**
+     * Read local committed application-owned state; None means absent.
+     * Refresh on group events. Ids below the application range
+     * (`APP_OWNED_APP_COMPONENT_ID_START`, 0xf000) are protocol space and
+     * are rejected.
+     */
+    func groupAppComponent(accountRef: String, groupIdHex: String, componentId: UInt16) async throws  -> GroupAppComponentFfi?
+
+    /**
      * Group details and management state captured for conversation loading in
      * one worker command. The authoritative group record, roster, and MLS
      * state share one session/snapshot frontier; management state is derived
@@ -3822,8 +3836,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Log in with an existing identity. `identity` can be an `nsec` (private
      * key) for a local-signing account, or an `npub` to track a public
      * identity without local signing.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func login(identity: String, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
+    func login(identity: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
     /**
      * Log in with an external account signer such as Amber/NIP-55.
@@ -3833,16 +3850,22 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * account-identity proof signing are routed through `signer`; apps must
      * call this again after process restart before the external account can
      * publish, decrypt welcomes, or start its worker.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String]) async throws  -> AccountSummaryFfi
+    func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
     /**
      * Consent-gated one-call recovery for installations stranded before MDK
      * had durable account-setup journals. This validates the same nsec,
      * removes only the recognized ambiguous partial shape, preserves an
      * existing account-id Keychain credential, and immediately retries login.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool) async throws  -> AccountSummaryFfi
+    func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool, inboxRelays: [String]) async throws  -> AccountSummaryFfi
 
     /**
      * Mark a kind-9 timeline message visible/read. Own kind-9 messages can
@@ -3955,6 +3978,21 @@ public protocol MarmotProtocol: AnyObject, Sendable {
     func periodicMaintenancePolicy(accountRef: String) async throws  -> PeriodicMaintenancePolicyFfi
 
     /**
+     * Who voted for what in one poll: each voter's effective (latest valid)
+     * selection, using the same rules as the row's `PollProjectionFfi`, so all
+     * pages together hold `participants` entries that sum to each option's
+     * `votes`. Polls in this profile are not anonymous: every member can
+     * already read each response and its sender. Blocked voters stay listed
+     * because the tally still counts them; mark them with the account's block
+     * list. Hidden, deleted, missing, or non-poll rows return an empty page.
+     * Votes are ordered by `(voted_at, voter_account_id_hex)`; pass both
+     * cursor fields from the last vote to read the next page (limit 1..=100).
+     * Re-read from the start when the poll row is reprojected. Run this
+     * synchronous details query off the UI thread.
+     */
+    func pollVotes(accountRef: String, groupIdHex: String, pollEventId: String, afterVotedAt: UInt64?, afterVoterAccountIdHex: String?, limit: UInt32) throws  -> PollVotePageFfi
+
+    /**
      * POST one selected JSONL audit log to a forensic analyzer endpoint.
      */
     func postAuditLogFile(path: String, endpoint: String) async throws  -> AuditLogUploadResultFfi
@@ -4019,8 +4057,11 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * relays and schedules public indexer copies when eligible, so call when
      * the relay lists need publication rather than on every launch. Indexers
      * are not advertised as account relays.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-    func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String]) async throws
+    func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String]) async throws
 
     /**
      * Publish Nostr kind:0 metadata with explicit caller-supplied relay
@@ -4074,6 +4115,12 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * React to `target_message_id` with `emoji` (an "add" reaction).
      */
     func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String) async throws  -> SendSummaryFfi
+
+    /**
+     * React with a custom emoji image: `attachments` become `imeta` tags on
+     * the kind-7 and `tags` name them (NIP-30 `emoji`).
+     */
+    func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String, tags: [[String]], attachments: [MediaAttachmentReferenceFfi]) async throws  -> SendSummaryFfi
 
     /**
      * Read 1..=1048576 bytes at an offset from an opaque local asset reference.
@@ -4204,6 +4251,13 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Pass up to 16 opaque targets from visible screen metadata. Does not await HTTP.
      */
     func requestAvatarAssets(accountRef: String, targets: [String]) async throws  -> [AvatarAssetFfi]
+
+    /**
+     * Idempotent explicit demand for the current source. Preserves active
+     * attempts, retry budgets and backoff; does not recover cancelled/removed
+     * or terminal work. Use control Retry or Download again for that intent.
+     */
+    func requestExplicitAttachment(accountRef: String, groupIdHex: String, target: AttachmentLocalTargetFfi) async throws  -> String?
 
     /**
      * Remove only the legacy ambiguous partial-account shape so a subsequent
@@ -4370,6 +4424,19 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Atomically consume this draft revision and admit its token-bound message.
      */
     func sendMessageDraftWithClientToken(accountRef: String, revision: MessageDraftRevisionFfi, attachments: [MediaAttachmentReferenceFfi], clientToken: String) async throws  -> LocalSendAcceptanceFfi
+
+    /**
+     * `send_media_attachments` plus application tags on the same kind-9
+     * event, e.g. NIP-30 `emoji` tags pointing at these attachments.
+     */
+    func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?, tags: [[String]]) async throws  -> SendSummaryFfi
+
+    /**
+     * `send_text` plus application tags on the same kind-9, e.g. NIP-30
+     * `["emoji", shortcode, url]`. At most 64 tags and 16 KiB of values;
+     * `imeta` rows are rejected (use `send_tagged_media` for attachments).
+     */
+    func sendTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]]) async throws  -> SendSummaryFfi
 
     /**
      * Send a plain UTF-8 text message. Structured payloads (reactions,
@@ -4712,6 +4779,15 @@ public protocol MarmotProtocol: AnyObject, Sendable {
      * Remove all of this account's active reactions from `target_message_id`.
      */
     func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws  -> SendSummaryFfi
+
+    /**
+     * Admin-only replacement of optional application-owned group state.
+     * Ids below the application range (0xf000), required components and data
+     * over `APP_COMPONENT_DATA_MAX_LEN` are rejected. Empty bytes do not
+     * remove the component. State survives message expiry and is included in
+     * Welcomes, so it is re-encoded into every later commit; keep it small.
+     */
+    func updateAppComponent(accountRef: String, groupIdHex: String, componentId: UInt16, data: Data) async throws  -> SendSummaryFfi
 
     /**
      * Set (or clear, with `url = None`) the group's URL-based avatar
@@ -5946,14 +6022,17 @@ open func createGroupWithPreparedInitialImage(accountRef: String, name: String, 
      * and an explicit readiness state. Public indexers receive best-effort
      * copies of both relay lists and kind-0 metadata; KeyPackages remain on
      * the advertised write relays.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func createIdentity(defaultRelays: [String], bootstrapRelays: [String])async throws  -> AccountSummaryFfi  {
+open func createIdentity(defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_create_identity(
                     self.uniffiClonePointer(),
-                    FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -5970,14 +6049,17 @@ open func createIdentity(defaultRelays: [String], bootstrapRelays: [String])asyn
      * authority for whether relay publication has completed; `LocalReady`
      * must not be presented as invite-receivable. Account setup copies both
      * relay lists and the default kind-0 profile to public indexers.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func createIdentityWithProfile(defaultRelays: [String], bootstrapRelays: [String])async throws  -> IdentityCreationResultFfi  {
+open func createIdentityWithProfile(defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> IdentityCreationResultFfi  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_create_identity_with_profile(
                     self.uniffiClonePointer(),
-                    FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -6578,6 +6660,29 @@ open func getBlockedUsers(accountRef: String)throws  -> [BlockedUserFfi]  {
 }
 
     /**
+     * Read local committed application-owned state; None means absent.
+     * Refresh on group events. Ids below the application range
+     * (`APP_OWNED_APP_COMPONENT_ID_START`, 0xf000) are protocol space and
+     * are rejected.
+     */
+open func groupAppComponent(accountRef: String, groupIdHex: String, componentId: UInt16)async throws  -> GroupAppComponentFfi?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_group_app_component(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterUInt16.lower(componentId)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeGroupAppComponentFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
      * Group details and management state captured for conversation loading in
      * one worker command. The authoritative group record, roster, and MLS
      * state share one session/snapshot frontier; management state is derived
@@ -7033,14 +7138,17 @@ open func localSendStatus(accountRef: String, groupIdHex: String, clientToken: S
      * Log in with an existing identity. `identity` can be an `nsec` (private
      * key) for a local-signing account, or an `npub` to track a public
      * identity without local signing.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func login(identity: String, defaultRelays: [String], bootstrapRelays: [String])async throws  -> AccountSummaryFfi  {
+open func login(identity: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_login(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(identity),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterString.lower(identity),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -7059,14 +7167,17 @@ open func login(identity: String, defaultRelays: [String], bootstrapRelays: [Str
      * account-identity proof signing are routed through `signer`; apps must
      * call this again after process restart before the external account can
      * publish, decrypt welcomes, or start its worker.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String])async throws  -> AccountSummaryFfi  {
+open func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFfi, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_login_external_signer(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(publicKey),FfiConverterTypeExternalAccountSignerFfi_lower(signer),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterString.lower(publicKey),FfiConverterTypeExternalAccountSignerFfi_lower(signer),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -7082,14 +7193,17 @@ open func loginExternalSigner(publicKey: String, signer: ExternalAccountSignerFf
      * had durable account-setup journals. This validates the same nsec,
      * removes only the recognized ambiguous partial shape, preserves an
      * existing account-id Keychain credential, and immediately retries login.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool)async throws  -> AccountSummaryFfi  {
+open func loginRecoveringIncompleteSetup(nsec: String, defaultRelays: [String], bootstrapRelays: [String], acknowledgePossibleKeyPackageOrphan: Bool, inboxRelays: [String] = [])async throws  -> AccountSummaryFfi  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_login_recovering_incomplete_setup(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(nsec),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterBool.lower(acknowledgePossibleKeyPackageOrphan)
+                    FfiConverterString.lower(nsec),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterBool.lower(acknowledgePossibleKeyPackageOrphan),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -7401,6 +7515,32 @@ open func periodicMaintenancePolicy(accountRef: String)async throws  -> Periodic
 }
 
     /**
+     * Who voted for what in one poll: each voter's effective (latest valid)
+     * selection, using the same rules as the row's `PollProjectionFfi`, so all
+     * pages together hold `participants` entries that sum to each option's
+     * `votes`. Polls in this profile are not anonymous: every member can
+     * already read each response and its sender. Blocked voters stay listed
+     * because the tally still counts them; mark them with the account's block
+     * list. Hidden, deleted, missing, or non-poll rows return an empty page.
+     * Votes are ordered by `(voted_at, voter_account_id_hex)`; pass both
+     * cursor fields from the last vote to read the next page (limit 1..=100).
+     * Re-read from the start when the poll row is reprojected. Run this
+     * synchronous details query off the UI thread.
+     */
+open func pollVotes(accountRef: String, groupIdHex: String, pollEventId: String, afterVotedAt: UInt64?, afterVoterAccountIdHex: String?, limit: UInt32)throws  -> PollVotePageFfi  {
+    return try  FfiConverterTypePollVotePageFfi_lift(try rustCallWithError(FfiConverterTypeMarmotKitError_lift) {
+    uniffi_marmot_uniffi_fn_method_marmot_poll_votes(self.uniffiClonePointer(),
+        FfiConverterString.lower(accountRef),
+        FfiConverterString.lower(groupIdHex),
+        FfiConverterString.lower(pollEventId),
+        FfiConverterOptionUInt64.lower(afterVotedAt),
+        FfiConverterOptionString.lower(afterVoterAccountIdHex),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+
+    /**
      * POST one selected JSONL audit log to a forensic analyzer endpoint.
      */
 open func postAuditLogFile(path: String, endpoint: String)async throws  -> AuditLogUploadResultFfi  {
@@ -7690,14 +7830,17 @@ open func publishNewKeyPackage(accountRef: String)async throws  -> UInt64  {
      * relays and schedules public indexer copies when eligible, so call when
      * the relay lists need publication rather than on every launch. Indexers
      * are not advertised as account relays.
+     *
+     * `inbox_relays` (default empty) sets the kind-10050 inbox list
+     * separately; empty declares `default_relays` in both lists.
      */
-open func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String])async throws   {
+open func publishRelayLists(accountRef: String, defaultRelays: [String], bootstrapRelays: [String], inboxRelays: [String] = [])async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_marmot_uniffi_fn_method_marmot_publish_relay_lists(
                     self.uniffiClonePointer(),
-                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays)
+                    FfiConverterString.lower(accountRef),FfiConverterSequenceString.lower(defaultRelays),FfiConverterSequenceString.lower(bootstrapRelays),FfiConverterSequenceString.lower(inboxRelays)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_void,
@@ -7822,6 +7965,27 @@ open func reactToMessage(accountRef: String, groupIdHex: String, targetMessageId
                 uniffi_marmot_uniffi_fn_method_marmot_react_to_message(
                     self.uniffiClonePointer(),
                     FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(emoji)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * React with a custom emoji image: `attachments` become `imeta` tags on
+     * the kind-7 and `tags` name them (NIP-30 `emoji`).
+     */
+open func reactWithMedia(accountRef: String, groupIdHex: String, targetMessageId: String, emoji: String, tags: [[String]], attachments: [MediaAttachmentReferenceFfi])async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_react_with_media(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId),FfiConverterString.lower(emoji),FfiConverterSequenceSequenceString.lower(tags),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -8273,6 +8437,28 @@ open func requestAvatarAssets(accountRef: String, targets: [String])async throws
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterSequenceTypeAvatarAssetFfi.lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Idempotent explicit demand for the current source. Preserves active
+     * attempts, retry budgets and backoff; does not recover cancelled/removed
+     * or terminal work. Use control Retry or Download again for that intent.
+     */
+open func requestExplicitAttachment(accountRef: String, groupIdHex: String, target: AttachmentLocalTargetFfi)async throws  -> String?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_request_explicit_attachment(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterTypeAttachmentLocalTargetFfi_lower(target)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionString.lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -8755,6 +8941,49 @@ open func sendMessageDraftWithClientToken(accountRef: String, revision: MessageD
             completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeLocalSendAcceptanceFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * `send_media_attachments` plus application tags on the same kind-9
+     * event, e.g. NIP-30 `emoji` tags pointing at these attachments.
+     */
+open func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi], caption: String?, tags: [[String]])async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_tagged_media(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterSequenceTypeMediaAttachmentReferenceFfi.lower(attachments),FfiConverterOptionString.lower(caption),FfiConverterSequenceSequenceString.lower(tags)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * `send_text` plus application tags on the same kind-9, e.g. NIP-30
+     * `["emoji", shortcode, url]`. At most 64 tags and 16 KiB of values;
+     * `imeta` rows are rejected (use `send_tagged_media` for attachments).
+     */
+open func sendTaggedText(accountRef: String, groupIdHex: String, text: String, tags: [[String]])async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_send_tagged_text(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(text),FfiConverterSequenceSequenceString.lower(tags)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
             errorHandler: FfiConverterTypeMarmotKitError_lift
         )
 }
@@ -9697,6 +9926,30 @@ open func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessa
                 uniffi_marmot_uniffi_fn_method_marmot_unreact_from_message(
                     self.uniffiClonePointer(),
                     FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterString.lower(targetMessageId)
+                )
+            },
+            pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_marmot_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_marmot_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSendSummaryFfi_lift,
+            errorHandler: FfiConverterTypeMarmotKitError_lift
+        )
+}
+
+    /**
+     * Admin-only replacement of optional application-owned group state.
+     * Ids below the application range (0xf000), required components and data
+     * over `APP_COMPONENT_DATA_MAX_LEN` are rejected. Empty bytes do not
+     * remove the component. State survives message expiry and is included in
+     * Welcomes, so it is re-encoded into every later commit; keep it small.
+     */
+open func updateAppComponent(accountRef: String, groupIdHex: String, componentId: UInt16, data: Data)async throws  -> SendSummaryFfi  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_marmot_uniffi_fn_method_marmot_update_app_component(
+                    self.uniffiClonePointer(),
+                    FfiConverterString.lower(accountRef),FfiConverterString.lower(groupIdHex),FfiConverterUInt16.lower(componentId),FfiConverterData.lower(data)
                 )
             },
             pollFunc: ffi_marmot_uniffi_rust_future_poll_rust_buffer,
@@ -18566,7 +18819,8 @@ public func FfiConverterTypeConversationIdentityFfi_lower(_ value: ConversationI
 
 /**
  * Timeline content plus bounded display references. Use references.reactions for UI;
- * custom-event tags are preserved; typed rows use structured fields and reactions use references.
+ * custom-event tags and NIP-30 `emoji` tags on chats are preserved; other typed-row tags use
+ * structured fields and reactions use references.
  */
 public struct ConversationMessageFfi {
     public var timeline: TimelineMessageRecordFfi
@@ -18984,17 +19238,27 @@ public struct ConversationReactionFfi {
      * Active reaction by the viewing account; independent of reactor previews.
      */
     public var viewerReacted: Bool
+    /**
+     * Earliest active kind-7 with this emoji. For a NIP-30 `:shortcode:`
+     * reaction, `list_media` returns its image under this message id.
+     */
+    public var reactionMessageIdHex: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(emoji: String, count: UInt64, reactors: [String],
         /**
          * Active reaction by the viewing account; independent of reactor previews.
-         */viewerReacted: Bool) {
+         */viewerReacted: Bool,
+        /**
+         * Earliest active kind-7 with this emoji. For a NIP-30 `:shortcode:`
+         * reaction, `list_media` returns its image under this message id.
+         */reactionMessageIdHex: String?) {
         self.emoji = emoji
         self.count = count
         self.reactors = reactors
         self.viewerReacted = viewerReacted
+        self.reactionMessageIdHex = reactionMessageIdHex
     }
 }
 
@@ -19017,6 +19281,9 @@ extension ConversationReactionFfi: Equatable, Hashable {
         if lhs.viewerReacted != rhs.viewerReacted {
             return false
         }
+        if lhs.reactionMessageIdHex != rhs.reactionMessageIdHex {
+            return false
+        }
         return true
     }
 
@@ -19025,6 +19292,7 @@ extension ConversationReactionFfi: Equatable, Hashable {
         hasher.combine(count)
         hasher.combine(reactors)
         hasher.combine(viewerReacted)
+        hasher.combine(reactionMessageIdHex)
     }
 }
 
@@ -19040,7 +19308,8 @@ public struct FfiConverterTypeConversationReactionFfi: FfiConverterRustBuffer {
                 emoji: FfiConverterString.read(from: &buf),
                 count: FfiConverterUInt64.read(from: &buf),
                 reactors: FfiConverterSequenceString.read(from: &buf),
-                viewerReacted: FfiConverterBool.read(from: &buf)
+                viewerReacted: FfiConverterBool.read(from: &buf),
+                reactionMessageIdHex: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -19049,6 +19318,7 @@ public struct FfiConverterTypeConversationReactionFfi: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.count, into: &buf)
         FfiConverterSequenceString.write(value.reactors, into: &buf)
         FfiConverterBool.write(value.viewerReacted, into: &buf)
+        FfiConverterOptionString.write(value.reactionMessageIdHex, into: &buf)
     }
 }
 
@@ -19866,6 +20136,79 @@ public func FfiConverterTypeExistingDirectConversationFfi_lift(_ buf: RustBuffer
 #endif
 public func FfiConverterTypeExistingDirectConversationFfi_lower(_ value: ExistingDirectConversationFfi) -> RustBuffer {
     return FfiConverterTypeExistingDirectConversationFfi.lower(value)
+}
+
+
+/**
+ * Opaque application-owned state. Empty data is present state.
+ */
+public struct GroupAppComponentFfi {
+    public var componentId: UInt16
+    public var data: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(componentId: UInt16, data: Data) {
+        self.componentId = componentId
+        self.data = data
+    }
+}
+
+#if compiler(>=6)
+extension GroupAppComponentFfi: Sendable {}
+#endif
+
+
+extension GroupAppComponentFfi: Equatable, Hashable {
+    public static func ==(lhs: GroupAppComponentFfi, rhs: GroupAppComponentFfi) -> Bool {
+        if lhs.componentId != rhs.componentId {
+            return false
+        }
+        if lhs.data != rhs.data {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(componentId)
+        hasher.combine(data)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeGroupAppComponentFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> GroupAppComponentFfi {
+        return
+            try GroupAppComponentFfi(
+                componentId: FfiConverterUInt16.read(from: &buf),
+                data: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: GroupAppComponentFfi, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.componentId, into: &buf)
+        FfiConverterData.write(value.data, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupAppComponentFfi_lift(_ buf: RustBuffer) throws -> GroupAppComponentFfi {
+    return try FfiConverterTypeGroupAppComponentFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeGroupAppComponentFfi_lower(_ value: GroupAppComponentFfi) -> RustBuffer {
+    return FfiConverterTypeGroupAppComponentFfi.lower(value)
 }
 
 
@@ -23713,14 +24056,22 @@ public struct MediaUploadRequestFfi {
     public var caption: String?
     public var send: Bool
     public var blossomServer: String?
+    /**
+     * Extra tags on the sent kind-9, e.g. NIP-30 `emoji`. `imeta` is rejected.
+     */
+    public var messageTags: [[String]]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(attachments: [MediaUploadAttachmentRequestFfi], caption: String?, send: Bool, blossomServer: String?) {
+    public init(attachments: [MediaUploadAttachmentRequestFfi], caption: String?, send: Bool, blossomServer: String?,
+        /**
+         * Extra tags on the sent kind-9, e.g. NIP-30 `emoji`. `imeta` is rejected.
+         */messageTags: [[String]] = []) {
         self.attachments = attachments
         self.caption = caption
         self.send = send
         self.blossomServer = blossomServer
+        self.messageTags = messageTags
     }
 }
 
@@ -23743,6 +24094,9 @@ extension MediaUploadRequestFfi: Equatable, Hashable {
         if lhs.blossomServer != rhs.blossomServer {
             return false
         }
+        if lhs.messageTags != rhs.messageTags {
+            return false
+        }
         return true
     }
 
@@ -23751,6 +24105,7 @@ extension MediaUploadRequestFfi: Equatable, Hashable {
         hasher.combine(caption)
         hasher.combine(send)
         hasher.combine(blossomServer)
+        hasher.combine(messageTags)
     }
 }
 
@@ -23766,7 +24121,8 @@ public struct FfiConverterTypeMediaUploadRequestFfi: FfiConverterRustBuffer {
                 attachments: FfiConverterSequenceTypeMediaUploadAttachmentRequestFfi.read(from: &buf),
                 caption: FfiConverterOptionString.read(from: &buf),
                 send: FfiConverterBool.read(from: &buf),
-                blossomServer: FfiConverterOptionString.read(from: &buf)
+                blossomServer: FfiConverterOptionString.read(from: &buf),
+                messageTags: FfiConverterSequenceSequenceString.read(from: &buf)
         )
     }
 
@@ -23775,6 +24131,7 @@ public struct FfiConverterTypeMediaUploadRequestFfi: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.caption, into: &buf)
         FfiConverterBool.write(value.send, into: &buf)
         FfiConverterOptionString.write(value.blossomServer, into: &buf)
+        FfiConverterSequenceSequenceString.write(value.messageTags, into: &buf)
     }
 }
 
@@ -25123,12 +25480,20 @@ public func FfiConverterTypeOnboardingFindingFfi_lower(_ value: OnboardingFindin
 public struct OnboardingOptionsFfi {
     public var defaultRelays: [String]
     public var discoveryRelays: [String]
+    /**
+     * Recommended kind-10050 inbox relays. Empty uses `default_relays`.
+     */
+    public var inboxRelays: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(defaultRelays: [String], discoveryRelays: [String]) {
+    public init(defaultRelays: [String], discoveryRelays: [String],
+        /**
+         * Recommended kind-10050 inbox relays. Empty uses `default_relays`.
+         */inboxRelays: [String] = []) {
         self.defaultRelays = defaultRelays
         self.discoveryRelays = discoveryRelays
+        self.inboxRelays = inboxRelays
     }
 }
 
@@ -25145,12 +25510,16 @@ extension OnboardingOptionsFfi: Equatable, Hashable {
         if lhs.discoveryRelays != rhs.discoveryRelays {
             return false
         }
+        if lhs.inboxRelays != rhs.inboxRelays {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(defaultRelays)
         hasher.combine(discoveryRelays)
+        hasher.combine(inboxRelays)
     }
 }
 
@@ -25164,13 +25533,15 @@ public struct FfiConverterTypeOnboardingOptionsFfi: FfiConverterRustBuffer {
         return
             try OnboardingOptionsFfi(
                 defaultRelays: FfiConverterSequenceString.read(from: &buf),
-                discoveryRelays: FfiConverterSequenceString.read(from: &buf)
+                discoveryRelays: FfiConverterSequenceString.read(from: &buf),
+                inboxRelays: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
     public static func write(_ value: OnboardingOptionsFfi, into buf: inout [UInt8]) {
         FfiConverterSequenceString.write(value.defaultRelays, into: &buf)
         FfiConverterSequenceString.write(value.discoveryRelays, into: &buf)
+        FfiConverterSequenceString.write(value.inboxRelays, into: &buf)
     }
 }
 
@@ -25791,6 +26162,175 @@ public func FfiConverterTypePollProjectionFfi_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypePollProjectionFfi_lower(_ value: PollProjectionFfi) -> RustBuffer {
     return FfiConverterTypePollProjectionFfi.lower(value)
+}
+
+
+/**
+ * One voter's effective (latest valid) poll selection; the list sums to the
+ * row's `PollProjectionFfi` tally.
+ */
+public struct PollVoteFfi {
+    public var voterAccountIdHex: String
+    public var optionIds: [String]
+    /**
+     * Authenticated time of the effective response.
+     */
+    public var votedAt: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(voterAccountIdHex: String, optionIds: [String],
+        /**
+         * Authenticated time of the effective response.
+         */votedAt: UInt64) {
+        self.voterAccountIdHex = voterAccountIdHex
+        self.optionIds = optionIds
+        self.votedAt = votedAt
+    }
+}
+
+#if compiler(>=6)
+extension PollVoteFfi: Sendable {}
+#endif
+
+
+extension PollVoteFfi: Equatable, Hashable {
+    public static func ==(lhs: PollVoteFfi, rhs: PollVoteFfi) -> Bool {
+        if lhs.voterAccountIdHex != rhs.voterAccountIdHex {
+            return false
+        }
+        if lhs.optionIds != rhs.optionIds {
+            return false
+        }
+        if lhs.votedAt != rhs.votedAt {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(voterAccountIdHex)
+        hasher.combine(optionIds)
+        hasher.combine(votedAt)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePollVoteFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PollVoteFfi {
+        return
+            try PollVoteFfi(
+                voterAccountIdHex: FfiConverterString.read(from: &buf),
+                optionIds: FfiConverterSequenceString.read(from: &buf),
+                votedAt: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PollVoteFfi, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.voterAccountIdHex, into: &buf)
+        FfiConverterSequenceString.write(value.optionIds, into: &buf)
+        FfiConverterUInt64.write(value.votedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollVoteFfi_lift(_ buf: RustBuffer) throws -> PollVoteFfi {
+    return try FfiConverterTypePollVoteFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollVoteFfi_lower(_ value: PollVoteFfi) -> RustBuffer {
+    return FfiConverterTypePollVoteFfi.lower(value)
+}
+
+
+/**
+ * One page of poll votes ordered by `(voted_at, voter_account_id_hex)`.
+ */
+public struct PollVotePageFfi {
+    public var votes: [PollVoteFfi]
+    /**
+     * More votes follow; pass the last vote's `voted_at` and
+     * `voter_account_id_hex` as the next cursor.
+     */
+    public var hasMoreAfter: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(votes: [PollVoteFfi],
+        /**
+         * More votes follow; pass the last vote's `voted_at` and
+         * `voter_account_id_hex` as the next cursor.
+         */hasMoreAfter: Bool) {
+        self.votes = votes
+        self.hasMoreAfter = hasMoreAfter
+    }
+}
+
+#if compiler(>=6)
+extension PollVotePageFfi: Sendable {}
+#endif
+
+
+extension PollVotePageFfi: Equatable, Hashable {
+    public static func ==(lhs: PollVotePageFfi, rhs: PollVotePageFfi) -> Bool {
+        if lhs.votes != rhs.votes {
+            return false
+        }
+        if lhs.hasMoreAfter != rhs.hasMoreAfter {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(votes)
+        hasher.combine(hasMoreAfter)
+    }
+}
+
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePollVotePageFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PollVotePageFfi {
+        return
+            try PollVotePageFfi(
+                votes: FfiConverterSequenceTypePollVoteFfi.read(from: &buf),
+                hasMoreAfter: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PollVotePageFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypePollVoteFfi.write(value.votes, into: &buf)
+        FfiConverterBool.write(value.hasMoreAfter, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollVotePageFfi_lift(_ buf: RustBuffer) throws -> PollVotePageFfi {
+    return try FfiConverterTypePollVotePageFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePollVotePageFfi_lower(_ value: PollVotePageFfi) -> RustBuffer {
+    return FfiConverterTypePollVotePageFfi.lower(value)
 }
 
 
@@ -37249,6 +37789,8 @@ public enum MarmotKitError: Swift.Error {
      * An explicit target disappeared; an already-open window remains usable.
      */
     case ConversationWindowMessageNotRetained
+    case InvalidAppComponent(details: String
+    )
 }
 
 
@@ -37443,6 +37985,9 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
             details: try FfiConverterString.read(from: &buf)
             )
         case 85: return .ConversationWindowMessageNotRetained
+        case 86: return .InvalidAppComponent(
+            details: try FfiConverterString.read(from: &buf)
+            )
 
          default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -37842,6 +38387,11 @@ public struct FfiConverterTypeMarmotKitError: FfiConverterRustBuffer {
 
         case .ConversationWindowMessageNotRetained:
             writeInt(&buf, Int32(85))
+
+
+        case let .InvalidAppComponent(details):
+            writeInt(&buf, Int32(86))
+            FfiConverterString.write(details, into: &buf)
 
         }
     }
@@ -42438,6 +42988,30 @@ fileprivate struct FfiConverterOptionTypeExistingDirectConversationFfi: FfiConve
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeGroupAppComponentFfi: FfiConverterRustBuffer {
+    typealias SwiftType = GroupAppComponentFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeGroupAppComponentFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeGroupAppComponentFfi.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeGroupSystemEventFfi: FfiConverterRustBuffer {
     typealias SwiftType = GroupSystemEventFfi?
 
@@ -44726,6 +45300,31 @@ fileprivate struct FfiConverterSequenceTypePollOptionResultFfi: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypePollVoteFfi: FfiConverterRustBuffer {
+    typealias SwiftType = [PollVoteFfi]
+
+    public static func write(_ value: [PollVoteFfi], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePollVoteFfi.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PollVoteFfi] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PollVoteFfi]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePollVoteFfi.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePreparedGroupImageUploadFfi: FfiConverterRustBuffer {
     typealias SwiftType = [PreparedGroupImageUploadFfi]
 
@@ -45751,10 +46350,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_group_with_prepared_initial_image() != 14270) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity() != 60507) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity() != 12514) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity_with_profile() != 486) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_create_identity_with_profile() != 65394) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_create_poll() != 2964) {
@@ -45841,6 +46440,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_get_blocked_users() != 21604) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_group_app_component() != 45914) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_group_conversation_snapshot() != 51785) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -45916,13 +46518,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_local_send_status() != 62132) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login() != 33167) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login() != 10007) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login_external_signer() != 44038) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login_external_signer() != 48495) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_login_recovering_incomplete_setup() != 65462) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_login_recovering_incomplete_setup() != 3221) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_mark_timeline_message_read() != 32522) {
@@ -45982,6 +46584,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_periodic_maintenance_policy() != 2598) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_poll_votes() != 3245) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_post_audit_log_file() != 63080) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -46027,7 +46632,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_new_key_package() != 11266) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 48323) {
+    if (uniffi_marmot_uniffi_checksum_method_marmot_publish_relay_lists() != 42046) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_publish_user_profile() != 56905) {
@@ -46046,6 +46651,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_react_to_message() != 39138) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_react_with_media() != 10392) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_read_attachment_asset() != 20920) {
@@ -46120,6 +46728,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_marmot_uniffi_checksum_method_marmot_request_avatar_assets() != 35630) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_request_explicit_attachment() != 48149) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_marmot_uniffi_checksum_method_marmot_reset_incomplete_account_setup() != 58104) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -46190,6 +46801,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_message_draft_with_client_token() != 11648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_tagged_media() != 11125) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_send_tagged_text() != 27615) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_send_text() != 60625) {
@@ -46337,6 +46954,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_unreact_from_message() != 52209) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_marmot_uniffi_checksum_method_marmot_update_app_component() != 33870) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_marmot_uniffi_checksum_method_marmot_update_group_avatar_url() != 57913) {

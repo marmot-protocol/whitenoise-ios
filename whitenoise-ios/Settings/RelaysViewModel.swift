@@ -10,6 +10,7 @@ protocol RelaysViewModelDataSource: AnyObject {
     func saveAccountRelayLists(
         accountRef: String,
         relays: [String],
+        target: RelayListTarget,
         currentLists: AccountRelayListsFfi?
     ) async throws -> AccountRelayListsFfi
     func present(_ toast: Toast)
@@ -28,12 +29,14 @@ extension AppState: RelaysViewModelDataSource {
     func saveAccountRelayLists(
         accountRef: String,
         relays: [String],
+        target: RelayListTarget,
         currentLists: AccountRelayListsFfi?
     ) async throws -> AccountRelayListsFfi {
         let client = try currentMarmotClient()
         return try await RelaySettings.saveAccountRelays(
             accountRef: accountRef,
             relays: relays,
+            target: target,
             currentLists: currentLists,
             manager: client
         )
@@ -109,6 +112,7 @@ nonisolated enum RelayEndpointPreflight {
 final class RelaysViewModel {
     private struct QueuedRelayDelete {
         var urls: [String]
+        let target: RelayListTarget
         let accountRef: String
         let expectedRelays: [String]?
 
@@ -127,6 +131,8 @@ final class RelaysViewModel {
         for task in actionTasks.values { task.cancel() }
     }
     var saveError: String?
+    /// The list whose save produced `saveError`, so the error shows in its section.
+    var saveErrorTarget: RelayListTarget?
     var savedAt: Date?
     var loadError: String?
 
@@ -141,12 +147,26 @@ final class RelaysViewModel {
         return RelaySettings.editableRelays(from: lists)
     }
 
-    var canAdd: Bool {
+    var currentInboxRelays: [String] {
+        guard let lists else { return [] }
+        return RelaySettings.editableInboxRelays(from: lists)
+    }
+
+    func relays(for target: RelayListTarget) -> [String] {
+        switch target {
+        case .nip65: currentRelays
+        case .inbox: currentInboxRelays
+        }
+    }
+
+    var canAdd: Bool { canAdd(to: .nip65) }
+
+    func canAdd(to target: RelayListTarget) -> Bool {
         guard lists != nil,
               !isSaving,
               let normalized = RelaySettings.normalizedRelayURL(pendingUrl)
         else { return false }
-        return !currentRelays.contains(normalized)
+        return !relays(for: target).contains(normalized)
     }
 
     private func requestReloadAfterSave() {
@@ -207,29 +227,33 @@ final class RelaysViewModel {
         }
     }
 
-    func addPending(using dataSource: any RelaysViewModelDataSource) {
-        guard let normalized = RelaySettings.normalizedRelayURL(pendingUrl), canAdd else { return }
+    func addPending(to target: RelayListTarget = .nip65, using dataSource: any RelaysViewModelDataSource) {
+        guard let normalized = RelaySettings.normalizedRelayURL(pendingUrl), canAdd(to: target) else { return }
         trackActionTask { [weak self] in
             guard let self else { return }
-            if await self.save(self.currentRelays + [normalized], using: dataSource) {
+            if await self.save(self.relays(for: target) + [normalized], to: target, using: dataSource) {
                 self.pendingUrl = ""
             }
         }
     }
 
-    func deleteRelays(at indexSet: IndexSet, using dataSource: any RelaysViewModelDataSource) {
-        let relays = currentRelays
+    func deleteRelays(
+        at indexSet: IndexSet,
+        from target: RelayListTarget = .nip65,
+        using dataSource: any RelaysViewModelDataSource
+    ) {
+        let relays = self.relays(for: target)
         let urls = indexSet.compactMap { index in
             relays.indices.contains(index) ? relays[index] : nil
         }
         guard !urls.isEmpty else { return }
         if isSaving {
-            queueRelayDeletes(urls, using: dataSource)
+            queueRelayDeletes(urls, from: target, using: dataSource)
             return
         }
         trackActionTask { [weak self] in
             guard let self else { return }
-            _ = await self.deleteRelayURLs(urls, using: dataSource)
+            _ = await self.deleteRelayURLs(urls, from: target, using: dataSource)
         }
     }
 
@@ -245,7 +269,11 @@ final class RelaysViewModel {
     }
 
     @discardableResult
-    func save(_ relays: [String], using dataSource: any RelaysViewModelDataSource) async -> Bool {
+    func save(
+        _ relays: [String],
+        to target: RelayListTarget = .nip65,
+        using dataSource: any RelaysViewModelDataSource
+    ) async -> Bool {
         // Serialize saves: an overlapping save would compute its next list from
         // stale `lists`/`currentRelays` and clobber the in-flight write.
         guard actionGate.tryBegin() else { return false }
@@ -259,11 +287,13 @@ final class RelaysViewModel {
             actionGate.end()
             await drainDeferredReload(using: dataSource)
             saveError = L10n.string("Keep at least one relay.")
+            saveErrorTarget = target
             Haptics.error()
             return false
         }
 
         saveError = nil
+        saveErrorTarget = nil
 
         do {
             let classifications = try await dataSource.classifyRelayEndpoints(locallyNormalized)
@@ -283,6 +313,7 @@ final class RelaysViewModel {
             let savedLists = try await dataSource.saveAccountRelayLists(
                 accountRef: accountRef,
                 relays: normalized,
+                target: target,
                 currentLists: lists
             )
             guard dataSource.activeAccountRef == accountRef else {
@@ -306,6 +337,7 @@ final class RelaysViewModel {
             }
             Haptics.error()
             saveError = UserFacingError.message(for: error)
+            saveErrorTarget = target
             dataSource.present(UserFacingError.toast(title: L10n.string("Relay update failed"), error: error))
             actionGate.end()
             await drainDeferredReload(using: dataSource)
@@ -315,12 +347,15 @@ final class RelaysViewModel {
 
     private func queueRelayDeletes(
         _ urls: [String],
+        from target: RelayListTarget,
         using dataSource: any RelaysViewModelDataSource,
         expectedRelays: [String]? = nil
     ) {
         guard let accountRef = dataSource.activeAccountRef else { return }
         if let index = queuedRelayDeletes.firstIndex(
-            where: { $0.accountRef == accountRef && $0.expectedRelays == expectedRelays }
+            where: {
+                $0.target == target && $0.accountRef == accountRef && $0.expectedRelays == expectedRelays
+            }
         ) {
             for url in urls where !queuedRelayDeletes[index].urls.contains(url) {
                 queuedRelayDeletes[index].urls.append(url)
@@ -329,6 +364,7 @@ final class RelaysViewModel {
             queuedRelayDeletes.append(
                 QueuedRelayDelete(
                     urls: urls,
+                    target: target,
                     accountRef: accountRef,
                     expectedRelays: expectedRelays
                 )
@@ -337,16 +373,20 @@ final class RelaysViewModel {
     }
 
     @discardableResult
-    private func deleteRelayURLs(_ urls: [String], using dataSource: any RelaysViewModelDataSource) async -> Bool {
+    private func deleteRelayURLs(
+        _ urls: [String],
+        from target: RelayListTarget,
+        using dataSource: any RelaysViewModelDataSource
+    ) async -> Bool {
         guard !isSaving else {
-            queueRelayDeletes(urls, using: dataSource)
+            queueRelayDeletes(urls, from: target, using: dataSource)
             return false
         }
         let deleteSet = Set(urls)
-        let relays = currentRelays
+        let relays = self.relays(for: target)
         let next = relays.filter { !deleteSet.contains($0) }
         guard next != relays else { return true }
-        return await save(next, using: dataSource)
+        return await save(next, to: target, using: dataSource)
     }
 
     private func drainQueuedRelayDeletes(using dataSource: any RelaysViewModelDataSource) async {
@@ -354,15 +394,16 @@ final class RelaysViewModel {
         let deletes = queuedRelayDeletes
         queuedRelayDeletes.removeAll()
         for queuedDelete in deletes {
-            let relays = currentRelays
+            let relays = self.relays(for: queuedDelete.target)
             guard queuedDelete.canApply(
                 accountRef: dataSource.activeAccountRef,
                 relays: relays
             ) else { continue }
-            let deleted = await deleteRelayURLs(queuedDelete.urls, using: dataSource)
+            let deleted = await deleteRelayURLs(queuedDelete.urls, from: queuedDelete.target, using: dataSource)
             if !deleted {
                 queueRelayDeletes(
                     queuedDelete.urls,
+                    from: queuedDelete.target,
                     using: dataSource,
                     expectedRelays: relays
                 )
