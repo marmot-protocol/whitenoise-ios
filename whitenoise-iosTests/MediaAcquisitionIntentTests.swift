@@ -63,6 +63,67 @@ struct MediaAcquisitionIntentTests {
         #expect(AttachmentDemand.retry.isUserInitiated)
     }
 
+    @Test func sharedMediaTileAppearanceStaysAutomaticUntilATap() async {
+        var requests = [AttachmentDemand]()
+        let loader = ConversationMediaLoader { item in
+            requests.append(item.demand)
+            throw AttachmentReadError.unavailable
+        }
+        var didFail = false
+        func load(_ demand: AttachmentDemand) async {
+            if (try? await loader.data(for: attachment(), demand: demand)) == nil {
+                didFail = demand.failureOffersRetry
+            }
+        }
+        for _ in 0..<3 {
+            guard let demand = GroupSharedMediaThumbnailDemand.onAppear(autoDownloadAllowed: true) else { continue }
+            await load(demand)
+        }
+        // Reappearing may repeat automatic demand; MDK keeps the durable history, and
+        // only a tap on a tile showing Retry asks it to download again.
+        #expect(requests == [.automatic, .automatic, .automatic])
+        await load(GroupSharedMediaThumbnailDemand.onTap(didFail: didFail))
+        await load(GroupSharedMediaThumbnailDemand.onTap(didFail: didFail))
+        #expect(requests.suffix(2) == [.explicit, .retry])
+    }
+
+    @Test func policyBlockedSharedMediaTileWaitsForAnExplicitTap() async {
+        var requests = [AttachmentDemand]()
+        let loader = ConversationMediaLoader { item in
+            requests.append(item.demand)
+            return Data([1])
+        }
+        if let demand = GroupSharedMediaThumbnailDemand.onAppear(autoDownloadAllowed: false) {
+            _ = try? await loader.data(for: attachment(), demand: demand)
+        }
+        #expect(requests.isEmpty)
+        _ = try? await loader.data(for: attachment(), demand: GroupSharedMediaThumbnailDemand.onTap(didFail: false))
+        #expect(requests == [.explicit])
+    }
+
+    @Test func aTapDuringAnAutomaticLoadSupersedesIt() {
+        var loads = GroupSharedMediaThumbnailLoadGate()
+        let automatic = loads.begin()
+        let tap = loads.begin()
+        #expect(loads.isLoading)
+        #expect(!loads.owns(automatic))
+        // The superseded automatic load finishing cannot clear the tap's spinner or record its outcome.
+        loads.finish(automatic)
+        #expect(loads.isLoading)
+        #expect(loads.owns(tap))
+        loads.finish(tap)
+        #expect(!loads.isLoading)
+    }
+
+    @Test func aPolicyRevisionDuringALoadStartsAFreshOne() {
+        var loads = GroupSharedMediaThumbnailLoadGate()
+        let cancelled = loads.begin()
+        let replacement = loads.begin()
+        loads.finish(cancelled)
+        #expect(loads.owns(replacement))
+        #expect(loads.isLoading)
+    }
+
     @Test func automaticFailureLeavesTheFirstTapExplicit() {
         // Appearance load fails (e.g. a failed or retry-exhausted source).
         var showsRetry = AttachmentDemand.automatic.failureOffersRetry

@@ -170,6 +170,38 @@ struct GroupSharedMediaSection: View {
     }
 }
 
+/// The attachment demand a shared-media tile sends to MDK.
+nonisolated enum GroupSharedMediaThumbnailDemand {
+    /// Appearing never escalates past automatic; a policy-blocked tile waits for a tap.
+    static func onAppear(autoDownloadAllowed: Bool) -> AttachmentDemand? {
+        autoDownloadAllowed ? .automatic : nil
+    }
+
+    /// Only a tap on a tile showing its failure state is the deliberate Retry.
+    static func onTap(didFail: Bool) -> AttachmentDemand {
+        .userTap(afterFailure: didFail)
+    }
+}
+
+/// Lets a tap or a re-run appear task supersede an in-flight load. Only the newest
+/// load may clear the spinner or record its outcome.
+nonisolated struct GroupSharedMediaThumbnailLoadGate: Equatable {
+    private var generation = 0
+    private(set) var isLoading = false
+
+    mutating func begin() -> Int {
+        generation &+= 1
+        isLoading = true
+        return generation
+    }
+
+    func owns(_ load: Int) -> Bool { load == generation }
+
+    mutating func finish(_ load: Int) {
+        if owns(load) { isLoading = false }
+    }
+}
+
 struct GroupSharedMediaThumbnail: View {
     let item: MessageMediaAttachment
     let onLoadMedia: ConversationMediaLoader
@@ -178,8 +210,9 @@ struct GroupSharedMediaThumbnail: View {
     @Environment(\.displayScale) private var displayScale
     @State private var thumbnail: UIImage?
     @State private var sourceData: Data?
-    @State private var isLoading = false
+    @State private var loads = GroupSharedMediaThumbnailLoadGate()
     @State private var didFail = false
+    @State private var awaitingManualDownload = false
 
     private let pointSize: CGFloat = 120
 
@@ -187,7 +220,7 @@ struct GroupSharedMediaThumbnail: View {
         Button {
             Task {
                 if thumbnail == nil {
-                    await load(demand: .userTap(afterFailure: didFail))
+                    await load(demand: GroupSharedMediaThumbnailDemand.onTap(didFail: didFail))
                 }
                 guard thumbnail != nil else { return }
                 onOpen(item.isImage ? sourceData : nil)
@@ -205,11 +238,12 @@ struct GroupSharedMediaThumbnail: View {
                                 height: geometry.size.height
                             )
                             .clipped()
-                    } else if isLoading {
+                    } else if loads.isLoading {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Image(systemName: didFail ? "arrow.clockwise" : item.kind.systemImageName)
+                        Image(systemName: didFail ? "arrow.clockwise"
+                            : awaitingManualDownload ? "arrow.down.circle" : item.kind.systemImageName)
                             .font(.title3)
                             .foregroundStyle(.secondary)
                     }
@@ -230,19 +264,22 @@ struct GroupSharedMediaThumbnail: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(item.fileName)
-        .task(id: item.id) {
-            await load(demand: .automatic)
+        .task(id: [item.id, MediaAutoDownloadStore.shared.attachmentPolicyRevision]) {
+            guard !restoreCachedThumbnail() else { return }
+            let autoDownloadAllowed = MediaAutoDownloadStore.shared.shouldAutoDownload(item.isVideo ? .video : .image)
+            guard let demand = GroupSharedMediaThumbnailDemand.onAppear(autoDownloadAllowed: autoDownloadAllowed) else {
+                awaitingManualDownload = !didFail
+                return
+            }
+            await load(demand: demand)
         }
     }
 
     @MainActor
-    private func load(demand: AttachmentDemand) async {
-        let force = demand == .retry
-        guard !isLoading else { return }
+    private func restoreCachedThumbnail() -> Bool {
         let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
         let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
-
-        if !force, item.isImage,
+        if item.isImage,
            let cached = MessageMediaThumbnailDecoder.cachedThumbnail(
             for: cacheKey,
             maxPixelSize: maxPixelSize
@@ -251,9 +288,10 @@ struct GroupSharedMediaThumbnail: View {
             thumbnail = cached.image
             sourceData = cached.sourceData
             didFail = false
-            return
+            awaitingManualDownload = false
+            return true
         }
-        if !force, item.isVideo,
+        if item.isVideo,
            let cached = MessageVideoThumbnailDecoder.cachedThumbnail(
             for: cacheKey,
             maxPixelSize: maxPixelSize
@@ -261,25 +299,38 @@ struct GroupSharedMediaThumbnail: View {
         {
             thumbnail = cached
             didFail = false
-            return
+            awaitingManualDownload = false
+            return true
         }
+        return false
+    }
 
-        isLoading = true
+    @MainActor
+    private func load(demand: AttachmentDemand) async {
+        if demand != .retry, restoreCachedThumbnail() { return }
+        let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
+        let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
+
+        // A newer load supersedes this one; the downloader lets an explicit tap join the
+        // automatic transfer instead of being dropped behind it.
+        let load = loads.begin()
         didFail = false
-        defer { isLoading = false }
+        awaitingManualDownload = false
+        defer { loads.finish(load) }
         do {
             let producerEpoch = MessageMediaCache.currentProducerEpoch()
             let data = try await onLoadMedia.data(for: item, demand: demand)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loads.owns(load) else { return }
             if item.isImage {
                 guard let decoded = await MessageMediaThumbnailDecoder.image(
                     data: data,
                     maxPixelSize: maxPixelSize,
                     scale: displayScale
                 ) else {
-                    didFail = demand.failureOffersRetry
+                    if loads.owns(load) { didFail = demand.failureOffersRetry }
                     return
                 }
+                guard loads.owns(load) else { return }
                 MessageMediaThumbnailDecoder.store(
                     decoded,
                     sourceData: data,
@@ -294,7 +345,8 @@ struct GroupSharedMediaThumbnail: View {
                         url: url,
                         maxPixelSize: maxPixelSize,
                         scale: displayScale
-                      )
+                      ),
+                      loads.owns(load)
             {
                 MessageVideoThumbnailDecoder.store(
                     decoded,
@@ -302,13 +354,13 @@ struct GroupSharedMediaThumbnail: View {
                     maxPixelSize: maxPixelSize
                 )
                 thumbnail = decoded
-            } else {
+            } else if loads.owns(load) {
                 didFail = demand.failureOffersRetry
             }
         } catch is CancellationError {
             return
         } catch {
-            didFail = demand.failureOffersRetry
+            if loads.owns(load) { didFail = demand.failureOffersRetry }
         }
     }
 }
