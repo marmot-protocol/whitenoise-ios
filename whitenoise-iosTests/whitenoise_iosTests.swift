@@ -3218,6 +3218,31 @@ struct RelaySettingsTests {
         #expect(RelaySettings.normalizedRelayURL("wss://relay.example/" + String(repeating: "a", count: 4096)) == nil)
     }
 
+    @Test func savingRelaysKeepsASeparatelyPublishedInboxList() async throws {
+        let lists = relayLists(
+            bootstrapRelays: ["wss://source.example"],
+            nip65: ["wss://wn.example", "wss://general.example"],
+            inbox: ["wss://wn.example"]
+        )
+        let manager = FakeAccountRelayListManager(lists: lists, failNip65: false)
+        _ = try await RelaySettings.saveAccountRelays(
+            accountRef: "account-a",
+            relays: ["wss://wn.example", "wss://general.example", "wss://added.example"],
+            currentLists: lists,
+            manager: manager
+        )
+        #expect(manager.calls == [
+            .nip65(
+                relays: ["wss://wn.example", "wss://general.example", "wss://added.example"],
+                bootstrapRelays: ["wss://source.example"]
+            )
+        ])
+        #expect(RelaySettings.inboxFollowsEditor(relayLists(
+            bootstrapRelays: [], nip65: ["wss://a.example"], inbox: []
+        )))
+        #expect(RelaySettings.inboxFollowsEditor(nil))
+    }
+
     @Test func savingRelaysReloadsAuthoritativeListsWhenFinalPublishFails() async throws {
         let oldLists = relayLists(
             bootstrapRelays: ["wss://source.example"],

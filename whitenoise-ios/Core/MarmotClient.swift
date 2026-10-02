@@ -1257,6 +1257,15 @@ enum RelaySettings {
         return normalized
     }
 
+    /// The editor shows the NIP-65 list. An inbox (kind 10050) list that
+    /// matches it, or is missing, follows each edit as before; one published
+    /// separately, such as a new account's White Noise-only inbox, is kept.
+    static func inboxFollowsEditor(_ lists: AccountRelayListsFfi?) -> Bool {
+        guard let lists else { return true }
+        let inbox = normalizedRelayURLs(lists.inbox.relays)
+        return inbox.isEmpty || Set(inbox) == Set(normalizedRelayURLs(lists.nip65.relays))
+    }
+
     static func saveAccountRelays(
         accountRef: String,
         relays: [String],
@@ -1267,11 +1276,13 @@ enum RelaySettings {
         let bootstrap = currentLists.map(bootstrapRelays(from:)) ?? MarmotClient.seedRelays
 
         do {
-            _ = try await manager.setAccountInboxRelays(
-                accountRef: accountRef,
-                relays: normalized,
-                bootstrapRelays: bootstrap
-            )
+            if inboxFollowsEditor(currentLists) {
+                _ = try await manager.setAccountInboxRelays(
+                    accountRef: accountRef,
+                    relays: normalized,
+                    bootstrapRelays: bootstrap
+                )
+            }
             return try await manager.setAccountNip65Relays(
                 accountRef: accountRef,
                 relays: normalized,
