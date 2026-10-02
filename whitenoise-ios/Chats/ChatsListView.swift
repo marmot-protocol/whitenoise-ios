@@ -36,6 +36,7 @@ struct ChatsListView: View {
     @State private var showSettings = false
     @State private var path: [ChatNavigationTarget] = []
     @State private var search = ChatListSearchPresentation()
+    @State private var identifierQuery = RecipientQueryModel()
     @State private var scope: ChatScope = .active
     @State private var listViewport = ChatListViewport()
     @State private var selectedChatIds = Set<String>()
@@ -294,6 +295,11 @@ struct ChatsListView: View {
             .onChange(of: canPresentDiagnostics) {
                 if canPresentDiagnostics { showDiagnosticsPrompt = true }
             }
+            .modifier(ChatListIdentifierProfileRouting(
+                query: search.query,
+                identifierQuery: identifierQuery,
+                onOpenProfile: exitSearch
+            ))
             // Chats owns the consent read: bootstrap's own refresh runs while the
             // phase is still `.bootstrapping`, so it cannot see the runtime.
             .task(id: ConsentRuntimeState(
@@ -733,10 +739,26 @@ struct ChatsListView: View {
     @ViewBuilder
     private var emptyState: some View {
         if search.isFiltering {
-            ContentUnavailableView {
-                Label("No Results", systemImage: "magnifyingglass")
-            } description: {
-                Text("Check the spelling or try a different search.")
+            switch identifierQuery.resolution {
+            case .resolving:
+                ProgressView()
+            case .noProfile:
+                ContentUnavailableView(
+                    "No profile found for that address.",
+                    systemImage: "person.crop.circle.badge.questionmark"
+                )
+            case .failed:
+                ContentUnavailableView {
+                    Label("Couldn't check that address.", systemImage: "wifi.exclamationmark")
+                } actions: {
+                    Button("Retry") { identifierQuery.queryChanged(using: appState) }
+                }
+            case .idle, .resolved, .invalid:
+                ContentUnavailableView {
+                    Label("No Results", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Check the spelling or try a different search.")
+                }
             }
         } else if scope == .archived {
             ContentUnavailableView(
