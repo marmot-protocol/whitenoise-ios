@@ -14686,7 +14686,6 @@ struct SensitiveClipboardTests {
 
     @Test func clearWipesPasteboardWhenUserHasNotChangedItSinceCapture() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let secret = "nsec1examplesecretkeythatshouldnotleak"
         pasteboard.string = secret
         let token = SensitiveClipboard.capture(from: pasteboard)
@@ -14699,7 +14698,6 @@ struct SensitiveClipboardTests {
 
     @Test func clearLeavesPasteboardAloneWhenUserCopiedSomethingElseAfterCapture() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let secret = "nsec1examplesecretkeythatshouldnotleak"
         pasteboard.string = secret
         let token = SensitiveClipboard.capture(from: pasteboard)
@@ -14716,7 +14714,6 @@ struct SensitiveClipboardTests {
 
     @Test func clearIsNoOpWhenPasteboardHasNoStringEvenIfChangeCountMatches() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         pasteboard.items = []
         let token = SensitiveClipboard.capture(from: pasteboard)
 
@@ -14727,12 +14724,13 @@ struct SensitiveClipboardTests {
 
     @Test func copyStoresSensitiveTextWithExpirationOptions() throws {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let expiry = Date().addingTimeInterval(120)
 
         SensitiveClipboard.copy("private message", to: pasteboard, expiresAt: expiry)
 
         #expect(pasteboard.string == "private message")
+        #expect(pasteboard.lastOptions[.expirationDate] as? Date == expiry)
+        #expect(pasteboard.lastOptions[.localOnly] as? Bool == true)
     }
 
     // Regression test for the #409 PR review BLOCKING finding: a nil token
@@ -14779,7 +14777,6 @@ struct SensitiveClipboardTests {
     // blocking finding.
     @Test func clearIsNoOpWhenTokenIsNilEvenIfPasteboardHasStrings() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let unrelated = "https://example.com/unrelated"
         pasteboard.string = unrelated
 
@@ -14790,7 +14787,6 @@ struct SensitiveClipboardTests {
 
     @Test func importClearIgnoresNilTokenFromPartialPasteIntoExistingText() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let fragment = "nsec-fragment-from-clipboard"
         let resultingNsec = validNsec(filledWith: "d")
         pasteboard.string = fragment
@@ -14807,7 +14803,6 @@ struct SensitiveClipboardTests {
 
     @Test func importClearIgnoresTokenFromNonNsecPasteEditedIntoNsec() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let unrelated = "https://example.com/unrelated"
         pasteboard.string = unrelated
         let token = SensitiveClipboard.capture(from: pasteboard)
@@ -14824,7 +14819,6 @@ struct SensitiveClipboardTests {
 
     @Test func importClearIgnoresTokenWhenPastedNsecWasEditedToDifferentNsec() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let pastedNsec = validNsec(filledWith: "a")
         let importedNsec = validNsec(filledWith: "b")
         pasteboard.string = pastedNsec
@@ -14842,7 +14836,6 @@ struct SensitiveClipboardTests {
 
     @Test func importClearUsesTokenWhenImportedNsecStillMatchesPastedNsec() {
         let pasteboard = makeIsolatedPasteboard()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
         let nsec = validNsec(filledWith: "c")
         pasteboard.string = nsec
         let token = SensitiveClipboard.capture(from: pasteboard)
@@ -14860,9 +14853,8 @@ struct SensitiveClipboardTests {
         #expect(!pasteboard.hasStrings)
     }
 
-    private func makeIsolatedPasteboard() -> UIPasteboard {
-        let name = UIPasteboard.Name("dev.ipf.WhiteNoise.tests.sensitive-clipboard-\(UUID().uuidString)")
-        return UIPasteboard(name: name, create: true)!
+    private func makeIsolatedPasteboard() -> InMemorySensitivePasteboard {
+        InMemorySensitivePasteboard()
     }
 
     private func validNsec(filledWith character: Character) -> String {

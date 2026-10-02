@@ -161,7 +161,7 @@ final class ImportIdentityViewModel {
     /// matching pasteboard generation (the same token gate `runImport`'s defer
     /// uses, so unrelated clipboard content is never touched), and drop the
     /// shadow copy — every exit from the sheet clears the secret.
-    func scrubDismissedImportState(pasteboard: UIPasteboard = .general) {
+    func scrubDismissedImportState(pasteboard: any SensitivePasteboard = UIPasteboard.general) {
         resolveIncompleteSetupRecoveryConfirmation(approved: false)
         identity = ""
         SensitiveClipboard.clear(matching: pastedClipboardToken, from: pasteboard)

@@ -97,8 +97,7 @@ struct ImportIdentityValidationTests {
     }
 
     @Test @MainActor func dismissWithoutImportScrubsShadowCopyAndPasteboard() {
-        let pasteboard = UIPasteboard.withUniqueName()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let pasteboard = InMemorySensitivePasteboard()
         let model = ImportIdentityViewModel()
         let nsec = validNsec
         pasteboard.string = nsec
@@ -119,8 +118,7 @@ struct ImportIdentityValidationTests {
     }
 
     @Test @MainActor func dismissScrubLeavesClipboardTheUserChangedAfterPasting() {
-        let pasteboard = UIPasteboard.withUniqueName()
-        defer { UIPasteboard.remove(withName: pasteboard.name) }
+        let pasteboard = InMemorySensitivePasteboard()
         let model = ImportIdentityViewModel()
         let nsec = validNsec
         pasteboard.string = nsec

@@ -21,8 +21,12 @@ struct GroupModerationBindingTests {
                     description: nil, initialImage: nil, disappearingMessageSecs: 0))
             let live = try await client.groupConversationSnapshot(accountRef: account.label, groupIdHex: group.groupIdHex)
             #expect(live.managementState.isSelfAdmin)
-            let sent = try await client.sendText(accountRef: account.label, groupIdHex: group.groupIdHex, text: "Reported text")
-            let messageID = try #require(sent.messageIds.first)
+            // Legacy sendText couples to relay subscription and can fail against
+            // the unreachable relay; durable admission is the offline contract.
+            let sent = try await client.sendTextWithClientToken(accountRef: account.label,
+                groupIdHex: group.groupIdHex, text: "Reported text", clientToken: UUID().uuidString)
+            let messageID = sent.messageIdHex
+            #expect(!messageID.isEmpty)
             _ = try await client.reportMessage(accountRef: account.label, groupID: group.groupIdHex,
                 messageID: messageID, reason: .spam, explanation: "Please review")
             let reports = try await client.contentReports(accountRef: account.label, groupID: group.groupIdHex, after: nil)
