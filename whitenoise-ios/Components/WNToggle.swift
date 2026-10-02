@@ -29,6 +29,7 @@ extension WNToggle where Label == Text {
         self.init(isOn: isOn) { Text(titleKey) }
     }
 
+    @_disfavoredOverload
     init(_ title: some StringProtocol, isOn: Binding<Bool>) {
         self.init(isOn: isOn) { Text(title) }
     }
