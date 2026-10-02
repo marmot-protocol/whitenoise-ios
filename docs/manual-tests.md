@@ -482,6 +482,43 @@ Copy this into the release issue or PR.
 Notes: <anything unexpected, with diagnostics log excerpts>
 ```
 
+## MarmotKit 0.12.0 custom emoji (NIP-30)
+
+Two devices in one group: the iOS build under test and a 0.12.0 client that can
+send custom emoji (Android or another MDK client). Image auto-download allowed
+on the current network unless a step says otherwise.
+
+- [ ] From the 0.12.0 client, send `hi :party: there` with a custom `:party:`
+      image. On iOS the image renders inline at text size between the words,
+      not as a media tile, in light and dark mode. A photo sent in the same
+      message still shows as a tile.
+- [ ] Send text whose shortcode has no matching image (or a typo such as
+      `:partyy:`): iOS shows the literal `:partyy:` text. While an image is
+      still loading, or with image auto-download off for the current network,
+      the literal `:party:` shows instead of a spinner or blank space.
+- [ ] Increase Dynamic Type to an accessibility size: the inline image grows
+      with the text. Switch the app to an RTL language (Arabic): the image
+      stays in reading order inside the sentence.
+- [ ] VoiceOver on the bubble reads the shortcode name (“party”) where the
+      image sits.
+- [ ] Send `[here](https://example.com/:party:)` with the `:party:` image
+      attached: the link reads “here” and the image stays visible as a media
+      tile (it is not drawn inline and does not disappear).
+- [ ] From the 0.12.0 client, react with `:cat:`. The reaction chip and the
+      reaction details sheet show the `:cat:` text (known limitation: MDK
+      0.12.0 exposes no host-managed slot for kind-7 reaction images; tracked
+      in marmot-protocol/mdk#2151 and #1137), and VoiceOver reads “cat”.
+      Unicode reactions are unchanged.
+- [ ] Account isolation: sign in a second iOS profile that is not in the group
+      (or is in a different group), switch to it and back. No emoji image from
+      the first profile's chat appears in the other profile; switching mid-load
+      leaves no stray image, and returning reloads the first chat's emoji.
+      Background long enough for the runtime to suspend, then foreground with
+      the chat open: emoji briefly show their text and reload.
+- [ ] Background the app while emoji are loading, then foreground: emoji either
+      render or show their text; nothing stays blank. Relaunch offline: emoji
+      already downloaded render from local storage.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.

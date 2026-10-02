@@ -127,6 +127,9 @@ struct MessageBubble: View {
     var clusterPresentation: MessageClusterPresentation = .none
     var replyPreview: ConversationReplyPreview? = nil
     var mediaItems: [MessageMediaAttachment] = []
+    /// NIP-30 custom emoji drawn inline in the body; their attachments are
+    /// already excluded from `mediaItems`.
+    var customEmoji: CustomEmojiRowResolution = .empty
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
     var poll: PollProjectionFfi? = nil
     var onPollVote: ((String) -> Void)? = nil
@@ -781,6 +784,16 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private var messageBodyContent: some View {
+        if customEmoji.isEmpty {
+            messageBodyTextContent
+        } else {
+            messageBodyTextContent
+                .modifier(CustomEmojiInlineLoader(resolution: customEmoji))
+        }
+    }
+
+    @ViewBuilder
+    private var messageBodyTextContent: some View {
         if let blocks = markdownBlocks {
             MarkdownMessageView(
                 blocks: blocks,
@@ -794,7 +807,7 @@ struct MessageBubble: View {
         } else {
             // Records without parsed tokens (non-chat kinds, optimistic
             // stream bubbles, pre-markdown history) keep the plain path.
-            Text(sanitizedBodyText)
+            CustomEmojiAwareText(AttributedString(sanitizedBodyText))
         }
     }
 
@@ -897,7 +910,7 @@ struct MessageBubble: View {
 
     private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 3) {
-            Text(ContentSanitizer.reactionEmoji(tally.emoji))
+            CustomEmojiReactionLabel(emoji: tally.emoji)
                 .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))

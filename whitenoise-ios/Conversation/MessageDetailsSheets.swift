@@ -250,18 +250,14 @@ struct ReactionDetailsSheet: View {
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                filterButton(
-                    emoji: nil,
-                    label: L10n.string("All"),
-                    count: details.totalReactionCount
-                )
+                filterButton(emoji: nil, count: details.totalReactionCount) {
+                    Text(L10n.string("All"))
+                }
 
                 ForEach(details.groups) { group in
-                    filterButton(
-                        emoji: group.emoji,
-                        label: ContentSanitizer.reactionEmoji(group.emoji),
-                        count: group.count
-                    )
+                    filterButton(emoji: group.emoji, count: group.count) {
+                        CustomEmojiReactionLabel(emoji: group.emoji)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -269,14 +265,15 @@ struct ReactionDetailsSheet: View {
         }
     }
 
-    private func filterButton(emoji: String?, label: String, count: Int) -> some View {
+    private func filterButton<Label: View>(emoji: String?, count: Int,
+                                           @ViewBuilder label: () -> Label) -> some View {
         let selected = selectedEmoji == emoji
         return Button {
             selectedEmoji = emoji
             Haptics.tap()
         } label: {
             HStack(spacing: 5) {
-                Text(label)
+                label()
                 Text(L10n.formatted("%lld", Int64(count)))
                     .font(.caption.weight(.semibold))
             }
@@ -371,7 +368,7 @@ struct ReactionDetailsSheet: View {
                             onRemoveOwnReaction(emoji)
                         } label: {
                             HStack(spacing: 3) {
-                                Text(ContentSanitizer.reactionEmoji(emoji))
+                                CustomEmojiReactionLabel(emoji: emoji)
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -384,9 +381,9 @@ struct ReactionDetailsSheet: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(L10n.string("Remove"))
-                        .accessibilityValue(ContentSanitizer.reactionEmoji(emoji))
+                        .accessibilityValue(CustomEmojiShortcode.spokenReaction(emoji))
                     } else {
-                        Text(ContentSanitizer.reactionEmoji(emoji))
+                        CustomEmojiReactionLabel(emoji: emoji)
                             .font(.title3)
                     }
                 }
