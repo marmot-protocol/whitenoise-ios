@@ -101,21 +101,17 @@ final class MediaImageZoomTests: XCTestCase {
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil; previousKeyWindow?.makeKey() }
-        host.view.layoutIfNeeded()
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while findZoomView(host.view) == nil, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(50))
-        }
+        // The page decodes off the MainActor at utility priority, which a
+        // loaded CI runner can starve for seconds; wait for the hosted view.
+        try await waitForHostedUpdate(host) { findZoomView(host.view) != nil }
         let zoom = try XCTUnwrap(findZoomView(host.view))
         XCTAssertFalse(requestedIDs.isEmpty)
         XCTAssertEqual(Set(requestedIDs), ["selected"])
         zoom.setZoomScale(2.5, animated: false)
-        zoom.onTap?()
-        try await Task.sleep(for: .milliseconds(250))
+        try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
         XCTAssertEqual(zoom.zoomScale, 2.5)
         XCTAssertEqual(Set(requestedIDs), ["selected"])
-        zoom.onTap?()
-        try await Task.sleep(for: .milliseconds(250))
+        try await toggleChromeAndAwaitRepresentableUpdate(zoom, host: host)
         XCTAssertEqual(zoom.zoomScale, 2.5)
         let rendered = UIGraphicsImageRenderer(size: host.view.bounds.size).image { _ in
             host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
@@ -124,6 +120,40 @@ final class MediaImageZoomTests: XCTestCase {
         attachment.name = "hosted-fullscreen-gallery-zoomed"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// `updateUIView` reassigns `onTap`, so clearing it after the tap proves
+    /// the chrome change reached the representable before zoom is asserted.
+    private func toggleChromeAndAwaitRepresentableUpdate(
+        _ zoom: MediaImageScrollView,
+        host: UIViewController
+    ) async throws {
+        let onTap = try XCTUnwrap(zoom.onTap)
+        zoom.onTap = nil
+        onTap()
+        try await waitForHostedUpdate(host) { zoom.onTap != nil }
+    }
+
+    /// Runs the host's layout pass, which flushes pending SwiftUI updates, then
+    /// yields the run loop until `condition` holds. The deadline only bounds a hang.
+    private func waitForHostedUpdate(
+        _ host: UIViewController,
+        timeout: Duration = .seconds(60),
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        until condition: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while true {
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+            if condition() { return }
+            guard ContinuousClock.now < deadline else {
+                XCTFail("Hosted gallery did not reach the expected state within \(timeout)", file: file, line: line)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
     }
 
     private func findZoomView(_ view: UIView) -> MediaImageScrollView? {

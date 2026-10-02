@@ -1,5 +1,16 @@
 import UIKit
 
+/// The pasteboard surface `SensitiveClipboard` needs. Unit tests substitute an
+/// in-process pasteboard: real `UIPasteboard` calls are synchronous IPC that can
+/// stall the MainActor for minutes on a loaded simulator.
+protocol SensitivePasteboard: AnyObject {
+    var changeCount: Int { get }
+    var hasStrings: Bool { get }
+    func setItems(_ items: [[String: Any]], options: [UIPasteboard.OptionsKey: Any])
+}
+
+extension UIPasteboard: SensitivePasteboard {}
+
 /// Removes a freshly consumed secret from `UIPasteboard` so it doesn't sit on
 /// the shared system clipboard where any other app can read it.
 ///
@@ -12,7 +23,7 @@ enum SensitiveClipboard {
 
     static func copy(
         _ text: String,
-        to pasteboard: UIPasteboard = .general,
+        to pasteboard: any SensitivePasteboard = UIPasteboard.general,
         expiresAt: Date = Date().addingTimeInterval(defaultExpirationInterval)
     ) {
         pasteboard.setItems(
@@ -24,7 +35,7 @@ enum SensitiveClipboard {
     /// Ordinary user copies (message text) — E2EE plaintext must not ride
     /// Universal Clipboard to iCloud-paired devices, but unlike a consumed
     /// nsec it should not silently vanish from the pasteboard either.
-    static func copyLocalOnly(_ text: String, to pasteboard: UIPasteboard = .general) {
+    static func copyLocalOnly(_ text: String, to pasteboard: any SensitivePasteboard = UIPasteboard.general) {
         pasteboard.setItems(
             [[UIPasteboard.typeAutomatic: text]],
             options: [.localOnly: true]
@@ -54,7 +65,7 @@ enum SensitiveClipboard {
     /// `pasteboard.string` would. Call this from the paste interception
     /// (`onPaste`), not at import tap, so the captured generation provably
     /// belongs to the pasted secret.
-    static func capture(from pasteboard: UIPasteboard = .general) -> Token {
+    static func capture(from pasteboard: any SensitivePasteboard = UIPasteboard.general) -> Token {
         Token(changeCount: pasteboard.changeCount)
     }
 
@@ -98,9 +109,11 @@ enum SensitiveClipboard {
     /// Uses `setItems([], options: [.expirationDate: Date()])` so the cleared
     /// pasteboard isn't republished as an empty string that other apps would
     /// see as a fresh copy event.
-    static func clear(matching token: Token?, from pasteboard: UIPasteboard = .general) {
+    static func clear(matching token: Token?, from pasteboard: any SensitivePasteboard = UIPasteboard.general) {
+        // No observed paste means nothing to wipe; skip the pasteboard reads.
+        guard let token else { return }
         guard shouldClear(
-            capturedChangeCount: token?.changeCount,
+            capturedChangeCount: token.changeCount,
             currentChangeCount: pasteboard.changeCount,
             hasStrings: pasteboard.hasStrings
         ) else { return }
