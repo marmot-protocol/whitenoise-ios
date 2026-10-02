@@ -187,7 +187,7 @@ struct GroupSharedMediaThumbnail: View {
         Button {
             Task {
                 if thumbnail == nil {
-                    await load(force: didFail)
+                    await load(demand: .userTap(afterFailure: didFail))
                 }
                 guard thumbnail != nil else { return }
                 onOpen(item.isImage ? sourceData : nil)
@@ -236,7 +236,8 @@ struct GroupSharedMediaThumbnail: View {
     }
 
     @MainActor
-    private func load(force: Bool = false) async {
+    private func load(demand: AttachmentDemand = .explicit) async {
+        let force = demand == .retry
         guard !isLoading else { return }
         let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
         let cacheKey = MessageMediaThumbnailPresentation.cacheKey(for: item)
@@ -268,7 +269,7 @@ struct GroupSharedMediaThumbnail: View {
         defer { isLoading = false }
         do {
             let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            let data = try await onLoadMedia.data(for: item)
+            let data = try await onLoadMedia.data(for: item, demand: demand)
             guard !Task.isCancelled else { return }
             if item.isImage {
                 guard let decoded = await MessageMediaThumbnailDecoder.image(

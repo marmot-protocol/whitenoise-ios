@@ -270,7 +270,7 @@ nonisolated struct OwnSendMediaStore {
             localTarget: item.localTarget
         )
         overlaid.sourceHint = item.sourceHint
-        overlaid.downloadExplicitly = item.downloadExplicitly
+        overlaid.demand = item.demand
         return overlaid
     }
 }

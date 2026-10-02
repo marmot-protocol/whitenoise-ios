@@ -91,8 +91,9 @@ struct AttachmentTransfersView: View {
                     groupIdHex: groupID, targets: [target]).items.first
                 let applied: Bool
                 if control == .retry {
-                    applied = try await client.marmot.downloadAttachmentAgain(accountRef: account,
-                        groupIdHex: groupID, target: target) != nil
+                    // The deliberate recovery action: re-arms failed, cancelled or exhausted work.
+                    applied = try await AttachmentDemand.retry.record(accountRef: account,
+                        groupID: groupID, target: target, with: client.marmot)
                 } else if let reference = current?.reference {
                     applied = try await client.marmot.controlAttachment(accountRef: account,
                         reference: reference, control: control)
