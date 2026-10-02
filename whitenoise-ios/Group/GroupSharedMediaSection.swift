@@ -231,12 +231,12 @@ struct GroupSharedMediaThumbnail: View {
         .buttonStyle(.plain)
         .accessibilityLabel(item.fileName)
         .task(id: item.id) {
-            await load()
+            await load(demand: .automatic)
         }
     }
 
     @MainActor
-    private func load(demand: AttachmentDemand = .explicit) async {
+    private func load(demand: AttachmentDemand) async {
         let force = demand == .retry
         guard !isLoading else { return }
         let maxPixelSize = max(1, Int(ceil(pointSize * displayScale)))
@@ -277,7 +277,7 @@ struct GroupSharedMediaThumbnail: View {
                     maxPixelSize: maxPixelSize,
                     scale: displayScale
                 ) else {
-                    didFail = true
+                    didFail = demand.failureOffersRetry
                     return
                 }
                 MessageMediaThumbnailDecoder.store(
@@ -303,12 +303,12 @@ struct GroupSharedMediaThumbnail: View {
                 )
                 thumbnail = decoded
             } else {
-                didFail = true
+                didFail = demand.failureOffersRetry
             }
         } catch is CancellationError {
             return
         } catch {
-            didFail = true
+            didFail = demand.failureOffersRetry
         }
     }
 }

@@ -2069,13 +2069,10 @@ private struct MessageMediaTile: View {
                 return
             }
             guard item.isImage else { return }
-            if didFail {
-                Task { await loadImageIfNeeded(scale: displayScale, demand: .retry) }
-            } else {
-                Task {
-                    if let data = await loadImageIfNeeded(scale: displayScale, demand: .explicit) {
-                        onOpenImage(item, data)
-                    }
+            let demand = AttachmentDemand.userTap(afterFailure: didFail)
+            Task {
+                if let data = await loadImageIfNeeded(scale: displayScale, demand: demand) {
+                    onOpenImage(item, data)
                 }
             }
         }
@@ -2158,7 +2155,7 @@ private struct MessageMediaTile: View {
             guard let decoded else {
                 image = nil
                 loadedImageID = item.id
-                didFail = true
+                didFail = demand.failureOffersRetry
                 return nil
             }
             guard !Task.isCancelled else { return nil }
@@ -2176,7 +2173,7 @@ private struct MessageMediaTile: View {
                                   outcome: error is CancellationError ? .cancelled : .failure)
             image = nil
             loadedImageID = item.id
-            didFail = true
+            didFail = demand.failureOffersRetry
             return nil
         }
     }

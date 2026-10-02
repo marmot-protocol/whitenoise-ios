@@ -63,6 +63,19 @@ struct MediaAcquisitionIntentTests {
         #expect(AttachmentDemand.retry.isUserInitiated)
     }
 
+    @Test func automaticFailureLeavesTheFirstTapExplicit() {
+        // Appearance load fails (e.g. a failed or retry-exhausted source).
+        var showsRetry = AttachmentDemand.automatic.failureOffersRetry
+        #expect(!showsRetry)
+        let firstTap = AttachmentDemand.userTap(afterFailure: showsRetry)
+        #expect(firstTap == .explicit)
+        // MDK does not re-arm the source, so the tap fails and surfaces Retry.
+        showsRetry = firstTap.failureOffersRetry
+        #expect(showsRetry)
+        #expect(AttachmentDemand.userTap(afterFailure: showsRetry) == .retry)
+        #expect(AttachmentDemand.retry.failureOffersRetry)
+    }
+
     private let target = AttachmentLocalTargetFfi(messageIdHex: String(repeating: "a", count: 64),
         sourceMessageIdHex: String(repeating: "b", count: 64), attachmentIndex: 1)
 

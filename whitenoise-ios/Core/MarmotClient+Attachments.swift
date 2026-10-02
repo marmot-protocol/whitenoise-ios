@@ -46,6 +46,10 @@ nonisolated enum AttachmentDemand: Hashable, Sendable {
 
     var isUserInitiated: Bool { self != .automatic }
 
+    /// Only a failed user-initiated load shows the Retry state. An automatic failure leaves the
+    /// next tap an ordinary explicit request, so it can surface a terminal source without re-arming it.
+    var failureOffersRetry: Bool { isUserInitiated }
+
     /// Records the demand with MDK and returns whether transfer state is worth awaiting.
     /// A returned reference is intent, not readiness.
     func record(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
