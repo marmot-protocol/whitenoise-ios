@@ -18,13 +18,21 @@ struct PollVotesSheet: View {
     private struct LoadKey: Hashable {
         let subject: PollVotesSubject?
         let reprojection: UInt64
+        let invalidation: UInt64
         let runtimeGeneration: Int
         let runtimeReady: Bool
         let retry: Int
     }
 
+    private var watch: PollVotesWatch? {
+        guard let accountIdHex = appState.activeAccount?.accountIdHex, !messageIdHex.isEmpty else { return nil }
+        return PollVotesWatch(accountIdHex: accountIdHex, groupIdHex: viewModel.group.groupIdHex,
+                              pollEventId: messageIdHex)
+    }
+
     var body: some View {
         let subject = viewModel.pollVotesSubject(for: messageIdHex)
+        let watch = watch
         NavigationStack {
             PollVotesList(
                 content: content(for: subject),
@@ -43,9 +51,19 @@ struct PollVotesSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .onChange(of: watch, initial: true) { previous, current in
+            if let previous, previous != current { appState.pollVotesInvalidation.end(previous) }
+            if let current { appState.pollVotesInvalidation.begin(current) }
+        }
+        .onDisappear {
+            if let watch { appState.pollVotesInvalidation.end(watch) }
+        }
+        // Window reprojections cover changed rows; runtime projection events
+        // also cover same-tally re-votes the window deduplicates.
         .task(id: LoadKey(
             subject: subject,
             reprojection: viewModel.pollReprojectionRevision(for: messageIdHex),
+            invalidation: appState.pollVotesInvalidation.revision,
             runtimeGeneration: appState.runtimeGeneration,
             runtimeReady: appState.canUseRuntimeForForegroundWork,
             retry: retryCount
@@ -84,14 +102,13 @@ struct PollVotesSheet: View {
 
     @ViewBuilder
     private func avatar(for voter: PollVotesPresentation.Voter, name: String) -> some View {
-        if voter.isBlocked {
-            // A blocked person's content stays off screen; show the monogram only.
+        switch PollVotesPresentation.avatarSource(
+            for: voter, identity: viewModel.windowIdentities[voter.accountIdHex]
+        ) {
+        case .native(let asset):
+            NativeAvatarBubble(seed: voter.accountIdHex, title: name, asset: asset)
+        case .monogram:
             AvatarBubble(seed: voter.accountIdHex, title: name)
-        } else if let identity = viewModel.windowIdentities[voter.accountIdHex] {
-            NativeAvatarBubble(seed: voter.accountIdHex, title: name, asset: identity.avatarAsset)
-        } else {
-            AvatarBubble(seed: voter.accountIdHex, title: name,
-                         pictureURL: appState.avatarURL(forAccountIdHex: voter.accountIdHex))
         }
     }
 }

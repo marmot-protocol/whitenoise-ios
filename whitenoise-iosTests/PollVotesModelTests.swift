@@ -1,5 +1,6 @@
 import Foundation
 import MarmotKit
+import Synchronization
 import Testing
 @testable import whitenoise_ios
 
@@ -284,6 +285,109 @@ struct PollVotesModelTests {
         #expect(model.phase == .loading)
     }
 
+    // MARK: Runtime projection invalidation
+
+    private static let me = voter(0x11)
+    private static let watch = PollVotesWatch(accountIdHex: me, groupIdHex: group, pollEventId: pollA)
+
+    private func projectionUpdate(
+        account: String? = nil,
+        group: String? = nil,
+        messages: [TimelineMessageRecordFfi] = [],
+        changes: [TimelineMessageChangeFfi]
+    ) -> RuntimeProjectionUpdateFfi {
+        RuntimeProjectionUpdateFfi(accountIdHex: account ?? Self.me, accountLabel: "alice",
+            update: TimelineProjectionUpdateFfi(groupIdHex: group ?? Self.group, messages: messages, changes: changes,
+                chatListRow: nil, chatListTrigger: .snapshotRefresh))
+    }
+
+    @Test func aWatchMatchesUpsertsRemovalsAndMessagesForItsPollOnly() {
+        let row = pollRecord(id: Self.pollA, votes: [1, 0])
+        let reVote = projectionUpdate(changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)])
+        #expect(Self.watch.isTouched(by: reVote))
+        #expect(Self.watch.isTouched(by: projectionUpdate(account: Self.me.uppercased(),
+            changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)])))
+        #expect(Self.watch.isTouched(by: projectionUpdate(changes: [.remove(messageIdHex: Self.pollA, reason: .invalidated)])))
+        #expect(Self.watch.isTouched(by: projectionUpdate(messages: [row], changes: [])))
+
+        let otherPoll = pollRecord(id: Self.pollB, votes: [1, 0])
+        #expect(!Self.watch.isTouched(by: projectionUpdate(changes: [.upsert(trigger: .messageEditedOrReprojected, message: otherPoll)])))
+        #expect(!Self.watch.isTouched(by: projectionUpdate(group: String(repeating: "d", count: 64),
+            changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)])))
+        #expect(!Self.watch.isTouched(by: projectionUpdate(account: Self.voter(0x22),
+            changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)])))
+    }
+
+    @Test func invalidationCountsOnlyWhileThePollIsWatched() {
+        let invalidation = PollVotesInvalidation()
+        let event = MarmotEventFfi.projectionUpdated(update: projectionUpdate(
+            changes: [.upsert(trigger: .messageEditedOrReprojected, message: pollRecord(id: Self.pollA, votes: [1, 0]))]))
+
+        invalidation.observe(event)
+        #expect(invalidation.revision == 0)
+
+        invalidation.begin(Self.watch)
+        invalidation.observe(event)
+        invalidation.observe(.historyNoticesChanged(accountIdHex: Self.me, accountLabel: "alice"))
+        #expect(invalidation.revision == 1)
+
+        // A sheet for another poll ending must not stop this watch.
+        invalidation.end(PollVotesWatch(accountIdHex: Self.me, groupIdHex: Self.group, pollEventId: Self.pollB))
+        invalidation.observe(event)
+        #expect(invalidation.revision == 2)
+
+        invalidation.end(Self.watch)
+        invalidation.observe(event)
+        #expect(invalidation.revision == 2)
+    }
+
+    /// A re-vote for the same option changes only the voter's `votedAt`: the
+    /// window path sees an identical poll row and skips it, so the runtime
+    /// projection event MDK emits for the response is what invalidates.
+    @Test func aSameTallyReVoteInvalidatesThroughRuntimeEventsAfterTheWindowDeduplicatesIt() throws {
+        let row = pollRecord(id: Self.pollA, votes: [2, 1])
+        let store = TimelineStore(appState: nil, groupIdHex: Self.group)
+        store.applyConversationWindowPage(TimelinePageFfi(messages: [row], hasMoreBefore: false, hasMoreAfter: false))
+        let windowRevision = store.pollReprojectionRevision(for: Self.pollA)
+        store.applyConversationWindowPage(TimelinePageFfi(messages: [row], hasMoreBefore: false, hasMoreAfter: false))
+        #expect(store.pollReprojectionRevision(for: Self.pollA) == windowRevision)
+
+        let state = AppState.test(client: try MarmotClient.testClient())
+        state.accountStore.accounts = [
+            AccountSummaryFfi(label: "alice", accountIdHex: Self.me, localSigning: true, signedOut: false, running: true)
+        ]
+        state.activeAccountRef = "alice"
+        state.setPhase(.ready)
+        let generation = try #require(state.runtimeEventsGeneration)
+        state.pollVotesInvalidation.begin(Self.watch)
+
+        let reVote = MarmotEventFfi.projectionUpdated(update: projectionUpdate(
+            changes: [.upsert(trigger: .messageEditedOrReprojected, message: row)]))
+        state.handleRuntimeEvent(reVote, generation: generation)
+        #expect(state.pollVotesInvalidation.revision == 1)
+        state.handleRuntimeEvent(reVote, generation: generation)
+        #expect(state.pollVotesInvalidation.revision == 2)
+
+        // Events from a replaced runtime are ignored.
+        state.handleRuntimeEvent(reVote, generation: generation - 1)
+        #expect(state.pollVotesInvalidation.revision == 2)
+    }
+
+    // MARK: Avatars
+
+    @Test func onlyConversationIdentitiesProvideAnAvatarAndNeverForBlockedVoters() {
+        let asset = AvatarAssetFfi(target: "t", reference: "r", availability: .ready, acquisition: nil,
+                                   contentRevision: 1, byteCount: 10)
+        let identity = ConversationIdentityFfi(accountIdHex: Self.voter(3), displayName: "Alice",
+            avatar: .placeholder(stableSeed: "s", source: .peerProfile), hasCachedProfile: true, avatarAsset: asset)
+        let voter = PollVotesPresentation.Voter(accountIdHex: Self.voter(3), votedAt: 1, isBlocked: false, isMe: false)
+        let blocked = PollVotesPresentation.Voter(accountIdHex: Self.voter(3), votedAt: 1, isBlocked: true, isMe: false)
+
+        #expect(PollVotesPresentation.avatarSource(for: voter, identity: identity) == .native(asset))
+        #expect(PollVotesPresentation.avatarSource(for: voter, identity: nil) == .monogram)
+        #expect(PollVotesPresentation.avatarSource(for: blocked, identity: identity) == .monogram)
+    }
+
     // MARK: Fixtures
 
     private func pollRecord(
@@ -319,86 +423,95 @@ struct PollVotesModelTests {
 }
 
 /// Returns scripted pages in order and records every request.
-private nonisolated final class ScriptedPollVotesSource: PollVotesDataSource, @unchecked Sendable {
+private nonisolated final class ScriptedPollVotesSource: PollVotesDataSource {
     struct Call: Equatable {
         let subject: PollVotesSubject
         let cursor: PollVotesCursor?
         let limit: UInt32
     }
 
-    private let lock = NSLock()
-    private var pages: [PollVotePageFfi]
-    private var recorded: [Call] = []
-    private let failure: Error?
+    private struct State {
+        var pages: [PollVotePageFfi]
+        var calls: [Call] = []
+    }
 
-    init(pages: [PollVotePageFfi], failure: Error? = nil) {
-        self.pages = pages
+    private let state: Mutex<State>
+    private let failure: (any Error)?
+
+    init(pages: [PollVotePageFfi], failure: (any Error)? = nil) {
+        state = Mutex(State(pages: pages))
         self.failure = failure
     }
 
-    var calls: [Call] { lock.withLock { recorded } }
+    var calls: [Call] { state.withLock { $0.calls } }
 
     func pollVotesPage(for subject: PollVotesSubject, after cursor: PollVotesCursor?, limit: UInt32) async throws -> PollVotePageFfi {
-        try lock.withLock {
-            recorded.append(Call(subject: subject, cursor: cursor, limit: limit))
-            if let failure { throw failure }
-            guard !pages.isEmpty else { return PollVotePageFfi(votes: [], hasMoreAfter: false) }
-            return pages.removeFirst()
+        let page = state.withLock { state -> PollVotePageFfi in
+            state.calls.append(Call(subject: subject, cursor: cursor, limit: limit))
+            guard !state.pages.isEmpty else { return PollVotePageFfi(votes: [], hasMoreAfter: false) }
+            return state.pages.removeFirst()
         }
+        if let failure { throw failure }
+        return page
     }
 }
 
 /// Holds requests for gated subjects until the test releases them, so a test
 /// can deliver a page after a newer load has started.
-private nonisolated final class GatedPollVotesSource: PollVotesDataSource, @unchecked Sendable {
-    private let lock = NSLock()
-    private var gated: Set<PollVotesSubject> = []
-    private var responses: [PollVotesSubject: PollVotePageFfi] = [:]
-    private var waiters: [PollVotesSubject: CheckedContinuation<PollVotePageFfi, Error>] = [:]
-    private var requestedCursors: [PollVotesSubject: [PollVotesCursor?]] = [:]
+private nonisolated final class GatedPollVotesSource: PollVotesDataSource {
+    private struct State {
+        var gated: Set<PollVotesSubject> = []
+        var responses: [PollVotesSubject: PollVotePageFfi] = [:]
+        var waiters: [PollVotesSubject: CheckedContinuation<PollVotePageFfi, any Error>] = [:]
+        var requestedCursors: [PollVotesSubject: [PollVotesCursor?]] = [:]
+    }
+
+    private let state = Mutex(State())
 
     func gate(_ subject: PollVotesSubject) {
-        lock.withLock { _ = gated.insert(subject) }
+        state.withLock { _ = $0.gated.insert(subject) }
     }
 
     func respond(_ subject: PollVotesSubject, with page: PollVotePageFfi) {
-        lock.withLock { responses[subject] = page }
+        state.withLock { $0.responses[subject] = page }
     }
 
     func cursors(for subject: PollVotesSubject) -> [PollVotesCursor?] {
-        lock.withLock { requestedCursors[subject] ?? [] }
+        state.withLock { $0.requestedCursors[subject] ?? [] }
     }
 
-    func takeWaiter(_ subject: PollVotesSubject) -> CheckedContinuation<PollVotePageFfi, Error>? {
-        lock.withLock { waiters.removeValue(forKey: subject) }
+    func takeWaiter(_ subject: PollVotesSubject) -> CheckedContinuation<PollVotePageFfi, any Error>? {
+        state.withLock { $0.waiters.removeValue(forKey: subject) }
     }
 
     /// Resumes the held request and stops gating the subject.
     func release(_ subject: PollVotesSubject, with page: PollVotePageFfi) {
-        let waiter = lock.withLock { () -> CheckedContinuation<PollVotePageFfi, Error>? in
-            gated.remove(subject)
-            responses[subject] = page
-            return waiters.removeValue(forKey: subject)
+        let waiter = state.withLock { state -> CheckedContinuation<PollVotePageFfi, any Error>? in
+            state.gated.remove(subject)
+            state.responses[subject] = page
+            return state.waiters.removeValue(forKey: subject)
         }
         waiter?.resume(returning: page)
     }
 
     func waitUntilWaiting(_ subject: PollVotesSubject) async throws {
         for _ in 0..<10_000 {
-            if lock.withLock({ waiters[subject] != nil }) { return }
+            if state.withLock({ $0.waiters[subject] != nil }) { return }
             try await Task.sleep(nanoseconds: 1_000_000)
         }
         Issue.record("Timed out waiting for a request for \(subject.pollEventId)")
     }
 
     func pollVotesPage(for subject: PollVotesSubject, after cursor: PollVotesCursor?, limit: UInt32) async throws -> PollVotePageFfi {
-        let immediate = lock.withLock { () -> PollVotePageFfi? in
-            requestedCursors[subject, default: []].append(cursor)
-            return gated.contains(subject) ? nil : (responses[subject] ?? PollVotePageFfi(votes: [], hasMoreAfter: false))
+        let immediate = state.withLock { state -> PollVotePageFfi? in
+            state.requestedCursors[subject, default: []].append(cursor)
+            return state.gated.contains(subject)
+                ? nil
+                : (state.responses[subject] ?? PollVotePageFfi(votes: [], hasMoreAfter: false))
         }
         if let immediate { return immediate }
         return try await withCheckedThrowingContinuation { continuation in
-            lock.withLock { waiters[subject] = continuation }
+            state.withLock { $0.waiters[subject] = continuation }
         }
     }
 }

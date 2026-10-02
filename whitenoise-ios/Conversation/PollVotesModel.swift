@@ -37,6 +37,52 @@ extension MarmotClient: PollVotesDataSource {
     }
 }
 
+/// The poll an open View votes sheet wants invalidations for.
+nonisolated struct PollVotesWatch: Hashable, Sendable {
+    let accountIdHex: String
+    let groupIdHex: String
+    let pollEventId: String
+
+    /// MDK reprojects the poll row for every accepted response (as
+    /// `messageEditedOrReprojected`), deletion and removal, and emits that
+    /// change on the runtime event stream even when the row is unchanged, as
+    /// for a re-vote for the same option. The conversation window can
+    /// deduplicate such equal rows, so this event is the reload signal.
+    func isTouched(by update: RuntimeProjectionUpdateFfi) -> Bool {
+        guard update.accountIdHex.lowercased() == accountIdHex.lowercased(),
+              update.update.groupIdHex == groupIdHex else { return false }
+        if update.update.messages.contains(where: { $0.messageIdHex == pollEventId }) { return true }
+        return update.update.changes.contains { change in
+            switch change {
+            case .upsert(_, let message): message.messageIdHex == pollEventId
+            case .remove(let messageIdHex, _): messageIdHex == pollEventId
+            }
+        }
+    }
+}
+
+/// Counts runtime projection updates that touch the watched poll, so an open
+/// View votes sheet re-reads from the first page.
+@MainActor
+@Observable
+final class PollVotesInvalidation {
+    private(set) var revision: UInt64 = 0
+    @ObservationIgnored private(set) var watch: PollVotesWatch?
+
+    func begin(_ watch: PollVotesWatch) {
+        self.watch = watch
+    }
+
+    func end(_ watch: PollVotesWatch) {
+        if self.watch == watch { self.watch = nil }
+    }
+
+    func observe(_ event: MarmotEventFfi) {
+        guard let watch, case .projectionUpdated(let update) = event, watch.isTouched(by: update) else { return }
+        revision &+= 1
+    }
+}
+
 nonisolated enum PollVotesPhase: Equatable {
     case idle
     case loading
@@ -183,6 +229,21 @@ nonisolated enum PollVotesPresentation {
         case .loaded:
             return hasVoters ? .votes(sections) : .noVotes
         }
+    }
+
+    enum AvatarSource: Equatable {
+        /// MDK's opaque avatar asset from the conversation identity sidecar.
+        case native(AvatarAssetFfi?)
+        case monogram
+    }
+
+    /// Only conversation identities carry an MDK avatar asset for a person.
+    /// Voters without one (poll responses are not timeline rows, and former
+    /// members' votes are retained) get a monogram: there is no host URL
+    /// fallback. A blocked voter's picture stays off screen too.
+    static func avatarSource(for voter: Voter, identity: ConversationIdentityFfi?) -> AvatarSource {
+        guard !voter.isBlocked, let identity else { return .monogram }
+        return .native(identity.avatarAsset)
     }
 
     static func votedAtLabel(_ timestamp: UInt64, locale: Locale) -> String? {
