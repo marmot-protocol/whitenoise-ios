@@ -376,37 +376,6 @@ struct ChatsListView: View {
                     viewModel?.refreshDisplayProjections()
                 }
             }
-            .confirmationDialog(
-                singleDeleteConfirmationTitle,
-                isPresented: singleDeleteConfirmationPresented,
-                titleVisibility: .visible
-            ) {
-                if let target = pendingSingleDelete {
-                    Button("Delete Chat", role: .destructive) {
-                        pendingSingleDelete = nil
-                        Task { _ = await deleteLocal(groupIdHex: target.id) }
-                    }
-                }
-                Button("Cancel", role: .cancel) { pendingSingleDelete = nil }
-            } message: {
-                Text("This permanently removes the chat and its messages from this device. Signing in again won’t restore them.")
-            }
-            .confirmationDialog(
-                leaveConfirmationTitle,
-                isPresented: leaveConfirmationPresented,
-                titleVisibility: .visible
-            ) {
-                if let target = leaveActionState.pendingConfirmation {
-                    Button("Leave Chat", role: .destructive) {
-                        startConfirmedLeave(target)
-                    }
-                }
-                Button("Cancel", role: .cancel) {
-                    leaveActionState.cancelConfirmation()
-                }
-            } message: {
-                Text(ChatListLeavePresentation.confirmationMessage)
-            }
         }
         // Warm path: a chat created / deep-linked while the list is on screen.
         .onChange(of: appState.navigation.pendingChatPerformance?.id) { _, _ in
@@ -724,6 +693,37 @@ struct ChatsListView: View {
                 swipeActions(for: item)
             }
         }
+        .confirmationDialog(
+            singleDeleteConfirmationTitle,
+            isPresented: singleDeleteConfirmationPresented(for: item.id),
+            titleVisibility: .visible
+        ) {
+            if let target = pendingSingleDelete {
+                Button("Delete Chat", role: .destructive) {
+                    pendingSingleDelete = nil
+                    Task { _ = await deleteLocal(groupIdHex: target.id) }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingSingleDelete = nil }
+        } message: {
+            Text("This permanently removes the chat and its messages from this device. Signing in again won’t restore them.")
+        }
+        .confirmationDialog(
+            leaveConfirmationTitle,
+            isPresented: leaveConfirmationPresented(for: item.id),
+            titleVisibility: .visible
+        ) {
+            if let target = leaveActionState.pendingConfirmation {
+                Button("Leave Chat", role: .destructive) {
+                    startConfirmedLeave(target)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                leaveActionState.cancelConfirmation()
+            }
+        } message: {
+            Text(ChatListLeavePresentation.confirmationMessage)
+        }
         .listRowSeparator(.hidden)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .background(alignment: .trailing) {
@@ -814,9 +814,9 @@ struct ChatsListView: View {
         }
     }
 
-    private var singleDeleteConfirmationPresented: Binding<Bool> {
+    private func singleDeleteConfirmationPresented(for groupIdHex: String) -> Binding<Bool> {
         Binding(
-            get: { pendingSingleDelete != nil },
+            get: { pendingSingleDelete?.id == groupIdHex },
             set: { presented in
                 if !presented { pendingSingleDelete = nil }
             }
@@ -828,9 +828,9 @@ struct ChatsListView: View {
         return L10n.formatted("Delete “%@” from this device?", target.title)
     }
 
-    private var leaveConfirmationPresented: Binding<Bool> {
+    private func leaveConfirmationPresented(for groupIdHex: String) -> Binding<Bool> {
         Binding(
-            get: { leaveActionState.pendingConfirmation != nil },
+            get: { leaveActionState.pendingConfirmation?.groupIdHex == groupIdHex },
             set: { presented in
                 if !presented {
                     leaveActionState.cancelConfirmation()
