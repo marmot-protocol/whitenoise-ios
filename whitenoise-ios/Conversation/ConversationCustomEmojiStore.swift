@@ -54,7 +54,7 @@ final class ConversationCustomEmojiStore {
         if let cached = images[key] { return (key, cached) }
         guard failures[key] != policyRevision else { return nil }
         var requested = item
-        requested.downloadExplicitly = false
+        requested.demand = .automatic
         do {
             let data = try await loadData(requested)
             try Task.checkCancellation()

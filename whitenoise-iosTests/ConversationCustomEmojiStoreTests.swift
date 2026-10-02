@@ -46,7 +46,7 @@ struct ConversationCustomEmojiStoreTests {
         let first = await harness.store.inlineImage(for: item, pixelSize: 60, scale: 3, policyRevision: "p1")
         #expect(first != nil)
         #expect(harness.loadRequests.count == 1)
-        #expect(harness.loadRequests.first?.downloadExplicitly == false)
+        #expect(harness.loadRequests.first?.demand == .automatic)
         #expect(harness.loadRequests.first?.localTarget != nil)
         let cached = await harness.store.inlineImage(for: item, pixelSize: 60, scale: 3, policyRevision: "p1")
         #expect(cached?.image === first?.image)
