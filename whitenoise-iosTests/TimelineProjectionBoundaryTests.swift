@@ -272,7 +272,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: downloadedData)
         let downloader = ConversationMediaDownloader(
@@ -313,7 +313,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0xff]))
         let downloader = ConversationMediaDownloader(
@@ -350,7 +350,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0x01]))
         let downloader = ConversationMediaDownloader(
@@ -385,7 +385,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         let downloaded = DownloadMediaSpy(data: Data([0x01]))
         let downloader = ConversationMediaDownloader(
@@ -436,7 +436,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = Data([0xff])
         let downloaded = DownloadMediaSpy(data: downloadedData)
@@ -475,7 +475,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = data
         cached.blocksCachedDataRead = true
@@ -511,7 +511,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         cached.invalidatesDuringStore = true
         let downloaded = DownloadMediaSpy(data: data)
@@ -541,7 +541,7 @@ struct TimelineProjectionBoundaryTests {
             dim: nil,
             localData: nil
         )
-        media.downloadExplicitly = true
+        media.demand = .explicit
         let cached = CountingConversationMediaCache()
         cached.cachedDataToReturn = cachedData
         cached.blocksCachedDataRead = true

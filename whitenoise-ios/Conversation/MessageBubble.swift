@@ -35,21 +35,22 @@ final class ConversationMediaLoader {
         self.load = load
     }
 
-    func data(for media: MessageMediaAttachment, explicit: Bool = true) async throws -> Data {
+    func data(for media: MessageMediaAttachment, demand: AttachmentDemand = .explicit) async throws -> Data {
         var requested = media
-        requested.downloadExplicitly = explicit
+        requested.demand = demand
         return try await load(requested)
     }
 
-    func selectedPageData(for media: MessageMediaAttachment, isSelected: Bool) async throws -> Data? {
+    func selectedPageData(for media: MessageMediaAttachment, isSelected: Bool,
+                          demand: AttachmentDemand = .explicit) async throws -> Data? {
         guard isSelected else { return nil }
-        return try await data(for: media, explicit: true)
+        return try await data(for: media, demand: demand)
     }
 
     func prefetchDocument(_ media: MessageMediaAttachment, isVisible: Bool, allowed: Bool) async {
         guard isVisible, allowed, media.kind == .document || media.kind == .unsupported else { return }
         // MDK retains bytes and acquisition history; a miss never becomes an explicit retry.
-        _ = try? await data(for: media, explicit: false)
+        _ = try? await data(for: media, demand: .automatic)
     }
 }
 
@@ -2064,17 +2065,14 @@ private struct MessageMediaTile: View {
         .onTapGesture {
             if awaitingManualDownload {
                 awaitingManualDownload = false
-                Task { _ = await loadImageIfNeeded(scale: displayScale, force: true) }
+                Task { _ = await loadImageIfNeeded(scale: displayScale, demand: .explicit) }
                 return
             }
             guard item.isImage else { return }
-            if didFail {
-                Task { await loadImageIfNeeded(scale: displayScale, force: true) }
-            } else {
-                Task {
-                    if let data = await loadImageIfNeeded(scale: displayScale) {
-                        onOpenImage(item, data)
-                    }
+            let demand = AttachmentDemand.userTap(afterFailure: didFail)
+            Task {
+                if let data = await loadImageIfNeeded(scale: displayScale, demand: demand) {
+                    onOpenImage(item, data)
                 }
             }
         }
@@ -2119,10 +2117,10 @@ private struct MessageMediaTile: View {
         .background(Color(.tertiarySystemFill))
     }
 
-    private func loadImageIfNeeded(scale: CGFloat, force: Bool = false) async -> Data? {
+    private func loadImageIfNeeded(scale: CGFloat, demand: AttachmentDemand = .automatic) async -> Data? {
         guard item.isImage else { return nil }
         let maxPixelSize = max(1, Int(ceil(max(size.width, size.height) * scale)))
-        if !force {
+        if demand != .retry {
             if let cachedThumbnail = MessageMediaThumbnailDecoder.cachedThumbnail(
                 for: thumbnailCacheKey,
                 maxPixelSize: maxPixelSize
@@ -2140,7 +2138,7 @@ private struct MessageMediaTile: View {
         let analytics = appState.productAnalytics
         let prepareTiming = analytics.beginTiming()
         do {
-            let data = try await onLoadMedia.data(for: item, explicit: force)
+            let data = try await onLoadMedia.data(for: item, demand: demand)
             guard !Task.isCancelled else {
                 analytics.recordStage(.mediaPrepare, since: prepareTiming, outcome: .cancelled)
                 return nil
@@ -2157,7 +2155,7 @@ private struct MessageMediaTile: View {
             guard let decoded else {
                 image = nil
                 loadedImageID = item.id
-                didFail = true
+                didFail = demand.failureOffersRetry
                 return nil
             }
             guard !Task.isCancelled else { return nil }
@@ -2175,7 +2173,7 @@ private struct MessageMediaTile: View {
                                   outcome: error is CancellationError ? .cancelled : .failure)
             image = nil
             loadedImageID = item.id
-            didFail = true
+            didFail = demand.failureOffersRetry
             return nil
         }
     }
@@ -2348,7 +2346,7 @@ private struct MessageReplyMediaThumbnail: View {
 
     private func mediaData() async -> Data? {
         if let localData = item.localData { return localData }
-        return try? await onLoadMedia.data(for: item, explicit: false)
+        return try? await onLoadMedia.data(for: item, demand: .automatic)
     }
 }
 
@@ -2593,7 +2591,7 @@ private struct MessageVideoAttachmentView: View {
                   MediaPrefetchRegistry.claim(item.id)
             else { return }
             do {
-                let url = try await playbackFileURL(explicit: false)
+                let url = try await playbackFileURL(demand: .automatic)
                 await loadPreviewThumbnail(from: url, scale: displayScale)
             } catch {
                 MediaPrefetchRegistry.release(item.id)
@@ -2643,11 +2641,12 @@ private struct MessageVideoAttachmentView: View {
             audioSession.attach(to: player)
             return
         }
+        let demand = AttachmentDemand.userTap(afterFailure: didFail)
         isLoading = true
         didFail = false
         defer { isLoading = false }
         do {
-            let url = try await playbackFileURL()
+            let url = try await playbackFileURL(demand: demand)
             await loadPreviewThumbnail(from: url, scale: scale)
             let next = AVPlayer(url: url)
             player = next
@@ -2666,11 +2665,12 @@ private struct MessageVideoAttachmentView: View {
             return
         }
 
+        let demand = AttachmentDemand.userTap(afterFailure: didFail)
         isLoadingFullscreen = true
         didFail = false
         defer { isLoadingFullscreen = false }
         do {
-            let url = try await playbackFileURL()
+            let url = try await playbackFileURL(demand: demand)
             await loadPreviewThumbnail(from: url, scale: scale)
             fullscreenVideo = MessageFullscreenVideo(id: item.id, item: item, url: url)
         } catch {
@@ -2678,12 +2678,12 @@ private struct MessageVideoAttachmentView: View {
         }
     }
 
-    private func playbackFileURL(explicit: Bool = true) async throws -> URL {
+    private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
         if let playbackURL {
             return playbackURL
         }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item, explicit: explicit)
+        let data = try await onLoadMedia.data(for: item, demand: demand)
         guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
@@ -2958,7 +2958,7 @@ private struct MessageAudioAttachmentView: View {
         guard player == nil, !isLoading else { return }
         guard MediaAutoDownloadStore.shared.shouldAutoDownload(.audio) else { return }
         guard MediaPrefetchRegistry.claim(metadataCacheKey) else { return }
-        guard let data = try? await onLoadMedia.data(for: item, explicit: false) else {
+        guard let data = try? await onLoadMedia.data(for: item, demand: .automatic) else {
             MediaPrefetchRegistry.release(metadataCacheKey)
             return
         }
@@ -3000,11 +3000,12 @@ private struct MessageAudioAttachmentView: View {
     }
 
     private func loadAndPlay() async {
+        let demand = AttachmentDemand.userTap(afterFailure: didFail)
         isLoading = true
         didFail = false
         defer { isLoading = false }
         do {
-            let data = try await onLoadMedia.data(for: item)
+            let data = try await onLoadMedia.data(for: item, demand: demand)
             // The view may have disappeared (and `stopPlayback` cancelled this
             // task) while the decrypt/download was in flight. Bail before
             // touching player state or acquiring the audio-session lease so a
@@ -3284,12 +3285,13 @@ private struct MessageDocumentAttachmentView: View {
     }
 
     private func openDocument() async {
+        let demand = AttachmentDemand.userTap(afterFailure: didFail)
         isLoading = true
         didFail = false
         defer { isLoading = false }
         do {
             let producerEpoch = MessageMediaCache.currentProducerEpoch()
-            let data = try await onLoadMedia.data(for: item)
+            let data = try await onLoadMedia.data(for: item, demand: demand)
             guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
                 didFail = true
                 return
@@ -3950,7 +3952,7 @@ private struct MessageMediaFullscreenVideoPage: View {
         didFail = false
         defer { isLoading = false }
         do {
-            let url = try await playbackFileURL()
+            let url = try await playbackFileURL(demand: .userTap(afterFailure: force))
             guard !Task.isCancelled, isSelected else { return }
             let next = AVPlayer(url: url)
             productOutcome = .success
@@ -3964,12 +3966,12 @@ private struct MessageMediaFullscreenVideoPage: View {
         }
     }
 
-    private func playbackFileURL() async throws -> URL {
+    private func playbackFileURL(demand: AttachmentDemand) async throws -> URL {
         if let playbackURL {
             return playbackURL
         }
         let producerEpoch = MessageMediaCache.currentProducerEpoch()
-        let data = try await onLoadMedia.data(for: item)
+        let data = try await onLoadMedia.data(for: item, demand: demand)
         guard let url = await MediaPlaybackFileStore.fileURL(for: item, data: data, producerEpoch: producerEpoch) else {
             throw MessageVideoAttachmentError.playbackFileUnavailable
         }
@@ -4082,7 +4084,8 @@ private struct MessageMediaFullscreenImagePage: View {
         didFail = false
         defer { isLoading = false }
         do {
-            guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected) else { return }
+            guard let data = try await onLoadMedia.selectedPageData(for: item, isSelected: isSelected,
+                demand: .userTap(afterFailure: force)) else { return }
             guard !Task.isCancelled else { return }
             guard let decoded = await MessageMediaFullscreenPresentation.decodedImage(
                 from: data,

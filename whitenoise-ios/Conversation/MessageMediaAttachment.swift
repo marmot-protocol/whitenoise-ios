@@ -246,7 +246,7 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
     let rejectionKind: MediaAttachmentRejectionKindFfi?
     var localTarget: AttachmentLocalTargetFfi?
     var sourceHint: AttachmentSourceHint?
-    var downloadExplicitly = false
+    var demand = AttachmentDemand.automatic
 
     init(
         id: String,

@@ -97,6 +97,12 @@ struct Marmot0102IntegrationTests {
             let reader = Task { try await subscription.next() }
             subscription.cancel()
             #expect(try await reader.value == nil)
+            #expect(try await client.marmot.requestExplicitAttachment(accountRef: account.label,
+                groupIdHex: group.groupIdHex, target: target) == nil)
+            await #expect(throws: AttachmentReadError.unavailable) {
+                _ = try await client.acquireAttachmentData(accountRef: account.label,
+                    groupID: group.groupIdHex, target: target, demand: .explicit)
+            }
             #expect(try await client.marmot.downloadAttachmentAgain(accountRef: account.label,
                 groupIdHex: group.groupIdHex, target: target) == nil)
             // Offline creation may not have authored a current package yet. A local read must still succeed.

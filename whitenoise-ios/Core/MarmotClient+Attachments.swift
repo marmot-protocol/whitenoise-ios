@@ -29,25 +29,70 @@ nonisolated enum AttachmentReadError: Error {
     case unavailable
 }
 
+/// Why a host load asks MDK for an attachment that has no retained bytes yet.
+nonisolated enum AttachmentDemand: Hashable, Sendable {
+    /// Visibility or policy prefetch. Never escalates to explicit work.
+    case automatic
+    /// An ordinary tap. Joins or promotes the current source without resetting its
+    /// retry budget, backoff or deadline, and never re-arms failed, cancelled or removed work.
+    case explicit
+    /// The deliberate Retry offered after a failure. Re-arms terminal work.
+    case retry
+
+    /// A tap on an attachment that is showing its failure/Retry state is the deliberate Retry.
+    static func userTap(afterFailure: Bool) -> AttachmentDemand {
+        afterFailure ? .retry : .explicit
+    }
+
+    var isUserInitiated: Bool { self != .automatic }
+
+    /// Only a failed user-initiated load shows the Retry state. An automatic failure leaves the
+    /// next tap an ordinary explicit request, so it can surface a terminal source without re-arming it.
+    var failureOffersRetry: Bool { isUserInitiated }
+
+    /// Records the demand with MDK and returns whether transfer state is worth awaiting.
+    /// A returned reference is intent, not readiness.
+    func record(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
+                with requester: some AttachmentDemandRequesting) async throws -> Bool {
+        switch self {
+        case .automatic:
+            let request = try await requester.requestAutomaticAttachment(accountRef: accountRef,
+                groupIdHex: groupID, target: target)
+            return AttachmentAcquisitionPresentation.canAwait(request.status.state)
+        case .explicit:
+            return try await requester.requestExplicitAttachment(accountRef: accountRef,
+                groupIdHex: groupID, target: target) != nil
+        case .retry:
+            return try await requester.downloadAttachmentAgain(accountRef: accountRef,
+                groupIdHex: groupID, target: target) != nil
+        }
+    }
+}
+
+/// The MDK attachment-demand calls, narrowed so demand routing can be tested without a runtime.
+nonisolated protocol AttachmentDemandRequesting: Sendable {
+    func requestAutomaticAttachment(accountRef: String, groupIdHex: String,
+                                    target: AttachmentLocalTargetFfi) async throws -> AutomaticAttachmentRequestFfi
+    func requestExplicitAttachment(accountRef: String, groupIdHex: String,
+                                   target: AttachmentLocalTargetFfi) async throws -> String?
+    func downloadAttachmentAgain(accountRef: String, groupIdHex: String,
+                                 target: AttachmentLocalTargetFfi) async throws -> String?
+}
+
+extension Marmot: AttachmentDemandRequesting {}
+
 extension MarmotClient {
     /// `onLocalHit` receives the elapsed milliseconds of a successful retained-byte read.
     func acquireAttachmentData(accountRef: String, groupID: String, target: AttachmentLocalTargetFfi,
-                               explicit: Bool,
+                               demand: AttachmentDemand,
                                onLocalHit: (@Sendable (UInt64) -> Void)? = nil) async throws -> Data? {
         let localReadStartedAt = ContinuousClock.now
         if let data = try await attachmentData(accountRef: accountRef, groupID: groupID, target: target) {
             onLocalHit?(ProductAnalyticsRecorder.elapsedMilliseconds(from: localReadStartedAt, to: .now))
             return data
         }
-        if explicit {
-            guard try await marmot.downloadAttachmentAgain(accountRef: accountRef, groupIdHex: groupID,
-                target: target) != nil else { throw AttachmentReadError.unavailable }
-        } else {
-            let request = try await marmot.requestAutomaticAttachment(accountRef: accountRef,
-                groupIdHex: groupID, target: target)
-            guard AttachmentAcquisitionPresentation.canAwait(request.status.state) else {
-                throw AttachmentReadError.unavailable
-            }
+        guard try await demand.record(accountRef: accountRef, groupID: groupID, target: target, with: marmot) else {
+            throw AttachmentReadError.unavailable
         }
         let subscription = try await marmot.subscribeAttachmentTransfers(accountRef: accountRef,
             groupIdHex: groupID, targets: [target])

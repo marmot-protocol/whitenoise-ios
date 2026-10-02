@@ -260,6 +260,22 @@ before every release tag.
       decode and settings save. Frame, fonts, search, media queue, handoff and
       media apply stay at zero.
 
+## MarmotKit 0.12.0 attachment taps
+
+- [ ] Throttle the network (Network Link Conditioner) and let a large received
+      video or image start downloading automatically. Tap it while it is still
+      downloading. The download continues rather than starting over, and the
+      message's Info → Downloads shows one transfer, not two. Tap it repeatedly;
+      it still finishes once and opens.
+- [ ] Make a received attachment fail (for example, every Blossom server returns
+      404, or it reaches its retry limit offline). Tap the bubble once: it shows
+      its failure/Retry state and does not start downloading again on its own.
+      Navigate away and back; it stays failed.
+- [ ] Then tap that bubble's Retry (or Download again in the message's Info →
+      Downloads). This is the only action that starts a fresh download; with the
+      network restored, the attachment downloads and opens. Repeat for a voice
+      note, a document and a fullscreen gallery page's Retry button.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.

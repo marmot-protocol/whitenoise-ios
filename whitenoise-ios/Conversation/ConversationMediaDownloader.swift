@@ -11,15 +11,15 @@ struct MediaDownloadInFlightKey: Hashable {
     let ciphertextSha256: String
     let nonceHex: String
     let target: AttachmentLocalTargetFfi?
-    let explicit: Bool
+    let demand: AttachmentDemand
     let sourceHint: AttachmentSourceHint?
     let scope: String
 
-    init(reference: MediaAttachmentReferenceFfi, target: AttachmentLocalTargetFfi? = nil, explicit: Bool = false, sourceHint: AttachmentSourceHint? = nil, scope: String = "") {
+    init(reference: MediaAttachmentReferenceFfi, target: AttachmentLocalTargetFfi? = nil, demand: AttachmentDemand = .automatic, sourceHint: AttachmentSourceHint? = nil, scope: String = "") {
         self.sourceHint = sourceHint
         self.scope = scope
         self.target = target
-        self.explicit = explicit
+        self.demand = demand
         self.version = reference.version
         self.plaintextSha256 = reference.plaintextSha256.lowercased()
         self.ciphertextSha256 = reference.ciphertextSha256.lowercased()
@@ -156,7 +156,7 @@ final class ConversationMediaDownloader {
             throw MediaDataError.unsafeLocator
         }
         return try await inFlight.data(
-            for: MediaDownloadInFlightKey(reference: reference, target: media.localTarget, explicit: media.downloadExplicitly,
+            for: MediaDownloadInFlightKey(reference: reference, target: media.localTarget, demand: media.demand,
                 sourceHint: media.sourceHint, scope: "\(appState?.activeAccountRef ?? "")/\(appState?.runtimeGeneration ?? 0)/\(groupIdHex)")
         ) {
             // host_media_load: plaintext bytes from MDK, the host cache, or download.
@@ -179,7 +179,7 @@ final class ConversationMediaDownloader {
                     guard let appState, let account = appState.activeAccountRef else { throw MediaDataError.missingAccount }
                     let client = try appState.currentMarmotClient()
                     if let data = try await client.acquireAttachmentData(accountRef: account, groupID: groupIdHex,
-                        target: target, explicit: media.downloadExplicitly,
+                        target: target, demand: media.demand,
                         onLocalHit: { [recorder, cacheTicket] milliseconds in
                             recorder?.recordPerformance(.mediaCacheRead, milliseconds: milliseconds, ticket: cacheTicket)
                         }) {
@@ -196,7 +196,7 @@ final class ConversationMediaDownloader {
                 }
                 // A cache miss never grants new automatic network work. Source-scoped
                 // MDK reads above own expiry, removal and acquisition history.
-                guard media.downloadExplicitly else { throw AttachmentReadError.unavailable }
+                guard media.demand.isUserInitiated else { throw AttachmentReadError.unavailable }
                 let producerEpoch = self.cache.producerGeneration
                 let cacheReadStartedAt = ContinuousClock.now
                 if let cached = await self.cache.cachedData(for: reference),
