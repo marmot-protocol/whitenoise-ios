@@ -4590,6 +4590,125 @@ struct NotificationPresentationTests {
         }
     }
 
+    @Test func groupReactionNamesEmojiAndReactedToMessage() {
+        withAppLanguage(.english) {
+            let update = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "❤️",
+                reactionEmoji: "❤️",
+                reactedToPreview: " Lunch at\n1? "
+            )
+
+            let presentation = LocalNotificationProjection.makePresentation(for: update)
+
+            #expect(presentation?.title == "Project Room")
+            #expect(presentation?.body == "Alice reacted ❤️ to: “Lunch at 1?”")
+        }
+    }
+
+    @Test func directReactionKeepsSenderInTitle() {
+        withAppLanguage(.english) {
+            let update = notificationUpdate(
+                isDm: true,
+                senderName: "Alice",
+                previewText: "👍",
+                reactionEmoji: "👍",
+                reactedToPreview: "Lunch at 1?"
+            )
+
+            let presentation = LocalNotificationProjection.makePresentation(for: update)
+
+            #expect(presentation?.title == "Alice")
+            #expect(presentation?.body == "Reacted 👍 to: “Lunch at 1?”")
+        }
+    }
+
+    @Test func reactionWithoutResolvableTargetOmitsQuote() {
+        withAppLanguage(.english) {
+            let group = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "🎉",
+                reactionEmoji: "🎉",
+                reactedToPreview: nil
+            )
+            let direct = notificationUpdate(
+                isDm: true,
+                senderName: "Alice",
+                previewText: "🎉",
+                reactionEmoji: "🎉",
+                reactedToPreview: "  "
+            )
+
+            #expect(LocalNotificationProjection.makePresentation(for: group)?.body == "Alice reacted 🎉")
+            #expect(LocalNotificationProjection.makePresentation(for: direct)?.body == "Reacted 🎉")
+        }
+    }
+
+    @Test func reactionEmojiIsSanitizedAndBlankEmojiFallsBackToMessageBody() {
+        withAppLanguage(.english) {
+            let spoofed = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "❤️",
+                reactionEmoji: "\u{202E}❤️\u{200B}",
+                reactedToPreview: "Lunch"
+            )
+            let blank = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "Hello",
+                reactionEmoji: "\u{200B} ",
+                reactedToPreview: "Lunch"
+            )
+
+            #expect(LocalNotificationProjection.makePresentation(for: spoofed)?.body == "Alice reacted ❤️ to: “Lunch”")
+            #expect(LocalNotificationProjection.makePresentation(for: blank)?.body == "Alice: Hello")
+        }
+    }
+
+    @Test func reactionContentFollowsPreviewMode() {
+        withAppLanguage(.english) {
+            let update = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "❤️",
+                reactionEmoji: "❤️",
+                reactedToPreview: "Lunch at 1?"
+            )
+
+            let senderOnly = LocalNotificationProjection.makePresentation(for: update, previewMode: .senderOnly)
+            let generic = LocalNotificationProjection.makePresentation(for: update, previewMode: .generic)
+
+            #expect(senderOnly?.body == "Alice sent a message")
+            #expect(generic?.title == "White Noise")
+            #expect(generic?.body == "New encrypted message")
+        }
+    }
+
+    @Test func groupReactionLocalizesBody() {
+        withAppLanguage(.french) {
+            let update = notificationUpdate(
+                isDm: false,
+                groupName: "Project Room",
+                senderName: "Alice",
+                previewText: "❤️",
+                reactionEmoji: "❤️",
+                reactedToPreview: "Lunch"
+            )
+
+            let presentation = LocalNotificationProjection.makePresentation(for: update)
+
+            #expect(presentation?.body == "Alice a réagi avec ❤️ à : « Lunch »")
+        }
+    }
+
     @Test func groupMessagePreviewUsesLocalizedSeparator() {
         withAppLanguage(.french) {
             let update = notificationUpdate(
