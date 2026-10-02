@@ -107,6 +107,8 @@ final class RecipientDirectory {
     private var loadTaskID: UUID?
     private var loadAccountRef: String?
 
+    var isLoadInFlight: Bool { loadTask != nil }
+
     private static let profileWarmupLimit = 24
 
     /// Callers that need the directory before deciding (e.g. DM reuse) can
