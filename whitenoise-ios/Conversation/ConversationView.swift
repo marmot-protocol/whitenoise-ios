@@ -942,6 +942,7 @@ struct ConversationView: View {
                         identityAvatar: viewModel.windowAvatarURL,
                         identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset }
                     )
+                    .environment(\.customEmojiStore, viewModel.customEmojiStore)
                     .appAppearance()
                 }
             }
@@ -2130,6 +2131,7 @@ struct ConversationView: View {
                 : .none,
             replyPreview: viewModel.replyPreview(for: record),
             mediaItems: viewModel.mediaItems(for: item),
+            customEmoji: viewModel.customEmoji(for: item),
             markdownBlocks: viewModel.markdownDisplayBlocks(for: item),
             poll: viewModel.poll(for: record.messageIdHex),
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
@@ -2176,6 +2178,7 @@ struct ConversationView: View {
                 ? nil
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
         )
+        .environment(\.customEmojiStore, viewModel.customEmojiStore)
         .id(AttachmentPresentationState.shared.revision)
     }
 

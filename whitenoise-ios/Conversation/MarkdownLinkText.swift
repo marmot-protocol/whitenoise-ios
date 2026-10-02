@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MarkdownLinkText: View {
     @Environment(\.copyMessageLink) private var copyMessageLink
+    @Environment(\.customEmojiInline) private var customEmoji
 
     let text: AttributedString
     private let segments: [MessageLinkSegment]
@@ -17,7 +18,7 @@ struct MarkdownLinkText: View {
 
     var body: some View {
         if let copyMessageLink, hasCopyableLinks {
-            Self.composedText(segments)
+            Self.composedText(segments, customEmoji: customEmoji)
                 .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
                     GeometryReader { proxy in
                         let regions = Self.hitRegions(in: layouts, proxy: proxy)
@@ -27,11 +28,11 @@ struct MarkdownLinkText: View {
                     }
                 }
         } else {
-            Text(text)
+            CustomEmojiTextComposer.text(text, context: customEmoji)
         }
     }
 
-    private static func composedText(_ segments: [MessageLinkSegment]) -> Text {
+    private static func composedText(_ segments: [MessageLinkSegment], customEmoji: CustomEmojiInlineContext) -> Text {
         var interpolation = LocalizedStringKey.StringInterpolation(
             literalCapacity: 0,
             interpolationCount: segments.count
@@ -39,10 +40,11 @@ struct MarkdownLinkText: View {
         for segment in segments {
             if let target = segment.target {
                 interpolation.appendInterpolation(
-                    Text(segment.text).customAttribute(MessageLinkTextAttribute(target: target))
+                    CustomEmojiTextComposer.text(segment.text, context: customEmoji)
+                        .customAttribute(MessageLinkTextAttribute(target: target))
                 )
             } else {
-                interpolation.appendInterpolation(Text(segment.text))
+                interpolation.appendInterpolation(CustomEmojiTextComposer.text(segment.text, context: customEmoji))
             }
         }
         return Text(LocalizedStringKey(stringInterpolation: interpolation), tableName: "MarkdownLinkText")

@@ -646,6 +646,11 @@ final class TimelineStore {
         return mediaProjections.items(for: record, ownerId: record.messageIdHex)
     }
 
+    func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
+        _ = timelineProjectionGeneration
+        return mediaProjections.customEmoji(for: item)
+    }
+
     func groupSystemDisplayText(for record: AppMessageRecordFfi) -> String? {
         _ = timelineProjectionGeneration
         if preparedOrder != nil {

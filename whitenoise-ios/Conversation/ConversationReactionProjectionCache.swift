@@ -82,7 +82,8 @@ final class ConversationReactionProjectionCache {
     func preparedDetails(_ value: ConversationReactionsFfi, target: String, me: String) -> ConversationViewModel.ReactionDetails {
         var groups = value.items.map {
             ConversationViewModel.ReactionDetails.EmojiGroup(emoji: $0.emoji, senders: $0.reactors,
-                mine: $0.viewerReacted, totalCount: Int(clamping: $0.count))
+                mine: $0.viewerReacted, totalCount: Int(clamping: $0.count),
+                reactionMessageIdHex: $0.reactionMessageIdHex)
         }
         let additions = Set(optimisticRecords.values.compactMap { record -> String? in
             guard record.sender == me, case .reaction(let id) = MessageSemantics.classify(record), id == target else { return nil }
@@ -98,7 +99,8 @@ final class ConversationReactionProjectionCache {
             guard count > 0 else { return nil }
             var senders = group.senders.filter { $0 != me }
             if mine && !me.isEmpty { senders.append(me) }
-            return .init(emoji: group.emoji, senders: senders, mine: mine, totalCount: count)
+            return .init(emoji: group.emoji, senders: senders, mine: mine, totalCount: count,
+                reactionMessageIdHex: group.reactionMessageIdHex)
         }
         let original = value.items.reduce(0) { $0 + Int(clamping: $1.count) }
         let adjusted = Int(clamping: value.totalCount) + groups.reduce(0) { $0 + $1.count } - original

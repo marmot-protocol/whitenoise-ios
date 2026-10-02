@@ -37,7 +37,7 @@ struct MarkdownMessageView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
         case .codeBlock(let code):
-            Text(code)
+            CustomEmojiAwareText(code)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(8)
                 .background(

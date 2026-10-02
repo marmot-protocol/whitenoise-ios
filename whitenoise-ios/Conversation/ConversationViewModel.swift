@@ -147,6 +147,9 @@ final class ConversationViewModel {
         let emoji: String
         let count: Int
         let mine: Bool
+        /// Earliest active kind-7 carrying this emoji; names a `:shortcode:`
+        /// reaction's image for `listMedia`.
+        var reactionMessageIdHex: String? = nil
         var id: String { emoji }
     }
 
@@ -160,6 +163,7 @@ final class ConversationViewModel {
             let senders: [String]
             let mine: Bool
             var totalCount: Int? = nil
+            var reactionMessageIdHex: String? = nil
 
             var id: String { emoji }
             var count: Int { totalCount ?? senders.count }
@@ -179,12 +183,17 @@ final class ConversationViewModel {
 
         var tallies: [ReactionTally] {
             groups.map { group in
-                ReactionTally(emoji: group.emoji, count: group.count, mine: group.mine)
+                ReactionTally(emoji: group.emoji, count: group.count, mine: group.mine,
+                    reactionMessageIdHex: group.reactionMessageIdHex)
             }
         }
 
         var totalReactionCount: Int {
             totalCount ?? groups.reduce(0) { $0 + $1.count }
+        }
+
+        func reactionMessageIdHex(for emoji: String) -> String? {
+            groups.first { $0.emoji == emoji }?.reactionMessageIdHex
         }
 
         func users(filteredBy emoji: String?) -> [User] {
@@ -290,6 +299,21 @@ final class ConversationViewModel {
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
+    /// Decoded NIP-30 custom emoji for this conversation's rows and reactions.
+    @ObservationIgnored lazy var customEmojiStore = ConversationCustomEmojiStore(
+        scopeProvider: { [weak self] in self?.customEmojiScope },
+        listMedia: { [weak self] scope in
+            guard let self else { throw CancellationError() }
+            return try await self.customEmojiMediaRecords(scope: scope)
+        },
+        loadData: { [weak self] item in
+            guard let self else { throw CancellationError() }
+            return try await self.data(for: item)
+        },
+        loadableAttachment: { [weak self] reference in
+            self?.timelineStore.mediaProjections.loadableImageAttachment(matching: reference)
+        }
+    )
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
@@ -957,6 +981,7 @@ final class ConversationViewModel {
         isLocallyReset = true
         resetOptimisticState()
         await stopLiveSubscriptions()
+        customEmojiStore.cancelAll()
         await mediaDownloader.stopAndDrain()
     }
 
@@ -2103,6 +2128,35 @@ final class ConversationViewModel {
         try await mediaDownloader.data(for: media, groupIdHex: group.groupIdHex, appState: appState)
     }
 
+    /// The account, runtime and chat custom emoji images belong to; nil once
+    /// the active account is no longer the one this conversation opened under.
+    var customEmojiScope: CustomEmojiScope? {
+        guard let appState, let account = appState.activeAccountRef,
+              moderationAccountRef == nil || moderationAccountRef == account else { return nil }
+        return CustomEmojiScope(accountRef: account, runtimeGeneration: appState.runtimeGeneration,
+                                groupIdHex: group.groupIdHex)
+    }
+
+    func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
+        timelineStore.customEmoji(for: item)
+    }
+
+    /// Custom emoji this conversation already holds (inline in loaded messages
+    /// and resolved reaction images), with the reference a sender can reuse.
+    var customEmojiCatalog: [CustomEmojiCatalogEntry] {
+        _ = timelineStore.timelineProjectionGeneration
+        return CustomEmojiCatalog.merge(messages: timelineStore.mediaProjections.customEmojiCatalogEntries,
+                                        reactions: customEmojiStore.reactionCatalogEntries)
+    }
+
+    private func customEmojiMediaRecords(scope: CustomEmojiScope) async throws -> [MediaRecordFfi] {
+        guard let appState, customEmojiScope == scope else { throw CancellationError() }
+        let client = try appState.currentMarmotClient()
+        let records = try await client.listMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex)
+        guard customEmojiScope == scope, appState.client === client else { throw CancellationError() }
+        return records
+    }
+
 #if DEBUG
     var markdownProjectionBuildCountForTesting: Int {
         timelineStore.markdownProjectionBuildCountForTesting
@@ -2281,6 +2335,15 @@ final class ConversationViewModel {
         })
     }
 
+    /// The earliest active kind-7 with `emoji`, matching what the conversation
+    /// window reports as `reactionMessageIdHex`.
+    nonisolated static func earliestReactionMessageId(emoji: String, in summary: TimelineReactionSummaryFfi) -> String? {
+        summary.userReactions
+            .filter { $0.emoji == emoji && !$0.reactionMessageIdHex.isEmpty }
+            .min { ($0.reactedAt, $0.reactionMessageIdHex) < ($1.reactedAt, $1.reactionMessageIdHex) }?
+            .reactionMessageIdHex
+    }
+
     /// Sender-level counterpart to `reactionTallies`. This is the canonical
     /// fold of Marmot's authenticated summary and the local optimistic overlay.
     nonisolated static func reactionDetails(
@@ -2327,7 +2390,8 @@ final class ConversationViewModel {
             groups.append(ReactionDetails.EmojiGroup(
                 emoji: emoji,
                 senders: senders.sorted(),
-                mine: senders.contains(me)
+                mine: senders.contains(me),
+                reactionMessageIdHex: summary.flatMap { earliestReactionMessageId(emoji: emoji, in: $0) }
             ))
         }
         groups.sort { lhs, rhs in

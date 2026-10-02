@@ -31,6 +31,7 @@ final class ConversationMediaProjectionCache {
     private var ownSends = OwnSendMediaStore()
     private var projectionsByRowId: [String: [MessageMediaAttachment]] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
+    private var customEmojiByRowId: [String: RowCustomEmoji] = [:]
 #if DEBUG
     // Counts build invocations across both record-backed and classify-backed
     // media paths so tests can catch accidental body-time rebuilds.
@@ -42,11 +43,21 @@ final class ConversationMediaProjectionCache {
         case fallback(kind: UInt64, tags: [MessageTagFfi])
     }
 
+    private struct RowCustomEmoji {
+        let messageIdHex: String
+        let resolution: CustomEmojiRowResolution
+    }
+
     private struct ProjectionKey: Equatable {
         let ownerId: String
         let messageIdHex: String
         let source: ProjectionSourceKey
         let sourceMessageID: String?
+        // Inline custom emoji depend on the (possibly edited) text and the
+        // row's `emoji` tags as well as its attachments.
+        let kind: UInt64
+        let plaintext: String
+        let emojiTags: [MessageTagFfi]
 
         init(
             record: AppMessageRecordFfi,
@@ -57,6 +68,9 @@ final class ConversationMediaProjectionCache {
             self.sourceMessageID = sourceMessageID
             self.ownerId = ownerId
             messageIdHex = record.messageIdHex
+            kind = record.kind
+            plaintext = record.plaintext
+            emojiTags = record.tags.filter { $0.values.first == "emoji" }
             if let mirroredReferences {
                 source = .mirrored(mirroredReferences)
             } else {
@@ -69,11 +83,40 @@ final class ConversationMediaProjectionCache {
 
     func sourceMessageID(for messageID: String) -> String? { sourceIDs[messageID] }
 
+    /// Attachments for the row's media grid. Attachments drawn inline as
+    /// custom emoji are excluded so they never render twice.
     func items(for item: TimelineItem) -> [MessageMediaAttachment] {
         if let pending = pendingByRowId[item.id] {
             return pending
         }
+        if let emoji = customEmojiByRowId[item.id] {
+            return emoji.resolution.gridItems.map(ownSends.overlay)
+        }
         return (projectionsByRowId[item.id] ?? []).map(ownSends.overlay)
+    }
+
+    func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
+        guard pendingByRowId[item.id] == nil else { return .empty }
+        return customEmojiByRowId[item.id]?.resolution ?? .empty
+    }
+
+    /// Inline emoji the loaded rows hold, for the conversation's catalog.
+    var customEmojiCatalogEntries: [CustomEmojiCatalogEntry] {
+        customEmojiByRowId.sorted { $0.key < $1.key }.flatMap { _, row in
+            CustomEmojiCatalog.messageEntries(messageIdHex: row.messageIdHex, resolution: row.resolution)
+        }
+    }
+
+    /// A loaded chat attachment with a readable original slot whose plaintext
+    /// digest matches, used to read a reaction image MDK does not serve.
+    func loadableImageAttachment(matching reference: MediaAttachmentReferenceFfi) -> MessageMediaAttachment? {
+        for rowId in projectionsByRowId.keys.sorted() {
+            if let match = CustomEmojiReactionResolver.loadableAttachment(
+                matching: reference, candidates: projectionsByRowId[rowId] ?? []) {
+                return match
+            }
+        }
+        return nil
     }
 
     func items(for record: AppMessageRecordFfi, ownerId: String) -> [MessageMediaAttachment] {
@@ -181,19 +224,34 @@ final class ConversationMediaProjectionCache {
         guard projectionKeysByRowId[item.id] != key else { return false }
         let next = build(for: record, ownerId: item.id)
         projectionKeysByRowId[item.id] = key
+        let emojiChanged = updateCustomEmoji(rowId: item.id, record: record, attachments: next)
         guard !next.isEmpty else {
-            return projectionsByRowId.removeValue(forKey: item.id) != nil
+            return (projectionsByRowId.removeValue(forKey: item.id) != nil) || emojiChanged
         }
-        guard projectionsByRowId[item.id] != next else { return false }
+        guard projectionsByRowId[item.id] != next else { return emojiChanged }
         projectionsByRowId[item.id] = next
+        return true
+    }
+
+    private func updateCustomEmoji(rowId: String, record: AppMessageRecordFfi, attachments: [MessageMediaAttachment]) -> Bool {
+        let resolution = record.kind == MessageSemantics.kindChat
+            ? CustomEmojiResolver.resolve(text: record.plaintext, tags: record.tags, attachments: attachments)
+            : .empty
+        guard !resolution.isEmpty else {
+            return customEmojiByRowId.removeValue(forKey: rowId) != nil
+        }
+        guard customEmojiByRowId[rowId]?.resolution != resolution
+                || customEmojiByRowId[rowId]?.messageIdHex != record.messageIdHex else { return false }
+        customEmojiByRowId[rowId] = RowCustomEmoji(messageIdHex: record.messageIdHex, resolution: resolution)
         return true
     }
 
     @discardableResult
     func remove(rowId: String) -> Bool {
         let removedProjection = projectionsByRowId.removeValue(forKey: rowId) != nil
+        let removedEmoji = customEmojiByRowId.removeValue(forKey: rowId) != nil
         projectionKeysByRowId.removeValue(forKey: rowId)
-        return removedProjection
+        return removedProjection || removedEmoji
     }
 
     @discardableResult
