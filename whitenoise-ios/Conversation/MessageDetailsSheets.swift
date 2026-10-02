@@ -256,12 +256,7 @@ struct ReactionDetailsSheet: View {
 
                 ForEach(details.groups) { group in
                     filterButton(emoji: group.emoji, count: group.count) {
-                        CustomEmojiReactionLabel(
-                            emoji: group.emoji,
-                            reactionMessageIdHex: group.reactionMessageIdHex,
-                            pointSize: CustomEmojiInlineMetrics.reactionChipPointSize,
-                            scalesWithDynamicType: true
-                        )
+                        CustomEmojiReactionLabel(emoji: group.emoji)
                     }
                 }
             }
@@ -328,15 +323,6 @@ struct ReactionDetailsSheet: View {
         }
     }
 
-    private func reactionLabel(_ emoji: String) -> some View {
-        CustomEmojiReactionLabel(
-            emoji: emoji,
-            reactionMessageIdHex: details.reactionMessageIdHex(for: emoji),
-            pointSize: CustomEmojiInlineMetrics.reactionSheetPointSize,
-            scalesWithDynamicType: true
-        )
-    }
-
     private func reactionRow(_ user: ConversationViewModel.ReactionDetails.User) -> some View {
         let name = (identityName?(user.sender) ?? appState.displayName(forAccountIdHex: user.sender))
         let isMe = user.sender == appState.activeAccount?.accountIdHex
@@ -382,7 +368,7 @@ struct ReactionDetailsSheet: View {
                             onRemoveOwnReaction(emoji)
                         } label: {
                             HStack(spacing: 3) {
-                                reactionLabel(emoji)
+                                CustomEmojiReactionLabel(emoji: emoji)
                                 Image(systemName: "xmark.circle.fill")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -397,7 +383,7 @@ struct ReactionDetailsSheet: View {
                         .accessibilityLabel(L10n.string("Remove"))
                         .accessibilityValue(CustomEmojiShortcode.spokenReaction(emoji))
                     } else {
-                        reactionLabel(emoji)
+                        CustomEmojiReactionLabel(emoji: emoji)
                             .font(.title3)
                     }
                 }

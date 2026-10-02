@@ -481,15 +481,20 @@ on the current network unless a step says otherwise.
       stays in reading order inside the sentence.
 - [ ] VoiceOver on the bubble reads the shortcode name (“party”) where the
       image sits.
+- [ ] Send `[here](https://example.com/:party:)` with the `:party:` image
+      attached: the link reads “here” and the image stays visible as a media
+      tile (it is not drawn inline and does not disappear).
 - [ ] From the 0.12.0 client, react with `:cat:`. The reaction chip and the
-      reaction details sheet (filter row and the reactor's row) show the cat
-      image when this chat already holds the same image in a message; otherwise
-      they show `:cat:` text. VoiceOver reads “cat”. Unicode reactions are
-      unchanged.
+      reaction details sheet show the `:cat:` text (known limitation: MDK
+      0.12.0 exposes no host-managed slot for kind-7 reaction images; tracked
+      in marmot-protocol/mdk#2151 and #1137), and VoiceOver reads “cat”.
+      Unicode reactions are unchanged.
 - [ ] Account isolation: sign in a second iOS profile that is not in the group
       (or is in a different group), switch to it and back. No emoji image from
       the first profile's chat appears in the other profile; switching mid-load
       leaves no stray image, and returning reloads the first chat's emoji.
+      Background long enough for the runtime to suspend, then foreground with
+      the chat open: emoji briefly show their text and reload.
 - [ ] Background the app while emoji are loading, then foreground: emoji either
       render or show their text; nothing stays blank. Relaunch offline: emoji
       already downloaded render from local storage.

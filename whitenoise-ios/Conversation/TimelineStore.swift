@@ -230,6 +230,12 @@ final class TimelineStore {
     @ObservationIgnored let markdownProjections = ConversationMarkdownProjectionCache()
     @ObservationIgnored let agentEventProjections = ConversationAgentEventProjectionCache()
     @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
+    private struct CustomEmojiCacheEntry {
+        let candidates: [CustomEmojiShortcode: MessageMediaAttachment]
+        let resolution: CustomEmojiRowResolution
+    }
+    @ObservationIgnored private var customEmojiCache: [String: CustomEmojiCacheEntry] = [:]
+    @ObservationIgnored private var customEmojiCacheGeneration = -1
     @ObservationIgnored let reactionProjections = ConversationReactionProjectionCache()
     @ObservationIgnored let deletedProjections = ConversationDeletedMessageProjection()
     @ObservationIgnored let editProjections = ConversationEditProjectionCache()
@@ -636,9 +642,15 @@ final class TimelineStore {
         )
     }
 
+    /// Attachments for the row's media grid. Attachments drawn inline as
+    /// custom emoji are excluded so they never render twice.
     func mediaItems(for item: TimelineItem) -> [MessageMediaAttachment] {
         _ = timelineProjectionGeneration
-        return mediaProjections.items(for: item)
+        let items = mediaProjections.items(for: item)
+        let emoji = customEmoji(for: item)
+        guard !emoji.isEmpty else { return items }
+        let inlineIDs = Set(emoji.inline.values.map(\.id))
+        return items.filter { !inlineIDs.contains($0.id) }
     }
 
     func mediaItems(for record: AppMessageRecordFfi) -> [MessageMediaAttachment] {
@@ -646,9 +658,37 @@ final class TimelineStore {
         return mediaProjections.items(for: record, ownerId: record.messageIdHex)
     }
 
+    /// Inline custom emoji for a row: tag-matched candidates whose shortcode
+    /// occurs in the text the bubble displays (prepared markdown blocks, or the
+    /// plain-text fallback). Cached per projection generation.
     func customEmoji(for item: TimelineItem) -> CustomEmojiRowResolution {
         _ = timelineProjectionGeneration
-        return mediaProjections.customEmoji(for: item)
+        guard case .message(let record, _) = item.kind else { return .empty }
+        let candidates = mediaProjections.customEmojiCandidates(for: item)
+        guard !candidates.isEmpty else { return .empty }
+        if customEmojiCacheGeneration != timelineProjectionGeneration {
+            customEmojiCache.removeAll()
+            customEmojiCacheGeneration = timelineProjectionGeneration
+        }
+        if let cached = customEmojiCache[item.id], cached.candidates == candidates {
+            return cached.resolution
+        }
+        let runs = markdownProjections.blocks(for: item).map(CustomEmojiDisplayText.runs(in:))
+            ?? [ContentSanitizer.messageBody(displayBody(of: record))]
+        let resolution = CustomEmojiResolver.claim(candidates, attachments: mediaProjections.items(for: item),
+                                                   displayedRuns: runs)
+        customEmojiCache[item.id] = CustomEmojiCacheEntry(candidates: candidates, resolution: resolution)
+        return resolution
+    }
+
+    /// Inline custom emoji held by the loaded message rows, for the catalog.
+    var customEmojiCatalogEntries: [CustomEmojiCatalogEntry] {
+        timeline.flatMap { item -> [CustomEmojiCatalogEntry] in
+            guard case .message(let record, _) = item.kind else { return [] }
+            let resolution = customEmoji(for: item)
+            guard !resolution.isEmpty else { return [] }
+            return CustomEmojiCatalog.messageEntries(messageIdHex: record.messageIdHex, resolution: resolution)
+        }
     }
 
     func groupSystemDisplayText(for record: AppMessageRecordFfi) -> String? {

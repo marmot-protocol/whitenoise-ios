@@ -25,8 +25,6 @@ struct CustomEmojiInlineContext: Equatable {
 nonisolated enum CustomEmojiInlineMetrics {
     static let bodyPointSize: CGFloat = 20
     static let bodyBaselineOffset: CGFloat = -4
-    static let reactionChipPointSize: CGFloat = 16
-    static let reactionSheetPointSize: CGFloat = 24
 
     static func pixelSize(pointSize: CGFloat, scale: CGFloat) -> Int {
         max(1, Int(ceil(max(1, pointSize) * max(1, scale))))
@@ -93,12 +91,13 @@ struct CustomEmojiInlineLoader: ViewModifier {
     @ScaledMetric(relativeTo: .body) private var baselineOffset = CustomEmojiInlineMetrics.bodyBaselineOffset
 
     let resolution: CustomEmojiRowResolution
-    /// Images keyed by the row-scoped attachment id and pixel size, so a
-    /// changed resolution never shows a previous row's or chat's image and a
-    /// Dynamic Type change reloads at the new size.
-    @State private var images: [String: UIImage] = [:]
+    /// Images keyed by scope, row-scoped attachment id and pixel size. Only
+    /// keys for the current scope are shown, so an account switch, runtime
+    /// restart or chat change withholds old images immediately.
+    @State private var images: [CustomEmojiImageKey: UIImage] = [:]
 
     private struct TaskID: Equatable {
+        let scope: CustomEmojiScope?
         let itemIDs: [String]
         let isVisible: Bool
         let pixelSize: Int
@@ -106,22 +105,26 @@ struct CustomEmojiInlineLoader: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content
-            .environment(\.customEmojiInline, context)
+        let scope = store?.currentScope
+        let size = pixelSize
+        return content
+            .environment(\.customEmojiInline, context(scope: scope, pixelSize: size))
             .task(id: TaskID(
+                scope: scope,
                 itemIDs: resolution.inline.values.map(\.id).sorted(),
                 isVisible: isVisible,
-                pixelSize: pixelSize,
+                pixelSize: size,
                 policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision
             )) {
-                guard isVisible, let store, !resolution.isEmpty else { return }
+                images = images.filter { $0.key.scope == scope }
+                guard isVisible, let store, scope != nil, !resolution.isEmpty else { return }
                 let revision = MediaAutoDownloadStore.shared.attachmentPolicyRevision
                 let unique = Dictionary(resolution.inline.values.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-                let size = pixelSize
-                for (id, item) in unique.sorted(by: { $0.key < $1.key }) where images[Self.key(id, size)] == nil {
-                    guard let image = await store.inlineImage(for: item, pixelSize: size,
-                        scale: displayScale, policyRevision: revision), !Task.isCancelled else { continue }
-                    images[Self.key(id, size)] = image
+                for (_, item) in unique.sorted(by: { $0.key < $1.key }) {
+                    guard let loaded = await store.inlineImage(for: item, pixelSize: size,
+                        scale: displayScale, policyRevision: revision),
+                          !Task.isCancelled, loaded.key.scope == store.currentScope else { continue }
+                    images[loaded.key] = loaded.image
                 }
             }
     }
@@ -130,71 +133,25 @@ struct CustomEmojiInlineLoader: ViewModifier {
         CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale)
     }
 
-    private var context: CustomEmojiInlineContext {
+    private func context(scope: CustomEmojiScope?, pixelSize: Int) -> CustomEmojiInlineContext {
         guard !resolution.isEmpty else { return .none }
-        var loaded: [CustomEmojiShortcode: UIImage] = [:]
-        for (shortcode, item) in resolution.inline {
-            if let image = images[Self.key(item.id, pixelSize)] {
-                loaded[shortcode] = image
-            }
-        }
-        return CustomEmojiInlineContext(resolvable: resolution.shortcodes, images: loaded, baselineOffset: baselineOffset)
+        return CustomEmojiInlineContext(
+            resolvable: resolution.shortcodes,
+            images: CustomEmojiInlinePresentation.images(for: resolution, loaded: images, scope: scope, pixelSize: pixelSize),
+            baselineOffset: baselineOffset
+        )
     }
-
-    private static func key(_ itemID: String, _ pixelSize: Int) -> String { "\(itemID)#\(pixelSize)" }
 }
 
-/// A reaction's label: the custom emoji image for a resolved `:shortcode:`
-/// reaction, otherwise the sanitized reaction text (also while loading).
+/// A reaction's label. MDK 0.12.0 exposes no host-managed slot for kind-7
+/// reaction images, so a `:shortcode:` reaction shows its sanitized text and
+/// VoiceOver reads the shortcode name.
 struct CustomEmojiReactionLabel: View {
-    @Environment(\.customEmojiStore) private var store
-    @Environment(\.timelineRowIsVisible) private var isVisible
-    @Environment(\.displayScale) private var displayScale
-
-    @ScaledMetric(relativeTo: .body) private var dynamicTypeFactor: CGFloat = 1
-
     let emoji: String
-    let reactionMessageIdHex: String?
-    let basePointSize: CGFloat
-    /// Fixed-size chips keep a fixed image; text-styled rows scale with it.
-    let scalesWithDynamicType: Bool
-
-    init(emoji: String, reactionMessageIdHex: String?, pointSize: CGFloat, scalesWithDynamicType: Bool = false) {
-        self.emoji = emoji
-        self.reactionMessageIdHex = reactionMessageIdHex
-        self.basePointSize = pointSize
-        self.scalesWithDynamicType = scalesWithDynamicType
-    }
-
-    @State private var loaded: (key: String, image: UIImage)?
-
-    private var pointSize: CGFloat { scalesWithDynamicType ? basePointSize * dynamicTypeFactor : basePointSize }
-    private var shortcode: CustomEmojiShortcode? { CustomEmojiShortcode(reactionContent: emoji) }
-    private var loadKey: String { "\(reactionMessageIdHex ?? "")|\(emoji)|\(pixelSize)" }
-    private var pixelSize: Int { CustomEmojiInlineMetrics.pixelSize(pointSize: pointSize, scale: displayScale) }
 
     var body: some View {
-        Group {
-            if let shortcode, let loaded, loaded.key == loadKey {
-                Image(uiImage: loaded.image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: pointSize)
-                    .accessibilityLabel(Text(verbatim: shortcode.name))
-            } else {
-                Text(ContentSanitizer.reactionEmoji(emoji))
-                    .accessibilityLabel(Text(verbatim: CustomEmojiShortcode.spokenReaction(emoji)))
-            }
-        }
-        .task(id: shortcode == nil ? nil : "\(loadKey)|\(isVisible)|\(MediaAutoDownloadStore.shared.attachmentPolicyRevision)") {
-            guard shortcode != nil, isVisible, let store else { return }
-            let key = loadKey
-            guard let image = await store.reactionImage(emoji: emoji, reactionMessageIdHex: reactionMessageIdHex,
-                pixelSize: pixelSize, scale: displayScale,
-                policyRevision: MediaAutoDownloadStore.shared.attachmentPolicyRevision),
-                  !Task.isCancelled, key == loadKey else { return }
-            loaded = (key, image)
-        }
+        Text(ContentSanitizer.reactionEmoji(emoji))
+            .accessibilityLabel(Text(verbatim: CustomEmojiShortcode.spokenReaction(emoji)))
     }
 }
 

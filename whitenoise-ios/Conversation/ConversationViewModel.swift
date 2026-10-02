@@ -299,19 +299,12 @@ final class ConversationViewModel {
     private(set) var windowIdentities: [String: ConversationIdentityFfi] = [:]
     private(set) var windowReactions: [String: ConversationReactionsFfi] = [:]
     @ObservationIgnored private let mediaDownloader = ConversationMediaDownloader()
-    /// Decoded NIP-30 custom emoji for this conversation's rows and reactions.
+    /// Decoded inline NIP-30 custom emoji for this conversation's rows.
     @ObservationIgnored lazy var customEmojiStore = ConversationCustomEmojiStore(
         scopeProvider: { [weak self] in self?.customEmojiScope },
-        listMedia: { [weak self] scope in
-            guard let self else { throw CancellationError() }
-            return try await self.customEmojiMediaRecords(scope: scope)
-        },
         loadData: { [weak self] item in
             guard let self else { throw CancellationError() }
             return try await self.data(for: item)
-        },
-        loadableAttachment: { [weak self] reference in
-            self?.timelineStore.mediaProjections.loadableImageAttachment(matching: reference)
         }
     )
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
@@ -981,7 +974,6 @@ final class ConversationViewModel {
         isLocallyReset = true
         resetOptimisticState()
         await stopLiveSubscriptions()
-        customEmojiStore.cancelAll()
         await mediaDownloader.stopAndDrain()
     }
 
@@ -2141,20 +2133,12 @@ final class ConversationViewModel {
         timelineStore.customEmoji(for: item)
     }
 
-    /// Custom emoji this conversation already holds (inline in loaded messages
-    /// and resolved reaction images), with the reference a sender can reuse.
+    /// Custom emoji this conversation already holds inline in its loaded
+    /// kind-9 messages, with the reference a sender can reuse. Reaction images
+    /// are not included: MDK 0.12.0 exposes no host-managed slot for them.
     var customEmojiCatalog: [CustomEmojiCatalogEntry] {
         _ = timelineStore.timelineProjectionGeneration
-        return CustomEmojiCatalog.merge(messages: timelineStore.mediaProjections.customEmojiCatalogEntries,
-                                        reactions: customEmojiStore.reactionCatalogEntries)
-    }
-
-    private func customEmojiMediaRecords(scope: CustomEmojiScope) async throws -> [MediaRecordFfi] {
-        guard let appState, customEmojiScope == scope else { throw CancellationError() }
-        let client = try appState.currentMarmotClient()
-        let records = try await client.listMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex)
-        guard customEmojiScope == scope, appState.client === client else { throw CancellationError() }
-        return records
+        return CustomEmojiCatalog.merge(messages: timelineStore.customEmojiCatalogEntries, reactions: [])
     }
 
 #if DEBUG

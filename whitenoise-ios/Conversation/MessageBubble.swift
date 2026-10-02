@@ -908,12 +908,8 @@ struct MessageBubble: View {
 
     private func reactionPill(_ tally: ConversationViewModel.ReactionTally) -> some View {
         HStack(spacing: 3) {
-            CustomEmojiReactionLabel(
-                emoji: tally.emoji,
-                reactionMessageIdHex: tally.reactionMessageIdHex,
-                pointSize: CustomEmojiInlineMetrics.reactionChipPointSize
-            )
-            .font(.system(size: 14, weight: .bold))
+            CustomEmojiReactionLabel(emoji: tally.emoji)
+                .font(.system(size: 14, weight: .bold))
             if tally.count > 1 {
                 Text(L10n.formatted("%lld", Int64(tally.count)))
                     .font(.system(size: 12, weight: .bold, design: .monospaced))

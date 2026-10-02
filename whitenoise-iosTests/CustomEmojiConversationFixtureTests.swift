@@ -78,12 +78,9 @@ struct CustomEmojiConversationFixtureTests {
             #expect(tallies.first { $0.emoji == ":cat:" }?.reactionMessageIdHex == reactionID)
             #expect(model.reactionDetails(for: messageID).reactionMessageIdHex(for: ":cat:") == reactionID)
 
-            // The fixture runtime holds no kind-7 media, so the reaction stays text
-            // after a real listMedia lookup instead of fetching anything.
+            // Reaction images stay text (MDK 0.12.0 exposes no kind-7 slot), but the
+            // reaction id is carried for a later MDK release.
             #expect(model.customEmojiScope?.groupIdHex == group.groupIdHex)
-            let image = await model.customEmojiStore.reactionImage(emoji: ":cat:", reactionMessageIdHex: reactionID,
-                pixelSize: 48, scale: 3, policyRevision: "fixture")
-            #expect(image == nil)
 
             // Reprojection without the shortcode returns the attachment to the grid.
             row.plaintext = "hi"
@@ -92,6 +89,19 @@ struct CustomEmojiConversationFixtureTests {
             #expect(model.customEmoji(for: updated).isEmpty)
             #expect(model.mediaItems(for: updated).count == 2)
             #expect(model.customEmojiCatalog.isEmpty)
+
+            // A shortcode only in a rendered link's destination is not displayed,
+            // so its attachment stays in the grid instead of vanishing.
+            row.plaintext = "[here](https://example.com/:party:)"
+            row.contentTokens = MarkdownDocumentFfi(blocks: [.paragraph(inlines: [
+                .link(dest: "https://example.com/:party:", title: nil, children: [.text(content: "here")],
+                      classification: .web),
+            ])], truncated: false)
+            install(row)
+            let linked = try #require(model.timeline.first { $0.id == "msg:\(messageID)" })
+            #expect(model.markdownDisplayBlocks(for: linked) != nil)
+            #expect(model.customEmoji(for: linked).isEmpty)
+            #expect(model.mediaItems(for: linked).count == 2)
 
             // Switching away from the conversation's account drops the scope:
             // nothing loads or renders for another account.

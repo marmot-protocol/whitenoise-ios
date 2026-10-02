@@ -32,13 +32,6 @@ enum CustomEmojiFixtures {
     }
 
     static func tag(_ values: String...) -> MessageTagFfi { MessageTagFfi(values: values) }
-
-    static func mediaRecord(messageID: String, index: UInt32 = 0, caption: String?,
-                            reference: MediaAttachmentReferenceFfi) -> MediaRecordFfi {
-        MediaRecordFfi(messageIdHex: messageID, attachmentIndex: index, direction: "received",
-            groupIdHex: String(repeating: "ee", count: 32), sender: String(repeating: "11", count: 32),
-            reference: reference, caption: caption, recordedAt: 1, receivedAt: 1)
-    }
 }
 
 struct CustomEmojiResolverTests {
@@ -199,37 +192,43 @@ struct CustomEmojiResolverTests {
 
     // MARK: Reactions
 
-    @Test func reactionRecordResolvesThroughReactionMessageId() {
-        let reactionID = String(repeating: "7a", count: 32)
-        let cat = F.reference(url: catURL)
-        let records = [
-            F.mediaRecord(messageID: String(repeating: "99", count: 32), caption: ":cat:", reference: cat),
-            F.mediaRecord(messageID: reactionID, index: 1, caption: ":cat:", reference: F.reference(url: catURL + "2")),
-            F.mediaRecord(messageID: reactionID, index: 0, caption: ":cat:", reference: cat),
-        ]
-        let record = CustomEmojiReactionResolver.record(forReaction: ":cat:",
-            reactionMessageIdHex: reactionID.uppercased(), in: records)
-        #expect(record?.messageIdHex == reactionID)
-        #expect(record?.attachmentIndex == 0)
-        // A different reaction's caption, a unicode emoji, or an unknown id resolve to nothing.
-        #expect(CustomEmojiReactionResolver.record(forReaction: ":dog:", reactionMessageIdHex: reactionID, in: records) == nil)
-        #expect(CustomEmojiReactionResolver.record(forReaction: "👍", reactionMessageIdHex: reactionID, in: records) == nil)
-        #expect(CustomEmojiReactionResolver.record(forReaction: ":cat:", reactionMessageIdHex: "", in: records) == nil)
-        #expect(CustomEmojiReactionResolver.record(forReaction: ":cat:",
-            reactionMessageIdHex: String(repeating: "00", count: 32), in: records) == nil)
-        let video = [F.mediaRecord(messageID: reactionID, caption: ":cat:", reference: F.reference(url: catURL, mediaType: "video/mp4"))]
-        #expect(CustomEmojiReactionResolver.record(forReaction: ":cat:", reactionMessageIdHex: reactionID, in: video) == nil)
+    @Test @MainActor func shortcodeOnlyInALinkDestinationKeepsItsAttachmentInTheGrid() throws {
+        let items = F.attachments([.accepted(attachmentIndex: 0, reference: F.reference(url: partyURL))])
+        let tags = [F.tag("emoji", "party", partyURL)]
+        let candidates = CustomEmojiResolver.candidates(tags: tags, attachments: items)
+        #expect(candidates.keys.map(\.name) == ["party"])
+        // `[here](https://example.com/:party:)` renders only "here".
+        let document = MarkdownDocumentFfi(blocks: [.paragraph(inlines: [
+            .link(dest: "https://example.com/:party:", title: nil, children: [.text(content: "here")],
+                  classification: .web),
+        ])], truncated: false)
+        let blocks = try #require(MarkdownMessageBuilder.displayBlocks(for: document))
+        let runs = CustomEmojiDisplayText.runs(in: blocks)
+        #expect(runs == ["here"])
+        let resolution = CustomEmojiResolver.claim(candidates, attachments: items, displayedRuns: runs)
+        #expect(resolution.isEmpty)
+        #expect(resolution.gridItems == items)
+
+        // The same shortcode in the link's visible text is claimed.
+        let visible = MarkdownDocumentFfi(blocks: [.paragraph(inlines: [
+            .link(dest: "https://example.com", title: nil, children: [.text(content: "go :party:")],
+                  classification: .web),
+        ])], truncated: false)
+        let visibleRuns = CustomEmojiDisplayText.runs(in: try #require(MarkdownMessageBuilder.displayBlocks(for: visible)))
+        let claimed = CustomEmojiResolver.claim(candidates, attachments: items, displayedRuns: visibleRuns)
+        #expect(claimed.shortcodes.map(\.name) == ["party"])
+        #expect(claimed.gridItems.isEmpty)
     }
 
-    @Test func reactionImageReadsOnlyThroughAMatchingChatSlot() {
-        let sha = String(repeating: "d", count: 64)
-        let reactionReference = F.reference(url: catURL, sha: sha)
-        let withTarget = F.attachments([.accepted(attachmentIndex: 0, reference: F.reference(url: partyURL, sha: sha.uppercased()))])
-        let withoutTarget = F.attachments([.accepted(attachmentIndex: 0, reference: F.reference(url: partyURL, sha: sha))], sourceID: nil)
-        let otherContent = F.attachments([.accepted(attachmentIndex: 0, reference: F.reference(url: partyURL))])
-        #expect(CustomEmojiReactionResolver.loadableAttachment(matching: reactionReference, candidates: withTarget)?.id == withTarget[0].id)
-        #expect(CustomEmojiReactionResolver.loadableAttachment(matching: reactionReference, candidates: withoutTarget) == nil)
-        #expect(CustomEmojiReactionResolver.loadableAttachment(matching: reactionReference, candidates: otherContent) == nil)
+    @Test @MainActor func displayRunsWalkNestedBlocksButNotHiddenContent() {
+        let blocks: [MarkdownDisplayBlock] = [
+            .heading(AttributedString("Title")),
+            .blockQuote([.paragraph(AttributedString("quoted :a:"))]),
+            .list(items: [MarkdownDisplayListItem(marker: .bullet, blocks: [.codeBlock(AttributedString("code :b:"))])],
+                  tight: true),
+            .thematicBreak,
+        ]
+        #expect(CustomEmojiDisplayText.runs(in: blocks) == ["Title", "quoted :a:", "code :b:"])
     }
 
     @Test func legacySummaryNamesTheEarliestActiveReaction() {
@@ -275,7 +274,7 @@ struct CustomEmojiResolverTests {
 
     @Test func lateResultsFromAnotherScopeAreRejected() {
         let scope = CustomEmojiScope(accountRef: "alice", runtimeGeneration: 1, groupIdHex: "g1")
-        let key = CustomEmojiImageKey(scope: scope, source: .attachment(itemID: "msg:a:sha:3:0"), pixelSize: 60)
+        let key = CustomEmojiImageKey(scope: scope, itemID: "msg:a:sha:3:0", pixelSize: 60)
         #expect(CustomEmojiImageKey.accepts(key, currentScope: scope))
         #expect(!CustomEmojiImageKey.accepts(key, currentScope: nil))
         #expect(!CustomEmojiImageKey.accepts(key, currentScope: CustomEmojiScope(accountRef: "bob", runtimeGeneration: 1, groupIdHex: "g1")))
