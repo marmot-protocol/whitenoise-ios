@@ -13,7 +13,10 @@ the tag identifies the source that shipped.
    Unit-test target versions are independent.
 3. For MarmotKit updates, run `./scripts/sync-bindings.sh <version>` and commit
    its generated Swift source, package binary pin/checksum, and provenance
-   together. Address any required app compatibility changes.
+   together. Address any required app compatibility changes. If the bump
+   advances the account storage schema (see the release's MDK integration
+   guide), run "In-place MarmotKit upgrade" in `docs/manual-tests.md` on a
+   device before release, and record its results in the release issue or PR.
 4. Run the production simulator tests, production release device build, and
    `git diff --check` as described in `AGENTS.md`. Record results and whether
    code signing was enabled. Review `docs/manual-tests.md`; record pending
