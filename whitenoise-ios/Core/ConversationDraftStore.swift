@@ -343,6 +343,33 @@ final class ConversationDraftStore {
         if pendingWrites[key] != nil { scheduleSave(for: key) }
     }
 
+    /// Clears a chat's saved draft after a send that bypasses draft revisions
+    /// (custom emoji via `sendTaggedMedia`) was accepted. Runs independently
+    /// of the conversation view, so a draft persisted when the view closed
+    /// mid-send cannot come back and be sent twice. A draft that no longer
+    /// matches what was submitted (the person kept typing) is kept.
+    func completeUnrevisionedSend(_ submitted: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard !sendingKeys.contains(key), !conflictedKeys.contains(key),
+              let current = await snapshot(accountRef: accountRef, groupIdHex: groupIdHex),
+              Self.isSameSubmission(current, submitted)
+        else { return }
+        // A keystroke may have landed while the saved draft was read.
+        if let pending = pendingWrites[key] {
+            guard case .save(let latest) = pending.operation, Self.isSameSubmission(latest, submitted) else { return }
+        }
+        suppressEmptyAfterSendKeys.remove(key)
+        removeDraft(accountRef: accountRef, groupIdHex: groupIdHex)
+        await flush(key: key, using: nil)
+    }
+
+    nonisolated static func isSameSubmission(_ current: ConversationDraftSnapshot, _ submitted: ConversationDraftSnapshot) -> Bool {
+        current.mediaAttachments.isEmpty
+            && current.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)
+                == submitted.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)
+            && Hex.normalized32Bytes(current.replyToMessageIdHex) == Hex.normalized32Bytes(submitted.replyToMessageIdHex)
+    }
+
     @ObservationIgnored private var nextRevision: UInt64 = 0
 
     init(

@@ -79,6 +79,18 @@ nonisolated enum EmojiCatalogSearch {
     }
 }
 
+nonisolated enum CustomEmojiPickerSearch {
+    /// Custom emoji whose shortcode contains every search term.
+    static func results(in sendables: [CustomEmojiSendable], query: String) -> [CustomEmojiSendable] {
+        let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ":")) }
+        guard !terms.isEmpty else { return sendables }
+        return sendables.filter { sendable in
+            let name = sendable.shortcode.name.lowercased()
+            return terms.allSatisfy { $0.isEmpty || name.contains($0) }
+        }
+    }
+}
+
 private struct EmojiCategory: Identifiable {
     let id: Int
     let title: LocalizedStringKey
@@ -137,6 +149,8 @@ private enum EmojiRecents {
 struct EmojiPickerSheet: View {
     var quickReactions: [String]?
     var onQuickReactionsSave: (([String]) -> Void)?
+    /// Custom emoji this conversation holds; picking one passes `:shortcode:`.
+    var customEmoji: [CustomEmojiSendable] = []
     let onPick: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -145,6 +159,7 @@ struct EmojiPickerSheet: View {
     var body: some View {
         EmojiPickerContent(
             showsSearchField: true,
+            customEmoji: customEmoji,
             onConfigure: quickReactions != nil && onQuickReactionsSave != nil
                 ? { isConfiguringReactions = true }
                 : nil
@@ -267,6 +282,7 @@ struct ComposerEmojiPanel: View {
 
 private struct EmojiPickerContent: View {
     let showsSearchField: Bool
+    var customEmoji: [CustomEmojiSendable] = []
     var onConfigure: (() -> Void)?
     var onDeleteBackward: (() -> Void)?
     let onPick: (String) -> Void
@@ -329,8 +345,16 @@ private struct EmojiPickerContent: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
                     if !query.isEmpty {
+                        let customResults = CustomEmojiPickerSearch.results(in: customEmoji, query: query)
+                        if !customResults.isEmpty {
+                            customEmojiSection(customResults)
+                        }
                         emojiSection(title: "Search results", entries: searchResults)
                     } else {
+                        if !customEmoji.isEmpty {
+                            customEmojiSection(customEmoji)
+                                .id("custom")
+                        }
                         let recentEntries = EmojiRecents.values.compactMap { emoji in
                             model.entries.first { $0.emoji == emoji }
                         }
@@ -387,10 +411,43 @@ private struct EmojiPickerContent: View {
         }
     }
 
+    /// Images from this conversation; the shortcode is the spoken name.
+    private func customEmojiSection(_ entries: [CustomEmojiSendable]) -> some View {
+        Section {
+            LazyVGrid(columns: columns, spacing: 5) {
+                ForEach(entries) { entry in
+                    Button {
+                        onPick(entry.token)
+                    } label: {
+                        CustomEmojiPickerImage(sendable: entry)
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(verbatim: entry.shortcode.name))
+                    .accessibilityHint(L10n.string("Custom emoji"))
+                }
+            }
+        } header: {
+            Text("Custom")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 7)
+                .background(.bar)
+        }
+    }
+
     private func categoryRail(proxy: ScrollViewProxy) -> some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
+                    if !customEmoji.isEmpty {
+                        railButton(systemImage: "face.smiling.inverse", selected: false) {
+                            withAnimation(.smooth) { proxy.scrollTo("custom", anchor: .top) }
+                        }
+                        .accessibilityLabel(L10n.string("Custom emoji"))
+                    }
                     railButton(systemImage: "clock.fill", selected: false) {
                         withAnimation(.smooth) { proxy.scrollTo("recent", anchor: .top) }
                     }

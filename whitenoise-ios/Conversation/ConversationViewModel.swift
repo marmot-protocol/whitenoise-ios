@@ -310,6 +310,45 @@ final class ConversationViewModel {
     @ObservationIgnored private let daySectionProjections = ConversationDaySectionProjectionCache()
     @ObservationIgnored private let deleteMessageOperation: DeleteMessageOperation
     @ObservationIgnored private let durableRetryOperations: DurableRetryOperations
+    /// Sends NIP-30 custom emoji drawn from `customEmojiCatalog`; holds the
+    /// uploaded references retries reuse.
+    @ObservationIgnored lazy var customEmojiSender = ConversationCustomEmojiSender(
+        scopeProvider: { [weak self] in self?.customEmojiSendScope },
+        currentEpoch: { [weak self] in self?.conversationWindow?.header.epoch },
+        loadBytes: { [weak self] item in
+            guard let self else { throw CancellationError() }
+            return try await self.data(for: item)
+        },
+        upload: { [weak self] scope, request in
+            guard let self else { throw CancellationError() }
+            return try await self.uploadCustomEmoji(request, scope: scope)
+        },
+        sendMessage: { [weak self] scope, caption, attachments, tags in
+            guard let self, let appState = self.appState else { throw CancellationError() }
+            let client = try appState.currentMarmotClient()
+            _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                 attachments: attachments, caption: caption, tags: tags)
+        }
+    )
+    /// Composer progress, saved-draft cleanup and the inline error for a
+    /// custom emoji message.
+    @ObservationIgnored lazy var customEmojiComposer = CustomEmojiComposerSubmitter(
+        send: { [weak self] text, replyTargetId, emoji in
+            guard let self else { throw CancellationError() }
+            return try await self.customEmojiSender.sendMessage(text: text, replyTargetId: replyTargetId, emoji: emoji)
+        },
+        completeDraft: { [weak self] submission in
+            await self?.appState?.conversationDraftStore.completeUnrevisionedSend(
+                submission.draft, accountRef: submission.accountRef, groupIdHex: submission.groupIdHex)
+        },
+        storeSentBytes: { uploaded, generation in
+            for item in uploaded {
+                await MessageMediaCache.store(item.plaintext, for: item.reference, producerGeneration: generation)
+            }
+        },
+        cacheGeneration: { MessageMediaCache.currentProducerEpoch() }
+    )
+    @ObservationIgnored private var customEmojiAvailability: (generation: Int, scope: CustomEmojiScope, available: Bool)?
     // Lazy so its timeline-index closure can capture a fully initialized
     // store; first touched on the post-start apply/mark paths.
     @ObservationIgnored private lazy var readMarker = ConversationReadMarker(
@@ -3153,12 +3192,103 @@ final class ConversationViewModel {
         )
     }
 
+    // MARK: - Custom emoji sending
+
+    /// The custom-emoji scope while this conversation can still send in it.
+    var customEmojiSendScope: CustomEmojiScope? {
+        isLocallyReset ? nil : customEmojiScope
+    }
+
+    /// Custom emoji the person can send here: catalog entries with a NIP-30
+    /// shortcode whose image a loaded chat row holds. Read when a picker opens
+    /// or a send starts, not from `body`.
+    var customEmojiSendables: [CustomEmojiSendable] {
+        let catalog = customEmojiCatalog
+        guard !catalog.isEmpty, customEmojiSendScope != nil else { return [] }
+        var sources: [String: MessageMediaAttachment] = [:]
+        for item in timeline {
+            for attachment in customEmoji(for: item).inline.values.sorted(by: { $0.id < $1.id }) {
+                guard let sha = attachment.reference?.plaintextSha256.lowercased(), sources[sha] == nil else { continue }
+                sources[sha] = attachment
+            }
+        }
+        return CustomEmojiSendCatalog.sendables(catalog: catalog) { sources[$0.plaintextSha256.lowercased()] }
+    }
+
+    /// Whether the composer offers custom emoji at all. Read from `body`, so
+    /// the catalog scan is cached per timeline projection generation.
+    var canSendCustomEmoji: Bool {
+        guard canSendMessages, canSendMediaAttachments, let scope = customEmojiSendScope else { return false }
+        let generation = timelineStore.timelineProjectionGeneration
+        if let cached = customEmojiAvailability, cached.generation == generation, cached.scope == scope {
+            return cached.available
+        }
+        let available = customEmojiCatalog.contains { CustomEmojiSendPolicy.isSendable($0.shortcode) }
+        customEmojiAvailability = (generation, scope, available)
+        return available
+    }
+
+    /// The custom emoji `text` uses, in text order; empty means the ordinary
+    /// send path applies.
+    func customEmojiUsed(in text: String) -> [CustomEmojiSendable] {
+        guard text.contains(":") else { return [] }
+        return CustomEmojiSendCatalog.used(in: text, sendables: customEmojiSendables)
+    }
+
+    var isSendingCustomEmojiMessage: Bool { customEmojiComposer.isSending }
+
+    var customEmojiSendErrorMessage: String? { customEmojiComposer.errorMessage }
+
+    /// Whether a new attachment may join the composer now.
+    var composerAdmitsNewAttachments: Bool { customEmojiComposer.state.admitsNewAttachments }
+
+    /// Sends composer text containing custom emoji with `sendTaggedMedia`.
+    /// Returns true only once MDK accepted the message. `draft` is the saved
+    /// draft form of what was submitted; it is cleared through the draft store
+    /// even if the conversation closes meanwhile. On failure the draft stays
+    /// and an inline error explains what to do.
+    @discardableResult
+    func sendCustomEmojiMessage(
+        text: String,
+        replyTargetId: String?,
+        emoji: [CustomEmojiSendable],
+        draft: ConversationDraftSnapshot,
+        onAccepted: @MainActor () -> Void
+    ) async -> Bool {
+        guard !customEmojiComposer.isSending else { return false }
+        guard canSendMessages, canSendMediaAttachments, let scope = customEmojiSendScope else {
+            customEmojiComposer.report(.sendFailed)
+            return false
+        }
+        let submission = CustomEmojiSubmittedDraft(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                   text: text, replyTargetId: replyTargetId, draft: draft)
+        return await customEmojiComposer.submit(submission, emoji: emoji, onAccepted: onAccepted)
+    }
+
+    func reportCustomEmojiSendError(_ error: CustomEmojiSendError) {
+        customEmojiComposer.report(error)
+    }
+
+    func dismissCustomEmojiSendError() {
+        customEmojiComposer.dismissError()
+    }
+
+    private func uploadCustomEmoji(_ request: MediaUploadAttachmentRequestFfi, scope: CustomEmojiScope) async throws -> MediaAttachmentReferenceFfi {
+        guard let appState, customEmojiSendScope == scope else { throw CancellationError() }
+        let client = try appState.currentMarmotClient()
+        let result = try await client.uploadMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+            request: MediaUploadRequestFfi(attachments: [request], caption: nil, send: false, blossomServer: nil))
+        guard let reference = result.attachments.first?.reference else { throw CustomEmojiSendError.uploadFailed }
+        return reference
+    }
+
     func toggleReaction(_ emoji: String, on message: AppMessageRecordFfi) async {
         guard canSendMessages,
               let appState, let accountRef = appState.activeAccountRef,
               !message.messageIdHex.isEmpty else { return }
         let me = appState.activeAccount?.accountIdHex ?? ""
         let alreadyMine = reactions(for: message.messageIdHex).contains { $0.emoji == emoji && $0.mine }
+        guard alreadyMine || CustomEmojiReactionPolicy.allowsAdding(emoji) else { return }
 
         // Optimistic state we can roll back on failure.
         var addedKey: String?
