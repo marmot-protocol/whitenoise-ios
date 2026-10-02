@@ -313,6 +313,10 @@ final class AppNotifications: NSObject, UNUserNotificationCenterDelegate {
                 isMention: LocalNotificationProjection.isMention(
                     from: notification.request.content.userInfo
                 ),
+                mentionsBreakThroughMute: LocalNotificationSuppressionPolicy.storedNotificationBreaksThroughMute(
+                    userInfo: userInfo,
+                    preference: MutedChatMentionsStore.mentionsBreakThroughMute()
+                ),
                 appSceneActive: appState?.isAppSceneActive ?? true,
                 updateAccountRef: route.accountRef,
                 updateGroupIdHex: route.groupIdHex,

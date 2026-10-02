@@ -244,12 +244,14 @@ final class NotificationCoordinator {
                         accountIdHex: update.accountIdHex,
                         groupIdHex: update.groupIdHex
                     )
+                    let mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute()
                     self.noteNotificationSubscriptionDelivery()
                     return self.shouldPresentLocalNotification(
                         update,
                         localNotificationsEnabled: localNotificationsEnabled,
                         isArchived: isArchived,
                         notifyMode: notifyMode,
+                        mentionsBreakThroughMute: mentionsBreakThroughMute,
                         host: host
                     )
                 }
@@ -292,6 +294,7 @@ final class NotificationCoordinator {
         localNotificationsEnabled: Bool,
         isArchived: Bool,
         notifyMode: ChatNotifyMode,
+        mentionsBreakThroughMute: Bool,
         host: NotificationCoordinatorHost
     ) -> Bool {
         LocalNotificationSuppressionPolicy.shouldPresent(
@@ -299,6 +302,7 @@ final class NotificationCoordinator {
             isArchived: isArchived,
             notifyMode: notifyMode,
             isMention: update.isMention,
+            mentionsBreakThroughMute: mentionsBreakThroughMute,
             appSceneActive: host.isAppSceneActive,
             updateAccountRef: update.accountRef,
             updateGroupIdHex: update.groupIdHex,

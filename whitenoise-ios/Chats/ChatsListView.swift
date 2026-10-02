@@ -1550,7 +1550,10 @@ struct ChatsListView: View {
                     pendingMute = nil
                 }
             ),
-            message: L10n.formatted("Choose how long to mute %@.", item.title)
+            message: MutedChatMentionsCopy.mutePickerMessage(
+                chatTitle: item.title,
+                mentionsBreakThroughMute: MutedChatMentionsStore.mentionsBreakThroughMute()
+            )
         ) { duration in
             guard pendingMute?.id == target.id else { return }
             pendingMute = nil

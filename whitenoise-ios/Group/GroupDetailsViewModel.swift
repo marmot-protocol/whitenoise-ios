@@ -38,6 +38,9 @@ final class GroupDetailsViewModel {
     var isMuteStateLoaded = false
     var notifyModeError: String?
     var muteExpiresAt: Date?
+    /// Device-wide `MutedChatMentionsStore` preference, read with the mute
+    /// state so the Notifications footer can say whether mentions still notify.
+    var mentionsBreakThroughMute = false
     var isMuted: Bool { notifyMode == .nothing }
     var notifyModeSummary: String {
         guard isMuteStateLoaded else { return L10n.string("Unavailable") }
@@ -538,6 +541,7 @@ final class GroupDetailsViewModel {
 
     func loadMuteState(using appState: AppState) {
         guard let conversation, let accountIdHex = appState.activeAccount?.accountIdHex else { return }
+        mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute()
         loadMuteState(
             accountIdHex: accountIdHex, groupIdHex: conversation.group.groupIdHex,
             snapshot: ChatMuteStore.notifyModeSnapshot()

@@ -33,7 +33,9 @@ struct ChatNotificationsView: View {
                 .labelsHidden()
                 .disabled(!model.isMuteStateLoaded)
             } footer: {
-                Text("Applies on this device only. Messages still arrive and count as unread. With \"Only mentions\", this chat notifies only when someone mentions you.")
+                Text(MutedChatMentionsCopy.chatNotificationsFooter(
+                    mentionsBreakThroughMute: model.mentionsBreakThroughMute
+                ))
             }
         }
         .navigationTitle("Notifications")
