@@ -278,6 +278,18 @@ nonisolated enum AccountSetupInput {
 
 }
 
+nonisolated enum AccountSetupOptions {
+    /// MDK adds its built-in public indexers to these discovery relays, so
+    /// identities never published to our messaging relays are still found.
+    static func importOptions(runtimeRelays: [String]) -> OnboardingOptionsFfi {
+        OnboardingOptionsFfi(
+            defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: runtimeRelays),
+            discoveryRelays: runtimeRelays,
+            inboxRelays: runtimeRelays
+        )
+    }
+}
+
 nonisolated struct AccountSetupAvatar: Sendable {
     let data: Data
     let mediaType: String

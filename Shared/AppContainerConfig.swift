@@ -39,11 +39,6 @@ nonisolated enum AppContainerConfig {
         "wss://relay.eu.whitenoise.chat",
         "wss://relay.us.whitenoise.chat"
     ]
-    // Existing Nostr identities may never have published to our messaging relays.
-    static let discoveryRelays = seedRelays + [
-        "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
-        "wss://relay.ditto.pub", "wss://relay.primal.net"
-    ]
 
     /// General-purpose relays added to new accounts' NIP-65 (kind 10002) lists.
     /// White Noise relays accept only the event kinds White Noise needs, so other

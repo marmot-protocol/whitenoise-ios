@@ -274,11 +274,14 @@ struct AccountSetupTests {
         #expect(AccountSetupPolicy.automaticAction(value) == nil)
     }
 
-    @Test func discoveryIncludesIndexers() {
-        #expect(AppContainerConfig.discoveryRelays == AppContainerConfig.seedRelays + [
-            "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
-            "wss://relay.ditto.pub", "wss://relay.primal.net"
-        ])
+    @Test func importOptionsDiscoverOnRuntimeRelays() {
+        let options = AccountSetupOptions.importOptions(runtimeRelays: AppContainerConfig.seedRelays)
+        #expect(options.discoveryRelays == AppContainerConfig.seedRelays)
+        #expect(options.inboxRelays == AppContainerConfig.seedRelays)
+        #expect(options.defaultRelays == AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays))
+        let local = ["ws://127.0.0.1:7777"]
+        #expect(AccountSetupOptions.importOptions(runtimeRelays: local)
+            == OnboardingOptionsFfi(defaultRelays: local, discoveryRelays: local, inboxRelays: local))
     }
 
     @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])

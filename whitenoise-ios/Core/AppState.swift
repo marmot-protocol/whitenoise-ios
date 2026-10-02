@@ -1791,11 +1791,7 @@ final class AppState {
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = lease.client.relayUrls
-        let options = OnboardingOptionsFfi(
-            defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
-            discoveryRelays: AppContainerConfig.discoveryRelays,
-            inboxRelays: relays
-        )
+        let options = AccountSetupOptions.importOptions(runtimeRelays: relays)
         var snapshot: OnboardingSnapshotFfi
         do {
             let existing = try await lease.client.listAccounts()
