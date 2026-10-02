@@ -1,6 +1,180 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Inbox Relays" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Posteingangs-Relays"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relés de bandeja de entrada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relais de boîte de réception"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relay della posta in arrivo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relés da caixa de entrada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Реле входящих"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gelen Kutusu Röleleri"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收件箱中继"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收件匣中繼"
+          }
+        }
+      }
+    },
+    "Other Nostr apps find your posts and profile on these relays. Edits are published as your NIP-65 relay list." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere Nostr-Apps finden Ihre Beiträge und Ihr Profil über diese Relais. Änderungen werden als Ihre NIP-65-Relay-Liste veröffentlicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otras apps de Nostr encuentran tus publicaciones y tu perfil en estos relés. Los cambios se publican como tu lista de relés NIP-65."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les autres applications Nostr trouvent vos publications et votre profil sur ces relais. Les modifications sont publiées comme votre liste de relais NIP-65."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le altre app Nostr trovano i tuoi post e il tuo profilo su questi relay. Le modifiche vengono pubblicate come tuo elenco di relay NIP-65."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outros apps Nostr encontram suas publicações e seu perfil nesses relés. As alterações são publicadas como sua lista de relés NIP-65."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другие приложения Nostr находят ваши публикации и профиль на этих реле. Изменения публикуются как ваш список реле NIP-65."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diğer Nostr uygulamaları gönderilerinizi ve profilinizi bu rölelerde bulur. Değişiklikler NIP-65 röle listeniz olarak yayınlanır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 Nostr 应用会在这些中继上找到你的帖子和个人资料。更改会作为你的 NIP-65 中继列表发布。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他 Nostr 應用程式會在這些中繼站上找到你的貼文和個人檔案。變更會發布為你的 NIP-65 中繼列表。"
+          }
+        }
+      }
+    },
+    "People send you chat invitations on these relays. Edits are published as your inbox relay list." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Andere senden Ihnen Chat-Einladungen über diese Relais. Änderungen werden als Ihre Posteingangs-Relay-Liste veröffentlicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otras personas te envían invitaciones de chat a través de estos relés. Los cambios se publican como tu lista de relés de bandeja de entrada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les autres vous envoient des invitations de discussion via ces relais. Les modifications sont publiées comme votre liste de relais de boîte de réception."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le altre persone ti inviano inviti alle chat tramite questi relay. Le modifiche vengono pubblicate come tuo elenco di relay della posta in arrivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As pessoas enviam convites de conversa para você nesses relés. As alterações são publicadas como sua lista de relés da caixa de entrada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другие пользователи отправляют вам приглашения в чаты через эти реле. Изменения публикуются как ваш список реле входящих."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kişiler size sohbet davetlerini bu röleler üzerinden gönderir. Değişiklikler gelen kutusu röle listeniz olarak yayınlanır."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他人会通过这些中继向你发送聊天邀请。更改会作为你的收件箱中继列表发布。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他人會透過這些中繼站向你傳送聊天邀請。變更會發布為你的收件匣中繼列表。"
+          }
+        }
+      }
+    },
     "Choose Relays" : {
       "extractionState": "manual",
       "localizations": {
@@ -78301,66 +78475,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部標示為已讀"
-          }
-        }
-      }
-    },
-    "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists." : {
-      "comment" : "A description of how the relays feature works.",
-      "isCommentAutoGenerated" : true,
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read from Marmot's account relay lists. Edits are published through Marmot to your NIP-65 and inbox relay lists."
           }
         }
       }

@@ -3218,7 +3218,7 @@ struct RelaySettingsTests {
         #expect(RelaySettings.normalizedRelayURL("wss://relay.example/" + String(repeating: "a", count: 4096)) == nil)
     }
 
-    @Test func savingRelaysKeepsASeparatelyPublishedInboxList() async throws {
+    @Test func savingRelaysPublishesOnlyTheEditedList() async throws {
         let lists = relayLists(
             bootstrapRelays: ["wss://source.example"],
             nip65: ["wss://wn.example", "wss://general.example"],
@@ -3228,6 +3228,14 @@ struct RelaySettingsTests {
         _ = try await RelaySettings.saveAccountRelays(
             accountRef: "account-a",
             relays: ["wss://wn.example", "wss://general.example", "wss://added.example"],
+            target: .nip65,
+            currentLists: lists,
+            manager: manager
+        )
+        _ = try await RelaySettings.saveAccountRelays(
+            accountRef: "account-a",
+            relays: ["wss://wn.example", "wss://inbox.example"],
+            target: .inbox,
             currentLists: lists,
             manager: manager
         )
@@ -3235,12 +3243,12 @@ struct RelaySettingsTests {
             .nip65(
                 relays: ["wss://wn.example", "wss://general.example", "wss://added.example"],
                 bootstrapRelays: ["wss://source.example"]
+            ),
+            .inbox(
+                relays: ["wss://wn.example", "wss://inbox.example"],
+                bootstrapRelays: ["wss://source.example"]
             )
         ])
-        #expect(RelaySettings.inboxFollowsEditor(relayLists(
-            bootstrapRelays: [], nip65: ["wss://a.example"], inbox: []
-        )))
-        #expect(RelaySettings.inboxFollowsEditor(nil))
     }
 
     @Test func savingRelaysReloadsAuthoritativeListsWhenFinalPublishFails() async throws {
@@ -3255,18 +3263,14 @@ struct RelaySettingsTests {
             _ = try await RelaySettings.saveAccountRelays(
                 accountRef: "account-a",
                 relays: ["  wss://new.example  "],
+                target: .nip65,
                 currentLists: oldLists,
                 manager: manager
             )
             Issue.record("Expected relay save to fail")
         } catch let failure as RelaySettingsSaveFailure {
-            #expect(failure.reloadedLists == relayLists(
-                bootstrapRelays: ["wss://source.example"],
-                nip65: ["wss://old.example"],
-                inbox: ["wss://new.example"]
-            ))
+            #expect(failure.reloadedLists == oldLists)
             #expect(manager.calls == [
-                .inbox(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
                 .nip65(relays: ["wss://new.example"], bootstrapRelays: ["wss://source.example"]),
                 .reload(accountRef: "account-a")
             ])
