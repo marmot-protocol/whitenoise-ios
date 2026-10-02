@@ -5,6 +5,7 @@ nonisolated enum AccountSetupCommand: Sendable {
     case run, cancel, retry(OnboardingStepFfi), skip(OnboardingStepFfi)
     case acknowledge(UInt64, recoveryEpoch: String? = nil), approve(UInt64, recoveryEpoch: String? = nil), cancelRepair
     case useDefaults(OnboardingStepFfi)
+    case editRelays(OnboardingStepFfi, reads: [String], writes: [String])
     case discovery([String]), saveProfile(UserProfileMetadataFfi, AccountSetupAvatar?)
 }
 
@@ -75,13 +76,15 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
         case .cancelRepair: return try await marmot.cancelOnboardingRepair(accountRef: accountID)
         case .useDefaults(let step):
             return try await AccountSetupPublication.publish(step: step, propose: {
-                try await marmot.proposeOnboardingRelays(
-                    accountRef: accountID, step: step, readRelays: MarmotClient.seedRelays,
-                    writeRelays: step == .relays ? MarmotClient.seedRelays : []
-                )
+                // MDK merges defaults with the checked record and preserves NIP-65 roles.
+                try await marmot.proposeOnboardingRecommendedRelays(accountRef: accountID, step: step)
             }, approve: { revision, epoch in
                 try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
             })
+        case .editRelays(let step, let reads, let writes):
+            return try await marmot.proposeOnboardingRelays(
+                accountRef: accountID, step: step, readRelays: reads, writeRelays: writes
+            )
         case .discovery(let relays):
             return try await marmot.setOnboardingDiscoveryRelays(accountRef: accountID, discoveryRelays: relays)
         case .saveProfile(var profile, let avatar):
@@ -254,6 +257,11 @@ nonisolated enum AccountSetupInput {
             if !result.contains(relay) { result.append(relay) }
         }
         return result
+    }
+
+    // MDK caps an explicit selection at 16 unique addresses across both roles.
+    static func exceedsSelectionLimit(reads: [String], writes: [String]) -> Bool {
+        Set(reads + writes).count > 16
     }
 
     static func proposalRelays(_ relays: [String]) -> [String]? {

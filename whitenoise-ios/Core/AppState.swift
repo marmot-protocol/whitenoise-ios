@@ -1795,7 +1795,7 @@ final class AppState {
             let existing = try await lease.client.listAccounts()
             snapshot = try await lease.client.marmot.beginOnboarding(
                 nsec: identity,
-                options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
+                options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: AppContainerConfig.discoveryRelays)
             )
             if !snapshot.ready, existing.contains(where: { $0.accountIdHex == snapshot.accountIdHex }) {
                 snapshot = try await AccountSetupRecovery.restartIfPossible(
@@ -1804,7 +1804,7 @@ final class AppState {
                     begin: {
                         try await lease.client.marmot.beginOnboarding(
                             nsec: identity,
-                            options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: relays)
+                            options: OnboardingOptionsFfi(defaultRelays: relays, discoveryRelays: AppContainerConfig.discoveryRelays)
                         )
                     }
                 )

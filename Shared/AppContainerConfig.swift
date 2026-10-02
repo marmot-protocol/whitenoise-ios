@@ -39,6 +39,11 @@ nonisolated enum AppContainerConfig {
         "wss://relay.eu.whitenoise.chat",
         "wss://relay.us.whitenoise.chat"
     ]
+    // Existing Nostr identities may never have published to our messaging relays.
+    static let discoveryRelays = seedRelays + [
+        "wss://purplepag.es", "wss://relay.vertexlab.io", "wss://nos.lol",
+        "wss://relay.ditto.pub", "wss://relay.primal.net"
+    ]
 
     /// MIP-05 notification-server inbox relay stamped into push registrations.
     /// Kind-446 triggers publish here; keep aligned with `seedRelays`.
