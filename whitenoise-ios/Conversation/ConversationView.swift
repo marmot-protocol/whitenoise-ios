@@ -603,6 +603,7 @@ struct ConversationView: View {
     @State private var openAddMembersOnDetails = false
     @State private var actionsTarget: ActionsTarget?
     @State private var emojiPickerTarget: ActionsTarget?
+    @State private var composerCustomEmojiPicker: ComposerCustomEmojiPicker?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
     @State private var pollVotesTarget: PollVotesTarget?
@@ -662,6 +663,12 @@ struct ConversationView: View {
 
     private static let timelineBottomID = "conversation-timeline-bottom"
     private static let actionFrameMeasurementClearDelayNanoseconds: UInt64 = 250_000_000
+
+    /// The composer's custom emoji picker, with its options captured on open.
+    private struct ComposerCustomEmojiPicker: Identifiable {
+        let id = UUID()
+        let emoji: [CustomEmojiSendable]
+    }
 
     private struct ActionsTarget: Identifiable {
         let record: AppMessageRecordFfi
@@ -1127,6 +1134,17 @@ struct ConversationView: View {
                     .appAppearance()
                 }
             }
+            .sheet(item: $composerCustomEmojiPicker, onDismiss: requestComposerFocus) { picker in
+                EmojiPickerSheet(customEmoji: picker.emoji) { emoji in
+                    if CustomEmojiShortcode(reactionContent: emoji) != nil {
+                        draft = CustomEmojiComposerText.inserting(emoji, into: draft)
+                    } else {
+                        draft += emoji
+                    }
+                }
+                .environment(\.customEmojiStore, viewModel?.customEmojiStore)
+                .appAppearance()
+            }
             .fileImporter(
                 isPresented: $showFileImporter,
                 allowedContentTypes: MediaAttachmentPolicy.fileImporterAllowedTypes,
@@ -1226,6 +1244,12 @@ struct ConversationView: View {
                 if editSession == nil {
                     persistComposerChange(text: draft)
                 }
+                if draft.isEmpty {
+                    viewModel?.dismissCustomEmojiSendError()
+                }
+            }
+            .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
+                if id != nil { reconcileAcceptedCustomEmojiSend() }
             }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
@@ -1315,9 +1339,14 @@ struct ConversationView: View {
                 let inlineAudioDraft = ComposerMediaDraftPresentation.inlineAudioDraft(in: mediaDrafts)
                 let mentionCandidates = inlineAudioDraft == nil ? (viewModel?.mentionCandidates(for: draft) ?? []) : []
                 let stripAttachments = ComposerMediaDraftPresentation.stripAttachments(from: mediaDrafts)
+                if editSession == nil, let message = viewModel?.customEmojiSendErrorMessage {
+                    CustomEmojiSendNotice(message: message) {
+                        viewModel?.dismissCustomEmojiSendError()
+                    }
+                }
                 ComposerBar(
                     draft: $draft,
-                    isSending: editSaveInFlight,
+                    isSending: editSaveInFlight || viewModel?.isSendingCustomEmojiMessage == true,
                     hasAttachments: !mediaDrafts.isEmpty,
                     audioDraft: inlineAudioDraft,
                     preparedAttachments: stripAttachments,
@@ -1345,6 +1374,8 @@ struct ConversationView: View {
                     gifsAvailable: ComposerAttachmentCapabilities.gifsAvailable,
                     pollsAvailable: editSession == nil && (viewModel?.canCreatePolls ?? false),
                     onCreatePoll: openPollComposer,
+                    customEmojiAvailable: editSession == nil && (viewModel?.canSendCustomEmoji ?? false),
+                    onCustomEmoji: openComposerCustomEmojiPicker,
                     onTakePhoto: takePhoto,
                     onPhotoLibrary: openPhotoLibrary,
                     onAttachFile: openFileImporter,
@@ -2657,6 +2688,18 @@ struct ConversationView: View {
         let saved = ConversationDraftSnapshot(canonicalText: ConversationViewModel.cappedOutgoingText(mentionState.canonicalText.trimmingCharacters(in: .whitespacesAndNewlines)),
             replyToMessageIdHex: originalReply, mediaAttachments: originalAttachments)
         guard !saved.canonicalText.isEmpty || !originalAttachments.isEmpty else { return }
+        if let outgoing = viewModel.preparedComposerText(draft).map({
+            ConversationViewModel.cappedOutgoingText($0.trimmingCharacters(in: .whitespacesAndNewlines))
+        }) {
+            let customEmoji = viewModel.customEmojiUsed(in: outgoing)
+            if !customEmoji.isEmpty {
+                let submitted = ConversationDraftSnapshot(canonicalText: mentionState.canonicalText,
+                                                          replyToMessageIdHex: originalReply, mediaAttachments: [])
+                sendWithCustomEmoji(outgoing, emoji: customEmoji, replyTargetId: originalReply,
+                                    submitted: submitted, viewModel: viewModel)
+                return
+            }
+        }
 
         // Everything up to the staged bubble is synchronous: the draft round-trip
         // and MDK are not on the path to the user's first visual acknowledgment.
@@ -2725,6 +2768,66 @@ struct ConversationView: View {
                 persistCurrentDraft()
             }
         }
+    }
+
+    /// Custom emoji messages publish through `sendTaggedMedia`, which has no
+    /// draft revision or client token. The chat is claimed in the draft store
+    /// for the whole send, so this and any reopened composer keep Send
+    /// disabled and refuse attachments while the draft stays visible. Once MDK
+    /// accepts it, the store clears the saved draft (even if this view is
+    /// gone) and the composer on screen clears itself in
+    /// `reconcileAcceptedCustomEmojiSend`. Any failure keeps the draft with an
+    /// inline error so Send retries without re-uploading.
+    private func sendWithCustomEmoji(
+        _ text: String,
+        emoji: [CustomEmojiSendable],
+        replyTargetId: String?,
+        submitted: ConversationDraftSnapshot,
+        viewModel: ConversationViewModel
+    ) {
+        guard !viewModel.isSendingCustomEmojiMessage else { return }
+        // A composer still showing an already accepted message clears instead.
+        reconcileAcceptedCustomEmojiSend()
+        guard !draft.isEmpty else { return }
+        guard mediaDrafts.isEmpty else {
+            viewModel.reportCustomEmojiSendError(.mixedWithAttachments)
+            return
+        }
+        Task {
+            await viewModel.sendCustomEmojiMessage(text: text, replyTargetId: replyTargetId, emoji: emoji, draft: submitted)
+        }
+    }
+
+    /// Clears the composer on screen after its chat's custom emoji send was
+    /// accepted, but only while it still shows exactly what was submitted:
+    /// any change to the text, reply target, edit session or attachments
+    /// during the upload keeps the composer.
+    private func reconcileAcceptedCustomEmojiSend() {
+        guard let viewModel, let accepted = viewModel.acceptedCustomEmojiSend,
+              CustomEmojiComposerReconciliation.clears(
+                  submitted: accepted.submitted,
+                  canonicalText: viewModel.composerMentionDraftState(for: draft).canonicalText,
+                  replyTargetId: viewModel.replyTargetMessageIdHex,
+                  hasMediaDrafts: !mediaDrafts.isEmpty,
+                  isEditing: editSession != nil
+              ) else { return }
+        _ = viewModel.consumeComposerText(draft)
+        if viewModel.replyTargetMessageIdHex != nil {
+            viewModel.restoreReplyTarget(messageIdHex: nil)
+        }
+        draft = ""
+        viewModel.consumeAcceptedCustomEmojiSend(accepted.id)
+        isAtTimelineBottom = true
+        userMovedAwayFromTimelineBottom = false
+        viewModel.followConversationLatest()
+        composerSendBottomScrollRequest &+= 1
+    }
+
+    private func openComposerCustomEmojiPicker() {
+        guard editSession == nil, let viewModel, viewModel.canSendCustomEmoji else { return }
+        let emoji = viewModel.customEmojiSendables
+        guard !emoji.isEmpty else { return }
+        composerCustomEmojiPicker = ComposerCustomEmojiPicker(emoji: emoji)
     }
 
     private func recoverSizeRejectedSend(
@@ -3041,6 +3144,7 @@ struct ConversationView: View {
     }
 
     private func appendPreparedVisualDrafts(_ attachments: [MediaDraftAttachment]) -> Bool {
+        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         let availableSlots = max(0, MediaDraftProcessor.maxAttachmentCount - mediaDrafts.count)
         let accepted = Array(attachments.prefix(availableSlots))
         guard !accepted.isEmpty else {
@@ -3158,6 +3262,8 @@ struct ConversationView: View {
     }
 
     private func canBeginMediaSelection() -> Bool {
+        // A custom emoji send in flight owns the composer until it settles.
+        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         guard let viewModel, viewModel.canSendMediaAttachments else {
             appState.present(.warning(L10n.string("Media is not available in this group")))
             return false
@@ -3171,6 +3277,7 @@ struct ConversationView: View {
 
     @discardableResult
     private func appendMediaDraft(_ attachment: MediaDraftAttachment) throws -> Bool {
+        guard viewModel?.composerAdmitsNewAttachments != false else { return false }
         if attachment.kind == .audio {
             mediaDrafts.removeAll { $0.kind == .audio }
         }

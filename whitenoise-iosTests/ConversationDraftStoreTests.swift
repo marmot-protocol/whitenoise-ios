@@ -409,6 +409,137 @@ struct ConversationDraftStoreTests {
         #expect(reopened?.mediaAttachments.isEmpty == true)
     }
 
+    // MARK: Custom emoji sends (no draft revision)
+
+    /// One conversation screen's submitter; every screen for the chat shares
+    /// the store's claim.
+    private func customEmojiSubmitter(
+        store: ConversationDraftStore,
+        sent: @escaping () -> Void = {},
+        release: @escaping (CheckedContinuation<Void, Never>) -> Void
+    ) -> CustomEmojiComposerSubmitter {
+        CustomEmojiComposerSubmitter(
+            send: { _, _, _ in
+                sent()
+                await withCheckedContinuation { release($0) }
+                return []
+            },
+            claim: { submitted in
+                store.beginUnrevisionedSend(submitted.draft, accountRef: submitted.accountRef,
+                                            groupIdHex: submitted.groupIdHex)
+            },
+            finish: { claim, submitted, accepted in
+                await store.finishUnrevisionedSend(claim, accepted: accepted, accountRef: submitted.accountRef,
+                                                   groupIdHex: submitted.groupIdHex)
+            },
+            storeSentBytes: { _, _ in },
+            cacheGeneration: { 0 }
+        )
+    }
+
+    private func customEmojiSubmission(_ draft: ConversationDraftSnapshot) -> CustomEmojiSubmittedDraft {
+        CustomEmojiSubmittedDraft(accountRef: "account", groupIdHex: "group", text: draft.canonicalText,
+                                  replyTargetId: draft.replyToMessageIdHex, draft: draft)
+    }
+
+    @Test func acceptedCustomEmojiSendClearsTheSavedDraftEvenAfterTheChatClosed() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        let typed = textSnapshot("yay :party: ")
+        store.setDraft(typed, accountRef: "account", groupIdHex: "group")
+        var release: CheckedContinuation<Void, Never>?
+        let submitter = customEmojiSubmitter(store: store) { release = $0 }
+        let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
+        while release == nil { await Task.yield() }
+        // Leaving the chat mid-upload persists the still-visible draft.
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "yay :party: ")
+        release?.resume()
+        #expect(await send.value)
+
+        // Nothing observes the closed view, yet the accepted text is gone.
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group") == nil)
+        let reopened = ConversationDraftStore(persistence: persistence)
+        #expect(await reopened.snapshot(accountRef: "account", groupIdHex: "group") == nil)
+    }
+
+    @Test func aChatReopenedMidSendCannotSendAgainAndDoesNotResaveTheAcceptedText() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        let typed = textSnapshot("yay :party:")
+        store.setDraft(typed, accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        var sends = 0
+        var release: CheckedContinuation<Void, Never>?
+        let first = customEmojiSubmitter(store: store, sent: { sends += 1 }) { release = $0 }
+        let send = Task { await first.submit(customEmojiSubmission(typed), emoji: []) }
+        while release == nil { await Task.yield() }
+
+        // The chat was closed and reopened: a new screen restores the draft
+        // while the first send is still uploading.
+        #expect(await store.snapshot(accountRef: "account", groupIdHex: "group") == typed)
+        #expect(store.isUnrevisionedSendInFlight(accountRef: "account", groupIdHex: "group"))
+        let reopened = customEmojiSubmitter(store: store, sent: { sends += 1 }) { _ in }
+        #expect(!(await reopened.submit(customEmojiSubmission(typed), emoji: [])))
+        #expect(sends == 1)
+
+        release?.resume()
+        #expect(await send.value)
+        #expect(!store.isUnrevisionedSendInFlight(accountRef: "account", groupIdHex: "group"))
+        // The reopened composer learns what was accepted so it can clear itself.
+        #expect(store.acceptedUnrevisionedSend(accountRef: "account", groupIdHex: "group")?.submitted == typed)
+        #expect(store.isAcceptedUnrevisionedSend(typed, accountRef: "account", groupIdHex: "group"))
+
+        // If it disappears still showing the sent text, that text is not saved back.
+        store.setDraft(typed, accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group") == nil)
+
+        // Typing something else afterwards is an ordinary draft again.
+        store.setDraft(textSnapshot("new"), accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "new")
+        #expect(store.acceptedUnrevisionedSend(accountRef: "account", groupIdHex: "group") == nil)
+    }
+
+    @Test func draftEditedAfterACustomEmojiSubmitSurvivesAcceptance() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        let typed = textSnapshot("yay :party:")
+        store.setDraft(typed, accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        var release: CheckedContinuation<Void, Never>?
+        let submitter = customEmojiSubmitter(store: store) { release = $0 }
+        let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
+        while release == nil { await Task.yield() }
+        store.setDraft(textSnapshot("yay :party: and more"), accountRef: "account", groupIdHex: "group")
+        release?.resume()
+        #expect(await send.value)
+        await store.flush()
+        #expect(persistence.draft(accountRef: "account", groupIdHex: "group")?.content == "yay :party: and more")
+    }
+
+    @Test func replyChangedDuringACustomEmojiSendKeepsTheSavedDraft() async {
+        let persistence = DraftPersistenceProbe()
+        let store = ConversationDraftStore(persistence: persistence)
+        let parent = String(repeating: "ab", count: 32)
+        let typed = ConversationDraftSnapshot(canonicalText: "yay :party:", replyToMessageIdHex: parent, mediaAttachments: [])
+        store.setDraft(typed, accountRef: "account", groupIdHex: "group")
+        await store.flush()
+        var release: CheckedContinuation<Void, Never>?
+        let submitter = customEmojiSubmitter(store: store) { release = $0 }
+        let send = Task { await submitter.submit(customEmojiSubmission(typed), emoji: []) }
+        while release == nil { await Task.yield() }
+        // The reply was cancelled while uploading; the text is unchanged.
+        store.setDraft(textSnapshot("yay :party:"), accountRef: "account", groupIdHex: "group")
+        release?.resume()
+        #expect(await send.value)
+        await store.flush()
+        let saved = persistence.draft(accountRef: "account", groupIdHex: "group")
+        #expect(saved?.content == "yay :party:")
+        #expect(saved?.replyToMessageIdHex == nil)
+    }
+
     private func textSnapshot(_ text: String) -> ConversationDraftSnapshot {
         ConversationDraftSnapshot(
             canonicalText: text,

@@ -937,6 +937,14 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.reactToMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId, emoji: emoji)
     }
 
+    /// NIP-30 custom emoji: a kind-9 whose `tags` name the already-uploaded
+    /// `attachments` (`["emoji", shortcode, url]`).
+    func sendTaggedMedia(accountRef: String, groupIdHex: String, attachments: [MediaAttachmentReferenceFfi],
+                         caption: String?, tags: [[String]]) async throws -> SendSummaryFfi {
+        try await marmot.sendTaggedMedia(accountRef: accountRef, groupIdHex: groupIdHex, attachments: attachments,
+                                         caption: caption, tags: tags)
+    }
+
     func createPoll(accountRef: String, groupIdHex: String, question: String, options: [String],
                     pollType: PollTypeFfi, endsAt: UInt64?) async throws -> SendSummaryFfi {
         try await marmot.createPoll(accountRef: accountRef, groupIdHex: groupIdHex, question: question,

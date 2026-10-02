@@ -519,6 +519,60 @@ on the current network unless a step says otherwise.
       render or show their text; nothing stays blank. Relaunch offline: emoji
       already downloaded render from local storage.
 
+### Sending custom emoji
+
+Same two devices. Before each step, the 0.12.0 client has sent a message with a
+custom `:party:` image that renders inline on iOS. The emoji iOS can send come
+only from custom emoji already shown in that chat.
+
+- [ ] In a chat with no custom emoji, the composer `+` menu has no Custom
+      Emoji row. After `:party:` arrives it appears; another chat still has
+      none.
+- [ ] Composer `+` → Custom Emoji opens the emoji picker with a Custom
+      section first. Tap `:party:`: `:party:` is added to the draft (with a
+      space before it if needed) and the keyboard returns. Add text and send.
+      The Send button shows progress, the bubble appears with the image inline
+      on both devices, and the draft clears only after the send succeeds.
+- [ ] Type `:party:` by hand and send: it goes out as the image too. Send a
+      message without custom emoji: it sends instantly through the normal path
+      (bubble appears at the tap).
+- [ ] Reply to a message with `:party:` in the text: both devices show it as a
+      reply with the inline image.
+- [ ] Custom emoji reactions are deferred until MDK epoch-pins media
+      reactions (#1137, marmot-protocol/mdk#2151). Long-press → More emoji
+      shows no Custom section, and the quick-reaction editor offers no custom
+      emoji. When the 0.12.0 client reacts with `:party:`, tapping that chip on
+      iOS adds nothing (no image reaction and no `:party:` text reaction).
+- [ ] Turn on Airplane Mode and send a message with `:party:`: an inline error
+      appears above the composer, the draft stays, and Send retries once back
+      online without uploading the image again.
+- [ ] Send `:party:` on a slow network and go back to the chat list while Send
+      shows progress. Reopen the chat after it lands: the message is in the
+      chat and the composer is empty (the draft is not offered again). Repeat,
+      but type more text before the send finishes: that edited text stays in
+      the composer.
+- [ ] Send `:party:` on a slow network, go back, and reopen the chat before it
+      lands: the draft shows, but Send stays disabled and no photo can be
+      added. When the send lands, that reopened composer clears itself, and
+      leaving and reopening again does not bring the text back.
+- [ ] Reply to a message with `:party:`, send on a slow network, and cancel the
+      reply before it lands: the message goes out as a reply, and the composer
+      keeps its text without the reply.
+- [ ] If the 0.12.0 client sent one image under two shortcodes (`:party:` and
+      `:celebrate:`), send `:party: :celebrate:`: both render inline on both
+      devices with no extra media tile.
+- [ ] While Send shows progress, Send stays disabled and choosing a photo
+      from the `+` menu adds nothing.
+- [ ] Attach a photo and add `:party:` to the caption, then send: an inline
+      error says to send custom emoji separately and nothing is sent.
+- [ ] Start a send with `:party:` on a slow network and immediately switch to
+      another profile: nothing is sent into the other profile's chats.
+- [ ] VoiceOver: the composer picker reads each custom emoji by its shortcode
+      name (“party”) with a “Custom emoji” hint, and the inline error is
+      announced.
+      Check the picker at an accessibility Dynamic Type size, in RTL (Arabic),
+      and in light and dark mode.
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.

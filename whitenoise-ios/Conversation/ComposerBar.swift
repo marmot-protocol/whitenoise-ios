@@ -217,6 +217,9 @@ struct ComposerBar: View {
     var gifsAvailable = true
     var pollsAvailable = false
     var onCreatePoll: () -> Void = {}
+    /// The conversation holds custom emoji this person can send.
+    var customEmojiAvailable = false
+    var onCustomEmoji: () -> Void = {}
     let onTakePhoto: () -> Void
     let onPhotoLibrary: () -> Void
     let onAttachFile: () -> Void
@@ -350,7 +353,8 @@ struct ComposerBar: View {
                 items: ComposerAttachmentOption.dropdownItems(
                     cameraAvailable: cameraAvailable,
                     gifsAvailable: gifsAvailable,
-                    pollsAvailable: pollsAvailable
+                    pollsAvailable: pollsAvailable,
+                    customEmojiAvailable: customEmojiAvailable
                 ),
                 onSelect: selectAttachmentOption
             ) {
@@ -644,6 +648,8 @@ struct ComposerBar: View {
             onAttachFile()
         case .gifs:
             onSearchGIFs()
+        case .customEmoji:
+            onCustomEmoji()
         case .location:
             onShareLocation()
         case .contact:
