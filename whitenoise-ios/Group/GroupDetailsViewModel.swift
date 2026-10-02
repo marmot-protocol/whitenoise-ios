@@ -40,7 +40,7 @@ final class GroupDetailsViewModel {
     var muteExpiresAt: Date?
     /// Device-wide `MutedChatMentionsStore` preference, read with the mute
     /// state so the Notifications footer can say whether mentions still notify.
-    var mentionsBreakThroughMute = false
+    var mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute()
     var isMuted: Bool { notifyMode == .nothing }
     var notifyModeSummary: String {
         guard isMuteStateLoaded else { return L10n.string("Unavailable") }
