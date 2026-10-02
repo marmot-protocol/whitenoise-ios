@@ -4,6 +4,7 @@ struct AppearanceSettingsView: View {
     @Environment(AppAppearanceStore.self) private var appearance
     @AppStorage(ComposerReturnKeyBehavior.storageKey) private var sendsOnReturn = false
     @State private var languageRawValue = AppLanguage.currentRawValue
+    @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
     var body: some View {
         Form {
@@ -43,6 +44,18 @@ struct AppearanceSettingsView: View {
                 WNToggle("Return Key Sends", isOn: $sendsOnReturn)
             } footer: {
                 Text("When on, the Return key sends your message instead of starting a new line.")
+            }
+
+            Section {
+                WNToggle(
+                    "Show Link Previews",
+                    isOn: Binding(
+                        get: { linkPreviewSettings.showsPreviews },
+                        set: { linkPreviewSettings.setShowsPreviews($0) }
+                    )
+                )
+            } footer: {
+                Text("Shows the title and image of links in chats. Loading a preview tells the linked website your IP address.")
             }
         }
         .localizedNavigationTitle("Appearance")
