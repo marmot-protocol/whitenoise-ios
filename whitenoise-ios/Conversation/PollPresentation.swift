@@ -59,6 +59,11 @@ nonisolated enum PollPresentation {
         return result
     }
 
+    /// The bubble offers its voter list once someone has voted.
+    static func offersVoteList(_ poll: PollProjectionFfi) -> Bool {
+        poll.participants > 0
+    }
+
     /// Share of voters who picked the option, for the result bar.
     static func fraction(votes: UInt64, participants: UInt64) -> Double {
         guard participants > 0 else { return 0 }

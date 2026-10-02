@@ -7,6 +7,8 @@ struct PollMessageContent: View {
     let isFromMe: Bool
     /// Nil when the viewer cannot vote here (inactive group, pending row).
     let onVote: ((String) -> Void)?
+    /// Opens the per-voter results sheet.
+    var onViewVotes: (() -> Void)? = nil
 
     private var isMultipleChoice: Bool { poll.pollType == .multipleChoice }
     private var foreground: Color { MessageBubblePalette.foreground(isFromMe: isFromMe) }
@@ -44,9 +46,24 @@ struct PollMessageContent: View {
                 optionRow(option, isOpen: isOpen)
             }
 
-            Text(footerText(isOpen: isOpen))
-                .font(.caption)
-                .foregroundStyle(secondaryForeground)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(footerText(isOpen: isOpen))
+                    .font(.caption)
+                    .foregroundStyle(secondaryForeground)
+
+                if let onViewVotes, PollPresentation.offersVoteList(poll) {
+                    Button(action: onViewVotes) {
+                        Label(L10n.string("View votes"), systemImage: "person.2")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(foreground)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    // The 44-point target may extend into the bubble's bottom inset.
+                    .padding(.bottom, -8)
+                }
+            }
         }
         .padding(.horizontal, ChatBubbleMetrics.horizontalInset)
         .padding(.vertical, 12)

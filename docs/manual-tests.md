@@ -243,6 +243,19 @@ before every release tag.
       screen across the deadline. Relaunch before and after expiry.
 - [ ] A malformed kind-1068 row shows "This poll can’t be displayed." rather
       than its raw question.
+- [ ] View votes (MarmotKit 0.12.0): in a group with at least three accounts,
+      vote on a multiple-choice poll from each. **View votes** (in the bubble
+      once someone voted, and in the long-press menu) opens a sheet that says
+      votes aren’t anonymous and lists each voter with name, avatar and vote
+      time under every option they chose, with **You** on your row. Options
+      nobody chose show "No votes"; with no votes at all it shows "No votes
+      yet". Leave the sheet open while another account changes its vote: the
+      voter moves to the new option without reopening. Block one voter from
+      their profile: they stay listed, marked **Blocked**, with a monogram
+      avatar. Delete the poll as its sender or an admin while the sheet is
+      open: it shows "Poll unavailable", not an error. Check Light/Dark, a
+      large accessibility text size, and VoiceOver (each row reads name,
+      You/Blocked and time; option headers read as headings).
 - [ ] Edit a text or reply while it is still sending (relays offline). The edit
       appears at once, survives relaunch, and publishes after the original.
       Rapid repeated edits that hit MDK's rate limit keep the edit text for a

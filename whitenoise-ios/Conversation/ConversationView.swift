@@ -605,6 +605,7 @@ struct ConversationView: View {
     @State private var emojiPickerTarget: ActionsTarget?
     @State private var messageInfoTarget: ActionsTarget?
     @State private var reactionDetailsTarget: ReactionDetailsTarget?
+    @State private var pollVotesTarget: PollVotesTarget?
     @State private var forwardTarget: ActionsTarget?
     @State private var forwardSelectionTarget: ForwardSelectionTarget?
     @State private var isSelectingMessages = false
@@ -728,6 +729,13 @@ struct ConversationView: View {
         let record: AppMessageRecordFfi
         let initialEmoji: String?
         var messageIdHex: String { record.messageIdHex }
+        let id = UUID()
+    }
+
+    private struct PollVotesTarget: Identifiable {
+        let messageIdHex: String
+        /// Labels shown if the row later leaves the loaded timeline window.
+        let options: [PollOptionResultFfi]
         let id = UUID()
     }
 
@@ -941,6 +949,17 @@ struct ConversationView: View {
                         identityName: viewModel.windowDisplayName,
                         identityAvatar: viewModel.windowAvatarURL,
                         identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset }
+                    )
+                    .appAppearance()
+                }
+            }
+            .sheet(item: $pollVotesTarget) { target in
+                if let viewModel {
+                    PollVotesSheet(
+                        messageIdHex: target.messageIdHex,
+                        initialOptions: target.options,
+                        viewModel: viewModel,
+                        blockedAccountIds: blockedUsers.blockedAccountIds
                     )
                     .appAppearance()
                 }
@@ -2135,6 +2154,7 @@ struct ConversationView: View {
             onPollVote: viewModel.canVoteInPolls && status != .sending && status != .failed
                 ? { optionId in Task { await viewModel.votePoll(option: optionId, on: record) } }
                 : nil,
+            onViewPollVotes: isSelectingMessages ? nil : { openPollVotes(for: record, viewModel: viewModel) },
             reactions: viewModel.reactions(for: record.messageIdHex),
             omittedReactionKinds: viewModel.windowReactions[record.messageIdHex]?.omittedKinds ?? 0,
             projectedReactionTotal: viewModel.windowReactions[record.messageIdHex]?.totalCount,
@@ -3619,8 +3639,18 @@ struct ConversationView: View {
             ),
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
-            canReport: viewModel.canReport(record)
+            canReport: viewModel.canReport(record),
+            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel)
         )
+    }
+
+    private func canViewPollVotes(for record: AppMessageRecordFfi, viewModel: ConversationViewModel) -> Bool {
+        viewModel.poll(for: record.messageIdHex) != nil && !viewModel.isDeleted(record.messageIdHex)
+    }
+
+    private func openPollVotes(for record: AppMessageRecordFfi, viewModel: ConversationViewModel) {
+        guard let poll = viewModel.poll(for: record.messageIdHex) else { return }
+        pollVotesTarget = PollVotesTarget(messageIdHex: record.messageIdHex, options: poll.options)
     }
 
     private func messageActionsAlignTrailing(record: AppMessageRecordFfi) -> Bool {
@@ -3655,6 +3685,7 @@ struct ConversationView: View {
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
             canReport: viewModel.canReport(record),
+            canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
             quickReactions: appState.quickReactions,
             selectedReaction: viewModel.reactions(for: record.messageIdHex).first(where: \.mine)?.emoji,
             previewHeight: previewHeight,
@@ -3716,6 +3747,10 @@ struct ConversationView: View {
             onReport: {
                 dismissActions()
                 reportTarget = ActionsTarget(record: record, status: status)
+            },
+            onViewVotes: {
+                dismissActions()
+                openPollVotes(for: record, viewModel: viewModel)
             }
         )
     }
