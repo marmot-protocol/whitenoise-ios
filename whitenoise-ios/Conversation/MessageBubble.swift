@@ -130,6 +130,7 @@ struct MessageBubble: View {
     var markdownBlocks: [MarkdownDisplayBlock]? = nil
     var poll: PollProjectionFfi? = nil
     var onPollVote: ((String) -> Void)? = nil
+    var onViewPollVotes: (() -> Void)? = nil
     var reactions: [ConversationViewModel.ReactionTally] = []
     var omittedReactionKinds: UInt64 = 0
     var projectedReactionTotal: UInt64? = nil
@@ -326,7 +327,8 @@ struct MessageBubble: View {
         } else if record.kind == MessageSemantics.kindPoll, showsStandardBody {
             Group {
                 if let poll {
-                    PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote)
+                    PollMessageContent(poll: poll, isFromMe: isFromMe, onVote: onPollVote,
+                                       onViewVotes: onViewPollVotes)
                 } else {
                     // MDK projects no tally for a malformed poll; never show its raw question.
                     Label(L10n.string("This poll can’t be displayed."), systemImage: "chart.bar.xaxis")

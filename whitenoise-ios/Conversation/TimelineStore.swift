@@ -206,6 +206,11 @@ final class TimelineStore {
     @ObservationIgnored private var groupSystemByMessageId: [String: GroupSystemEventFfi] = [:]
     /// MDK's validated tally for kind-1068 rows; absent means not a valid poll.
     @ObservationIgnored private var pollByMessageId: [String: PollProjectionFfi] = [:]
+    /// Last applied kind-1068 record and a counter bumped whenever MDK
+    /// reprojects that row (vote, edit, deletion, removal), so a View votes
+    /// sheet knows to re-read from the first page.
+    @ObservationIgnored private var pollRowRecordByMessageId: [String: TimelineMessageRecordFfi] = [:]
+    @ObservationIgnored private var pollReprojectionRevisionByMessageId: [String: UInt64] = [:]
     /// Client tokens of own rows MDK has not yet delivered; edits of these go
     /// through MDK's durable pending-edit queue.
     @ObservationIgnored private var unsettledClientTokenByMessageId: [String: String] = [:]
@@ -426,6 +431,22 @@ final class TimelineStore {
         guard let poll = pollByMessageId[messageIdHex] else { return nil }
         guard let pending = pendingPollSelections[messageIdHex] else { return poll }
         return PollPresentation.applyingLocalSelection(pending, to: poll)
+    }
+
+    /// Changes whenever MDK reprojects the poll row; zero before it is seen.
+    func pollReprojectionRevision(for messageIdHex: String) -> UInt64 {
+        _ = timelineProjectionGeneration
+        return pollReprojectionRevisionByMessageId[messageIdHex] ?? 0
+    }
+
+    private func notePollRowReprojection(_ record: TimelineMessageRecordFfi?, messageIdHex: String, live: Bool) {
+        let previous = pollRowRecordByMessageId[messageIdHex]
+        guard record != nil || previous != nil else { return }
+        // Window reloads re-apply unchanged rows; only a live upsert or a
+        // changed record counts as a reprojection.
+        guard live || previous != record else { return }
+        pollRowRecordByMessageId[messageIdHex] = record
+        pollReprojectionRevisionByMessageId[messageIdHex, default: 0] &+= 1
     }
 
     @ObservationIgnored private var pendingPollSelections: [String: [String]] = [:]
@@ -925,6 +946,9 @@ final class TimelineStore {
         groupSystemDisplayCache[appRecord.messageIdHex] = nil
         groupSystemByMessageId[appRecord.messageIdHex] = record.groupSystem
         pollByMessageId[appRecord.messageIdHex] = record.poll
+        if record.kind == MessageSemantics.kindPoll {
+            notePollRowReprojection(record, messageIdHex: appRecord.messageIdHex, live: trigger != nil)
+        }
         unsettledClientTokenByMessageId[appRecord.messageIdHex] =
             appRecord.direction == "sent" && record.sourceMessageIdHex == nil ? record.clientToken : nil
         if let pending = pendingPollSelections[appRecord.messageIdHex],
@@ -1031,6 +1055,7 @@ final class TimelineStore {
         replyPreviewDisplayCache[messageIdHex] = nil
         groupSystemDisplayCache[messageIdHex] = nil
         groupSystemByMessageId[messageIdHex] = nil
+        notePollRowReprojection(nil, messageIdHex: messageIdHex, live: true)
         mediaProjections.removeReferences(forMessageId: messageIdHex)
         reactionProjections.removeSummary(forMessageId: messageIdHex)
         deletedProjections.removeProjected(forMessageId: messageIdHex)

@@ -1082,6 +1082,17 @@ final class ConversationViewModel {
         timelineStore.poll(for: messageIdHex)
     }
 
+    func pollReprojectionRevision(for messageIdHex: String) -> UInt64 {
+        timelineStore.pollReprojectionRevision(for: messageIdHex)
+    }
+
+    /// The query a View votes sheet runs for this poll in the active account,
+    /// or nil when there is no account or no durable poll id.
+    func pollVotesSubject(for messageIdHex: String) -> PollVotesSubject? {
+        guard let accountRef = appState?.activeAccountRef, !messageIdHex.isEmpty else { return nil }
+        return PollVotesSubject(accountRef: accountRef, groupIdHex: group.groupIdHex, pollEventId: messageIdHex)
+    }
+
     /// MDK only accepts polls in group conversations, never direct messages.
     var canCreatePolls: Bool {
         canSendMessages && !groupDisplay.isDirectMessage

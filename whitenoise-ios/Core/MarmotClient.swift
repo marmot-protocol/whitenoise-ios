@@ -949,6 +949,18 @@ nonisolated final class MarmotClient: Sendable {
                                       pollEventId: pollEventId, optionIds: optionIds)
     }
 
+    /// One page of per-voter poll results. `pollVotes` is a synchronous
+    /// local query, so it runs off the MainActor.
+    func pollVotes(accountRef: String, groupIdHex: String, pollEventId: String,
+                   afterVotedAt: UInt64?, afterVoterAccountIdHex: String?,
+                   limit: UInt32) async throws -> PollVotePageFfi {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            try marmot.pollVotes(accountRef: accountRef, groupIdHex: groupIdHex, pollEventId: pollEventId,
+                                 afterVotedAt: afterVotedAt, afterVoterAccountIdHex: afterVoterAccountIdHex,
+                                 limit: limit)
+        }.value
+    }
+
     func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {
         try await marmot.unreactFromMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId)
     }
