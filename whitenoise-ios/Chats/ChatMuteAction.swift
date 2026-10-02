@@ -51,3 +51,19 @@ nonisolated enum ChatMuteAction: Sendable {
         }
     }
 }
+
+/// Mute copy that states whether mentions still notify, following the
+/// device-wide `MutedChatMentionsStore` preference.
+nonisolated enum MutedChatMentionsCopy {
+    static func mutePickerMessage(chatTitle: String, mentionsBreakThroughMute: Bool) -> String {
+        mentionsBreakThroughMute
+            ? L10n.formatted("Choose how long to mute %@. You'll still be notified when someone mentions you.", chatTitle)
+            : L10n.formatted("Choose how long to mute %@.", chatTitle)
+    }
+
+    static func chatNotificationsFooter(mentionsBreakThroughMute: Bool) -> String {
+        mentionsBreakThroughMute
+            ? L10n.string("Applies on this device only. Messages still arrive and count as unread. With \"Only mentions\", this chat notifies only when someone mentions you. With \"Nothing\", mentions still notify unless \"Mentions in Muted Chats\" is turned off in Notifications settings.")
+            : L10n.string("Applies on this device only. Messages still arrive and count as unread. With \"Only mentions\", this chat notifies only when someone mentions you.")
+    }
+}

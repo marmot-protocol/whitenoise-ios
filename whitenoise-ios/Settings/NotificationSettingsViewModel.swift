@@ -70,17 +70,28 @@ final class NotificationSettingsViewModel {
     /// Per-device, so it is read from shared defaults rather than from the
     /// account-scoped `settings` this screen otherwise renders.
     var previewMode: NotificationPreviewMode
+    /// Per-device, like `previewMode`: whether direct mentions still notify
+    /// from muted chats.
+    var mentionsBreakThroughMute: Bool
 
     private var actionGate = AsyncActionGate()
     private var reloadRequestedAfterAction = false
     private let previewDefaults: UserDefaults?
+    private let mutedChatMentionsDefaults: UserDefaults?
 
-    /// Tests inject an isolated suite; the shared App Group suite is visible to
+    /// Tests inject isolated suites; the shared App Group suite is visible to
     /// every concurrently running suite (and to the extension).
-    init(previewDefaults: UserDefaults? = NotificationPreviewStore.defaults) {
+    init(
+        previewDefaults: UserDefaults? = NotificationPreviewStore.defaults,
+        mutedChatMentionsDefaults: UserDefaults? = MutedChatMentionsStore.defaults
+    ) {
         self.previewDefaults = previewDefaults
+        self.mutedChatMentionsDefaults = mutedChatMentionsDefaults
         previewMode = previewDefaults.map { NotificationPreviewStore.mode(defaults: $0) }
             ?? NotificationPreviewStore.migrationDefault
+        mentionsBreakThroughMute = mutedChatMentionsDefaults.map {
+            MutedChatMentionsStore.mentionsBreakThroughMute(defaults: $0)
+        } ?? MutedChatMentionsStore.unresolvableValue
     }
 
     /// Publishes storage, not the tap: an unresolvable suite cannot persist the
@@ -89,6 +100,16 @@ final class NotificationSettingsViewModel {
         guard let previewDefaults else { return }
         NotificationPreviewStore.setMode(mode, defaults: previewDefaults)
         previewMode = NotificationPreviewStore.mode(defaults: previewDefaults)
+    }
+
+    /// Publishes storage, not the tap, like `setPreviewMode`: an unresolvable
+    /// suite keeps showing the policy still in force (off).
+    func setMentionsBreakThroughMute(_ enabled: Bool) {
+        guard let mutedChatMentionsDefaults else { return }
+        MutedChatMentionsStore.setMentionsBreakThroughMute(enabled, defaults: mutedChatMentionsDefaults)
+        mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute(
+            defaults: mutedChatMentionsDefaults
+        )
     }
 
     /// Whether a mutating action is currently in flight. Mirrors the action gate
@@ -169,6 +190,11 @@ final class NotificationSettingsViewModel {
         }
         if let previewDefaults {
             previewMode = NotificationPreviewStore.mode(defaults: previewDefaults)
+        }
+        if let mutedChatMentionsDefaults {
+            mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute(
+                defaults: mutedChatMentionsDefaults
+            )
         }
         let accountRef = appState.activeAccountRef
         let reloadedAuthorizationStatus = await appState.notificationAuthorizationStatus()

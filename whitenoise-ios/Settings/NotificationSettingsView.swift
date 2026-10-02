@@ -42,6 +42,16 @@ struct NotificationSettingsView: View {
                 }
             )
 
+            Section {
+                WNToggle("Mentions in Muted Chats", isOn: Binding(
+                    get: { model.mentionsBreakThroughMute },
+                    set: { model.setMentionsBreakThroughMute($0) }
+                ))
+            } footer: {
+                Text("When this is on, mentions of you still notify in muted chats, including chats set to \"Nothing\". Applies to all profiles on this device.")
+            }
+            .disabled(!previewControlsEnabled)
+
             statusSection
 
             if appState.developerMode {
@@ -203,8 +213,9 @@ struct NotificationSettingsView: View {
         return false
     }
 
-    /// The preview choice only governs notifications this device renders, so
-    /// it stays inert until local notifications can actually be delivered.
+    /// The preview and muted-mention choices only govern notifications this
+    /// device renders, so they stay inert until local notifications can
+    /// actually be delivered.
     private var previewControlsEnabled: Bool {
         guard let settings = model.settings, settings.localNotificationsEnabled else { return false }
         switch model.authorizationStatus {

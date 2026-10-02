@@ -442,6 +442,279 @@ struct ChatMuteSuppressionPolicyTests {
     }
 }
 
+struct MutedChatMentionsPolicyTests {
+
+    private func isolatedDefaults() throws -> (UserDefaults, String) {
+        let suiteName = "muted-chat-mentions-tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        return (defaults, suiteName)
+    }
+
+    private func collection(_ updates: [NotificationUpdateFfi]) -> BackgroundNotificationCollectionFfi {
+        BackgroundNotificationCollectionFfi(status: .newData, notifications: updates, error: nil)
+    }
+
+    // MARK: Store
+
+    @Test func absentPreferenceDefaultsToOn() throws {
+        let (defaults, suiteName) = try isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        #expect(MutedChatMentionsStore.defaultValue)
+        #expect(MutedChatMentionsStore.mentionsBreakThroughMute(defaults: defaults))
+    }
+
+    @Test func preferenceRoundTripsThroughTheSuite() throws {
+        let (defaults, suiteName) = try isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        MutedChatMentionsStore.setMentionsBreakThroughMute(false, defaults: defaults)
+        #expect(!MutedChatMentionsStore.mentionsBreakThroughMute(defaults: defaults))
+        MutedChatMentionsStore.setMentionsBreakThroughMute(true, defaults: defaults)
+        #expect(MutedChatMentionsStore.mentionsBreakThroughMute(defaults: defaults))
+    }
+
+    @Test func storageKeyIsPersistedAndMustNotDrift() {
+        #expect(MutedChatMentionsStore.storageKey == "notifications.mentionsBreakThroughMute")
+    }
+
+    @Test func unresolvableSuiteReadsAsOffSoMutesStaySilent() {
+        // The mute store fails safe (every chat `.nothing`) on the same suite;
+        // the preference must not then let every muted chat's mentions through.
+        #expect(!MutedChatMentionsStore.unresolvableValue)
+        let mention = muteTestUpdate(notificationKey: "m", groupIdHex: "group-a", isMention: true, timestampMs: 1)
+        let decision = NotificationServiceProjection.decision(
+            for: collection([mention]),
+            notifyMode: { account, group in
+                ChatMuteStore.notifyMode(accountIdHex: account, groupIdHex: group, snapshot: nil)
+            },
+            mentionsBreakThroughMute: MutedChatMentionsStore.unresolvableValue
+        )
+        #expect(decision == .deliverQuietly)
+    }
+
+    // MARK: Shared gate
+
+    @Test func notifyModeGateMatrix() {
+        for breakThrough in [true, false] {
+            for isMention in [true, false] {
+                #expect(NotificationPresentationPolicy.notifyModeAllows(
+                    .all, isMention: isMention, mentionsBreakThroughMute: breakThrough
+                ))
+                #expect(NotificationPresentationPolicy.notifyModeAllows(
+                    .mentionsOnly, isMention: isMention, mentionsBreakThroughMute: breakThrough
+                ) == isMention)
+                #expect(NotificationPresentationPolicy.notifyModeAllows(
+                    .nothing, isMention: isMention, mentionsBreakThroughMute: breakThrough
+                ) == (isMention && breakThrough))
+            }
+        }
+    }
+
+    // MARK: Every muted state
+
+    @Test func everyMutedStateLetsOnlyMentionsThroughWhenTheToggleIsOn() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let account = String(repeating: "11", count: 32)
+        let mutes: [(String, (UserDefaults) -> Void)] = [
+            ("timed", { ChatMuteAction.mute(.oneHour).perform(
+                accountIdHex: account, groupIdHex: "group-a", defaults: $0, now: now
+            ) }),
+            ("always", { ChatMuteAction.mute(.always).perform(
+                accountIdHex: account, groupIdHex: "group-a", defaults: $0, now: now
+            ) }),
+            ("nothing", { ChatMuteStore.setNotifyMode(
+                .nothing, accountIdHex: account, groupIdHex: "group-a", defaults: $0
+            ) }),
+            ("legacy", { ChatMuteStore.setMuted(
+                true, accountIdHex: account, groupIdHex: "group-a", defaults: $0
+            ) }),
+        ]
+        let mention = muteTestUpdate(
+            notificationKey: "mention", accountIdHex: account, groupIdHex: "group-a",
+            isMention: true, timestampMs: 2_000
+        )
+        let plain = muteTestUpdate(
+            notificationKey: "plain", accountIdHex: account, groupIdHex: "group-a", timestampMs: 1_000
+        )
+        for (label, mute) in mutes {
+            let (defaults, suiteName) = try isolatedDefaults()
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+            mute(defaults)
+            let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+            let notifyMode: (String, String) -> ChatNotifyMode = { account, group in
+                ChatMuteStore.notifyMode(accountIdHex: account, groupIdHex: group, in: snapshot, now: now)
+            }
+            #expect(notifyMode(account, "group-a") == .nothing, "\(label)")
+
+            #expect(NotificationServiceProjection.decision(
+                for: collection([plain, mention]), notifyMode: notifyMode, mentionsBreakThroughMute: true
+            ) == .decorate(LocalNotificationProjection.makePresentation(for: mention)!, additionalPresentations: []),
+                "\(label)")
+            #expect(NotificationServiceProjection.decision(
+                for: collection([plain, mention]), notifyMode: notifyMode, mentionsBreakThroughMute: false
+            ) == .deliverQuietly, "\(label)")
+            #expect(NotificationServiceProjection.decision(
+                for: collection([plain]), notifyMode: notifyMode, mentionsBreakThroughMute: true
+            ) == .deliverQuietly, "\(label)")
+            for breakThrough in [true, false] {
+                #expect(LocalNotificationSuppressionPolicy.shouldPresent(
+                    localNotificationsEnabled: true,
+                    notifyMode: notifyMode(account, "group-a"),
+                    isMention: true,
+                    mentionsBreakThroughMute: breakThrough,
+                    appSceneActive: false,
+                    updateAccountRef: mention.accountRef,
+                    updateGroupIdHex: mention.groupIdHex,
+                    visibleChat: nil
+                ) == breakThrough, "\(label)")
+            }
+        }
+    }
+
+    @Test func timedMuteExpiryRestoresOrdinaryDeliveryWhateverTheToggle() throws {
+        let (defaults, suiteName) = try isolatedDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let mention = muteTestUpdate(notificationKey: "mention", groupIdHex: "group-a", isMention: true, timestampMs: 2_000)
+        let plain = muteTestUpdate(notificationKey: "plain", groupIdHex: "group-a", timestampMs: 1_000)
+        ChatMuteAction.mute(.oneHour).perform(
+            accountIdHex: mention.accountIdHex, groupIdHex: "group-a", defaults: defaults, now: now
+        )
+        let snapshot = ChatMuteStore.notifyModeSnapshot(defaults: defaults)
+        let afterExpiry: (String, String) -> ChatNotifyMode = { account, group in
+            ChatMuteStore.notifyMode(
+                accountIdHex: account, groupIdHex: group, in: snapshot, now: now.addingTimeInterval(3_600)
+            )
+        }
+
+        for breakThrough in [true, false] {
+            #expect(NotificationServiceProjection.decision(
+                for: collection([plain, mention]), notifyMode: afterExpiry, mentionsBreakThroughMute: breakThrough
+            ) == .decorate(
+                LocalNotificationProjection.makePresentation(for: mention)!,
+                additionalPresentations: [LocalNotificationProjection.makePresentation(for: plain)!]
+            ))
+        }
+    }
+
+    // MARK: NSE decision
+
+    @Test func serviceDecisionOrdersBreakingThroughMentionsWithUnmutedTraffic() {
+        let mutedMention = muteTestUpdate(
+            notificationKey: "muted-mention", groupIdHex: "group-muted", isMention: true, timestampMs: 3_000
+        )
+        let mutedPlain = muteTestUpdate(
+            notificationKey: "muted-plain", groupIdHex: "group-muted", timestampMs: 2_500
+        )
+        let unmuted = muteTestUpdate(
+            notificationKey: "unmuted", groupIdHex: "group-open", timestampMs: 2_000
+        )
+        let notifyMode: (String, String) -> ChatNotifyMode = { _, group in
+            group == "group-muted" ? .nothing : .all
+        }
+
+        #expect(NotificationServiceProjection.decision(
+            for: collection([unmuted, mutedPlain, mutedMention]),
+            notifyMode: notifyMode,
+            mentionsBreakThroughMute: true
+        ) == .decorate(
+            LocalNotificationProjection.makePresentation(for: mutedMention)!,
+            additionalPresentations: [LocalNotificationProjection.makePresentation(for: unmuted)!]
+        ))
+        #expect(NotificationServiceProjection.decision(
+            for: collection([unmuted, mutedPlain, mutedMention]),
+            notifyMode: notifyMode,
+            mentionsBreakThroughMute: false
+        ) == .decorate(LocalNotificationProjection.makePresentation(for: unmuted)!, additionalPresentations: []))
+    }
+
+    @Test func breakingThroughNeverRevivesSelfDisabledOrArchivedRecords() {
+        let selfMention = muteTestUpdate(
+            notificationKey: "self", groupIdHex: "group-a", isFromSelf: true, isMention: true, timestampMs: 1
+        )
+        let mention = muteTestUpdate(notificationKey: "m", groupIdHex: "group-a", isMention: true, timestampMs: 2)
+
+        #expect(NotificationServiceProjection.decision(
+            for: collection([selfMention]), notifyMode: { _, _ in .nothing }, mentionsBreakThroughMute: true
+        ) == .deliverQuietly)
+        #expect(NotificationServiceProjection.decision(
+            for: collection([mention]),
+            localNotificationsEnabled: { _ in false },
+            notifyMode: { _, _ in .nothing },
+            mentionsBreakThroughMute: true
+        ) == .deliverQuietly)
+        #expect(NotificationServiceProjection.decision(
+            for: collection([mention]),
+            isArchived: { _, _ in true },
+            notifyMode: { _, _ in .nothing },
+            mentionsBreakThroughMute: true
+        ) == .deliverQuietly)
+    }
+
+    @Test func breakingThroughMentionKeepsPreviewRedaction() {
+        let mention = muteTestUpdate(
+            notificationKey: "m", groupIdHex: "group-a", previewText: "secret", isMention: true, timestampMs: 1
+        )
+        let decision = NotificationServiceProjection.decision(
+            for: collection([mention]),
+            notifyMode: { _, _ in .nothing },
+            mentionsBreakThroughMute: true,
+            previewMode: .generic
+        )
+        #expect(decision == .decorate(
+            LocalNotificationProjection.makePresentation(for: mention, previewMode: .generic)!,
+            additionalPresentations: []
+        ))
+    }
+
+    @Test func serviceDecisionStillFallsBackOnNoData() {
+        for status in [NotificationCollectionStatusFfi.noData, .failed] {
+            #expect(NotificationServiceProjection.decision(
+                for: BackgroundNotificationCollectionFfi(status: status, notifications: [], error: nil),
+                notifyMode: { _, _ in .nothing },
+                mentionsBreakThroughMute: true
+            ) == .fallback)
+        }
+    }
+
+    // MARK: Copy
+
+    @Test func muteCopySaysWhetherMentionsStillNotify() {
+        #expect(MutedChatMentionsCopy.mutePickerMessage(chatTitle: "Book Club", mentionsBreakThroughMute: false)
+            == L10n.formatted("Choose how long to mute %@.", "Book Club"))
+        #expect(MutedChatMentionsCopy.mutePickerMessage(chatTitle: "Book Club", mentionsBreakThroughMute: true)
+            == L10n.formatted("Choose how long to mute %@. You'll still be notified when someone mentions you.", "Book Club"))
+        #expect(MutedChatMentionsCopy.chatNotificationsFooter(mentionsBreakThroughMute: true)
+            != MutedChatMentionsCopy.chatNotificationsFooter(mentionsBreakThroughMute: false))
+    }
+}
+
+@MainActor
+struct MutedChatMentionsSettingsViewModelTests {
+    @Test func modelStartsFromStorageAndPersistsTheToggle() throws {
+        let suiteName = "muted-chat-mentions-settings.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let model = NotificationSettingsViewModel(previewDefaults: defaults, mutedChatMentionsDefaults: defaults)
+        #expect(model.mentionsBreakThroughMute)
+
+        model.setMentionsBreakThroughMute(false)
+        #expect(!model.mentionsBreakThroughMute)
+        #expect(!MutedChatMentionsStore.mentionsBreakThroughMute(defaults: defaults))
+    }
+
+    @Test func anUnresolvableSuiteShowsThePolicyStillInForce() {
+        let model = NotificationSettingsViewModel(previewDefaults: nil, mutedChatMentionsDefaults: nil)
+        #expect(!model.mentionsBreakThroughMute)
+
+        model.setMentionsBreakThroughMute(true)
+        #expect(!model.mentionsBreakThroughMute)
+    }
+}
+
 struct ChatListMuteSwipeActionsTests {
 
     @Test func unmutedRowOffersMuteOnly() {

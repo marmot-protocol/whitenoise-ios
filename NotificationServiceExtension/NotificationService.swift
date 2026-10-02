@@ -134,8 +134,10 @@ final class NotificationService: UNNotificationServiceExtension {
                 }
                 // One shared-defaults read per wake; per-record lookups hit the
                 // in-memory snapshots. A nil mode snapshot means the shared suite
-                // couldn't be resolved, so delivery fails safe (all suppressed).
+                // couldn't be resolved, so delivery fails safe (all suppressed);
+                // the mention preference reads as off in that case too.
                 let notifyModeSnapshot = ChatMuteStore.notifyModeSnapshot()
+                let mentionsBreakThroughMute = MutedChatMentionsStore.mentionsBreakThroughMute()
                 let muteEvaluationTime = Date.now
                 let contactNicknames = ContactNicknameStore.nicknamesByKey()
                 let previewMode = NotificationPreviewStore.mode()
@@ -158,7 +160,8 @@ final class NotificationService: UNNotificationServiceExtension {
                     NotificationPresentationPolicy.accountRefsRequiringArchivedLookup(
                         for: result,
                         localNotificationsEnabled: localNotificationsEnabled,
-                        notifyMode: notifyMode
+                        notifyMode: notifyMode,
+                        mentionsBreakThroughMute: mentionsBreakThroughMute
                     )
                 let archivedChatKeys = await NotificationServiceStorageReader.archivedChatKeys(
                     marmot: marmot,
@@ -177,6 +180,7 @@ final class NotificationService: UNNotificationServiceExtension {
                         )
                     },
                     notifyMode: notifyMode,
+                    mentionsBreakThroughMute: mentionsBreakThroughMute,
                     nickname: { ownerAccountIdHex, contactAccountIdHex in
                         ContactNicknameStore.nickname(
                             ownerAccountIdHex: ownerAccountIdHex,

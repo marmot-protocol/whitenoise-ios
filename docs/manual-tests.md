@@ -1035,6 +1035,21 @@ the test device.
       @-mentioning you banners normally.
 - [ ] "Nothing" behaves like mute; the chat-list swipe Mute/Unmute stays in
       sync with the details picker.
+- [ ] Mentions in muted chats (two devices, native push on): on device B mute
+      a shared chat three ways in turn — swipe Mute → 1 Hour, Mute → Always,
+      and Notifications → "Nothing". With Settings → Notifications → Mentions
+      in Muted Chats ON (the default on a fresh install and on upgrade), device
+      A sends a plain message and then one @-mentioning B, with B foregrounded
+      on the Chats list, foregrounded in a different chat, backgrounded, and
+      force-quit. Only the mention notifies, with sound, in every state; the
+      plain message stays silent (foreground: no banner; background/killed: a
+      quiet Notification Center entry at most). With B viewing the muted chat
+      itself, neither shows a banner. The mute picker message and the
+      "Nothing" footer say mentions still notify.
+- [ ] Repeat with Mentions in Muted Chats OFF: neither message notifies in any
+      state, the mute picker and "Nothing" footer drop the mention sentence,
+      and turning Local Notifications off disables the toggle. After a 1 Hour
+      mute expires, both messages notify normally whatever the toggle.
 - [ ] With local notifications OFF and native push ON, an incoming message
       produces no audible banner — the generic record lands quietly in
       Notification Center (#675). Currently expected to FAIL (audible generic

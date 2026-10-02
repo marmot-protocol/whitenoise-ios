@@ -9,6 +9,7 @@ nonisolated enum NotificationPresentationPolicy {
         isArchived: Bool = false,
         notifyMode: ChatNotifyMode = .all,
         isMention: Bool = false,
+        mentionsBreakThroughMute: Bool = false,
         appSceneActive: Bool,
         updateAccountRef: String,
         updateGroupIdHex: String,
@@ -16,18 +17,31 @@ nonisolated enum NotificationPresentationPolicy {
         visibleGroupIdHex: String?
     ) -> Bool {
         guard localNotificationsEnabled, !isArchived else { return false }
-        switch notifyMode {
-        case .all:
-            break
-        case .mentionsOnly:
-            guard isMention else { return false }
-        case .nothing:
-            return false
-        }
+        guard notifyModeAllows(
+            notifyMode,
+            isMention: isMention,
+            mentionsBreakThroughMute: mentionsBreakThroughMute
+        ) else { return false }
         guard appSceneActive else { return true }
         guard let visibleAccountRef, let visibleGroupIdHex else { return true }
         return visibleAccountRef != updateAccountRef
             || visibleGroupIdHex != updateGroupIdHex
+    }
+
+    /// The per-chat gate every delivery path shares. A muted chat (`.nothing`,
+    /// which is also what a timed mute and Mute → Always read as) passes only a
+    /// direct mention, and only when the device-wide `MutedChatMentionsStore`
+    /// preference lets mentions break through.
+    static func notifyModeAllows(
+        _ notifyMode: ChatNotifyMode,
+        isMention: Bool,
+        mentionsBreakThroughMute: Bool
+    ) -> Bool {
+        switch notifyMode {
+        case .all: true
+        case .mentionsOnly: isMention
+        case .nothing: isMention && mentionsBreakThroughMute
+        }
     }
 
     /// `notifyMode` is keyed by (accountIdHex, groupIdHex) — the mute store's
@@ -37,6 +51,7 @@ nonisolated enum NotificationPresentationPolicy {
         localNotificationsEnabled: (String) -> Bool = { _ in true },
         isArchived: (String, String) -> Bool = { _, _ in false },
         notifyMode: (String, String) -> ChatNotifyMode = { _, _ in .all },
+        mentionsBreakThroughMute: Bool = false,
         nickname: (String, String) -> String? = { _, _ in nil },
         previewMode: NotificationPreviewMode = .senderAndMessage
     ) -> NotificationServiceRenderDecision {
@@ -48,15 +63,16 @@ nonisolated enum NotificationPresentationPolicy {
                 isArchived: isArchived
             )
             let allowedUpdates = updates.filter { update in
-                switch notifyMode(update.accountIdHex, update.groupIdHex) {
-                case .all: true
-                case .mentionsOnly: update.isMention
-                case .nothing: false
-                }
+                notifyModeAllows(
+                    notifyMode(update.accountIdHex, update.groupIdHex),
+                    isMention: update.isMention,
+                    mentionsBreakThroughMute: mentionsBreakThroughMute
+                )
             }
             // The alert that woke the extension cannot be dropped, so a wake
-            // whose every record is suppressed — muted or mentions-only chats,
-            // disabled local notifications, archived chats, self-messages —
+            // whose every record is suppressed — muted chats without a
+            // breaking-through mention, mentions-only chats, disabled local
+            // notifications, archived chats, self-messages —
             // delivers quietly instead of falling back to audible generic
             // content the user asked not to hear.
             if allowedUpdates.isEmpty, !collection.notifications.isEmpty {
@@ -90,20 +106,19 @@ nonisolated enum NotificationPresentationPolicy {
     static func accountRefsRequiringArchivedLookup(
         for collection: BackgroundNotificationCollectionFfi,
         localNotificationsEnabled: (String) -> Bool = { _ in true },
-        notifyMode: (String, String) -> ChatNotifyMode = { _, _ in .all }
+        notifyMode: (String, String) -> ChatNotifyMode = { _, _ in .all },
+        mentionsBreakThroughMute: Bool = false
     ) -> Set<String> {
         Set(collection.notifications.compactMap { update in
             guard !update.isFromSelf,
-                  localNotificationsEnabled(update.accountRef)
+                  localNotificationsEnabled(update.accountRef),
+                  notifyModeAllows(
+                      notifyMode(update.accountIdHex, update.groupIdHex),
+                      isMention: update.isMention,
+                      mentionsBreakThroughMute: mentionsBreakThroughMute
+                  )
             else { return nil }
-            switch notifyMode(update.accountIdHex, update.groupIdHex) {
-            case .all:
-                return update.accountRef
-            case .mentionsOnly:
-                return update.isMention ? update.accountRef : nil
-            case .nothing:
-                return nil
-            }
+            return update.accountRef
         })
     }
 

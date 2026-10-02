@@ -119775,6 +119775,242 @@
           }
         }
       }
+    },
+    "Mentions in Muted Chats" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erwähnungen in stummgeschalteten Chats"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menciones en chats silenciados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mentions dans les discussions en sourdine"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menzioni nelle chat silenziate"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menções em chats silenciados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Упоминания в чатах без звука"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessize alınmış sohbetlerde bahsetmeler"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静音聊天中的提及"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "靜音聊天室中的提及"
+          }
+        }
+      }
+    },
+    "When this is on, mentions of you still notify in muted chats, including chats set to \"Nothing\". Applies to all profiles on this device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn aktiviert, benachrichtigen dich Erwähnungen auch in stummgeschalteten Chats, einschließlich Chats mit „Nichts“. Gilt für alle Profile auf diesem Gerät."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si está activado, las menciones te siguen notificando en los chats silenciados, incluidos los chats configurados en \"Nada\". Se aplica a todos los perfiles de este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque cette option est activée, les mentions vous notifient toujours dans les discussions en sourdine, y compris celles réglées sur « Rien ». S’applique à tous les profils de cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando è attiva, le menzioni ti notificano anche nelle chat silenziate, comprese quelle impostate su \"Niente\". Si applica a tutti i profili su questo dispositivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando ativado, as menções ainda notificam você em chats silenciados, incluindo chats definidos como \"Nada\". Aplica-se a todos os perfis neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если включено, упоминания по-прежнему приходят как уведомления в чатах без звука, включая чаты с режимом «Ничего». Действует для всех профилей на этом устройстве."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Açık olduğunda, \"Hiçbiri\" olarak ayarlananlar dahil sessize alınmış sohbetlerde sizden bahsedilmesi yine bildirim gönderir. Bu cihazdaki tüm profiller için geçerlidir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启后，在已静音的聊天中（包括设为“无”的聊天），有人提及你时仍会通知你。适用于此设备上的所有个人资料。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "開啟後，在已靜音的聊天室中（包括設為「無」的聊天室），有人提及你時仍會通知你。適用於此裝置上的所有個人檔案。"
+          }
+        }
+      }
+    },
+    "Choose how long to mute %@. You'll still be notified when someone mentions you." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle, wie lange %@ stummgeschaltet werden soll. Wenn dich jemand erwähnt, wirst du trotzdem benachrichtigt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige cuánto tiempo silenciar %@. Seguirás recibiendo notificaciones cuando alguien te mencione."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez la durée de désactivation des notifications pour %@. Vous serez toujours notifié lorsque quelqu'un vous mentionne."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli per quanto tempo silenziare %@. Riceverai comunque una notifica quando qualcuno ti menziona."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha por quanto tempo silenciar %@. Você ainda será notificado quando alguém mencionar você."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите, на какое время отключить уведомления для %@. Вы всё равно получите уведомление, если вас упомянут."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ için bildirimlerin ne kadar süre sessize alınacağını seçin. Biri sizden bahsettiğinde yine de bildirim alırsınız."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择将 %@ 静音多长时间。有人提及你时，你仍会收到通知。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇將 %@ 靜音多久。有人提及你時，你仍會收到通知。"
+          }
+        }
+      }
+    },
+    "Applies on this device only. Messages still arrive and count as unread. With \"Only mentions\", this chat notifies only when someone mentions you. With \"Nothing\", mentions still notify unless \"Mentions in Muted Chats\" is turned off in Notifications settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt nur auf diesem Gerät. Nachrichten kommen weiterhin an und zählen als ungelesen. Mit „Nur Erwähnungen“ benachrichtigt dieser Chat nur, wenn dich jemand erwähnt. Mit „Nichts“ benachrichtigen Erwähnungen weiterhin, außer „Erwähnungen in stummgeschalteten Chats“ ist in den Benachrichtigungseinstellungen deaktiviert."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se aplica solo en este dispositivo. Los mensajes siguen llegando y cuentan como no leídos. Con \"Solo menciones\", este chat solo notifica cuando alguien te menciona. Con \"Nada\", las menciones siguen notificando, salvo que desactives \"Menciones en chats silenciados\" en los ajustes de Notificaciones."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S'applique uniquement à cet appareil. Les messages continuent d'arriver et comptent comme non lus. Avec « Mentions uniquement », cette discussion ne notifie que lorsque quelqu'un vous mentionne. Avec « Rien », les mentions vous notifient toujours, sauf si « Mentions dans les discussions en sourdine » est désactivé dans les réglages des notifications."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vale solo su questo dispositivo. I messaggi continuano ad arrivare e contano come non letti. Con \"Solo menzioni\", questa chat notifica solo quando qualcuno ti menziona. Con \"Niente\", le menzioni notificano comunque, a meno che \"Menzioni nelle chat silenziate\" non sia disattivato nelle impostazioni delle notifiche."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aplica-se apenas a este dispositivo. As mensagens continuam chegando e contam como não lidas. Com \"Apenas menções\", este chat só notifica quando alguém menciona você. Com \"Nada\", as menções ainda notificam, a menos que \"Menções em chats silenciados\" esteja desativado nos ajustes de Notificações."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Действует только на этом устройстве. Сообщения по-прежнему приходят и считаются непрочитанными. С «Только упоминания» этот чат уведомляет, только когда вас упоминают. С «Ничего» упоминания по-прежнему уведомляют, если в настройках уведомлений не выключен параметр «Упоминания в чатах без звука»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca bu cihazda geçerlidir. Mesajlar gelmeye ve okunmamış sayılmaya devam eder. \"Yalnızca bahsetmeler\" ile bu sohbet yalnızca biri sizden bahsettiğinde bildirir. \"Hiçbiri\" ile, Bildirim ayarlarında \"Sessize alınmış sohbetlerde bahsetmeler\" kapatılmadıkça bahsetmeler yine bildirim gönderir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅适用于此设备。消息仍会送达并计为未读。选择“仅提及”后，只有当有人提及你时，此聊天才会通知。选择“无”后，除非在通知设置中关闭“静音聊天中的提及”，有人提及你时仍会通知。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "僅適用於此裝置。訊息仍會送達並計為未讀。選擇「僅提及」後，只有當有人提及你時，此聊天室才會通知。選擇「無」後，除非在通知設定中關閉「靜音聊天室中的提及」，有人提及你時仍會通知。"
+          }
+        }
+      }
     }
   },
   "version" : "1.1"
