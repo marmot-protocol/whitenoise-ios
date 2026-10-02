@@ -72,6 +72,31 @@ struct ChatSurfacePresentationTests {
         #expect(!MessageMediaUploadPresentation.showsIndicator(status: .sending, items: []))
     }
 
+    @Test func pendingAudioShowsUploadInsideItsPillInsteadOfTheMediaOverlay() {
+        let pendingAudio = MessageMediaAttachment(
+            id: "pending-voice",
+            reference: nil,
+            fileName: "voice.m4a",
+            mediaType: "audio/mp4",
+            dim: nil,
+            localData: Data([1])
+        )
+        let pendingImage = MessageMediaAttachment(
+            id: "pending-image",
+            reference: nil,
+            fileName: "photo.jpg",
+            mediaType: "image/jpeg",
+            dim: "640x480",
+            localData: Data([1])
+        )
+
+        #expect(!MessageMediaUploadPresentation.showsIndicator(status: .sending, items: [pendingAudio]))
+        #expect(MessageMediaUploadPresentation.showsIndicator(status: .sending, items: [pendingAudio, pendingImage]))
+        #expect(MessageMediaUploadPresentation.isUploading(pendingAudio, status: .sending))
+        #expect(!MessageMediaUploadPresentation.isUploading(pendingAudio, status: .sent))
+        #expect(!MessageMediaUploadPresentation.isUploading(pendingAudio, status: .failed))
+    }
+
     @Test func reactionSummaryCombinesEmojisAndTotalCount() throws {
         let summary = try #require(ReactionSummaryPresentation.value(from: [
             .init(emoji: "👍", count: 4, mine: false),

@@ -603,6 +603,7 @@ struct MessageBubble: View {
         MessageMediaAttachmentContent(
             items: mediaItems,
             isFromMe: isFromMe,
+            status: status,
             maxWidth: mediaGridWidth,
             fillsWidth: singleVisualFillsBubbleWidth,
             onLoadMedia: onLoadMedia,
@@ -1565,6 +1566,7 @@ private struct MessageMediaRoundedTileShape: Shape {
 private struct MessageMediaAttachmentContent: View {
     let items: [MessageMediaAttachment]
     let isFromMe: Bool
+    let status: MessageStatus
     let maxWidth: CGFloat
     let fillsWidth: Bool
     let onLoadMedia: ConversationMediaLoader
@@ -1647,6 +1649,7 @@ private struct MessageMediaAttachmentContent: View {
                             MessageAudioAttachmentView(
                                 item: item,
                                 isFromMe: isFromMe,
+                                isUploading: MessageMediaUploadPresentation.isUploading(item, status: status),
                                 width: maxWidth,
                                 onLoadMedia: onLoadMedia
                             )
@@ -2851,6 +2854,7 @@ private enum MediaPrefetchRegistry {
 private struct MessageAudioAttachmentView: View {
     let item: MessageMediaAttachment
     let isFromMe: Bool
+    let isUploading: Bool
     let width: CGFloat
     let onLoadMedia: ConversationMediaLoader
 
@@ -2868,7 +2872,9 @@ private struct MessageAudioAttachmentView: View {
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
 
     @ScaledMetric(relativeTo: .subheadline)
-    private var playIconSize: CGFloat = 18
+    private var playIconSize: CGFloat = 16
+    @ScaledMetric(relativeTo: .subheadline)
+    private var controlDiameter: CGFloat = 36
     @ScaledMetric(relativeTo: .caption)
     private var speedBadgeWidth: CGFloat = 38
     @ScaledMetric(relativeTo: .caption)
@@ -2881,11 +2887,13 @@ private struct MessageAudioAttachmentView: View {
     init(
         item: MessageMediaAttachment,
         isFromMe: Bool,
+        isUploading: Bool,
         width: CGFloat,
         onLoadMedia: ConversationMediaLoader
     ) {
         self.item = item
         self.isFromMe = isFromMe
+        self.isUploading = isUploading
         self.width = width
         self.onLoadMedia = onLoadMedia
         _durationSeconds = State(initialValue: item.durationSeconds)
@@ -2897,9 +2905,10 @@ private struct MessageAudioAttachmentView: View {
             HStack(spacing: 10) {
                 Button(action: togglePlayback) {
                     Group {
-                        if isLoading {
+                        if isLoading || isUploading {
                             ProgressView()
                                 .controlSize(.small)
+                                .tint(foregroundColor)
                         } else {
                             Image(systemName: MessageAudioBubblePresentation.playbackIconName(
                                 isPlaying: isPlaying,
@@ -2908,12 +2917,15 @@ private struct MessageAudioAttachmentView: View {
                             .font(.system(size: playIconSize, weight: .semibold))
                         }
                     }
+                    .frame(width: controlDiameter, height: controlDiameter)
+                    .background(controlFill, in: Circle())
                     .frame(width: 44, height: 44)
-                    .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.primary)
+                    .foregroundStyle(foregroundColor)
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isPlaying ? "Pause audio message" : "Play audio message")
+                .disabled(isUploading)
+                .accessibilityLabel(isUploading ? L10n.string("Sending…") : isPlaying ? "Pause audio message" : "Play audio message")
 
                 VStack(alignment: .leading, spacing: 5) {
                     AudioWaveformView(
@@ -2934,10 +2946,10 @@ private struct MessageAudioAttachmentView: View {
                     Text(speedLabel)
                         .font(.caption.weight(.bold))
                         .frame(width: speedBadgeWidth, height: speedBadgeHeight)
-                        .background(isFromMe ? MessageBubblePalette.sentForeground.opacity(0.18) : Color.primary.opacity(0.08), in: Capsule())
+                        .background(controlFill, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(isFromMe ? MessageBubblePalette.sentForeground : Color.primary)
+                .foregroundStyle(foregroundColor)
                 .accessibilityLabel("Playback speed")
             }
             .padding(.horizontal, 12)
@@ -2979,6 +2991,14 @@ private struct MessageAudioAttachmentView: View {
         }
         guard AudioPlaybackLoadOutcome.resolve(isCancelled: Task.isCancelled) == .proceed else { return }
         applyMetadata(await audioMetadata(from: data))
+    }
+
+    private var foregroundColor: Color {
+        isFromMe ? MessageBubblePalette.sentForeground : Color.primary
+    }
+
+    private var controlFill: Color {
+        isFromMe ? MessageBubblePalette.sentForeground.opacity(0.18) : Color.primary.opacity(0.08)
     }
 
     private var speedLabel: String {

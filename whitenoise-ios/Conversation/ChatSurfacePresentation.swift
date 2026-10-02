@@ -325,8 +325,11 @@ nonisolated enum MessageRetryPresentation {
 
 enum MessageMediaUploadPresentation {
     static func showsIndicator(status: MessageStatus, items: [MessageMediaAttachment]) -> Bool {
-        guard status == .sending else { return false }
-        return items.contains { $0.reference == nil && $0.localData != nil }
+        items.contains { $0.kind != .audio && isUploading($0, status: status) }
+    }
+
+    static func isUploading(_ item: MessageMediaAttachment, status: MessageStatus) -> Bool {
+        status == .sending && item.reference == nil && item.localData != nil
     }
 }
 
