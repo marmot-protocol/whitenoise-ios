@@ -276,6 +276,192 @@ before every release tag.
       network restored, the attachment downloads and opens. Repeat for a voice
       note, a document and a fullscreen gallery page's Retry button.
 
+## In-place MarmotKit upgrade
+
+Run this before releasing any MarmotKit bump that advances the account storage
+schema. Check the "Storage upgrade" section of MDK's integration guide for the
+new release. The case installs a build on MarmotKit N over a populated install
+on N−1 without erasing it. MDK migrations are forward-only, so take the backup
+before the new build first opens the store.
+
+### Builds
+
+- **From (N−1):** the last release tag pinned to the old MarmotKit. Find it with
+  `git tag --sort=-creatordate`, then
+  `git show <tag>:Packages/MarmotKit/Package.swift | grep marmotKitReleaseID`.
+  Build it from its own worktree, for example
+  `git worktree add ../wn-<tag> <tag>`. The binary pin and checksum come from
+  the tag, so SwiftPM fetches the matching XCFramework. Use a separate
+  `-derivedDataPath` so the two builds don't share package caches. Copy your
+  ignored `Config/TelemetrySecrets.xcconfig` into that worktree only if the run
+  needs telemetry.
+- **To (N):** the release candidate on the new MarmotKit, in the **same flavor**.
+  Production and staging use different bundle IDs and App Groups, so a
+  cross-flavor install never touches the old store. Give the candidate a higher
+  `CURRENT_PROJECT_VERSION` than the old tag. TestFlight requires it, and it
+  keeps the two builds apart in the results.
+- The forward upgrade can use TestFlight or Xcode. The downgrade check cannot
+  use TestFlight: it rejects a lower build at install time, before the old
+  binary opens the store, so that rejection is not the schema refusal. Install
+  the old tag over the existing container with Xcode or `xcrun devicectl`,
+  which can replace a higher build number without removing the app. Never
+  delete the app between builds; that deletes the store.
+
+### Fixture
+
+- [ ] On the old build, populate a test device with at least three profiles,
+      each with direct messages and groups of 3+ members. Include a long
+      conversation that needs several pages of history.
+- [ ] Leave state in flight. Include an attachment still pending because the
+      device was offline, an attachment parked because its media type is set
+      to Never, a failed or cancelled attachment, and a message still sending
+      (relays offline).
+- [ ] Leave unsent drafts in several chats. Mute one chat, set another to
+      mentions only, and archive one. Give at least one profile a custom relay
+      list that differs from the defaults.
+- [ ] Record the fixture shape for the results template: profiles, chats per
+      profile, the offline-pending, Never-parked and failed attachments,
+      drafts, mutes and custom relays.
+- [ ] Take the backup. On a device, make an **encrypted** Finder backup so
+      Keychain account secrets are included. A restore brings App Group data
+      back only for an app iOS reinstalls. An Xcode-installed build may not
+      return, so note which you used. If a simulator copy of the fixture also
+      exists, shut it down and `xcrun simctl clone <udid> <name>` it. The clone
+      keeps the old build and its data, giving a reliable rollback.
+
+### Upgrade and exercise
+
+- [ ] Install the new build over the old one and cold-launch it. Every profile
+      opens without a migration error, startup failure screen, re-import prompt,
+      or a full history replay.
+- [ ] Switch through every profile. Chat titles, avatars, unread counts, pins,
+      archive state and last-message previews match the fixture.
+- [ ] Open the long conversation and page back to its start. No gap, duplicate
+      or reordered message. Drafts are where they were left.
+- [ ] Send and receive text, a reply, a reaction and media in a DM and a group
+      with a second device. Each message appears exactly once on both sides.
+- [ ] Bring relays back online. The message left sending delivers once. The
+      offline-pending attachment completes, or ends in a clean failed state
+      with a deliberate retry. None spins indefinitely or re-uploads by itself.
+      The failed or cancelled attachment stays terminal until you retry it.
+- [ ] The Never-parked attachment stays parked with relays online: Never is
+      still honored after the upgrade. Then tap it, or set its media type to
+      allow downloads, and confirm it completes.
+- [ ] Notifications: foreground and background receipt, including the NSE.
+      Muted and mentions-only chats keep their modes.
+- [ ] Settings → relays shows each profile's custom relay list unchanged.
+- [ ] Force-quit and relaunch twice. Each launch opens the same state with no
+      new migration work, duplicated rows or lost drafts.
+
+### Expected results
+
+- Every profile opens on the first launch without a migration error or replay.
+- History, drafts, mutes, notification modes, archive state and relay lists
+  survive intact.
+- Offline-pending attachments complete, or fail cleanly within the new
+  release's retry policy. A Never-parked attachment waits until you tap it or
+  allow its media type.
+- Nothing is duplicated: messages, chats, reactions, uploads or notifications.
+
+### Downgrade check
+
+Do this last, after recording the upgrade results, on the test device or the
+simulator clone.
+
+- [ ] Install the old tag over the upgraded store with Xcode or
+      `xcrun devicectl`, not TestFlight. It must refuse the store,
+      either with the startup failure screen or with the affected profiles
+      unavailable. It must not open chats, show empty history, or rewrite data.
+      Do not use Sign Out, Delete Profile, Erase App Data or nsec re-import
+      while the old build is installed.
+- [ ] Reinstall the new build. It opens the upgraded store unchanged.
+- [ ] Confirm the only way back to the old build is the pre-upgrade backup.
+      An encrypted Finder backup restores app data and Keychain, not an
+      Xcode-installed binary. Restore it, install the N−1 build, then launch
+      that build and check that it opens the fixture as recorded. Do not
+      install or launch the N build first: it re-runs the migration and the
+      pre-upgrade fixture is gone. Booting the simulator clone is the other
+      path; it already contains the old build and its data. Never remove
+      migration records to force a downgrade.
+
+### MarmotKit 0.11.0 → 0.12.0
+
+- **From:** `v2026.9.29`, White Noise 2026.9.29 (43), the last release tag on
+  MarmotKit 0.11.0 (`marmotkit-v0.11.0`). **To:** a 0.12.0 release candidate
+  from `master` with its build number above 43. `master` still carries 43 from
+  the last release.
+- Account databases advance from schema 98 to 101 on first open:
+  - **0099** adds a `preparation_deferrals` counter. Missing-key attachment
+    deferrals back off and fail on the sixth consecutive miss.
+  - **0100** replaces an attachment-priority trigger. A tapped attachment keeps
+    its explicit priority when its history row is reprojected.
+  - **0101** adds bounded outgoing-upload retention records, at most 256
+    outstanding, for genuinely sent files.
+- These add a column, a trigger and small tables; they do not rebuild message
+  history. First launch should feel like a normal cold start.
+- [ ] **0099:** no screen shows the deferral count. Leave an attachment
+      pending on a missing key and wait 10 minutes; deferrals back off from
+      15 to 240 seconds and fail after about eight minutes. It reaches a
+      terminal failure and stays there. An attachment whose key does arrive
+      still completes.
+- [ ] **0100:** not observable from the UI. Scrolling is not a reprojection,
+      no screen shows queue order, and a single tapped attachment outranks
+      automatic jobs even with the old trigger. Record it as covered by MDK's
+      released regression test
+      `explicit_priority_survives_same_source_reprojection`. A UI refresh does
+      not count as a pass.
+- [ ] Only once taps use `requestExplicitAttachment` (#1133) is in the build:
+      tap two slow attachments while they download; both complete. This does
+      not verify 0100.
+- [ ] **0101:** send a file, relaunch, turn the network off, and open the
+      sent file on the sender. It opens from the local copy. The 256-record
+      cap needs no manual run.
+- Results rows: "0099 missing-key attachment fails and stays failed",
+  "0100 explicit priority (covered by MDK test)" and "0101 sent file opens
+  offline".
+
+### Results template
+
+Copy this into the release issue or PR.
+
+```markdown
+### In-place MarmotKit upgrade: <from MarmotKit> → <to MarmotKit>
+
+- From build: <version> (<build>), tag <tag>, MarmotKit <version>
+- To build: <version> (<build>), commit <sha>, MarmotKit <version>
+- Flavor and install method: <Production/Staging>, upgrade via
+  <Xcode/devicectl/TestFlight>, downgrade via <Xcode/devicectl>
+- Devices and iOS versions: <device, iOS x.y>; <device, iOS x.y>
+- Backup: <encrypted Finder backup / simulator clone / both>
+- Fixture: <n> profiles; <n> DMs and <n> groups per profile; longest chat
+  <n> messages; offline-pending attachments <n>; Never-parked attachments
+  <n>; failed/cancelled attachments <n>; messages left sending <n>; drafts
+  <n>; muted/mentions-only/archived chats <n>; custom relay lists <n>
+
+| Step | Result | Notes |
+| --- | --- | --- |
+| Cold start, no migration error or replay | Pass/Fail | |
+| Profile switching | Pass/Fail | |
+| Chat list | Pass/Fail | |
+| Conversation paging | Pass/Fail | |
+| Drafts intact | Pass/Fail | |
+| Send/receive, no duplicates | Pass/Fail | |
+| Offline-pending attachments complete or fail cleanly | Pass/Fail | |
+| Never-parked attachment stays parked, completes after tap/allow | Pass/Fail | |
+| Failed/cancelled attachments stay terminal | Pass/Fail | |
+| Release-specific: <check> (one row each) | Pass/Fail/Covered by MDK test | |
+| Notifications, mutes and modes | Pass/Fail | |
+| Relay settings intact | Pass/Fail | |
+| Force-quit and relaunch (1) | Pass/Fail | |
+| Force-quit and relaunch (2) | Pass/Fail | |
+| Old build refuses upgraded store | Pass/Fail | |
+| New build reopens upgraded store | Pass/Fail | |
+| Backup restored the pre-upgrade store | Pass/Fail/Not run | |
+| Reinstalled old build opened restored fixture | Pass/Fail/Not run | |
+
+Notes: <anything unexpected, with diagnostics log excerpts>
+```
+
 ## Onboarding
 
 - [ ] Cold launch on a clean install lands on **Welcome** within ~1s.
