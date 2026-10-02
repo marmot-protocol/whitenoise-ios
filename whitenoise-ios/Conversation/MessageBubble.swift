@@ -158,6 +158,7 @@ struct MessageBubble: View {
     @State private var mediaGallery: MessageMediaGallery?
     @State private var isBodyExpanded = false
     @State private var pendingExternalLink: PendingMessageExternalLink?
+    @State private var linkPreviewSettings = LinkPreviewSettingsStore.shared
 
     private var isFromMe: Bool { !usesReviewLayout && record.direction == "sent" }
 
@@ -212,6 +213,11 @@ struct MessageBubble: View {
     private var remoteGiphyMedia: RemoteGiphyMedia? {
         guard debugStyle == nil, mediaItems.isEmpty else { return nil }
         return RemoteGiphyMedia.parse(wireText: record.plaintext)
+    }
+
+    private var linkPreviewURL: URL? {
+        guard debugStyle == nil, linkPreviewSettings.showsPreviews else { return nil }
+        return LinkPreviewMetadata.previewURL(in: markdownBlocks)
     }
 
     private var showsStandardBody: Bool {
@@ -459,6 +465,12 @@ struct MessageBubble: View {
                 if let sharedLocation {
                     sharedLocationBody(sharedLocation)
                 } else {
+                    if let linkPreviewURL {
+                        LinkPreviewCard(url: linkPreviewURL, isFromMe: isFromMe) {
+                            _ = handleMessageLink(linkPreviewURL)
+                        }
+                        .id(linkPreviewURL)
+                    }
                     messageBodyText(hasReply: replyPreview != nil)
                 }
                 if let debugStyle, debugStyle.isUserVisibleBubble {

@@ -1161,6 +1161,8 @@ final class AppState {
             MediaAutoDownloadStore.shared.resetToDefaults()
             MediaQualityStore.setQuality(.standard)
             RemoteGIFLoadingStore.shared.setAutomaticallyLoads(false)
+            LinkPreviewSettingsStore.shared.setShowsPreviews(false)
+            LinkPreviewLoader.clearCaches()
             if let bundleID = Bundle.main.bundleIdentifier {
                 UserDefaults.standard.removePersistentDomain(forName: bundleID)
             }
