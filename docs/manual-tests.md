@@ -275,6 +275,13 @@ before every release tag.
       Downloads). This is the only action that starts a fresh download; with the
       network restored, the attachment downloads and opens. Repeat for a voice
       note, a document and a fullscreen gallery page's Retry button.
+- [ ] Set image and video auto-download to Never, then open a group's details
+      and View Shared Media. Uncached tiles show a download arrow and fetch
+      nothing until tapped; a tap downloads and opens. Restore auto-download:
+      visible tiles load on their own. A tile whose automatic load failed does
+      not show Retry and stays failed when scrolled away and back; its first
+      tap surfaces the failure, and only the following Retry tap starts a fresh
+      download.
 
 ## In-place MarmotKit upgrade
 
