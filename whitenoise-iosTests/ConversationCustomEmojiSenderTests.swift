@@ -227,14 +227,29 @@ struct ConversationCustomEmojiSenderTests {
         #expect(harness.messages.isEmpty)
     }
 
+    @Test func shortcodeAliasesOfOneImageSendOneAttachment() async throws {
+        let harness = Harness()
+        let party = harness.sendable("party", bytes: "same-png")
+        let celebrate = harness.sendable("celebrate", bytes: "same-png")
+        try await harness.sender.sendMessage(text: ":party: :celebrate:", replyTargetId: nil, emoji: [party, celebrate])
+        #expect(harness.uploads.count == 1)
+        let sent = try #require(harness.messages.first)
+        #expect(sent.attachments.count == 1)
+        #expect(sent.tags == [
+            ["emoji", "party", "https://mine.example/1"],
+            ["emoji", "celebrate", "https://mine.example/1"],
+        ])
+    }
+
     // MARK: Composer hand-off
 
     @MainActor final class SubmitterHarness {
         var sends = 0
         var events: [String] = []
         var sendError: Error?
-        var draftGate: CheckedContinuation<Void, Never>?
-        var holdsDraftCleanup = false
+        var claimed: UUID?
+        var finishGate: CheckedContinuation<Void, Never>?
+        var holdsFinish = false
 
         lazy var submitter = CustomEmojiComposerSubmitter(
             send: { [weak self] _, _, _ in
@@ -243,12 +258,19 @@ struct ConversationCustomEmojiSenderTests {
                 if let sendError { throw sendError }
                 return []
             },
-            completeDraft: { [weak self] _ in
+            claim: { [weak self] _ in
+                guard let self, self.claimed == nil else { return nil }
+                let id = UUID()
+                self.claimed = id
+                return id
+            },
+            finish: { [weak self] claim, _, accepted in
                 guard let self else { return }
-                if self.holdsDraftCleanup {
-                    await withCheckedContinuation { self.draftGate = $0 }
+                if self.holdsFinish {
+                    await withCheckedContinuation { self.finishGate = $0 }
                 }
-                self.events.append("draft")
+                self.events.append(accepted ? "accepted" : "rejected")
+                if self.claimed == claim { self.claimed = nil }
             },
             storeSentBytes: { [weak self] _, _ in self?.events.append("cache") },
             cacheGeneration: { 0 }
@@ -259,39 +281,85 @@ struct ConversationCustomEmojiSenderTests {
             draft: ConversationDraftSnapshot(canonicalText: "yay :party:", replyToMessageIdHex: nil, mediaAttachments: []))
     }
 
-    @Test func sendStaysInFlightUntilDraftAndComposerCleanupFinish() async {
+    @Test func claimIsHeldUntilDraftCleanupFinishesAndCacheWritesComeLast() async {
         let harness = SubmitterHarness()
-        harness.holdsDraftCleanup = true
-        let first = Task {
-            await harness.submitter.submit(harness.submission, emoji: []) { harness.events.append("composer") }
-        }
-        while harness.draftGate == nil { await Task.yield() }
+        harness.holdsFinish = true
+        let first = Task { await harness.submitter.submit(harness.submission, emoji: []) }
+        while harness.finishGate == nil { await Task.yield() }
 
-        // Accepted by MDK, cleanup pending: Send and attachments stay blocked.
-        #expect(harness.submitter.isSending)
-        #expect(!harness.submitter.state.admitsNewAttachments)
-        let second = await harness.submitter.submit(harness.submission, emoji: []) { harness.events.append("second") }
-        #expect(!second)
+        // Accepted by MDK, cleanup pending: the claim still refuses a second send.
+        #expect(harness.claimed != nil)
+        #expect(!(await harness.submitter.submit(harness.submission, emoji: [])))
         #expect(harness.sends == 1)
 
-        harness.draftGate?.resume()
+        harness.finishGate?.resume()
         #expect(await first.value)
-        // Optional cache writes come only after the composer was cleared.
-        #expect(harness.events == ["draft", "composer", "cache"])
-        #expect(!harness.submitter.isSending)
-        #expect(harness.submitter.state.admitsNewAttachments)
+        #expect(harness.events == ["accepted", "cache"])
+        #expect(harness.claimed == nil)
     }
 
-    @Test func failedSendKeepsTheDraftAndAllowsARetry() async {
+    @Test func failedSendReleasesTheClaimKeepsTheErrorAndAllowsARetry() async {
         let harness = SubmitterHarness()
         harness.sendError = CustomEmojiSendError.uploadFailed
-        #expect(!(await harness.submitter.submit(harness.submission, emoji: []) { harness.events.append("composer") }))
+        #expect(!(await harness.submitter.submit(harness.submission, emoji: [])))
         #expect(harness.submitter.errorMessage == CustomEmojiSendError.uploadFailed.message)
-        #expect(harness.events.isEmpty)
+        #expect(harness.events == ["rejected"])
+        #expect(harness.claimed == nil)
 
         harness.sendError = nil
-        #expect(await harness.submitter.submit(harness.submission, emoji: []) { harness.events.append("composer") })
+        #expect(await harness.submitter.submit(harness.submission, emoji: []))
         #expect(harness.submitter.errorMessage == nil)
-        #expect(harness.events == ["draft", "composer", "cache"])
+        #expect(harness.events == ["rejected", "accepted", "cache"])
+    }
+
+    // MARK: Reconciling the composer on screen
+
+    @Test func onlyAnUnchangedComposerClearsAfterAcceptance() {
+        let parent = String(repeating: "ab", count: 32)
+        let submitted = ConversationDraftSnapshot(canonicalText: "yay :party:", replyToMessageIdHex: parent, mediaAttachments: [])
+        func clears(text: String = "yay :party: ", reply: String? = parent, media: Bool = false, editing: Bool = false) -> Bool {
+            CustomEmojiComposerReconciliation.clears(submitted: submitted, canonicalText: text, replyTargetId: reply,
+                                                     hasMediaDrafts: media, isEditing: editing)
+        }
+        #expect(clears())
+        #expect(clears(reply: parent.uppercased()))
+        #expect(!clears(text: "yay :party: more"))
+        // A reply-only change during the upload keeps the composer.
+        #expect(!clears(reply: nil))
+        #expect(!clears(reply: String(repeating: "cd", count: 32)))
+        #expect(!clears(media: true))
+        #expect(!clears(editing: true))
+    }
+
+    @Test func everyConversationScreenForTheChatSeesTheInFlightSend() throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let group = Self.group()
+        let first = ConversationViewModel(appState: appState, group: group)
+        let reopened = ConversationViewModel(appState: appState, group: group)
+        #expect(!reopened.isSendingCustomEmojiMessage)
+        let claim = appState.conversationDraftStore.beginUnrevisionedSend(
+            ConversationDraftSnapshot(canonicalText: "yay :party:", replyToMessageIdHex: nil, mediaAttachments: []),
+            accountRef: "account-1", groupIdHex: group.groupIdHex)
+        #expect(claim != nil)
+        // The screen opened after the send started also disables Send and
+        // refuses attachments.
+        #expect(first.isSendingCustomEmojiMessage)
+        #expect(reopened.isSendingCustomEmojiMessage)
+        #expect(!reopened.composerAdmitsNewAttachments)
+        // Another account's screen for the same chat id is unaffected.
+        appState.activeAccountRef = "account-2"
+        #expect(!reopened.isSendingCustomEmojiMessage)
+    }
+
+    static func group() -> AppGroupRecordFfi {
+        AppGroupRecordFfi(
+            groupIdHex: String(repeating: "bb", count: 32), endpoint: "", name: "Emoji", description: "",
+            admins: [], relays: [], nostrGroupIdHex: "", avatarUrl: nil, avatarDim: nil, avatarThumbhash: nil,
+            encryptedMedia: AppGroupEncryptedMediaComponentFfi(
+                componentId: 0x8008, component: "marmot.group.encrypted-media.v1", required: true,
+                mediaFormat: EncryptedMediaVersionFfi.v1.wireValue, allowedLocatorKinds: ["blossom-v1"],
+                defaultBlobEndpoints: [AppBlobEndpointFfi(locatorKind: "blossom-v1", baseUrl: "https://blossom.primal.net")]),
+            archived: false, pendingConfirmation: false, welcomerAccountIdHex: nil, viaWelcomeMessageIdHex: nil)
     }
 }

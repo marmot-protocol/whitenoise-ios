@@ -270,6 +270,15 @@ final class ConversationDraftStore {
     @ObservationIgnored private var editedWhileSending: Set<ConversationDraftKey> = []
     private(set) var loadErrorKeys: Set<ConversationDraftKey> = []
     private(set) var conflictedKeys: Set<ConversationDraftKey> = []
+    /// Custom emoji sends (`sendTaggedMedia`, no draft revision or client
+    /// token) in flight, by chat. Owned here so the claim outlives the
+    /// conversation screen: a reopened composer sees it and cannot send the
+    /// same text again.
+    private(set) var unrevisionedSends: [ConversationDraftKey: UnrevisionedSend] = [:]
+    /// The last accepted unrevisioned submission per chat, until the composer
+    /// moves on. The composer on screen clears itself when it still shows this
+    /// submission, and saving the same text again is ignored.
+    private(set) var acceptedUnrevisionedSends: [ConversationDraftKey: UnrevisionedSend] = [:]
 
     func receiveSelection(_ selection: SelectedMessageDraftFfi, accountRef: String, groupIdHex: String) {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
@@ -343,15 +352,58 @@ final class ConversationDraftStore {
         if pendingWrites[key] != nil { scheduleSave(for: key) }
     }
 
-    /// Clears a chat's saved draft after a send that bypasses draft revisions
-    /// (custom emoji via `sendTaggedMedia`) was accepted. Runs independently
-    /// of the conversation view, so a draft persisted when the view closed
-    /// mid-send cannot come back and be sent twice. A draft that no longer
-    /// matches what was submitted (the person kept typing) is kept.
-    func completeUnrevisionedSend(_ submitted: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) async {
+    struct UnrevisionedSend: Equatable {
+        let id: UUID
+        let submitted: ConversationDraftSnapshot
+    }
+
+    /// Claims the chat for one unrevisioned send; nil while another is in
+    /// flight for the same chat (from this screen or a reopened one).
+    func beginUnrevisionedSend(_ submitted: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) -> UUID? {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard unrevisionedSends[key] == nil, !sendingKeys.contains(key) else { return nil }
+        let id = UUID()
+        unrevisionedSends[key] = UnrevisionedSend(id: id, submitted: submitted)
+        return id
+    }
+
+    func isUnrevisionedSendInFlight(accountRef: String, groupIdHex: String) -> Bool {
+        unrevisionedSends[ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)] != nil
+    }
+
+    func acceptedUnrevisionedSend(accountRef: String, groupIdHex: String) -> UnrevisionedSend? {
+        acceptedUnrevisionedSends[ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)]
+    }
+
+    /// Whether `snapshot` is the text MDK already accepted for this chat.
+    func isAcceptedUnrevisionedSend(_ snapshot: ConversationDraftSnapshot, accountRef: String, groupIdHex: String) -> Bool {
+        guard let accepted = acceptedUnrevisionedSend(accountRef: accountRef, groupIdHex: groupIdHex) else { return false }
+        return Self.isSameSubmission(snapshot, accepted.submitted)
+    }
+
+    /// Releases the claim. On acceptance the saved draft is cleared (unless
+    /// the person kept typing) before the claim is released, independently of
+    /// any conversation screen, and the accepted submission is recorded for
+    /// the composer on screen to reconcile.
+    func finishUnrevisionedSend(_ id: UUID, accepted: Bool, accountRef: String, groupIdHex: String) async {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        guard let send = unrevisionedSends[key], send.id == id else { return }
+        if accepted {
+            await completeUnrevisionedSend(send.submitted, key: key)
+            acceptedUnrevisionedSends[key] = send
+        }
+        if unrevisionedSends[key]?.id == id { unrevisionedSends[key] = nil }
+    }
+
+    /// The composer on screen applied (or declined) the accepted submission.
+    func consumeAcceptedUnrevisionedSend(_ id: UUID, accountRef: String, groupIdHex: String) {
+        let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        if acceptedUnrevisionedSends[key]?.id == id { acceptedUnrevisionedSends[key] = nil }
+    }
+
+    private func completeUnrevisionedSend(_ submitted: ConversationDraftSnapshot, key: ConversationDraftKey) async {
         guard !sendingKeys.contains(key), !conflictedKeys.contains(key),
-              let current = await snapshot(accountRef: accountRef, groupIdHex: groupIdHex),
+              let current = await snapshot(accountRef: key.accountRef, groupIdHex: key.groupIdHex),
               Self.isSameSubmission(current, submitted)
         else { return }
         // A keystroke may have landed while the saved draft was read.
@@ -359,7 +411,7 @@ final class ConversationDraftStore {
             guard case .save(let latest) = pending.operation, Self.isSameSubmission(latest, submitted) else { return }
         }
         suppressEmptyAfterSendKeys.remove(key)
-        removeDraft(accountRef: accountRef, groupIdHex: groupIdHex)
+        removeDraft(accountRef: key.accountRef, groupIdHex: key.groupIdHex)
         await flush(key: key, using: nil)
     }
 
@@ -501,6 +553,12 @@ final class ConversationDraftStore {
         guard !resetPausedKeys.contains(key) else { return }
         resetKeys.remove(key)
         let operation = Self.normalizedSnapshot(snapshot).map(PendingOperation.save) ?? .delete
+        if let accepted = acceptedUnrevisionedSends[key] {
+            // A composer still showing an accepted custom emoji message (for
+            // example on disappear) must not save it back as a draft.
+            if case .save(let latest) = operation, Self.isSameSubmission(latest, accepted.submitted) { return }
+            acceptedUnrevisionedSends[key] = nil
+        }
         if case .delete = operation, suppressEmptyAfterSendKeys.contains(key) { return }
         suppressEmptyAfterSendKeys.remove(key)
         if sendingKeys.contains(key) {
@@ -592,6 +650,7 @@ final class ConversationDraftStore {
             conflictedKeys.remove(key)
             sendingKeys.remove(key)
             editedWhileSending.remove(key)
+            acceptedUnrevisionedSends[key] = nil
         }
         loadedAccounts.remove(accountRef)
         generation &+= 1

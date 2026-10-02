@@ -86,10 +86,6 @@ nonisolated enum CustomEmojiComposerSendState: Equatable {
     case idle
     case sending
     case failed(String)
-
-    /// No new attachment may join the composer while its text is in flight:
-    /// an accepted caption would otherwise be left behind with the photo.
-    var admitsNewAttachments: Bool { self != .sending }
 }
 
 /// What a custom emoji composer send submitted, captured at the Send tap.

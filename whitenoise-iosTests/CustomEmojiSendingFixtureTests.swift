@@ -51,9 +51,10 @@ struct CustomEmojiSendingFixtureTests {
             let peer = String(repeating: "5e", count: 32)
             let peerMessageID = String(repeating: "9a", count: 32)
             var peerRow = TimelineMessageRecordFfi(messageIdHex: peerMessageID, sourceMessageIdHex: nil, direction: "received",
-                groupIdHex: group.groupIdHex, sender: peer, plaintext: "look :party: :party-time:",
+                groupIdHex: group.groupIdHex, sender: peer, plaintext: "look :party: :celebrate: :party-time:",
                 contentTokens: .emptyDocument, kind: MessageSemantics.kindChat,
                 tags: [MessageTagFfi(values: ["emoji", "party", peerURL]),
+                       MessageTagFfi(values: ["emoji", "celebrate", peerURL]),
                        MessageTagFfi(values: ["emoji", "party-time", peerURL])],
                 timelineAt: 1, receivedAt: 1, replyToMessageIdHex: nil, replyPreview: nil, mediaJson: nil,
                 media: [], agentTextStreamJson: nil, groupSystem: nil,
@@ -69,10 +70,12 @@ struct CustomEmojiSendingFixtureTests {
             model.installConversationWindow(snapshot)
 
             let party = try #require(CustomEmojiShortcode("party"))
-            // The hyphenated shortcode renders but is not NIP-30, so it is never offered.
-            #expect(model.customEmojiSendables.map(\.shortcode) == [party])
-            let emoji = model.customEmojiUsed(in: "yay :party: :party-time:")
-            #expect(emoji.map(\.shortcode) == [party])
+            let celebrate = try #require(CustomEmojiShortcode("celebrate"))
+            // :celebrate: is an alias of the same image. The hyphenated
+            // shortcode renders but is not NIP-30, so it is never offered.
+            #expect(Set(model.customEmojiSendables.map(\.shortcode)) == [party, celebrate])
+            let emoji = model.customEmojiUsed(in: "yay :party: :celebrate: :party-time:")
+            #expect(emoji.map(\.shortcode) == [party, celebrate])
 
             var uploadCount = 0
             var uploadedURL = ""
@@ -102,7 +105,7 @@ struct CustomEmojiSendingFixtureTests {
                 }
             )
 
-            try await sender.sendMessage(text: "yay :party: :party-time:", replyTargetId: nil, emoji: emoji)
+            try await sender.sendMessage(text: "yay :party: :celebrate: :party-time:", replyTargetId: nil, emoji: emoji)
             #expect(uploadCount == 1)
 
             // MDK stored a kind-9 carrying the caption, the emoji tag naming our
@@ -112,18 +115,21 @@ struct CustomEmojiSendingFixtureTests {
             let sent = try #require(readBack.messages.first {
                 $0.timeline.direction == "sent" && $0.timeline.kind == MessageSemantics.kindChat
             }).timeline
-            #expect(sent.plaintext == "yay :party: :party-time:")
+            #expect(sent.plaintext == "yay :party: :celebrate: :party-time:")
             #expect(sent.tags.contains(MessageTagFfi(values: ["emoji", "party", uploadedURL])))
+            #expect(sent.tags.contains(MessageTagFfi(values: ["emoji", "celebrate", uploadedURL])))
+            // One image, one attachment slot, even with two shortcodes.
+            #expect(sent.media.count == 1)
             #expect(!sent.tags.contains { $0.values.first == "emoji" && $0.values.dropFirst().first == "party-time" })
             let attachments = MessageMediaAttachment.displayItems(fromOutcomes: sent.media, ownerId: "msg:\(sent.messageIdHex)",
                 messageId: sent.messageIdHex, sourceMessageId: sent.sourceMessageIdHex)
             let resolution = CustomEmojiResolver.resolve(text: sent.plaintext, tags: sent.tags, attachments: attachments)
-            #expect(resolution.shortcodes == [party])
+            #expect(resolution.shortcodes == [party, celebrate])
             #expect(resolution.inline[party]?.reference?.locators.first?.value == uploadedURL)
             #expect(resolution.gridItems.isEmpty)
 
             // A second message reuses the uploaded reference: no second upload.
-            try await sender.sendMessage(text: "again :party:", replyTargetId: nil, emoji: emoji)
+            try await sender.sendMessage(text: "again :party:", replyTargetId: nil, emoji: [emoji[0]])
             #expect(uploadCount == 1)
             readBack = try await readSnapshot()
             #expect(readBack.messages.filter {
@@ -138,7 +144,8 @@ struct CustomEmojiSendingFixtureTests {
                 if case .message(let record, _) = item.kind { return record.messageIdHex == sent.messageIdHex }
                 return false
             })
-            #expect(model.customEmoji(for: item).shortcodes == [party])
+            #expect(model.customEmoji(for: item).shortcodes == [party, celebrate])
+            #expect(model.mediaItems(for: item).isEmpty)
             try await client.marmot.shutdownAndClose()
         } catch {
             try? await client.marmot.shutdownAndClose()

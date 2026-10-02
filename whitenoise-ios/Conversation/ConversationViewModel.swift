@@ -337,9 +337,13 @@ final class ConversationViewModel {
             guard let self else { throw CancellationError() }
             return try await self.customEmojiSender.sendMessage(text: text, replyTargetId: replyTargetId, emoji: emoji)
         },
-        completeDraft: { [weak self] submission in
-            await self?.appState?.conversationDraftStore.completeUnrevisionedSend(
+        claim: { [weak self] submission in
+            self?.appState?.conversationDraftStore.beginUnrevisionedSend(
                 submission.draft, accountRef: submission.accountRef, groupIdHex: submission.groupIdHex)
+        },
+        finish: { [weak self] claim, submission, accepted in
+            await self?.appState?.conversationDraftStore.finishUnrevisionedSend(
+                claim, accepted: accepted, accountRef: submission.accountRef, groupIdHex: submission.groupIdHex)
         },
         storeSentBytes: { uploaded, generation in
             for item in uploaded {
@@ -3235,34 +3239,60 @@ final class ConversationViewModel {
         return CustomEmojiSendCatalog.used(in: text, sendables: customEmojiSendables)
     }
 
-    var isSendingCustomEmojiMessage: Bool { customEmojiComposer.isSending }
+    /// Whether this chat has a custom emoji send in flight, from any screen.
+    /// The claim lives in the draft store, so a chat reopened mid-upload sees
+    /// it too.
+    var isSendingCustomEmojiMessage: Bool {
+        guard let appState, let scope = customEmojiSendScope else { return false }
+        return appState.conversationDraftStore.isUnrevisionedSendInFlight(accountRef: scope.accountRef,
+                                                                          groupIdHex: scope.groupIdHex)
+    }
 
     var customEmojiSendErrorMessage: String? { customEmojiComposer.errorMessage }
 
-    /// Whether a new attachment may join the composer now.
-    var composerAdmitsNewAttachments: Bool { customEmojiComposer.state.admitsNewAttachments }
+    /// Whether a new attachment may join the composer now. An accepted
+    /// caption must not be left behind with a photo added mid-send.
+    var composerAdmitsNewAttachments: Bool { !isSendingCustomEmojiMessage }
+
+    /// The accepted custom emoji submission the composer on screen has not
+    /// reconciled yet.
+    var acceptedCustomEmojiSend: ConversationDraftStore.UnrevisionedSend? {
+        guard let appState, let scope = customEmojiSendScope else { return nil }
+        return appState.conversationDraftStore.acceptedUnrevisionedSend(accountRef: scope.accountRef,
+                                                                        groupIdHex: scope.groupIdHex)
+    }
+
+    func consumeAcceptedCustomEmojiSend(_ id: UUID) {
+        guard let appState, let scope = customEmojiSendScope else { return }
+        appState.conversationDraftStore.consumeAcceptedUnrevisionedSend(id, accountRef: scope.accountRef,
+                                                                        groupIdHex: scope.groupIdHex)
+    }
 
     /// Sends composer text containing custom emoji with `sendTaggedMedia`.
     /// Returns true only once MDK accepted the message. `draft` is the saved
-    /// draft form of what was submitted; it is cleared through the draft store
-    /// even if the conversation closes meanwhile. On failure the draft stays
-    /// and an inline error explains what to do.
+    /// draft form of what was submitted; the draft store clears it (even if
+    /// the conversation closes meanwhile) and records it for the composer on
+    /// screen to clear. Refused while the chat already has a send in flight,
+    /// and a composer still showing an already-accepted submission is not
+    /// sent again. On failure the draft stays and an inline error explains
+    /// what to do.
     @discardableResult
     func sendCustomEmojiMessage(
         text: String,
         replyTargetId: String?,
         emoji: [CustomEmojiSendable],
-        draft: ConversationDraftSnapshot,
-        onAccepted: @MainActor () -> Void
+        draft: ConversationDraftSnapshot
     ) async -> Bool {
-        guard !customEmojiComposer.isSending else { return false }
+        guard let appState, !isSendingCustomEmojiMessage else { return false }
         guard canSendMessages, canSendMediaAttachments, let scope = customEmojiSendScope else {
             customEmojiComposer.report(.sendFailed)
             return false
         }
+        guard !appState.conversationDraftStore.isAcceptedUnrevisionedSend(
+            draft, accountRef: scope.accountRef, groupIdHex: scope.groupIdHex) else { return false }
         let submission = CustomEmojiSubmittedDraft(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
                                                    text: text, replyTargetId: replyTargetId, draft: draft)
-        return await customEmojiComposer.submit(submission, emoji: emoji, onAccepted: onAccepted)
+        return await customEmojiComposer.submit(submission, emoji: emoji)
     }
 
     func reportCustomEmojiSendError(_ error: CustomEmojiSendError) {

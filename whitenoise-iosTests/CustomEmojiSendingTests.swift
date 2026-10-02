@@ -157,11 +157,6 @@ struct CustomEmojiSendingTests {
         #expect(CustomEmojiComposerText.inserting("🎉", into: "hi\n") == "hi\n🎉")
     }
 
-    @Test func attachmentsWaitForAnInFlightCustomEmojiSend() {
-        #expect(CustomEmojiComposerSendState.idle.admitsNewAttachments)
-        #expect(!CustomEmojiComposerSendState.sending.admitsNewAttachments)
-        #expect(CustomEmojiComposerSendState.failed("x").admitsNewAttachments)
-    }
 
     @Test func pickerSearchMatchesShortcodes() {
         let all = [sendable("party_parrot"), sendable("cat")]

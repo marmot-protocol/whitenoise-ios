@@ -54,7 +54,10 @@ final class ConversationCustomEmojiSender {
             replyTargetId: replyTargetId
         )
         try ensure(scope)
-        let references = uploaded.map(\.reference)
+        // Shortcode aliases of one image share an upload: one attachment, one
+        // `emoji` tag each.
+        var seen = Set<MediaAttachmentReferenceFfi>()
+        let references = uploaded.map(\.reference).filter { seen.insert($0).inserted }
         do {
             try await sendMessageOperation(scope, text, references, tags)
         } catch {
@@ -89,72 +92,72 @@ final class ConversationCustomEmojiSender {
     }
 }
 
-/// Runs one custom emoji composer send and hands its outcome back to the
-/// composer. The send stays in flight (Send disabled, no new attachments)
-/// until the saved draft is cleared and the composer has been told to clear
-/// itself, because `sendTaggedMedia` has no client token that could collapse
-/// a duplicate. Saved-draft cleanup runs here, not in the view, so it
-/// completes even if the conversation closed during the upload.
+/// Runs one custom emoji composer send. The chat is claimed in the draft
+/// store (which outlives the conversation screen) for the whole send, so no
+/// composer for that chat, including one reopened mid-upload, can send the
+/// same text again: `sendTaggedMedia` has no client token that could collapse
+/// a duplicate. On acceptance the store clears the saved draft and records the
+/// accepted submission before releasing the claim; the composer on screen
+/// reconciles itself from that record. Optional cache writes come last.
 @Observable
 @MainActor
 final class CustomEmojiComposerSubmitter {
     typealias Send = @MainActor (_ text: String, _ replyTargetId: String?,
                                  _ emoji: [CustomEmojiSendable]) async throws -> [CustomEmojiUploadCache.Uploaded]
-    typealias CompleteDraft = @MainActor (CustomEmojiSubmittedDraft) async -> Void
+    typealias Claim = @MainActor (CustomEmojiSubmittedDraft) -> UUID?
+    typealias Finish = @MainActor (_ claim: UUID, _ submission: CustomEmojiSubmittedDraft, _ accepted: Bool) async -> Void
     typealias StoreSentBytes = @MainActor (_ uploaded: [CustomEmojiUploadCache.Uploaded], _ cacheGeneration: Int) async -> Void
 
+    /// This screen's last outcome, for its inline error. Whether the chat has
+    /// a send in flight is the draft store's claim, not this state.
     private(set) var state: CustomEmojiComposerSendState = .idle
 
     @ObservationIgnored private let send: Send
-    @ObservationIgnored private let completeDraft: CompleteDraft
+    @ObservationIgnored private let claim: Claim
+    @ObservationIgnored private let finish: Finish
     @ObservationIgnored private let storeSentBytes: StoreSentBytes
     @ObservationIgnored private let cacheGeneration: @MainActor () -> Int
 
     init(
         send: @escaping Send,
-        completeDraft: @escaping CompleteDraft,
+        claim: @escaping Claim,
+        finish: @escaping Finish,
         storeSentBytes: @escaping StoreSentBytes,
         cacheGeneration: @escaping @MainActor () -> Int
     ) {
         self.send = send
-        self.completeDraft = completeDraft
+        self.claim = claim
+        self.finish = finish
         self.storeSentBytes = storeSentBytes
         self.cacheGeneration = cacheGeneration
     }
-
-    var isSending: Bool { state == .sending }
 
     var errorMessage: String? {
         if case .failed(let message) = state { return message }
         return nil
     }
 
-    /// Returns true once MDK accepted the message. A second call while one is
-    /// in flight is refused. `onAccepted` clears the composer (if it is still
-    /// on screen) before Send is enabled again; optional local cache writes
-    /// happen only after that hand-off.
+    /// Returns true once MDK accepted the message. Refused (false, nothing
+    /// sent) while the chat already has a send in flight.
     @discardableResult
-    func submit(
-        _ submission: CustomEmojiSubmittedDraft,
-        emoji: [CustomEmojiSendable],
-        onAccepted: @MainActor () -> Void
-    ) async -> Bool {
-        guard state != .sending else { return false }
+    func submit(_ submission: CustomEmojiSubmittedDraft, emoji: [CustomEmojiSendable]) async -> Bool {
+        guard let claimID = claim(submission) else { return false }
         state = .sending
         let generation = cacheGeneration()
         let uploaded: [CustomEmojiUploadCache.Uploaded]
         do {
             uploaded = try await send(submission.text, submission.replyTargetId, emoji)
         } catch is CancellationError {
+            await finish(claimID, submission, false)
             state = .idle
             return false
         } catch {
+            await finish(claimID, submission, false)
             state = .failed((error as? CustomEmojiSendError ?? .sendFailed).message)
             Haptics.error()
             return false
         }
-        await completeDraft(submission)
-        onAccepted()
+        await finish(claimID, submission, true)
         state = .idle
         Haptics.tap()
         await storeSentBytes(uploaded, generation)
@@ -170,5 +173,24 @@ final class CustomEmojiComposerSubmitter {
     func dismissError() {
         guard state != .sending else { return }
         state = .idle
+    }
+}
+
+/// Whether the composer on screen still shows an accepted custom emoji
+/// submission and may clear itself. Anything the person changed while it
+/// uploaded (text, reply target, an edit session, attachments) keeps it.
+nonisolated enum CustomEmojiComposerReconciliation {
+    static func clears(
+        submitted: ConversationDraftSnapshot,
+        canonicalText: String,
+        replyTargetId: String?,
+        hasMediaDrafts: Bool,
+        isEditing: Bool
+    ) -> Bool {
+        guard !isEditing, !hasMediaDrafts else { return false }
+        return ConversationDraftStore.isSameSubmission(
+            ConversationDraftSnapshot(canonicalText: canonicalText, replyToMessageIdHex: replyTargetId, mediaAttachments: []),
+            submitted
+        )
     }
 }

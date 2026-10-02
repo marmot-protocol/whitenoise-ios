@@ -551,6 +551,16 @@ only from custom emoji already shown in that chat.
       chat and the composer is empty (the draft is not offered again). Repeat,
       but type more text before the send finishes: that edited text stays in
       the composer.
+- [ ] Send `:party:` on a slow network, go back, and reopen the chat before it
+      lands: the draft shows, but Send stays disabled and no photo can be
+      added. When the send lands, that reopened composer clears itself, and
+      leaving and reopening again does not bring the text back.
+- [ ] Reply to a message with `:party:`, send on a slow network, and cancel the
+      reply before it lands: the message goes out as a reply, and the composer
+      keeps its text without the reply.
+- [ ] If the 0.12.0 client sent one image under two shortcodes (`:party:` and
+      `:celebrate:`), send `:party: :celebrate:`: both render inline on both
+      devices with no extra media tile.
 - [ ] While Send shows progress, Send stays disabled and choosing a photo
       from the `+` menu adds nothing.
 - [ ] Attach a photo and add `:party:` to the caption, then send: an inline

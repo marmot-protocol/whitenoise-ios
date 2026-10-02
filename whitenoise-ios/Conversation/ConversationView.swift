@@ -1248,6 +1248,9 @@ struct ConversationView: View {
                     viewModel?.dismissCustomEmojiSendError()
                 }
             }
+            .onChange(of: viewModel?.acceptedCustomEmojiSend?.id) { _, id in
+                if id != nil { reconcileAcceptedCustomEmojiSend() }
+            }
             .onChange(of: mediaDrafts.map(\.id)) { _, _ in
                 reconcileDraftMediaUploads()
                 if editSession == nil {
@@ -2768,12 +2771,13 @@ struct ConversationView: View {
     }
 
     /// Custom emoji messages publish through `sendTaggedMedia`, which has no
-    /// draft revision or client token. The draft stays in the composer while
-    /// the send runs (Send shows progress, attachments are refused). Once MDK
-    /// accepts it, the view model clears the saved draft through the draft
-    /// store (even if this view is gone) and then this composer, unless the
-    /// text was edited meanwhile. Any failure keeps the draft with an inline
-    /// error so Send retries without re-uploading.
+    /// draft revision or client token. The chat is claimed in the draft store
+    /// for the whole send, so this and any reopened composer keep Send
+    /// disabled and refuse attachments while the draft stays visible. Once MDK
+    /// accepts it, the store clears the saved draft (even if this view is
+    /// gone) and the composer on screen clears itself in
+    /// `reconcileAcceptedCustomEmojiSend`. Any failure keeps the draft with an
+    /// inline error so Send retries without re-uploading.
     private func sendWithCustomEmoji(
         _ text: String,
         emoji: [CustomEmojiSendable],
@@ -2782,27 +2786,41 @@ struct ConversationView: View {
         viewModel: ConversationViewModel
     ) {
         guard !viewModel.isSendingCustomEmojiMessage else { return }
+        // A composer still showing an already accepted message clears instead.
+        reconcileAcceptedCustomEmojiSend()
+        guard !draft.isEmpty else { return }
         guard mediaDrafts.isEmpty else {
             viewModel.reportCustomEmojiSendError(.mixedWithAttachments)
             return
         }
-        let sentDraft = draft
         Task {
-            await viewModel.sendCustomEmojiMessage(
-                text: text, replyTargetId: replyTargetId, emoji: emoji, draft: submitted
-            ) {
-                guard draft == sentDraft, mediaDrafts.isEmpty else { return }
-                _ = viewModel.consumeComposerText(sentDraft)
-                if viewModel.replyTargetMessageIdHex == replyTargetId {
-                    viewModel.restoreReplyTarget(messageIdHex: nil)
-                }
-                draft = ""
-                isAtTimelineBottom = true
-                userMovedAwayFromTimelineBottom = false
-                viewModel.followConversationLatest()
-                composerSendBottomScrollRequest &+= 1
-            }
+            await viewModel.sendCustomEmojiMessage(text: text, replyTargetId: replyTargetId, emoji: emoji, draft: submitted)
         }
+    }
+
+    /// Clears the composer on screen after its chat's custom emoji send was
+    /// accepted, but only while it still shows exactly what was submitted:
+    /// any change to the text, reply target, edit session or attachments
+    /// during the upload keeps the composer.
+    private func reconcileAcceptedCustomEmojiSend() {
+        guard let viewModel, let accepted = viewModel.acceptedCustomEmojiSend,
+              CustomEmojiComposerReconciliation.clears(
+                  submitted: accepted.submitted,
+                  canonicalText: viewModel.composerMentionDraftState(for: draft).canonicalText,
+                  replyTargetId: viewModel.replyTargetMessageIdHex,
+                  hasMediaDrafts: !mediaDrafts.isEmpty,
+                  isEditing: editSession != nil
+              ) else { return }
+        _ = viewModel.consumeComposerText(draft)
+        if viewModel.replyTargetMessageIdHex != nil {
+            viewModel.restoreReplyTarget(messageIdHex: nil)
+        }
+        draft = ""
+        viewModel.consumeAcceptedCustomEmojiSend(accepted.id)
+        isAtTimelineBottom = true
+        userMovedAwayFromTimelineBottom = false
+        viewModel.followConversationLatest()
+        composerSendBottomScrollRequest &+= 1
     }
 
     private func openComposerCustomEmojiPicker() {
