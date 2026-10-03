@@ -50,6 +50,7 @@ nonisolated enum WNPhotoMenuAction: Hashable, CaseIterable {
 struct WNPhotoMenuButton: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
+    var controlSize: ControlSize = .large
 
     var body: some View {
         Menu {
@@ -57,7 +58,7 @@ struct WNPhotoMenuButton: View {
         } label: {
             Text(hasPhoto ? "Change Photo" : "Add Photo")
         }
-        .wnAvatarActionButtonStyle()
+        .wnAvatarActionButtonStyle(controlSize: controlSize)
     }
 }
 

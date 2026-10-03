@@ -195,9 +195,9 @@ extension View {
         modifier(WNButtonChrome(borderShape: borderShape, emphasis: emphasis))
     }
 
-    func wnAvatarActionButtonStyle() -> some View {
+    func wnAvatarActionButtonStyle(controlSize: ControlSize = .large) -> some View {
         wnSecondaryButtonStyle()
-            .controlSize(.large)
+            .controlSize(controlSize)
             .wnButtonChrome(emphasis: .secondary)
     }
 
