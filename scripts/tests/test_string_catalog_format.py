@@ -89,6 +89,20 @@ class StringCatalogFormatTests(unittest.TestCase):
             self.assertIn("duplicate JSON key", result.stderr)
             self.assertEqual(good.read_bytes(), original)
 
+    def test_overflowing_number_does_not_rewrite_any_catalog(self):
+        with tempfile.TemporaryDirectory() as directory:
+            good = Path(directory) / "Good.xcstrings"
+            overflow = Path(directory) / "Overflow.xcstrings"
+            original_good = b'{"strings":{},"version":"1.0","sourceLanguage":"en"}'
+            original_overflow = b'{"strings":{},"version":"1.0","metadata":{"number":1e400}}'
+            good.write_bytes(original_good)
+            overflow.write_bytes(original_overflow)
+            result = self.run_formatter("--write", good, overflow)
+            self.assertEqual(result.returncode, 2, result.stdout)
+            self.assertIn(str(overflow), result.stderr)
+            self.assertEqual(good.read_bytes(), original_good)
+            self.assertEqual(overflow.read_bytes(), original_overflow)
+
     @unittest.skipUnless(shutil.which("xcrun"), "Xcode writer comparison requires macOS with Xcode")
     def test_matches_xcode_after_a_real_catalog_update(self):
         # An unchanged sync may skip writing. Add a temporary key to force Xcode

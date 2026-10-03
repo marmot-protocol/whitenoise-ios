@@ -27,7 +27,7 @@ def reject_constant(value):
 def format_catalog(raw):
     catalog = json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant)
     formatted = json.dumps(
-        catalog, ensure_ascii=False, sort_keys=True, indent=2, separators=(",", " : ")
+        catalog, ensure_ascii=False, allow_nan=False, sort_keys=True, indent=2, separators=(",", " : ")
     )
     # xcstringstool expands empty objects and writes no trailing newline.
     return re.sub(

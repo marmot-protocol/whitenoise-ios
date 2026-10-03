@@ -37,6 +37,11 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
+
       - name: Check string catalog formatting
         run: |
           python3 -m unittest discover -s scripts/tests -p test_string_catalog_format.py
