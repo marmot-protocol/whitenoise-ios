@@ -5,6 +5,7 @@ import Foundation
 nonisolated enum GIFPlaybackAdmission {
     static let maximumEdge = 4_096
     static let maximumFrames = 1_000
+    static let maximumCanvasPixels = 4 * 1_024 * 1_024
     static let maximumCanvasPixelsAcrossFrames = 32 * 1_024 * 1_024
 
     struct Metadata: Equatable, Sendable {
@@ -28,6 +29,7 @@ nonisolated enum GIFPlaybackAdmission {
         // The edge cap makes this product safe; division keeps the aggregate check independent
         // of the frame count and prevents multiplication overflow if limits change later.
         let canvasPixels = width * height
+        guard canvasPixels <= maximumCanvasPixels else { return nil }
         var frames = 0
         while let marker = reader.byte() {
             switch marker {

@@ -29,11 +29,25 @@ struct GIFPlaybackAdmissionTests {
     }
 
     @Test func enforcesAggregateCanvasBudgetWithoutAllocatingPixels() {
-        // Two full logical canvases are exactly 32 Mi pixels, though the stored frames are 1x1.
-        let boundary = Self.container(width: 4_096, height: 4_096)
+        // Eight full logical canvases are exactly 32 Mi pixels; stored frames are 1x1.
+        let boundary = Self.container(width: 2_048, height: 2_048, frames: Array(repeating: Self.frame(), count: 8))
         #expect(GIFPlaybackAdmission.inspect(boundary) != nil)
-        let over = Self.container(width: 4_096, height: 4_096, frames: Array(repeating: Self.frame(), count: 3))
+        let over = Self.container(width: 2_048, height: 2_048, frames: Array(repeating: Self.frame(), count: 9))
         #expect(GIFPlaybackAdmission.inspect(over) == nil)
+    }
+
+    @Test func boundsOneCanvasIndependentlyOfTotalFrames() {
+        #expect(GIFPlaybackAdmission.inspect(Self.container(width: 4_096, height: 1_024)) != nil)
+        #expect(GIFPlaybackAdmission.inspect(Self.container(width: 4_096, height: 1_025)) == nil)
+    }
+
+    @Test func admitsLoopExtensionAndRejectsReservedFrameFlags() {
+        var bytes = Array(Self.container())
+        bytes.insert(contentsOf: [0x21, 0xFF, 11] + Array("NETSCAPE2.0".utf8) + [3, 1, 0, 0, 0], at: 13)
+        #expect(GIFPlaybackAdmission.inspect(Data(bytes)) != nil)
+        var reserved = Array(Self.container())
+        reserved[30] |= 0x08  // First image descriptor's reserved flag.
+        #expect(GIFPlaybackAdmission.inspect(Data(reserved)) == nil)
     }
 
     @Test func rejectsEveryIncompletePrefixAndTrailingGarbage() {
@@ -83,6 +97,22 @@ struct GIFPlaybackAdmissionTests {
                 #expect(error as? GiphyRemoteMediaLoader.Failure == .invalidResponse)
             }
         }
+    }
+
+    @Test func playbackPreparationAdmitsACompleteTinyAnimation() async throws {
+        let media = RemoteGiphyMedia(
+            url: URL(string: "https://media.giphy.com/media/fixture/giphy.gif")!,
+            width: 1, height: 1, attribution: nil)
+        let data = Self.container(width: 3, height: 2)
+        let playback = try await GiphyRemoteMediaLoader.preparePlayback(for: media, apiKey: nil) { request in
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "image/gif"]
+            )!
+            return (data, response)
+        }
+        #expect(playback.data == data)
+        #expect(playback.aspectRatio == 1.5)
     }
 
     @Test func legacyLookupUsesTheSameAdmissionForItsDownloadedGIF() async {

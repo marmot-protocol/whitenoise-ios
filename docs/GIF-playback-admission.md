@@ -5,7 +5,8 @@ UIKit playback. URL extensions, advertised rendition dimensions, display size
 and encoded byte count are not decoded-resource limits.
 
 The initial policy permits at most 5 MiB encoded bytes, a positive logical
-canvas of at most 4096 pixels on either edge, and 2–1000 image frames whose
+canvas of at most 4096 pixels on either edge and 4 Mi pixels in area, and
+2–1000 image frames whose
 rectangles fit inside that canvas. Logical canvas area multiplied by frame
 count must not exceed 32 Mi pixels; division checks the limit without overflow.
 Partial frames still count as a full compositing canvas. The parser walks
@@ -50,3 +51,10 @@ Native Swift tests cover the admission boundaries without allocating oversized
 rasters, logical-canvas geometry and refusal during direct and legacy lookup.
 These ceilings do not prove a total UIKit memory ceiling or prevent every
 native codec defect. Keep OS codec security updates current.
+
+The separate 4 Mi canvas-area ceiling limits one RGBA frame to 16 MiB of
+declared pixels, independently of the total-frame work counter. It is stricter
+than the initial Mac policy because the mobile player shares a six-playback
+reservation budget. Native decoder buffers and other app allocations still
+require runtime qualification; multiplying this number by six is not a
+total-process memory bound.
