@@ -155,9 +155,13 @@ struct GIFPlaybackAdmissionTests {
 
     private static func frame(left: Int = 0, top: Int = 0, width: Int = 1, height: Int = 1) -> [UInt8] {
         // A local color table makes the partial-frame animation valid without a global table.
-        [0x21, 0xF9, 4, 0, 10, 0, 0, 0, 0x2C]
-            + word(left) + word(top) + word(width) + word(height)
-            + [0x80, 0, 0, 0, 255, 255, 255, 2, 2, 0x44, 0x01, 0]
+        var bytes: [UInt8] = [0x21, 0xF9, 4, 0, 10, 0, 0, 0, 0x2C]
+        bytes += word(left)
+        bytes += word(top)
+        bytes += word(width)
+        bytes += word(height)
+        bytes += [0x80, 0, 0, 0, 255, 255, 255, 2, 2, 0x44, 0x01, 0]
+        return bytes
     }
 
     private static func word(_ value: Int) -> [UInt8] {
