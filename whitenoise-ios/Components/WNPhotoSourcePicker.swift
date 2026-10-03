@@ -37,6 +37,7 @@ nonisolated enum WNPhotoSourceRoute: Equatable {
 struct WNAvatarPhotoMenu<Preview: View>: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
+    var buttonControlSize: ControlSize = .large
     @ViewBuilder var preview: () -> Preview
 
     var body: some View {
@@ -51,7 +52,7 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
             .accessibilityLabel(hasPhoto ? "Change Photo" : "Add Photo")
 
-            WNPhotoMenuButton(hasPhoto: hasPhoto, selection: $selection)
+            WNPhotoMenuButton(hasPhoto: hasPhoto, selection: $selection, controlSize: buttonControlSize)
                 .padding(.top)
         }
     }

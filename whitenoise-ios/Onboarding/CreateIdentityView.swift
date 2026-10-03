@@ -198,7 +198,7 @@ struct IdentityProfileSetupView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            if isFormReady && allowsBackNavigation {
+            if isFormReady {
                 ToolbarItem(placement: .cancellationAction) {
                     WNIconButton(
                         title: isPushed ? "Back" : "Close",
@@ -208,9 +208,11 @@ struct IdentityProfileSetupView: View {
                         if accountSetup == nil { appState.closeSignUpDraft() }
                         dismiss()
                     }
+                    .disabled(!allowsBackNavigation)
+                    .allowsHitTesting(allowsBackNavigation)
                 }
             }
-            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !model.isResetPending, !model.isRestorationBlocked {
+            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !isBusy, !model.isResetPending, !model.isRestorationBlocked {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button("Start over", role: .destructive) {
@@ -222,7 +224,6 @@ struct IdentityProfileSetupView: View {
                         Image(systemName: "ellipsis")
                     }
                     .accessibilityLabel("More")
-                    .disabled(isBusy)
                 }
             }
         }
@@ -455,7 +456,8 @@ struct IdentityProfileSetupView: View {
         VStack(spacing: 0) {
             WNAvatarPhotoMenu(
                 hasPhoto: model.avatarDraft != nil,
-                selection: $photoMenuAction
+                selection: $photoMenuAction,
+                buttonControlSize: .regular
             ) {
                 WNAvatarPreview(
                     name: model.displayName,
@@ -528,10 +530,10 @@ private struct ProfilePrivacyDetailsView: View {
         .scrollBounceBehavior(.basedOnSize)
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack {
-                Spacer()
                 WNIconButton(title: "Close", systemImage: "xmark") {
                     dismiss()
                 }
+                Spacer()
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
