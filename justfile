@@ -12,6 +12,14 @@ sync-bindings release:
 lint:
     @./scripts/lint.sh
 
+# Normalize catalog formatting without changing translations or metadata.
+format-localizations:
+    @python3 scripts/format-string-catalogs.py --write
+
+# Read-only check, also part of the existing CI lint job.
+check-localizations:
+    @python3 scripts/format-string-catalogs.py --check
+
 # Auto-corrects everything SwiftLint can auto-correct
 autofix:
     @swiftlint lint --fix --config .swiftlint.yml || true
@@ -28,6 +36,7 @@ clean:
 
 # Full pre-commit gate. Runs the exact same command CI runs.
 precommit:
+    @python3 scripts/format-string-catalogs.py --check
     @./scripts/lint.sh
     @./scripts/test.sh
     @echo "✓ precommit (lint only)"
