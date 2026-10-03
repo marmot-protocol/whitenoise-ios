@@ -59,8 +59,6 @@ struct WNPhotoMenuButton: View {
             Text(hasPhoto ? "Change Photo" : "Add Photo")
         }
         .wnAvatarActionButtonStyle(controlSize: controlSize)
-        .frame(minHeight: 44)
-        .contentShape(Rectangle())
     }
 }
 
