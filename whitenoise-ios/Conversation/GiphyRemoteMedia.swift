@@ -94,6 +94,8 @@ final class GiphyPlaybackBudget {
 }
 
 nonisolated enum GiphyRemoteMediaLoader {
+    typealias Fetch = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
     struct PreparedPlayback: Sendable {
         let data: Data
         let aspectRatio: CGFloat?
@@ -101,7 +103,8 @@ nonisolated enum GiphyRemoteMediaLoader {
 
     static func preparePlayback(
         for media: RemoteGiphyMedia,
-        apiKey: String? = GiphyBuildConfig.current().apiKey
+        apiKey: String? = GiphyBuildConfig.current().apiKey,
+        fetch: @escaping Fetch = { try await RemoteImageFetch.data(for: $0) }
     ) async throws -> PreparedPlayback {
         guard RemoteGiphyMedia.validatedMediaURL(media.url.absoluteString) != nil else {
             throw Failure.invalidURL
@@ -116,8 +119,9 @@ nonisolated enum GiphyRemoteMediaLoader {
                 throw Failure.invalidResponse
             }
             do {
-                animatedMedia = try await GiphySearchClient(apiKey: apiKey)
-                    .resolveAnimatedMedia(for: media.url)
+                var client = GiphySearchClient(apiKey: apiKey)
+                client.fetch = fetch
+                animatedMedia = try await client.resolveAnimatedMedia(for: media.url)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -130,18 +134,21 @@ nonisolated enum GiphyRemoteMediaLoader {
 
         return try await prepareAnimatedImage(
             url: animatedMedia.url,
-            fallbackAspectRatio: animatedMedia.aspectRatio
+            fallbackAspectRatio: animatedMedia.aspectRatio,
+            fetch: fetch
         )
     }
 
     private static func prepareAnimatedImage(
         url: URL,
-        fallbackAspectRatio: CGFloat
+        fallbackAspectRatio: CGFloat,
+        fetch: Fetch
     ) async throws -> PreparedPlayback {
         let data = try await downloadedData(
             for: url,
             accept: "image/gif",
-            allowedMIMETypes: ["image/gif", "application/octet-stream"]
+            allowedMIMETypes: ["image/gif", "application/octet-stream"],
+            fetch: fetch
         )
         let aspectRatio = try await Task.detached(priority: .utility) {
             try animatedImageAspectRatio(from: data)
@@ -153,34 +160,33 @@ nonisolated enum GiphyRemoteMediaLoader {
     }
 
     static func animatedImageAspectRatio(from data: Data) throws -> CGFloat {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              CGImageSourceGetCount(source) > 1,
+        guard let admitted = GIFPlaybackAdmission.inspect(data) else {
+            throw Failure.invalidResponse
+        }
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, options),
+              CGImageSourceGetCount(source) == admitted.frameCount,
+              CGImageSourceGetStatus(source) == .statusComplete,
               let type = CGImageSourceGetType(source),
-              UTType(type as String)?.conforms(to: .gif) == true,
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.doubleValue,
-              let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
-              width > 0,
-              height > 0,
-              width.isFinite,
-              height.isFinite
+              UTType(type as String)?.conforms(to: .gif) == true
         else {
             GiphyPlaybackDiagnostics.log.error("image_decode_failed bytes=\(data.count, privacy: .public)")
             throw Failure.invalidResponse
         }
-        return CGFloat(width / height)
+        return CGFloat(admitted.width) / CGFloat(admitted.height)
     }
 
     private static func downloadedData(
         for url: URL,
         accept: String,
-        allowedMIMETypes: Set<String>
+        allowedMIMETypes: Set<String>,
+        fetch: Fetch
     ) async throws -> Data {
         let request = RemoteImageFetch.request(for: url, accept: accept)
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await RemoteImageFetch.data(for: request)
+            (data, response) = try await fetch(request)
         } catch {
             GiphyPlaybackDiagnostics.log.error(
                 "media_transport_failed error_type=\(String(reflecting: type(of: error)), privacy: .public)"
@@ -205,7 +211,7 @@ nonisolated enum GiphyRemoteMediaLoader {
         return data
     }
 
-    enum Failure: LocalizedError {
+    enum Failure: LocalizedError, Equatable {
         case invalidURL
         case invalidResponse
 
