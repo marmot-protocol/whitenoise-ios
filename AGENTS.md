@@ -332,6 +332,17 @@ Do not add a second storage path for data Marmot already owns.
 
 ## Validation
 
+After editing or merging `.xcstrings` files, or after Xcode rewrites them, run
+`just format-localizations` and review the resulting diff. The formatter uses
+`xcstringstool` ordering and spacing; the Xcode editor can write a different
+ordering. Do not hand-append entries or use a different JSON formatter.
+`just check-localizations` runs the read-only check enforced by the lint job.
+Keep automatic extraction enabled. Formatting preserves parsed content; review
+new or removed strings, translations, plurals, comments, and extraction-state
+changes separately. Never discard a whole catalog diff without checking its
+content. Pass new, untracked catalogs explicitly to
+`python3 scripts/format-string-catalogs.py --write <path>`.
+
 Use the smallest test set that covers your change, then broaden when lifecycle, notification, or binding behavior changes.
 
 Useful commands:
