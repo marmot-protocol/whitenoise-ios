@@ -70,6 +70,14 @@ nonisolated enum TimelineDownArrowPolicy {
         isInitialPositionSettled && isUserScrolling
     }
 
+    static func orderKeyRange<Keys: Sequence>(_ keys: Keys) -> ClosedRange<UInt64>? where Keys.Element == UInt64 {
+        var range: ClosedRange<UInt64>?
+        for key in keys {
+            range = range.map { min($0.lowerBound, key)...max($0.upperBound, key) } ?? key...key
+        }
+        return range
+    }
+
     /// Index range of the visible rows in timeline order, or nil when none are.
     static func visibleIndices<RowKeys: BidirectionalCollection>(
         rowKeys: RowKeys,

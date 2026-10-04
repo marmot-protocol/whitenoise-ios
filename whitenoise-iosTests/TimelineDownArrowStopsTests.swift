@@ -89,6 +89,26 @@ struct TimelineDownArrowStopsTests {
             isInitialPositionSettled: true, isUserScrolling: true))
     }
 
+    /// A stop that leaves the top during the reader's scroll is retired, so
+    /// scrolling back above it later does not revive it as a destination.
+    @Test func stopRetiredWhenItExitsTheTopStaysRetired() {
+        let stopIndex = 5
+        #expect(loaded(stopIndex, visible: 3...7).isPassed == false)
+        let afterExit = loaded(stopIndex, visible: 6...10)
+        #expect(afterExit.isPassed)
+        #expect(TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: true, isUserScrolling: true))
+        // Back above the stop: it would be ahead, but a retired stop is not offered.
+        #expect(loaded(stopIndex, visible: 0...4) == .below)
+        #expect(TimelineDownArrowPolicy.destination(replyOrigin: nil, firstUnread: nil) == .latest)
+    }
+
+    @Test func orderKeyRangeSpansTheGivenKeys() {
+        #expect(TimelineDownArrowPolicy.orderKeyRange([150, 120, 180]) == 120...180)
+        #expect(TimelineDownArrowPolicy.orderKeyRange([42]) == 42...42)
+        #expect(TimelineDownArrowPolicy.orderKeyRange([UInt64]()) == nil)
+    }
+
     @Test func visibleIndicesSpanFirstToLastVisibleRow() {
         let rows = ["a", "b", "c", "d", "e"]
         #expect(TimelineDownArrowPolicy.visibleIndices(rowKeys: rows, visibleRowKeys: ["d", "b"]) == 1...3)

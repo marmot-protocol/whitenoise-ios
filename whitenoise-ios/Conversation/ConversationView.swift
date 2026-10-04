@@ -1774,6 +1774,9 @@ struct ConversationView: View {
                                                 onBecameVisible: {
                                                     markCurrentlyVisibleMessagesRead(viewModel: viewModel)
                                                     clearPassedDownArrowStops(viewModel: viewModel)
+                                                },
+                                                onBecameHidden: {
+                                                    clearPassedDownArrowStops(viewModel: viewModel)
                                                 }
                                             ))
                                     }
@@ -1843,10 +1846,15 @@ struct ConversationView: View {
                         }
                         .compatibleBottomScrollEdgeEffectHidden()
                         .scrollDismissesKeyboard(.interactively)
-                        .onScrollPhaseChange { _, phase in
+                        .onScrollPhaseChange { oldPhase, phase in
                             // New-message follow requests must not interrupt
                             // native dragging, deceleration, or rubber-banding.
                             isUserScrollingTimeline = TimelineBottomScrollCoordinator.isUserDriven(phase)
+                            if phase == .idle, TimelineBottomScrollCoordinator.isUserDriven(oldPhase) {
+                                // Reconcile the settled visible set once per gesture,
+                                // whichever row-edge callbacks it produced.
+                                clearPassedDownArrowStops(viewModel: viewModel, afterUserScroll: true)
+                            }
                             if isUserScrollingTimeline {
                                 cancelPendingBottomScroll()
                             }
@@ -2459,12 +2467,11 @@ struct ConversationView: View {
             rowKeys: viewModel.timeline.lazy.map(\.rowFrameKey),
             visibleRowKeys: timelineVisibility.visibleRowKeys
         )
-        var loadedOrderKeys: ClosedRange<UInt64>?
-        for item in viewModel.timeline {
-            guard case .message(let record, _) = item.kind else { continue }
-            let key = record.recordedAt
-            loadedOrderKeys = loadedOrderKeys.map { min($0.lowerBound, key)...max($0.upperBound, key) } ?? key...key
-        }
+        // The window page alone: local sends kept beside it carry current
+        // timestamps and would stretch the range over a dropped newer row.
+        let loadedOrderKeys = TimelineDownArrowPolicy.orderKeyRange(
+            viewModel.conversationWindow?.messages.lazy.map(\.timeline.timelineAt) ?? []
+        )
         func stop(_ messageIdHex: String?, orderKey: UInt64?) -> TimelineDownArrowPolicy.Stop? {
             guard let messageIdHex else { return nil }
             let index = viewModel.timeline.firstIndex { item in
@@ -2489,10 +2496,10 @@ struct ConversationView: View {
     }
 
     /// Scrolling past a stop on one's own retires it, so a later tap moves on.
-    private func clearPassedDownArrowStops(viewModel: ConversationViewModel) {
+    private func clearPassedDownArrowStops(viewModel: ConversationViewModel, afterUserScroll: Bool = false) {
         guard TimelineDownArrowPolicy.mayRetirePassedStops(
             isInitialPositionSettled: isInitialTimelinePositionSettled,
-            isUserScrolling: isUserScrollingTimeline
+            isUserScrolling: isUserScrollingTimeline || afterUserScroll
         ) else { return }
         let stops = downArrowStops(viewModel: viewModel)
         if stops.replyOrigin?.placement.isPassed == true {
@@ -4035,6 +4042,7 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
     let rowKey: String
     let store: TimelineVisibilityStore
     let onBecameVisible: () -> Void
+    var onBecameHidden: () -> Void = {}
 
     @State private var isVisible = false
 
@@ -4046,8 +4054,11 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
             ) { nextIsVisible in
                 guard nextIsVisible != isVisible else { return }
                 isVisible = nextIsVisible
-                if store.set(rowKey, isVisible: nextIsVisible), nextIsVisible {
+                guard store.set(rowKey, isVisible: nextIsVisible) else { return }
+                if nextIsVisible {
                     onBecameVisible()
+                } else {
+                    onBecameHidden()
                 }
             }
     }
