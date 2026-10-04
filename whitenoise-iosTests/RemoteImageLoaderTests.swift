@@ -196,7 +196,8 @@ struct RemoteImageLoaderTests {
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
     }
 
-    @Test func avatarDrainFinishesWhileCancelledDNSWorkerIsStillBlocked() async throws {
+    @Test(.timeLimit(.minutes(1)))
+    func avatarDrainFinishesWhileCancelledDNSWorkerIsStillBlocked() async throws {
         let url = try #require(URL(string: "https://cdn.example/\(UUID()).png"))
         let fixture = BlockingDNS()
         defer { fixture.release() }
@@ -222,6 +223,7 @@ struct RemoteImageLoaderTests {
         await RemoteAvatarImageLoader.clearCachesAndDrain()
         await #expect(throws: CancellationError.self) { _ = try await request.value }
         #expect(slots.inFlight == 1)
+        #expect(!fixture.didTimeOut)
         #expect(connections.withLock { $0 } == 0)
         #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))

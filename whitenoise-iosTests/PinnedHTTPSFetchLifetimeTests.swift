@@ -67,6 +67,7 @@ struct PinnedHTTPSFetchLifetimeTests {
             #expect(slots.inFlight == 1)
             #expect(!slots.claim())
         }
+        #expect(!fixture.didTimeOut)
         fixture.release()
         _ = try await exited.wait { _ in }
         #expect(slots.inFlight == 0)
@@ -102,6 +103,7 @@ struct PinnedHTTPSFetchLifetimeTests {
             #expect(slots.inFlight == 1)
             #expect(connections.withLock { $0 } == 0)
         }
+        #expect(!fixture.didTimeOut)
         fixture.release()
         _ = try await exited.wait { _ in }
         // A late worker completion has no continuation capable of starting a connection.
@@ -141,6 +143,7 @@ struct PinnedHTTPSFetchLifetimeTests {
             )
         }
         #expect(slots.inFlight == 6)
+        #expect(fixtures.allSatisfy { !$0.didTimeOut })
         fixtures.forEach { $0.release() }
         _ = try await exited.wait { _ in }
         #expect(slots.inFlight == 0)
@@ -226,19 +229,32 @@ struct PinnedHTTPSFetchLifetimeTests {
     }
 }
 
-// Only the condition owns released; the worker cannot outlive the test's deferred release.
+// Condition-protected state; a watchdog also releases a worker if an awaited drain regresses.
 // swiftlint:disable:next no_unchecked_sendable
 nonisolated final class BlockingDNS: @unchecked Sendable {
     private let condition = NSCondition()
     private var released = false
+    private var timedOut = false
     let started = PinnedFetchWaitGate<Void>()
 
     func resolve(_ host: String) -> [String] {
         started.complete(.success(()))
         condition.lock()
         defer { condition.unlock() }
-        while !released { condition.wait() }
+        let watchdog = Date().addingTimeInterval(30)
+        while !released {
+            guard condition.wait(until: watchdog) else {
+                timedOut = true
+                break
+            }
+        }
         return ["8.8.8.8"]
+    }
+
+    var didTimeOut: Bool {
+        condition.lock()
+        defer { condition.unlock() }
+        return timedOut
     }
 
     func release() {
