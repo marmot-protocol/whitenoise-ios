@@ -192,6 +192,31 @@ struct PinnedHTTPSFetchLifetimeTests {
         #expect(budgets.withLock { $0 } == [12_000_000_000, 12_000_000_000])
     }
 
+    @Test func successfulResolutionFreesItsSlotBeforeSequentialRedirects() async throws {
+        let calls = Mutex(0)
+        let slots = PinnedDNSResolutionSlots(limit: 1)
+        let result = try await PinnedHTTPSFetcher.fetch(
+            URLRequest(url: try #require(URL(string: "https://cdn.example/start.png")), timeoutInterval: 12),
+            maximumResponseBytes: 1024,
+            resolver: { _ in ["8.8.8.8"] },
+            clock: VirtualFetchClock(), slots: slots,
+            attempt: { _, url, _, _, _ in
+                #expect(slots.inFlight == 0)
+                let count = calls.withLock { count in count += 1; return count }
+                return PinnedHTTPSFetcher.PinnedResponse(
+                    data: Data(),
+                    response: try #require(HTTPURLResponse(
+                        url: url, statusCode: count < 4 ? 302 : 200, httpVersion: "HTTP/1.1",
+                        headerFields: count < 4 ? ["Location": "/next.png"] : nil
+                    ))
+                )
+            }
+        )
+        #expect(result.0.isEmpty)
+        #expect(calls.withLock { $0 } == 4)
+        #expect(slots.inFlight == 0)
+    }
+
     @Test func redirectsAndEndpointsNeverResetTotalBudget() async throws {
         let clock = VirtualFetchClock()
         let budgets = Mutex<[UInt64]>([])

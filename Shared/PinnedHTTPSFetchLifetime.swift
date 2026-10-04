@@ -180,9 +180,10 @@ nonisolated enum PinnedDNSWait {
             }
             // getaddrinfo is synchronous: do not pin a cooperative Swift executor thread.
             DispatchQueue.global(qos: .utility).async {
-                defer { slots.release() }
-                // Only worker exit frees the reservation; the gate ignores late replies.
-                gate.complete(Result { try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver) })
+                let result = Result { try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver) }
+                // Blocking resolution has exited; free its slot before a caller can start its next hop.
+                slots.release()
+                gate.complete(result)
             }
         }
         try deadline.check()
