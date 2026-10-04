@@ -5,6 +5,69 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func profileOptionalityFollowsTheOfferedActions() {
+        var step = snapshot().steps[0]
+        step.step = .profile
+        step.findings = [.init(issue: .missing, endpoint: nil)]
+        step.actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalProfile)
+
+        step.status = .retryableFailure
+        step.findings = [.init(issue: .timedOut, endpoint: nil)]
+        step.actions = [.retry, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalIssue)
+
+        // An interrupted profile publication cannot promise a skip that MDK does not offer.
+        step.findings = [.init(issue: .publicationFailed, endpoint: nil)]
+        step.actions = [.retry]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func deviceAcknowledgmentIsDifferentFromARequiredRepair() {
+        var step = snapshot().steps[0]
+        #expect(AccountSetupPresentation.checkState(step) == .acknowledgment)
+        step.actions = [.retry]
+        step.status = .retryableFailure
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+
+        step.step = .relays
+        step.actions = [.useRecommendedRelays, .editDiscoveryRelays]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func queuedChecksKeepTheirStatusAndErrorsOverrideTheReadyHeading() {
+        #expect(AccountSetupPresentation.checkState(snapshot(status: .pending).steps[0]).subtitle == L10n.string("Waiting"))
+        #expect(AccountSetupPresentation.heading(snapshot(ready: true), isBusy: false, hasError: true)
+                == L10n.string("Couldn’t continue signing in"))
+        #expect(AccountSetupPresentation.heading(snapshot(ready: true), isBusy: false, hasError: false)
+                == L10n.string("You’re ready to chat"))
+        #expect(AccountSetupPresentation.heading(snapshot(status: .checking), isBusy: true, hasError: false)
+                == L10n.string("Getting ready to chat"))
+    }
+
+    @Test func reviewDestinationFollowsTheCurrentUnfinishedCheck() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .skipped
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == .singleDevice)
+
+        current.steps[0].status = .needsInput
+        current.steps[0].actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == .profile)
+
+        // A later decision must not jump ahead of the check that is still running or queued.
+        current.steps[0].status = .checking
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == nil)
+        current.steps[0].status = .pending
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(), isBusy: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(ready: true), isBusy: false) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false) == nil)
+    }
+
     @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {
         #expect(AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays) == [
             "wss://relay.eu.whitenoise.chat", "wss://relay.us.whitenoise.chat",
@@ -94,8 +157,12 @@ struct AccountSetupTests {
     }
 
     @Test func optionalSkipIsDistinctFromSuccess() {
-        #expect(AccountSetupPresentation.symbol(.skipped) != AccountSetupPresentation.symbol(.passed))
-        #expect(AccountSetupPresentation.status(.skipped) != AccountSetupPresentation.status(.passed))
+        let skipped = AccountSetupPresentation.checkState(snapshot(status: .skipped).steps[0])
+        let passed = AccountSetupPresentation.checkState(snapshot(status: .passed).steps[0])
+        #expect(skipped == .skipped)
+        #expect(passed == .passed)
+        #expect(skipped.symbol != passed.symbol)
+        #expect(skipped.subtitle != passed.subtitle)
     }
 
     @Test func analyticsReadinessWaitsForCancellationToClear() {

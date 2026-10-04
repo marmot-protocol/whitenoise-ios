@@ -2,70 +2,91 @@ import SwiftUI
 import MarmotKit
 
 struct AccountSetupView: View {
-    @Environment(AppState.self) private var appState
+    @CurrentAccountSetupSession private var session
     @Bindable var model: AccountSetupModel
     let onClose: () -> Void
     @State private var decision: SetupDecision?
+    @State private var isOpeningChats = false
 
     var body: some View {
         List {
             Section {
                 ForEach(model.snapshot.steps, id: \.step) { step in
-                    if Self.needsAttention(step.status) {
-                        Button {
-                            decision = SetupDecision(step: step.step)
-                        } label: {
-                            stepRow(step)
+                    let state = AccountSetupPresentation.checkState(step)
+                    Group {
+                        if state.needsAttention {
+                            Button {
+                                decision = SetupDecision(step: step.step)
+                            } label: {
+                                stepRow(step, state: state)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Show options for this check")
+                        } else {
+                            stepRow(step, state: state)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Show options for this check")
-                    } else {
-                        stepRow(step)
                     }
                 }
             } header: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.snapshot.ready ? "You’re ready" : "Getting you ready")
-                        .font(.title.bold()).foregroundStyle(Color.primary)
-                    if !model.snapshot.ready {
-                        Text("Checking your profile before you start chatting.")
-                            .font(.body)
-                    }
-                }
-                .textCase(nil)
-                .padding(.bottom)
-            }
-            if let error = model.errorMessage {
-                Section {
-                    Text(error).foregroundStyle(.orange)
-                    Button("Reconnect") { Task { await appState.connectAccountSetup() } }
-                        .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy)
-                }
+                header
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .textCase(nil)
+                    .padding(.bottom, 12)
             }
         }
+        .listStyle(.insetGrouped)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
-                    Task { if await appState.cancelAccountSetup() { onClose() } }
+                    Task { if await session.cancelAccountSetup() { onClose() } }
                 }
-                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+                .disabled(session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
             }
         }
         .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Open Chats") {
-                Task { await appState.finishAccountSetup() }
+            if model.errorMessage != nil {
+                WNOnboardingButton(title: "Try Again") {
+                    Task { await session.connectAccountSetup() }
+                }
+                .disabled(!session.canUseRuntimeForLocalForegroundWork || model.isBusy)
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
+                .background(Color(uiColor: .systemGroupedBackground))
+            } else if model.isDurablyReady || isOpeningChats {
+                WNOnboardingButton(title: "Open Chats", isLoading: isOpeningChats) {
+                    guard !isOpeningChats else { return }
+                    isOpeningChats = true
+                    Task {
+                        defer { isOpeningChats = false }
+                        await session.finishAccountSetup()
+                    }
+                }
+                .accessibilityValue(isOpeningChats ? "In progress" : "")
+                .disabled(!model.canFinish || session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
+                .background(Color(uiColor: .systemGroupedBackground))
+            } else if model.isConnected,
+                      let step = AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy) {
+                WNOnboardingButton(title: "Review and Continue") {
+                    decision = SetupDecision(step: step)
+                }
+                .disabled(session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
+                .background(Color(uiColor: .systemGroupedBackground))
             }
-            .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
-            .safeAreaPadding(.horizontal)
-            .safeAreaPadding(.bottom)
-            .background(.background)
         }
         .interactiveDismissDisabled()
-        .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
-            if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
+        .task(id: "\(session.runtimeGeneration):\(session.canUseRuntimeForLocalForegroundWork)") {
+            if session.canUseRuntimeForLocalForegroundWork { await session.connectAccountSetup() }
         }
         .onDisappear { model.suspend() }
         .sheet(item: $decision) { decision in
@@ -74,34 +95,70 @@ struct AccountSetupView: View {
         }
     }
 
-    static func needsAttention(_ status: OnboardingStatusFfi) -> Bool {
-        status == .needsInput || status == .retryableFailure || status == .waitingForSigner
-    }
-
-    private func stepRow(_ step: OnboardingStepStateFfi) -> some View {
-        HStack(spacing: 12) {
-            Group {
-                if step.step == model.snapshot.steps.first(where: { $0.status == .checking })?.step && !model.snapshot.ready {
-                    ProgressView()
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(AccountSetupPresentation.heading(model.snapshot, isBusy: model.isBusy, hasError: model.errorMessage != nil))
+                .font(.title.bold())
+                .accessibilityAddTraits(.isHeader)
+            if model.errorMessage != nil {
+                Text("Please try again.")
+                    .foregroundStyle(.secondary)
+            } else if isOpeningChats {
+                Text("Opening your chats…")
+                    .foregroundStyle(.secondary)
+            } else if model.isDurablyReady {
+                Text("Open Chats to start messaging.")
+                    .foregroundStyle(.secondary)
+            } else {
+                if !model.isBusy, model.snapshot.steps.contains(where: { AccountSetupPresentation.checkState($0).needsAttention }) {
+                    Text("Review the item below to continue.")
+                        .foregroundStyle(.secondary)
                 } else {
-                    Image(systemName: AccountSetupPresentation.symbol(step.status))
-                        .foregroundStyle(step.status == .passed ? .green : Self.needsAttention(step.status) ? .orange : .secondary)
+                    Text("We’re checking your profile and connection.")
+                        .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(AccountSetupPresentation.title(step.step)).foregroundStyle(Color.primary)
-                Text(AccountSetupPresentation.status(step.status)).font(.subheadline).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func stepRow(_ step: OnboardingStepStateFfi, state: AccountSetupPresentation.CheckState) -> some View {
+        HStack {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(AccountSetupPresentation.title(step.step)).foregroundStyle(.primary)
+                    Text(state.subtitle).font(.subheadline).foregroundStyle(.secondary)
+                }
+            } icon: {
+                Group {
+                    if state == .checking {
+                        ProgressView()
+                    } else {
+                        Image(systemName: state.symbol)
+                            .foregroundStyle(iconColor(state))
+                    }
+                }
+                .accessibilityHidden(true)
             }
+            .labelStyle(.titleAndIcon)
             Spacer(minLength: 0)
-            if Self.needsAttention(step.status) {
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            if state.needsAttention {
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
         }
-        .padding(.vertical, 4)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
+    }
+
+    private func iconColor(_ state: AccountSetupPresentation.CheckState) -> Color {
+        switch state {
+        case .passed: .green
+        case .optionalProfile, .optionalIssue, .acknowledgment: .orange
+        case .requiredFix: .red
+        default: .secondary
+        }
     }
 }
 

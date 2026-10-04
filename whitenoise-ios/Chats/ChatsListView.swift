@@ -170,6 +170,9 @@ struct ChatsListView: View {
             .task(id: visibleRowsKey) {
                 selectedChatIds = ChatListSelection.reconcile(selectedChatIds, visibleIds: visibleRowIds)
             }
+            #if DEBUG
+            .modifier(AccountRecoveryScenarioLauncher())
+            #endif
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

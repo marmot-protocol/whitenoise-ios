@@ -29,26 +29,73 @@ nonisolated enum AccountSetupPresentation {
         }
     }
 
-    static func status(_ status: OnboardingStatusFfi) -> String {
-        switch status {
-        case .pending: L10n.string("Waiting")
-        case .checking: L10n.string("Checking…")
-        case .passed: L10n.string("Done")
-        case .needsInput: L10n.string("Needs your attention")
-        case .retryableFailure: L10n.string("Couldn’t finish this check")
-        case .waitingForSigner: L10n.string("Couldn’t access your private key")
-        case .skipped: L10n.string("Skipped")
+    enum CheckState: Equatable {
+        case pending, checking, passed, skipped
+        case optionalProfile, optionalIssue, requiredFix, acknowledgment
+
+        var subtitle: String {
+            switch self {
+            case .pending: L10n.string("Waiting")
+            case .checking: L10n.string("Checking…")
+            case .passed: L10n.string("Done")
+            case .skipped: L10n.string("Skipped")
+            case .optionalProfile, .optionalIssue: L10n.string("Review or skip")
+            case .requiredFix: L10n.string("Fix to continue")
+            case .acknowledgment: L10n.string("Review to continue")
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .pending, .checking: "circle"
+            case .passed: "checkmark.circle.fill"
+            case .skipped: "minus.circle"
+            case .optionalProfile, .optionalIssue, .acknowledgment: "exclamationmark.triangle.fill"
+            case .requiredFix: "xmark.circle.fill"
+            }
+        }
+
+        var needsAttention: Bool {
+            switch self {
+            case .optionalProfile, .optionalIssue, .requiredFix, .acknowledgment: true
+            case .pending, .checking, .passed, .skipped: false
+            }
         }
     }
 
-    static func symbol(_ status: OnboardingStatusFfi) -> String {
-        switch status {
-        case .passed: "checkmark.circle.fill"
-        case .skipped: "minus.circle"
-        case .needsInput, .retryableFailure: "exclamationmark.circle"
-        case .waitingForSigner: "key"
-        case .checking, .pending: "circle"
+    static func checkState(_ step: OnboardingStepStateFfi) -> CheckState {
+        switch step.status {
+        case .pending: return .pending
+        case .checking: return .checking
+        case .passed: return .passed
+        case .skipped: return .skipped
+        case .needsInput, .retryableFailure, .waitingForSigner:
+            if step.step == .singleDevice, step.actions.contains(.continueAnyway) {
+                return .acknowledgment
+            }
+            // Only describe skipping when the current snapshot offers an action the UI supports.
+            if (step.step == .profile || step.step == .follows), step.actions.contains(.continueWithout) {
+                let isInvitation = step.status == .needsInput && step.findings.allSatisfy { $0.issue == .missing }
+                return isInvitation ? .optionalProfile : .optionalIssue
+            }
+            return .requiredFix
         }
+    }
+
+    static func stepToReview(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool) -> OnboardingStepFfi? {
+        guard !isBusy, !snapshot.ready, !snapshot.cancellationPending,
+              let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
+              checkState(step).needsAttention else { return nil }
+        return step.step
+    }
+
+    static func heading(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, hasError: Bool) -> String {
+        if hasError { return L10n.string("Couldn’t continue signing in") }
+        if snapshot.ready && !snapshot.cancellationPending { return L10n.string("You’re ready to chat") }
+        if !isBusy, snapshot.steps.contains(where: { checkState($0).needsAttention }) {
+            return L10n.string("A little more to do")
+        }
+        return L10n.string("Getting ready to chat")
     }
 
     static func deviceAction(_ discovery: OnboardingDeviceDiscoveryFfi?) -> String {
