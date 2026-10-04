@@ -1,7 +1,6 @@
 import Foundation
 import Network
 import Security
-import Synchronization
 
 /// Minimal HTTPS/1.1 GET client for peer-controlled image URLs. It resolves a
 /// hostname once, rejects the entire answer set if any address is private, then
@@ -15,25 +14,16 @@ nonisolated enum PinnedHTTPSFetcher {
     /// queueing more stuck work.
     static let maxConcurrentDnsResolutions = 6
 
-    private static let dnsResolutionsInFlight = Mutex(0)
+    private static let dnsSlots = PinnedDNSResolutionSlots(limit: maxConcurrentDnsResolutions)
 
-    /// Claim logic is pure for testability; the process-wide counter is
-    /// touched only through the argumentless wrappers.
+    /// Pure admission logic; the process-wide reservation owner holds its mutex.
     static func claimDnsSlot(_ inFlight: inout Int, limit: Int = maxConcurrentDnsResolutions) -> Bool {
         guard inFlight < limit else { return false }
         inFlight += 1
         return true
     }
 
-    static func claimDnsSlot() -> Bool {
-        dnsResolutionsInFlight.withLock { claimDnsSlot(&$0) }
-    }
-
-    static func releaseDnsSlot() {
-        dnsResolutionsInFlight.withLock { $0 = max(0, $0 - 1) }
-    }
-
-    struct Endpoint: Equatable {
+    struct Endpoint: Equatable, Sendable {
         let address: String
         let tlsServerName: String
         let port: UInt16
@@ -59,17 +49,26 @@ nonisolated enum PinnedHTTPSFetcher {
     static func fetch(
         _ originalRequest: URLRequest,
         maximumResponseBytes: Int,
-        resolver: @escaping HostResolutionGuard.Resolver = HostResolutionGuard.systemResolver
+        resolver: @escaping HostResolutionGuard.Resolver = HostResolutionGuard.systemResolver,
+        clock: any PinnedFetchClock = SystemPinnedFetchClock(),
+        slots: PinnedDNSResolutionSlots? = nil,
+        attempt: FetchAttempt? = nil
     ) async throws -> (Data, URLResponse) {
         guard maximumResponseBytes >= 0 else { throw FetchError.invalidRequest }
+        let deadline = PinnedFetchDeadline(clock: clock)
         var request = originalRequest
 
         for redirectCount in 0...maximumRedirects {
+            try deadline.check()
             let (data, response) = try await fetchOnce(
                 request,
                 maximumResponseBytes: maximumResponseBytes,
-                resolver: resolver
+                resolver: resolver,
+                deadline: deadline,
+                slots: slots ?? dnsSlots,
+                attempt: attempt
             )
+            try deadline.check()
             guard (300..<400).contains(response.statusCode) else {
                 guard (200..<300).contains(response.statusCode) else {
                     throw FetchError.httpStatus(response.statusCode)
@@ -116,47 +115,55 @@ nonisolated enum PinnedHTTPSFetcher {
     private static func fetchOnce(
         _ request: URLRequest,
         maximumResponseBytes: Int,
-        resolver: @escaping HostResolutionGuard.Resolver
+        resolver: @escaping HostResolutionGuard.Resolver,
+        deadline: PinnedFetchDeadline,
+        slots: PinnedDNSResolutionSlots,
+        attempt: FetchAttempt?
     ) async throws -> (Data, HTTPURLResponse) {
         guard let url = request.url,
               ContentSanitizer.imageURL(url.absoluteString) != nil,
               request.httpMethod == nil || request.httpMethod == "GET"
         else { throw FetchError.invalidRequest }
 
-        // The resolver blocks a thread in getaddrinfo, which cancellation
-        // cannot interrupt — but propagating it stops the connection and body
-        // stages from ever starting for an abandoned fetch. A process-wide
-        // slot cap bounds how many of those stuck threads can exist at once:
-        // repeated wakes naming distinct slow hosts fail fast instead of
-        // stacking resolutions behind abandoned deadlines.
-        guard claimDnsSlot() else { throw URLError(.cannotConnectToHost) }
-        let dnsTask = Task.detached(priority: .utility) {
-            defer { releaseDnsSlot() }
-            return try endpoints(for: url, resolver: resolver)
-        }
-        let resolvedEndpoints = try await withTaskCancellationHandler {
-            try await dnsTask.value
-        } onCancel: {
-            dnsTask.cancel()
-        }
-        try Task.checkCancellation()
+        let resolvedEndpoints = try await PinnedDNSWait.resolve(
+            url: url,
+            resolver: resolver,
+            deadline: deadline,
+            slots: slots
+        )
         let requestData = try requestBytes(for: request)
         var lastError: Error = URLError(.cannotConnectToHost)
         for endpoint in resolvedEndpoints {
+            let timeout = try deadline.attemptNanoseconds(maximum: timeoutNanoseconds(for: request))
             do {
-                return try await fetch(
-                    requestData: requestData,
-                    url: url,
-                    endpoint: endpoint,
-                    maximumResponseBytes: maximumResponseBytes,
-                    timeoutNanoseconds: timeoutNanoseconds(for: request)
+                let result = try await (attempt ?? nativeAttempt)(
+                    requestData, url, endpoint, maximumResponseBytes, timeout
                 )
+                try deadline.check()
+                return (result.data, result.response)
             } catch {
                 if error is CancellationError || Task.isCancelled { throw CancellationError() }
+                try deadline.check()
                 lastError = error
             }
         }
         throw lastError
+    }
+
+    /// Internal behavioral seam; production always uses the same native TLS adapter.
+    typealias FetchAttempt = @Sendable (
+        Data, URL, Endpoint, Int, UInt64
+    ) async throws -> PinnedResponse
+
+    private static let nativeAttempt: FetchAttempt = { data, url, endpoint, cap, timeout in
+        let result = try await fetch(
+            requestData: data,
+            url: url,
+            endpoint: endpoint,
+            maximumResponseBytes: cap,
+            timeoutNanoseconds: timeout
+        )
+        return PinnedResponse(data: result.0, response: result.1)
     }
 
     private static func fetch(
@@ -209,6 +216,7 @@ nonisolated enum PinnedHTTPSFetcher {
         let cancellation = PinnedConnectionCancellation(connection: connection)
         return try await withTaskCancellationHandler {
             defer { connection.cancel() }
+            try Task.checkCancellation()
             try await start(connection)
             try await send(requestData, on: connection)
             let rawLimit = maximumResponseBytes.addingReportingOverflow(maximumHeaderBytes)
@@ -221,20 +229,19 @@ nonisolated enum PinnedHTTPSFetcher {
     }
 
     private static func start(_ connection: NWConnection) async throws {
-        let gate = ThrowingContinuationGate<Void>()
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            gate.install(continuation)
+        let gate = PinnedFetchWaitGate<Void>()
+        try await gate.wait { gate in
             connection.stateUpdateHandler = { state in
                 switch state {
                 case .ready:
                     connection.stateUpdateHandler = nil
-                    gate.resume(returning: ())
+                    gate.complete(.success(()))
                 case .failed(let error):
                     connection.stateUpdateHandler = nil
-                    gate.resume(throwing: error)
+                    gate.complete(.failure(error))
                 case .cancelled:
                     connection.stateUpdateHandler = nil
-                    gate.resume(throwing: CancellationError())
+                    gate.complete(.failure(CancellationError()))
                 default:
                     break
                 }
@@ -244,12 +251,13 @@ nonisolated enum PinnedHTTPSFetcher {
     }
 
     private static func send(_ data: Data, on connection: NWConnection) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        let gate = PinnedFetchWaitGate<Void>()
+        try await gate.wait { gate in
             connection.send(content: data, completion: .contentProcessed { error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    gate.complete(.failure(error))
                 } else {
-                    continuation.resume()
+                    gate.complete(.success(()))
                 }
             })
         }
@@ -270,16 +278,17 @@ nonisolated enum PinnedHTTPSFetcher {
     }
 
     private static func receive(from connection: NWConnection) async throws -> ReceivedChunk {
-        try await withCheckedThrowingContinuation { continuation in
+        let gate = PinnedFetchWaitGate<ReceivedChunk>()
+        return try await gate.wait { gate in
             connection.receive(minimumIncompleteLength: 1, maximumLength: ioChunkBytes) {
                 data,
                 _,
                 complete,
                 error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    gate.complete(.failure(error))
                 } else {
-                    continuation.resume(returning: ReceivedChunk(data: data, complete: complete))
+                    gate.complete(.success(ReceivedChunk(data: data, complete: complete)))
                 }
             }
         }
@@ -421,7 +430,7 @@ nonisolated enum PinnedHTTPSFetcher {
     // boundary and is only read afterwards; Foundation has not annotated
     // HTTPURLResponse as Sendable on every supported OS toolchain.
     // swiftlint:disable:next no_unchecked_sendable
-    private struct PinnedResponse: @unchecked Sendable {
+    struct PinnedResponse: @unchecked Sendable {
         let data: Data
         let response: HTTPURLResponse
     }
@@ -445,31 +454,5 @@ nonisolated private final class PinnedConnectionCancellation: @unchecked Sendabl
 
     func cancel() {
         connection.cancel()
-    }
-}
-
-// State callbacks can race task cancellation. Taking and clearing the stored
-// continuation under a mutex makes every terminal state idempotent.
-// swiftlint:disable:next no_unchecked_sendable
-nonisolated private final class ThrowingContinuationGate<Value>: @unchecked Sendable {
-    private let continuation = Mutex<CheckedContinuation<Value, Error>?>(nil)
-
-    func install(_ continuation: CheckedContinuation<Value, Error>) {
-        self.continuation.withLock { $0 = continuation }
-    }
-
-    func resume(returning value: Value) {
-        take()?.resume(returning: value)
-    }
-
-    func resume(throwing error: Error) {
-        take()?.resume(throwing: error)
-    }
-
-    private func take() -> CheckedContinuation<Value, Error>? {
-        continuation.withLock { continuation in
-            defer { continuation = nil }
-            return continuation
-        }
     }
 }

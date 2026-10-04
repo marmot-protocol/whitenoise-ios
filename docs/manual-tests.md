@@ -1570,3 +1570,21 @@ Marmot root. Automated simulator checks do not replace these device checks.
   until typing or moving the insertion point requires a caret reveal.
 - Delete back to one line and clear/send the draft. The composer should shrink,
   reset its scroll offset, and preserve the full text when sending.
+
+## Remote image fetch lifetime
+
+- Load ordinary HTTPS avatars and image-search previews, including a public CDN
+  redirect and a host where the first public address fails but a later one succeeds.
+  HTTPS-only URL checks, complete DNS-answer validation, numeric address pinning,
+  original-host TLS authentication and encoded-byte limits must remain enforced.
+- A load has one monotonic 60-second network budget beginning before DNS. Endpoint
+  attempts retain the request's existing timeout (normally 12 seconds), clamped to
+  the remaining total budget; redirects and incoming bytes do not reset it.
+- With a controlled slow resolver, cancel a load or clear avatar caches while DNS
+  is blocked. The caller and cache drain should finish without waiting for the
+  resolver. A late answer must not start a connection or repopulate image caches.
+  Six blocked workers exhaust the process-wide DNS slots; further loads fail fast.
+- Deadline and cancellation bound asynchronous waits, not hard real-time execution
+  or native image decoding. A cancelled synchronous system resolver can continue
+  until the OS returns, retaining its slot throughout; this change neither kills
+  resolver threads nor changes negative-cache or retry policy.
