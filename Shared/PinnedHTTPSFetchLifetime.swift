@@ -63,6 +63,11 @@ nonisolated struct PinnedFetchDeadline: Sendable {
         guard nanos > 0 else { throw URLError(.timedOut) }
         return min(maximum, nanos)
     }
+
+    func attemptExpiry(maximum: UInt64) throws -> ContinuousClock.Instant {
+        let timeout = try attemptNanoseconds(maximum: maximum)
+        return min(expiry, clock.now().advanced(by: .nanoseconds(Int64(clamping: timeout))))
+    }
 }
 
 /// Remember completion before installation; callbacks and cancellation resume exactly once.

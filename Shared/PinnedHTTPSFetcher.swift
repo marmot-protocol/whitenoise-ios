@@ -136,9 +136,18 @@ nonisolated enum PinnedHTTPSFetcher {
         for endpoint in resolvedEndpoints {
             let timeout = try deadline.attemptNanoseconds(maximum: timeoutNanoseconds(for: request))
             do {
-                let result = try await (attempt ?? nativeAttempt)(
-                    requestData, url, endpoint, maximumResponseBytes, timeout
-                )
+                let result: PinnedResponse
+                if let attempt {
+                    result = try await attempt(requestData, url, endpoint, maximumResponseBytes, timeout)
+                } else {
+                    let response = try await fetch(
+                        requestData: requestData, url: url, endpoint: endpoint,
+                        maximumResponseBytes: maximumResponseBytes,
+                        attemptExpiry: deadline.attemptExpiry(maximum: timeoutNanoseconds(for: request)),
+                        deadline: deadline
+                    )
+                    result = PinnedResponse(data: response.0, response: response.1)
+                }
                 try deadline.check()
                 return (result.data, result.response)
             } catch {
@@ -155,23 +164,13 @@ nonisolated enum PinnedHTTPSFetcher {
         Data, URL, Endpoint, Int, UInt64
     ) async throws -> PinnedResponse
 
-    private static let nativeAttempt: FetchAttempt = { data, url, endpoint, cap, timeout in
-        let result = try await fetch(
-            requestData: data,
-            url: url,
-            endpoint: endpoint,
-            maximumResponseBytes: cap,
-            timeoutNanoseconds: timeout
-        )
-        return PinnedResponse(data: result.0, response: result.1)
-    }
-
     private static func fetch(
         requestData: Data,
         url: URL,
         endpoint: Endpoint,
         maximumResponseBytes: Int,
-        timeoutNanoseconds: UInt64
+        attemptExpiry: ContinuousClock.Instant,
+        deadline: PinnedFetchDeadline
     ) async throws -> (Data, HTTPURLResponse) {
         try await withThrowingTaskGroup(of: PinnedResponse.self) { group in
             group.addTask {
@@ -179,12 +178,13 @@ nonisolated enum PinnedHTTPSFetcher {
                     requestData: requestData,
                     url: url,
                     endpoint: endpoint,
-                    maximumResponseBytes: maximumResponseBytes
+                    maximumResponseBytes: maximumResponseBytes,
+                    deadline: deadline
                 )
                 return PinnedResponse(data: response.0, response: response.1)
             }
             group.addTask {
-                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                try await Task.sleep(until: attemptExpiry, clock: .continuous)
                 throw URLError(.timedOut)
             }
             guard let first = try await group.next() else { throw URLError(.unknown) }
@@ -197,8 +197,10 @@ nonisolated enum PinnedHTTPSFetcher {
         requestData: Data,
         url: URL,
         endpoint: Endpoint,
-        maximumResponseBytes: Int
+        maximumResponseBytes: Int,
+        deadline: PinnedFetchDeadline
     ) async throws -> (Data, HTTPURLResponse) {
+        try deadline.check()
         let tls = NWProtocolTLS.Options()
         sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, endpoint.tlsServerName)
         sec_protocol_options_add_tls_application_protocol(tls.securityProtocolOptions, "http/1.1")
@@ -216,7 +218,7 @@ nonisolated enum PinnedHTTPSFetcher {
         let cancellation = PinnedConnectionCancellation(connection: connection)
         return try await withTaskCancellationHandler {
             defer { connection.cancel() }
-            try Task.checkCancellation()
+            try deadline.check()
             try await start(connection)
             try await send(requestData, on: connection)
             let rawLimit = maximumResponseBytes.addingReportingOverflow(maximumHeaderBytes)

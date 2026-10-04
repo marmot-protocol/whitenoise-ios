@@ -33,6 +33,18 @@ struct PinnedHTTPSFetchLifetimeTests {
         #expect(wins.withLock { $0 } == 1)
     }
 
+    @Test func absoluteAttemptExpiryCannotSlidePastTotalDeadline() throws {
+        let clock = VirtualFetchClock()
+        let deadline = PinnedFetchDeadline(clock: clock)
+        clock.advance(by: .seconds(55))
+        let attemptExpiry = try deadline.attemptExpiry(maximum: 12_000_000_000)
+        #expect(attemptExpiry == deadline.expiry)
+        clock.advance(by: .seconds(5))
+        #expect(throws: URLError(.timedOut)) {
+            try deadline.attemptExpiry(maximum: 12_000_000_000)
+        }
+    }
+
     @Test func blockedDNSCancellationReturnsBeforeWorkerRelease() async throws {
         let fixture = BlockingDNS()
         defer { fixture.release() }
