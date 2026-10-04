@@ -2214,8 +2214,12 @@ struct ConversationView: View {
             },
             onReplyPreviewTap: {
                 guard let targetId = viewModel.replyTargetMessageId(for: record) else { return }
-                replyOriginMessageIdHex = record.messageIdHex
-                navigateToTimelineMessage(targetId, viewModel: viewModel)
+                let originId = record.messageIdHex
+                replyOriginMessageIdHex = originId
+                navigateToTimelineMessage(targetId, viewModel: viewModel) {
+                    // No jump happened, so there is nothing to return from.
+                    if replyOriginMessageIdHex == originId { replyOriginMessageIdHex = nil }
+                }
             },
             onLoadMedia: ConversationMediaLoader { media in
                 try await viewModel.data(for: media)
@@ -3471,7 +3475,8 @@ struct ConversationView: View {
     private func navigateToTimelineMessage(
         _ messageIdHex: String,
         viewModel: ConversationViewModel,
-        landsOnUnreadDivider: Bool = false
+        landsOnUnreadDivider: Bool = false,
+        onUnavailable: (() -> Void)? = nil
     ) {
         messageNavigationTask?.cancel()
         viewModel.supersedePendingConversationNavigation()
@@ -3500,6 +3505,7 @@ struct ConversationView: View {
                 return
             }
 
+            onUnavailable?()
             appState.present(.warning(L10n.string("Original message is no longer available")))
         }
     }
