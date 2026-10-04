@@ -32,6 +32,11 @@ struct PinnedHTTPSRedirectTests {
         "https://[::1]/avatar.png",
         "https://[ff02::1]/avatar.png",
         "https://[2002:7f00:1::]/avatar.png",
+        "https://198.18.0.1/avatar.png",
+        "https://198.51.100.1/avatar.png",
+        "https://[fec0::1]/avatar.png",
+        "https://[2001:db8::1]/avatar.png",
+        "https://[64:ff9b:1::1]/avatar.png",
     ])
     func refusesUnsafeRedirect(location: String) throws {
         let currentURL = try #require(URL(string: "https://cdn.example/avatar.png"))
