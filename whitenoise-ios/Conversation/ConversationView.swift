@@ -654,8 +654,11 @@ struct ConversationView: View {
     @State private var pendingSearchMatchScrollTask: Task<Void, Never>?
     @State private var messageNavigationTarget: MessageNavigationTarget?
     /// The message whose quote the user tapped; the down arrow returns here first.
-    @State private var replyOriginMessageIdHex: String?
+    @State private var replyOrigin: DownArrowStopAnchor?
     @State private var didPassFirstUnread = false
+    /// Captured while the first unread row is loaded, so it can still be placed
+    /// after the bounded window drops it.
+    @State private var firstUnreadOrderKey: UInt64?
     @State private var messageNavigationTask: Task<Void, Never>?
     @State private var messageNavigationGeneration = 0
     @State private var visibleChatRoute: VisibleChatRoute?
@@ -698,6 +701,11 @@ struct ConversationView: View {
         let status: MessageStatus
         let rowId: String
         let rowFrameKey: String
+    }
+
+    private struct DownArrowStopAnchor: Equatable {
+        let messageIdHex: String
+        let orderKey: UInt64
     }
 
     /// `scrollID` can be the unread divider above the row identified by `rowID`.
@@ -2214,11 +2222,11 @@ struct ConversationView: View {
             },
             onReplyPreviewTap: {
                 guard let targetId = viewModel.replyTargetMessageId(for: record) else { return }
-                let originId = record.messageIdHex
-                replyOriginMessageIdHex = originId
+                let origin = DownArrowStopAnchor(messageIdHex: record.messageIdHex, orderKey: record.recordedAt)
+                replyOrigin = origin
                 navigateToTimelineMessage(targetId, viewModel: viewModel) {
                     // No jump happened, so there is nothing to return from.
-                    if replyOriginMessageIdHex == originId { replyOriginMessageIdHex = nil }
+                    if replyOrigin == origin { replyOrigin = nil }
                 }
             },
             onLoadMedia: ConversationMediaLoader { media in
@@ -2414,26 +2422,19 @@ struct ConversationView: View {
     }
 
     private func handleDownArrowTap(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
-        let visible = TimelineDownArrowPolicy.visibleIndices(
-            rowKeys: viewModel.timeline.lazy.map(\.rowFrameKey),
-            visibleRowKeys: timelineVisibility.visibleRowKeys
-        )
-        let destination = TimelineDownArrowPolicy.destination(
-            replyOrigin: downArrowStop(replyOriginMessageIdHex, visible: visible, viewModel: viewModel),
-            firstUnread: downArrowStop(firstUnreadStopMessageId(viewModel: viewModel),
-                visible: visible, viewModel: viewModel),
-            hasMoreAfter: viewModel.hasMoreAfter
-        )
-        switch destination {
+        let stops = downArrowStops(viewModel: viewModel)
+        // Choosing any destination retires the reply origin: it is either the
+        // destination or was not ahead, and a later jump may drop its row.
+        replyOrigin = nil
+        switch TimelineDownArrowPolicy.destination(replyOrigin: stops.replyOrigin, firstUnread: stops.firstUnread) {
         case .replyOrigin(let messageIdHex):
-            replyOriginMessageIdHex = nil
             navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
         case .firstUnread(let messageIdHex):
             didPassFirstUnread = true
             navigateToTimelineMessage(messageIdHex, viewModel: viewModel, landsOnUnreadDivider: true)
         case .latest:
-            replyOriginMessageIdHex = nil
             didPassFirstUnread = true
+            messageNavigationTask?.cancel()
             isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
                 currentIsPinned: isAtTimelineBottom)
             jumpToBottom(proxy: proxy)
@@ -2446,34 +2447,58 @@ struct ConversationView: View {
         return viewModel.initialWindowUnreadMessageId.flatMap { $0.isEmpty ? nil : $0 }
     }
 
-    private func downArrowStop(
-        _ messageIdHex: String?,
-        visible: ClosedRange<Int>?,
+    private func downArrowStops(
         viewModel: ConversationViewModel
-    ) -> TimelineDownArrowPolicy.Stop? {
-        guard let messageIdHex else { return nil }
-        let index = viewModel.timeline.firstIndex { item in
-            guard case .message(let record, _) = item.kind else { return false }
-            return record.messageIdHex == messageIdHex
+    ) -> (replyOrigin: TimelineDownArrowPolicy.Stop?, firstUnread: TimelineDownArrowPolicy.Stop?) {
+        let unreadId = firstUnreadStopMessageId(viewModel: viewModel)
+        guard replyOrigin != nil || unreadId != nil else { return (nil, nil) }
+        if let unreadId, let key = viewModel.record(for: unreadId)?.recordedAt {
+            firstUnreadOrderKey = key
         }
-        return TimelineDownArrowPolicy.Stop(
-            messageIdHex: messageIdHex,
-            placement: TimelineDownArrowStopPlacement.of(targetIndex: index, visibleIndices: visible)
+        let visible = TimelineDownArrowPolicy.visibleIndices(
+            rowKeys: viewModel.timeline.lazy.map(\.rowFrameKey),
+            visibleRowKeys: timelineVisibility.visibleRowKeys
+        )
+        var loadedOrderKeys: ClosedRange<UInt64>?
+        for item in viewModel.timeline {
+            guard case .message(let record, _) = item.kind else { continue }
+            let key = record.recordedAt
+            loadedOrderKeys = loadedOrderKeys.map { min($0.lowerBound, key)...max($0.upperBound, key) } ?? key...key
+        }
+        func stop(_ messageIdHex: String?, orderKey: UInt64?) -> TimelineDownArrowPolicy.Stop? {
+            guard let messageIdHex else { return nil }
+            let index = viewModel.timeline.firstIndex { item in
+                guard case .message(let record, _) = item.kind else { return false }
+                return record.messageIdHex == messageIdHex
+            }
+            return TimelineDownArrowPolicy.Stop(
+                messageIdHex: messageIdHex,
+                placement: TimelineDownArrowStopPlacement.of(
+                    targetIndex: index,
+                    visibleIndices: visible,
+                    orderKey: orderKey,
+                    loadedOrderKeys: loadedOrderKeys,
+                    hasMoreAfter: viewModel.hasMoreAfter
+                )
+            )
+        }
+        return (
+            stop(replyOrigin?.messageIdHex, orderKey: replyOrigin?.orderKey),
+            stop(unreadId, orderKey: firstUnreadOrderKey)
         )
     }
 
     /// Scrolling past a stop on one's own retires it, so a later tap moves on.
     private func clearPassedDownArrowStops(viewModel: ConversationViewModel) {
-        let unreadId = firstUnreadStopMessageId(viewModel: viewModel)
-        guard replyOriginMessageIdHex != nil || unreadId != nil else { return }
-        let visible = TimelineDownArrowPolicy.visibleIndices(
-            rowKeys: viewModel.timeline.lazy.map(\.rowFrameKey),
-            visibleRowKeys: timelineVisibility.visibleRowKeys
-        )
-        if downArrowStop(replyOriginMessageIdHex, visible: visible, viewModel: viewModel)?.placement.isPassed == true {
-            replyOriginMessageIdHex = nil
+        guard TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: isInitialTimelinePositionSettled,
+            isUserScrolling: isUserScrollingTimeline
+        ) else { return }
+        let stops = downArrowStops(viewModel: viewModel)
+        if stops.replyOrigin?.placement.isPassed == true {
+            replyOrigin = nil
         }
-        if downArrowStop(unreadId, visible: visible, viewModel: viewModel)?.placement.isPassed == true {
+        if stops.firstUnread?.placement.isPassed == true {
             didPassFirstUnread = true
         }
     }
@@ -2608,6 +2633,9 @@ struct ConversationView: View {
             visibleRowKeys: timelineVisibility.visibleRowKeys,
             didScrollToUnreadTarget: viewModel.conversationWindow?.anchor.kind == .firstUnread
         )
+        if let unreadId = viewModel.initialWindowUnreadMessageId {
+            firstUnreadOrderKey = viewModel.record(for: unreadId)?.recordedAt
+        }
         markCurrentlyVisibleMessagesRead(viewModel: viewModel)
         reconcileTimelineTailVisibility(viewModel: viewModel)
     }

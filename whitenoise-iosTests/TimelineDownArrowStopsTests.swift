@@ -3,57 +3,90 @@ import Testing
 
 struct TimelineDownArrowStopsTests {
     private typealias Stop = TimelineDownArrowPolicy.Stop
+    private typealias Placement = TimelineDownArrowStopPlacement
 
-    @Test func placementComparesTargetWithVisibleRows() {
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: 2, visibleIndices: 5...9) == .above)
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: 5, visibleIndices: 5...9) == .visible)
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: 9, visibleIndices: 5...9) == .visible)
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: 10, visibleIndices: 5...9) == .below)
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: nil, visibleIndices: 5...9) == .unloaded)
-        #expect(TimelineDownArrowStopPlacement.of(targetIndex: 3, visibleIndices: nil) == .unloaded)
+    private func loaded(_ index: Int, visible: ClosedRange<Int>?) -> Placement {
+        Placement.of(targetIndex: index, visibleIndices: visible, orderKey: nil,
+                     loadedOrderKeys: 100...200, hasMoreAfter: false)
     }
 
-    @Test func onlyAStopAboveTheViewportIsPassed() {
-        #expect(TimelineDownArrowStopPlacement.above.isPassed)
-        #expect(!TimelineDownArrowStopPlacement.visible.isPassed)
-        #expect(!TimelineDownArrowStopPlacement.below.isPassed)
-        #expect(!TimelineDownArrowStopPlacement.unloaded.isPassed)
+    private func unloaded(orderKey: UInt64?, loaded: ClosedRange<UInt64>? = 100...200,
+                          hasMoreAfter: Bool) -> Placement {
+        Placement.of(targetIndex: nil, visibleIndices: 5...9, orderKey: orderKey,
+                     loadedOrderKeys: loaded, hasMoreAfter: hasMoreAfter)
     }
 
-    @Test func replyOriginBelowTheViewportComesFirst() {
+    @Test func loadedPlacementComparesTargetWithVisibleRows() {
+        #expect(loaded(2, visible: 5...9) == .above)
+        #expect(loaded(5, visible: 5...9) == .visible)
+        #expect(loaded(9, visible: 5...9) == .visible)
+        #expect(loaded(10, visible: 5...9) == .below)
+        #expect(loaded(3, visible: nil) == .unknown)
+    }
+
+    @Test func unloadedPlacementUsesTheCapturedOrderKey() {
+        #expect(unloaded(orderKey: 50, hasMoreAfter: true) == .unloadedOlder)
+        #expect(unloaded(orderKey: 250, hasMoreAfter: true) == .unloadedNewer)
+        #expect(unloaded(orderKey: 250, hasMoreAfter: false) == .unknown)
+        #expect(unloaded(orderKey: 150, hasMoreAfter: true) == .unknown)
+        #expect(unloaded(orderKey: nil, hasMoreAfter: true) == .unknown)
+        #expect(unloaded(orderKey: 250, loaded: nil, hasMoreAfter: true) == .unknown)
+    }
+
+    @Test func stopsBehindTheReaderArePassedAndOnlyStopsInFrontAreAhead() {
+        #expect(Placement.above.isPassed)
+        #expect(Placement.unloadedOlder.isPassed)
+        #expect(!Placement.visible.isPassed)
+        #expect(!Placement.unknown.isPassed)
+        #expect(Placement.below.isAhead)
+        #expect(Placement.unloadedNewer.isAhead)
+        #expect(!Placement.unloadedOlder.isAhead)
+        #expect(!Placement.visible.isAhead)
+        #expect(!Placement.unknown.isAhead)
+    }
+
+    @Test func replyOriginAheadComesFirst() {
         let destination = TimelineDownArrowPolicy.destination(
             replyOrigin: Stop(messageIdHex: "origin", placement: .below),
-            firstUnread: Stop(messageIdHex: "unread", placement: .below),
-            hasMoreAfter: false
+            firstUnread: Stop(messageIdHex: "unread", placement: .below)
         )
         #expect(destination == .replyOrigin(messageIdHex: "origin"))
     }
 
-    @Test func firstUnreadBelowTheViewportComesBeforeLatest() {
-        let destination = TimelineDownArrowPolicy.destination(
+    @Test func firstUnreadAheadComesBeforeLatest() {
+        #expect(TimelineDownArrowPolicy.destination(
             replyOrigin: nil,
-            firstUnread: Stop(messageIdHex: "unread", placement: .below),
-            hasMoreAfter: false
-        )
-        #expect(destination == .firstUnread(messageIdHex: "unread"))
-    }
-
-    @Test func stopsOnScreenOrAlreadyPassedFallThroughToLatest() {
-        let destination = TimelineDownArrowPolicy.destination(
+            firstUnread: Stop(messageIdHex: "unread", placement: .below)
+        ) == .firstUnread(messageIdHex: "unread"))
+        #expect(TimelineDownArrowPolicy.destination(
             replyOrigin: Stop(messageIdHex: "origin", placement: .visible),
-            firstUnread: Stop(messageIdHex: "unread", placement: .above),
-            hasMoreAfter: true
-        )
-        #expect(destination == .latest)
-        #expect(TimelineDownArrowPolicy.destination(replyOrigin: nil, firstUnread: nil, hasMoreAfter: true) == .latest)
+            firstUnread: Stop(messageIdHex: "unread", placement: .unloadedNewer)
+        ) == .firstUnread(messageIdHex: "unread"))
     }
 
-    @Test func unloadedStopIsAheadOnlyWhileNewerHistoryRemains() {
-        let origin = Stop(messageIdHex: "origin", placement: .unloaded)
-        #expect(TimelineDownArrowPolicy.destination(replyOrigin: origin, firstUnread: nil, hasMoreAfter: true)
-            == .replyOrigin(messageIdHex: "origin"))
-        #expect(TimelineDownArrowPolicy.destination(replyOrigin: origin, firstUnread: nil, hasMoreAfter: false)
-            == .latest)
+    @Test func stopsThatAreNotAheadFallThroughToLatest() {
+        #expect(TimelineDownArrowPolicy.destination(
+            replyOrigin: Stop(messageIdHex: "origin", placement: .unloadedOlder),
+            firstUnread: Stop(messageIdHex: "unread", placement: .above)
+        ) == .latest)
+        #expect(TimelineDownArrowPolicy.destination(
+            replyOrigin: Stop(messageIdHex: "origin", placement: .unknown),
+            firstUnread: nil
+        ) == .latest)
+        #expect(TimelineDownArrowPolicy.destination(replyOrigin: nil, firstUnread: nil) == .latest)
+    }
+
+    /// The first frame is bottom-anchored, so the first unread row starts
+    /// above the viewport before the requested unread position settles.
+    @Test func onlyTheReadersOwnScrollingAfterSettlingRetiresStops() {
+        #expect(!TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: false, isUserScrolling: false))
+        #expect(!TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: false, isUserScrolling: true))
+        #expect(!TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: true, isUserScrolling: false))
+        #expect(TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: true, isUserScrolling: true))
     }
 
     @Test func visibleIndicesSpanFirstToLastVisibleRow() {

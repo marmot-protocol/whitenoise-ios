@@ -5,28 +5,38 @@ nonisolated enum TimelineDownArrowStopPlacement: Equatable {
     case above
     case visible
     case below
-    /// The row is not in the loaded window, or nothing is visible yet.
-    case unloaded
+    /// Dropped from the loaded window on its older side.
+    case unloadedOlder
+    /// Not loaded yet, and newer than everything that is.
+    case unloadedNewer
+    /// Nothing visible yet, or the row is missing from inside the loaded range.
+    case unknown
 
-    static func of(targetIndex: Int?, visibleIndices: ClosedRange<Int>?) -> Self {
-        guard let targetIndex, let visibleIndices else { return .unloaded }
-        if targetIndex < visibleIndices.lowerBound { return .above }
-        if targetIndex > visibleIndices.upperBound { return .below }
-        return .visible
-    }
-
-    /// A stop the user has scrolled past on their own no longer applies.
-    var isPassed: Bool { self == .above }
-
-    /// Both stops are newer than where the user is reading, so an unloaded
-    /// row is reachable only while newer history remains to be loaded.
-    func isAhead(hasMoreAfter: Bool) -> Bool {
-        switch self {
-        case .below: true
-        case .unloaded: hasMoreAfter
-        case .above, .visible: false
+    /// `orderKey` is the stop's `recordedAt`, captured when the stop was taken,
+    /// so a row the bounded window has dropped can still be placed.
+    static func of(
+        targetIndex: Int?,
+        visibleIndices: ClosedRange<Int>?,
+        orderKey: UInt64?,
+        loadedOrderKeys: ClosedRange<UInt64>?,
+        hasMoreAfter: Bool
+    ) -> Self {
+        if let targetIndex {
+            guard let visibleIndices else { return .unknown }
+            if targetIndex < visibleIndices.lowerBound { return .above }
+            if targetIndex > visibleIndices.upperBound { return .below }
+            return .visible
         }
+        guard let orderKey, let loadedOrderKeys else { return .unknown }
+        if orderKey < loadedOrderKeys.lowerBound { return .unloadedOlder }
+        if orderKey > loadedOrderKeys.upperBound, hasMoreAfter { return .unloadedNewer }
+        return .unknown
     }
+
+    /// A stop behind the reader no longer applies.
+    var isPassed: Bool { self == .above || self == .unloadedOlder }
+
+    var isAhead: Bool { self == .below || self == .unloadedNewer }
 }
 
 nonisolated enum TimelineDownArrowDestination: Equatable {
@@ -43,18 +53,21 @@ nonisolated enum TimelineDownArrowPolicy {
         let placement: TimelineDownArrowStopPlacement
     }
 
-    static func destination(
-        replyOrigin: Stop?,
-        firstUnread: Stop?,
-        hasMoreAfter: Bool
-    ) -> TimelineDownArrowDestination {
-        if let replyOrigin, replyOrigin.placement.isAhead(hasMoreAfter: hasMoreAfter) {
+    static func destination(replyOrigin: Stop?, firstUnread: Stop?) -> TimelineDownArrowDestination {
+        if let replyOrigin, replyOrigin.placement.isAhead {
             return .replyOrigin(messageIdHex: replyOrigin.messageIdHex)
         }
-        if let firstUnread, firstUnread.placement.isAhead(hasMoreAfter: hasMoreAfter) {
+        if let firstUnread, firstUnread.placement.isAhead {
             return .firstUnread(messageIdHex: firstUnread.messageIdHex)
         }
         return .latest
+    }
+
+    /// Only the reader's own scrolling retires a stop. Initial positioning
+    /// starts bottom-anchored and programmatic jumps pass rows the reader
+    /// never chose to pass.
+    static func mayRetirePassedStops(isInitialPositionSettled: Bool, isUserScrolling: Bool) -> Bool {
+        isInitialPositionSettled && isUserScrolling
     }
 
     /// Index range of the visible rows in timeline order, or nil when none are.
