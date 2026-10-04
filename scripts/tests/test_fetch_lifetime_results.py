@@ -5,6 +5,7 @@ import pathlib
 import subprocess
 import sys
 import unittest
+import xml.etree.ElementTree as ET
 
 
 SCRIPT = pathlib.Path(__file__).resolve().parents[1] / "check-fetch-lifetime-results.py"
@@ -21,9 +22,35 @@ def fixture():
 
 
 class FetchLifetimeResultTests(unittest.TestCase):
-    def test_all_twelve_pass(self):
+    def test_all_eleven_hermetic_cases_pass(self):
         self.assertEqual(CHECKER.require_passes(fixture()), sorted(CHECKER.REQUIRED))
-        self.assertEqual(len(CHECKER.REQUIRED), 12)
+        self.assertEqual(len(CHECKER.REQUIRED), 11)
+
+    def test_public_case_is_required_only_when_opted_in(self):
+        document = fixture()
+        with self.assertRaises(ValueError):
+            CHECKER.require_passes(document, include_public_cdn=True)
+        document["testNodes"][0]["children"].append({
+            "nodeType": "Test Case", "nodeIdentifier": CHECKER.PUBLIC_CDN_CASE, "result": "Passed"})
+        self.assertEqual(len(CHECKER.require_passes(document, include_public_cdn=True)), 12)
+
+    def test_skipped_public_case_does_not_weaken_hermetic_cases(self):
+        document = fixture()
+        document["testNodes"][0]["children"].append({
+            "nodeType": "Test Case", "nodeIdentifier": CHECKER.PUBLIC_CDN_CASE, "result": "Skipped"})
+        self.assertEqual(CHECKER.require_passes(document), sorted(CHECKER.REQUIRED))
+        with self.assertRaises(ValueError):
+            CHECKER.require_passes(document, include_public_cdn=True)
+
+    def test_staging_test_scheme_forwards_opt_in_without_changing_launch(self):
+        project = SCRIPT.parent.parent / "whitenoise-ios.xcodeproj"
+        scheme = ET.parse(project / "xcshareddata/xcschemes/Whitenoise (Staging).xcscheme").getroot()
+        action = scheme.find("TestAction")
+        self.assertEqual(action.get("shouldUseLaunchSchemeArgsEnv"), "NO")
+        variable = action.find("EnvironmentVariables/EnvironmentVariable")
+        self.assertEqual(variable.attrib, {
+            "key": "WN_FETCH_NATIVE_CDN", "value": "$(WN_FETCH_NATIVE_CDN)", "isEnabled": "YES"})
+        self.assertIsNone(scheme.find("LaunchAction/EnvironmentVariables"))
 
     def test_missing_required_case_refused(self):
         document = fixture()

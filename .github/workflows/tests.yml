@@ -1,6 +1,7 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "whitenoise-ios/**"
@@ -36,6 +37,8 @@ jobs:
     timeout-minutes: 45
 
     env:
+      # Explicit manual qualification, never routine PR or offline unit tests.
+      WN_FETCH_NATIVE_CDN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache

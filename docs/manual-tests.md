@@ -1584,6 +1584,13 @@ Marmot root. Automated simulator checks do not replace these device checks.
   is blocked. The caller and cache drain should finish without waiting for the
   resolver. A late answer must not start a connection or repopulate image caches.
   Six blocked workers exhaust the process-wide DNS slots; further loads fail fast.
+- Native CI requires eleven hermetic lifetime/cache-drain cases from the result
+  bundle, not only a green test command. An explicit manual `Tests` workflow run
+  also requires the default Network/TLS fetch of a tiny immutable PNG with its
+  exact byte count and digest. Locally, `WN_FETCH_NATIVE_CDN=1 ./scripts/test.sh`
+  opts in; ordinary offline unit tests skip that network case. The native suite
+  has a two-minute limit beyond the fetch's sixty-second budget. This checks one
+  successful public fetch, not stalled native TLS, proxies or physical devices.
 - Deadline and cancellation bound asynchronous waits, not hard real-time execution
   or native image decoding. A cancelled synchronous system resolver can continue
   until the OS returns, retaining its slot throughout; this change neither kills

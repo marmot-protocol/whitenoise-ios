@@ -27,6 +27,7 @@ if [ -n "${WN_TEST_SOURCE_PACKAGES:-}" ]; then
 fi
 
 build_settings=(
+  WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}"
   ONLY_ACTIVE_ARCH=YES
   CODE_SIGN_STYLE=Manual
   DEVELOPMENT_TEAM=""
@@ -105,4 +106,5 @@ fi
 
 phase "test-without-building" run test-without-building \
   "${xcodebuild_args[@]}" \
+  WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}" \
   -resultBundlePath "$RESULT_BUNDLE"

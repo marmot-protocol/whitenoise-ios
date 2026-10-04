@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Require actual successful lifetime regressions in xcresulttool's test tree."""
 import json
+import os
 import sys
 
 
@@ -8,7 +9,6 @@ MAX_INPUT_BYTES = 8 * 1024 * 1024
 REQUIRED = frozenset(
     "PinnedHTTPSFetchLifetimeTests/" + name + "()"
     for name in (
-        "nativePublicHTTPSFetchUsesDefaultTransport",
         "gateRemembersCancellationBeforeInstallation",
         "gateDeliversOnlyOneOfConcurrentCompletions",
         "absoluteAttemptExpiryCannotSlidePastTotalDeadline",
@@ -21,12 +21,14 @@ REQUIRED = frozenset(
         "redirectsAndEndpointsNeverResetTotalBudget",
     )
 ) | {"RemoteImageLoaderTests/avatarDrainFinishesWhileCancelledDNSWorkerIsStillBlocked()"}
+PUBLIC_CDN_CASE = "PinnedHTTPSFetchNativeCompatibilityTests/nativePublicHTTPSFetchUsesDefaultTransport()"
 
 
-def require_passes(document):
+def require_passes(document, include_public_cdn=False):
     if not isinstance(document, dict) or not isinstance(document.get("testNodes"), list):
         raise ValueError("Missing xcresult test tree")
-    results = {identifier: [] for identifier in REQUIRED}
+    required = REQUIRED | {PUBLIC_CDN_CASE} if include_public_cdn else REQUIRED
+    results = {identifier: [] for identifier in required}
     pending = list(document["testNodes"])
     while pending:
         node = pending.pop()
@@ -55,7 +57,7 @@ def main():
         payload = sys.stdin.buffer.read(MAX_INPUT_BYTES + 1)
         if len(payload) > MAX_INPUT_BYTES:
             raise ValueError("xcresult test tree exceeds input limit")
-        identifiers = require_passes(json.loads(payload))
+        identifiers = require_passes(json.loads(payload), include_public_cdn=os.environ.get("WN_FETCH_NATIVE_CDN") == "1")
     except (ValueError, UnicodeError) as error:
         print(str(error), file=sys.stderr)
         return 1
