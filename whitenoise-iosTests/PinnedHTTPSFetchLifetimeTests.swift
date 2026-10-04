@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Synchronization
 import Testing
@@ -6,6 +7,24 @@ import Testing
 
 @Suite(.timeLimit(.minutes(1)))
 struct PinnedHTTPSFetchLifetimeTests {
+    @Test func nativePublicHTTPSFetchUsesDefaultTransport() async throws {
+        let url = try #require(
+            URL(string: "https://raw.githubusercontent.com/marmot-protocol/whitenoise-android/"
+                + "4a1a8a8f7ebfe5235f5fec85401883d09ee74ab5/"
+                + "app/src/test/snapshots/composer_attachment_shelf_visual.png")
+        )
+        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 12)
+        // Real system DNS, monotonic clock and Network/TLS; no injected attempt or trust.
+        let (data, response) = try await PinnedHTTPSFetcher.fetch(request, maximumResponseBytes: 4096)
+        let http = try #require(response as? HTTPURLResponse)
+        #expect(http.statusCode == 200)
+        #expect(http.url == url)
+        try #require(data.count == 1945)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        #expect(digest == "95f3d94ce721ce62e5cfefc8ee99923f257dc31cc565746053c84e47b9a09617")
+        // No image codec is necessary to qualify this bounded successful fetch.
+    }
+
     @Test func gateRemembersCancellationBeforeInstallation() async throws {
         let gate = PinnedFetchWaitGate<Int>()
         #expect(gate.complete(.failure(CancellationError())))

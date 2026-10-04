@@ -21,9 +21,9 @@ def fixture():
 
 
 class FetchLifetimeResultTests(unittest.TestCase):
-    def test_all_eleven_pass(self):
+    def test_all_twelve_pass(self):
         self.assertEqual(CHECKER.require_passes(fixture()), sorted(CHECKER.REQUIRED))
-        self.assertEqual(len(CHECKER.REQUIRED), 11)
+        self.assertEqual(len(CHECKER.REQUIRED), 12)
 
     def test_missing_required_case_refused(self):
         document = fixture()
