@@ -87386,61 +87386,61 @@
         }
       }
     },
-    "Scroll to latest message" : {
+    "Scroll down" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scrollen Sie zur neuesten Nachricht"
+            "value" : "Nach unten scrollen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Desplácese hasta el último mensaje"
+            "value" : "Desplazarse hacia abajo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Faites défiler jusqu'au dernier message"
+            "value" : "Faire défiler vers le bas"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scorri fino all'ultimo messaggio"
+            "value" : "Scorri verso il basso"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Role até a última mensagem"
+            "value" : "Rolar para baixo"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Прокрутить до последнего сообщения"
+            "value" : "Прокрутить вниз"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En son mesaja ilerleyin"
+            "value" : "Aşağı kaydır"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "滚动到最新消息"
+            "value" : "向下滚动"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "捲動到最新消息"
+            "value" : "向下捲動"
           }
         }
       }

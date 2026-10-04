@@ -2326,11 +2326,11 @@ struct ConversationView: View {
             hasMoreAfter: viewModel.hasMoreAfter,
             isAtBottom: isAtTimelineBottom
         ) {
-            WNIconButton(title: "Scroll to latest message", systemImage: "arrow.down") {
+            WNIconButton(title: "Scroll down", systemImage: "arrow.down") {
                 Haptics.tap()
                 handleDownArrowTap(proxy: proxy, viewModel: viewModel)
             }
-            .accessibilityLabel("Scroll to latest message")
+            .accessibilityLabel("Scroll down")
             .padding(.trailing, 9)
             .padding(.bottom, 10)
             .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -2470,7 +2470,7 @@ struct ConversationView: View {
         // The window page alone: local sends kept beside it carry current
         // timestamps and would stretch the range over a dropped newer row.
         let loadedOrderKeys = TimelineDownArrowPolicy.orderKeyRange(
-            viewModel.conversationWindow?.messages.lazy.map(\.timeline.timelineAt) ?? []
+            viewModel.conversationWindow?.messages.map(\.timeline.timelineAt) ?? []
         )
         func stop(_ messageIdHex: String?, orderKey: UInt64?) -> TimelineDownArrowPolicy.Stop? {
             guard let messageIdHex else { return nil }
