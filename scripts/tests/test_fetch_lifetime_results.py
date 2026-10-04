@@ -1,9 +1,12 @@
 """Refuse absent, skipped or mixed-result security regressions."""
 import copy
 import importlib.util
+import json
+import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -42,15 +45,51 @@ class FetchLifetimeResultTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CHECKER.require_passes(document, include_public_cdn=True)
 
-    def test_staging_test_scheme_forwards_opt_in_without_changing_launch(self):
+    def test_staging_scheme_does_not_override_runner_flag_or_change_launch(self):
         project = SCRIPT.parent.parent / "whitenoise-ios.xcodeproj"
         scheme = ET.parse(project / "xcshareddata/xcschemes/Whitenoise (Staging).xcscheme").getroot()
         action = scheme.find("TestAction")
         self.assertEqual(action.get("shouldUseLaunchSchemeArgsEnv"), "NO")
-        variable = action.find("EnvironmentVariables/EnvironmentVariable")
-        self.assertEqual(variable.attrib, {
-            "key": "WN_FETCH_NATIVE_CDN", "value": "$(WN_FETCH_NATIVE_CDN)", "isEnabled": "YES"})
+        self.assertIsNone(action.find("EnvironmentVariables"))
         self.assertIsNone(scheme.find("LaunchAction/EnvironmentVariables"))
+
+    def check_runner_environment(self, opt_in):
+        with tempfile.TemporaryDirectory() as directory:
+            fixtures = pathlib.Path(directory)
+            runner = fixtures / "xcodebuild"
+            runner.write_text(
+                "#!" + sys.executable + "\nimport json, os, sys\n"
+                "print('RUNNER_FIXTURE:' + json.dumps({'phase': sys.argv[1], "
+                "'flag': os.environ.get('TEST_RUNNER_WN_FETCH_NATIVE_CDN'), "
+                "'build_setting': any(a.startswith('WN_FETCH_NATIVE_CDN=') for a in sys.argv)}))\n",
+                encoding="utf-8")
+            runner.chmod(0o700)
+            formatter = fixtures / "xcbeautify"
+            formatter.write_text("#!/bin/sh\nexec cat\n", encoding="utf-8")
+            formatter.chmod(0o700)
+            environment = os.environ.copy()
+            environment.pop("TEST_RUNNER_WN_FETCH_NATIVE_CDN", None)
+            environment.pop("WN_FETCH_NATIVE_CDN", None)
+            environment["PATH"] = str(fixtures) + os.pathsep + environment["PATH"]
+            environment["WN_TEST_DESTINATION"] = "platform=iOS Simulator,name=Owned Fixture"
+            environment["WN_TEST_RESULT_BUNDLE"] = str(fixtures / "owned-results.xcresult")
+            if opt_in is not None:
+                environment["WN_FETCH_NATIVE_CDN"] = opt_in
+            result = subprocess.run(
+                ["bash", str(SCRIPT.parent / "test.sh")], env=environment,
+                capture_output=True, text=True, timeout=30, check=True)
+            phases = [json.loads(line.removeprefix("RUNNER_FIXTURE:"))
+                      for line in result.stdout.splitlines() if line.startswith("RUNNER_FIXTURE:")]
+            self.assertEqual(phases, [
+                {"phase": "build-for-testing", "flag": None, "build_setting": False},
+                {"phase": "test-without-building", "flag": opt_in or "0", "build_setting": False},
+            ])
+
+    def test_manual_opt_in_is_exported_only_to_test_execution(self):
+        self.check_runner_environment("1")
+
+    def test_ordinary_tests_export_an_explicit_off_flag(self):
+        self.check_runner_environment(None)
 
     def test_missing_required_case_refused(self):
         document = fixture()

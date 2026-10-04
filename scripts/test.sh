@@ -27,7 +27,6 @@ if [ -n "${WN_TEST_SOURCE_PACKAGES:-}" ]; then
 fi
 
 build_settings=(
-  WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}"
   ONLY_ACTIVE_ARCH=YES
   CODE_SIGN_STYLE=Manual
   DEVELOPMENT_TEAM=""
@@ -104,7 +103,9 @@ if [ -n "$boot_pid" ]; then
   wait "$boot_pid" || true
 fi
 
+# xcodebuild forwards TEST_RUNNER_ variables to the test process without the
+# prefix. A custom build setting alone does not establish its runtime value.
+export TEST_RUNNER_WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}"
 phase "test-without-building" run test-without-building \
   "${xcodebuild_args[@]}" \
-  WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}" \
   -resultBundlePath "$RESULT_BUNDLE"

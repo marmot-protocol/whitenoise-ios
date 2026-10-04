@@ -1588,7 +1588,8 @@ Marmot root. Automated simulator checks do not replace these device checks.
   bundle, not only a green test command. An explicit manual `Tests` workflow run
   also requires the default Network/TLS fetch of a tiny immutable PNG with its
   exact byte count and digest. Locally, `WN_FETCH_NATIVE_CDN=1 ./scripts/test.sh`
-  opts in; ordinary offline unit tests skip that network case. The native suite
+  opts in through Xcode's test-runner environment forwarding; ordinary offline
+  unit tests skip that network case. The native suite
   has a two-minute limit beyond the fetch's sixty-second budget. This checks one
   successful public fetch, not stalled native TLS, proxies or physical devices.
 - Deadline and cancellation bound asynchronous waits, not hard real-time execution

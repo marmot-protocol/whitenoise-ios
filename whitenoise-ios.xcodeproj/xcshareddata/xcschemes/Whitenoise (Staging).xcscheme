@@ -41,13 +41,6 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "NO">
-      <EnvironmentVariables>
-         <EnvironmentVariable
-            key = "WN_FETCH_NATIVE_CDN"
-            value = "$(WN_FETCH_NATIVE_CDN)"
-            isEnabled = "YES">
-         </EnvironmentVariable>
-      </EnvironmentVariables>
       <Testables>
          <TestableReference
             skipped = "NO">
