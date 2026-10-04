@@ -16,6 +16,7 @@ struct ImportIdentityView: View {
 
     @State private var model = ImportIdentityViewModel()
     @State private var isKeyFocused = false
+    @State private var isKeyboardVisible = false
     @State private var showScanner = false
 
     let isPushed: Bool
@@ -97,6 +98,7 @@ struct ImportIdentityView: View {
                         }
                         .compatibleGlassCircleButtonStyle()
                         .controlSize(.large)
+                        .preservesKeyboardOnTap()
                         .transition(.opacity)
                         .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                     }
@@ -169,7 +171,21 @@ struct ImportIdentityView: View {
             .presentationDragIndicator(.visible)
         }
         .onChange(of: isKeyFocused) {
+            // Coordinate compact sizing with keyboard dismissal, not the focus change.
+            guard isKeyFocused || !isKeyboardVisible else { return }
             onPreferredSheetExpansionChange(isKeyFocused)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+            guard isKeyboardVisible else { return }
+            isKeyboardVisible = false
+            if !isKeyFocused {
+                withAnimation(KeyboardFrameChange.animation(from: notification)) {
+                    onPreferredSheetExpansionChange(false)
+                }
+            }
         }
         .interactiveDismissDisabled(model.isImporting)
         .alert(
