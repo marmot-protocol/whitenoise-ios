@@ -10,12 +10,12 @@ struct AccountSetupTests {
         step.step = .profile
         step.findings = [.init(issue: .missing, endpoint: nil)]
         step.actions = [.editProfile, .continueWithout]
-        #expect(AccountSetupPresentation.checkState(step) == .optionalProfile)
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
 
         step.status = .retryableFailure
         step.findings = [.init(issue: .timedOut, endpoint: nil)]
         step.actions = [.retry, .continueWithout]
-        #expect(AccountSetupPresentation.checkState(step) == .optionalIssue)
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
 
         // An interrupted profile publication cannot promise a skip that MDK does not offer.
         step.findings = [.init(issue: .publicationFailed, endpoint: nil)]

@@ -118,9 +118,6 @@ struct WelcomeView: View {
             .presentationDragIndicator(.visible)
             .presentationContentInteraction(.resizes)
         }
-        #if DEBUG
-        .modifier(AccountRecoveryScenarioLauncher())
-        #endif
         .productScreen(.onboarding)
         .onChange(of: showSignIn) {
             if !showSignIn {

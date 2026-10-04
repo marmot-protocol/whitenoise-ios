@@ -31,7 +31,7 @@ nonisolated enum AccountSetupPresentation {
 
     enum CheckState: Equatable {
         case pending, checking, passed, skipped
-        case optionalProfile, optionalIssue, requiredFix, acknowledgment
+        case optionalReview, requiredFix, acknowledgment
 
         var subtitle: String {
             switch self {
@@ -39,7 +39,7 @@ nonisolated enum AccountSetupPresentation {
             case .checking: L10n.string("Checking…")
             case .passed: L10n.string("Done")
             case .skipped: L10n.string("Skipped")
-            case .optionalProfile, .optionalIssue: L10n.string("Review or skip")
+            case .optionalReview: L10n.string("Review or skip")
             case .requiredFix: L10n.string("Fix to continue")
             case .acknowledgment: L10n.string("Review to continue")
             }
@@ -50,14 +50,14 @@ nonisolated enum AccountSetupPresentation {
             case .pending, .checking: "circle"
             case .passed: "checkmark.circle.fill"
             case .skipped: "minus.circle"
-            case .optionalProfile, .optionalIssue, .acknowledgment: "exclamationmark.triangle.fill"
+            case .optionalReview, .acknowledgment: "exclamationmark.triangle.fill"
             case .requiredFix: "xmark.circle.fill"
             }
         }
 
         var needsAttention: Bool {
             switch self {
-            case .optionalProfile, .optionalIssue, .requiredFix, .acknowledgment: true
+            case .optionalReview, .requiredFix, .acknowledgment: true
             case .pending, .checking, .passed, .skipped: false
             }
         }
@@ -75,8 +75,7 @@ nonisolated enum AccountSetupPresentation {
             }
             // Only describe skipping when the current snapshot offers an action the UI supports.
             if (step.step == .profile || step.step == .follows), step.actions.contains(.continueWithout) {
-                let isInvitation = step.status == .needsInput && step.findings.allSatisfy { $0.issue == .missing }
-                return isInvitation ? .optionalProfile : .optionalIssue
+                return .optionalReview
             }
             return .requiredFix
         }

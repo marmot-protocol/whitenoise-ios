@@ -2,7 +2,7 @@ import SwiftUI
 import MarmotKit
 
 struct AccountSetupView: View {
-    @CurrentAccountSetupSession private var session
+    @Environment(AppState.self) private var appState
     @Bindable var model: AccountSetupModel
     let onClose: () -> Void
     @State private var decision: SetupDecision?
@@ -45,17 +45,17 @@ struct AccountSetupView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
-                    Task { if await session.cancelAccountSetup() { onClose() } }
+                    Task { if await appState.cancelAccountSetup() { onClose() } }
                 }
-                .disabled(session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
+                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }
         .safeAreaInset(edge: .bottom) {
             if model.errorMessage != nil {
                 WNOnboardingButton(title: "Try Again") {
-                    Task { await session.connectAccountSetup() }
+                    Task { await appState.connectAccountSetup() }
                 }
-                .disabled(!session.canUseRuntimeForLocalForegroundWork || model.isBusy)
+                .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy)
                 .safeAreaPadding(.horizontal, 16)
                 .safeAreaPadding(.bottom)
                 .background(Color(uiColor: .systemGroupedBackground))
@@ -65,11 +65,11 @@ struct AccountSetupView: View {
                     isOpeningChats = true
                     Task {
                         defer { isOpeningChats = false }
-                        await session.finishAccountSetup()
+                        await appState.finishAccountSetup()
                     }
                 }
                 .accessibilityValue(isOpeningChats ? "In progress" : "")
-                .disabled(!model.canFinish || session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
+                .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
                 .safeAreaPadding(.horizontal, 16)
                 .safeAreaPadding(.bottom)
                 .background(Color(uiColor: .systemGroupedBackground))
@@ -78,15 +78,15 @@ struct AccountSetupView: View {
                 WNOnboardingButton(title: "Review and Continue") {
                     decision = SetupDecision(step: step)
                 }
-                .disabled(session.isFinishingAccountSetup || !session.canUseRuntimeForLocalForegroundWork)
+                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
                 .safeAreaPadding(.horizontal, 16)
                 .safeAreaPadding(.bottom)
                 .background(Color(uiColor: .systemGroupedBackground))
             }
         }
         .interactiveDismissDisabled()
-        .task(id: "\(session.runtimeGeneration):\(session.canUseRuntimeForLocalForegroundWork)") {
-            if session.canUseRuntimeForLocalForegroundWork { await session.connectAccountSetup() }
+        .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
+            if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
         }
         .onDisappear { model.suspend() }
         .sheet(item: $decision) { decision in
@@ -155,7 +155,7 @@ struct AccountSetupView: View {
     private func iconColor(_ state: AccountSetupPresentation.CheckState) -> Color {
         switch state {
         case .passed: .green
-        case .optionalProfile, .optionalIssue, .acknowledgment: .orange
+        case .optionalReview, .acknowledgment: .orange
         case .requiredFix: .red
         default: .secondary
         }
