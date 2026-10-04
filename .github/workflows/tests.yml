@@ -14,6 +14,7 @@ on:
       - "scripts/sync-local-bindings.sh"
       - "scripts/check-analytics-release-config.py"
       - "scripts/check-marmotkit-bindings.py"
+      - "scripts/check-fetch-lifetime-results.py"
       - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
@@ -103,6 +104,13 @@ jobs:
         # End the step before the job deadline so failure artifacts can upload.
         timeout-minutes: 40
         run: ./scripts/test.sh
+
+      - name: Verify fetch lifetime regressions actually passed
+        timeout-minutes: 2
+        run: |
+          set -o pipefail
+          xcrun xcresulttool get test-results tests --path build/TestResults.xcresult \
+            | python3 scripts/check-fetch-lifetime-results.py
 
       - name: Save compilation cache
         if: always() && github.ref == 'refs/heads/master'
