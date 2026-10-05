@@ -35,14 +35,64 @@ struct AccountSetupTests {
         #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
     }
 
-    @Test func queuedChecksKeepTheirStatusAndErrorsOverrideTheReadyHeading() {
-        #expect(AccountSetupPresentation.checkState(snapshot(status: .pending).steps[0]).subtitle == L10n.string("Waiting"))
-        #expect(AccountSetupPresentation.heading(snapshot(ready: true), isBusy: false, hasError: true)
-                == L10n.string("Couldn’t continue signing in"))
-        #expect(AccountSetupPresentation.heading(snapshot(ready: true), isBusy: false, hasError: false)
-                == L10n.string("You’re ready to chat"))
-        #expect(AccountSetupPresentation.heading(snapshot(status: .checking), isBusy: true, hasError: false)
-                == L10n.string("Getting ready to chat"))
+    @Test func errorsPreserveTheExplanationAndIdentifyFailedClose() {
+        let error = L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+        let header = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: error, isOpeningChats: false, closeFailed: true
+        )
+        #expect(header.title == L10n.string("Couldn’t close sign-in"))
+        #expect(header.subtitle == error)
+
+        let refreshError = L10n.string("Couldn’t refresh your accounts. Try again.")
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: refreshError, isOpeningChats: true, closeFailed: false
+        )
+        #expect(opening.title == L10n.string("Couldn’t continue signing in"))
+        #expect(opening.subtitle == refreshError)
+    }
+
+    @Test func readyHeaderDistinguishesOpeningFromReady() {
+        let ready = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: true, closeFailed: false
+        )
+        #expect(ready.title == L10n.string("You’re ready to chat"))
+        #expect(opening.title == ready.title)
+        #expect(ready.subtitle == L10n.string("Open Chats to start messaging."))
+        #expect(opening.subtitle == L10n.string("Opening your chats…"))
+    }
+
+    @Test func reviewPromptRequiresAnAvailableCurrentDecision() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .checking
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        let queued = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(queued.title == L10n.string("Getting ready to chat"))
+        #expect(queued.subtitle == L10n.string("We’re checking your profile and connection."))
+
+        current.steps[0].status = .skipped
+        let disconnected = AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: false)
+        #expect(disconnected == nil)
+        let reconnecting = AccountSetupPresentation.header(
+            current, reviewStep: disconnected, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(reconnecting.title == queued.title)
+        #expect(reconnecting.subtitle == queued.subtitle)
+
+        let connected = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(connected.title == L10n.string("A little more to do"))
+        #expect(connected.subtitle == L10n.string("Review the item below to continue."))
     }
 
     @Test func reviewDestinationFollowsTheCurrentUnfinishedCheck() {
@@ -52,20 +102,20 @@ struct AccountSetupTests {
         profile.status = .skipped
         profile.actions = []
         current.steps.insert(profile, at: 0)
-        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == .singleDevice)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .singleDevice)
 
         current.steps[0].status = .needsInput
         current.steps[0].actions = [.editProfile, .continueWithout]
-        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == .profile)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .profile)
 
         // A later decision must not jump ahead of the check that is still running or queued.
         current.steps[0].status = .checking
-        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == nil)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
         current.steps[0].status = .pending
-        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false) == nil)
-        #expect(AccountSetupPresentation.stepToReview(snapshot(), isBusy: true) == nil)
-        #expect(AccountSetupPresentation.stepToReview(snapshot(ready: true), isBusy: false) == nil)
-        #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false) == nil)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(), isBusy: true, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(ready: true), isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false, isConnected: true) == nil)
     }
 
     @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {

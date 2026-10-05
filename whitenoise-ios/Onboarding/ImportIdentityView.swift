@@ -144,7 +144,6 @@ struct ImportIdentityView: View {
             }
             .disabled(!canSubmit && !model.isImporting)
             .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
-            .accessibilityValue(model.isImporting ? "In progress" : "")
             .safeAreaPadding(.horizontal)
             .safeAreaPadding(.bottom)
         }

@@ -81,20 +81,33 @@ nonisolated enum AccountSetupPresentation {
         }
     }
 
-    static func stepToReview(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool) -> OnboardingStepFfi? {
-        guard !isBusy, !snapshot.ready, !snapshot.cancellationPending,
+    static func stepToReview(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, isConnected: Bool) -> OnboardingStepFfi? {
+        guard isConnected, !isBusy, !snapshot.ready, !snapshot.cancellationPending,
               let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
               checkState(step).needsAttention else { return nil }
         return step.step
     }
 
-    static func heading(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, hasError: Bool) -> String {
-        if hasError { return L10n.string("Couldn’t continue signing in") }
-        if snapshot.ready && !snapshot.cancellationPending { return L10n.string("You’re ready to chat") }
-        if !isBusy, snapshot.steps.contains(where: { checkState($0).needsAttention }) {
-            return L10n.string("A little more to do")
+    static func header(
+        _ snapshot: OnboardingSnapshotFfi, reviewStep: OnboardingStepFfi?, errorMessage: String?,
+        isOpeningChats: Bool, closeFailed: Bool
+    ) -> (title: String, subtitle: String) {
+        if let errorMessage {
+            return (
+                closeFailed ? L10n.string("Couldn’t close sign-in") : L10n.string("Couldn’t continue signing in"),
+                errorMessage
+            )
         }
-        return L10n.string("Getting ready to chat")
+        if isOpeningChats {
+            return (L10n.string("You’re ready to chat"), L10n.string("Opening your chats…"))
+        }
+        if snapshot.ready && !snapshot.cancellationPending {
+            return (L10n.string("You’re ready to chat"), L10n.string("Open Chats to start messaging."))
+        }
+        if reviewStep != nil {
+            return (L10n.string("A little more to do"), L10n.string("Review the item below to continue."))
+        }
+        return (L10n.string("Getting ready to chat"), L10n.string("We’re checking your profile and connection."))
     }
 
     static func deviceAction(_ discovery: OnboardingDeviceDiscoveryFfi?) -> String {

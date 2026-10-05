@@ -7,6 +7,7 @@ struct AccountSetupView: View {
     let onClose: () -> Void
     @State private var decision: SetupDecision?
     @State private var isOpeningChats = false
+    @State private var failedCloseError: String?
 
     var body: some View {
         List {
@@ -45,43 +46,17 @@ struct AccountSetupView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
-                    Task { if await appState.cancelAccountSetup() { onClose() } }
+                    Task { await close() }
                 }
                 .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if model.errorMessage != nil {
-                WNOnboardingButton(title: "Try Again") {
-                    Task { await appState.connectAccountSetup() }
-                }
-                .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy)
-                .safeAreaPadding(.horizontal, 16)
-                .safeAreaPadding(.bottom)
-                .background(Color(uiColor: .systemGroupedBackground))
-            } else if model.isDurablyReady || isOpeningChats {
-                WNOnboardingButton(title: "Open Chats", isLoading: isOpeningChats) {
-                    guard !isOpeningChats else { return }
-                    isOpeningChats = true
-                    Task {
-                        defer { isOpeningChats = false }
-                        await appState.finishAccountSetup()
-                    }
-                }
-                .accessibilityValue(isOpeningChats ? "In progress" : "")
-                .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
-                .safeAreaPadding(.horizontal, 16)
-                .safeAreaPadding(.bottom)
-                .background(Color(uiColor: .systemGroupedBackground))
-            } else if model.isConnected,
-                      let step = AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy) {
-                WNOnboardingButton(title: "Review and Continue") {
-                    decision = SetupDecision(step: step)
-                }
-                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
-                .safeAreaPadding(.horizontal, 16)
-                .safeAreaPadding(.bottom)
-                .background(Color(uiColor: .systemGroupedBackground))
+            if model.errorMessage != nil || model.isDurablyReady || isOpeningChats || reviewStep != nil {
+                bottomAction
+                    .safeAreaPadding(.horizontal, 16)
+                    .safeAreaPadding(.bottom)
+                    .background(Color(uiColor: .systemGroupedBackground))
             }
         }
         .interactiveDismissDisabled()
@@ -89,35 +64,68 @@ struct AccountSetupView: View {
             if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
         }
         .onDisappear { model.suspend() }
+        .onChange(of: model.errorMessage) {
+            if model.errorMessage != failedCloseError { failedCloseError = nil }
+        }
         .sheet(item: $decision) { decision in
             AccountSetupActions(model: model, selectedStep: decision.step)
                 .appAppearance()
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(AccountSetupPresentation.heading(model.snapshot, isBusy: model.isBusy, hasError: model.errorMessage != nil))
-                .font(.title.bold())
-                .accessibilityAddTraits(.isHeader)
-            if model.errorMessage != nil {
-                Text("Please try again.")
-                    .foregroundStyle(.secondary)
-            } else if isOpeningChats {
-                Text("Opening your chats…")
-                    .foregroundStyle(.secondary)
-            } else if model.isDurablyReady {
-                Text("Open Chats to start messaging.")
-                    .foregroundStyle(.secondary)
-            } else {
-                if !model.isBusy, model.snapshot.steps.contains(where: { AccountSetupPresentation.checkState($0).needsAttention }) {
-                    Text("Review the item below to continue.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("We’re checking your profile and connection.")
-                        .foregroundStyle(.secondary)
+    private var reviewStep: OnboardingStepFfi? {
+        AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected)
+    }
+
+    private var closeFailed: Bool {
+        failedCloseError != nil && model.errorMessage == failedCloseError
+    }
+
+    private func close() async {
+        if await appState.cancelAccountSetup() {
+            onClose()
+        } else {
+            failedCloseError = model.errorMessage
+        }
+    }
+
+    @ViewBuilder private var bottomAction: some View {
+        if model.errorMessage != nil {
+            WNOnboardingButton(title: "Try Again") {
+                Task {
+                    if closeFailed { await close() } else { await appState.connectAccountSetup() }
                 }
             }
+            .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy || appState.isFinishingAccountSetup)
+        } else if model.isDurablyReady || isOpeningChats {
+            WNOnboardingButton(title: "Open Chats", isLoading: isOpeningChats) {
+                guard !isOpeningChats else { return }
+                isOpeningChats = true
+                Task {
+                    defer { isOpeningChats = false }
+                    await appState.finishAccountSetup()
+                }
+            }
+            .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+        } else if let step = reviewStep {
+            WNOnboardingButton(title: "Review and Continue") {
+                decision = SetupDecision(step: step)
+            }
+            .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+        }
+    }
+
+    private var header: some View {
+        let content = AccountSetupPresentation.header(
+            model.snapshot, reviewStep: reviewStep, errorMessage: model.errorMessage,
+            isOpeningChats: isOpeningChats, closeFailed: closeFailed
+        )
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(content.title)
+                .font(.title.bold())
+                .accessibilityAddTraits(.isHeader)
+            Text(verbatim: content.subtitle)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
@@ -157,7 +165,7 @@ struct AccountSetupView: View {
         case .passed: .green
         case .optionalReview, .acknowledgment: .orange
         case .requiredFix: .red
-        default: .secondary
+        case .pending, .checking, .skipped: .secondary
         }
     }
 }
