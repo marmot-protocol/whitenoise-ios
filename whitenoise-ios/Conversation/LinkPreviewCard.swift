@@ -10,6 +10,7 @@ struct LinkPreviewCard: View {
     @State private var metadata: LinkPreviewMetadata?
     @State private var image: UIImage?
     @State private var imageFailed = false
+    @State private var cardWidth: CGFloat = 0
 
     init(url: URL, isFromMe: Bool, onOpen: @escaping () -> Void) {
         self.url = url
@@ -31,14 +32,15 @@ struct LinkPreviewCard: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { cardWidth = $0 }
                 .padding(.horizontal, MessageBubbleReplyLayout.cardOuterInset)
                 .padding(.top, MessageBubbleReplyLayout.cardOuterInset)
-                .frame(width: MessageBubbleReplyLayout.richBubbleWidth, alignment: .leading)
+                .frame(minWidth: MessageBubbleReplyLayout.richBubbleWidth, maxWidth: .infinity, alignment: .leading)
             } else {
                 Color.clear.frame(width: 0, height: 0)
             }
         }
-        .task(id: LinkPreviewTaskID(url: url, isVisible: isTimelineRowVisible)) {
+        .task(id: LinkPreviewTaskID(url: url, isVisible: isTimelineRowVisible, cardWidth: cardWidth)) {
             guard isTimelineRowVisible else { return }
             await load()
         }
@@ -49,8 +51,8 @@ struct LinkPreviewCard: View {
             guard let loaded = try? await LinkPreviewLoader.metadata(for: url) else { return }
             metadata = loaded
         }
-        guard image == nil, !imageFailed, let imageURL = metadata?.imageURL else { return }
-        let maxPixelSize = Int((MessageBubbleReplyLayout.richContentWidth * displayScale).rounded(.up))
+        guard image == nil, !imageFailed, cardWidth > 0, let imageURL = metadata?.imageURL else { return }
+        let maxPixelSize = Int((cardWidth * displayScale).rounded(.up))
         do {
             image = try await LinkPreviewLoader.image(for: imageURL, maxPixelSize: maxPixelSize, scale: displayScale)
         } catch {
@@ -62,6 +64,7 @@ struct LinkPreviewCard: View {
 private struct LinkPreviewTaskID: Equatable {
     let url: URL
     let isVisible: Bool
+    let cardWidth: CGFloat
 }
 
 #Preview {
