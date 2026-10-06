@@ -4,9 +4,10 @@ import MarmotKit
 struct AccountSetupView: View {
     @Environment(AppState.self) private var appState
     @Bindable var model: AccountSetupModel
+    let isOpeningChats: Bool
     let onClose: () -> Void
+    let onOpenChats: () -> Void
     @State private var decision: SetupDecision?
-    @State private var isOpeningChats = false
     @State private var failedCloseError: String?
 
     var body: some View {
@@ -48,7 +49,7 @@ struct AccountSetupView: View {
                 WNIconButton(title: "Close", systemImage: "xmark", chrome: .container) {
                     Task { await close() }
                 }
-                .disabled(appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+                .disabled(isOpeningChats || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -98,15 +99,8 @@ struct AccountSetupView: View {
             }
             .disabled(!appState.canUseRuntimeForLocalForegroundWork || model.isBusy || appState.isFinishingAccountSetup)
         } else if model.isDurablyReady || isOpeningChats {
-            WNOnboardingButton(title: "Open Chats", isLoading: isOpeningChats) {
-                guard !isOpeningChats else { return }
-                isOpeningChats = true
-                Task {
-                    defer { isOpeningChats = false }
-                    await appState.finishAccountSetup()
-                }
-            }
-            .disabled(!model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
+            WNOnboardingButton(title: "Open Chats", isLoading: isOpeningChats, action: onOpenChats)
+                .disabled(isOpeningChats || !model.canFinish || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
         } else if let step = reviewStep {
             WNOnboardingButton(title: "Review and Continue") {
                 decision = SetupDecision(step: step)

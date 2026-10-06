@@ -17,6 +17,7 @@ struct ImportIdentityView: View {
     @State private var model = ImportIdentityViewModel()
     @State private var isKeyFocused = false
     @State private var showScanner = false
+    @State private var openingSetup: AccountSetupModel?
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
@@ -61,11 +62,28 @@ struct ImportIdentityView: View {
 
     var body: some View {
         Group {
-            if let setup = appState.pendingAccountSetup, appState.isAccountSetupPresented {
-                AccountSetupView(model: setup, onClose: { dismiss() })
-                    .onAppear { onPreferredSheetExpansionChange(true) }
+            if let setup = openingSetup ?? (appState.isAccountSetupPresented ? appState.pendingAccountSetup : nil) {
+                AccountSetupView(
+                    model: setup,
+                    isOpeningChats: openingSetup != nil,
+                    onClose: { dismiss() },
+                    onOpenChats: { openChats(setup) }
+                )
+                .onAppear { onPreferredSheetExpansionChange(true) }
             } else {
                 signInForm
+            }
+        }
+    }
+
+    private func openChats(_ setup: AccountSetupModel) {
+        guard openingSetup == nil else { return }
+        // Keep the checklist through account refresh and the outgoing sheet transition.
+        openingSetup = setup
+        Task {
+            await appState.finishAccountSetup()
+            if appState.pendingAccountSetup != nil || appState.activeAccount?.accountIdHex != setup.accountID {
+                openingSetup = nil
             }
         }
     }
