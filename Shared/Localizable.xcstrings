@@ -94144,61 +94144,61 @@
         }
       }
     },
-    "Shows the title and image of links in chats. Loading a preview tells the linked website your IP address." : {
+    "Shows the title and image of links in chats. Loading a preview tells the linked website, and the site hosting its image, your IP address." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zeigt Titel und Bild von Links in Chats. Beim Laden einer Vorschau erfährt die verlinkte Website deine IP-Adresse."
+            "value" : "Zeigt Titel und Bild von Links in Chats. Beim Laden einer Vorschau erfahren die verlinkte Website und die Website, auf der das Bild liegt, deine IP-Adresse."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Muestra el título y la imagen de los enlaces en los chats. Al cargar una vista previa, el sitio web enlazado conoce tu dirección IP."
+            "value" : "Muestra el título y la imagen de los enlaces en los chats. Al cargar una vista previa, el sitio web enlazado y el sitio que aloja su imagen conocen tu dirección IP."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Affiche le titre et l’image des liens dans les discussions. Le chargement d’un aperçu communique votre adresse IP au site lié."
+            "value" : "Affiche le titre et l’image des liens dans les discussions. Le chargement d’un aperçu communique votre adresse IP au site lié et au site qui héberge son image."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra il titolo e l’immagine dei link nelle chat. Il caricamento di un’anteprima comunica il tuo indirizzo IP al sito collegato."
+            "value" : "Mostra il titolo e l’immagine dei link nelle chat. Il caricamento di un’anteprima comunica il tuo indirizzo IP al sito collegato e al sito che ospita la sua immagine."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mostra o título e a imagem dos links nas conversas. Carregar uma pré-visualização informa o seu endereço IP ao site vinculado."
+            "value" : "Mostra o título e a imagem dos links nas conversas. Carregar uma pré-visualização informa o seu endereço IP ao site vinculado e ao site que hospeda a imagem."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Показывает заголовок и изображение ссылок в чатах. При загрузке превью связанный сайт узнаёт ваш IP-адрес."
+            "value" : "Показывает заголовок и изображение ссылок в чатах. При загрузке превью связанный сайт и сайт, на котором размещено изображение, узнают ваш IP-адрес."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sohbetlerdeki bağlantıların başlığını ve görselini gösterir. Önizleme yüklemek, bağlantılı web sitesine IP adresinizi bildirir."
+            "value" : "Sohbetlerdeki bağlantıların başlığını ve görselini gösterir. Önizleme yüklemek, bağlantılı web sitesine ve görselini barındıran siteye IP adresinizi bildirir."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "显示聊天中链接的标题和图片。加载预览会让链接的网站得知你的 IP 地址。"
+            "value" : "显示聊天中链接的标题和图片。加载预览会让链接的网站以及托管其图片的网站得知你的 IP 地址。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "顯示聊天中連結的標題與圖片。載入預覽會讓連結的網站得知你的 IP 位址。"
+            "value" : "顯示聊天中連結的標題與圖片。載入預覽會讓連結的網站以及託管其圖片的網站得知你的 IP 位址。"
           }
         }
       }
