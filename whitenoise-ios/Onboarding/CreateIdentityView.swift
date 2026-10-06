@@ -231,81 +231,7 @@ struct IdentityProfileSetupView: View {
     }
 
     var body: some View {
-        presentedEditor
-        .onChange(of: model.displayName) { saveDraftChanges() }
-        .onChange(of: model.about) { saveDraftChanges() }
-        .onChange(of: didCompleteProfileDiscard) {
-            if didCompleteProfileDiscard { dismiss() }
-        }
-        .onChange(of: isSetupConnectionBlocked) {
-            if isSetupConnectionBlocked { focusedField = nil }
-        }
-        .sheet(isPresented: $showPrivacyDetails) {
-            ProfilePrivacyDetailsView()
-                .presentationDetents(accountSetup == nil ? [.medium] : [.large])
-                .presentationDragIndicator(accountSetup == nil ? .visible : .hidden)
-                .presentationContentInteraction(.scrolls)
-        }
-        .scrollContentBackground(.hidden)
-        .compatibleBottomScrollEdgeEffectHidden()
-        .scrollDismissesKeyboard(.interactively)
-        .navigationTitle(accountSetup == nil ? "Sign Up" : "Your profile")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
-            if isFormReady {
-                ToolbarItem(placement: .cancellationAction) {
-                    WNIconButton(
-                        title: isPushed ? "Back" : "Close",
-                        systemImage: isPushed ? "chevron.backward" : "xmark",
-                        chrome: .container
-                    ) {
-                        if accountSetup == nil {
-                            appState.closeSignUpDraft()
-                            dismiss()
-                        } else {
-                            requestProfileExit(.close)
-                        }
-                    }
-                    .disabled(!allowsBackNavigation)
-                    .allowsHitTesting(allowsBackNavigation)
-                }
-            }
-            if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !isBusy, !model.isResetPending, !model.isRestorationBlocked {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button("Start over", role: .destructive) {
-                            focusedField = nil
-                            restartError = nil
-                            confirmsStartOver = true
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                    }
-                    .accessibilityLabel("More")
-                }
-            }
-        }
-        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation || hasProfileChanges)
-        .alert("Discard profile changes?", isPresented: Binding(
-            get: { profileExit != nil },
-            set: { if !$0 { profileExit = nil } }
-        ), presenting: profileExit) { exit in
-            Button("Discard changes", role: .destructive) {
-                performProfileExit(exit)
-                profileExit = nil
-            }
-            Button("Cancel", role: .cancel) { profileExit = nil }
-        } message: { _ in
-            Text("Your unsaved changes to this form will be lost.")
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isFormReady && !model.isRestorationBlocked && !showsInlineActions {
-                profileActions
-                    .safeAreaPadding(.horizontal, 16)
-                    .safeAreaPadding(.bottom)
-            }
-        }
+        profileContent
         .onDisappear {
             submissionTask?.cancel()
             flushDraftChanges()
@@ -330,6 +256,90 @@ struct IdentityProfileSetupView: View {
         .background {
             Color(uiColor: accountSetup == nil ? .systemBackground : .systemGroupedBackground)
                 .ignoresSafeArea()
+        }
+    }
+
+    private var profileContent: some View {
+        profileNavigation
+        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation || hasProfileChanges)
+        .alert("Discard profile changes?", isPresented: Binding(
+            get: { profileExit != nil },
+            set: { if !$0 { profileExit = nil } }
+        ), presenting: profileExit) { exit in
+            Button("Discard changes", role: .destructive) {
+                performProfileExit(exit)
+                profileExit = nil
+            }
+            Button("Cancel", role: .cancel) { profileExit = nil }
+        } message: { _ in
+            Text("Your unsaved changes to this form will be lost.")
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isFormReady && !model.isRestorationBlocked && !showsInlineActions {
+                profileActions
+                    .safeAreaPadding(.horizontal, 16)
+                    .safeAreaPadding(.bottom)
+            }
+        }
+    }
+
+    private var profileNavigation: some View {
+        presentedEditor
+        .onChange(of: model.displayName) { saveDraftChanges() }
+        .onChange(of: model.about) { saveDraftChanges() }
+        .onChange(of: didCompleteProfileDiscard) {
+            if didCompleteProfileDiscard { dismiss() }
+        }
+        .onChange(of: isSetupConnectionBlocked) {
+            if isSetupConnectionBlocked { focusedField = nil }
+        }
+        .sheet(isPresented: $showPrivacyDetails) {
+            ProfilePrivacyDetailsView()
+                .presentationDetents(accountSetup == nil ? [.medium] : [.large])
+                .presentationDragIndicator(accountSetup == nil ? .visible : .hidden)
+                .presentationContentInteraction(.scrolls)
+        }
+        .scrollContentBackground(.hidden)
+        .compatibleBottomScrollEdgeEffectHidden()
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle(accountSetup == nil ? "Sign Up" : "Your profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar { profileToolbar }
+    }
+
+    @ToolbarContentBuilder private var profileToolbar: some ToolbarContent {
+        if isFormReady {
+            ToolbarItem(placement: .cancellationAction) {
+                WNIconButton(
+                    title: isPushed ? "Back" : "Close",
+                    systemImage: isPushed ? "chevron.backward" : "xmark",
+                    chrome: .container
+                ) {
+                    if accountSetup == nil {
+                        appState.closeSignUpDraft()
+                        dismiss()
+                    } else {
+                        requestProfileExit(.close)
+                    }
+                }
+                .disabled(!allowsBackNavigation)
+                .allowsHitTesting(allowsBackNavigation)
+            }
+        }
+        if isFormReady, accountSetup == nil, model.draft.requiresRecovery, !isBusy, !model.isResetPending, !model.isRestorationBlocked {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("Start over", role: .destructive) {
+                        focusedField = nil
+                        restartError = nil
+                        confirmsStartOver = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .accessibilityLabel("More")
+            }
         }
     }
 
