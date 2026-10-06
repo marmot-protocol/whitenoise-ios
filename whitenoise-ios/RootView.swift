@@ -27,15 +27,28 @@ nonisolated enum RootPresentation: Equatable {
 /// identity is set up.
 struct RootView: View {
     @Environment(AppState.self) private var appState
+    @State private var showSignIn = false
 
     var body: some View {
         let presentation = RootPresentation.resolve(
             phase: appState.phase,
             activeAccountRef: appState.activeAccountRef
         )
-        rootContent(presentation)
-        .animation(.smooth(duration: 0.25), value: presentation)
+        ZStack {
+            rootContent(presentation)
+                .animation(showSignIn ? nil : .smooth(duration: 0.25), value: presentation)
+        }
         .toastHost()
+        // Keep the presenter alive when Chats replaces Welcome behind the sheet.
+        .sheet(isPresented: $showSignIn, onDismiss: {
+            appState.diagnosticsConsent.onboardingVisible = false
+            appState.cancelProductOnboardingIfAbandoned()
+        }) {
+            InitialSignInSheet()
+        }
+        .onChange(of: presentation) { _, current in
+            if current != .onboarding { showSignIn = false }
+        }
         .sheet(isPresented: Binding(
             get: { appState.restoreSignUpPresentation && appState.phaseOwnsLiveRuntime },
             set: { presented in
@@ -81,7 +94,10 @@ struct RootView: View {
             BootstrapSplash()
         case .onboarding:
             NavigationStack {
-                WelcomeView()
+                WelcomeView(onPresentSignIn: {
+                    appState.diagnosticsConsent.onboardingVisible = true
+                    showSignIn = true
+                })
             }
         case .profileSelection:
             SignedOutProfilesView()
@@ -90,6 +106,28 @@ struct RootView: View {
         case .failed(let message):
             BootstrapFailureView(message: message)
         }
+    }
+}
+
+private struct InitialSignInSheet: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var selectedDetent = PresentationDetent.medium
+
+    var body: some View {
+        NavigationStack {
+            ImportIdentityView(onPreferredSheetExpansionChange: { expanded in
+                selectedDetent = expanded ? .large : .medium
+            })
+        }
+        .tint(colorScheme == .dark ? .white : .black)
+        .appAppearance()
+        .presentationDetents(
+            dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large],
+            selection: $selectedDetent
+        )
+        .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.resizes)
     }
 }
 

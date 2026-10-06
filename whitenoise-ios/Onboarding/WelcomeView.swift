@@ -31,15 +31,18 @@ struct WelcomeView: View {
     let isAddingProfile: Bool
     let onSheetContentChange: (OnboardingSheetContent) -> Void
     let onSignInExpansionChange: (Bool) -> Void
+    let onPresentSignIn: (() -> Void)?
 
     init(
         isAddingProfile: Bool = false,
         onSheetContentChange: @escaping (OnboardingSheetContent) -> Void = { _ in },
-        onSignInExpansionChange: @escaping (Bool) -> Void = { _ in }
+        onSignInExpansionChange: @escaping (Bool) -> Void = { _ in },
+        onPresentSignIn: (() -> Void)? = nil
     ) {
         self.isAddingProfile = isAddingProfile
         self.onSheetContentChange = onSheetContentChange
         self.onSignInExpansionChange = onSignInExpansionChange
+        self.onPresentSignIn = onPresentSignIn
     }
 
     private var accentColor: Color {
@@ -145,7 +148,11 @@ struct WelcomeView: View {
         appState.beginProductOnboarding(path)
         selectedSheetDetent = route == .signIn ? .medium : .large
         if !isAddingProfile {
-            sheetRoute = route
+            if route == .signIn, let onPresentSignIn {
+                onPresentSignIn()
+            } else {
+                sheetRoute = route
+            }
         } else {
             switch route {
             case .signIn:
