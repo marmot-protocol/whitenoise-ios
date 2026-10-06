@@ -390,7 +390,6 @@ struct IdentityProfileSetupView: View {
             .disabled(isBusy || (!hasValidName && !model.isResetPending) || (accountSetup != nil && accountSetup?.isConnected != true))
             .accessibilityLabel(primaryActionTitle)
             .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
-            .accessibilityValue(isSaving || model.isSubmitting ? "In progress" : "")
         }
     }
 

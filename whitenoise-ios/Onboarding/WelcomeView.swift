@@ -31,15 +31,21 @@ struct WelcomeView: View {
     let isAddingProfile: Bool
     let onSheetContentChange: (OnboardingSheetContent) -> Void
     let onSignInExpansionChange: (Bool) -> Void
+    let onPresentSignIn: (() -> Void)?
+    let onChatsOpened: () -> Void
 
     init(
         isAddingProfile: Bool = false,
         onSheetContentChange: @escaping (OnboardingSheetContent) -> Void = { _ in },
-        onSignInExpansionChange: @escaping (Bool) -> Void = { _ in }
+        onSignInExpansionChange: @escaping (Bool) -> Void = { _ in },
+        onPresentSignIn: (() -> Void)? = nil,
+        onChatsOpened: @escaping () -> Void = {}
     ) {
         self.isAddingProfile = isAddingProfile
         self.onSheetContentChange = onSheetContentChange
         self.onSignInExpansionChange = onSignInExpansionChange
+        self.onPresentSignIn = onPresentSignIn
+        self.onChatsOpened = onChatsOpened
     }
 
     private var accentColor: Color {
@@ -90,7 +96,8 @@ struct WelcomeView: View {
         .navigationDestination(isPresented: $showSignIn) {
             ImportIdentityView(
                 isPushed: true,
-                onPreferredSheetExpansionChange: updateSignInExpansion
+                onPreferredSheetExpansionChange: updateSignInExpansion,
+                onChatsOpened: onChatsOpened
             )
         }
         .navigationDestination(isPresented: $showSignUp) {
@@ -145,7 +152,11 @@ struct WelcomeView: View {
         appState.beginProductOnboarding(path)
         selectedSheetDetent = route == .signIn ? .medium : .large
         if !isAddingProfile {
-            sheetRoute = route
+            if route == .signIn, let onPresentSignIn {
+                onPresentSignIn()
+            } else {
+                sheetRoute = route
+            }
         } else {
             switch route {
             case .signIn:

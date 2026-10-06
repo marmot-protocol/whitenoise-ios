@@ -49,5 +49,6 @@ struct WNOnboardingButton: View {
         }
         .allowsHitTesting(!isLoading)
         .accessibilityLabel(title)
+        .accessibilityValue(isLoading ? Text("In progress") : Text(""))
     }
 }

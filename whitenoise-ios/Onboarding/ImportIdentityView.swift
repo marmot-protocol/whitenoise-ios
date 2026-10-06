@@ -18,16 +18,20 @@ struct ImportIdentityView: View {
     @State private var isKeyFocused = false
     @State private var isKeyboardVisible = false
     @State private var showScanner = false
+    @State private var openingSetup: AccountSetupModel?
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
+    let onChatsOpened: () -> Void
 
     init(
         isPushed: Bool = false,
-        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in }
+        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in },
+        onChatsOpened: @escaping () -> Void = {}
     ) {
         self.isPushed = isPushed
         self.onPreferredSheetExpansionChange = onPreferredSheetExpansionChange
+        self.onChatsOpened = onChatsOpened
     }
 
     private var normalizedIdentity: String {
@@ -62,11 +66,30 @@ struct ImportIdentityView: View {
 
     var body: some View {
         Group {
-            if let setup = appState.pendingAccountSetup, appState.isAccountSetupPresented {
-                AccountSetupView(model: setup, onClose: { dismiss() })
-                    .onAppear { onPreferredSheetExpansionChange(true) }
+            if let setup = openingSetup ?? (appState.isAccountSetupPresented ? appState.pendingAccountSetup : nil) {
+                AccountSetupView(
+                    model: setup,
+                    isOpeningChats: openingSetup != nil,
+                    onClose: { dismiss() },
+                    onOpenChats: { openChats(setup) }
+                )
+                .onAppear { onPreferredSheetExpansionChange(true) }
             } else {
                 signInForm
+            }
+        }
+    }
+
+    private func openChats(_ setup: AccountSetupModel) {
+        guard openingSetup == nil else { return }
+        // Keep the checklist through account refresh and the outgoing sheet transition.
+        openingSetup = setup
+        Task {
+            await appState.finishAccountSetup()
+            if appState.pendingAccountSetup != nil || appState.activeAccount?.accountIdHex != setup.accountID {
+                openingSetup = nil
+            } else {
+                onChatsOpened()
             }
         }
     }
@@ -146,7 +169,6 @@ struct ImportIdentityView: View {
             }
             .disabled(!canSubmit && !model.isImporting)
             .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
-            .accessibilityValue(model.isImporting ? "In progress" : "")
             .safeAreaPadding(.horizontal)
             .safeAreaPadding(.bottom)
         }

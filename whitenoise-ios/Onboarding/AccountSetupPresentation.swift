@@ -29,26 +29,85 @@ nonisolated enum AccountSetupPresentation {
         }
     }
 
-    static func status(_ status: OnboardingStatusFfi) -> String {
-        switch status {
-        case .pending: L10n.string("Waiting")
-        case .checking: L10n.string("Checking…")
-        case .passed: L10n.string("Done")
-        case .needsInput: L10n.string("Needs your attention")
-        case .retryableFailure: L10n.string("Couldn’t finish this check")
-        case .waitingForSigner: L10n.string("Couldn’t access your private key")
-        case .skipped: L10n.string("Skipped")
+    enum CheckState: Equatable {
+        case pending, checking, passed, skipped
+        case optionalReview, requiredFix, acknowledgment
+
+        var subtitle: String {
+            switch self {
+            case .pending: L10n.string("Waiting")
+            case .checking: L10n.string("Checking…")
+            case .passed: L10n.string("Done")
+            case .skipped: L10n.string("Skipped")
+            case .optionalReview: L10n.string("Review or skip")
+            case .requiredFix: L10n.string("Fix to continue")
+            case .acknowledgment: L10n.string("Review to continue")
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .pending, .checking: "circle"
+            case .passed: "checkmark.circle.fill"
+            case .skipped: "minus.circle"
+            case .optionalReview, .acknowledgment: "exclamationmark.triangle.fill"
+            case .requiredFix: "xmark.circle.fill"
+            }
+        }
+
+        var needsAttention: Bool {
+            switch self {
+            case .optionalReview, .requiredFix, .acknowledgment: true
+            case .pending, .checking, .passed, .skipped: false
+            }
         }
     }
 
-    static func symbol(_ status: OnboardingStatusFfi) -> String {
-        switch status {
-        case .passed: "checkmark.circle.fill"
-        case .skipped: "minus.circle"
-        case .needsInput, .retryableFailure: "exclamationmark.circle"
-        case .waitingForSigner: "key"
-        case .checking, .pending: "circle"
+    static func checkState(_ step: OnboardingStepStateFfi) -> CheckState {
+        switch step.status {
+        case .pending: return .pending
+        case .checking: return .checking
+        case .passed: return .passed
+        case .skipped: return .skipped
+        case .needsInput, .retryableFailure, .waitingForSigner:
+            if step.step == .singleDevice, step.actions.contains(.continueAnyway) {
+                return .acknowledgment
+            }
+            // Only describe skipping when the current snapshot offers an action the UI supports.
+            if (step.step == .profile || step.step == .follows), step.actions.contains(.continueWithout) {
+                return .optionalReview
+            }
+            return .requiredFix
         }
+    }
+
+    static func stepToReview(_ snapshot: OnboardingSnapshotFfi, isBusy: Bool, isConnected: Bool) -> OnboardingStepFfi? {
+        guard isConnected, !isBusy, !snapshot.ready, !snapshot.cancellationPending,
+              let step = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }),
+              checkState(step).needsAttention else { return nil }
+        return step.step
+    }
+
+    static func header(
+        _ snapshot: OnboardingSnapshotFfi, reviewStep: OnboardingStepFfi?, errorMessage: String?,
+        isOpeningChats: Bool, closeFailed: Bool
+    ) -> (title: String, subtitle: String) {
+        if let errorMessage {
+            return (
+                closeFailed ? L10n.string("Couldn’t close sign-in") : L10n.string("Couldn’t continue signing in"),
+                errorMessage
+            )
+        }
+        if isOpeningChats {
+            return (L10n.string("You’re ready to chat"), L10n.string("Opening your chats…"))
+        }
+        if snapshot.ready && !snapshot.cancellationPending {
+            return (L10n.string("You’re ready to chat"), L10n.string("Open Chats to start messaging."))
+        }
+        if reviewStep != nil {
+            return (L10n.string("A little more to do"), L10n.string("Review the item below to continue."))
+        }
+        return (L10n.string("Getting ready to chat"), L10n.string("We’re checking your profile and connection."))
     }
 
     static func deviceAction(_ discovery: OnboardingDeviceDiscoveryFfi?) -> String {

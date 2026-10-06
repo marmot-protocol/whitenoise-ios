@@ -5,6 +5,119 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func profileOptionalityFollowsTheOfferedActions() {
+        var step = snapshot().steps[0]
+        step.step = .profile
+        step.findings = [.init(issue: .missing, endpoint: nil)]
+        step.actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
+
+        step.status = .retryableFailure
+        step.findings = [.init(issue: .timedOut, endpoint: nil)]
+        step.actions = [.retry, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
+
+        // An interrupted profile publication cannot promise a skip that MDK does not offer.
+        step.findings = [.init(issue: .publicationFailed, endpoint: nil)]
+        step.actions = [.retry]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func deviceAcknowledgmentIsDifferentFromARequiredRepair() {
+        var step = snapshot().steps[0]
+        #expect(AccountSetupPresentation.checkState(step) == .acknowledgment)
+        step.actions = [.retry]
+        step.status = .retryableFailure
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+
+        step.step = .relays
+        step.actions = [.useRecommendedRelays, .editDiscoveryRelays]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func errorsPreserveTheExplanationAndIdentifyFailedClose() {
+        let error = L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+        let header = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: error, isOpeningChats: false, closeFailed: true
+        )
+        #expect(header.title == L10n.string("Couldn’t close sign-in"))
+        #expect(header.subtitle == error)
+
+        let refreshError = L10n.string("Couldn’t refresh your accounts. Try again.")
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: refreshError, isOpeningChats: true, closeFailed: false
+        )
+        #expect(opening.title == L10n.string("Couldn’t continue signing in"))
+        #expect(opening.subtitle == refreshError)
+    }
+
+    @Test func readyHeaderDistinguishesOpeningFromReady() {
+        let ready = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: true, closeFailed: false
+        )
+        #expect(ready.title == L10n.string("You’re ready to chat"))
+        #expect(opening.title == ready.title)
+        #expect(ready.subtitle == L10n.string("Open Chats to start messaging."))
+        #expect(opening.subtitle == L10n.string("Opening your chats…"))
+    }
+
+    @Test func reviewPromptRequiresAnAvailableCurrentDecision() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .checking
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        let queued = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(queued.title == L10n.string("Getting ready to chat"))
+        #expect(queued.subtitle == L10n.string("We’re checking your profile and connection."))
+
+        current.steps[0].status = .skipped
+        let disconnected = AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: false)
+        #expect(disconnected == nil)
+        let reconnecting = AccountSetupPresentation.header(
+            current, reviewStep: disconnected, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(reconnecting.title == queued.title)
+        #expect(reconnecting.subtitle == queued.subtitle)
+
+        let connected = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(connected.title == L10n.string("A little more to do"))
+        #expect(connected.subtitle == L10n.string("Review the item below to continue."))
+    }
+
+    @Test func reviewDestinationFollowsTheCurrentUnfinishedCheck() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .skipped
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .singleDevice)
+
+        current.steps[0].status = .needsInput
+        current.steps[0].actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .profile)
+
+        // A later decision must not jump ahead of the check that is still running or queued.
+        current.steps[0].status = .checking
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        current.steps[0].status = .pending
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(), isBusy: true, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(ready: true), isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false, isConnected: true) == nil)
+    }
+
     @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {
         #expect(AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays) == [
             "wss://relay.eu.whitenoise.chat", "wss://relay.us.whitenoise.chat",
@@ -94,8 +207,12 @@ struct AccountSetupTests {
     }
 
     @Test func optionalSkipIsDistinctFromSuccess() {
-        #expect(AccountSetupPresentation.symbol(.skipped) != AccountSetupPresentation.symbol(.passed))
-        #expect(AccountSetupPresentation.status(.skipped) != AccountSetupPresentation.status(.passed))
+        let skipped = AccountSetupPresentation.checkState(snapshot(status: .skipped).steps[0])
+        let passed = AccountSetupPresentation.checkState(snapshot(status: .passed).steps[0])
+        #expect(skipped == .skipped)
+        #expect(passed == .passed)
+        #expect(skipped.symbol != passed.symbol)
+        #expect(skipped.subtitle != passed.subtitle)
     }
 
     @Test func analyticsReadinessWaitsForCancellationToClear() {
