@@ -21,13 +21,16 @@ struct ImportIdentityView: View {
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
+    let onChatsOpened: () -> Void
 
     init(
         isPushed: Bool = false,
-        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in }
+        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in },
+        onChatsOpened: @escaping () -> Void = {}
     ) {
         self.isPushed = isPushed
         self.onPreferredSheetExpansionChange = onPreferredSheetExpansionChange
+        self.onChatsOpened = onChatsOpened
     }
 
     private var normalizedIdentity: String {
@@ -84,6 +87,8 @@ struct ImportIdentityView: View {
             await appState.finishAccountSetup()
             if appState.pendingAccountSetup != nil || appState.activeAccount?.accountIdHex != setup.accountID {
                 openingSetup = nil
+            } else {
+                onChatsOpened()
             }
         }
     }

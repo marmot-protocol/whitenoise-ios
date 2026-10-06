@@ -259,7 +259,8 @@ struct AddProfileSheet: View {
                 },
                 onSignInExpansionChange: { isExpanded in
                     selectedDetent = isExpanded ? .large : .medium
-                }
+                },
+                onChatsOpened: { dismiss() }
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
