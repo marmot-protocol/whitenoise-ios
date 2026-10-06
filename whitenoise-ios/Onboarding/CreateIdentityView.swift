@@ -39,8 +39,25 @@ struct IdentityProfileSetupView: View {
 
     let isPushed: Bool
     let accountSetup: AccountSetupModel?
-    @State private var setupSaveError: String?
-    @State private var hasSubmittedProfile = false
+    @State private var profileFailure: AccountSetupProfilePresentation.Failure?
+    @State private var profileExit: ProfileExit?
+
+    private enum ProfileExit { case close, skip, cancelRepair }
+
+    private var recovery: AccountSetupProfilePresentation? {
+        accountSetup.map { AccountSetupProfilePresentation(snapshot: $0.snapshot) }
+    }
+
+    private var showsProfileFields: Bool {
+        recovery?.canEdit ?? true
+    }
+
+    private var hasProfileChanges: Bool {
+        guard accountSetup != nil, showsProfileFields else { return false }
+        let profile = recovery?.profile
+        return model.displayName != (profile?.displayName ?? profile?.name ?? "")
+            || model.about != (profile?.about ?? "") || model.avatarDraft != nil
+    }
 
     init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
         self.isPushed = isPushed
@@ -52,7 +69,15 @@ struct IdentityProfileSetupView: View {
         accountSetup?.snapshot.steps.first { $0.step == .profile }?.status
     }
 
-    private var showsInlineActions: Bool { accountSetup == nil && isKeyboardVisible }
+    private var isSetupConnectionBlocked: Bool {
+        accountSetup.map { !$0.isConnected && $0.errorMessage != nil } ?? false
+    }
+
+    private var profileFailureMessage: String? { accountSetup?.errorMessage ?? profileFailure?.message }
+
+    private var showsInlineActions: Bool {
+        !isSetupConnectionBlocked && isKeyboardVisible && (accountSetup == nil || showsProfileFields)
+    }
 
     private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
     private var isBusy: Bool { isRestarting || model.isBusy || (accountSetup?.isBusy ?? false) }
@@ -84,7 +109,7 @@ struct IdentityProfileSetupView: View {
                     if focusedField == .about { revealFocusedField(using: proxy) }
                 }
         }
-        .disabled(isBusy || isSaving || accountSetup?.isResumingProfilePublication == true)
+        .disabled(isBusy || isSaving)
         .formStyle(.grouped)
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .wnPhotoSourceMenu(
@@ -115,6 +140,20 @@ struct IdentityProfileSetupView: View {
         Group {
             if isFormReady, model.isRestorationBlocked {
                 restorationFailureView
+            } else if isSetupConnectionBlocked {
+                Form {
+                    Section {
+                        AccountSetupProfileError(
+                            title: "Couldn’t continue signing in",
+                            message: L10n.string("We couldn’t finish checking your sign-in. Go back to Sign In to try again.")
+                        )
+                        .padding(.vertical, 4)
+                        .listRowBackground(Color(uiColor: .quaternarySystemFill))
+                        .wnGroupedCardRow(.only)
+                    }
+                }
+                .formStyle(.grouped)
+                .contentMargins(.horizontal, 16, for: .scrollContent)
             } else if isFormReady {
                 profileEditor
             } else {
@@ -185,16 +224,19 @@ struct IdentityProfileSetupView: View {
         presentedEditor
         .onChange(of: model.displayName) { saveDraftChanges() }
         .onChange(of: model.about) { saveDraftChanges() }
+        .onChange(of: isSetupConnectionBlocked) {
+            if isSetupConnectionBlocked { focusedField = nil }
+        }
         .sheet(isPresented: $showPrivacyDetails) {
             ProfilePrivacyDetailsView()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+                .presentationDetents(accountSetup == nil ? [.medium] : [.large])
+                .presentationDragIndicator(accountSetup == nil ? .visible : .hidden)
                 .presentationContentInteraction(.scrolls)
         }
         .scrollContentBackground(.hidden)
         .compatibleBottomScrollEdgeEffectHidden()
         .scrollDismissesKeyboard(.interactively)
-        .navigationTitle(accountSetup == nil ? "Sign Up" : "Update profile")
+        .navigationTitle(accountSetup == nil ? "Sign Up" : "Your profile")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -205,8 +247,12 @@ struct IdentityProfileSetupView: View {
                         systemImage: isPushed ? "chevron.backward" : "xmark",
                         chrome: .container
                     ) {
-                        if accountSetup == nil { appState.closeSignUpDraft() }
-                        dismiss()
+                        if accountSetup == nil {
+                            appState.closeSignUpDraft()
+                            dismiss()
+                        } else {
+                            requestProfileExit(.close)
+                        }
                     }
                     .disabled(!allowsBackNavigation)
                     .allowsHitTesting(allowsBackNavigation)
@@ -227,7 +273,19 @@ struct IdentityProfileSetupView: View {
                 }
             }
         }
-        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation)
+        .interactiveDismissDisabled(!isFormReady || !allowsBackNavigation || hasProfileChanges)
+        .alert("Discard profile changes?", isPresented: Binding(
+            get: { profileExit != nil },
+            set: { if !$0 { profileExit = nil } }
+        ), presenting: profileExit) { exit in
+            Button("Discard changes", role: .destructive) {
+                performProfileExit(exit)
+                profileExit = nil
+            }
+            Button("Cancel", role: .cancel) { profileExit = nil }
+        } message: { _ in
+            Text("Your unsaved changes to this form will be lost.")
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isFormReady && !model.isRestorationBlocked && !showsInlineActions {
                 profileActions
@@ -248,7 +306,8 @@ struct IdentityProfileSetupView: View {
         // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
         .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
         .onChange(of: importedProfileStatus) {
-            if hasSubmittedProfile, importedProfileStatus == .passed {
+            if accountSetup != nil,
+               importedProfileStatus == .passed || importedProfileStatus == .skipped {
                 dismiss()
             }
         }
@@ -256,7 +315,7 @@ struct IdentityProfileSetupView: View {
             await prepareForm()
         }
         .background {
-            Color(.systemBackground)
+            Color(uiColor: accountSetup == nil ? .systemBackground : .systemGroupedBackground)
                 .ignoresSafeArea()
         }
     }
@@ -284,50 +343,75 @@ struct IdentityProfileSetupView: View {
     private var profileForm: some View {
         @Bindable var model = model
         return Form {
-            avatarSection
-                .disabled(model.isResetPending)
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
-            Section("Name") {
-                TextField("Name", text: $model.displayName)
-                    .disabled(model.isResetPending)
-                    .textContentType(.name)
-                    .textInputAutocapitalization(.words)
-                    .submitLabel(.next)
-                    .focused($focusedField, equals: .name)
-                    .onSubmit { focusedField = .about }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { nameFieldHeight = $0 }
-                    .id(ProfileField.name)
-                    .listRowBackground(Color(uiColor: .secondarySystemFill))
-            }
-
-            Section {
-                TextField("A little about you", text: $model.about, axis: .vertical)
-                    .disabled(model.isResetPending)
-                    .lineLimit(3 ... 6)
-                    .textInputAutocapitalization(.sentences)
-                    .focused($focusedField, equals: .about)
-                    .accessibilityLabel("About")
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { aboutFieldHeight = $0 }
-                    .id(ProfileField.about)
-                    .listRowBackground(Color(uiColor: .secondarySystemFill))
-            } header: {
-                Text("About")
-            }
-
-            Section {
-                privacyNote
+            if let recovery {
+                Section {
+                    AccountSetupProfileStatus(
+                        presentation: recovery, failureMessage: profileFailureMessage, failedAction: profileFailure?.action
+                    ) {
+                        if let action = recovery.retryAction(
+                            failedAction: profileFailure?.action, hasFailure: profileFailureMessage != nil
+                        ) {
+                            profileRetry(action)
+                        }
+                        if recovery.canEdit || recovery.profile != nil {
+                            Divider()
+                            privacyText
+                        }
+                    }
                     .padding(.vertical, 4)
                     .listRowBackground(Color(uiColor: .quaternarySystemFill))
+                    .wnGroupedCardRow(.only)
+                }
             }
 
-            if let failureMessage = setupSaveError {
+            if showsProfileFields {
+                avatarSection
+                    .disabled(model.isResetPending)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+
+                Section("Name") {
+                    TextField("Name", text: $model.displayName)
+                        .disabled(model.isResetPending)
+                        .textContentType(.name)
+                        .textInputAutocapitalization(.words)
+                        .submitLabel(.next)
+                        .focused($focusedField, equals: .name)
+                        .onSubmit { focusedField = .about }
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { nameFieldHeight = $0 }
+                        .id(ProfileField.name)
+                        .listRowBackground(Color(uiColor: .secondarySystemFill))
+                }
+
                 Section {
-                    Label(failureMessage, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.callout)
+                    TextField("A little about you", text: $model.about, axis: .vertical)
+                        .disabled(model.isResetPending)
+                        .lineLimit(3 ... 6)
+                        .textInputAutocapitalization(.sentences)
+                        .focused($focusedField, equals: .about)
+                        .accessibilityLabel("About")
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { aboutFieldHeight = $0 }
+                        .id(ProfileField.about)
+                        .listRowBackground(Color(uiColor: .secondarySystemFill))
+                } header: {
+                    Text("About")
+                }
+            } else if let profile = recovery?.profile {
+                Section {
+                    AccountSetupProfileSummary(profile: profile)
+                        .frame(maxWidth: .infinity)
+                        .listRowInsets(EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            }
+
+            if accountSetup == nil {
+                Section {
+                    privacyNote
+                        .padding(.vertical, 4)
+                        .listRowBackground(Color(uiColor: .quaternarySystemFill))
                 }
             }
 
@@ -354,18 +438,25 @@ struct IdentityProfileSetupView: View {
     private var privacyNote: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "eye")
+                .foregroundStyle(.primary)
                 .accessibilityHidden(true)
-            Text(privacySummary)
-                .fixedSize(horizontal: false, vertical: true)
-                .tint(.primary)
-                .environment(\.openURL, OpenURLAction { _ in
-                    focusedField = nil
-                    showPrivacyDetails = true
-                    return .handled
-                })
+            privacyText
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
+    }
+
+    private var privacyText: some View {
+        Text(privacySummary)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .tint(.primary)
+            .environment(\.openURL, OpenURLAction { _ in
+                focusedField = nil
+                showPrivacyDetails = true
+                return .handled
+            })
     }
 
     private var privacySummary: AttributedString {
@@ -378,19 +469,106 @@ struct IdentityProfileSetupView: View {
         return summary
     }
 
-    private var profileActions: some View {
+    @ViewBuilder private var profileActions: some View {
+        if isSetupConnectionBlocked {
+            WNOnboardingButton(title: "Back to Sign In") { requestProfileExit(.close) }
+                .disabled(!allowsBackNavigation)
+        } else if let accountSetup, let recovery {
+            recoveryActions(accountSetup, presentation: recovery)
+        } else {
+            signUpActions
+        }
+    }
+
+    private var signUpActions: some View {
         VStack(spacing: 8) {
             WNOnboardingButton(
                 title: LocalizedStringKey(primaryActionTitle),
-                layoutTitle: accountSetup == nil ? "Sign Up" : "Save",
+                layoutTitle: "Sign Up",
                 isLoading: isSaving || model.isSubmitting
             ) {
                 submitProfile()
             }
-            .disabled(isBusy || (!hasValidName && !model.isResetPending) || (accountSetup != nil && accountSetup?.isConnected != true))
+            .disabled(isBusy || (!hasValidName && !model.isResetPending))
             .accessibilityLabel(primaryActionTitle)
-            .accessibilityIdentifier(accountSetup == nil ? "sign-up.create" : "account-setup.save-profile")
+            .accessibilityIdentifier("sign-up.create")
         }
+    }
+
+    private func requestProfileExit(_ exit: ProfileExit) {
+        focusedField = nil
+        if hasProfileChanges { profileExit = exit }
+        else { performProfileExit(exit) }
+    }
+
+    private func performProfileExit(_ exit: ProfileExit) {
+        switch exit {
+        case .close: dismiss()
+        case .skip: performProfileAction(.skip)
+        case .cancelRepair: performProfileAction(.cancelRepair)
+        }
+    }
+
+    private func performProfileAction(_ action: AccountSetupProfilePresentation.Action) {
+        guard let setup = accountSetup else { return }
+        let command: AccountSetupCommand
+        switch action {
+        case .retry: command = .retry(.profile)
+        case .skip: command = .skip(.profile)
+        case .cancelRepair: command = .cancelRepair
+        case .save: return
+        }
+        guard let operation = setup.send(command) else { return }
+        submissionTask = Task {
+            await operation.value
+            guard !Task.isCancelled, setup.isConnected else { return }
+            if AccountSetupProfilePresentation.shouldDismiss(after: action, snapshot: setup.snapshot, errorMessage: setup.errorMessage) {
+                profileFailure = nil
+                dismiss()
+            } else {
+                profileFailure = setup.errorMessage.map { .init(action: action, message: $0) }
+            }
+        }
+    }
+
+    private func recoveryActions(_ setup: AccountSetupModel, presentation: AccountSetupProfilePresentation) -> some View {
+        VStack(spacing: 8) {
+            if presentation.canEdit, profileFailure?.action != .save {
+                WNOnboardingButton(title: "Save", isLoading: setup.isBusy) { submitProfile() }
+                    .disabled(!hasValidName || isBusy || !setup.isConnected)
+                    .accessibilityIdentifier("account-setup.save-profile")
+            }
+            if presentation.canSkip {
+                WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
+                    .disabled(isBusy || !setup.isConnected)
+            }
+            if presentation.canCancelRepair {
+                WNButton(title: "Back", emphasis: .secondary) { requestProfileExit(.cancelRepair) }
+                    .disabled(isBusy || !setup.isConnected)
+            }
+        }
+    }
+
+    private func profileRetry(_ action: AccountSetupProfilePresentation.Action) -> some View {
+        Button {
+            switch action {
+            case .save: submitProfile()
+            case .retry: performProfileAction(.retry)
+            case .skip: requestProfileExit(.skip)
+            case .cancelRepair: requestProfileExit(.cancelRepair)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Try Again").underline()
+                if accountSetup?.isBusy == true { ProgressView().controlSize(.small) }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.primary)
+            .frame(minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isBusy || accountSetup?.isConnected != true || (action == .save && !hasValidName))
     }
 
     private func saveDraftChanges() {
@@ -468,27 +646,23 @@ struct IdentityProfileSetupView: View {
     }
 
     private func saveImportedProfile(using setup: AccountSetupModel) async {
-        setupSaveError = nil
         let draft = OnboardingProfileMetadataDraft(
             displayName: model.displayName, about: model.about, uploadedPictureURL: nil
         )
         guard let profile = draft.merging(with: setup.snapshot.proposal?.profile) else { return }
         let avatar = model.avatarDraft.map { AccountSetupAvatar(data: $0.data, mediaType: $0.mediaType) }
-        hasSubmittedProfile = true
-        if await setup.saveProfile(profile, avatar: avatar) {
+        let saved = await setup.saveProfile(profile, avatar: avatar)
+        guard !Task.isCancelled else { return }
+        if saved {
             Haptics.success()
             dismiss()
         } else {
-            setupSaveError = setup.errorMessage ?? L10n.string("Couldn’t save your profile. Try again.")
+            profileFailure = .init(action: .save, message: setup.errorMessage ?? L10n.string("Couldn’t save your profile. Try again."))
             Haptics.error()
         }
     }
 
     private var primaryActionTitle: String {
-        if let accountSetup {
-            if isSaving { return L10n.string("Saving…") }
-            return accountSetup.isResumingProfilePublication ? L10n.string("Retry") : L10n.string("Save")
-        }
         if model.isResetPending { return L10n.string("Start over") }
         if model.phase == .finishingSetup { return L10n.string("Finishing setup…") }
         if model.phase == .savingProfile { return L10n.string("Saving…") }
@@ -511,13 +685,13 @@ private struct ProfilePrivacyDetailsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Image(systemName: "eye")
                     .font(.system(size: iconSize))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .accessibilityHidden(true)
                 Text("Your profile is public")
                     .font(.title2.bold())
                     .accessibilityAddTraits(.isHeader)
-                Text("Your name, photo, and bio are visible to everyone. Use a nickname and share only what you’re comfortable making public.")
-                Text("Photos may stay online even after you remove them from your profile.")
+                Text("Anyone can see your name, photo, and bio, including people using other apps on the same network. You can use a nickname instead of your real name.")
+                Text("Share only what you’re comfortable making public. Photos may stay online even after you remove them from your profile.")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

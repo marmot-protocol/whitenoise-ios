@@ -9031,67 +9031,67 @@
         }
       }
     },
-    "A name and photo help people recognize you. You can also do this later." : {
+    "A name and photo help people recognize you. You can add them now or later in Settings." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein Name und Foto helfen anderen, dich zu erkennen. Du kannst das auch später machen."
+            "value" : "Ein Name und ein Foto helfen anderen, dich zu erkennen. Du kannst sie jetzt oder später in den Einstellungen hinzufügen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A name and photo help people recognize you. You can also do this later."
+            "value" : "A name and photo help people recognize you. You can add them now or later in Settings."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un nombre y una foto ayudan a reconocerte. También puedes hacerlo más tarde."
+            "value" : "Un nombre y una foto ayudan a que te reconozcan. Puedes añadirlos ahora o más tarde en Ajustes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un nom et une photo aident les autres à vous reconnaître. Vous pouvez aussi le faire plus tard."
+            "value" : "Un nom et une photo aident les autres à vous reconnaître. Vous pouvez les ajouter maintenant ou plus tard dans les réglages."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un nome e una foto aiutano gli altri a riconoscerti. Puoi farlo anche più tardi."
+            "value" : "Un nome e una foto aiutano gli altri a riconoscerti. Puoi aggiungerli ora o più tardi nelle Impostazioni."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Um nome e uma foto ajudam as pessoas a reconhecer você. Você também pode fazer isso depois."
+            "value" : "Um nome e uma foto ajudam as pessoas a reconhecer você. Você pode adicioná-los agora ou depois em Configurações."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Имя и фото помогут другим узнать вас. Это можно сделать и позже."
+            "value" : "Имя и фото помогут другим узнать вас. Их можно добавить сейчас или позже в настройках."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bir ad ve fotoğraf insanların sizi tanımasına yardımcı olur. Bunu daha sonra da yapabilirsiniz."
+            "value" : "Ad ve fotoğraf, insanların sizi tanımasına yardımcı olur. Bunları şimdi veya daha sonra Ayarlar’dan ekleyebilirsiniz."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "姓名和照片有助于他人认出你。你也可以稍后再设置。"
+            "value" : "名字和照片能帮助他人认出你。你可以现在添加，也可以稍后在设置中添加。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "姓名和照片有助於他人認出你。你也可以稍後再設定。"
+            "value" : "名字和照片能幫助他人認出你。你可以現在新增，也可以稍後在設定中新增。"
           }
         }
       }
@@ -11817,6 +11817,71 @@
         }
       }
     },
+    "Add your profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge dein Profil hinzu"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add your profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade tu perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez votre profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi il tuo profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicione seu perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilinizi ekleyin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加你的个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新增你的個人資料"
+          }
+        }
+      }
+    },
     "Added to group" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13815,6 +13880,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Anthropic Claude Code 程式設計代理"
+          }
+        }
+      }
+    },
+    "Anyone can see your name, photo, and bio, including people using other apps on the same network. You can use a nickname instead of your real name." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle können deinen Namen, dein Foto und deine Profilbeschreibung sehen, auch Personen, die andere Apps im selben Netzwerk nutzen. Du kannst einen Spitznamen statt deines echten Namens verwenden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anyone can see your name, photo, and bio, including people using other apps on the same network. You can use a nickname instead of your real name."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cualquiera puede ver tu nombre, foto y biografía, incluidas las personas que usan otras apps en la misma red. Puedes usar un apodo en lugar de tu nombre real."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tout le monde peut voir votre nom, votre photo et votre biographie, y compris les personnes utilisant d’autres apps sur le même réseau. Vous pouvez utiliser un pseudonyme à la place de votre vrai nom."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiunque può vedere il tuo nome, la tua foto e la tua biografia, anche chi usa altre app sulla stessa rete. Puoi usare un soprannome invece del tuo vero nome."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Qualquer pessoa pode ver seu nome, foto e biografia, inclusive quem usa outros apps na mesma rede. Você pode usar um apelido em vez do seu nome real."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваше имя, фото и описание профиля видны всем, в том числе пользователям других приложений в той же сети. Вместо настоящего имени можно использовать псевдоним."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adınızı, fotoğrafınızı ve biyografinizi aynı ağdaki diğer uygulamaları kullananlar dahil herkes görebilir. Gerçek adınız yerine bir takma ad kullanabilirsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何人都能看到你的名字、照片和个人简介，包括在同一网络上使用其他应用的人。你可以使用昵称，而不是真实姓名。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何人都能看到你的名字、照片和個人簡介，包括在同一網路上使用其他 App 的人。你可以使用暱稱，而不是真實姓名。"
           }
         }
       }
@@ -16370,6 +16500,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回"
+          }
+        }
+      }
+    },
+    "Back to Sign In" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zurück zur Anmeldung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to Sign In"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a iniciar sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retour à la connexion"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Torna all’accesso"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voltar para entrar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Назад ко входу"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş ekranına dön"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回登录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回登入"
           }
         }
       }
@@ -29130,6 +29325,71 @@
         }
       }
     },
+    "Couldn’t save your profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Profil konnte nicht gespeichert werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t save your profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar tu perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer votre profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare il tuo profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seu perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profiliniz kaydedilemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能保存你的个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能儲存你的個人資料"
+          }
+        }
+      }
+    },
     "Couldn’t save your profile details. Please try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36345,6 +36605,71 @@
         }
       }
     },
+    "Discard changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Änderungen verwerfen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard changes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar cambios"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonner les modifications"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scarta modifiche"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar alterações"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить изменения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değişiklikleri sil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放弃更改"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放棄變更"
+          }
+        }
+      }
+    },
     "Discard draft" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36400,6 +36725,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "捨棄草稿"
+          }
+        }
+      }
+    },
+    "Discard profile changes?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profiländerungen verwerfen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard profile changes?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Descartar los cambios del perfil?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonner les modifications du profil ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scartare le modifiche al profilo?"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descartar as alterações do perfil?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отменить изменения профиля?"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil değişiklikleri silinsin mi?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放弃个人资料更改？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放棄個人資料變更？"
           }
         }
       }
@@ -39188,65 +39578,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "編輯暱稱"
-          }
-        }
-      }
-    },
-    "Edit Profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil bearbeiten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Editar perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modifier le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Modifica profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Editar perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Редактировать профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profili düzenle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "編輯個人資料"
           }
         }
       }
@@ -74863,66 +75194,6 @@
         }
       }
     },
-    "Photos may stay online even after you remove them from your profile." : {
-      "comment" : "Public-profile explanation opened from the sign-up and imported-profile form.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotos können online bleiben, auch nachdem du sie aus deinem Profil entfernt hast."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Las fotos pueden seguir en internet incluso después de eliminarlas de tu perfil."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les photos peuvent rester en ligne même après leur suppression de votre profil."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le foto possono rimanere online anche dopo averle rimosse dal tuo profilo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As fotos podem continuar online mesmo depois de serem removidas do seu perfil."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Фотографии могут остаться в интернете даже после удаления из профиля."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fotoğraflar, profilinizden kaldırsanız bile internette kalabilir."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即使你从个人资料中移除了照片，它们也可能仍保留在网上。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即使你從個人資料中移除了照片，它們也可能仍保留在網路上。"
-          }
-        }
-      }
-    },
     "Pi" : {
       "comment" : "AI agent connector name.",
       "extractionState" : "manual",
@@ -86765,6 +87036,71 @@
         }
       }
     },
+    "Review your profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prüfe dein Profil"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review your profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa tu perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vérifiez votre profil"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Controlla il tuo profilo"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revise seu perfil"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Проверьте профиль"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilinizi gözden geçirin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查你的个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢查你的個人資料"
+          }
+        }
+      }
+    },
     "Running" : {
       "comment" : "Text displayed in a maintenance section of the chat developer tools, indicating that the worker is running.",
       "isCommentAutoGenerated" : true,
@@ -92912,6 +93248,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享邀請"
+          }
+        }
+      }
+    },
+    "Share only what you’re comfortable making public. Photos may stay online even after you remove them from your profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teile nur das, was du öffentlich machen möchtest. Fotos können auch dann online bleiben, wenn du sie aus deinem Profil entfernst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share only what you’re comfortable making public. Photos may stay online even after you remove them from your profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparte solo lo que quieras hacer público. Las fotos pueden seguir en internet aunque las elimines de tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partagez uniquement ce que vous souhaitez rendre public. Les photos peuvent rester en ligne même après leur suppression de votre profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Condividi solo ciò che vuoi rendere pubblico. Le foto potrebbero restare online anche dopo averle rimosse dal profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartilhe apenas o que você se sente à vontade para tornar público. As fotos podem permanecer online mesmo depois de removidas do perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Делитесь только тем, что готовы сделать общедоступным. Фотографии могут остаться в интернете даже после удаления из профиля."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yalnızca herkese açık olmasını istediğiniz bilgileri paylaşın. Fotoğraflar, profilinizden kaldırsanız bile internette kalabilir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只分享你愿意公开的内容。即使你从个人资料中移除照片，它们仍可能留在网上。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只分享你願意公開的內容。即使你從個人資料中移除照片，它們仍可能留在網路上。"
           }
         }
       }
@@ -103194,6 +103595,71 @@
         }
       }
     },
+    "The service we checked took too long to respond." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der angefragte Dienst hat nicht rechtzeitig geantwortet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service we checked took too long to respond."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El servicio que consultamos tardó demasiado en responder."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le service consulté a mis trop de temps à répondre."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il servizio consultato ha impiegato troppo tempo a rispondere."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O serviço consultado demorou demais para responder."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервис, к которому мы обратились, не ответил вовремя."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kontrol ettiğimiz hizmetin yanıt vermesi çok uzun sürdü."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我们查询的服务响应超时。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我們查詢的服務回應逾時。"
+          }
+        }
+      }
+    },
     "The stored Marmot group record could not be read or refreshed. Retry may help after a transient storage failure." : {
       "comment" : "Text displayed in a notification when a group record load fails.",
       "isCommentAutoGenerated" : true,
@@ -103556,6 +104022,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這些是安裝提示。選擇你的代理，複製相應提示並將其貼上到該代理中，即可將其連接到 White Noise。提示包含你的 npub（公開金鑰，並非祕密），並會讓代理先解釋連接器的運作方式，再請求你的安裝批准。請僅使用由你執行且信任的代理；其中絕不會包含你的私密金鑰。"
+          }
+        }
+      }
+    },
+    "These changes haven’t been shared yet. Check the details below, then save to update your public profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Änderungen wurden noch nicht veröffentlicht. Prüfe die Angaben unten und speichere sie, um dein öffentliches Profil zu aktualisieren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These changes haven’t been shared yet. Check the details below, then save to update your public profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estos cambios aún no se han compartido. Revisa los datos de abajo y guarda para actualizar tu perfil público."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces modifications n’ont pas encore été partagées. Vérifiez les informations ci-dessous, puis enregistrez pour mettre à jour votre profil public."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queste modifiche non sono ancora state condivise. Controlla i dettagli qui sotto, poi salva per aggiornare il tuo profilo pubblico."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estas alterações ainda não foram compartilhadas. Confira os detalhes abaixo e salve para atualizar seu perfil público."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эти изменения ещё не опубликованы. Проверьте данные ниже и сохраните их, чтобы обновить общедоступный профиль."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu değişiklikler henüz paylaşılmadı. Aşağıdaki bilgileri kontrol edin, ardından herkese açık profilinizi güncellemek için kaydedin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些更改尚未分享。请检查下方信息，然后保存以更新你的公开个人资料。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這些變更尚未分享。請檢查下方資訊，然後儲存以更新你的公開個人資料。"
           }
         }
       }
@@ -108483,67 +109014,132 @@
         }
       }
     },
-    "Try again to load your profile, or continue without changing it." : {
+    "Try again to continue." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Versuche erneut, dein Profil zu laden, oder fahre fort, ohne es zu ändern."
+            "value" : "Versuche es erneut, um fortzufahren."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Try again to load your profile, or continue without changing it."
+            "value" : "Try again to continue."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Intenta cargar tu perfil de nuevo o continúa sin cambiarlo."
+            "value" : "Inténtalo de nuevo para continuar."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Réessayez de charger votre profil ou continuez sans le modifier."
+            "value" : "Réessayez pour continuer."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Riprova a caricare il tuo profilo o continua senza modificarlo."
+            "value" : "Riprova per continuare."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tente carregar seu perfil novamente ou continue sem alterá-lo."
+            "value" : "Tente novamente para continuar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Попробуйте загрузить профиль снова или продолжите без изменений."
+            "value" : "Попробуйте ещё раз, чтобы продолжить."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Profilinizi yüklemeyi tekrar deneyin veya değiştirmeden devam edin."
+            "value" : "Devam etmek için tekrar deneyin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请重试加载个人资料，或继续而不做更改。"
+            "value" : "请重试以继续。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "請重試載入個人檔案，或繼續而不做變更。"
+            "value" : "請再試一次以繼續。"
+          }
+        }
+      }
+    },
+    "Try again, or continue signing in without changing your profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versuche es erneut oder setze die Anmeldung fort, ohne dein Profil zu ändern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Try again, or continue signing in without changing your profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inténtalo de nuevo o continúa iniciando sesión sin cambiar tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réessayez ou poursuivez la connexion sans modifier votre profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riprova o continua ad accedere senza modificare il tuo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tente novamente ou continue entrando sem alterar seu perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробуйте ещё раз или продолжите вход, не меняя профиль."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tekrar deneyin veya profilinizi değiştirmeden giriş yapmaya devam edin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请重试，或在不更改个人资料的情况下继续登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請再試一次，或在不變更個人資料的情況下繼續登入。"
           }
         }
       }
@@ -110413,71 +111009,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不支援的附件"
-          }
-        }
-      }
-    },
-    "Update profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil aktualisieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Update profile"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Actualizar perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mettre à jour le profil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aggiorna profilo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Atualizar perfil"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Обновить профиль"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profili güncelle"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更新个人资料"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更新個人資料"
           }
         }
       }
@@ -114349,6 +114880,71 @@
         }
       }
     },
+    "We couldn’t connect to the service that provides your profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten keine Verbindung zu dem Dienst herstellen, der dein Profil bereitstellt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t connect to the service that provides your profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos conectar con el servicio que proporciona tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu nous connecter au service qui fournit votre profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a connetterci al servizio che fornisce il tuo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível conectar ao serviço que fornece seu perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось подключиться к сервису, который предоставляет ваш профиль."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilinizi sağlayan hizmete bağlanamadık."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能连接到提供你个人资料的服务。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能連線到提供你個人資料的服務。"
+          }
+        }
+      }
+    },
     "We couldn’t determine whether another installation exists. Invitations may reach only one installation, and chats will not appear on both." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -114475,6 +115071,201 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未找到可用清單。請在你曾用過的中繼上尋找，或發布我們的預設設定。"
+          }
+        }
+      }
+    },
+    "We couldn’t finish checking your sign-in. Go back to Sign In to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten die Überprüfung deiner Anmeldung nicht abschließen. Kehre zur Anmeldung zurück, um es erneut zu versuchen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t finish checking your sign-in. Go back to Sign In to try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos terminar de comprobar tu inicio de sesión. Vuelve a Iniciar sesión para intentarlo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu terminer la vérification de votre connexion. Revenez à l’écran de connexion pour réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a completare la verifica dell’accesso. Torna alla schermata di accesso per riprovare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível concluir a verificação da sua entrada. Volte à tela de entrada para tentar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить проверку входа. Вернитесь на экран входа и попробуйте ещё раз."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş kontrolünüzü tamamlayamadık. Tekrar denemek için giriş ekranına dönün."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能完成登录检查。请返回登录页面重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能完成登入檢查。請返回登入頁面再試一次。"
+          }
+        }
+      }
+    },
+    "We couldn’t finish sharing your changes. Try again to complete the update." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten deine Änderungen nicht vollständig veröffentlichen. Versuche es erneut, um die Aktualisierung abzuschließen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t finish sharing your changes. Try again to complete the update."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos terminar de compartir tus cambios. Inténtalo de nuevo para completar la actualización."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu terminer le partage de vos modifications. Réessayez pour finaliser la mise à jour."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a completare la condivisione delle modifiche. Riprova per completare l’aggiornamento."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível terminar de compartilhar suas alterações. Tente novamente para concluir a atualização."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось завершить публикацию изменений. Попробуйте ещё раз, чтобы завершить обновление."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Değişikliklerinizin paylaşımı tamamlanamadı. Güncellemeyi tamamlamak için tekrar deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能完成分享你的更改。请重试以完成更新。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能完成分享你的變更。請再試一次以完成更新。"
+          }
+        }
+      }
+    },
+    "We couldn’t get your profile details." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir konnten deine Profilangaben nicht laden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t get your profile details."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pudimos obtener los datos de tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous n’avons pas pu récupérer les informations de votre profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non siamo riusciti a recuperare i dettagli del tuo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível obter os dados do seu perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось загрузить данные профиля."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil bilgileriniz alınamadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能获取你的个人资料信息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能取得你的個人資料資訊。"
           }
         }
       }
@@ -114658,6 +115449,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法讀取此圖片。請選擇其他圖片。"
+          }
+        }
+      }
+    },
+    "We found profile information, but couldn’t read it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wir haben Profilinformationen gefunden, konnten sie aber nicht lesen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We found profile information, but couldn’t read it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encontramos información del perfil, pero no pudimos leerla."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nous avons trouvé des informations de profil, mais n’avons pas pu les lire."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbiamo trovato informazioni sul profilo, ma non siamo riusciti a leggerle."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encontramos informações do perfil, mas não foi possível lê-las."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Данные профиля найдены, но прочитать их не удалось."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil bilgileri bulundu, ancak okunamadı."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到了个人资料信息，但未能读取。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到了個人資料資訊，但未能讀取。"
           }
         }
       }
@@ -119589,6 +120445,71 @@
         }
       }
     },
+    "Your unsaved changes to this form will be lost." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine nicht gespeicherten Änderungen an diesem Formular gehen verloren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your unsaved changes to this form will be lost."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se perderán los cambios sin guardar de este formulario."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les modifications non enregistrées de ce formulaire seront perdues."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche non salvate a questo modulo andranno perse."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As alterações não salvas neste formulário serão perdidas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Несохранённые изменения в этой форме будут потеряны."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu formdaki kaydedilmemiş değişiklikleriniz kaybolacak."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此表单中未保存的更改将丢失。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此表單中未儲存的變更將遺失。"
+          }
+        }
+      }
+    },
     "You’re all caught up." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -120965,66 +121886,6 @@
         }
       }
     },
-    "Your name, photo, and bio are visible to everyone. Use a nickname and share only what you’re comfortable making public." : {
-      "comment" : "Public-profile explanation opened from the sign-up and imported-profile form.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Name, dein Foto und deine Profilbeschreibung sind für alle sichtbar. Verwende einen Spitznamen und teile nur das, was du öffentlich machen möchtest."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu nombre, foto y biografía son visibles para todo el mundo. Usa un apodo y comparte solo lo que quieras hacer público."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Votre nom, votre photo et votre biographie sont visibles par tout le monde. Utilisez un pseudonyme et partagez uniquement ce que vous souhaitez rendre public."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Il tuo nome, la tua foto e la tua biografia sono visibili a tutti. Usa un soprannome e condividi solo ciò che vuoi rendere pubblico."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seu nome, foto e biografia são visíveis para todos. Use um apelido e compartilhe apenas o que você se sente à vontade para tornar público."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ваше имя, фото и описание профиля видны всем. Используйте псевдоним и делитесь только тем, что готовы сделать общедоступным."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adınız, fotoğrafınız ve biyografiniz herkes tarafından görülebilir. Bir takma ad kullanın ve yalnızca herkese açık olmasını istediğiniz bilgileri paylaşın."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "任何人都能看到你的名字、照片和个人简介。你可以使用昵称，只分享你愿意公开的内容。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "任何人都能看到你的名字、照片和個人簡介。你可以使用暱稱，只分享你願意公開的內容。"
-          }
-        }
-      }
-    },
     "Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it." : {
       "localizations" : {
         "de" : {
@@ -121328,6 +122189,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的個人資料是公開的"
+          }
+        }
+      }
+    },
+    "Your profile update didn’t finish" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Profilaktualisierung wurde nicht abgeschlossen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your profile update didn’t finish"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La actualización de tu perfil no se completó"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mise à jour de votre profil n’a pas abouti"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’aggiornamento del profilo non è stato completato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A atualização do seu perfil não foi concluída"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновление профиля не завершено"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil güncellemeniz tamamlanmadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的个人资料更新未完成"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的個人資料更新未完成"
           }
         }
       }
