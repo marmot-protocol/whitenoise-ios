@@ -76,7 +76,8 @@ nonisolated final class MarmotClient: Sendable {
         rootPath: String,
         relayUrls: [String],
         cursorPersistence: CursorPersistenceFfi,
-        telemetryConfig: TelemetryBuildConfig
+        telemetryConfig: TelemetryBuildConfig,
+        relayPolicy: RelayPolicyFfi = .publicOnly
     ) throws {
         let constructionStartedAt = ContinuousClock.now
         self.rootPath = rootPath
@@ -87,7 +88,7 @@ nonisolated final class MarmotClient: Sendable {
         self.marmot = try Marmot.newWithConfiguration(
             rootPath: rootPath,
             relayUrls: relayUrls,
-            options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
+            options: MarmotOptions(relayPolicy: relayPolicy, cursorPersistence: cursorPersistence, clientName: "whitenoise",
                 attachmentAcquisitionMode: .hostManaged)
         )
         // A rejected audit destination must not block startup; recordings stay local.

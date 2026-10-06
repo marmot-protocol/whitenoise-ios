@@ -1,5 +1,7 @@
 import CryptoKit
 import Foundation
+import Network
+import os
 import Testing
 import MarmotKit
 @testable import whitenoise_ios
@@ -8,7 +10,8 @@ import MarmotKit
 /// `:party:` in the chat's catalog, then a tagged kind-9 goes through the
 /// real `sendTaggedMedia` of a live test runtime and is read back through the
 /// conversation window and the rendering resolver. The peer row is synthetic, so its retained bytes and
-/// the Blossom upload are simulated (the runtime is offline); the uploaded
+/// the Blossom upload are simulated; a local relay serves empty history and
+/// refuses publication with a retryable response. The uploaded
 /// reference is shaped like a real one for the group's epoch.
 @MainActor
 @Suite(.serialized)
@@ -18,13 +21,19 @@ struct CustomEmojiSendingFixtureTests {
     }
 
     @Test func taggedMessageRoundTripsThroughTheRuntime() async throws {
-        let client = try MarmotClient.testClient()
-        try await client.startRuntime()
+        let relay = try CustomEmojiTestRelay()
+        defer { relay.stop() }
+        let relayURL = try await relay.start()
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("EmojiSend-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let client = try MarmotClient(rootPath: root.path, relayUrls: [relayURL], cursorPersistence: .advance,
+            telemetryConfig: .current(), relayPolicy: .allowLoopback)
         let watchdog = MarmotFixtureWatchdog.start("Custom emoji send fixture exceeded its deadline", breaking: client)
         defer { watchdog.cancel() }
         do {
+            try await client.startRuntime()
             let account = try await client.marmot.createIdentityWithProfile(
-                defaultRelays: ["wss://relay.invalid.test"], bootstrapRelays: ["wss://relay.invalid.test"]
+                defaultRelays: [relayURL], bootstrapRelays: [relayURL]
             ).account
             let group = try await client.createGroupWithOptionsDetailed(accountRef: account.label,
                 name: "Emoji send", memberRefs: [], options: CreateGroupOptionsFfi(
@@ -101,8 +110,9 @@ struct CustomEmojiSendingFixtureTests {
                 },
                 sendMessage: { scope, caption, attachments, tags in
                     do {
-                        _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                                             attachments: attachments, caption: caption, tags: tags)
+                        let summary = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                                     attachments: attachments, caption: caption, tags: tags)
+                        #expect(summary.acceptDisposition != .published)
                     } catch {
                         Issue.record(error, "MDK tagged-media send failed before the app classified the error")
                         throw error
@@ -151,10 +161,96 @@ struct CustomEmojiSendingFixtureTests {
             })
             #expect(model.customEmoji(for: item).shortcodes == [party, celebrate])
             #expect(model.mediaItems(for: item).isEmpty)
+            #expect(relay.didRefusePublication)
             try await client.marmot.shutdownAndClose()
         } catch {
             try? await client.marmot.shutdownAndClose()
             throw error
+        }
+    }
+}
+
+/// Serves empty history and refuses publication with a retryable relay response.
+private nonisolated final class CustomEmojiTestRelay: Sendable {
+    private let queue = DispatchQueue(label: "CustomEmojiTestRelay")
+    private let listener: NWListener
+    private let connections = OSAllocatedUnfairLock(initialState: [NWConnection]())
+    private let refusedPublication = OSAllocatedUnfairLock(initialState: false)
+
+    var didRefusePublication: Bool { refusedPublication.withLock { $0 } }
+
+    init() throws {
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+        let webSocket = NWProtocolWebSocket.Options()
+        webSocket.autoReplyPing = true
+        parameters.defaultProtocolStack.applicationProtocols.insert(webSocket, at: 0)
+        listener = try NWListener(using: parameters)
+    }
+
+    func start() async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            listener.stateUpdateHandler = { [self] state in
+                switch state {
+                case .ready:
+                    listener.stateUpdateHandler = nil
+                    guard let port = listener.port else {
+                        continuation.resume(throwing: NWError.posix(.EADDRNOTAVAIL))
+                        return
+                    }
+                    continuation.resume(returning: "ws://127.0.0.1:\(port.rawValue)")
+                case .waiting(let error), .failed(let error):
+                    listener.stateUpdateHandler = nil
+                    continuation.resume(throwing: error)
+                default:
+                    break
+                }
+            }
+            listener.newConnectionHandler = { [self] connection in
+                connections.withLock { $0.append(connection) }
+                connection.start(queue: queue)
+                receive(on: connection)
+            }
+            listener.start(queue: queue)
+        }
+    }
+
+    func stop() {
+        queue.sync {
+            listener.newConnectionHandler = nil
+            listener.stateUpdateHandler = nil
+            listener.cancel()
+            connections.withLock { connections in
+                connections.forEach { $0.cancel() }
+                connections.removeAll()
+            }
+        }
+    }
+
+    private func receive(on connection: NWConnection) {
+        connection.receiveMessage { [weak self] data, context, _, error in
+            guard let self, error == nil else { return }
+            if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata,
+               metadata.opcode == .close {
+                connection.cancel()
+                return
+            }
+            if let data, let request = try? JSONSerialization.jsonObject(with: data) as? [Any], request.count > 1 {
+                var response: [Any]?
+                if request.first as? String == "REQ", let subscriptionID = request[1] as? String {
+                    response = ["EOSE", subscriptionID]
+                } else if request.first as? String == "EVENT", let event = request[1] as? [String: Any],
+                          let eventID = event["id"] as? String {
+                    refusedPublication.withLock { $0 = true }
+                    response = ["OK", eventID, false, "rate-limited: publication unavailable in this test"]
+                }
+                if let response, let data = try? JSONSerialization.data(withJSONObject: response) {
+                    let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+                    let context = NWConnection.ContentContext(identifier: "relay response", metadata: [metadata])
+                    connection.send(content: data, contentContext: context, completion: .idempotent)
+                }
+            }
+            receive(on: connection)
         }
     }
 }
