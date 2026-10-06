@@ -100,8 +100,13 @@ struct CustomEmojiSendingFixtureTests {
                         dim: request.dim, thumbhash: request.thumbhash)
                 },
                 sendMessage: { scope, caption, attachments, tags in
-                    _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
-                                                         attachments: attachments, caption: caption, tags: tags)
+                    do {
+                        _ = try await client.sendTaggedMedia(accountRef: scope.accountRef, groupIdHex: scope.groupIdHex,
+                                                             attachments: attachments, caption: caption, tags: tags)
+                    } catch {
+                        Issue.record(error, "MDK tagged-media send failed before the app classified the error")
+                        throw error
+                    }
                 }
             )
 
