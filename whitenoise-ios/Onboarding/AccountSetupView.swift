@@ -16,7 +16,7 @@ struct AccountSetupView: View {
                 ForEach(model.snapshot.steps, id: \.step) { step in
                     let state = AccountSetupPresentation.checkState(step)
                     Group {
-                        if state.needsAttention {
+                        if state.needsAttention, reviewStep == step.step {
                             Button {
                                 decision = SetupDecision(step: step.step)
                             } label: {
@@ -145,7 +145,7 @@ struct AccountSetupView: View {
             }
             .labelStyle(.titleAndIcon)
             Spacer(minLength: 0)
-            if state.needsAttention {
+            if state.needsAttention, reviewStep == step.step {
                 Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
