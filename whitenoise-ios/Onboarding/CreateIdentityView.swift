@@ -41,6 +41,7 @@ struct IdentityProfileSetupView: View {
     let accountSetup: AccountSetupModel?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
+    @State private var pendingProfileDiscard: AccountSetupProfilePresentation.PendingDiscard?
 
     private enum ProfileExit { case close, skip, cancelRepair }
 
@@ -70,7 +71,12 @@ struct IdentityProfileSetupView: View {
     }
 
     private var isSetupConnectionBlocked: Bool {
-        accountSetup.map { !$0.isConnected && $0.errorMessage != nil } ?? false
+        accountSetup?.hasConnectionFailure ?? false
+    }
+
+    private var didCompleteProfileDiscard: Bool {
+        guard scenePhase == .active, let setup = accountSetup, setup.isConnected, !setup.isBusy else { return false }
+        return pendingProfileDiscard?.isComplete(in: setup.snapshot) ?? false
     }
 
     private var profileFailureMessage: String? { accountSetup?.errorMessage ?? profileFailure?.message }
@@ -125,13 +131,17 @@ struct IdentityProfileSetupView: View {
             },
             onRemove: {
                 submissionTask = Task {
-                    do { try await model.acceptPreparedAvatar(nil) }
+                    do {
+                        try await model.acceptPreparedAvatar(nil)
+                        profileDraftDidChange()
+                    }
                     catch is CancellationError { return }
                     catch { model.failure = .draftStorage }
                 }
             },
             onSelect: { selection in
                 try await model.acceptPreparedAvatar(selection)
+                profileDraftDidChange()
             }
         )
     }
@@ -224,6 +234,9 @@ struct IdentityProfileSetupView: View {
         presentedEditor
         .onChange(of: model.displayName) { saveDraftChanges() }
         .onChange(of: model.about) { saveDraftChanges() }
+        .onChange(of: didCompleteProfileDiscard) {
+            if didCompleteProfileDiscard { dismiss() }
+        }
         .onChange(of: isSetupConnectionBlocked) {
             if isSetupConnectionBlocked { focusedField = nil }
         }
@@ -349,7 +362,8 @@ struct IdentityProfileSetupView: View {
                         presentation: recovery, failureMessage: profileFailureMessage, failedAction: profileFailure?.action
                     ) {
                         if let action = recovery.retryAction(
-                            failedAction: profileFailure?.action, hasFailure: profileFailureMessage != nil
+                            failedAction: profileFailure?.action, hasFailure: profileFailureMessage != nil,
+                            draftWasEdited: profileFailure?.draftWasEdited ?? false
                         ) {
                             profileRetry(action)
                         }
@@ -518,10 +532,13 @@ struct IdentityProfileSetupView: View {
         case .cancelRepair: command = .cancelRepair
         case .save: return
         }
+        let discard = action == .cancelRepair ? AccountSetupProfilePresentation.PendingDiscard(snapshot: setup.snapshot) : nil
         guard let operation = setup.send(command) else { return }
+        pendingProfileDiscard = discard
         submissionTask = Task {
             await operation.value
             guard !Task.isCancelled, setup.isConnected else { return }
+            pendingProfileDiscard = nil
             if AccountSetupProfilePresentation.shouldDismiss(after: action, snapshot: setup.snapshot, errorMessage: setup.errorMessage) {
                 profileFailure = nil
                 dismiss()
@@ -533,7 +550,7 @@ struct IdentityProfileSetupView: View {
 
     private func recoveryActions(_ setup: AccountSetupModel, presentation: AccountSetupProfilePresentation) -> some View {
         VStack(spacing: 8) {
-            if presentation.canEdit, profileFailure?.action != .save {
+            if presentation.canEdit, profileFailure?.action != .save || profileFailure?.draftWasEdited == true {
                 WNOnboardingButton(title: "Save", isLoading: setup.isBusy) { submitProfile() }
                     .disabled(!hasValidName || isBusy || !setup.isConnected)
                     .accessibilityIdentifier("account-setup.save-profile")
@@ -571,7 +588,13 @@ struct IdentityProfileSetupView: View {
         .disabled(isBusy || accountSetup?.isConnected != true || (action == .save && !hasValidName))
     }
 
+    private func profileDraftDidChange() {
+        pendingProfileDiscard = nil
+        if profileFailure?.action == .save { profileFailure?.draftWasEdited = true }
+    }
+
     private func saveDraftChanges() {
+        profileDraftDidChange()
         guard isFormReady, accountSetup == nil else { return }
         model.scheduleDraftPersistence()
     }
@@ -646,6 +669,7 @@ struct IdentityProfileSetupView: View {
     }
 
     private func saveImportedProfile(using setup: AccountSetupModel) async {
+        pendingProfileDiscard = nil
         let draft = OnboardingProfileMetadataDraft(
             displayName: model.displayName, about: model.about, uploadedPictureURL: nil
         )

@@ -16,6 +16,39 @@ struct AccountSetupTests {
         #expect(presentation.retryAction(failedAction: .save, hasFailure: true) == .save)
     }
 
+    @Test func editingAfterAFailedSaveRemovesInlineRetryUntilTheNextFailure() {
+        var value = proposalSnapshot(step: .profile)
+        var presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: true) == nil)
+        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: false) == .save)
+        #expect(presentation.retryAction(failedAction: .cancelRepair, hasFailure: true, draftWasEdited: true) == .cancelRepair)
+
+        value.steps[0].actions = [.retry]
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: true) == .retry)
+    }
+
+    @Test func pendingProfileDiscardRecognizesTheRefreshedCheckpoint() {
+        var value = proposalSnapshot(step: .profile)
+        let pending = AccountSetupProfilePresentation.PendingDiscard(snapshot: value)
+        #expect(!pending.isComplete(in: value))
+        value.revision += 1
+        #expect(!pending.isComplete(in: value))
+        // Cancellation can commit before the suspended UI receives its completion.
+        value.proposal = nil
+        #expect(pending.isComplete(in: value))
+        #expect(value.steps[0].status == .needsInput)
+
+        value.revision = 8
+        #expect(!pending.isComplete(in: value))
+        value.revision = 9
+        value.recoveryEpoch = "another-attempt"
+        #expect(!pending.isComplete(in: value))
+        value.recoveryEpoch = nil
+        value.accountIdHex = String(repeating: "b", count: 64)
+        #expect(!pending.isComplete(in: value))
+    }
+
     @Test func profileRetryRespectsChangesToOfferedActions() {
         var value = proposalSnapshot(step: .profile)
         var presentation = AccountSetupProfilePresentation(snapshot: value)
@@ -366,7 +399,31 @@ struct AccountSetupTests {
         await model.drain()
         #expect(model.canFinish == ready)
         #expect((model.errorMessage == nil) == ready)
+        #expect(model.hasConnectionFailure == !ready)
         model.suspend()
+        #expect(!model.hasConnectionFailure)
+    }
+
+    @Test func suspendingAfterAnActionFailureDoesNotReportAConnectionFailure() async {
+        let initial = snapshot()
+        let model = AccountSetupModel(snapshot: initial)
+        await model.connect(SetupTestClient(initial: initial))
+        await settle { model.isConnected && !model.isBusy }
+        await model.send(.approve(0))?.value
+        #expect(model.errorMessage != nil)
+        #expect(!model.hasConnectionFailure)
+        model.suspend()
+        #expect(!model.isConnected)
+        #expect(model.errorMessage != nil)
+        #expect(!model.hasConnectionFailure)
+
+        await model.connect(SetupTestClient(initial: initial))
+        await settle { model.isConnected && !model.isBusy }
+        #expect(model.isConnected)
+        #expect(model.errorMessage == nil)
+        #expect(!model.hasConnectionFailure)
+        model.suspend()
+        await model.drain()
     }
 
     @Test(arguments: [UInt64(4), 5]) func automaticSkipStopsOnUnchangedOrOlderResults(revision: UInt64) async {

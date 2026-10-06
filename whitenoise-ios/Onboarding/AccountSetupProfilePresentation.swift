@@ -17,6 +17,24 @@ nonisolated struct AccountSetupProfilePresentation {
     struct Failure {
         let action: Action
         let message: String
+        var draftWasEdited = false
+    }
+
+    struct PendingDiscard {
+        private let accountID: String
+        private let recoveryEpoch: String?
+        private let revision: UInt64
+
+        init(snapshot: OnboardingSnapshotFfi) {
+            accountID = snapshot.accountIdHex
+            recoveryEpoch = snapshot.recoveryEpoch
+            revision = snapshot.revision
+        }
+
+        func isComplete(in snapshot: OnboardingSnapshotFfi) -> Bool {
+            snapshot.accountIdHex == accountID && snapshot.recoveryEpoch == recoveryEpoch
+                && snapshot.revision > revision && snapshot.proposal == nil
+        }
     }
 
     let profile: UserProfileMetadataFfi?
@@ -47,10 +65,10 @@ nonisolated struct AccountSetupProfilePresentation {
         }.first
     }
 
-    func retryAction(failedAction: Action?, hasFailure: Bool) -> Action? {
+    func retryAction(failedAction: Action?, hasFailure: Bool, draftWasEdited: Bool = false) -> Action? {
         if hasFailure {
             switch failedAction {
-            case .save where canEdit: return .save
+            case .save where canEdit: return draftWasEdited ? nil : .save
             case .skip where canSkip: return .skip
             case .cancelRepair where canCancelRepair: return .cancelRepair
             default: return canRetry ? .retry : nil
@@ -89,7 +107,7 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
                         .foregroundStyle(isFailure ? Color.red : Color.primary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
-                    Text(message)
+                    message
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 privacyContent()
@@ -112,23 +130,25 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
         return presentation.canEdit ? "Add your profile" : "Couldn’t load your profile"
     }
 
-    private var message: String {
-        if let failureMessage { return failureMessage }
-        if presentation.isInterrupted {
-            return L10n.string("We couldn’t finish sharing your changes. Try again to complete the update.")
+    @ViewBuilder private var message: some View {
+        if let failureMessage {
+            Text(failureMessage)
+        } else if presentation.isInterrupted {
+            Text("We couldn’t finish sharing your changes. Try again to complete the update.")
+        } else if presentation.profile != nil {
+            Text("These changes haven’t been shared yet. Check the details below, then save to update your public profile.")
+        } else if presentation.canEdit {
+            Text("A name and photo help people recognize you. You can add them now or later in Settings.")
+        } else {
+            Text(presentation.lookupExplanation ?? L10n.string("We couldn’t get your profile details."))
+            if presentation.canSkip {
+                Text("Try again, or continue signing in without changing your profile.")
+            } else {
+                Text("Try again to continue.")
+            }
         }
-        if presentation.profile != nil {
-            return L10n.string("These changes haven’t been shared yet. Check the details below, then save to update your public profile.")
-        }
-        if presentation.canEdit {
-            return L10n.string("A name and photo help people recognize you. You can add them now or later in Settings.")
-        }
-        let explanation = presentation.lookupExplanation ?? L10n.string("We couldn’t get your profile details.")
-        let nextStep = presentation.canSkip
-            ? L10n.string("Try again, or continue signing in without changing your profile.")
-            : L10n.string("Try again to continue.")
-        return explanation + " " + nextStep
     }
+
 }
 
 struct AccountSetupProfileError: View {
