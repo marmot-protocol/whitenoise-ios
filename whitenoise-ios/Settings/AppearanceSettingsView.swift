@@ -55,7 +55,7 @@ struct AppearanceSettingsView: View {
                     )
                 )
             } footer: {
-                Text("Shows the title and image of links in chats. Loading a preview tells the linked website your IP address.")
+                Text("Shows the title and image of links in chats. Loading a preview tells the linked website, and the site hosting its image, your IP address.")
             }
         }
         .localizedNavigationTitle("Appearance")
