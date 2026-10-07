@@ -384,7 +384,7 @@ struct IdentityProfileSetupView: View {
                 Section {
                     AccountSetupProfileStatus(
                         presentation: recovery, failureMessage: profileFailureMessage,
-                        failedAction: profileFailure?.action, isBusy: isSaving, isSavingProfile: activeProfileAction == .save
+                        failedAction: profileFailure?.action, isBusy: isSaving, activeAction: activeProfileAction
                     ) {
                         if recovery.canEdit || recovery.profile != nil {
                             Divider()

@@ -13,6 +13,7 @@ struct AccountSetupProfileView: View {
 
 nonisolated struct AccountSetupProfilePresentation {
     enum Action { case save, retry, skip, cancelRepair }
+    enum Progress { case checking, saving, skipping, discarding }
     enum Feedback { case working, complete, add, review, interrupted, lookupFailure, actionFailure }
 
     struct Failure {
@@ -79,6 +80,16 @@ nonisolated struct AccountSetupProfilePresentation {
         return .working
     }
 
+    func progress(for action: Action?) -> Progress {
+        switch action {
+        case .save: .saving
+        case .retry: isInterrupted ? .saving : .checking
+        case .skip: .skipping
+        case .cancelRepair: .discarding
+        case nil: .checking
+        }
+    }
+
     struct PrimaryAction: Equatable {
         let action: Action
         let isRetry: Bool
@@ -106,7 +117,7 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
     let failureMessage: String?
     let failedAction: AccountSetupProfilePresentation.Action?
     var isBusy = false
-    var isSavingProfile = false
+    var activeAction: AccountSetupProfilePresentation.Action?
     @ViewBuilder var privacyContent: () -> PrivacyContent
 
     private var feedback: AccountSetupProfilePresentation.Feedback {
@@ -161,7 +172,12 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
 
     @ViewBuilder private var message: some View {
         if feedback == .working {
-            if isSavingProfile { Text("Saving…") } else { Text("Checking…") }
+            switch presentation.progress(for: activeAction) {
+            case .checking: Text("Checking…")
+            case .saving: Text("Saving…")
+            case .skipping: Text("Skipping…")
+            case .discarding: Text("Discarding changes…")
+            }
         } else if feedback == .complete {
             Text("Done")
         } else if let failureMessage {

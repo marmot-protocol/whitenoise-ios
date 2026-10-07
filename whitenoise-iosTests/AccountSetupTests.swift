@@ -5,6 +5,21 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func profileProgressDistinguishesLookupFromPublicationAndExitActions() {
+        var value = proposalSnapshot(step: .profile)
+        value.steps[0].actions = [.retry]
+        let publication = AccountSetupProfilePresentation(snapshot: value)
+        #expect(publication.progress(for: .retry) == .saving)
+
+        value.proposal = nil
+        let lookup = AccountSetupProfilePresentation(snapshot: value)
+        #expect(lookup.progress(for: .retry) == .checking)
+        #expect(lookup.progress(for: nil) == .checking)
+        #expect(lookup.progress(for: .save) == .saving)
+        #expect(lookup.progress(for: .skip) == .skipping)
+        #expect(lookup.progress(for: .cancelRepair) == .discarding)
+    }
+
     @Test func profileProgressDoesNotMasqueradeAsLookupOrPublicationFailure() {
         var value = proposalSnapshot(step: .profile)
         value.steps[0].status = .checking
