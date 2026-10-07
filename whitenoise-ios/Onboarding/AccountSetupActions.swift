@@ -29,6 +29,14 @@ struct AccountSetupActions: View {
     }
 
     var body: some View {
+        if selectedStep == .profile {
+            AccountSetupProfileView(model: model)
+        } else {
+            decisionContent
+        }
+    }
+
+    private var decisionContent: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -45,7 +53,7 @@ struct AccountSetupActions: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .safeAreaPadding()
             }
-            .navigationTitle(title)
+            .navigationTitle(AccountSetupPresentation.title(selectedStep))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -63,8 +71,6 @@ struct AccountSetupActions: View {
             .sheet(item: $editor) { editor in
                 NavigationStack {
                     switch editor {
-                    case .profile:
-                        IdentityProfileSetupView(accountSetup: model)
                     case .discovery:
                         AccountSetupDiscoverySheet(model: model, step: selectedStep)
                     case .relays:
@@ -79,24 +85,12 @@ struct AccountSetupActions: View {
         }
     }
 
-    private var title: String {
-        if selectedStep == .profile {
-            return step?.status == .retryableFailure
-                ? L10n.string("Couldn’t load your profile") : L10n.string("Your profile")
-        }
-        return AccountSetupPresentation.title(selectedStep)
-    }
-
     @ViewBuilder private var explanation: some View {
         if proposal != nil, step?.actions.contains(.approveRepair) != true,
            step?.actions.contains(.cancelRepair) != true {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
         } else {
             switch selectedStep {
-            case .profile:
-                Text(step?.status == .retryableFailure
-                     ? "Try again to load your profile, or continue without changing it."
-                     : "A name and photo help people recognize you. You can also do this later.")
             case .relays, .inboxRelays:
                 if step?.actions.contains(.useRecommendedRelays) == true || proposal != nil {
                     Text("Relays let your profile publish information, receive chat invitations, and deliver messages.")
@@ -138,6 +132,8 @@ struct AccountSetupActions: View {
                 Text("Secure messaging must be ready before you can open Chats. Try this check again.")
             case .follows:
                 Text("You can continue without changing the people you follow.")
+            default:
+                EmptyView()
             }
         }
     }
@@ -146,11 +142,6 @@ struct AccountSetupActions: View {
         if let step {
             if proposal != nil, !step.actions.contains(.approveRepair), !step.actions.contains(.cancelRepair) {
                 if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
-            } else if selectedStep == .profile {
-                if step.actions.contains(.editProfile) || step.actions.contains(.approveRepair) {
-                    WNButton(title: "Edit Profile") { editor = .profile }
-                } else if step.actions.contains(.retry) { action("Try again", .retry(.profile)) }
-                if step.actions.contains(.continueWithout) { action("Not Now", .skip(.profile), secondary: true) }
             } else if selectedStep == .relays || selectedStep == .inboxRelays {
                 if let proposal, step.actions.contains(.approveRepair) {
                     action("Use These Relays", .approve(proposal.revision, recoveryEpoch: model.snapshot.recoveryEpoch)).disabled(relays == nil)
@@ -178,7 +169,7 @@ struct AccountSetupActions: View {
 }
 
 private enum SetupEditor: String, Identifiable {
-    case profile, discovery, relays
+    case discovery, relays
     var id: String { rawValue }
 }
 

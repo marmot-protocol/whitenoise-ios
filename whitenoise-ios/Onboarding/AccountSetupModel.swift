@@ -113,6 +113,7 @@ final class AccountSetupModel {
     private(set) var snapshot: OnboardingSnapshotFfi
     private(set) var isBusy = false
     private(set) var isConnected = false
+    private(set) var hasConnectionFailure = false
     private(set) var cancelled = false
     var errorMessage: String?
     @ObservationIgnored private var client: (any AccountSetupClient)?
@@ -171,10 +172,12 @@ final class AccountSetupModel {
                 guard self.session == id, !Task.isCancelled, !self.cancelled,
                       !self.snapshot.ready || self.snapshot.cancellationPending else { return }
                 self.isConnected = false
+                self.hasConnectionFailure = true
                 self.errorMessage = L10n.string("Setup updates stopped. Try again to continue.")
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 self.isConnected = false
+                self.hasConnectionFailure = true
                 self.errorMessage = L10n.string("Couldn’t load sign-in checks. Please try again.")
             }
         }
@@ -228,6 +231,7 @@ final class AccountSetupModel {
     func suspend() {
         session = UUID()
         isConnected = false
+        hasConnectionFailure = false
         isBusy = false
         client = nil
         observer?.cancel()
