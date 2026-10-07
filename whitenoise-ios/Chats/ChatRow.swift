@@ -139,7 +139,22 @@ struct ChatRow: View {
         )
     }
 
-    private var previewText: Text {
+    @ViewBuilder
+    private var previewText: some View {
+        if let source = item.timestampPreview, item.draftPreview == nil,
+           preview.body == item.previewText {
+            let prefix = preview.prefix.map { name in
+                var text = AttributedString(name + ": ")
+                text.font = .subheadline.bold()
+                return text
+            } ?? AttributedString()
+            MarkdownLinkText(prefix + source, leadingSymbolName: preview.systemImageName)
+        } else {
+            staticPreviewText
+        }
+    }
+
+    private var staticPreviewText: Text {
         var body = Text(verbatim: preview.body)
         if let symbolName = preview.systemImageName {
             body = Text(Image(systemName: symbolName)) + Text(verbatim: " ") + body

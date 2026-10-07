@@ -503,6 +503,16 @@ enum MarkdownMessageBuilder {
 
             case .nostrUri(let entity):
                 emitted = appendNostrEntity(entity, prefix: "", to: &out, context: context, budget: &budget) || emitted
+
+            case .timestamp(let unixSeconds, let style):
+                let timestamp = MarkdownTimestamp(unixSeconds: unixSeconds, style: .init(style))
+                var source = AttributedString()
+                if append(timestamp.token, to: &source, context: context, budget: &budget) {
+                    source[MarkdownTimestampAttribute.self] = timestamp
+                    source[MarkdownTimestampOccurrenceAttribute.self] = out.characters.count
+                    out += source
+                    emitted = true
+                }
             }
         }
         return emitted
@@ -636,5 +646,21 @@ enum MarkdownMessageBuilder {
         guard !budget.take(piece).isEmpty else { return false }
         out += AttributedString(piece)
         return true
+    }
+}
+
+extension MarkdownTimestamp.Style {
+    nonisolated init(_ style: MarkdownTimestampStyleFfi) {
+        switch style {
+        case .shortTime: self = .shortTime
+        case .longTime: self = .longTime
+        case .shortDate: self = .shortDate
+        case .longDate: self = .longDate
+        case .shortDateTime: self = .shortDateTime
+        case .longDateTime: self = .longDateTime
+        case .compactDateTime: self = .compactDateTime
+        case .compactDateTimeSeconds: self = .compactDateTimeSeconds
+        case .relative: self = .relative
+        }
     }
 }
