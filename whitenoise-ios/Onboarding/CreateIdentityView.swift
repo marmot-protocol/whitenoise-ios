@@ -774,9 +774,11 @@ private struct ProfileActionBar<Actions: View>: ViewModifier {
 
     @ViewBuilder func body(content: Content) -> some View {
         if isRecovery, #available(iOS 26.0, *) {
-            content.safeAreaBar(edge: .bottom, spacing: 0) {
-                if isPresented { actions() }
-            }
+            content
+                .scrollEdgeEffectStyle(.soft, for: .bottom)
+                .safeAreaBar(edge: .bottom, spacing: 0) {
+                    if isPresented { actions() }
+                }
         } else {
             content.safeAreaInset(edge: .bottom, spacing: 0) {
                 if isPresented { actions() }
