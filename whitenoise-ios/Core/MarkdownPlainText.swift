@@ -18,16 +18,38 @@ nonisolated enum MarkdownPlainText {
         _ document: MarkdownDocumentFfi,
         mentionDisplayName: MarkdownMentionResolver? = nil
     ) -> String? {
+        projection(document, mentionDisplayName: mentionDisplayName).map { MarkdownTimestamp.plainText($0) }
+    }
+
+    static func timestampProjection(
+        _ document: MarkdownDocumentFfi,
+        kind: UInt64 = 9,
+        plaintext: String = "",
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> AttributedString? {
+        guard kind != MessageSemantics.kindGroupSystem, kind != MessageSemantics.kindPoll,
+              !MessageSemantics.isTypedAgentEventKind(kind),
+              RemoteGiphyMedia.envelopePreviewText(for: plaintext) == nil else { return nil }
+        guard let source = projection(document, mentionDisplayName: mentionDisplayName),
+              source.runs.contains(where: { $0[MarkdownTimestampAttribute.self] != nil }) else { return nil }
+        return source
+    }
+
+    static func projection(
+        _ document: MarkdownDocumentFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil
+    ) -> AttributedString? {
         guard !document.blocks.isEmpty else { return nil }
         var state = State(mentionDisplayName: mentionDisplayName)
         appendBlocks(document.blocks, to: &state, depth: 0)
         let trimmed = state.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        return trimmed.isEmpty ? nil : state.source
     }
 
     private struct State {
         var mentionDisplayName: MarkdownMentionResolver?
         var text = ""
+        var source = AttributedString()
         var nodes = 0
 
         var exhausted: Bool {
@@ -40,7 +62,7 @@ nonisolated enum MarkdownPlainText {
             return true
         }
 
-        mutating func append(_ piece: String) {
+        mutating func append(_ piece: String, timestamp: MarkdownTimestamp? = nil) {
             guard !exhausted else { return }
             let separatorLength = text.isEmpty ? 0 : 1
             let remaining = max(0, maxCharacters - text.count - separatorLength)
@@ -50,8 +72,18 @@ nonisolated enum MarkdownPlainText {
                 .filter { !$0.isEmpty }
                 .joined(separator: " ")
             guard !collapsed.isEmpty else { return }
-            if !text.isEmpty { text += " " }
-            text += String(collapsed.prefix(remaining))
+            if !text.isEmpty {
+                text += " "
+                source += AttributedString(" ")
+            }
+            let bounded = String(collapsed.prefix(remaining))
+            text += bounded
+            var run = AttributedString(ContentSanitizer.textRun(bounded))
+            if let timestamp {
+                run[MarkdownTimestampAttribute.self] = timestamp
+                run[MarkdownTimestampOccurrenceAttribute.self] = source.characters.count
+            }
+            source += run
         }
     }
 
@@ -119,6 +151,9 @@ nonisolated enum MarkdownPlainText {
                 appendInlines(alt, to: &state, depth: depth + 1)
             case .autolink(let url, _, _):
                 state.append(url)
+            case .timestamp(let unixSeconds, let style):
+                let timestamp = MarkdownTimestamp(unixSeconds: unixSeconds, style: .init(style))
+                state.append(timestamp.token, timestamp: timestamp)
             case .nostrMention(let entity):
                 if let name = state.mentionDisplayName?(entity) {
                     state.append("@" + name)

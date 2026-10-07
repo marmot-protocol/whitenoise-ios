@@ -899,6 +899,37 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
 
 ## Markdown rendering
 
+Timestamp rendering requires the typed timestamp nodes from
+[MDK #2214](https://github.com/marmot-protocol/mdk/pull/2214), head
+`2336afda22f6100ecb76916bf187cb9c311d3c8d`. The pinned MarmotKit 0.12.0
+does not expose those nodes, and no immutable snapshot for that head is
+published. This branch cannot build against the current pin. Install the
+matching published source and binary together with `scripts/sync-bindings.sh`
+before running the timestamp checks; do not edit generated Swift bindings.
+
+- [ ] Send `<t:-1:t> <t:-1:T> <t:-1:d> <t:-1:D> <t:-1:f> <t:-1:F>`
+      and `<t:-1:s> <t:-1:S> <t:-1:R> <t:-1>`. Verify local date/time labels,
+      seconds only for `T`/`S`, weekday for `F`, and default `f` for omitted
+      style. Every typed timestamp starts with an SF Symbols clock.
+- [ ] Keep a near-future `R` timestamp visible until it passes. Its label
+      updates in the bubble, chat-list preview, and reply quote without a new
+      message or profile refresh. Change the device locale/timezone and verify
+      visible absolute labels update without rewriting the stored message.
+- [ ] Repeat identical adjacent timestamps, and put timestamps in emphasis,
+      headings, lists, table cells and a wrapped linked label. Each clock and
+      label has its own disclosure containing the local weekday/date/time and
+      canonical token. Pointer hover discloses; touch on the clock or an
+      unlinked label discloses; touch on a linked label still navigates.
+- [ ] Select wrapped timestamp text, use VoiceOver to disclose its clock,
+      and copy a surrounding link. Verify selection order, link destination,
+      and dismissal of the native popover.
+- [ ] Send escaped tokens, inline/fenced code, `<t:nope:R>`, `<t:1:Z>` and
+      `<t:9223372036854775808:R>`: all remain literal without a timestamp clock.
+      Signed i64 limits must not trap or clamp relative distances. Absolute
+      instants outside Foundation's calendar range retain the exact token.
+- [ ] Delete or expire a timestamp message, block its author, or add a draft.
+      Preview redaction, retention and draft precedence remain unchanged.
+
 - [ ] Send `**bold** _italic_ ~~strike~~ \`code\``: both sides render
       styled text (no literal asterisks); the sent bubble stays white-on-
       gradient, received stays primary-on-gray, in light and dark mode.

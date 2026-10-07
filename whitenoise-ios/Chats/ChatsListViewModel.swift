@@ -89,7 +89,11 @@ final class ChatsListViewModel {
         /// chat-list row carries no welcomer, so this is enriched separately.
         let inviterAccountIdHex: String?
         let isMuted: Bool
-        let previewText: String?
+        private let staticPreviewText: String?
+        let timestampPreview: AttributedString?
+        var previewText: String? {
+            timestampPreview.map { MarkdownTimestamp.plainText($0) } ?? staticPreviewText
+        }
         let previewSymbolName: String?
         let previewExpired: Bool
         let draftPreview: String?
@@ -119,6 +123,10 @@ final class ChatsListViewModel {
             now: Date = Date()
         ) {
             let previewExpired = ChatPreviewRetention.isExpired(row.lastMessage, at: now)
+            let timestampPreview = isBlockedDirectPeer || previewExpired ? nil : row.lastMessage.flatMap {
+                $0.deleted ? nil : MarkdownPlainText.timestampProjection($0.contentTokens, kind: $0.kind, plaintext: $0.plaintext,
+                    mentionDisplayName: mentionDisplayName)
+            }
             let previewText = isBlockedDirectPeer
                 ? L10n.string("You blocked this user")
                 : previewExpired ? nil : Self.sanitizedPreview(
@@ -138,7 +146,8 @@ final class ChatsListViewModel {
             self.inviterAccountIdHex = inviterAccountIdHex
             self.isMuted = isMuted
             self.leaveRequestPending = leaveRequestPending
-            self.previewText = previewText
+            self.timestampPreview = timestampPreview
+            self.staticPreviewText = timestampPreview == nil ? previewText : nil
             self.previewSymbolName = isBlockedDirectPeer || previewExpired
                 ? nil
                 : row.lastMessage.flatMap(ChatListAttachmentPresentation.systemImageName(for:))
@@ -158,7 +167,7 @@ final class ChatsListViewModel {
             }
             self.searchHaystack = Self.makeSearchHaystack(
                 title: title,
-                previewText: previewText,
+                previewText: timestampPreview.map { String($0.characters) } ?? previewText,
                 draftPreview: self.draftPreview
             )
         }
