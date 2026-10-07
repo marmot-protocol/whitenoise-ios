@@ -91,8 +91,6 @@ struct AccountSetupActions: View {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
         } else {
             switch selectedStep {
-            case .profile:
-                EmptyView()
             case .relays, .inboxRelays:
                 if step?.actions.contains(.useRecommendedRelays) == true || proposal != nil {
                     Text("Relays let your profile publish information, receive chat invitations, and deliver messages.")
@@ -134,6 +132,8 @@ struct AccountSetupActions: View {
                 Text("Secure messaging must be ready before you can open Chats. Try this check again.")
             case .follows:
                 Text("You can continue without changing the people you follow.")
+            default:
+                EmptyView()
             }
         }
     }

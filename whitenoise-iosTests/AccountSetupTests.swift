@@ -5,27 +5,60 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func profileProgressDoesNotMasqueradeAsLookupOrPublicationFailure() {
+        var value = proposalSnapshot(step: .profile)
+        value.steps[0].status = .checking
+        value.steps[0].actions = []
+        var presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .working)
+        value.proposal = nil
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .working)
+        #expect(presentation.feedback(hasFailure: true, isBusy: false) == .actionFailure)
+
+        // A retry starts with the previous failure snapshot until MDK sends an update.
+        value.steps[0].status = .retryableFailure
+        value.steps[0].actions = [.retry]
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: true, isBusy: true) == .working)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .lookupFailure)
+
+        value.proposal = proposalSnapshot(step: .profile).proposal
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: true) == .working)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .interrupted)
+    }
+
+    @Test(arguments: [OnboardingStatusFfi.passed, .skipped])
+    func completedProfileNeverShowsAnErrorDuringDismissal(status: OnboardingStatusFfi) {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: status, findings: [], actions: [], checkedAt: nil)]
+        let presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: true, isBusy: false) == .complete)
+    }
+
     @Test func editableProfileNeverOffersAnImplicitSaveRetry() {
         var value = snapshot()
         value.steps = [.init(step: .profile, status: .needsInput, findings: [],
                              actions: [.retry, .editDiscoveryRelays, .editProfile, .continueWithout], checkedAt: nil)]
         let presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: nil, hasFailure: false) == nil)
-        #expect(presentation.retryAction(failedAction: nil, hasFailure: true) == .retry)
-        #expect(presentation.retryAction(failedAction: .skip, hasFailure: true) == .skip)
-        #expect(presentation.retryAction(failedAction: .save, hasFailure: true) == .save)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .save, isRetry: false))
+        #expect(presentation.primaryAction(failure: .init(action: .skip, message: "Skip failed"))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.canSkip)
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed"))
+                == .init(action: .save, isRetry: true))
     }
 
-    @Test func editingAfterAFailedSaveRemovesInlineRetryUntilTheNextFailure() {
-        var value = proposalSnapshot(step: .profile)
-        var presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: true) == nil)
-        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: false) == .save)
-        #expect(presentation.retryAction(failedAction: .cancelRepair, hasFailure: true, draftWasEdited: true) == .cancelRepair)
-
-        value.steps[0].actions = [.retry]
-        presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: .save, hasFailure: true, draftWasEdited: true) == .retry)
+    @Test func editingAfterAFailedSaveRestoresSaveInsteadOfRetry() {
+        let presentation = AccountSetupProfilePresentation(snapshot: proposalSnapshot(step: .profile))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed", draftWasEdited: true))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed"))
+                == .init(action: .save, isRetry: true))
+        #expect(presentation.primaryAction(failure: .init(action: .cancelRepair, message: "Back failed"))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.canCancelRepair)
     }
 
     @Test func pendingProfileDiscardRecognizesTheRefreshedCheckpoint() {
@@ -49,21 +82,18 @@ struct AccountSetupTests {
         #expect(!pending.isComplete(in: value))
     }
 
-    @Test func profileRetryRespectsChangesToOfferedActions() {
+    @Test func interruptedProfileOffersPrimaryRetryWithoutSkipOrEditing() {
         var value = proposalSnapshot(step: .profile)
-        var presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: .cancelRepair, hasFailure: true) == .cancelRepair)
-
-        // Once publication starts, the previous draft is immutable and cannot be skipped or cancelled.
         value.steps[0].actions = [.retry]
-        presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: .save, hasFailure: true) == .retry)
-        #expect(presentation.retryAction(failedAction: .skip, hasFailure: true) == .retry)
-        #expect(presentation.retryAction(failedAction: .cancelRepair, hasFailure: true) == .retry)
+        var presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .retry, isRetry: true))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed", draftWasEdited: true))
+                == .init(action: .retry, isRetry: true))
+        #expect(!presentation.canEdit && !presentation.canSkip && !presentation.canCancelRepair)
 
         value.steps[0].actions = []
         presentation = AccountSetupProfilePresentation(snapshot: value)
-        #expect(presentation.retryAction(failedAction: .cancelRepair, hasFailure: true) == nil)
+        #expect(presentation.primaryAction(failure: nil) == nil)
     }
 
     @Test func discardingAProfileProposalClosesOnlyAfterConfirmedCancellation() {
@@ -91,6 +121,7 @@ struct AccountSetupTests {
         #expect(presentation.canRetry)
         #expect(presentation.canSkip)
         #expect(presentation.profile == nil)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .retry, isRetry: true))
     }
 
     @Test func profileDraftRemainsReadOnlyWhilePublicationIsInterrupted() {

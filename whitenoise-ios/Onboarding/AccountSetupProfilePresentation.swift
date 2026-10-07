@@ -13,6 +13,7 @@ struct AccountSetupProfileView: View {
 
 nonisolated struct AccountSetupProfilePresentation {
     enum Action { case save, retry, skip, cancelRepair }
+    enum Feedback { case working, complete, add, review, interrupted, lookupFailure, actionFailure }
 
     struct Failure {
         let action: Action
@@ -37,6 +38,7 @@ nonisolated struct AccountSetupProfilePresentation {
         }
     }
 
+    private let status: OnboardingStatusFfi?
     let profile: UserProfileMetadataFfi?
     let canEdit: Bool
     let canRetry: Bool
@@ -47,6 +49,7 @@ nonisolated struct AccountSetupProfilePresentation {
 
     init(snapshot: OnboardingSnapshotFfi) {
         let step = snapshot.steps.first { $0.step == .profile }
+        status = step?.status
         let actions = step?.actions ?? []
         let proposal = snapshot.proposal.flatMap { $0.step == .profile ? $0 : nil }
         profile = proposal?.profile
@@ -65,16 +68,27 @@ nonisolated struct AccountSetupProfilePresentation {
         }.first
     }
 
-    func retryAction(failedAction: Action?, hasFailure: Bool, draftWasEdited: Bool = false) -> Action? {
-        if hasFailure {
-            switch failedAction {
-            case .save where canEdit: return draftWasEdited ? nil : .save
-            case .skip where canSkip: return .skip
-            case .cancelRepair where canCancelRepair: return .cancelRepair
-            default: return canRetry ? .retry : nil
-            }
+    func feedback(hasFailure: Bool, isBusy: Bool) -> Feedback {
+        if isBusy { return .working }
+        if status == .passed || status == .skipped { return .complete }
+        if hasFailure { return .actionFailure }
+        if status == .checking || status == .pending { return .working }
+        if isInterrupted { return .interrupted }
+        if canEdit { return profile == nil ? .add : .review }
+        if status == .retryableFailure { return .lookupFailure }
+        return .working
+    }
+
+    struct PrimaryAction: Equatable {
+        let action: Action
+        let isRetry: Bool
+    }
+
+    func primaryAction(failure: Failure?) -> PrimaryAction? {
+        if canEdit {
+            return .init(action: .save, isRetry: failure?.action == .save && failure?.draftWasEdited != true)
         }
-        return !canEdit && canRetry ? .retry : nil
+        return canRetry ? .init(action: .retry, isRetry: true) : nil
     }
 
     static func shouldDismiss(after action: Action, snapshot: OnboardingSnapshotFfi, errorMessage: String?) -> Bool {
@@ -91,15 +105,29 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
     let presentation: AccountSetupProfilePresentation
     let failureMessage: String?
     let failedAction: AccountSetupProfilePresentation.Action?
+    var isBusy = false
+    var isSavingProfile = false
     @ViewBuilder var privacyContent: () -> PrivacyContent
 
-    private var isFailure: Bool { failureMessage != nil || presentation.isInterrupted || !presentation.canEdit }
+    private var feedback: AccountSetupProfilePresentation.Feedback {
+        presentation.feedback(hasFailure: failureMessage != nil, isBusy: isBusy)
+    }
+
+    private var isFailure: Bool {
+        feedback == .actionFailure || feedback == .interrupted || feedback == .lookupFailure
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: isFailure ? "exclamationmark.circle" : "person.crop.circle")
-                .foregroundStyle(isFailure ? Color.red : Color.primary)
-                .accessibilityHidden(true)
+            Group {
+                if feedback == .working {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: isFailure ? "exclamationmark.circle" : "person.crop.circle")
+                        .foregroundStyle(isFailure ? Color.red : Color.primary)
+                }
+            }
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -119,7 +147,8 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
     }
 
     private var title: LocalizedStringKey {
-        if failureMessage != nil {
+        if feedback == .working || feedback == .complete { return "Your profile" }
+        if feedback == .actionFailure {
             if presentation.canEdit {
                 return failedAction == .save ? "Couldn’t save your profile" : "Couldn’t continue signing in"
             }
@@ -131,8 +160,18 @@ struct AccountSetupProfileStatus<PrivacyContent: View>: View {
     }
 
     @ViewBuilder private var message: some View {
-        if let failureMessage {
-            Text(failureMessage)
+        if feedback == .working {
+            if isSavingProfile { Text("Saving…") } else { Text("Checking…") }
+        } else if feedback == .complete {
+            Text("Done")
+        } else if let failureMessage {
+            if failedAction == .skip, presentation.canSkip {
+                Text("Couldn’t skip this step. Choose Not Now to try again.")
+            } else if failedAction == .cancelRepair, presentation.canCancelRepair {
+                Text("Couldn’t cancel your profile changes. Use Back to try again.")
+            } else {
+                Text(failureMessage)
+            }
         } else if presentation.isInterrupted {
             Text("We couldn’t finish sharing your changes. Try again to complete the update.")
         } else if presentation.profile != nil {

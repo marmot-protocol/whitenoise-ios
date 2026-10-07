@@ -41,12 +41,15 @@ struct IdentityProfileSetupView: View {
     let accountSetup: AccountSetupModel?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
+    @State private var activeProfileSnapshot: OnboardingSnapshotFfi?
+    @State private var activeProfileAction: AccountSetupProfilePresentation.Action?
+    @State private var profileActionCompleted = false
     @State private var pendingProfileDiscard: AccountSetupProfilePresentation.PendingDiscard?
 
     private enum ProfileExit { case close, skip, cancelRepair }
 
     private var recovery: AccountSetupProfilePresentation? {
-        accountSetup.map { AccountSetupProfilePresentation(snapshot: $0.snapshot) }
+        accountSetup.map { AccountSetupProfilePresentation(snapshot: activeProfileSnapshot ?? $0.snapshot) }
     }
 
     private var showsProfileFields: Bool {
@@ -79,14 +82,30 @@ struct IdentityProfileSetupView: View {
         return pendingProfileDiscard?.isComplete(in: setup.snapshot) ?? false
     }
 
-    private var profileFailureMessage: String? { accountSetup?.errorMessage ?? profileFailure?.message }
+    private var profileFailureMessage: String? { profileFailure?.message }
+
+    private var shouldDismissProfile: Bool {
+        guard let setup = accountSetup, scenePhase == .active, setup.isConnected,
+              activeProfileSnapshot == nil else { return false }
+        return profileActionCompleted || importedProfileStatus == .passed || importedProfileStatus == .skipped
+            || didCompleteProfileDiscard
+    }
+
+    private var hasFooterActions: Bool {
+        guard !isSetupConnectionBlocked, let recovery else { return true }
+        return recovery.primaryAction(failure: profileFailure) != nil || recovery.canSkip
+    }
+
+    private var showsRepairBack: Bool {
+        !isSetupConnectionBlocked && recovery?.canCancelRepair == true
+    }
 
     private var showsInlineActions: Bool {
         !isSetupConnectionBlocked && isKeyboardVisible && (accountSetup == nil || showsProfileFields)
     }
 
-    private var isSaving: Bool { model.isSavingProfile || (accountSetup?.isBusy ?? false) }
-    private var isBusy: Bool { isRestarting || model.isBusy || (accountSetup?.isBusy ?? false) }
+    private var isSaving: Bool { model.isSavingProfile || activeProfileSnapshot != nil || (accountSetup?.isBusy ?? false) }
+    private var isBusy: Bool { isRestarting || model.isBusy || isSaving }
     private var allowsBackNavigation: Bool {
         !isRestarting && (accountSetup == nil ? model.allowsBackNavigation : !isSaving)
     }
@@ -244,11 +263,8 @@ struct IdentityProfileSetupView: View {
         }
         // Native keyboard avoidance owns the motion; animating Form updates also morphs its rows.
         .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
-        .onChange(of: importedProfileStatus) {
-            if accountSetup != nil,
-               importedProfileStatus == .passed || importedProfileStatus == .skipped {
-                dismiss()
-            }
+        .onChange(of: shouldDismissProfile) {
+            if shouldDismissProfile { dismiss() }
         }
         .task(id: accountSetup == nil ? scenePhase : .active) {
             await prepareForm()
@@ -272,24 +288,22 @@ struct IdentityProfileSetupView: View {
             }
             Button("Cancel", role: .cancel) { profileExit = nil }
         } message: { _ in
-            Text("Your unsaved changes to this form will be lost.")
+            Text("Your profile changes will be discarded.")
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if isFormReady && !model.isRestorationBlocked && !showsInlineActions {
-                profileActions
-                    .safeAreaPadding(.horizontal, 16)
-                    .safeAreaPadding(.bottom)
-            }
-        }
+        .modifier(ProfileActionBar(
+            isRecovery: accountSetup != nil,
+            isPresented: isFormReady && !model.isRestorationBlocked && !showsInlineActions && hasFooterActions
+        ) {
+            profileActions
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
+        })
     }
 
     private var profileNavigation: some View {
         presentedEditor
         .onChange(of: model.displayName) { saveDraftChanges() }
         .onChange(of: model.about) { saveDraftChanges() }
-        .onChange(of: didCompleteProfileDiscard) {
-            if didCompleteProfileDiscard { dismiss() }
-        }
         .onChange(of: isSetupConnectionBlocked) {
             if isSetupConnectionBlocked { focusedField = nil }
         }
@@ -300,7 +314,7 @@ struct IdentityProfileSetupView: View {
                 .presentationContentInteraction(.scrolls)
         }
         .scrollContentBackground(.hidden)
-        .compatibleBottomScrollEdgeEffectHidden()
+        .modifier(ProfileScrollEdgeEffect(isRecovery: accountSetup != nil))
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(accountSetup == nil ? "Sign Up" : "Your profile")
         .navigationBarTitleDisplayMode(.inline)
@@ -312,15 +326,15 @@ struct IdentityProfileSetupView: View {
         if isFormReady {
             ToolbarItem(placement: .cancellationAction) {
                 WNIconButton(
-                    title: isPushed ? "Back" : "Close",
-                    systemImage: isPushed ? "chevron.backward" : "xmark",
+                    title: isPushed || showsRepairBack ? "Back" : "Close",
+                    systemImage: isPushed || showsRepairBack ? "chevron.backward" : "xmark",
                     chrome: .container
                 ) {
                     if accountSetup == nil {
                         appState.closeSignUpDraft()
                         dismiss()
                     } else {
-                        requestProfileExit(.close)
+                        requestProfileExit(showsRepairBack ? .cancelRepair : .close)
                     }
                 }
                 .disabled(!allowsBackNavigation)
@@ -369,14 +383,9 @@ struct IdentityProfileSetupView: View {
             if let recovery {
                 Section {
                     AccountSetupProfileStatus(
-                        presentation: recovery, failureMessage: profileFailureMessage, failedAction: profileFailure?.action
+                        presentation: recovery, failureMessage: profileFailureMessage,
+                        failedAction: profileFailure?.action, isBusy: isSaving, isSavingProfile: activeProfileAction == .save
                     ) {
-                        if let action = recovery.retryAction(
-                            failedAction: profileFailure?.action, hasFailure: profileFailureMessage != nil,
-                            draftWasEdited: profileFailure?.draftWasEdited ?? false
-                        ) {
-                            profileRetry(action)
-                        }
                         if recovery.canEdit || recovery.profile != nil {
                             Divider()
                             privacyText
@@ -521,7 +530,7 @@ struct IdentityProfileSetupView: View {
 
     private func requestProfileExit(_ exit: ProfileExit) {
         focusedField = nil
-        if hasProfileChanges { profileExit = exit }
+        if hasProfileChanges || exit == .cancelRepair { profileExit = exit }
         else { performProfileExit(exit) }
     }
 
@@ -543,15 +552,23 @@ struct IdentityProfileSetupView: View {
         case .save: return
         }
         let discard = action == .cancelRepair ? AccountSetupProfilePresentation.PendingDiscard(snapshot: setup.snapshot) : nil
+        let startingSnapshot = setup.snapshot
         guard let operation = setup.send(command) else { return }
+        activeProfileSnapshot = startingSnapshot
+        activeProfileAction = action
+        profileFailure = nil
         pendingProfileDiscard = discard
         submissionTask = Task {
+            defer {
+                activeProfileSnapshot = nil
+                activeProfileAction = nil
+            }
             await operation.value
             guard !Task.isCancelled, setup.isConnected else { return }
             pendingProfileDiscard = nil
             if AccountSetupProfilePresentation.shouldDismiss(after: action, snapshot: setup.snapshot, errorMessage: setup.errorMessage) {
                 profileFailure = nil
-                dismiss()
+                profileActionCompleted = true
             } else {
                 profileFailure = setup.errorMessage.map { .init(action: action, message: $0) }
             }
@@ -560,42 +577,22 @@ struct IdentityProfileSetupView: View {
 
     private func recoveryActions(_ setup: AccountSetupModel, presentation: AccountSetupProfilePresentation) -> some View {
         VStack(spacing: 8) {
-            if presentation.canEdit, profileFailure?.action != .save || profileFailure?.draftWasEdited == true {
-                WNOnboardingButton(title: "Save", isLoading: setup.isBusy) { submitProfile() }
-                    .disabled(!hasValidName || isBusy || !setup.isConnected)
-                    .accessibilityIdentifier("account-setup.save-profile")
+            if let primary = presentation.primaryAction(failure: profileFailure) {
+                WNOnboardingButton(
+                    title: primary.isRetry ? "Try Again" : "Save",
+                    isLoading: isSaving && activeProfileAction != .skip && activeProfileAction != .cancelRepair
+                ) {
+                    if primary.action == .save { submitProfile() }
+                    else { performProfileAction(.retry) }
+                }
+                .disabled(isBusy || !setup.isConnected || (primary.action == .save && !hasValidName))
+                .accessibilityIdentifier(primary.isRetry ? "account-setup.retry-profile" : "account-setup.save-profile")
             }
             if presentation.canSkip {
                 WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
                     .disabled(isBusy || !setup.isConnected)
             }
-            if presentation.canCancelRepair {
-                WNButton(title: "Back", emphasis: .secondary) { requestProfileExit(.cancelRepair) }
-                    .disabled(isBusy || !setup.isConnected)
-            }
         }
-    }
-
-    private func profileRetry(_ action: AccountSetupProfilePresentation.Action) -> some View {
-        Button {
-            switch action {
-            case .save: submitProfile()
-            case .retry: performProfileAction(.retry)
-            case .skip: requestProfileExit(.skip)
-            case .cancelRepair: requestProfileExit(.cancelRepair)
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text("Try Again").underline()
-                if accountSetup?.isBusy == true { ProgressView().controlSize(.small) }
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(.primary)
-            .frame(minHeight: 44, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isBusy || accountSetup?.isConnected != true || (action == .save && !hasValidName))
     }
 
     private func profileDraftDidChange() {
@@ -685,13 +682,20 @@ struct IdentityProfileSetupView: View {
         )
         guard let profile = draft.merging(with: setup.snapshot.proposal?.profile) else { return }
         let avatar = model.avatarDraft.map { AccountSetupAvatar(data: $0.data, mediaType: $0.mediaType) }
+        activeProfileSnapshot = setup.snapshot
+        activeProfileAction = .save
+        profileFailure = nil
+        defer {
+            activeProfileSnapshot = nil
+            activeProfileAction = nil
+        }
         let saved = await setup.saveProfile(profile, avatar: avatar)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, setup.isConnected else { return }
         if saved {
             Haptics.success()
-            dismiss()
-        } else {
-            profileFailure = .init(action: .save, message: setup.errorMessage ?? L10n.string("Couldn’t save your profile. Try again."))
+            profileActionCompleted = true
+        } else if let message = setup.errorMessage {
+            profileFailure = .init(action: .save, message: message)
             Haptics.error()
         }
     }
@@ -748,5 +752,35 @@ private struct ProfilePrivacyDetailsView: View {
         .font(.body)
         .foregroundStyle(.primary)
         .presentationBackground(Color(uiColor: .systemBackground))
+    }
+}
+
+private struct ProfileScrollEdgeEffect: ViewModifier {
+    let isRecovery: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if isRecovery {
+            content
+        } else {
+            content.compatibleBottomScrollEdgeEffectHidden()
+        }
+    }
+}
+
+private struct ProfileActionBar<Actions: View>: ViewModifier {
+    let isRecovery: Bool
+    let isPresented: Bool
+    @ViewBuilder var actions: () -> Actions
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if isRecovery, #available(iOS 26.0, *) {
+            content.safeAreaBar(edge: .bottom, spacing: 0) {
+                if isPresented { actions() }
+            }
+        } else {
+            content.safeAreaInset(edge: .bottom, spacing: 0) {
+                if isPresented { actions() }
+            }
+        }
     }
 }

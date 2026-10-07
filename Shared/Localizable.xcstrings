@@ -24845,6 +24845,71 @@
         }
       }
     },
+    "Couldn’t cancel your profile changes. Use Back to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Profiländerungen konnten nicht verworfen werden. Wähle „Zurück“, um es erneut zu versuchen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t cancel your profile changes. Use Back to try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron cancelar los cambios de tu perfil. Pulsa Atrás para volver a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’annuler les modifications de votre profil. Touchez Retour pour réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile annullare le modifiche al profilo. Tocca Indietro per riprovare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível cancelar as alterações do seu perfil. Toque em Voltar para tentar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось отменить изменения профиля. Нажмите «Назад», чтобы повторить попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil değişikliklerin iptal edilemedi. Tekrar denemek için Geri’ye dokun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法取消你的个人资料更改。请点按“返回”重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法取消你的個人檔案變更。請點一下「返回」重試。"
+          }
+        }
+      }
+    },
     "Couldn't change admin" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29449,71 +29514,6 @@
         }
       }
     },
-    "Couldn’t save your profile. Try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Profil konnte nicht gespeichert werden. Versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t save your profile. Try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo guardar tu perfil. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d’enregistrer votre profil. Réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile salvare il profilo. Riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível salvar seu perfil. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось сохранить профиль. Попробуйте ещё раз."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profiliniz kaydedilemedi. Tekrar deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法保存个人资料。请重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法儲存個人資料。請再試一次。"
-          }
-        }
-      }
-    },
     "Couldn’t save your sign-up progress on this device. Free up some space and try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29989,6 +29989,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法登出。請重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t skip this step. Choose Not Now to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieser Schritt konnte nicht übersprungen werden. Wähle „Nicht jetzt“, um es erneut zu versuchen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t skip this step. Choose Not Now to try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo omitir este paso. Pulsa Ahora no para volver a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de passer cette étape. Touchez Pas maintenant pour réessayer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile saltare questo passaggio. Tocca Non ora per riprovare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível pular esta etapa. Toque em Agora não para tentar novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось пропустить этот шаг. Нажмите «Не сейчас», чтобы повторить попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu adım atlanamadı. Tekrar denemek için Şimdi Değil’e dokun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法跳过此步骤。请选择“暂时不要”重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法略過此步驟。請選擇「暫時不要」重試。"
           }
         }
       }
@@ -120445,71 +120510,6 @@
         }
       }
     },
-    "Your unsaved changes to this form will be lost." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine nicht gespeicherten Änderungen an diesem Formular gehen verloren."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your unsaved changes to this form will be lost."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se perderán los cambios sin guardar de este formulario."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les modifications non enregistrées de ce formulaire seront perdues."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le modifiche non salvate a questo modulo andranno perse."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As alterações não salvas neste formulário serão perdidas."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Несохранённые изменения в этой форме будут потеряны."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bu formdaki kaydedilmemiş değişiklikleriniz kaybolacak."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此表单中未保存的更改将丢失。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此表單中未儲存的變更將遺失。"
-          }
-        }
-      }
-    },
     "You’re all caught up." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -122129,6 +122129,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的個人資料"
+          }
+        }
+      }
+    },
+    "Your profile changes will be discarded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Profiländerungen werden verworfen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your profile changes will be discarded."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se descartarán los cambios de tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les modifications de votre profil seront abandonnées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche al tuo profilo verranno scartate."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As alterações do seu perfil serão descartadas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Изменения вашего профиля будут отменены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil değişiklikleriniz iptal edilecek."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的个人资料更改将被舍弃。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的個人資料變更將被捨棄。"
           }
         }
       }
