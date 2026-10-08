@@ -52,14 +52,13 @@ struct AccountSetupView: View {
                 .disabled(isOpeningChats || appState.isFinishingAccountSetup || !appState.canUseRuntimeForLocalForegroundWork)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if model.errorMessage != nil || model.isDurablyReady || isOpeningChats || reviewStep != nil {
-                bottomAction
-                    .safeAreaPadding(.horizontal, 16)
-                    .safeAreaPadding(.bottom)
-                    .background(Color(uiColor: .systemGroupedBackground))
-            }
-        }
+        .modifier(WNOnboardingActionBar(
+            isPresented: model.errorMessage != nil || model.isDurablyReady || isOpeningChats || reviewStep != nil
+        ) {
+            bottomAction
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
+        })
         .interactiveDismissDisabled()
         .task(id: "\(appState.runtimeGeneration):\(appState.canUseRuntimeForLocalForegroundWork)") {
             if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }

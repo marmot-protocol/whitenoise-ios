@@ -27,7 +27,10 @@ struct AccountSetupRecoveryLayout<Content: View, Actions: View>: View {
         .formStyle(.grouped)
         .contentMargins(.horizontal, 16, for: .scrollContent)
         .scrollContentBackground(.hidden)
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background {
+            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+        }
+        .presentationBackground(Color(uiColor: .systemGroupedBackground))
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
@@ -40,12 +43,10 @@ struct AccountSetupRecoveryLayout<Content: View, Actions: View>: View {
                     .disabled(isBusy)
             }
         }
-        .modifier(RecoveryActionBar {
-            if !scrollsActions {
-                actions()
-                    .safeAreaPadding(.horizontal, 16)
-                    .safeAreaPadding(.bottom)
-            }
+        .modifier(WNOnboardingActionBar(isPresented: !scrollsActions) {
+            actions()
+                .safeAreaPadding(.horizontal, 16)
+                .safeAreaPadding(.bottom)
         })
         .interactiveDismissDisabled(isBusy || onBack != nil)
         .presentationDetents([.large])
@@ -83,19 +84,5 @@ struct AccountSetupRecoveryCallout<Content: View>: View {
         .padding(.vertical, 4)
         .listRowBackground(Color(uiColor: .quaternarySystemFill))
         .wnGroupedCardRow(.only)
-    }
-}
-
-private struct RecoveryActionBar<Actions: View>: ViewModifier {
-    @ViewBuilder var actions: () -> Actions
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .scrollEdgeEffectStyle(.soft, for: .bottom)
-                .safeAreaBar(edge: .bottom, spacing: 0, content: actions)
-        } else {
-            content.safeAreaInset(edge: .bottom, spacing: 0, content: actions)
-        }
     }
 }

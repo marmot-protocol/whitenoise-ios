@@ -6,7 +6,7 @@ struct AccountSetupActions: View {
     @Bindable var model: AccountSetupModel
     let selectedStep: OnboardingStepFfi
     @State private var editor: SetupEditor?
-    @State private var isPerformingPrimary = false
+    @State private var activePrimaryTitle: LocalizedStringKey?
 
     private var step: OnboardingStepStateFfi? {
         model.snapshot.steps.first { $0.step == selectedStep }
@@ -64,13 +64,12 @@ struct AccountSetupActions: View {
                         .accessibilityLabel("Close")
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .modifier(WNOnboardingActionBar {
                 VStack(spacing: 8) { actions }
                     .disabled(model.isBusy || !model.isConnected)
                     .safeAreaPadding(.horizontal)
                     .safeAreaPadding(.bottom)
-                    .background(.background)
-            }
+            })
             .sheet(item: $editor) { editor in
                 NavigationStack {
                     switch editor {
@@ -170,12 +169,12 @@ struct AccountSetupActions: View {
         if secondary {
             WNButton(title: title, emphasis: .secondary) { model.send(command) }
         } else {
-            WNOnboardingButton(title: title, isLoading: isPerformingPrimary) {
-                guard !isPerformingPrimary, let operation = model.send(command) else { return }
-                isPerformingPrimary = true
+            WNOnboardingButton(title: title, isLoading: activePrimaryTitle == title) {
+                guard activePrimaryTitle == nil, let operation = model.send(command) else { return }
+                activePrimaryTitle = title
                 Task {
                     await operation.value
-                    isPerformingPrimary = false
+                    activePrimaryTitle = nil
                 }
             }
         }

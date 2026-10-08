@@ -15,6 +15,7 @@ struct AccountSetupRelayRecoveryView: View {
     @State private var failureMessage: String?
     @State private var proposedDraft: AccountSetupRelayDraft
     @State private var confirmsDiscard = false
+    @State private var discardAction: Action = .discard
 
     private enum Editor: String, Identifiable {
         case relays, discovery
@@ -56,7 +57,7 @@ struct AccountSetupRelayRecoveryView: View {
     var body: some View {
         NavigationStack {
             AccountSetupRecoveryLayout(title: L10n.string("Your relays"), isBusy: isBusy,
-                                       onBack: allows(.cancelRepair) && model.isConnected ? { confirmsDiscard = true } : nil) {
+                                       onBack: allows(.cancelRepair) && model.isConnected ? { request(.discard) } : nil) {
                 Section {
                     AccountSetupRecoveryCallout(
                         title: statusTitle,
@@ -115,11 +116,19 @@ struct AccountSetupRelayRecoveryView: View {
                 .appAppearance()
             }
         }
-        .alert("Discard relay changes?", isPresented: $confirmsDiscard) {
-            Button("Discard Changes", role: .destructive) { perform(.discard) }
+        .alert(discardAction == .edit ? "Edit Relays" : "Discard relay changes?", isPresented: $confirmsDiscard) {
+            if discardAction == .edit {
+                Button("Edit Relays") { perform(.edit) }
+            } else {
+                Button("Discard Changes", role: .destructive) { perform(.discard) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This discards the proposed relay list without publishing it.")
+            if discardAction == .edit {
+                Text("Editing withdraws this proposal and keeps the addresses in your draft. Nothing is published until you review and save again.")
+            } else {
+                Text("This discards the proposed relay list without publishing it.")
+            }
         }
         .onChange(of: model.snapshot) { updatePresentation() }
         .onChange(of: model.isBusy) { updatePresentation() }
@@ -240,13 +249,13 @@ struct AccountSetupRelayRecoveryView: View {
         VStack(spacing: 8) {
             if let primary = primaryAction {
                 WNOnboardingButton(title: primary.title, isLoading: isBusy && activeAction == primary.action) {
-                    perform(primary.action)
+                    request(primary.action)
                 }
             }
             if !interrupted {
                 if primaryAction?.action != .edit, allows(.editRelays) || allows(.cancelRepair) {
                     WNButton(title: "Edit Relays", emphasis: .secondary, isLoading: isBusy && activeAction == .edit) {
-                        perform(.edit)
+                        request(.edit)
                     }
                     .environment(\.isEnabled, activeAction == .edit || (!isBusy && model.isConnected))
                     .accessibilityValue(activeAction == .edit ? "In progress" : "")
@@ -259,6 +268,15 @@ struct AccountSetupRelayRecoveryView: View {
     }
 
     private func allows(_ action: OnboardingActionFfi) -> Bool { step?.actions.contains(action) == true }
+
+    private func request(_ action: Action) {
+        if action == .discard || (action == .edit && proposal != nil) {
+            discardAction = action
+            confirmsDiscard = true
+        } else {
+            perform(action)
+        }
+    }
 
     private func perform(_ action: Action) {
         guard !isBusy else { return }

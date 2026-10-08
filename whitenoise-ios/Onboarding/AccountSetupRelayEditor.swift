@@ -207,6 +207,10 @@ private struct AccountSetupRelayEntryEditor: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background {
+                Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+            }
             .navigationTitle(isNew ? "Add Relay" : "Edit Relay")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -228,6 +232,7 @@ private struct AccountSetupRelayEntryEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationBackground(Color(uiColor: .systemGroupedBackground))
     }
 }
 

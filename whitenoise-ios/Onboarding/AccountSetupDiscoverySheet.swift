@@ -10,12 +10,11 @@ struct AccountSetupDiscoverySheet: View {
     @State private var fieldError: String?
     @State private var lookupError: String?
     @State private var isSubmitting = false
-    @State private var isKeyboardVisible = false
 
     private var isBusy: Bool { model.isBusy || isSubmitting }
 
     var body: some View {
-        AccountSetupRecoveryLayout(title: step == .relays ? L10n.string("Find Relay Settings") : L10n.string("Find Your Settings"), isBusy: isBusy, inlineActions: isKeyboardVisible) {
+        AccountSetupRecoveryLayout(title: step == .relays ? L10n.string("Find Relay Settings") : L10n.string("Find Your Settings"), isBusy: isBusy, inlineActions: true) {
             Section {
                 AccountSetupRecoveryCallout(
                     title: isBusy ? (step == .relays ? "Find Relay Settings" : "Find Your Settings") : lookupError == nil ? "Search a relay you’ve used before" : "Couldn’t find your relay settings",
@@ -57,7 +56,6 @@ struct AccountSetupDiscoverySheet: View {
             WNOnboardingButton(title: lookupError == nil ? "Search Relay" : "Try Again", isLoading: isSubmitting, action: search)
                 .disabled(isBusy || !model.isConnected || relay.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
-        .trackKeyboardVisibility($isKeyboardVisible, animatesChanges: false)
     }
 
     private func search() {
@@ -66,7 +64,10 @@ struct AccountSetupDiscoverySheet: View {
             fieldError = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
             return
         }
-        guard let operation = model.send(.discovery(values)) else { return }
+        guard let operation = model.send(.discovery(values)) else {
+            lookupError = model.errorMessage ?? L10n.string("Setup updates stopped. Try again to continue.")
+            return
+        }
         fieldError = nil
         isSubmitting = true
         Task {
