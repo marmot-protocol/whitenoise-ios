@@ -16,7 +16,10 @@ struct AccountSetupRelayEditor: View {
     private var isBusy: Bool { model.isBusy || isSubmitting }
 
     var body: some View {
-        AccountSetupRecoveryLayout(title: L10n.string("Edit Relays"), isBusy: isBusy) {
+        AccountSetupRecoveryLayout(
+            title: step == .inboxRelays ? L10n.string("Edit Inbox Relays") : L10n.string("Edit Relays"),
+            isBusy: isBusy
+        ) {
             Section {
                 AccountSetupRecoveryCallout(
                     title: isBusy ? "Your relay changes" : error == nil ? "Choose your relay list" : "Couldn’t prepare your relay changes",
@@ -68,11 +71,11 @@ struct AccountSetupRelayEditor: View {
                 Button {
                     editingEntry = .init(writes: step == .relays)
                 } label: {
-                    Label("Add Relay", systemImage: "plus.circle")
+                    Label(step == .inboxRelays ? "Add Inbox Relay" : "Add Relay", systemImage: "plus.circle")
                 }
                 .disabled(isBusy || draft.entries.count >= 16)
             } header: {
-                Text("Your new relay list")
+                Text(step == .inboxRelays ? "Your new inbox relay list" : "Your new relay list")
             } footer: {
                 if step == .relays {
                     Text("Read relays find public information. Write relays publish your public information. A relay can do both.")
@@ -158,6 +161,11 @@ private struct AccountSetupRelayEntryEditor: View {
     let onSave: (AccountSetupRelayDraft.Entry) -> Void
     @State private var showsValidation = false
 
+    private var title: LocalizedStringKey {
+        if showsRoles { return isNew ? "Add Relay" : "Edit Relay" }
+        return isNew ? "Add Inbox Relay" : "Edit Inbox Relay"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -211,7 +219,7 @@ private struct AccountSetupRelayEntryEditor: View {
             .background {
                 Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
             }
-            .navigationTitle(isNew ? "Add Relay" : "Edit Relay")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

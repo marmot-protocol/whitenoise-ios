@@ -32,6 +32,8 @@ struct AccountSetupActions: View {
     var body: some View {
         if selectedStep == .profile {
             AccountSetupProfileView(model: model)
+        } else if selectedStep == .inboxRelays {
+            AccountSetupInboxRelayView(model: model)
         } else if selectedStep == .relays {
             AccountSetupRelayRecoveryView(model: model, selectedStep: selectedStep)
         } else {
