@@ -125,6 +125,71 @@
         }
       }
     },
+    "Add a relay before continuing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a relay before continuing."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Füge ein Relay hinzu, bevor du fortfährst."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade un relé antes de continuar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutez un relais avant de continuer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi un relay prima di continuare."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicione um relay antes de continuar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавьте реле, прежде чем продолжить."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Devam etmeden önce bir relay ekleyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先添加一个中继，再继续。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請先新增一個中繼，再繼續。"
+          }
+        }
+      }
+    },
     "Couldn’t close sign-in" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -511,6 +576,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在為聊天做準備"
+          }
+        }
+      }
+    },
+    "Inbox relays receive invitations to new chats and groups." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inbox relays receive invitations to new chats and groups."
           }
         }
       }
@@ -1096,6 +1172,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在略過…"
+          }
+        }
+      }
+    },
+    "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ersetzt deine Relay-Liste für den Nachrichteneingang, einschließlich weggelassener Einträge. Nichts wird veröffentlicht, bevor du es überprüfst und bestätigst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto reemplaza tu lista de relés de la bandeja de mensajes, incluidas las entradas que omitas. No se publica nada hasta que lo revises y lo apruebes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cela remplace votre liste de relais de boîte de réception, y compris les entrées que vous omettez. Rien n’est publié avant que vous l’ayez vérifié et approuvé."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo sostituisce l’elenco dei relay della casella dei messaggi, comprese le voci che ometti. Nulla viene pubblicato finché non lo controlli e approvi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Isto substitui a sua lista de relays da caixa de mensagens, incluindo as entradas que omitir. Nada é publicado até que reveja e aprove."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это заменит ваш список реле для входящих сообщений, включая пропущенные записи. Ничего не будет опубликовано, пока вы не проверите и не подтвердите изменения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu, atladığınız girdiler dahil mesaj gelen kutusu relay listenizi değiştirir. Siz inceleyip onaylayana kadar hiçbir şey yayınlanmaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这将替换你的消息收件中继列表，包括你未填写的条目。在你检查并批准之前，不会发布任何内容。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這將取代你的訊息收件中繼清單，包括你未填寫的項目。在你檢查並核准之前，不會發布任何內容。"
           }
         }
       }
@@ -11756,6 +11897,17 @@
         }
       }
     },
+    "Add the relays you want to use. Keep at least one write relay so your profile can publish information." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add the relays you want to use. Keep at least one write relay so your profile can publish information."
+          }
+        }
+      }
+    },
     "Add to Another Group" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20285,6 +20437,28 @@
         }
       }
     },
+    "Check the addresses and their uses before saving." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the addresses and their uses before saving."
+          }
+        }
+      }
+    },
+    "Check the highlighted relay before continuing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the highlighted relay before continuing."
+          }
+        }
+      }
+    },
     "Check the spelling or try a different search." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20340,6 +20514,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "檢查拼字或嘗試其他搜尋。"
+          }
+        }
+      }
+    },
+    "Check your relay addresses" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check your relay addresses"
           }
         }
       }
@@ -20791,6 +20976,17 @@
         }
       }
     },
+    "Choose a use" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a use"
+          }
+        }
+      }
+    },
     "Choose Another Photo" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20846,6 +21042,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇其他照片"
+          }
+        }
+      }
+    },
+    "Choose at least one write relay so your profile can publish information." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose at least one write relay so your profile can publish information."
           }
         }
       }
@@ -21334,6 +21541,17 @@
         }
       }
     },
+    "Choose Read, Write, or both." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Read, Write, or both."
+          }
+        }
+      }
+    },
     "Choose Relays" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21638,6 +21856,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇 White Noise 要跟隨裝置外觀，還是永遠使用淺色或深色主題。純黑是為 OLED 螢幕提供純黑色背景的深色主題。"
+          }
+        }
+      }
+    },
+    "Choose your relay list" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your relay list"
           }
         }
       }
@@ -25099,6 +25328,17 @@
         }
       }
     },
+    "Couldn’t change your relay draft" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t change your relay draft"
+          }
+        }
+      }
+    },
     "Couldn’t check group recovery. Try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25225,6 +25465,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法檢查該地址。"
+          }
+        }
+      }
+    },
+    "Couldn’t check your relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check your relays"
           }
         }
       }
@@ -25839,6 +26090,17 @@
         }
       }
     },
+    "Couldn’t discard your relay changes. Use Back to try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t discard your relay changes. Use Back to try again."
+          }
+        }
+      }
+    },
     "Couldn't dismiss group status" : {
       "comment" : "Error message when dismissing a group status.",
       "extractionState" : "manual",
@@ -26200,6 +26462,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法匯出診斷記錄"
+          }
+        }
+      }
+    },
+    "Couldn’t find your relay settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t find your relay settings"
           }
         }
       }
@@ -28225,6 +28498,17 @@
         }
       }
     },
+    "Couldn’t prepare your relay changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t prepare your relay changes"
+          }
+        }
+      }
+    },
     "Couldn't publish profile" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -29640,6 +29924,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法儲存你的個人資料。請重試。"
+          }
+        }
+      }
+    },
+    "Couldn’t save your relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t save your relays"
           }
         }
       }
@@ -33388,6 +33683,17 @@
         }
       }
     },
+    "Default relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default relays"
+          }
+        }
+      }
+    },
     "Delete" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36865,6 +37171,17 @@
         }
       }
     },
+    "Discard Changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard Changes"
+          }
+        }
+      }
+    },
     "Discard draft" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -36985,6 +37302,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "放棄個人資料變更？"
+          }
+        }
+      }
+    },
+    "Discard relay changes?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard relay changes?"
           }
         }
       }
@@ -39777,6 +40105,39 @@
         }
       }
     },
+    "Edit Relay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Relay"
+          }
+        }
+      }
+    },
+    "Edit Relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Relays"
+          }
+        }
+      }
+    },
+    "Edit this relay to check its address and uses." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit this relay to check its address and uses."
+          }
+        }
+      }
+    },
     "Edited" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -41106,6 +41467,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "請輸入問題。"
+          }
+        }
+      }
+    },
+    "Enter a relay address from another app where you use this profile. We’ll look there for your existing relay settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a relay address from another app where you use this profile. We’ll look there for your existing relay settings."
           }
         }
       }
@@ -44737,6 +45109,17 @@
         }
       }
     },
+    "Find Existing Relay Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Existing Relay Settings"
+          }
+        }
+      }
+    },
     "Find Image on Web" : {
       "comment" : "A button that opens a web image picker.",
       "isCommentAutoGenerated" : true,
@@ -44793,6 +45176,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在網路上尋找圖片"
+          }
+        }
+      }
+    },
+    "Find public information on this relay." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find public information on this relay."
+          }
+        }
+      }
+    },
+    "Find Relay Settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Relay Settings"
           }
         }
       }
@@ -52784,6 +53189,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無效的中繼"
+          }
+        }
+      }
+    },
+    "Invalid relay address" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid relay address"
           }
         }
       }
@@ -76601,6 +77017,17 @@
         }
       }
     },
+    "Preparing changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing changes…"
+          }
+        }
+      }
+    },
     "Preparing export" : {
       "localizations" : {
         "de" : {
@@ -78125,6 +78552,17 @@
         }
       }
     },
+    "Proposed relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proposed relays"
+          }
+        }
+      }
+    },
     "Provisional" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -78673,6 +79111,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "將這兩個中繼發布為收件中繼，讓他人知道該向哪裡傳送邀請。"
+          }
+        }
+      }
+    },
+    "Publish your public information to this relay." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish your public information to this relay."
           }
         }
       }
@@ -80705,6 +81154,17 @@
         }
       }
     },
+    "Read" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read"
+          }
+        }
+      }
+    },
     "Read All" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -80760,6 +81220,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部標示為已讀"
+          }
+        }
+      }
+    },
+    "Read and write" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read and write"
           }
         }
       }
@@ -80884,6 +81355,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "閱讀更多"
+          }
+        }
+      }
+    },
+    "Read only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read only"
           }
         }
       }
@@ -81014,6 +81496,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "讀取中繼站（選填）"
+          }
+        }
+      }
+    },
+    "Read relays find public information. Write relays publish your public information. A relay can do both." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read relays find public information. Write relays publish your public information. A relay can do both."
           }
         }
       }
@@ -82501,6 +82994,17 @@
         }
       }
     },
+    "Relay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relay"
+          }
+        }
+      }
+    },
     "Relay Event History" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -82741,6 +83245,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "僅中繼"
+          }
+        }
+      }
+    },
+    "Relay settings changed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Relay settings changed"
           }
         }
       }
@@ -83775,6 +84290,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移除照片"
+          }
+        }
+      }
+    },
+    "Remove Relay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Relay"
           }
         }
       }
@@ -86978,6 +87504,17 @@
         }
       }
     },
+    "Review Changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Changes"
+          }
+        }
+      }
+    },
     "Review Environment" : {
       "localizations" : {
         "de" : {
@@ -87296,6 +87833,17 @@
         }
       }
     },
+    "Review your relay changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review your relay changes"
+          }
+        }
+      }
+    },
     "Running" : {
       "comment" : "Text displayed in a maintenance section of the chat developer tools, indicating that the worker is running.",
       "isCommentAutoGenerated" : true,
@@ -87591,6 +88139,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "儲存個人資料"
+          }
+        }
+      }
+    },
+    "Save Relay Changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Relay Changes"
           }
         }
       }
@@ -88017,6 +88576,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "儲存會將這些資訊發布到你的公開個人資料。"
+          }
+        }
+      }
+    },
+    "Saving publishes this as your public relay list. It replaces the previous list, removing any entries not included here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving publishes this as your public relay list. It replaces the previous list, removing any entries not included here."
           }
         }
       }
@@ -88618,6 +89188,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜尋"
+          }
+        }
+      }
+    },
+    "Search a relay you’ve used before" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search a relay you’ve used before"
           }
         }
       }
@@ -89482,6 +90063,17 @@
         }
       }
     },
+    "Search Relay" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Relay"
+          }
+        }
+      }
+    },
     "Search result" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -89663,6 +90255,17 @@
         }
       }
     },
+    "Searching won’t publish changes to your profile or replace your relay list." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching won’t publish changes to your profile or replace your relay list."
+          }
+        }
+      }
+    },
     "Searching your network…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -89718,6 +90321,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在搜尋你的網路…"
+          }
+        }
+      }
+    },
+    "Searching…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching…"
           }
         }
       }
@@ -92688,6 +93302,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "設定群組"
+          }
+        }
+      }
+    },
+    "Set up your relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up your relays"
           }
         }
       }
@@ -105394,6 +106019,17 @@
         }
       }
     },
+    "This discards the proposed relay list without publishing it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This discards the proposed relay list without publishing it."
+          }
+        }
+      }
+    },
     "This document isn't available right now. Please try again later." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -106639,6 +107275,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此連結將開啟：\n%@"
+          }
+        }
+      }
+    },
+    "This list needs a valid write relay, and every address must be valid. Edit the relays below to continue." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This list needs a valid write relay, and every address must be valid. Edit the relays below to continue."
           }
         }
       }
@@ -108536,6 +109183,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這會從此裝置移除你的姓名、簡介、照片及尚未完成註冊的帳號。已上傳或發佈的內容可能仍會保留在線上。"
+          }
+        }
+      }
+    },
+    "This will replace your public relay list, including entries you leave out. You’ll review the full list before anything is published." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This will replace your public relay list, including entries you leave out. You’ll review the full list before anything is published."
           }
         }
       }
@@ -112394,6 +113052,17 @@
         }
       }
     },
+    "Use For" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use For"
+          }
+        }
+      }
+    },
     "Use Image" : {
       "comment" : "A button that uses the selected image as the user's profile image.",
       "extractionState" : "manual",
@@ -113145,6 +113814,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用通用喚醒訊號在背景檢查新訊息。訊息詳情僅保留在此 iPhone 上。"
+          }
+        }
+      }
+    },
+    "Using defaults adds any missing addresses below to your public relay list. Existing entries are kept." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using defaults adds any missing addresses below to your public relay list. Existing entries are kept."
           }
         }
       }
@@ -115465,6 +116145,50 @@
         }
       }
     },
+    "We couldn’t find a usable relay list for your profile. You can use the defaults below, or search a relay you’ve used before." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t find a usable relay list for your profile. You can use the defaults below, or search a relay you’ve used before."
+          }
+        }
+      }
+    },
+    "We couldn’t finish checking your relay settings. Try again, or search a relay you’ve used with this profile. Searching won’t publish changes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t finish checking your relay settings. Try again, or search a relay you’ve used with this profile. Searching won’t publish changes."
+          }
+        }
+      }
+    },
+    "We couldn’t finish checking your relay settings. Try again, or search another relay." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t finish checking your relay settings. Try again, or search another relay."
+          }
+        }
+      }
+    },
+    "We couldn’t finish saving the relay list below. Try again to complete the update." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "We couldn’t finish saving the relay list below. Try again to complete the update."
+          }
+        }
+      }
+    },
     "We couldn’t load your profile. You can try again or continue without changing it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -117353,6 +118077,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在清除本機資料…"
+          }
+        }
+      }
+    },
+    "Write" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write"
+          }
+        }
+      }
+    },
+    "Write only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write only"
           }
         }
       }
@@ -121192,6 +121938,17 @@
         }
       }
     },
+    "Your current relay settings don’t let this profile publish information. Edit your relay list, or search another relay for your existing settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your current relay settings don’t let this profile publish information. Edit your relay list, or search another relay for your existing settings."
+          }
+        }
+      }
+    },
     "Your donation history couldn't be loaded. Please try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -122016,6 +122773,17 @@
         }
       }
     },
+    "Your new relay list" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your new relay list"
+          }
+        }
+      }
+    },
     "Your passphrase encrypts the exported ncryptsec1 backup. Marmot never stores it." : {
       "localizations" : {
         "de" : {
@@ -122512,6 +123280,61 @@
         }
       }
     },
+    "Your relay changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relay changes"
+          }
+        }
+      }
+    },
+    "Your relay changes haven’t finished publishing. Try again to complete the update." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relay changes haven’t finished publishing. Try again to complete the update."
+          }
+        }
+      }
+    },
+    "Your relay draft is still available. Review the changes and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relay draft is still available. Review the changes and try again."
+          }
+        }
+      }
+    },
+    "Your relay settings changed during this step. Review the current options before continuing." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relay settings changed during this step. Review the current options before continuing."
+          }
+        }
+      }
+    },
+    "Your relay update didn’t finish" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relay update didn’t finish"
+          }
+        }
+      }
+    },
     "Your relays" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -122573,6 +123396,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的中繼"
+          }
+        }
+      }
+    },
+    "Your relays need attention" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your relays need attention"
           }
         }
       }
