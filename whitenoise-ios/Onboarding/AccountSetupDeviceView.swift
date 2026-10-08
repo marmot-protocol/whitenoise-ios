@@ -75,10 +75,6 @@ struct AccountSetupDeviceView: View {
         guard !isBusy else { return [] }
         if let error = model.errorMessage { return [error] }
         guard let step, step.status == .retryableFailure else { return [] }
-        if step.findings.contains(where: { $0.issue == .timedOut }) {
-            return [L10n.string("A relay did not respond in time. Try again to check for other devices.")]
-                + AccountSetupPresentation.findingMessages(step.findings.filter { $0.issue != .timedOut })
-        }
         let messages = AccountSetupPresentation.findingMessages(step.findings)
         return messages.isEmpty ? [L10n.string("Couldn’t finish this step. Try again.")] : messages
     }
