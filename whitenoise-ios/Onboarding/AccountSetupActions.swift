@@ -61,13 +61,12 @@ struct AccountSetupActions: View {
                         .accessibilityLabel("Close")
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .modifier(WNOnboardingActionBar {
                 VStack(spacing: 8) { actions }
                     .disabled(model.isBusy || !model.isConnected)
                     .safeAreaPadding(.horizontal)
                     .safeAreaPadding(.bottom)
-                    .background(.background)
-            }
+            })
             .sheet(item: $editor) { editor in
                 NavigationStack {
                     switch editor {
@@ -205,43 +204,45 @@ private struct AccountSetupRelaySheet: View {
                 }
             }
             if let error { Text(error).foregroundStyle(.orange) }
+            Section {
+                WNButton(title: "Review Replacement", isLoading: model.isBusy) {
+                    let readValues = step == .relays && reads.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? [] : AccountSetupInput.relays(reads)
+                    let writeValues = step == .inboxRelays ? [] : AccountSetupInput.relays(writes)
+                    guard let readValues, let writeValues else {
+                        error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
+                        return
+                    }
+                    guard !AccountSetupInput.exceedsSelectionLimit(reads: readValues, writes: writeValues) else {
+                        error = L10n.string("The relay list is too large.")
+                        return
+                    }
+                    guard let operation = model.send(.editRelays(step, reads: readValues, writes: writeValues)) else { return }
+                    error = nil
+                    Task {
+                        await operation.value
+                        if model.errorMessage == nil,
+                           model.snapshot.proposal?.step == step,
+                           model.snapshot.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true {
+                            dismiss()
+                        } else {
+                            error = model.errorMessage ?? L10n.string("Couldn’t finish this step. Try again.")
+                        }
+                    }
+                }
+                .disabled(model.isBusy || !model.isConnected)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
         }
+        .compatibleBottomScrollEdgeEffectHidden()
         .navigationTitle("Choose Relays")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Review Replacement", isLoading: model.isBusy) {
-                let readValues = step == .relays && reads.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? [] : AccountSetupInput.relays(reads)
-                let writeValues = step == .inboxRelays ? [] : AccountSetupInput.relays(writes)
-                guard let readValues, let writeValues else {
-                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
-                    return
-                }
-                guard !AccountSetupInput.exceedsSelectionLimit(reads: readValues, writes: writeValues) else {
-                    error = L10n.string("The relay list is too large.")
-                    return
-                }
-                guard let operation = model.send(.editRelays(step, reads: readValues, writes: writeValues)) else { return }
-                error = nil
-                Task {
-                    await operation.value
-                    if model.errorMessage == nil,
-                       model.snapshot.proposal?.step == step,
-                       model.snapshot.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true {
-                        dismiss()
-                    } else {
-                        error = model.errorMessage ?? L10n.string("Couldn’t finish this step. Try again.")
-                    }
-                }
-            }
-            .disabled(model.isBusy || !model.isConnected)
-            .safeAreaPadding()
-            .background(.background)
         }
     }
 }
@@ -263,35 +264,37 @@ private struct AccountSetupDiscoverySheet: View {
                 Text("Choose a relay you’ve used with this profile. We’ll look there for your existing settings without publishing anything.")
             }
             if let error { Text(error).foregroundStyle(.orange) }
+            Section {
+                WNButton(title: "Look for My Settings", isLoading: model.isBusy) {
+                    guard let values = AccountSetupInput.relays(relay), values.count == 1 else {
+                        error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
+                        return
+                    }
+                    guard let operation = model.send(.discovery(values)) else { return }
+                    error = nil
+                    Task {
+                        await operation.value
+                        if model.errorMessage == nil,
+                           model.snapshot.steps.first(where: { $0.step == step })?.status != .retryableFailure {
+                            dismiss()
+                        } else {
+                            error = model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay.")
+                        }
+                    }
+                }
+                .disabled(model.isBusy || !model.isConnected)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
         }
+        .compatibleBottomScrollEdgeEffectHidden()
         .navigationTitle("Find Your Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Look for My Settings", isLoading: model.isBusy) {
-                guard let values = AccountSetupInput.relays(relay), values.count == 1 else {
-                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
-                    return
-                }
-                guard let operation = model.send(.discovery(values)) else { return }
-                error = nil
-                Task {
-                    await operation.value
-                    if model.errorMessage == nil,
-                       model.snapshot.steps.first(where: { $0.step == step })?.status != .retryableFailure {
-                        dismiss()
-                    } else {
-                        error = model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay.")
-                    }
-                }
-            }
-            .disabled(model.isBusy || !model.isConnected)
-            .safeAreaPadding()
-            .background(.background)
         }
     }
 }

@@ -140,10 +140,14 @@ struct ImportIdentityView: View {
                         .foregroundStyle(.secondary)
                         .padding(.leading)
                 }
+                signInAction
+                    .padding(.top)
             }
             .safeAreaPadding(.horizontal)
             .safeAreaPadding(.top)
+            .safeAreaPadding(.bottom)
         }
+        .compatibleBottomScrollEdgeEffectHidden()
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
@@ -159,18 +163,6 @@ struct ImportIdentityView: View {
                 }
                 .disabled(model.isImporting)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
-                isKeyFocused = false
-                Task {
-                    await model.runImport(using: appState, dismiss: { dismiss() })
-                }
-            }
-            .disabled(!canSubmit && !model.isImporting)
-            .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
-            .safeAreaPadding(.horizontal)
-            .safeAreaPadding(.bottom)
         }
         .sheet(isPresented: $showScanner) {
             NavigationStack {
@@ -227,6 +219,17 @@ struct ImportIdentityView: View {
             model.scrubDismissedImportState()
         }
         .background(.background)
+    }
+
+    private var signInAction: some View {
+        WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
+            isKeyFocused = false
+            Task {
+                await model.runImport(using: appState, dismiss: { dismiss() })
+            }
+        }
+        .disabled(!canSubmit && !model.isImporting)
+        .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
     }
 
     private func privateKeyField(identity: Binding<String>) -> some View {
