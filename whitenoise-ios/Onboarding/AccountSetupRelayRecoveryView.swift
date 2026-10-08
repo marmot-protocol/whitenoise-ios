@@ -218,7 +218,8 @@ struct AccountSetupRelayRecoveryView: View {
         if hasFailure, childFailure?.source == .relays, proposal == nil, allows(.editRelays) {
             return .init(action: .edit, title: "Edit Relays")
         }
-        if hasFailure, childFailure?.source == .discovery, allows(.editDiscoveryRelays) {
+        if hasFailure, childFailure?.source == .discovery,
+           allows(.editDiscoveryRelays), !allows(.useRecommendedRelays) {
             return .init(action: .discovery, title: "Find Existing Relay Settings")
         }
         if hasFailure, lastAction == .edit, allows(.cancelRepair) {
