@@ -34,6 +34,8 @@ struct AccountSetupActions: View {
             AccountSetupProfileView(model: model)
         } else if selectedStep == .inboxRelays {
             AccountSetupInboxRelayView(model: model)
+        } else if selectedStep == .singleDevice {
+            AccountSetupDeviceView(model: model)
         } else if selectedStep == .relays {
             AccountSetupRelayRecoveryView(model: model, selectedStep: selectedStep)
         } else {
@@ -46,7 +48,7 @@ struct AccountSetupActions: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     explanation
-                    if let step, selectedStep != .singleDevice {
+                    if let step {
                         ForEach(AccountSetupPresentation.findingMessages(step.findings), id: \.self) { message in
                             Text(verbatim: message)
                                 .foregroundStyle(.secondary)
@@ -127,11 +129,6 @@ struct AccountSetupActions: View {
                 } else {
                     Text("We couldn’t complete the lookup. Try another relay or check again before replacing any settings.")
                 }
-            case .singleDevice:
-                Text("White Noise does not yet sync conversations across devices. We recommend using this profile on one device.")
-                if let notice = model.snapshot.singleDeviceNotice {
-                    Text(AccountSetupPresentation.deviceNotice(notice.discovery)).foregroundStyle(.secondary)
-                }
             case .keyPackage:
                 Text("Secure messaging must be ready before you can open Chats. Try this check again.")
             case .follows:
@@ -158,9 +155,6 @@ struct AccountSetupActions: View {
                 if step.actions.contains(.editDiscoveryRelays) {
                     WNButton(title: "Look on Another Relay", emphasis: .secondary) { editor = .discovery }
                 }
-            } else if step.actions.contains(.continueAnyway) {
-                action(LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery)),
-                       .acknowledge(model.snapshot.revision, recoveryEpoch: model.snapshot.recoveryEpoch))
             } else if step.actions.contains(.retry) { action("Try Again", .retry(selectedStep)) }
             if step.actions.contains(.cancelRepair) { action("Back", .cancelRepair, secondary: true) }
             if selectedStep == .follows, step.actions.contains(.continueWithout) { action("Continue", .skip(.follows)) }
