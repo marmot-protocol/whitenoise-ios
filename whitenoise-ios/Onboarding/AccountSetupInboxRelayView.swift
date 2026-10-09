@@ -13,15 +13,18 @@ struct AccountSetupInboxRelayView: View {
     @State private var lastAction: Action?
     @State private var operationPrimary: PrimaryAction?
     @State private var confirmsDiscard = false
+    @State private var discardAction: Action = .discard
 
     private enum Editor: String, Identifiable {
         case relays, discovery
         var id: String { rawValue }
     }
-    private enum Action { case defaults, approve, retry, discard, edit, discovery }
-    private struct PrimaryAction {
-        let action: Action
-        let title: LocalizedStringKey
+    private typealias Action = AccountSetupInboxRelayPresentation.Action
+    private typealias PrimaryAction = AccountSetupInboxRelayPresentation.PrimaryAction
+
+    private var recovery: AccountSetupInboxRelayPresentation {
+        .init(actions: step?.actions ?? [], proposal: proposal, childFailureSource: childFailure?.source,
+              hasOperationError: model.errorMessage != nil, lastAction: lastAction)
     }
 
     init(model: AccountSetupModel) {
@@ -33,17 +36,9 @@ struct AccountSetupInboxRelayView: View {
     private var proposal: OnboardingRepairProposalFfi? {
         presentation.snapshot.proposal.flatMap { $0.step == selectedStep ? $0 : nil }
     }
-    private var interrupted: Bool { proposal != nil && !allows(.approveRepair) && !allows(.cancelRepair) }
+    private var interrupted: Bool { recovery.isInterrupted }
     private var isBusy: Bool { model.isBusy || activeAction != nil || isDismissing }
-    private var relays: [String]? {
-        guard let proposal else {
-            return MarmotClient.seedRelays
-        }
-        guard let reads = AccountSetupInput.proposalRelays(proposal.readRelays),
-              let writes = AccountSetupInput.proposalRelays(proposal.writeRelays),
-              !reads.isEmpty, writes.isEmpty else { return nil }
-        return Array(Set(reads)).sorted()
-    }
+    private var relays: [String]? { proposal == nil ? MarmotClient.seedRelays : recovery.relays }
     private var hasError: Bool { model.errorMessage != nil || childFailure != nil || interrupted || relays == nil }
     private var childFailure: AccountSetupRecoveryPresentation.ChildFailure? { presentation.childFailure }
     private var settingsChanged: Bool {
@@ -53,7 +48,7 @@ struct AccountSetupInboxRelayView: View {
     var body: some View {
         NavigationStack {
             AccountSetupRecoveryLayout(title: AccountSetupPresentation.title(selectedStep), isBusy: isBusy,
-                                       onBack: allows(.cancelRepair) && model.isConnected ? { confirmsDiscard = true } : nil) {
+                                       onBack: allows(.cancelRepair) && model.isConnected ? { request(.discard) } : nil) {
                 Section {
                     AccountSetupRecoveryCallout(title: statusTitle, symbol: hasError ? "exclamationmark.circle" : "network",
                                                 isError: !isDismissing && hasError,
@@ -74,21 +69,17 @@ struct AccountSetupInboxRelayView: View {
             } actions: {
                 VStack(spacing: 8) {
                     if let primary = primaryAction {
-                        WNOnboardingButton(title: primary.title, isLoading: isBusy && activeAction == primary.action) {
-                            if primary.action == .discard { confirmsDiscard = true } else { perform(primary.action) }
+                        WNOnboardingButton(title: title(for: primary), isLoading: isBusy && activeAction == primary.action) {
+                            request(primary.action)
                         }
                     }
-                    if !interrupted {
-                        if allows(.editRelays), primaryAction?.action != .edit {
-                            if primaryAction == nil {
-                                WNOnboardingButton(title: "Choose Inbox Relays") { editor = .relays }
-                            } else {
-                                WNButton(title: "Choose Inbox Relays", emphasis: .secondary) { editor = .relays }
-                            }
-                        }
-                        if allows(.editDiscoveryRelays), primaryAction?.action != .discovery {
-                            WNButton(title: "Look on Another Relay", emphasis: .secondary) { editor = .discovery }
-                        }
+                    if recovery.canEdit, primaryAction?.action != .edit {
+                        WNButton(title: proposal == nil ? "Choose Inbox Relays" : "Edit Inbox Relays",
+                                 emphasis: .secondary, isLoading: activeAction == .edit) { request(.edit) }
+                            .environment(\.isEnabled, activeAction == .edit || (!isBusy && model.isConnected))
+                    }
+                    if recovery.canDiscover, primaryAction?.action != .discovery {
+                        WNButton(title: "Look on Another Relay", emphasis: .secondary) { perform(.discovery) }
                     }
                 }
                 .disabled(isBusy || !model.isConnected)
@@ -117,11 +108,19 @@ struct AccountSetupInboxRelayView: View {
                 .appAppearance()
             }
         }
-        .alert("Discard relay changes?", isPresented: $confirmsDiscard) {
-            Button("Discard Changes", role: .destructive) { perform(.discard) }
+        .alert(discardAction == .edit ? "Edit Inbox Relays" : "Discard relay changes?", isPresented: $confirmsDiscard) {
+            if discardAction == .edit {
+                Button("Edit Inbox Relays") { perform(.edit) }
+            } else {
+                Button("Discard Changes", role: .destructive) { perform(.discard) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This discards the proposed relay list without publishing it.")
+            if discardAction == .edit {
+                Text("Editing withdraws this proposal and keeps the addresses in your draft. Nothing is published until you review and save again.")
+            } else {
+                Text("This discards the proposed relay list without publishing it.")
+            }
         }
         .onChange(of: model.snapshot) { updatePresentation() }
         .onChange(of: model.isBusy) { updatePresentation() }
@@ -130,13 +129,17 @@ struct AccountSetupInboxRelayView: View {
     private var statusTitle: LocalizedStringKey {
         if isBusy { return "Your inbox relays" }
         if settingsChanged { return "Relay settings changed" }
-        if childFailure?.source == .relays { return "Couldn’t prepare your relay changes" }
-        if childFailure?.source == .discovery { return "Couldn’t find your relay settings" }
-        if model.errorMessage != nil, lastAction == .retry, !interrupted { return "Couldn’t check your relays" }
-        if model.errorMessage != nil { return lastAction == .discard ? "Couldn’t discard your relay changes" : "Couldn’t update your inbox relays" }
-        if relays == nil { return "Your relays need attention" }
-        if interrupted { return "Your relay update didn’t finish" }
-        return proposal == nil ? "Your inbox relays" : "Review your relay changes"
+        switch recovery.status {
+        case .relays: return "Your inbox relays"
+        case .review: return "Review your relay changes"
+        case .invalid: return "Your relays need attention"
+        case .interrupted: return "Your relay update didn’t finish"
+        case .draftFailure: return "Couldn’t prepare your relay changes"
+        case .discoveryFailure: return "Couldn’t find your relay settings"
+        case .checkFailure: return "Couldn’t check your relays"
+        case .discardFailure: return "Couldn’t discard your relay changes"
+        case .updateFailure: return "Couldn’t update your inbox relays"
+        }
     }
 
     @ViewBuilder private var explanation: some View {
@@ -147,7 +150,9 @@ struct AccountSetupInboxRelayView: View {
         } else if settingsChanged {
             Text("Your relay settings changed during this step. Review the current options before continuing.")
         } else if lastAction == .discard, model.errorMessage != nil, allows(.cancelRepair) {
-            Text(relays == nil ? "Couldn’t discard your relay changes. Try again." : "Couldn’t discard your relay changes. Use Back to try again.")
+            Text("Couldn’t discard your relay changes. Use Back to try again.")
+        } else if lastAction == .edit, model.errorMessage != nil, allows(.cancelRepair) {
+            Text("Your relay draft is still available. Review the changes and try again.")
         } else if let error = model.errorMessage ?? childFailure?.message {
             if error == L10n.string("Couldn’t finish this step. Try again."), let childFailure {
                 Text(childFailure.source == .relays
@@ -156,12 +161,10 @@ struct AccountSetupInboxRelayView: View {
             } else {
                 Text(error)
             }
-        } else if relays == nil {
-            Text(allows(.cancelRepair)
-                 ? "This inbox relay list is invalid. Discard these changes to choose a new list. Nothing will be published."
-                 : "A relay address is invalid. Go back and check the settings.")
         } else if interrupted {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
+        } else if relays == nil {
+            Text("This inbox relay list is invalid. Edit the addresses before reviewing it again. Nothing will be published.")
         } else {
             Text("Inbox relays receive invitations to new chats and groups.")
             if let step {
@@ -201,36 +204,41 @@ struct AccountSetupInboxRelayView: View {
         } header: { Text(title) }
     }
 
-    private var primaryAction: PrimaryAction? {
-        if let operationPrimary { return operationPrimary }
-        if interrupted { return allows(.retry) ? .init(action: .retry, title: "Try Again") : nil }
-        if childFailure?.source == .relays, proposal == nil, allows(.editRelays) {
-            return .init(action: .edit, title: "Edit Inbox Relays")
+    private var primaryAction: PrimaryAction? { operationPrimary ?? recovery.primaryAction }
+
+    private func title(for primary: PrimaryAction) -> LocalizedStringKey {
+        if primary.isRetry { return "Try Again" }
+        switch primary.action {
+        case .defaults: return "Use Default Relays"
+        case .approve: return "Use These Relays"
+        case .retry: return "Try Again"
+        case .discard: return "Discard Changes"
+        case .edit: return "Edit Inbox Relays"
+        case .discovery: return "Look on Another Relay"
         }
-        if childFailure?.source == .discovery, allows(.editDiscoveryRelays) {
-            return .init(action: .discovery, title: "Look on Another Relay")
+    }
+
+    private func request(_ action: Action) {
+        if action == .discard || (action == .edit && proposal != nil) {
+            discardAction = action
+            confirmsDiscard = true
+        } else {
+            perform(action)
         }
-        if proposal != nil, relays == nil, allows(.cancelRepair) {
-            return .init(action: .discard, title: "Discard Changes")
-        }
-        if proposal != nil, allows(.approveRepair), relays != nil {
-            return .init(action: .approve, title: model.errorMessage != nil && lastAction == .approve ? "Try Again" : "Use These Relays")
-        }
-        if allows(.useRecommendedRelays) {
-            return .init(action: .defaults, title: model.errorMessage != nil && lastAction == .defaults ? "Try Again" : "Use Default Relays")
-        }
-        return allows(.retry) ? .init(action: .retry, title: "Try Again") : nil
     }
 
     private func allows(_ action: OnboardingActionFfi) -> Bool { step?.actions.contains(action) == true }
 
     private func perform(_ action: Action) {
         guard !isBusy else { return }
-        let command: AccountSetupCommand
-        switch action {
-        case .edit:
+        if action == .edit, proposal == nil {
             editor = .relays
             return
+        }
+        let proposalChange = AccountSetupInboxRelayPresentation.ProposalChange(action: action, snapshot: presentation.snapshot)
+        let command: AccountSetupCommand
+        switch action {
+        case .edit, .discard: command = .cancelRepair
         case .discovery:
             editor = .discovery
             return
@@ -239,7 +247,6 @@ struct AccountSetupInboxRelayView: View {
             guard let proposal, relays != nil else { return }
             command = .approve(proposal.revision, recoveryEpoch: presentation.snapshot.recoveryEpoch)
         case .retry: command = .retry(selectedStep)
-        case .discard: command = .cancelRepair
         }
         let primary = primaryAction
         guard let operation = model.send(command) else { return }
@@ -252,6 +259,13 @@ struct AccountSetupInboxRelayView: View {
             activeAction = nil
             operationPrimary = nil
             updatePresentation()
+            guard model.isConnected, let proposalChange,
+                  proposalChange.isComplete(in: model.snapshot, hasError: model.errorMessage != nil) else { return }
+            draft = proposalChange.draft
+            if proposalChange.action == .edit, !isDismissing,
+               model.snapshot.steps.first(where: { $0.step == selectedStep })?.actions.contains(.editRelays) == true {
+                editor = .relays
+            }
         }
     }
 

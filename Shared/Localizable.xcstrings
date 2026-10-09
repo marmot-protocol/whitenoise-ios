@@ -1230,67 +1230,67 @@
         }
       }
     },
-    "This inbox relay list is invalid. Discard these changes to choose a new list. Nothing will be published." : {
+    "This inbox relay list is invalid. Edit the addresses before reviewing it again. Nothing will be published." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diese Inbox-Relay-Liste ist ungültig. Verwirf diese Änderungen, um eine neue Liste auszuwählen. Es wird nichts veröffentlicht."
+            "value" : "Diese Inbox-Relay-Liste ist ungültig. Bearbeite die Adressen, bevor du sie erneut überprüfst. Es wird nichts veröffentlicht."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This inbox relay list is invalid. Discard these changes to choose a new list. Nothing will be published."
+            "value" : "This inbox relay list is invalid. Edit the addresses before reviewing it again. Nothing will be published."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta lista de relays de la bandeja de entrada no es válida. Descarta estos cambios para elegir una nueva lista. No se publicará nada."
+            "value" : "Esta lista de relays de la bandeja de entrada no es válida. Edita las direcciones antes de volver a revisarla. No se publicará nada."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette liste de relais de réception n’est pas valide. Abandonnez ces modifications pour choisir une nouvelle liste. Rien ne sera publié."
+            "value" : "Cette liste de relais de réception n’est pas valide. Modifiez les adresses avant de la vérifier à nouveau. Rien ne sera publié."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Questo elenco di relay della posta in arrivo non è valido. Scarta queste modifiche per scegliere un nuovo elenco. Non verrà pubblicato nulla."
+            "value" : "Questo elenco di relay della posta in arrivo non è valido. Modifica gli indirizzi prima di controllarlo di nuovo. Non verrà pubblicato nulla."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta lista de relays da caixa de entrada é inválida. Descarte estas alterações para escolher uma nova lista. Nada será publicado."
+            "value" : "Esta lista de relays da caixa de entrada é inválida. Edite os endereços antes de revisá-la novamente. Nada será publicado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Этот список ретрансляторов входящих сообщений недопустим. Отмените эти изменения, чтобы выбрать новый список. Ничего не будет опубликовано."
+            "value" : "Этот список ретрансляторов входящих сообщений недопустим. Измените адреса перед повторной проверкой. Ничего не будет опубликовано."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu gelen kutusu röle listesi geçersiz. Yeni bir liste seçmek için bu değişiklikleri iptal et. Hiçbir şey yayımlanmayacak."
+            "value" : "Bu gelen kutusu röle listesi geçersiz. Yeniden gözden geçirmeden önce adresleri düzenle. Hiçbir şey yayımlanmayacak."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此收件箱中继列表无效。请舍弃这些更改，以选择新列表。不会发布任何内容。"
+            "value" : "此收件箱中继列表无效。请编辑地址后重新检查。不会发布任何内容。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此收件匣中繼清單無效。請捨棄這些變更，以選擇新清單。不會發布任何內容。"
+            "value" : "此收件匣中繼清單無效。請編輯地址後重新檢查。不會發布任何內容。"
           }
         }
       }
