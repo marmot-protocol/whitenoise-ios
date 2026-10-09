@@ -101,7 +101,7 @@ struct IdentityProfileSetupView: View {
     }
 
     private var showsInlineActions: Bool {
-        !isSetupConnectionBlocked && isKeyboardVisible && (accountSetup == nil || showsProfileFields)
+        !isSetupConnectionBlocked && (accountSetup == nil || showsProfileFields)
     }
 
     private var isSaving: Bool { model.isSavingProfile || activeProfileSnapshot != nil || (accountSetup?.isBusy ?? false) }
@@ -290,8 +290,7 @@ struct IdentityProfileSetupView: View {
         } message: { _ in
             Text("Your profile changes will be discarded.")
         }
-        .modifier(ProfileActionBar(
-            isRecovery: accountSetup != nil,
+        .modifier(WNOnboardingActionBar(
             isPresented: isFormReady && !model.isRestorationBlocked && !showsInlineActions && hasFooterActions
         ) {
             profileActions
@@ -314,7 +313,6 @@ struct IdentityProfileSetupView: View {
                 .presentationContentInteraction(.scrolls)
         }
         .scrollContentBackground(.hidden)
-        .modifier(ProfileScrollEdgeEffect(isRecovery: accountSetup != nil))
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle(accountSetup == nil ? "Sign Up" : "Your profile")
         .navigationBarTitleDisplayMode(.inline)
@@ -752,37 +750,5 @@ private struct ProfilePrivacyDetailsView: View {
         .font(.body)
         .foregroundStyle(.primary)
         .presentationBackground(Color(uiColor: .systemBackground))
-    }
-}
-
-private struct ProfileScrollEdgeEffect: ViewModifier {
-    let isRecovery: Bool
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if isRecovery {
-            content
-        } else {
-            content.compatibleBottomScrollEdgeEffectHidden()
-        }
-    }
-}
-
-private struct ProfileActionBar<Actions: View>: ViewModifier {
-    let isRecovery: Bool
-    let isPresented: Bool
-    @ViewBuilder var actions: () -> Actions
-
-    @ViewBuilder func body(content: Content) -> some View {
-        if isRecovery, #available(iOS 26.0, *) {
-            content
-                .scrollEdgeEffectStyle(.soft, for: .bottom)
-                .safeAreaBar(edge: .bottom, spacing: 0) {
-                    if isPresented { actions() }
-                }
-        } else {
-            content.safeAreaInset(edge: .bottom, spacing: 0) {
-                if isPresented { actions() }
-            }
-        }
     }
 }
