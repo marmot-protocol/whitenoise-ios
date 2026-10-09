@@ -385,6 +385,71 @@
         }
       }
     },
+    "Couldn’t prepare secure messaging" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichere Nachrichten konnten nicht vorbereitet werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t prepare secure messaging"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo preparar la mensajería segura"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de préparer la messagerie sécurisée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile preparare i messaggi sicuri"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível preparar as mensagens seguras"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось подготовить защищённые сообщения"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Güvenli mesajlaşma hazırlanamadı"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法准备安全消息"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法準備安全訊息"
+          }
+        }
+      }
+    },
     "Discarding changes…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -775,6 +840,71 @@
         }
       }
     },
+    "Preparing secure messaging…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichere Nachrichten werden vorbereitet…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing secure messaging…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando la mensajería segura…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation de la messagerie sécurisée…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparazione dei messaggi sicuri…"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando mensagens seguras…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подготовка защищённых сообщений…"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Güvenli mesajlaşma hazırlanıyor…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备安全消息…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在準備安全訊息…"
+          }
+        }
+      }
+    },
     "Review and Continue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1035,6 +1165,71 @@
         }
       }
     },
+    "Secure messaging must be ready before you can open Chats." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichere Nachrichten müssen bereit sein, bevor du Chats öffnen kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secure messaging must be ready before you can open Chats."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La mensajería segura debe estar lista antes de abrir Chats."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La messagerie sécurisée doit être prête avant d’ouvrir les discussions."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I messaggi sicuri devono essere pronti prima di aprire Chat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As mensagens seguras precisam estar prontas antes de abrir Conversas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Защищённые сообщения должны быть готовы, прежде чем вы сможете открыть чаты."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sohbetler’i açmadan önce güvenli mesajlaşmanın hazır olması gerekir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全消息功能必须准备就绪才能打开聊天。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安全訊息功能必須準備就緒才能開啟聊天。"
+          }
+        }
+      }
+    },
     "Setup changed. Try again to review the latest options." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1096,6 +1291,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "設定已變更。請重試以查看最新選項。"
+          }
+        }
+      }
+    },
+    "Setup updates stopped. Close this sheet, then tap Try Again on Sign In to reconnect." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Aktualisierung der Einrichtung wurde unterbrochen. Schließe dieses Fenster und tippe unter „Anmelden“ auf „Erneut versuchen“, um die Verbindung wiederherzustellen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup updates stopped. Close this sheet, then tap Try Again on Sign In to reconnect."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se detuvieron las actualizaciones de la configuración. Cierra esta ventana y toca Reintentar en Iniciar sesión para volver a conectar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les mises à jour de la configuration se sont arrêtées. Fermez cette fenêtre, puis touchez Réessayer sur l’écran Se connecter pour rétablir la connexion."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gli aggiornamenti della configurazione si sono interrotti. Chiudi questa schermata, poi tocca Riprova in Accedi per riconnetterti."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As atualizações da configuração pararam. Feche esta janela e toque em Tentar novamente na tela Entrar para reconectar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обновление настройки остановлено. Закройте это окно и нажмите «Повторить» на экране «Войти», чтобы восстановить подключение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurulum güncellemeleri durdu. Bu pencereyi kapatın, ardından yeniden bağlanmak için Oturum Aç ekranında Tekrar dene seçeneğine dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置更新已停止。请关闭此窗口，然后在登录页面轻点“重试”以重新连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "設定更新已停止。請關閉此視窗，然後在登入頁面點一下「重試」以重新連線。"
           }
         }
       }
@@ -93618,71 +93878,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "安全訊息"
-          }
-        }
-      }
-    },
-    "Secure messaging must be ready before you can open Chats. Try this check again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sicheres Messaging muss bereit sein, bevor du Chats öffnen kannst. Wiederhole diese Prüfung."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Secure messaging must be ready before you can open Chats. Try this check again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La mensajería segura debe estar lista antes de abrir Chats. Repite esta comprobación."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La messagerie sécurisée doit être prête avant d’ouvrir les discussions. Réessayez cette vérification."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La messaggistica sicura deve essere pronta prima di aprire Chat. Ripeti questo controllo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As mensagens seguras precisam estar prontas antes de abrir Conversas. Tente esta verificação novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Безопасный обмен сообщениями должен быть готов, прежде чем вы сможете открыть чаты. Повторите эту проверку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sohbetler’i açmadan önce güvenli mesajlaşmanın hazır olması gerekir. Bu kontrolü tekrar deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安全消息功能必须准备就绪才能打开聊天。请重试此检查。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安全訊息功能必須準備就緒才能開啟聊天。請重試此檢查。"
           }
         }
       }
