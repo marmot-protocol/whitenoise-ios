@@ -185,7 +185,8 @@ struct GroupDetailsView: View {
         .toolbar {
             if !isDirectMessage && isAdmin {
                 ToolbarItem(placement: .topBarTrailing) {
-                    editMenu
+                    WNButton(title: "Edit", emphasis: .secondary, size: .compact, action: openGroupInfoEditor)
+                        .disabled(model.membershipActionInFlight)
                 }
             }
         }
@@ -202,22 +203,6 @@ struct GroupDetailsView: View {
             )
             .appAppearance()
         }
-        .sheet(isPresented: $model.showGroupImageEditor) {
-            GroupImageURLSheet(
-                hasCurrentImage: viewModel.group.avatarUrl != nil || viewModel.group.imageHashHex != nil,
-                currentURL: ContentSanitizer.imageURL(viewModel.group.avatarUrl),
-                currentGroupIdHex: viewModel.group.groupIdHex,
-                currentImageHashHex: viewModel.group.imageHashHex,
-                onSave: GroupImageSaveSubmitter(progressReporting: { draft, onProgress in
-                    try await model.updateGroupImage(
-                        draft: draft,
-                        using: appState,
-                        onProgress: onProgress
-                    )
-                })
-            )
-            .appAppearance()
-        }
         .sheet(isPresented: $model.showRetentionEditor) {
             GroupRetentionEditorSheet(
                 currentSeconds: viewModel.group.disappearingMessageSecs,
@@ -228,44 +213,13 @@ struct GroupDetailsView: View {
             .appAppearance()
         }
         .sheet(isPresented: $model.showProfileEditor) {
-            NavigationStack {
-                Form {
-                    Section {
-                        TextField("Group name", text: $model.renameDraft)
-                            .textInputAutocapitalization(.words)
-                            .submitLabel(.done)
-                        TextField(
-                            "Description",
-                            text: $model.descriptionDraft,
-                            axis: .vertical
-                        )
-                        .lineLimit(4...8)
-                    } footer: {
-                        Text("Everyone in the group will see this name and description. Leave the description blank to remove it.")
-                    }
-                }
-                .navigationTitle("Edit Group Info")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { model.showProfileEditor = false }
-                            .disabled(model.membershipActionInFlight)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            Task {
-                                if await model.updateProfile(using: appState) {
-                                    model.showProfileEditor = false
-                                }
-                            }
-                        }
-                        .disabled(
-                            model.membershipActionInFlight
-                                || Self.validatedGroupName(model.renameDraft) == nil
-                        )
-                    }
-                }
-                .interactiveDismissDisabled(model.membershipActionInFlight)
+            GroupInfoEditSheet(
+                model: model,
+                hasCurrentImage: viewModel.group.avatarUrl != nil || viewModel.group.imageHashHex != nil,
+                showsCurrentAvatar: hasGroupImage
+            ) {
+                let groupDisplay = viewModel.groupDisplay
+                groupAvatar(groupDisplay: groupDisplay, displayTitle: viewModel.displayTitle(for: groupDisplay))
             }
             .appAppearance()
         }
@@ -449,7 +403,7 @@ struct GroupDetailsView: View {
                         .accessibilityLabel(L10n.string("Photo"))
                     } else if isAdmin {
                         Button {
-                            model.showGroupImageEditor = true
+                            openGroupInfoEditor()
                         } label: {
                             groupAvatar(groupDisplay: groupDisplay, displayTitle: displayTitle)
                                 .frame(width: 104, height: 104)
@@ -486,8 +440,7 @@ struct GroupDetailsView: View {
                         .lineLimit(4)
                 } else if isAdmin {
                     Button {
-                        model.prepareProfileDrafts()
-                        model.showProfileEditor = true
+                        openGroupInfoEditor()
                     } label: {
                         Text("Add Description")
                             .font(.callout)
@@ -704,29 +657,9 @@ struct GroupDetailsView: View {
         }
     }
 
-    private var editMenu: some View {
-        Menu {
-            Button {
-                model.prepareProfileDrafts()
-                model.showProfileEditor = true
-            } label: {
-                Label("Edit Group Info", systemImage: "pencil")
-            }
-            Button {
-                model.showGroupImageEditor = true
-            } label: {
-                Label(
-                    hasGroupImage ? L10n.string("Edit Image") : L10n.string("Set Image"),
-                    systemImage: "photo"
-                )
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .disabled(model.membershipActionInFlight)
-        .accessibilityLabel("Edit group")
+    private func openGroupInfoEditor() {
+        model.prepareProfileDrafts()
+        model.showProfileEditor = true
     }
 
     // MARK: - Shared media

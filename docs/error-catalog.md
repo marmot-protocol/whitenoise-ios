@@ -697,9 +697,9 @@ switch self {
         }
 ```
 
-### DuckDuckGoImageSearchError — GroupImageURLSheet
+### DuckDuckGoImageSearchError — GroupImageSupport
 
-[whitenoise-ios/Group/GroupImageURLSheet.swift:181](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:181)
+[whitenoise-ios/Group/GroupImageSupport.swift:181](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageSupport.swift:181)
 
 Cases: `emptyQuery`; `missingToken`; `badResponse`.
 ```swift
@@ -870,11 +870,6 @@ Calls using `message(for:)` supply inline text; their heading comes from the enc
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupDetailsViewModel.swift:913](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupDetailsViewModel.swift:913) |
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupDetailsViewModel.swift:953](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupDetailsViewModel.swift:953) |
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupDetailsViewModel.swift:960](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupDetailsViewModel.swift:960) |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupImageURLSheet.swift:415](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:415) |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupImageURLSheet.swift:654](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:654) |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupImageURLSheet.swift:689](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:689) |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupImageURLSheet.swift:714](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:714) |
-| `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupImageURLSheet.swift:733](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:733) |
 | `UserFacingError.message(for: marmotError)` | [whitenoise-ios/Group/GroupsInCommonSection.swift:211](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupsInCommonSection.swift:211) |
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Group/GroupsInCommonSection.swift:215](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupsInCommonSection.swift:215) |
 | `UserFacingError.message(for: error)` | [whitenoise-ios/Group/SharedMediaLibraryView.swift:582](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/SharedMediaLibraryView.swift:582) |
@@ -947,7 +942,6 @@ These additional localized messages are assigned directly to error, failure, or 
 | `errorMessage = L10n.string("Couldn’t refresh your accounts. Try again.")` | [whitenoise-ios/Core/AppState.swift:245](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Core/AppState.swift:245) |
 | `sharedMediaError = L10n.string("Couldn't load shared media.")` | [whitenoise-ios/Group/GroupDetailsViewModel.swift:282](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupDetailsViewModel.swift:282) |
 | `actionError = L10n.string("Leave this group before deleting the local copy.")` | [whitenoise-ios/Group/GroupDetailsViewModel.swift:775](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupDetailsViewModel.swift:775) |
-| `searchError = L10n.string("No usable HTTPS images found.")` | [whitenoise-ios/Group/GroupImageURLSheet.swift:646](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupImageURLSheet.swift:646) |
 | `error = L10n.formatted( "%@ hasn't published a compatible key package yet.", IdentityFormatter.short(account) )` | [whitenoise-ios/Group/GroupsInCommonSection.swift:206](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/GroupsInCommonSection.swift:206) |
 | `loadError = L10n.string("Couldn't load shared media.")` | [whitenoise-ios/Group/SharedMediaLibraryView.swift:52](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/SharedMediaLibraryView.swift:52) |
 | `linksError = L10n.string("Couldn't load links.")` | [whitenoise-ios/Group/SharedMediaLibraryView.swift:110](/Users/jeff/code/whitenoise-ios/whitenoise-ios/Group/SharedMediaLibraryView.swift:110) |
