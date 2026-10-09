@@ -103,6 +103,9 @@ if [ -n "$boot_pid" ]; then
   wait "$boot_pid" || true
 fi
 
+# xcodebuild forwards TEST_RUNNER_ variables to the test process without the
+# prefix. A custom build setting alone does not establish its runtime value.
+export TEST_RUNNER_WN_FETCH_NATIVE_CDN="${WN_FETCH_NATIVE_CDN:-0}"
 phase "test-without-building" run test-without-building \
   "${xcodebuild_args[@]}" \
   -resultBundlePath "$RESULT_BUNDLE"

@@ -1,6 +1,7 @@
 name: Tests
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "whitenoise-ios/**"
@@ -14,6 +15,7 @@ on:
       - "scripts/sync-local-bindings.sh"
       - "scripts/check-analytics-release-config.py"
       - "scripts/check-marmotkit-bindings.py"
+      - "scripts/check-fetch-lifetime-results.py"
       - "scripts/tests/**"
       - "scripts/test.sh"
       - "scripts/pick-simulator.sh"
@@ -35,6 +37,8 @@ jobs:
     timeout-minutes: 45
 
     env:
+      # Explicit manual qualification, never routine PR or offline unit tests.
+      WN_FETCH_NATIVE_CDN: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
       WN_TEST_DERIVED_DATA: ${{ github.workspace }}/build/DerivedData
       WN_TEST_SOURCE_PACKAGES: ${{ github.workspace }}/build/SourcePackages
       WN_TEST_COMPILATION_CACHE: ${{ github.workspace }}/build/CompilationCache
@@ -103,6 +107,13 @@ jobs:
         # End the step before the job deadline so failure artifacts can upload.
         timeout-minutes: 40
         run: ./scripts/test.sh
+
+      - name: Verify fetch lifetime regressions actually passed
+        timeout-minutes: 2
+        run: |
+          set -o pipefail
+          xcrun xcresulttool get test-results tests --path build/TestResults.xcresult \
+            | python3 scripts/check-fetch-lifetime-results.py
 
       - name: Save compilation cache
         if: always() && github.ref == 'refs/heads/master'

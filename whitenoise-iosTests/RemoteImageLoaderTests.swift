@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -193,6 +194,45 @@ struct RemoteImageLoaderTests {
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
         #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: arrivingURL)))
         _ = try await RemoteAvatarImageLoader.image(for: arrivingURL, maxPixelSize: 8, scale: 1, fetch: { _ in data })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func avatarDrainFinishesWhileCancelledDNSWorkerIsStillBlocked() async throws {
+        let url = try #require(URL(string: "https://cdn.example/\(UUID()).png"))
+        let fixture = BlockingDNS()
+        defer { fixture.release() }
+        let exited = PinnedFetchWaitGate<Void>()
+        let slots = PinnedDNSResolutionSlots(limit: 1, onRelease: { exited.complete(.success(())) })
+        let connections = Mutex(0)
+        RemoteAvatarImageLoader.resetCachesForTesting()
+        defer { RemoteAvatarImageLoader.resetCachesForTesting() }
+        let request = Task {
+            try await RemoteAvatarImageLoader.image(for: url, maxPixelSize: 8, scale: 1) { url in
+                let result = try await PinnedHTTPSFetcher.fetch(
+                    URLRequest(url: url), maximumResponseBytes: 1024,
+                    resolver: fixture.resolve, slots: slots,
+                    attempt: { _, _, _, _, _ in
+                        connections.withLock { $0 += 1 }
+                        throw URLError(.cannotConnectToHost)
+                    }
+                )
+                return result.0
+            }
+        }
+        _ = try await fixture.started.wait { _ in }
+        await RemoteAvatarImageLoader.clearCachesAndDrain()
+        await #expect(throws: CancellationError.self) { _ = try await request.value }
+        #expect(slots.inFlight == 1)
+        #expect(!fixture.didTimeOut)
+        #expect(connections.withLock { $0 } == 0)
+        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
+        fixture.release()
+        _ = try await exited.wait { _ in }
+        #expect(slots.inFlight == 0)
+        #expect(connections.withLock { $0 } == 0)
+        #expect(RemoteAvatarImageLoader.cachedImageForTesting(for: url, maxPixelSize: 8) == nil)
+        #expect(!(await RemoteAvatarDiskCache.shared.cachedFileExistsForTesting(for: url)))
     }
 
     @Test func groupAvatarDrainBlocksNewLoadsAndSeedsUntilDecodeSettles() async throws {
