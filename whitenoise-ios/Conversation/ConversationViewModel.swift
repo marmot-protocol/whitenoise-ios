@@ -2902,17 +2902,13 @@ final class ConversationViewModel {
         appState?.present(.error(notice.title, message: notice.message))
     }
 
-    /// Settles a staged send that never reached MDK — the bubble stays as the
-    /// only copy of the user's message, in the same failed state a publish
-    /// failure produces.
-    var draftMediaUploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] {
-        composer.draftMediaUploadStates
-    }
-
     func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
         composer.reconcileDraftMediaUploads(attachments)
     }
 
+    /// Settles a staged send that never reached MDK — the bubble stays as the
+    /// only copy of the user's message, in the same failed state a publish
+    /// failure produces.
     func failStagedSend(_ staged: StagedOutgoingSend) {
         staged.cancelPreparedUploads()
         timelineStore.markFailed(tempId: staged.tempId)

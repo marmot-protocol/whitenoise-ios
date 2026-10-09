@@ -92,11 +92,16 @@ final class ComposerModel {
         ((String, String, String?, String, String) async throws -> LocalSendAcceptanceFfi)?
 #endif
 
-    init(appState: AppState?, groupIdHex: String, timelineStore: TimelineStore) {
+    init(
+        appState: AppState?,
+        groupIdHex: String,
+        timelineStore: TimelineStore,
+        draftMediaUploader: DraftMediaPreuploads.Uploader? = nil
+    ) {
         self.appState = appState
         self.groupIdHex = groupIdHex
         self.timelineStore = timelineStore
-        self.draftMediaUploads = DraftMediaPreuploads { [weak appState] accountRef, attachment in
+        self.draftMediaUploads = DraftMediaPreuploads(uploader: draftMediaUploader ?? { [weak appState] accountRef, attachment in
             guard let client = try appState?.currentMarmotClient() else { return nil }
             let result = try await client.uploadMedia(
                 accountRef: accountRef,
@@ -109,15 +114,11 @@ final class ComposerModel {
                 )
             )
             return result.attachments.first?.reference
-        }
+        })
     }
 
     func reconcileDraftMediaUploads(_ attachments: [MediaDraftAttachment]) {
         draftMediaUploads.reconcile(attachments, accountRef: appState?.activeAccountRef)
-    }
-
-    var draftMediaUploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] {
-        draftMediaUploads.states
     }
 
     func cancelDraftMediaUploads() {
