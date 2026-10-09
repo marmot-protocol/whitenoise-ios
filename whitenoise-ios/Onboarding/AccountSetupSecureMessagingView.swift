@@ -42,7 +42,7 @@ struct AccountSetupSecureMessagingView: View {
                     }
                 }
             } actions: {
-                if model.hasConnectionFailure {
+                if model.hasConnectionFailure && !isRetrying {
                     WNOnboardingButton(title: "Close") { dismiss() }
                         .disabled(isBusy)
                 } else if step?.actions.contains(.retry) == true {
