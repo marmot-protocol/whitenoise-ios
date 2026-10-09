@@ -652,7 +652,13 @@ struct ConversationView: View {
     @State private var pendingBottomScrollTask: Task<Void, Never>?
     @State private var lastAutomaticBottomScrollTargetID: String?
     @State private var pendingSearchMatchScrollTask: Task<Void, Never>?
-    @State private var messageNavigationTargetItemId: String?
+    @State private var messageNavigationTarget: MessageNavigationTarget?
+    /// The message whose quote the user tapped; the down arrow returns here first.
+    @State private var replyOrigin: DownArrowStopAnchor?
+    @State private var didPassFirstUnread = false
+    /// Captured while the first unread row is loaded, so it can still be placed
+    /// after the bounded window drops it.
+    @State private var firstUnreadOrderKey: UInt64?
     @State private var messageNavigationTask: Task<Void, Never>?
     @State private var messageNavigationGeneration = 0
     @State private var visibleChatRoute: VisibleChatRoute?
@@ -695,6 +701,18 @@ struct ConversationView: View {
         let status: MessageStatus
         let rowId: String
         let rowFrameKey: String
+    }
+
+    private struct DownArrowStopAnchor: Equatable {
+        let messageIdHex: String
+        let orderKey: UInt64
+    }
+
+    /// `scrollID` can be the unread divider above the row identified by `rowID`.
+    private struct MessageNavigationTarget: Equatable {
+        let scrollID: String
+        let rowID: String
+        let anchor: UnitPoint
     }
 
     private struct FailedSendTarget: Identifiable {
@@ -1753,6 +1771,10 @@ struct ConversationView: View {
                                                 store: timelineVisibility,
                                                 onBecameVisible: {
                                                     markCurrentlyVisibleMessagesRead(viewModel: viewModel)
+                                                    clearPassedDownArrowStops(viewModel: viewModel)
+                                                },
+                                                onBecameHidden: {
+                                                    clearPassedDownArrowStops(viewModel: viewModel)
                                                 }
                                             ))
                                     }
@@ -1822,10 +1844,15 @@ struct ConversationView: View {
                         }
                         .compatibleBottomScrollEdgeEffectHidden()
                         .scrollDismissesKeyboard(.interactively)
-                        .onScrollPhaseChange { _, phase in
+                        .onScrollPhaseChange { oldPhase, phase in
                             // New-message follow requests must not interrupt
                             // native dragging, deceleration, or rubber-banding.
                             isUserScrollingTimeline = TimelineBottomScrollCoordinator.isUserDriven(phase)
+                            if phase == .idle, TimelineBottomScrollCoordinator.isUserDriven(oldPhase) {
+                                // Reconcile the settled visible set once per gesture,
+                                // whichever row-edge callbacks it produced.
+                                clearPassedDownArrowStops(viewModel: viewModel, afterUserScroll: true)
+                            }
                             if isUserScrollingTimeline {
                                 cancelPendingBottomScroll()
                             }
@@ -1917,12 +1944,13 @@ struct ConversationView: View {
                             guard let request else { return }
                             scheduleSearchMatchScroll(to: request.itemId, proxy: proxy)
                         }
-                        .onChange(of: messageNavigationTargetItemId) { _, itemId in
-                            guard let itemId else { return }
+                        .onChange(of: messageNavigationTarget) { _, target in
+                            guard let target else { return }
                             isAtTimelineBottom = false
                             userMovedAwayFromTimelineBottom = true
-                            scheduleSearchMatchScroll(to: itemId, proxy: proxy)
-                            messageNavigationTargetItemId = nil
+                            scheduleSearchMatchScroll(to: target.scrollID, rowID: target.rowID,
+                                anchor: target.anchor, proxy: proxy)
+                            messageNavigationTarget = nil
                         }
                         .onAppear {
                             _ = performInitialScrollIfNeeded(viewModel: viewModel)
@@ -2200,7 +2228,12 @@ struct ConversationView: View {
             },
             onReplyPreviewTap: {
                 guard let targetId = viewModel.replyTargetMessageId(for: record) else { return }
-                navigateToTimelineMessage(targetId, viewModel: viewModel)
+                let origin = DownArrowStopAnchor(messageIdHex: record.messageIdHex, orderKey: record.recordedAt)
+                replyOrigin = origin
+                navigateToTimelineMessage(targetId, viewModel: viewModel) {
+                    // No jump happened, so there is nothing to return from.
+                    if replyOrigin == origin { replyOrigin = nil }
+                }
             },
             onLoadMedia: ConversationMediaLoader { media in
                 try await viewModel.data(for: media)
@@ -2291,13 +2324,11 @@ struct ConversationView: View {
             hasMoreAfter: viewModel.hasMoreAfter,
             isAtBottom: isAtTimelineBottom
         ) {
-            WNIconButton(title: "Scroll to latest message", systemImage: "arrow.down") {
+            WNIconButton(title: "Scroll down", systemImage: "arrow.down") {
                 Haptics.tap()
-                isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
-                    currentIsPinned: isAtTimelineBottom)
-                jumpToBottom(proxy: proxy)
+                handleDownArrowTap(proxy: proxy, viewModel: viewModel)
             }
-            .accessibilityLabel("Scroll to latest message")
+            .accessibilityLabel("Scroll down")
             .padding(.trailing, 9)
             .padding(.bottom, 10)
             .transition(.scale(scale: 0.9).combined(with: .opacity))
@@ -2393,6 +2424,87 @@ struct ConversationView: View {
             await viewModel?.returnConversationToLatest()
             scheduleScrollToBottom(proxy: proxy, animated: true, reason: .buttonTap,
                 targetID: viewModel?.timeline.last?.id)
+        }
+    }
+
+    private func handleDownArrowTap(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
+        let stops = downArrowStops(viewModel: viewModel)
+        // Choosing any destination retires the reply origin: it is either the
+        // destination or was not ahead, and a later jump may drop its row.
+        replyOrigin = nil
+        switch TimelineDownArrowPolicy.destination(replyOrigin: stops.replyOrigin, firstUnread: stops.firstUnread) {
+        case .replyOrigin(let messageIdHex):
+            navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
+        case .firstUnread(let messageIdHex):
+            didPassFirstUnread = true
+            navigateToTimelineMessage(messageIdHex, viewModel: viewModel, landsOnUnreadDivider: true)
+        case .latest:
+            didPassFirstUnread = true
+            messageNavigationTask?.cancel()
+            isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
+                currentIsPinned: isAtTimelineBottom)
+            jumpToBottom(proxy: proxy)
+        }
+    }
+
+    /// The unread divider is a stop only while it is shown and not yet passed.
+    private func firstUnreadStopMessageId(viewModel: ConversationViewModel) -> String? {
+        guard !didPassFirstUnread, !suppressesInitialUnreadDivider else { return nil }
+        return viewModel.initialWindowUnreadMessageId.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private func downArrowStops(
+        viewModel: ConversationViewModel
+    ) -> (replyOrigin: TimelineDownArrowPolicy.Stop?, firstUnread: TimelineDownArrowPolicy.Stop?) {
+        let unreadId = firstUnreadStopMessageId(viewModel: viewModel)
+        guard replyOrigin != nil || unreadId != nil else { return (nil, nil) }
+        if let unreadId, let key = viewModel.record(for: unreadId)?.recordedAt {
+            firstUnreadOrderKey = key
+        }
+        let visible = TimelineDownArrowPolicy.visibleIndices(
+            rowKeys: viewModel.timeline.lazy.map(\.rowFrameKey),
+            visibleRowKeys: timelineVisibility.visibleRowKeys
+        )
+        // The window page alone: local sends kept beside it carry current
+        // timestamps and would stretch the range over a dropped newer row.
+        let loadedOrderKeys = TimelineDownArrowPolicy.orderKeyRange(
+            viewModel.conversationWindow?.messages.map(\.timeline.timelineAt) ?? []
+        )
+        func stop(_ messageIdHex: String?, orderKey: UInt64?) -> TimelineDownArrowPolicy.Stop? {
+            guard let messageIdHex else { return nil }
+            let index = viewModel.timeline.firstIndex { item in
+                guard case .message(let record, _) = item.kind else { return false }
+                return record.messageIdHex == messageIdHex
+            }
+            return TimelineDownArrowPolicy.Stop(
+                messageIdHex: messageIdHex,
+                placement: TimelineDownArrowStopPlacement.of(
+                    targetIndex: index,
+                    visibleIndices: visible,
+                    orderKey: orderKey,
+                    loadedOrderKeys: loadedOrderKeys,
+                    hasMoreAfter: viewModel.hasMoreAfter
+                )
+            )
+        }
+        return (
+            stop(replyOrigin?.messageIdHex, orderKey: replyOrigin?.orderKey),
+            stop(unreadId, orderKey: firstUnreadOrderKey)
+        )
+    }
+
+    /// Scrolling past a stop on one's own retires it, so a later tap moves on.
+    private func clearPassedDownArrowStops(viewModel: ConversationViewModel, afterUserScroll: Bool = false) {
+        guard TimelineDownArrowPolicy.mayRetirePassedStops(
+            isInitialPositionSettled: isInitialTimelinePositionSettled,
+            isUserScrolling: isUserScrollingTimeline || afterUserScroll
+        ) else { return }
+        let stops = downArrowStops(viewModel: viewModel)
+        if stops.replyOrigin?.placement.isPassed == true {
+            replyOrigin = nil
+        }
+        if stops.firstUnread?.placement.isPassed == true {
+            didPassFirstUnread = true
         }
     }
 
@@ -2526,6 +2638,9 @@ struct ConversationView: View {
             visibleRowKeys: timelineVisibility.visibleRowKeys,
             didScrollToUnreadTarget: viewModel.conversationWindow?.anchor.kind == .firstUnread
         )
+        if let unreadId = viewModel.initialWindowUnreadMessageId {
+            firstUnreadOrderKey = viewModel.record(for: unreadId)?.recordedAt
+        }
         markCurrentlyVisibleMessagesRead(viewModel: viewModel)
         reconcileTimelineTailVisibility(viewModel: viewModel)
     }
@@ -3390,7 +3505,12 @@ struct ConversationView: View {
         cancelActionFrameMeasurement()
     }
 
-    private func navigateToTimelineMessage(_ messageIdHex: String, viewModel: ConversationViewModel) {
+    private func navigateToTimelineMessage(
+        _ messageIdHex: String,
+        viewModel: ConversationViewModel,
+        landsOnUnreadDivider: Bool = false,
+        onUnavailable: (() -> Void)? = nil
+    ) {
         messageNavigationTask?.cancel()
         viewModel.supersedePendingConversationNavigation()
         messageNavigationGeneration &+= 1
@@ -3405,19 +3525,34 @@ struct ConversationView: View {
             }
 
             if viewModel.record(for: messageIdHex) != nil {
-                messageNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
+                messageNavigationTarget = navigationTarget(messageIdHex, viewModel: viewModel,
+                    landsOnUnreadDivider: landsOnUnreadDivider)
                 return
             }
 
             await viewModel.jumpToConversationMessage(messageIdHex)
             guard !Task.isCancelled else { return }
             if viewModel.record(for: messageIdHex) != nil {
-                messageNavigationTargetItemId = viewModel.displayID(for: messageIdHex)
+                messageNavigationTarget = navigationTarget(messageIdHex, viewModel: viewModel,
+                    landsOnUnreadDivider: landsOnUnreadDivider)
                 return
             }
 
+            onUnavailable?()
             appState.present(.warning(L10n.string("Original message is no longer available")))
         }
+    }
+
+    private func navigationTarget(
+        _ messageIdHex: String,
+        viewModel: ConversationViewModel,
+        landsOnUnreadDivider: Bool
+    ) -> MessageNavigationTarget {
+        let rowID = viewModel.displayID(for: messageIdHex)
+        guard landsOnUnreadDivider else {
+            return MessageNavigationTarget(scrollID: rowID, rowID: rowID, anchor: .center)
+        }
+        return MessageNavigationTarget(scrollID: unreadDividerID(for: messageIdHex), rowID: rowID, anchor: .top)
     }
 
     // MARK: - In-conversation search
@@ -3448,10 +3583,15 @@ struct ConversationView: View {
     /// Jump the timeline to a search match. Deferred through a cancellable
     /// main-actor task like the bottom-follow coordinator, and any queued
     /// bottom-follow is cancelled so it cannot race the targeted jump.
-    private func scheduleSearchMatchScroll(to itemId: String, proxy: ScrollViewProxy) {
+    private func scheduleSearchMatchScroll(
+        to itemId: String,
+        rowID: String? = nil,
+        anchor: UnitPoint = .center,
+        proxy: ScrollViewProxy
+    ) {
         cancelPendingBottomScroll()
         let viewportToken = conversationViewport.beginProgrammaticScroll()
-        if let model = viewModel, let id = model.protocolID(forDisplayID: itemId) {
+        if let model = viewModel, let id = model.protocolID(forDisplayID: rowID ?? itemId) {
             model.setVisibleConversationAnchor(id)
         }
         userMovedAwayFromTimelineBottom = true
@@ -3466,7 +3606,7 @@ struct ConversationView: View {
             isAtTimelineBottom = false
             userMovedAwayFromTimelineBottom = true
             withAnimation(.smooth(duration: 0.2), completionCriteria: .logicallyComplete) {
-                proxy.scrollTo(itemId, anchor: .center)
+                proxy.scrollTo(itemId, anchor: anchor)
             } completion: {
                 conversationViewport.endProgrammaticScroll(viewportToken)
             }
@@ -3900,6 +4040,7 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
     let rowKey: String
     let store: TimelineVisibilityStore
     let onBecameVisible: () -> Void
+    var onBecameHidden: () -> Void = {}
 
     @State private var isVisible = false
 
@@ -3911,8 +4052,11 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
             ) { nextIsVisible in
                 guard nextIsVisible != isVisible else { return }
                 isVisible = nextIsVisible
-                if store.set(rowKey, isVisible: nextIsVisible), nextIsVisible {
+                guard store.set(rowKey, isVisible: nextIsVisible) else { return }
+                if nextIsVisible {
                     onBecameVisible()
+                } else {
+                    onBecameHidden()
                 }
             }
     }
