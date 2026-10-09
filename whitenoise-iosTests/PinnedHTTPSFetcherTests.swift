@@ -5,6 +5,17 @@ import Testing
 @testable import whitenoise_ios
 
 struct PinnedHTTPSFetcherTests {
+    @Test(arguments: ["198.19.255.255", "100::1", "fec0::1", "2001:2::1"])
+    func endpointsRejectSingleAndMixedNonPublicAnswers(address: String) throws {
+        let url = try #require(URL(string: "https://cdn.example/image.png"))
+        for answers in [[address], ["93.184.216.34", address]] {
+            let resolver: HostResolutionGuard.Resolver = { _ in answers }
+            #expect(throws: HostResolutionGuard.GuardError.resolvesToPrivateAddress) {
+                try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver)
+            }
+        }
+    }
+
     @Test func endpointsResolveOnceAndPreserveTLSHostname() throws {
         let url = try #require(URL(string: "https://cdn.example:443/avatar.png"))
         let calls = Mutex(0)

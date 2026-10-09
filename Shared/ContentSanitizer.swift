@@ -191,7 +191,7 @@ nonisolated enum ContentSanitizer {
     }
 
     /// Classifies an IP-literal (or literal-shaped) host string as
-    /// private/loopback/link-local, in every spelling the string allowlist
+    /// non-public, in every spelling the string allowlist
     /// already blocks. Exposed for connect-time resolution checks: a DNS name
     /// that is not an IP literal returns `false` here, so callers resolve the
     /// host first and pass each resolved address string through this.
@@ -251,6 +251,19 @@ nonisolated enum ContentSanitizer {
         }
         // RFC 6890 IETF protocol assignments: 192.0.0.0/24.
         if octets[0] == 192 && octets[1] == 0 && octets[2] == 0 {
+            return true
+        }
+        // IANA non-global documentation, benchmarking and deprecated relay blocks.
+        // Keep the existing conservative exclusion of all 192.0.0.0/24 above.
+        if octets[0] == 192 && ((octets[1] == 0 && octets[2] == 2) ||
+            (octets[1] == 88 && octets[2] == 99)) {
+            return true
+        }
+        if octets[0] == 198 && (octets[1] == 18 || octets[1] == 19 ||
+            (octets[1] == 51 && octets[2] == 100)) {
+            return true
+        }
+        if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
             return true
         }
         // Multicast (224.0.0.0/4) and reserved/future-use (240.0.0.0/4) space,
@@ -356,6 +369,10 @@ nonisolated enum ContentSanitizer {
         let address = String(host.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)[0])
         guard let bytes = ipv6Bytes(address), bytes.count == 16 else { return false }
 
+        if isNonGlobalIPv6Allocation(bytes) {
+            return true
+        }
+
         if bytes.allSatisfy({ $0 == 0 }) {
             return true
         }
@@ -424,6 +441,29 @@ nonisolated enum ContentSanitizer {
         }
 
         return (bytes[0] & 0xfe) == 0xfc || (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80)
+    }
+
+    /// IANA special-purpose ranges plus deprecated site-local space (RFC 3879).
+    /// IPv4 embeddings and Teredo are checked separately against the IPv4 policy.
+    private static func isNonGlobalIPv6Allocation(_ bytes: [UInt8]) -> Bool {
+        if bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0xc0 { return true }
+        if bytes[0] == 1 && bytes[1..<7].allSatisfy({ $0 == 0 }) && bytes[7] <= 1 { return true }
+        if bytes[0] == 0x3f && bytes[1] == 0xff && (bytes[2] & 0xf0) == 0 { return true }
+        if bytes[0] == 0x5f && bytes[1] == 0 { return true }
+        if Array(bytes[0..<6]) == [0, 0x64, 0xff, 0x9b, 0, 1] { return true }
+        guard bytes[0] == 0x20 && bytes[1] == 1 else { return false }
+        if bytes[2] == 0x0d && bytes[3] == 0xb8 { return true }
+        // General 2001::/23 is non-global unless a more specific allocation allows it.
+        guard bytes[2] < 2 else { return false }
+        if bytes[2] == 0 && bytes[3] == 0 { return false } // Teredo: embedded IPv4 checks below.
+        let anycast = bytes[2] == 0 && bytes[3] == 1 &&
+            bytes[4..<15].allSatisfy({ $0 == 0 }) && (1...3).contains(bytes[15])
+        let assignedGlobal = bytes[2] == 0 && (
+            bytes[3] == 3 ||
+            (bytes[3] == 4 && bytes[4] == 1 && bytes[5] == 0x12) ||
+            (bytes[3] & 0xf0) == 0x20 || (bytes[3] & 0xf0) == 0x30
+        )
+        return !anycast && !assignedGlobal
     }
 
     private static func ipv6Bytes(_ host: String) -> [UInt8]? {

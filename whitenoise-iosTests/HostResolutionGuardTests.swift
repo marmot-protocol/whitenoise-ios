@@ -7,6 +7,16 @@ import Testing
 /// resolver so no real DNS is involved.
 struct HostResolutionGuardTests {
 
+    @Test(arguments: ["198.18.0.1", "fec0::1", "2001:db8::1", "64:ff9b:1::1"])
+    func rejectsSingleAndMixedSpecialUseDNSAnswers(address: String) {
+        for answers in [[address], ["93.184.216.34", address]] {
+            let resolver: HostResolutionGuard.Resolver = { _ in answers }
+            #expect(throws: HostResolutionGuard.GuardError.resolvesToPrivateAddress) {
+                try HostResolutionGuard.resolvedPublicAddresses("cdn.example", resolver: resolver)
+            }
+        }
+    }
+
     @Test func publicResolvedAddressIsAllowed() throws {
         let resolver: HostResolutionGuard.Resolver = { _ in ["93.184.216.34"] }
         #expect(!HostResolutionGuard.resolvesToPrivateAddress("example.com", resolver: resolver))
