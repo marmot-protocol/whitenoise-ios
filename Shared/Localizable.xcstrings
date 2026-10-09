@@ -1213,7 +1213,7 @@
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sohbetler’i açmadan önce güvenli mesajlaşmanın hazır olması gerekir."
+            "value" : "Sohbetleri açmadan önce güvenli mesajlaşmanın hazır olması gerekir."
           }
         },
         "zh-Hans" : {
