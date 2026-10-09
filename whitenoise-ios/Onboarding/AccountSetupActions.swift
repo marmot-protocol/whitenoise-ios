@@ -36,6 +36,8 @@ struct AccountSetupActions: View {
             AccountSetupInboxRelayView(model: model)
         } else if selectedStep == .singleDevice {
             AccountSetupDeviceView(model: model)
+        } else if selectedStep == .keyPackage {
+            AccountSetupSecureMessagingView(model: model)
         } else if selectedStep == .relays {
             AccountSetupRelayRecoveryView(model: model, selectedStep: selectedStep)
         } else {
@@ -129,8 +131,6 @@ struct AccountSetupActions: View {
                 } else {
                     Text("We couldn’t complete the lookup. Try another relay or check again before replacing any settings.")
                 }
-            case .keyPackage:
-                Text("Secure messaging must be ready before you can open Chats. Try this check again.")
             case .follows:
                 Text("You can continue without changing the people you follow.")
             default:
