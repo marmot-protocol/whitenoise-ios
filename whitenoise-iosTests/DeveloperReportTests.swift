@@ -56,16 +56,110 @@ struct DeveloperReportTests {
         #expect(!MessageModerationPolicy.isOtherAuthor(direction: "received", sender: "", myAccountId: me, isDeleted: false))
     }
 
-    @Test func reportOutcomeNamesEveryDestination() {
+    @Test func reportOutcomeNamesEveryDestinationAndDisposition() {
+        #expect(ReportPresentation.developerOutcome(.published) == "Sent to the White Noise team.")
+        #expect(ReportPresentation.developerOutcome(.acceptedPending)
+            == "Saved and waiting to send to the White Noise team.")
+        #expect(ReportPresentation.developerOutcome(.completionUnknown)
+            == "Saved; delivery to the White Noise team is pending confirmation.")
         let group = "Sent to the group."
-        #expect(ReportPresentation.outcome(groupOutcome: group, sentToDeveloper: true)
-            == "Sent to the group. Sent to the White Noise team.")
-        #expect(ReportPresentation.outcome(groupOutcome: nil, sentToDeveloper: true) == "Sent to the White Noise team.")
-        #expect(ReportPresentation.outcome(groupOutcome: group, sentToDeveloper: false) == group)
-        #expect(ReportPresentation.outcome(groupOutcome: nil, sentToDeveloper: false) == nil)
+        #expect(ReportPresentation.outcome(groupOutcome: group, developerDisposition: .acceptedPending)
+            == "Sent to the group. Saved and waiting to send to the White Noise team.")
+        #expect(ReportPresentation.outcome(groupOutcome: group, developerDisposition: nil) == group)
+        #expect(ReportPresentation.outcome(groupOutcome: nil, developerDisposition: nil) == nil)
+    }
+
+    @MainActor
+    @Test func deliveryReusesTheSupportChatAndReturnsTheSendDisposition() async throws {
+        let harness = DeliveryHarness(existing: "support-group")
+        harness.disposition = .completionUnknown
+        let summary = try await harness.delivery.deliver("report", to: recipient)
+        #expect(summary.acceptDisposition == .completionUnknown)
+        #expect(harness.startedWith == ["support-group"])
+        #expect(harness.sent == ["account-a/support-group/report"])
+    }
+
+    @MainActor
+    @Test func profileSwitchDuringLookupNeverCreatesASupportChat() async {
+        let harness = DeliveryHarness(existing: nil)
+        harness.onLookup = { harness.scope = .init(accountRef: "account-b", runtimeGeneration: 1) }
+        await #expect(throws: CancellationError.self) {
+            _ = try await harness.delivery.deliver("report", to: recipient)
+        }
+        #expect(harness.startedWith.isEmpty)
+        #expect(harness.sent.isEmpty)
+    }
+
+    @MainActor
+    @Test func runtimeRestartAfterOpeningTheChatStopsTheSend() async {
+        let harness = DeliveryHarness(existing: nil)
+        harness.onStart = { harness.scope = .init(accountRef: "account-a", runtimeGeneration: 2) }
+        await #expect(throws: CancellationError.self) {
+            _ = try await harness.delivery.deliver("report", to: recipient)
+        }
+        #expect(harness.startedWith == [nil])
+        #expect(harness.sent.isEmpty)
+    }
+
+    @MainActor
+    @Test func missingSupportContactOrFailedStartIsUnavailable() async {
+        let harness = DeliveryHarness(existing: nil)
+        await #expect(throws: DeveloperReportDelivery.Failure.self) {
+            _ = try await harness.delivery.deliver("report", to: nil)
+        }
+        harness.startOutcome = .failed(.missingSetup)
+        await #expect(throws: DeveloperReportDelivery.Failure.self) {
+            _ = try await harness.delivery.deliver("report", to: recipient)
+        }
+        #expect(harness.sent.isEmpty)
+    }
+
+    private var recipient: ResolvedRecipient {
+        ResolvedRecipient(accountIdHex: hex("33"), memberRef: hex("33"), queriedNip05: nil)
     }
 
     private func hex(_ byte: String) -> String {
         String(repeating: byte, count: 32)
+    }
+}
+
+@MainActor
+private final class DeliveryHarness {
+    var scope: DeveloperReportDelivery.Scope? = .init(accountRef: "account-a", runtimeGeneration: 1)
+    let existing: String?
+    var onLookup: () -> Void = {}
+    var onStart: () -> Void = {}
+    var startOutcome: DirectChatStarter.Outcome = .created(groupIdHex: "new-group")
+    var disposition: SendAcceptDispositionFfi = .published
+    private(set) var startedWith: [String?] = []
+    private(set) var sent: [String] = []
+
+    init(existing: String?) {
+        self.existing = existing
+    }
+
+    var delivery: DeveloperReportDelivery {
+        DeveloperReportDelivery(
+            currentScope: { self.scope },
+            existingSupportChat: { _, _ in
+                await Task.yield()
+                self.onLookup()
+                return self.existing
+            },
+            startSupportChat: { _, existing in
+                self.startedWith.append(existing)
+                self.onStart()
+                return existing.map { .opened(groupIdHex: $0) } ?? self.startOutcome
+            },
+            sendText: { accountRef, groupIdHex, text in
+                self.sent.append("\(accountRef)/\(groupIdHex)/\(text)")
+                return SendSummaryFfi(
+                    published: 1,
+                    messageIds: [],
+                    acceptDisposition: self.disposition,
+                    maintenanceDisposition: .ready
+                )
+            }
+        )
     }
 }

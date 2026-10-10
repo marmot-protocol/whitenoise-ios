@@ -24,8 +24,17 @@ nonisolated enum ReportPresentation {
         }
     }
 
-    static func outcome(groupOutcome: String?, sentToDeveloper: Bool) -> String? {
-        let developer = sentToDeveloper ? L10n.string("Sent to the White Noise team.") : nil
+    /// A retained or unacknowledged send is still on its way, never "sent".
+    static func developerOutcome(_ disposition: SendAcceptDispositionFfi) -> String {
+        switch disposition {
+        case .published: L10n.string("Sent to the White Noise team.")
+        case .acceptedPending: L10n.string("Saved and waiting to send to the White Noise team.")
+        case .completionUnknown: L10n.string("Saved; delivery to the White Noise team is pending confirmation.")
+        }
+    }
+
+    static func outcome(groupOutcome: String?, developerDisposition: SendAcceptDispositionFfi?) -> String? {
+        let developer = developerDisposition.map(developerOutcome)
         let parts = [groupOutcome, developer].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
@@ -50,6 +59,8 @@ struct ReportMessageSheet: View {
     private var reportsToDeveloper: Bool {
         canReportToDeveloper && (sendsToDeveloper || !reportsToGroup)
     }
+    /// Once the group has the report, a retried White Noise copy must say the same thing.
+    private var reportIsLocked: Bool { sending || groupOutcome != nil }
 
     var body: some View {
         NavigationStack {
@@ -60,9 +71,11 @@ struct ReportMessageSheet: View {
                             Text(ReportPresentation.title(reason)).tag(reason)
                         }
                     }
+                    .disabled(reportIsLocked)
                     TextField("Explanation (optional)", text: $explanation, axis: .vertical)
                         .lineLimit(3...6)
                         .onChange(of: explanation) { _, value in explanation = String(value.prefix(1000)) }
+                        .disabled(reportIsLocked)
                 } footer: {
                     if reportsToGroup {
                         Text("Reports are shared inside this encrypted group. Group members can read your report and explanation.")
@@ -72,7 +85,7 @@ struct ReportMessageSheet: View {
                     Section {
                         if reportsToGroup {
                             Toggle("Send to White Noise", isOn: $sendsToDeveloper)
-                                .disabled(sending || groupOutcome != nil)
+                                .disabled(reportIsLocked)
                         }
                     } footer: {
                         if reportsToDeveloper {
@@ -100,6 +113,8 @@ struct ReportMessageSheet: View {
         let generation = appState.runtimeGeneration
         let toGroup = reportsToGroup && groupOutcome == nil
         let toDeveloper = reportsToDeveloper
+        let reason = reason
+        let explanation = explanation
         sending = true
         error = nil
         defer { sending = false }
@@ -119,13 +134,14 @@ struct ReportMessageSheet: View {
             self.error = UserFacingError.message(for: error)
             return
         }
+        var developerDisposition: SendAcceptDispositionFfi?
         if toDeveloper {
             do {
                 guard let text = DeveloperReportContent.text(
                     kind: .message(reason: reason, explanation: explanation),
                     reportedAccountIdHex: message.sender
-                ) else { throw DeveloperReportSender.Failure.supportUnavailable }
-                try await DeveloperReportSender.send(text, using: appState)
+                ) else { throw DeveloperReportDelivery.Failure.supportUnavailable }
+                developerDisposition = try await DeveloperReportSender.send(text, using: appState).acceptDisposition
                 try Task.checkCancellation()
             } catch is CancellationError {
                 return
@@ -140,7 +156,7 @@ struct ReportMessageSheet: View {
         guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
         appState.present(.success(
             L10n.string("Report submitted"),
-            message: ReportPresentation.outcome(groupOutcome: groupOutcome, sentToDeveloper: toDeveloper)
+            message: ReportPresentation.outcome(groupOutcome: groupOutcome, developerDisposition: developerDisposition)
         ))
         dismiss()
     }
