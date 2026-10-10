@@ -83,8 +83,8 @@ before every release tag.
       Payment errors and availability messages use the same footnote styling and
       equal side insets as amount helpers. Verify long messages wrap within the
       button width at large text sizes.
-      There is no extra Donate/Amount heading; the donation website link appears
-      only in the lost-access recovery state.
+      There is no extra Donate/Amount heading, and no donation website link appears
+      in any state, including lost-access recovery.
 - [ ] With no device donor credential, Donate shows no claimed subscription or
       payment history and does not look up a donor by email or White Noise identity.
       After a new Sandbox gift, verify the live screen loads Stripe-backed status
@@ -161,8 +161,9 @@ before every release tag.
       and verify the button refreshes to Donate with Apple Pay. On a device without
       Apple Pay (or where payments are restricted), verify a disabled flat gray capsule
       labeled Apple Pay unavailable appears, without glass, a border, a logo, or duplicate helper
-      message. It must not open Wallet or a payment sheet. Verify Other ways to
-      donate opens the IPF website when Apple Pay is unavailable or unconfigured.
+      message. It must not open Wallet or a payment sheet. No link to the IPF
+      website or any other payment method appears when Apple Pay is unavailable,
+      needs setup, or is unconfigured.
 - [ ] After payment succeeds, verify the thank-you sheet. From See all billing activity,
       open the payment's Invoice sheet. Receipt lookup starts only when the invoice
       is opened; a slow lookup must not delay the success sheet or keep Donate busy.
@@ -1405,11 +1406,13 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - [ ] In a direct chat, long-press the other person's message: **Report** sends
       only to the White Noise team (no group report), and **Block** offers
       **Block and Report** and **Block User**. Your own messages offer neither.
-      A sent report or Block and Report appears as a message in **Chat with
-      support** containing only the reported npub, the reason, and any
-      explanation; never the reported message, its id, or the chat. The
-      support chat is created if missing. With relays down, the report shows
-      an error and Block still succeeds or fails on its own.
+      A sent report appears as a message in **Chat with support** containing
+      only the reported npub, the reason, and any explanation; Block and Report
+      sends the npub only. Neither includes the reported message, its id, or the
+      chat. The support chat is created if missing. With relays down, a report
+      either fails with an error or dismisses with "Saved and waiting to send to
+      the White Noise team." (or the pending-confirmation line), and Block still
+      succeeds or fails on its own.
 - [ ] In a group, Report keeps the group report and adds **Send to White Noise**
       (on by default). If the group report succeeds but the White Noise copy
       fails, retrying sends only the copy. Profile and direct-chat-details Block

@@ -1815,6 +1815,71 @@
         }
       }
     },
+    "The copy to White Noise couldn't be sent. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kopie an White Noise konnte nicht gesendet werden. Versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The copy to White Noise couldn't be sent. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar la copia a White Noise. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La copie destinée à White Noise n’a pas pu être envoyée. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile inviare la copia a White Noise. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar a cópia ao White Noise. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось отправить копию в White Noise. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a gönderilecek kopya gönderilemedi. Yeniden deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能将副本发送给 White Noise。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能將副本傳送給 White Noise。請再試一次。"
+          }
+        }
+      }
+    },
     "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2071,71 +2136,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的檢舉和傳送者的公鑰會透過你的支援聊天傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
-          }
-        }
-      }
-    },
-    "Your report was shared with the group, but the copy to White Noise couldn't be sent. Try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine Meldung wurde in der Gruppe geteilt, aber die Kopie an White Noise konnte nicht gesendet werden. Versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your report was shared with the group, but the copy to White Noise couldn't be sent. Try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu reporte se compartió con el grupo, pero no se pudo enviar la copia a White Noise. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Votre signalement a été partagé avec le groupe, mais la copie destinée à White Noise n’a pas pu être envoyée. Réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La segnalazione è stata condivisa con il gruppo, ma non è stato possibile inviare la copia a White Noise. Riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sua denúncia foi compartilhada com o grupo, mas não foi possível enviar a cópia ao White Noise. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Жалоба отправлена в группу, но копию для White Noise отправить не удалось. Повторите попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bildiriminiz grupla paylaşıldı ancak White Noise’a gönderilecek kopya gönderilemedi. Yeniden deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的举报已分享到群组，但未能将副本发送给 White Noise。请重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的檢舉已分享到群組，但未能將副本傳送給 White Noise。請再試一次。"
           }
         }
       }

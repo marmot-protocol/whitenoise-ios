@@ -78,9 +78,18 @@ struct BlockUserActions: View {
                                   model.targetId == intent.targetId
                             else { return }
                             await model.setBlocked(true, userId: intent.targetId, using: appState)
-                            guard model.isConfirmedBlocked(intent.targetId, accountRef: intent.accountRef),
-                                  appState.activeAccountRef == intent.accountRef,
-                                  let text = DeveloperReportContent.text(
+                            guard appState.activeAccountRef == intent.accountRef else { return }
+                            // An unloaded list makes `setBlocked` return with no error row to show.
+                            guard model.isConfirmedBlocked(intent.targetId, accountRef: intent.accountRef) else {
+                                if model.error == nil {
+                                    appState.present(.error(
+                                        L10n.string("Couldn't block user"),
+                                        message: L10n.string("Please try again.")
+                                    ))
+                                }
+                                return
+                            }
+                            guard let text = DeveloperReportContent.text(
                                       kind: .block,
                                       reportedAccountIdHex: intent.targetId
                                   )
