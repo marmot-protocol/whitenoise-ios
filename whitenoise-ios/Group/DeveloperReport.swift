@@ -75,28 +75,35 @@ nonisolated enum MessageModerationPolicy {
 }
 
 /// Delivers a report to the White Noise team through the support chat,
-/// opening that chat first when this account has none.
+/// opening that chat first when this account has none. Every step stays bound
+/// to the profile and runtime that started the report: a profile switch or
+/// runtime restart while a step is suspended cancels the rest, so a support
+/// chat is never created or written under a different profile.
 @MainActor
-enum DeveloperReportSender {
+struct DeveloperReportDelivery {
+    struct Scope: Equatable {
+        let accountRef: String
+        let runtimeGeneration: Int
+    }
+
     enum Failure: Error {
         case noActiveAccount
         case supportUnavailable
     }
 
-    static func send(_ text: String, using appState: AppState) async throws {
-        guard let accountRef = appState.activeAccountRef else { throw Failure.noActiveAccount }
-        guard let recipient = WhiteNoiseSupportContact.recipient else { throw Failure.supportUnavailable }
-        let client = try appState.currentMarmotClient()
-        let existing = try await client.existingDirectConversation(
-            accountRef: accountRef,
-            peerAccountId: recipient.accountIdHex.lowercased()
-        )
-        let outcome = await DirectChatStarter().start(
-            accountIdHex: recipient.accountIdHex,
-            memberRef: recipient.memberRef,
-            existingGroupIdHex: existing?.reusable == true ? existing?.groupIdHex : nil,
-            using: appState
-        )
+    var currentScope: () -> Scope?
+    var existingSupportChat: (_ accountRef: String, _ peerAccountIdHex: String) async throws -> String?
+    var startSupportChat: (_ recipient: ResolvedRecipient, _ existingGroupIdHex: String?) async -> DirectChatStarter.Outcome
+    var sendText: (_ accountRef: String, _ groupIdHex: String, _ text: String) async throws -> SendSummaryFfi
+
+    func deliver(_ text: String, to recipient: ResolvedRecipient?) async throws -> SendSummaryFfi {
+        guard let scope = currentScope() else { throw Failure.noActiveAccount }
+        guard let recipient else { throw Failure.supportUnavailable }
+        let existing = try await existingSupportChat(scope.accountRef, recipient.accountIdHex.lowercased())
+        try ensureStill(scope)
+        // `DirectChatStarter` reads the active profile synchronously, in the
+        // same main-actor turn as the check above.
+        let outcome = await startSupportChat(recipient, existing)
         let groupIdHex: String
         switch outcome {
         case .opened(let id), .created(let id):
@@ -104,19 +111,59 @@ enum DeveloperReportSender {
         case .failed, .ignored:
             throw Failure.supportUnavailable
         }
+        try ensureStill(scope)
+        return try await sendText(scope.accountRef, groupIdHex, text)
+    }
+
+    private func ensureStill(_ scope: Scope) throws {
         try Task.checkCancellation()
-        guard appState.activeAccountRef == accountRef else { throw CancellationError() }
-        _ = try await client.sendText(accountRef: accountRef, groupIdHex: groupIdHex, text: text)
+        guard currentScope() == scope else { throw CancellationError() }
+    }
+
+    static func live(_ appState: AppState) -> DeveloperReportDelivery {
+        DeveloperReportDelivery(
+            currentScope: { [weak appState] in
+                guard let appState, let accountRef = appState.activeAccountRef else { return nil }
+                return Scope(accountRef: accountRef, runtimeGeneration: appState.runtimeGeneration)
+            },
+            existingSupportChat: { [weak appState] accountRef, peer in
+                guard let appState else { throw CancellationError() }
+                let existing = try await appState.currentMarmotClient()
+                    .existingDirectConversation(accountRef: accountRef, peerAccountId: peer)
+                return existing?.reusable == true ? existing?.groupIdHex : nil
+            },
+            startSupportChat: { [weak appState] recipient, existing in
+                guard let appState else { return .ignored }
+                return await DirectChatStarter().start(
+                    accountIdHex: recipient.accountIdHex,
+                    memberRef: recipient.memberRef,
+                    existingGroupIdHex: existing,
+                    using: appState
+                )
+            },
+            sendText: { [weak appState] accountRef, groupIdHex, text in
+                guard let appState else { throw CancellationError() }
+                return try await appState.currentMarmotClient()
+                    .sendText(accountRef: accountRef, groupIdHex: groupIdHex, text: text)
+            }
+        )
+    }
+}
+
+@MainActor
+enum DeveloperReportSender {
+    static func send(_ text: String, using appState: AppState) async throws -> SendSummaryFfi {
+        try await DeveloperReportDelivery.live(appState).deliver(text, to: WhiteNoiseSupportContact.recipient)
     }
 
     /// The block itself already succeeded, so a failed report surfaces as a
     /// toast rather than undoing or blocking anything.
     static func sendBlockReport(_ text: String, using appState: AppState) async {
         do {
-            try await send(text, using: appState)
+            let summary = try await send(text, using: appState)
             appState.present(.success(
                 L10n.string("Report submitted"),
-                message: L10n.string("Sent to the White Noise team.")
+                message: ReportPresentation.developerOutcome(summary.acceptDisposition)
             ))
         } catch is CancellationError {
         } catch {
@@ -128,7 +175,7 @@ enum DeveloperReportSender {
     }
 
     static func failureMessage(for error: Error) -> String {
-        if error is Failure {
+        if error is DeveloperReportDelivery.Failure {
             return L10n.string("Couldn't reach White Noise. Please check your connection and try again.")
         }
         return UserFacingError.message(for: error)

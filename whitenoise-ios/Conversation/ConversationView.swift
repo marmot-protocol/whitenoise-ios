@@ -3775,6 +3775,10 @@ struct ConversationView: View {
 
     private func canBlockAuthor(of record: AppMessageRecordFfi, viewModel: ConversationViewModel) -> Bool {
         viewModel.canBlockAuthor(of: record) && blockedUsers.canMutate
+            && BlockedUsersPresentation.canBlock(
+                targetAccountIdHex: record.sender,
+                localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+            )
             && !blockedUsers.isConfirmedBlocked(record.sender, accountRef: appState.activeAccountRef)
     }
 
@@ -3788,10 +3792,13 @@ struct ConversationView: View {
             await blockedUsers.setBlocked(true, userId: author, using: appState)
             guard appState.activeAccountRef == accountRef else { return }
             // The message menu has no inline row to show the model's error.
+            // The block list can unload while the confirmation is open, and then
+            // `setBlocked` returns without an error, so this must not stay silent.
             guard blockedUsers.isConfirmedBlocked(author, accountRef: accountRef) else {
-                if let error = blockedUsers.error {
-                    appState.present(.error(L10n.string("Couldn't block user"), message: error))
-                }
+                appState.present(.error(
+                    L10n.string("Couldn't block user"),
+                    message: blockedUsers.error ?? L10n.string("Please try again.")
+                ))
                 return
             }
             guard let reportText else { return }

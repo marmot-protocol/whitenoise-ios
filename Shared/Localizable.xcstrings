@@ -1360,6 +1360,136 @@
         }
       }
     },
+    "Saved and waiting to send to the White Noise team." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert und wartet auf das Senden an das White-Noise-Team."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved and waiting to send to the White Noise team."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado y en espera de enviarse al equipo de White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré, en attente d’envoi à l’équipe White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato e in attesa di invio al team di White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo e aguardando envio à equipe do White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранено и ожидает отправки команде White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydedildi, White Noise ekibine gönderilmeyi bekliyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存，等待发送给 White Noise 团队。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存，等待傳送給 White Noise 團隊。"
+          }
+        }
+      }
+    },
+    "Saved; delivery to the White Noise team is pending confirmation." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert; die Zustellung an das White-Noise-Team wartet auf Bestätigung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved; delivery to the White Noise team is pending confirmation."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado; la entrega al equipo de White Noise está pendiente de confirmación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré ; la remise à l’équipe White Noise est en attente de confirmation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato; la consegna al team di White Noise è in attesa di conferma."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo; a entrega à equipe do White Noise aguarda confirmação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранено; доставка команде White Noise ожидает подтверждения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydedildi; White Noise ekibine teslimat onay bekliyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存；发送给 White Noise 团队的投递正在等待确认。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存；傳送給 White Noise 團隊的投遞正在等待確認。"
+          }
+        }
+      }
+    },
     "Send to White Noise" : {
       "extractionState" : "manual",
       "localizations" : {
