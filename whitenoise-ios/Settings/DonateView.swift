@@ -109,7 +109,6 @@ struct DonateView: View {
                     Text("A new donation won't restore earlier payments.")
                         .foregroundStyle(.secondary)
                 }
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             }
         case .none, .loaded:
             EmptyView()
@@ -298,7 +297,6 @@ struct DonateView: View {
                 DonationApplePayButton(type: .setUp, action: model.openPaymentSetup)
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .accessibilityIdentifier("donate.apple-pay-setup")
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .unavailable:
                 Button {} label: {
                     Text("Apple Pay unavailable")
@@ -314,7 +312,6 @@ struct DonateView: View {
                 .buttonStyle(.plain)
                 .disabled(true)
                 .accessibilityIdentifier("donate.apple-pay-unavailable")
-                Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
             case .notConfigured:
                 if model.isPreparingApplePay {
                     WNButton(title: "Donate", size: .standard, isLoading: true) {}
@@ -328,7 +325,6 @@ struct DonateView: View {
                             .font(.footnote)
                             .padding(.horizontal, WNInputMetrics.leadingInset)
                     }
-                    Link("Other ways to donate", destination: URL(string: "https://ipf.dev/donate")!)
                 }
             }
 

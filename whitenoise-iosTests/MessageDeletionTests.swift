@@ -170,6 +170,33 @@ struct MessageDeletionTests {
         #expect(!model.canModerateReports)
         #expect(!model.deleteCapability(for: theirs).canDeleteForEveryone)
         #expect(!model.canReport(appRecord(id: "", groupId: group.groupIdHex, sender: me, direction: "sent")))
+        // Only someone else's message can also go to the White Noise team.
+        #expect(!model.canReportToDeveloper(mine))
+        #expect(model.canReportToDeveloper(theirs))
+        #expect(!model.canBlockAuthor(of: mine))
+        #expect(model.canBlockAuthor(of: theirs))
+    }
+
+    @Test func directChatReportsGoOnlyToTheWhiteNoiseTeam() throws {
+        let me = hex("11")
+        let other = hex("22")
+        let group = groupRecord(id: String(repeating: "cd", count: 16), name: "")
+        let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
+        let model = ConversationViewModel(appState: state, group: group, initialOtherMember: other, initialMemberCount: 2)
+        let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
+        let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
+        model.applyTimelinePage(TimelinePageFfi(messages: [
+            timelineRecord(id: mine.messageIdHex, groupId: group.groupIdHex, sender: me, at: 1),
+            timelineRecord(id: theirs.messageIdHex, groupId: group.groupIdHex, sender: other, at: 2)
+        ], hasMoreBefore: false, hasMoreAfter: false), placement: .window)
+        try #require(model.groupDisplay.isDirectMessage)
+        #expect(!model.canReportToGroup(theirs))
+        #expect(model.canReportToDeveloper(theirs))
+        #expect(model.canReport(theirs))
+        #expect(!model.canReport(mine))
+        state.activeAccountRef = "replacement-account"
+        #expect(!model.canReport(theirs))
+        #expect(!model.canBlockAuthor(of: theirs))
     }
 
     @Test func reportIndicatorFollowsNativeUpdatesAndRemoval() throws {

@@ -48,7 +48,6 @@ struct DonationLocalizationTests {
             "USD",
             "Donation history access is no longer available on this device.",
             "Your donation history couldn't be loaded. Please try again.",
-            "Other ways to donate",
             "Recent billing activity",
             "Your monthly donation has not started yet. Check your payment method to complete it.",
             "This monthly donation has ended.",

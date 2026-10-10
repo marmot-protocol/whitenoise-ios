@@ -23,6 +23,12 @@ nonisolated enum ReportPresentation {
         case .completionUnknown: L10n.string("Saved; delivery confirmation is pending.")
         }
     }
+
+    static func outcome(groupOutcome: String?, sentToDeveloper: Bool) -> String? {
+        let developer = sentToDeveloper ? L10n.string("Sent to the White Noise team.") : nil
+        let parts = [groupOutcome, developer].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
 }
 
 struct ReportMessageSheet: View {
@@ -32,9 +38,18 @@ struct ReportMessageSheet: View {
     let message: AppMessageRecordFfi
     @State private var reason: ReportReasonFfi = .spam
     @State private var explanation = ""
+    @State private var sendsToDeveloper = true
     @State private var sending = false
     @State private var error: String?
+    /// A retry after a failed White Noise copy must not report to the group twice.
+    @State private var groupOutcome: String?
     @State private var operation: Task<Void, Never>?
+
+    private var reportsToGroup: Bool { conversation.canReportToGroup(message) }
+    private var canReportToDeveloper: Bool { conversation.canReportToDeveloper(message) }
+    private var reportsToDeveloper: Bool {
+        canReportToDeveloper && (sendsToDeveloper || !reportsToGroup)
+    }
 
     var body: some View {
         NavigationStack {
@@ -49,7 +64,21 @@ struct ReportMessageSheet: View {
                         .lineLimit(3...6)
                         .onChange(of: explanation) { _, value in explanation = String(value.prefix(1000)) }
                 } footer: {
-                    Text("Reports are shared inside this encrypted group. Group members can read your report and explanation.")
+                    if reportsToGroup {
+                        Text("Reports are shared inside this encrypted group. Group members can read your report and explanation.")
+                    }
+                }
+                if canReportToDeveloper {
+                    Section {
+                        if reportsToGroup {
+                            Toggle("Send to White Noise", isOn: $sendsToDeveloper)
+                                .disabled(sending || groupOutcome != nil)
+                        }
+                    } footer: {
+                        if reportsToDeveloper {
+                            Text("Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified.")
+                        }
+                    }
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 Section {
@@ -69,22 +98,51 @@ struct ReportMessageSheet: View {
     private func submit() async {
         guard !sending, conversation.canReport(message), let account = appState.activeAccountRef else { return }
         let generation = appState.runtimeGeneration
+        let toGroup = reportsToGroup && groupOutcome == nil
+        let toDeveloper = reportsToDeveloper
         sending = true
         error = nil
         defer { sending = false }
         do {
-            let client = try appState.currentMarmotClient()
-            let result = try await client.reportMessage(accountRef: account, groupID: conversation.group.groupIdHex,
-                messageID: message.messageIdHex, reason: reason, explanation: explanation)
-            try Task.checkCancellation()
-            guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
-            appState.present(.success(L10n.string("Report submitted"), message: ReportPresentation.outcome(result)))
-            dismiss()
+            if toGroup {
+                let client = try appState.currentMarmotClient()
+                let result = try await client.reportMessage(accountRef: account, groupID: conversation.group.groupIdHex,
+                    messageID: message.messageIdHex, reason: reason, explanation: explanation)
+                try Task.checkCancellation()
+                guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
+                groupOutcome = ReportPresentation.outcome(result)
+            }
         } catch is CancellationError {
+            return
         } catch {
             guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
             self.error = UserFacingError.message(for: error)
+            return
         }
+        if toDeveloper {
+            do {
+                guard let text = DeveloperReportContent.text(
+                    kind: .message(reason: reason, explanation: explanation),
+                    reportedAccountIdHex: message.sender
+                ) else { throw DeveloperReportSender.Failure.supportUnavailable }
+                try await DeveloperReportSender.send(text, using: appState)
+                try Task.checkCancellation()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
+                self.error = groupOutcome == nil
+                    ? DeveloperReportSender.failureMessage(for: error)
+                    : L10n.string("Your report was shared with the group, but the copy to White Noise couldn't be sent. Try again.")
+                return
+            }
+        }
+        guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
+        appState.present(.success(
+            L10n.string("Report submitted"),
+            message: ReportPresentation.outcome(groupOutcome: groupOutcome, sentToDeveloper: toDeveloper)
+        ))
+        dismiss()
     }
 }
 
