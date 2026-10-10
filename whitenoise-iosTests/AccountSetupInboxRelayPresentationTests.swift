@@ -17,10 +17,40 @@ struct AccountSetupInboxRelayPresentationTests {
         #expect(presentation.status == (failed ? .discoveryFailure : .relays))
     }
 
-    @Test func failedDiscoveryWithoutDefaultsStillOffersAnotherSearch() {
+    @Test func inconclusiveDiscoveryOffersDefaultSearchBeforePublication() {
         let presentation = Presentation(actions: [.retry, .editDiscoveryRelays], proposal: nil, childFailureSource: .discovery)
-        #expect(presentation.primaryAction?.action == .discovery)
+        #expect(presentation.primaryAction?.action == .searchDefaults)
+        #expect(presentation.canDiscover)
+        #expect(!presentation.canEdit)
         #expect(presentation.status == .discoveryFailure)
+        let checked = Presentation(actions: [.retry, .useRecommendedRelays, .editRelays, .editDiscoveryRelays], proposal: nil)
+        #expect(checked.primaryAction?.action == .defaults)
+        #expect(!checked.canSearchDefaults)
+    }
+
+    @Test func defaultSearchRequiresDiscoveryPermissionAndNoProposal() {
+        let interrupted = Presentation(actions: [.retry], proposal: proposal())
+        #expect(!interrupted.canSearchDefaults)
+        #expect(interrupted.primaryAction?.action == .retry)
+        let unavailable = Presentation(actions: [], proposal: nil)
+        #expect(!unavailable.canSearchDefaults)
+        #expect(unavailable.primaryAction == nil)
+    }
+
+    @Test(arguments: [OnboardingStepFfi.profile, .relays])
+    func restartedEarlierCheckProvidesARouteBackToSignIn(_ earlierStep: OnboardingStepFfi) {
+        var updated = snapshot(revision: 2)
+        updated.steps[0].status = .pending
+        updated.steps[0].actions = []
+        updated.steps.insert(.init(step: earlierStep, status: .retryableFailure, findings: [],
+                                   actions: [.retry, .editDiscoveryRelays], checkedAt: nil), at: 0)
+        let needsReview = Presentation.needsEarlierReview(in: updated)
+        #expect(needsReview)
+        let presentation = Presentation(actions: [], proposal: nil, childFailureSource: .discovery, needsEarlierReview: needsReview)
+        #expect(presentation.primaryAction?.action == .reviewChecks)
+        #expect(presentation.status == .earlierCheck)
+        updated.steps[0].status = .passed
+        #expect(!Presentation.needsEarlierReview(in: updated))
     }
 
     @Test func validProposalCanBeApprovedOrEdited() {

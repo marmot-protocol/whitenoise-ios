@@ -1,8 +1,8 @@
 import MarmotKit
 
 nonisolated struct AccountSetupInboxRelayPresentation {
-    enum Action { case defaults, approve, retry, discard, edit, discovery }
-    enum Status { case relays, review, invalid, interrupted, draftFailure, discoveryFailure, checkFailure, discardFailure, updateFailure }
+    enum Action { case defaults, approve, retry, discard, edit, discovery, searchDefaults, reviewChecks }
+    enum Status { case relays, review, invalid, interrupted, draftFailure, discoveryFailure, checkFailure, discardFailure, updateFailure, earlierCheck }
     struct PrimaryAction: Equatable {
         let action: Action
         var isRetry = false
@@ -13,6 +13,7 @@ nonisolated struct AccountSetupInboxRelayPresentation {
     var childFailureSource: AccountSetupRecoveryPresentation.ChildFailure.Source?
     var hasOperationError = false
     var lastAction: Action?
+    var needsEarlierReview = false
 
     var relays: [String]? {
         guard let proposal else { return nil }
@@ -27,25 +28,34 @@ nonisolated struct AccountSetupInboxRelayPresentation {
     var canEdit: Bool { !isInterrupted && (proposal == nil ? allows(.editRelays) : allows(.cancelRepair)) }
     var canDiscover: Bool { !isInterrupted && allows(.editDiscoveryRelays) }
 
+    var canSearchDefaults: Bool { proposal == nil && canDiscover && !allows(.useRecommendedRelays) }
+
+    static func needsEarlierReview(in snapshot: OnboardingSnapshotFfi) -> Bool {
+        guard snapshot.steps.first(where: { $0.step == .inboxRelays })?.status == .pending,
+              let current = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }) else { return false }
+        return current.step != .inboxRelays && !current.actions.isEmpty
+    }
+
     var primaryAction: PrimaryAction? {
+        if needsEarlierReview { return .init(action: .reviewChecks) }
         if isInterrupted { return allows(.retry) ? .init(action: .retry) : nil }
         if hasOperationError, lastAction == .edit, canEdit { return .init(action: .edit, isRetry: true) }
         if isInvalid, canEdit { return .init(action: .edit) }
         if childFailureSource == .relays, proposal == nil, canEdit { return .init(action: .edit) }
-        if childFailureSource == .discovery, canDiscover, !allows(.useRecommendedRelays) {
-            return .init(action: .discovery)
-        }
         if proposal != nil, allows(.approveRepair), !isInvalid {
             return .init(action: .approve, isRetry: hasOperationError && lastAction == .approve)
         }
         if allows(.useRecommendedRelays) {
             return .init(action: .defaults, isRetry: hasOperationError && lastAction == .defaults)
         }
+        if canSearchDefaults { return .init(action: .searchDefaults) }
         if allows(.retry) { return .init(action: .retry) }
         return canEdit ? .init(action: .edit) : nil
     }
 
     var status: Status {
+        if needsEarlierReview { return .earlierCheck }
+        if hasOperationError, lastAction == .searchDefaults { return .discoveryFailure }
         if childFailureSource == .relays { return .draftFailure }
         if childFailureSource == .discovery { return .discoveryFailure }
         if hasOperationError {

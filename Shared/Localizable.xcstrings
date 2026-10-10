@@ -14344,6 +14344,71 @@
         }
       }
     },
+    "Another sign-in check needs your attention. Review it before continuing with your inbox relays." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine andere Anmeldeprüfung benötigt deine Aufmerksamkeit. Prüfe sie, bevor du mit deinen Posteingangs-Relays fortfährst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another sign-in check needs your attention. Review it before continuing with your inbox relays."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otra comprobación de inicio de sesión requiere tu atención. Revísala antes de continuar con los relays de tu bandeja de entrada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une autre vérification de connexion nécessite votre attention. Examinez-la avant de continuer avec les relais de votre boîte de réception."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un altro controllo di accesso richiede la tua attenzione. Verificalo prima di continuare con i relay della posta in arrivo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outra verificação de entrada precisa da sua atenção. Revise-a antes de continuar com os relays da sua caixa de entrada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Другая проверка входа требует вашего внимания. Просмотрите её, прежде чем продолжить настройку ретрансляторов входящих сообщений."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Başka bir giriş kontrolü ilgilenmenizi gerektiriyor. Gelen kutusu rölelerinize devam etmeden önce bu kontrolü inceleyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一项登录检查需要你处理。请先查看，再继续设置收件箱中继。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一項登入檢查需要你處理。請先查看，再繼續設定收件匣中繼。"
+          }
+        }
+      }
+    },
     "Anthropic Claude Code coding agent" : {
       "comment" : "Subtitle for the Claude Code AI agent connector.",
       "extractionState" : "manual",
@@ -90481,6 +90546,71 @@
         }
       }
     },
+    "Review Sign-In Checks" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldeprüfungen ansehen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Sign-In Checks"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar comprobaciones de inicio de sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Examiner les vérifications de connexion"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verifica i controlli di accesso"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar verificações de entrada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Просмотреть проверки входа"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş Kontrollerini İncele"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看登录检查"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看登入檢查"
+          }
+        }
+      }
+    },
     "Review your relay changes" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -92992,6 +93122,71 @@
         }
       }
     },
+    "Search Default Relays" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard-Relays durchsuchen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Default Relays"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar en relays predeterminados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher sur les relais par défaut"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca sui relay predefiniti"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar nos relays padrão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск на ретрансляторах по умолчанию"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Varsayılan Rölelerde Ara"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索默认中继"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋預設中繼"
+          }
+        }
+      }
+    },
     "Search Relay" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -93234,6 +93429,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜尋網頁"
+          }
+        }
+      }
+    },
+    "Search these relays for your existing settings. This won’t publish changes to your profile." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durchsuche diese Relays nach deinen bestehenden Einstellungen. Dabei werden keine Änderungen an deinem Profil veröffentlicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search these relays for your existing settings. This won’t publish changes to your profile."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busca tu configuración existente en estos relays. No se publicarán cambios en tu perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recherchez vos paramètres existants sur ces relais. Aucune modification de votre profil ne sera publiée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerca le tue impostazioni esistenti su questi relay. Non verranno pubblicate modifiche al tuo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Busque suas configurações existentes nesses relays. Isso não publicará alterações no seu perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Найдите существующие настройки на этих ретрансляторах. Изменения вашего профиля не будут опубликованы."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mevcut ayarlarınızı bu rölelerde arayın. Profilinizde herhangi bir değişiklik yayımlanmaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这些中继上搜索你的现有设置。这不会发布个人资料的更改。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在這些中繼上搜尋你的現有設定。這不會發布個人檔案的變更。"
           }
         }
       }
