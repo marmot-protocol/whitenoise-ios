@@ -617,6 +617,7 @@ struct ConversationView: View {
     @State private var editSaveInFlight = false
     @State private var editHistoryTarget: ActionsTarget?
     @State private var reportTarget: ActionsTarget?
+    @State private var blockTarget: ActionsTarget?
     @State private var deleteTarget: ActionsTarget?
     @State private var failedSendTarget: FailedSendTarget?
     @State private var senderProfileTarget: SenderProfileTarget?
@@ -1016,6 +1017,25 @@ struct ConversationView: View {
                 if let viewModel {
                     ReportMessageSheet(conversation: viewModel, message: target.record).appAppearance()
                 }
+            }
+            .confirmationDialog(
+                L10n.string("Block this user?"),
+                isPresented: Binding(
+                    get: { blockTarget != nil },
+                    set: { if !$0 { blockTarget = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: blockTarget
+            ) { target in
+                Button(L10n.string("Block and Report"), role: .destructive) {
+                    blockAuthor(of: target.record, reporting: true)
+                }
+                Button(L10n.string("Block User"), role: .destructive) {
+                    blockAuthor(of: target.record, reporting: false)
+                }
+                Button(L10n.string("Cancel"), role: .cancel) {}
+            } message: { _ in
+                Text("You won't see their messages. Block and Report also notifies the White Noise team.")
             }
             .sheet(item: $editHistoryTarget) { target in
                 if let viewModel {
@@ -3748,8 +3768,35 @@ struct ConversationView: View {
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
             canReport: viewModel.canReport(record),
+            canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel)
         )
+    }
+
+    private func canBlockAuthor(of record: AppMessageRecordFfi, viewModel: ConversationViewModel) -> Bool {
+        viewModel.canBlockAuthor(of: record) && blockedUsers.canMutate
+            && !blockedUsers.isConfirmedBlocked(record.sender, accountRef: appState.activeAccountRef)
+    }
+
+    /// Blocks through the live subscription this screen owns. A report goes
+    /// to the White Noise team only once the block is confirmed.
+    private func blockAuthor(of record: AppMessageRecordFfi, reporting: Bool) {
+        guard let author = Hex.normalized32Bytes(record.sender),
+              let accountRef = appState.activeAccountRef else { return }
+        let reportText = reporting ? DeveloperReportContent.text(kind: .block, reportedAccountIdHex: author) : nil
+        Task {
+            await blockedUsers.setBlocked(true, userId: author, using: appState)
+            guard appState.activeAccountRef == accountRef else { return }
+            // The message menu has no inline row to show the model's error.
+            guard blockedUsers.isConfirmedBlocked(author, accountRef: accountRef) else {
+                if let error = blockedUsers.error {
+                    appState.present(.error(L10n.string("Couldn't block user"), message: error))
+                }
+                return
+            }
+            guard let reportText else { return }
+            await DeveloperReportSender.sendBlockReport(reportText, using: appState)
+        }
     }
 
     private func canViewPollVotes(for record: AppMessageRecordFfi, viewModel: ConversationViewModel) -> Bool {
@@ -3793,6 +3840,7 @@ struct ConversationView: View {
             canViewEditHistory: viewModel.hasEditHistory(record.messageIdHex),
             canDelete: viewModel.deleteCapability(for: record).canDelete,
             canReport: viewModel.canReport(record),
+            canBlock: canBlockAuthor(of: record, viewModel: viewModel),
             canViewVotes: canViewPollVotes(for: record, viewModel: viewModel),
             quickReactions: appState.quickReactions,
             selectedReaction: viewModel.reactions(for: record.messageIdHex).first(where: \.mine)?.emoji,
@@ -3855,6 +3903,10 @@ struct ConversationView: View {
             onReport: {
                 dismissActions()
                 reportTarget = ActionsTarget(record: record, status: status)
+            },
+            onBlock: {
+                dismissActions()
+                blockTarget = ActionsTarget(record: record, status: status)
             },
             onViewVotes: {
                 dismissActions()

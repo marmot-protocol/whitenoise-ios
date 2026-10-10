@@ -1389,8 +1389,11 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - [ ] Reactions show the full count and your selected state even when your identity
       is outside the preview. Overflow/truncated reactor previews are disclosed.
 - [ ] Developer Key Packages shows current and superseded relay events.
-- [ ] Welcome displays the agreement beneath Sign Up/Sign In. The Terms of Service
-      link opens https://whitenoise.chat/terms. Check large text and VoiceOver.
+- [ ] Welcome shows an unchecked terms checkbox above Sign In/Sign Up, and both
+      buttons stay disabled until it is checked. Tapping the row toggles it; the
+      Terms of Service link opens https://whitenoise.chat/terms and the Acceptable
+      Use Policy link opens its section (#section-7), neither toggling the box.
+      Check Add Profile, large text, landscape, and VoiceOver.
 
 - [ ] In a blocked direct chat, the composer explains “You blocked this user” and
       offers View Profile. Follow it to the profile, unblock via Block or Unblock
@@ -1399,6 +1402,18 @@ Marmot root. Automated simulator checks do not replace these device checks.
 
 ## MarmotKit 0.10.1 reporting and avatar adoption
 
+- [ ] In a direct chat, long-press the other person's message: **Report** sends
+      only to the White Noise team (no group report), and **Block** offers
+      **Block and Report** and **Block User**. Your own messages offer neither.
+      A sent report or Block and Report appears as a message in **Chat with
+      support** containing only the reported npub, the reason, and any
+      explanation; never the reported message, its id, or the chat. The
+      support chat is created if missing. With relays down, the report shows
+      an error and Block still succeeds or fails on its own.
+- [ ] In a group, Report keeps the group report and adds **Send to White Noise**
+      (on by default). If the group report succeeds but the White Noise copy
+      fails, retrying sends only the copy. Profile and direct-chat-details Block
+      also offer **Block and Report**, which sends the npub only.
 - [ ] With two upgraded devices in a group, a non-admin can long-press their own
       or another member's message and choose **Report**. Check the reason picker,
       optional explanation, encrypted-group disclosure, send failure and pending
