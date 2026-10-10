@@ -69,6 +69,24 @@ struct DeveloperReportTests {
         #expect(ReportPresentation.outcome(groupOutcome: nil, developerDisposition: nil) == nil)
     }
 
+    @Test func failedWhiteNoiseCopyKeepsTheGroupReportsRealStatus() {
+        let failure = "Couldn't reach White Noise."
+        #expect(ReportPresentation.developerFailure(groupOutcome: nil, failure: failure) == failure)
+        for disposition in [SendAcceptDispositionFfi.published, .acceptedPending, .completionUnknown] {
+            let summary = SendSummaryFfi(
+                published: 0, messageIds: [], acceptDisposition: disposition, maintenanceDisposition: .ready
+            )
+            let group = ReportPresentation.outcome(summary)
+            #expect(ReportPresentation.developerFailure(groupOutcome: group, failure: failure)
+                == group + " The copy to White Noise couldn't be sent. Try again.")
+        }
+        let queued = ReportPresentation.outcome(SendSummaryFfi(
+            published: 0, messageIds: [], acceptDisposition: .acceptedPending, maintenanceDisposition: .ready
+        ))
+        #expect(ReportPresentation.developerFailure(groupOutcome: queued, failure: failure)
+            .hasPrefix("Saved and waiting to send."))
+    }
+
     @MainActor
     @Test func deliveryReusesTheSupportChatAndReturnsTheSendDisposition() async throws {
         let harness = DeliveryHarness(existing: "support-group")

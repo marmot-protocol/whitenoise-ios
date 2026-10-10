@@ -33,6 +33,13 @@ nonisolated enum ReportPresentation {
         }
     }
 
+    /// Keeps the group report's real status (it may only be queued) beside the
+    /// failed White Noise copy, so the retry copy never claims more than happened.
+    static func developerFailure(groupOutcome: String?, failure: String) -> String {
+        guard let groupOutcome else { return failure }
+        return groupOutcome + " " + L10n.string("The copy to White Noise couldn't be sent. Try again.")
+    }
+
     static func outcome(groupOutcome: String?, developerDisposition: SendAcceptDispositionFfi?) -> String? {
         let developer = developerDisposition.map(developerOutcome)
         let parts = [groupOutcome, developer].compactMap { $0 }
@@ -147,9 +154,10 @@ struct ReportMessageSheet: View {
                 return
             } catch {
                 guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
-                self.error = groupOutcome == nil
-                    ? DeveloperReportSender.failureMessage(for: error)
-                    : L10n.string("Your report was shared with the group, but the copy to White Noise couldn't be sent. Try again.")
+                self.error = ReportPresentation.developerFailure(
+                    groupOutcome: groupOutcome,
+                    failure: DeveloperReportSender.failureMessage(for: error)
+                )
                 return
             }
         }
