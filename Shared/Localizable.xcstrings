@@ -190,6 +190,266 @@
         }
       }
     },
+    "Block and Report" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockieren und melden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Block and Report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquear y reportar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquer et signaler"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocca e segnala"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bloquear e denunciar"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Заблокировать и пожаловаться"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Engelle ve Bildir"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏蔽并举报"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "封鎖並檢舉"
+          }
+        }
+      }
+    },
+    "By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch die Nutzung von White Noise stimmst du unseren [Nutzungsbedingungen](https://whitenoise.chat/terms) und unserer [Richtlinie zur akzeptablen Nutzung](https://whitenoise.chat/terms#section-7) zu."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al usar White Noise, aceptas nuestros [Términos de servicio](https://whitenoise.chat/terms) y nuestra [Política de uso aceptable](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En utilisant White Noise, vous acceptez nos [Conditions d’utilisation](https://whitenoise.chat/terms) et notre [Politique d’utilisation acceptable](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usando White Noise, accetti i nostri [Termini di servizio](https://whitenoise.chat/terms) e la nostra [Politica di utilizzo accettabile](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao usar o White Noise, você concorda com nossos [Termos de Serviço](https://whitenoise.chat/terms) e nossa [Política de Uso Aceitável](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Используя White Noise, вы соглашаетесь с нашими [Условиями использования](https://whitenoise.chat/terms) и [Правилами допустимого использования](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’u kullanarak [Hizmet Şartlarımızı](https://whitenoise.chat/terms) ve [Kabul Edilebilir Kullanım Politikamızı](https://whitenoise.chat/terms#section-7) kabul etmiş olursunuz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 White Noise 即表示你同意我们的[服务条款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 White Noise 即表示你同意我們的[服務條款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
+          }
+        }
+      }
+    },
+    "Couldn't block user" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nutzer konnte nicht blockiert werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't block user"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo bloquear al usuario"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de bloquer l’utilisateur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile bloccare l’utente"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível bloquear o usuário"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось заблокировать пользователя"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kullanıcı engellenemedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法屏蔽用户"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法封鎖使用者"
+          }
+        }
+      }
+    },
+    "Couldn't reach White Noise. Please check your connection and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise ist nicht erreichbar. Bitte überprüfe deine Verbindung und versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't reach White Noise. Please check your connection and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo contactar con White Noise. Comprueba tu conexión e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de joindre White Noise. Vérifiez votre connexion et réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile raggiungere White Noise. Controlla la connessione e riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível falar com o White Noise. Verifique sua conexão e tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось связаться с White Noise. Проверьте подключение и повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a ulaşılamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法联系 White Noise。请检查网络连接后重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法聯絡 White Noise。請檢查網路連線後再試一次。"
+          }
+        }
+      }
+    },
     "Couldn’t close sign-in" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -775,6 +1035,71 @@
         }
       }
     },
+    "Report not sent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldung nicht gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report not sent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reporte no enviado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signalement non envoyé"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Segnalazione non inviata"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denúncia não enviada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жалоба не отправлена"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildirim gönderilmedi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "举报未发送"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "檢舉未傳送"
+          }
+        }
+      }
+    },
     "Review and Continue" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1035,6 +1360,266 @@
         }
       }
     },
+    "Saved and waiting to send to the White Noise team." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert und wartet auf das Senden an das White-Noise-Team."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved and waiting to send to the White Noise team."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado y en espera de enviarse al equipo de White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré, en attente d’envoi à l’équipe White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato e in attesa di invio al team di White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo e aguardando envio à equipe do White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранено и ожидает отправки команде White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydedildi, White Noise ekibine gönderilmeyi bekliyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存，等待发送给 White Noise 团队。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存，等待傳送給 White Noise 團隊。"
+          }
+        }
+      }
+    },
+    "Saved; delivery to the White Noise team is pending confirmation." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert; die Zustellung an das White-Noise-Team wartet auf Bestätigung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved; delivery to the White Noise team is pending confirmation."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado; la entrega al equipo de White Noise está pendiente de confirmación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistré ; la remise à l’équipe White Noise est en attente de confirmation."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvato; la consegna al team di White Noise è in attesa di conferma."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salvo; a entrega à equipe do White Noise aguarda confirmação."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранено; доставка команде White Noise ожидает подтверждения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kaydedildi; White Noise ekibine teslimat onay bekliyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存；发送给 White Noise 团队的投递正在等待确认。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已儲存；傳送給 White Noise 團隊的投遞正在等待確認。"
+          }
+        }
+      }
+    },
+    "Send to White Noise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An White Noise senden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send to White Noise"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar a White Noise"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyer à White Noise"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia a White Noise"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar ao White Noise"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправить в White Noise"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a gönder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送给 White Noise"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "傳送給 White Noise"
+          }
+        }
+      }
+    },
+    "Sent to the White Noise team." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An das White-Noise-Team gesendet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent to the White Noise team."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviado al equipo de White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyé à l’équipe White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inviato al team di White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviado à equipe do White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлено команде White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise ekibine gönderildi."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已发送给 White Noise 团队。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已傳送給 White Noise 團隊。"
+          }
+        }
+      }
+    },
     "Setup changed. Try again to review the latest options." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1230,6 +1815,71 @@
         }
       }
     },
+    "The copy to White Noise couldn't be sent. Try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Kopie an White Noise konnte nicht gesendet werden. Versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The copy to White Noise couldn't be sent. Try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar la copia a White Noise. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La copie destinée à White Noise n’a pas pu être envoyée. Réessayez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile inviare la copia a White Noise. Riprova."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar a cópia ao White Noise. Tente novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось отправить копию в White Noise. Повторите попытку."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a gönderilecek kopya gönderilemedi. Yeniden deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能将副本发送给 White Noise。请重试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能將副本傳送給 White Noise。請再試一次。"
+          }
+        }
+      }
+    },
     "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1356,6 +2006,136 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "我們正在檢查你的個人資料和連線。"
+          }
+        }
+      }
+    },
+    "You won't see their messages. Block and Report also notifies the White Noise team." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du siehst ihre Nachrichten nicht mehr. „Blockieren und melden“ benachrichtigt außerdem das White-Noise-Team."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You won't see their messages. Block and Report also notifies the White Noise team."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No verás sus mensajes. Bloquear y reportar también avisa al equipo de White Noise."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous ne verrez plus ses messages. Bloquer et signaler prévient aussi l’équipe White Noise."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non vedrai i suoi messaggi. Blocca e segnala avvisa anche il team di White Noise."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você não verá as mensagens dessa pessoa. Bloquear e denunciar também avisa a equipe do White Noise."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы не будете видеть сообщения этого человека. «Заблокировать и пожаловаться» также уведомит команду White Noise."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişinin iletilerini görmezsiniz. Engelle ve Bildir ayrıca White Noise ekibini bilgilendirir."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你将不会看到此人的消息。“屏蔽并举报”还会通知 White Noise 团队。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你將不會看到此人的訊息。「封鎖並檢舉」還會通知 White Noise 團隊。"
+          }
+        }
+      }
+    },
+    "Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Meldung und der öffentliche Schlüssel des Absenders werden über deinen Support-Chat an das White-Noise-Team gesendet. Die Nachricht selbst wird nicht geteilt, und der Absender wird nicht benachrichtigt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu reporte y la clave pública del remitente se envían al equipo de White Noise a través de tu chat de soporte. El mensaje no se comparte y no se notifica al remitente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre signalement et la clé publique de l’expéditeur sont envoyés à l’équipe White Noise via votre discussion avec l’assistance. Le message lui-même n’est pas partagé et l’expéditeur n’est pas averti."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La tua segnalazione e la chiave pubblica del mittente vengono inviate al team di White Noise tramite la chat con il supporto. Il messaggio non viene condiviso e il mittente non riceve alcuna notifica."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sua denúncia e a chave pública do remetente são enviadas à equipe do White Noise pelo seu chat de suporte. A mensagem em si não é compartilhada, e o remetente não é notificado."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваша жалоба и открытый ключ отправителя передаются команде White Noise через чат с поддержкой. Само сообщение не передаётся, а отправитель не получает уведомления."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildiriminiz ve gönderenin açık anahtarı destek sohbetiniz üzerinden White Noise ekibine gönderilir. İletinin kendisi paylaşılmaz ve gönderene bildirim yapılmaz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的举报和发送者的公钥会通过你的支持聊天发送给 White Noise 团队。消息本身不会被分享，发送者也不会收到通知。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的檢舉和傳送者的公鑰會透過你的支援聊天傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
           }
         }
       }
@@ -18068,71 +18848,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "您的每月捐贈幫助 IPF 持續開發 White Noise，以及支持自由、私密溝通的工具。"
-          }
-        }
-      }
-    },
-    "By signing up or signing in, you agree to our [Terms of Service](https://whitenoise.chat/terms)." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Durch die Registrierung oder Anmeldung stimmst du unseren [Nutzungsbedingungen](https://whitenoise.chat/terms) zu."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "By signing up or signing in, you agree to our [Terms of Service](https://whitenoise.chat/terms)."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Al registrarte o iniciar sesión, aceptas nuestros [Términos de servicio](https://whitenoise.chat/terms)."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En vous inscrivant ou en vous connectant, vous acceptez nos [Conditions d’utilisation](https://whitenoise.chat/terms)."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Registrandoti o accedendo, accetti i nostri [Termini di servizio](https://whitenoise.chat/terms)."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ao criar uma conta ou entrar, você concorda com nossos [Termos de Serviço](https://whitenoise.chat/terms)."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Регистрируясь или входя, вы соглашаетесь с нашими [Условиями использования](https://whitenoise.chat/terms)."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kaydolarak veya giriş yaparak [Hizmet Şartlarımızı](https://whitenoise.chat/terms) kabul etmiş olursunuz."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "注册或登录即表示你同意我们的[服务条款](https://whitenoise.chat/terms)。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "註冊或登入即表示你同意我們的[服務條款](https://whitenoise.chat/terms)。"
           }
         }
       }
@@ -75189,65 +75904,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "其他 Nostr 應用程式會在這些中繼站上找到你的貼文和個人檔案。變更會發布為你的 NIP-65 中繼列表。"
-          }
-        }
-      }
-    },
-    "Other ways to donate" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Andere Spendenmöglichkeiten"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otras formas de donar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autres façons de donner"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altri modi per donare"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Outras formas de doar"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Другие способы пожертвовать"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diğer bağış yolları"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其他捐赠方式"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其他捐贈方式"
           }
         }
       }

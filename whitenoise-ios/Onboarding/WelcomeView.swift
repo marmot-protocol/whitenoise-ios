@@ -27,6 +27,7 @@ struct WelcomeView: View {
     @State private var showSignIn = false
     @State private var showSignUp = false
     @State private var selectedSheetDetent = PresentationDetent.large
+    @State private var hasAgreedToTerms = false
 
     let isAddingProfile: Bool
     let onSheetContentChange: (OnboardingSheetContent) -> Void
@@ -70,19 +71,20 @@ struct WelcomeView: View {
                         .anchorPreference(key: WelcomeBrandBoundsKey.self, value: .bounds) { $0 }
                     Spacer(minLength: 0)
 
-                    VStack {
+                    VStack(spacing: 24) {
+                        Toggle(isOn: $hasAgreedToTerms) {
+                            Text("By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7).")
+                        }
+                        .toggleStyle(WelcomeTermsCheckboxStyle())
+                        .accessibilityIdentifier("welcome.terms")
+
                         actionLayout {
                             WNButton(title: "Sign In", emphasis: .secondary) { open(.signIn) }
                                 .accessibilityIdentifier("welcome.sign-in")
                             WNButton(title: "Sign Up") { open(.signUp) }
                                 .accessibilityIdentifier("welcome.sign-up")
                         }
-                        Text("By signing up or signing in, you agree to our [Terms of Service](https://whitenoise.chat/terms).")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("welcome.terms")
+                        .disabled(!hasAgreedToTerms)
                     }
                 }
                 .frame(minHeight: geometry.size.height)
@@ -173,5 +175,26 @@ struct WelcomeView: View {
     private func updateSignInExpansion(_ isExpanded: Bool) {
         selectedSheetDetent = isExpanded ? .large : .medium
         onSignInExpansionChange(isExpanded)
+    }
+}
+
+/// App Review requires an explicit terms agreement before Sign In or Sign Up.
+/// Tapping the row toggles it; the inline Terms link keeps its own tap.
+private struct WelcomeTermsCheckboxStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                .font(.title2)
+                .foregroundStyle(.primary)
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
+            configuration.label
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(.rect)
+        .onTapGesture { configuration.isOn.toggle() }
     }
 }

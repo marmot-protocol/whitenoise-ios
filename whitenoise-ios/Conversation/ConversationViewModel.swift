@@ -1216,11 +1216,33 @@ final class ConversationViewModel {
             && !groupDisplay.isDirectMessage
     }
 
+    /// Shows Report in the message menu: a group report, a report to the
+    /// White Noise team, or both.
     func canReport(_ message: AppMessageRecordFfi) -> Bool {
+        canReportToGroup(message) || canReportToDeveloper(message)
+    }
+
+    /// Group members see a group report, so a direct chat has none: it would
+    /// go only to the person being reported.
+    func canReportToGroup(_ message: AppMessageRecordFfi) -> Bool {
         moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
             && canSendMessages && !groupDisplay.isDirectMessage
             && canonicalDeleteRecord(for: message) != nil
             && !isDeleted(message.messageIdHex)
+    }
+
+    func canReportToDeveloper(_ message: AppMessageRecordFfi) -> Bool {
+        moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
+            && MessageModerationPolicy.isOtherAuthor(
+                direction: message.direction,
+                sender: message.sender,
+                myAccountId: myAccountId,
+                isDeleted: isDeleted(message.messageIdHex)
+            )
+    }
+
+    func canBlockAuthor(of message: AppMessageRecordFfi) -> Bool {
+        canReportToDeveloper(message)
     }
 
     var canModerateReports: Bool {

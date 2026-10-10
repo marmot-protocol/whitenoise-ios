@@ -71,6 +71,33 @@ struct BlockUserActions: View {
             titleVisibility: .visible
         ) {
             if let intent = pendingIntent {
+                if intent.blocked {
+                    Button(L10n.string("Block and Report"), role: .destructive) {
+                        Task {
+                            guard appState.activeAccountRef == intent.accountRef,
+                                  model.targetId == intent.targetId
+                            else { return }
+                            await model.setBlocked(true, userId: intent.targetId, using: appState)
+                            guard appState.activeAccountRef == intent.accountRef else { return }
+                            // An unloaded list makes `setBlocked` return with no error row to show.
+                            guard model.isConfirmedBlocked(intent.targetId, accountRef: intent.accountRef) else {
+                                if model.error == nil {
+                                    appState.present(.error(
+                                        L10n.string("Couldn't block user"),
+                                        message: L10n.string("Please try again.")
+                                    ))
+                                }
+                                return
+                            }
+                            guard let text = DeveloperReportContent.text(
+                                      kind: .block,
+                                      reportedAccountIdHex: intent.targetId
+                                  )
+                            else { return }
+                            await DeveloperReportSender.sendBlockReport(text, using: appState)
+                        }
+                    }
+                }
                 Button(
                     intent.blocked ? L10n.string("Block User") : L10n.string("Unblock User"),
                     role: intent.blocked ? .destructive : nil
@@ -86,7 +113,7 @@ struct BlockUserActions: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if pendingIntent?.blocked == true {
-                Text("Blocking hides this person’s messages and prevents sending to them in direct chats. Existing history is retained.")
+                Text("You won't see their messages. Block and Report also notifies the White Noise team.")
             } else {
                 Text("Their messages will appear again and you'll be able to send to them.")
             }
