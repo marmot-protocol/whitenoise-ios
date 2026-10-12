@@ -30,7 +30,7 @@ final class MediaImageZoomTests: XCTestCase {
         let previousReservations = GiphyPlaybackBudget.shared.activePlaybackCount
         let reservation = await GiphyPlaybackBudget.shared.acquire()
         let id = try XCTUnwrap(reservation)
-        let playback = AttachmentGIF.Playback(data: data as Data, id: id)
+        let playback = AttachmentGIF.Playback(contentID: "gif", data: data as Data, id: id)
         defer { playback.stop() }
         var completionFrame: UIImage?
         view.setZoomScale(2.5, animated: false)

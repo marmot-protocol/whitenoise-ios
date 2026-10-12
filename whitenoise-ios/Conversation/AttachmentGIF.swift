@@ -7,11 +7,13 @@ nonisolated enum AttachmentGIF {
 
     @MainActor
     final class Playback {
+        let contentID: String
         let data: Data
         let id: UUID
         private var isStopped = false
 
-        init(data: Data, id: UUID) {
+        init(contentID: String, data: Data, id: UUID) {
+            self.contentID = contentID
             self.data = data
             self.id = id
         }
@@ -70,6 +72,7 @@ nonisolated enum AttachmentGIF {
 }
 
 struct AttachmentGIFPlayback<Content: View>: View {
+    let contentID: String
     let data: Data?
     let activity: AttachmentGIF.Activity
     @ViewBuilder let content: (AttachmentGIF.Playback?) -> Content
@@ -79,16 +82,17 @@ struct AttachmentGIFPlayback<Content: View>: View {
     @State private var playback: AttachmentGIF.Playback?
 
     private struct TaskID: Equatable {
-        let data: Data?
+        let contentID: String?
         let isEligible: Bool
     }
 
     private var taskID: TaskID {
-        TaskID(data: data, isEligible: activity == .active && scenePhase == .active && !reduceMotion)
+        TaskID(contentID: data == nil ? nil : contentID,
+            isEligible: activity == .active && scenePhase == .active && !reduceMotion)
     }
 
     var body: some View {
-        content(taskID.isEligible && playback?.data == data ? playback : nil)
+        content(taskID.isEligible && taskID.contentID != nil && playback?.contentID == contentID ? playback : nil)
             .task(id: taskID) {
                 stop()
                 guard taskID.isEligible, let data else { return }
@@ -101,7 +105,7 @@ struct AttachmentGIFPlayback<Content: View>: View {
                     GiphyPlaybackBudget.shared.release(id)
                     return
                 }
-                playback = AttachmentGIF.Playback(data: data, id: id)
+                playback = AttachmentGIF.Playback(contentID: contentID, data: data, id: id)
             }
             .onDisappear { stop() }
     }

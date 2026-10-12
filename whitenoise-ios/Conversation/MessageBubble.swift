@@ -2038,7 +2038,7 @@ private struct MessageMediaTile: View {
     var body: some View {
         ZStack {
             if item.isImage, loadedImageID == item.id, let image {
-                AttachmentGIFPlayback(data: gifData, activity: isTimelineRowVisible ? .active : .inactive) { playback in
+                AttachmentGIFPlayback(contentID: item.id, data: gifData, activity: isTimelineRowVisible ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFill,
                             onCompletion: playback.stop)
@@ -4095,7 +4095,7 @@ private struct MessageMediaFullscreenImagePage: View {
                 WNMediaSurface().ignoresSafeArea()
 
                 if let image {
-                    AttachmentGIFPlayback(data: item.isGIF ? imageData : nil,
+                    AttachmentGIFPlayback(contentID: item.id, data: item.isGIF ? imageData : nil,
                         activity: isSelected ? .active : .inactive) { playback in
                         ZoomableMediaImage(image: image, isSelected: isSelected,
                             onTap: onToggleChrome, onZoomChanged: onZoomChanged,

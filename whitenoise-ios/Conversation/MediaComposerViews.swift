@@ -534,7 +534,7 @@ private struct ComposerMediaPreviewPage: View {
                     ProgressView()
                 }
             } else if let image {
-                AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
+                AttachmentGIFPlayback(contentID: attachment.id.uuidString, data: attachment.mediaType == "image/gif" ? attachment.data : nil,
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
@@ -804,7 +804,7 @@ private struct MediaApprovalPage: View {
             Color.black
 
             if attachment.kind == .image, let image {
-                AttachmentGIFPlayback(data: attachment.mediaType == "image/gif" ? attachment.data : nil,
+                AttachmentGIFPlayback(contentID: attachment.id.uuidString, data: attachment.mediaType == "image/gif" ? attachment.data : nil,
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
