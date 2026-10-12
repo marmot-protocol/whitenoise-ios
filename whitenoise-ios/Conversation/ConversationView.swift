@@ -585,6 +585,7 @@ struct ConversationView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: ConversationViewModel?
+    @State private var isConversationOnScreen = false
     @State private var draft: String = ""
     @State private var didRestorePersistedDraft = false
     @State private var composerChangedBeforeDraftRestore = false
@@ -1269,6 +1270,12 @@ struct ConversationView: View {
             .onChange(of: appState.profileRefreshGeneration) { _, _ in
                 viewModel?.refreshProfileDependentTimelineProjections()
             }
+            .onChange(of: timestampRenderKey, initial: true) { _, key in
+                viewModel?.applyTimestampRenderGeneration(key.generation)
+            }
+            .onChange(of: relativeTimestampRefreshActive, initial: true) { _, active in
+                viewModel?.setRelativeTimestampRefreshActive(active)
+            }
             .onChange(of: appState.retentionSweepGeneration) { _, _ in
                 guard appState.retentionSweepPrunedGroupIds.contains(chat.groupIdHex) else { return }
                 Task { await viewModel?.refreshTimelineWindowAfterLocalPrune() }
@@ -1307,8 +1314,10 @@ struct ConversationView: View {
             }
             .onAppear {
                 visibleChatRoute = appState.beginViewingChat(groupIdHex: chat.groupIdHex)
+                isConversationOnScreen = true
             }
             .onDisappear {
+                isConversationOnScreen = false
                 if let visibleChatRoute {
                     appState.endViewingChat(visibleChatRoute)
                 }
@@ -1329,6 +1338,24 @@ struct ConversationView: View {
                 exitMessageSelection()
                 Task { await appState.conversationDraftStore.flush() }
             }
+    }
+
+    private struct TimestampRenderKey: Equatable {
+        let generation: Int
+        let hasViewModel: Bool
+    }
+
+    /// Includes view-model readiness so a generation that changed before the
+    /// view model existed is still applied once it does.
+    private var timestampRenderKey: TimestampRenderKey {
+        TimestampRenderKey(
+            generation: appState.markdownTimestampClock.generation,
+            hasViewModel: viewModel != nil
+        )
+    }
+
+    private var relativeTimestampRefreshActive: Bool {
+        viewModel != nil && isConversationOnScreen && appState.isAppSceneActive
     }
 
     private var blockedPeerSubscriptionKey: String {
@@ -1800,6 +1827,9 @@ struct ConversationView: View {
                                                 },
                                                 onBecameHidden: {
                                                     clearPassedDownArrowStops(viewModel: viewModel)
+                                                },
+                                                onVisibilityChange: { isVisible in
+                                                    viewModel.setTimestampRowVisible(item.rowFrameKey, isVisible: isVisible)
                                                 }
                                             ))
                                     }
@@ -4135,6 +4165,9 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
     let store: TimelineVisibilityStore
     let onBecameVisible: () -> Void
     var onBecameHidden: () -> Void = {}
+    /// Every row-level visibility flip, including ones the shared store
+    /// doesn't report (relative timestamps track their own rows).
+    var onVisibilityChange: (Bool) -> Void = { _ in }
 
     @State private var isVisible = false
 
@@ -4146,6 +4179,7 @@ private struct TimelineRowVisibilityModifier: ViewModifier {
             ) { nextIsVisible in
                 guard nextIsVisible != isVisible else { return }
                 isVisible = nextIsVisible
+                onVisibilityChange(nextIsVisible)
                 guard store.set(rowKey, isVisible: nextIsVisible) else { return }
                 if nextIsVisible {
                     onBecameVisible()

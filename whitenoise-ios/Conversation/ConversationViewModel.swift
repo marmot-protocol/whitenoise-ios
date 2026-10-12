@@ -936,6 +936,18 @@ final class ConversationViewModel {
         timelineStore.refreshProfileDependentTimelineProjections()
     }
 
+    func applyTimestampRenderGeneration(_ generation: Int) {
+        timelineStore.applyTimestampRenderGeneration(generation)
+    }
+
+    func setTimestampRowVisible(_ rowId: String, isVisible: Bool) {
+        timelineStore.setTimestampRowVisible(rowId, isVisible: isVisible)
+    }
+
+    func setRelativeTimestampRefreshActive(_ active: Bool) {
+        timelineStore.setRelativeTimestampRefreshActive(active)
+    }
+
     init(
         appState: AppState,
         group: AppGroupRecordFfi,

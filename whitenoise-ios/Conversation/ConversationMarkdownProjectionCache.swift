@@ -13,6 +13,9 @@ import MarmotKit
 final class ConversationMarkdownProjectionCache {
     private var projectionsByRowId: [String: MessageMarkdownDisplayProjection] = [:]
     private var projectionKeysByRowId: [String: ProjectionKey] = [:]
+    private var timestampGenerationsByRowId: [String: Int] = [:]
+    /// `MarkdownTimestampRenderClock.generation` the cache renders under.
+    private(set) var timestampGeneration = 0
 
 #if DEBUG
     private(set) var buildCountForTesting = 0
@@ -50,6 +53,10 @@ final class ConversationMarkdownProjectionCache {
         projectionsByRowId[item.id]?.blocks
     }
 
+    func relativeTimestampSeconds(forRowId rowId: String) -> [Int64] {
+        projectionsByRowId[rowId]?.timestamps.relativeUnixSeconds ?? []
+    }
+
     @discardableResult
     func update(for item: TimelineItem, force: Bool = false, resolver: @escaping MarkdownMentionResolver) -> Bool {
         guard case .message(let record, _) = item.kind else {
@@ -59,7 +66,12 @@ final class ConversationMarkdownProjectionCache {
             return remove(rowId: item.id)
         }
         let key = ProjectionKey(record: record)
-        if !force, projectionKeysByRowId[item.id] == key {
+        if !force, projectionKeysByRowId[item.id] == key,
+           !MarkdownTimestampCachePolicy.needsRebuild(
+               containsTimestamps: projectionsByRowId[item.id]?.timestamps.containsTimestamps == true,
+               builtGeneration: timestampGenerationsByRowId[item.id],
+               currentGeneration: timestampGeneration
+           ) {
             return false
         }
 #if DEBUG
@@ -75,6 +87,7 @@ final class ConversationMarkdownProjectionCache {
         let changed = projectionsByRowId[item.id] != next
         projectionsByRowId[item.id] = next
         projectionKeysByRowId[item.id] = key
+        timestampGenerationsByRowId[item.id] = timestampGeneration
         return changed
     }
 
@@ -82,6 +95,7 @@ final class ConversationMarkdownProjectionCache {
     func remove(rowId: String) -> Bool {
         let projectionRemoved = projectionsByRowId.removeValue(forKey: rowId) != nil
         projectionKeysByRowId.removeValue(forKey: rowId)
+        timestampGenerationsByRowId.removeValue(forKey: rowId)
         return projectionRemoved
     }
 
@@ -106,6 +120,38 @@ final class ConversationMarkdownProjectionCache {
             for rowId in Array(projectionKeysByRowId.keys) where !activeMessageRowIds.contains(rowId) {
                 changed = remove(rowId: rowId) || changed
             }
+        }
+        return changed
+    }
+
+    /// Adopts a new timestamp render generation and rebuilds only the rows
+    /// that render a timestamp.
+    @discardableResult
+    func applyTimestampGeneration(
+        _ generation: Int,
+        to items: [TimelineItem],
+        resolver: @escaping MarkdownMentionResolver
+    ) -> Bool {
+        guard generation != timestampGeneration else { return false }
+        timestampGeneration = generation
+        var changed = false
+        for item in items where projectionsByRowId[item.id]?.timestamps.containsTimestamps == true {
+            changed = update(for: item, resolver: resolver) || changed
+        }
+        return changed
+    }
+
+    /// Re-renders rows whose `relative` text depends on the current clock.
+    @discardableResult
+    func refreshRelativeTimestamps(
+        rowIds: Set<String>,
+        in items: [TimelineItem],
+        resolver: @escaping MarkdownMentionResolver
+    ) -> Bool {
+        var changed = false
+        for item in items where rowIds.contains(item.id)
+            && projectionsByRowId[item.id]?.timestamps.containsRelative == true {
+            changed = update(for: item, force: true, resolver: resolver) || changed
         }
         return changed
     }

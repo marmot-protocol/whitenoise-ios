@@ -954,6 +954,26 @@ iOS 26 and UIKit takes over the navigation bar when a native field activates.
       lands); a `nostr:note1…` reference renders monospaced and inert.
 - [ ] Chat-list preview and reply quote show `@Display Name` for
       mentions, not the npub.
+- [ ] Send `<t:1767225600> <t:1767225600:t> <t:1767225600:F> <t:1767225600:R>`:
+      each renders as a subtly tinted time in the device's language, date
+      order and time zone (`F` includes the weekday; `R` reads like
+      "9 months ago"); `<t:1767225600:x>` and `` `<t:1767225600:R>` `` stay
+      literal. With VoiceOver, the paragraph offers "Exact time" with the
+      full date and time under More Content.
+- [ ] Send `<t:N:R>` where `N` is a couple of minutes ahead
+      (`date -v+2M +%s`): while the bubble is on screen it counts down
+      ("in 2 minutes", "in 1 minute", "in 50 seconds", "now",
+      "10 seconds ago") without scrolling or reopening the chat. It stops
+      updating while scrolled off screen or backgrounded and is current again
+      when it returns.
+- [ ] With such a chat open, change Settings → General → Date & Time
+      (24-Hour Time, Time Zone) and the region or in-app language, then return:
+      every timestamp in the open chat, its reply quotes and the chat list
+      re-renders in the new format without reopening the chat. Messages
+      without timestamps do not flicker.
+- [ ] The chat-list preview, reply quote and notification for a message with
+      `<t:…:R>` show an absolute date and time, never a relative phrase or the
+      raw `<t:…>` syntax.
 
 ## Groups (3+ members)
 

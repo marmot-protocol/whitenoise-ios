@@ -305,7 +305,7 @@ nonisolated enum LocalNotificationProjection {
         if let label = RemoteGiphyMedia.envelopePreviewText(for: raw) {
             return label
         }
-        return sanitizedPreview(raw)
+        return sanitizedPreview(MarkdownTimestampTokenText.replacingTokens(in: raw))
     }
 
     private static func notificationIdentifier(for update: NotificationUpdateFfi) -> String {

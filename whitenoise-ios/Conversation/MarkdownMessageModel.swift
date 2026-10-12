@@ -32,13 +32,52 @@ struct MarkdownDisplayListItem: Equatable {
     let blocks: [MarkdownDisplayBlock]
 }
 
+/// Which instants a built message renders and how, so caches can tell which
+/// rows depend on the locale and clock without re-walking the AST.
+struct MarkdownTimestampUsage: Equatable {
+    /// Bounds the per-row refresh bookkeeping, not the rendering.
+    static let maxTrackedRelative = 16
+
+    private(set) var count = 0
+    private(set) var relativeUnixSeconds: [Int64] = []
+
+    var containsTimestamps: Bool { count > 0 }
+    var containsRelative: Bool { !relativeUnixSeconds.isEmpty }
+
+    mutating func record(unixSeconds: Int64, style: MarkdownTimestampStyleFfi) {
+        count += 1
+        guard MarkdownTimestampFormatter.isRelative(style),
+              MarkdownTimestampFormatter.isRenderable(unixSeconds),
+              relativeUnixSeconds.count < Self.maxTrackedRelative,
+              !relativeUnixSeconds.contains(unixSeconds) else { return }
+        relativeUnixSeconds.append(unixSeconds)
+    }
+}
+
+/// The clock, locale and time zone one build renders every timestamp with.
+struct MarkdownTimestampRenderContext {
+    var now: Date
+    var locale: Locale
+    var timeZone: TimeZone
+
+    static func current() -> MarkdownTimestampRenderContext {
+        MarkdownTimestampRenderContext(
+            now: Date(),
+            locale: MarkdownTimestampFormatter.currentLocale,
+            timeZone: .autoupdatingCurrent
+        )
+    }
+}
+
 struct MessageMarkdownDisplayProjection: Equatable {
     let blocks: [MarkdownDisplayBlock]?
     let mentionedAccountIds: Set<String>
+    var timestamps = MarkdownTimestampUsage()
 
     static func build(
         for record: AppMessageRecordFfi,
-        mentionDisplayName: MarkdownMentionResolver?
+        mentionDisplayName: MarkdownMentionResolver?,
+        timestampContext: MarkdownTimestampRenderContext? = nil
     ) -> MessageMarkdownDisplayProjection {
         var mentionedAccountIds = Set<String>()
         let trackingResolver: MarkdownMentionResolver = { entity in
@@ -47,14 +86,33 @@ struct MessageMarkdownDisplayProjection: Equatable {
             }
             return mentionDisplayName?(entity)
         }
-        let blocks = MarkdownMessageBuilder.displayBlocks(
+        let built = MarkdownMessageBuilder.build(
             for: record.contentTokens,
-            mentionDisplayName: trackingResolver
+            mentionDisplayName: trackingResolver,
+            timestampContext: timestampContext
         )
         return MessageMarkdownDisplayProjection(
-            blocks: blocks,
-            mentionedAccountIds: mentionedAccountIds
+            blocks: built.blocks,
+            mentionedAccountIds: mentionedAccountIds,
+            timestamps: built.timestamps
         )
+    }
+}
+
+/// The absolute, unambiguous description of a rendered timestamp run.
+nonisolated enum MarkdownTimestampDescriptionAttribute: AttributedStringKey {
+    typealias Value = String
+    static let name = "WhiteNoise.markdownTimestampDescription"
+
+    /// Distinct descriptions in reading order, for VoiceOver custom content.
+    static func descriptions(in text: AttributedString, limit: Int = 8) -> [String] {
+        var out: [String] = []
+        for (description, _) in text.runs[MarkdownTimestampDescriptionAttribute.self] {
+            guard let description, !out.contains(description) else { continue }
+            out.append(description)
+            if out.count >= limit { break }
+        }
+        return out
     }
 }
 
@@ -89,6 +147,17 @@ enum MarkdownMessageBuilder {
         var remainingCharacters = MarkdownMessageBuilder.maxCharacters
         var remainingNodes = MarkdownMessageBuilder.maxNodes
         var truncated = false
+        var timestamps = MarkdownTimestampUsage()
+        /// Resolved on the first timestamp so timestamp-free messages never
+        /// read the locale or clock.
+        var timestampContext: MarkdownTimestampRenderContext?
+
+        mutating func resolvedTimestampContext() -> MarkdownTimestampRenderContext {
+            if let timestampContext { return timestampContext }
+            let context = MarkdownTimestampRenderContext.current()
+            timestampContext = context
+            return context
+        }
 
         mutating func consumeNode() -> Bool {
             guard remainingNodes > 0 else {
@@ -131,21 +200,31 @@ enum MarkdownMessageBuilder {
     /// sanitization — callers fall back to the plain-text bubble path.
     static func displayBlocks(
         for document: MarkdownDocumentFfi,
-        mentionDisplayName: MarkdownMentionResolver? = nil
+        mentionDisplayName: MarkdownMentionResolver? = nil,
+        timestampContext: MarkdownTimestampRenderContext? = nil
     ) -> [MarkdownDisplayBlock]? {
-        guard !document.blocks.isEmpty else { return nil }
+        build(for: document, mentionDisplayName: mentionDisplayName, timestampContext: timestampContext).blocks
+    }
+
+    static func build(
+        for document: MarkdownDocumentFfi,
+        mentionDisplayName: MarkdownMentionResolver? = nil,
+        timestampContext: MarkdownTimestampRenderContext? = nil
+    ) -> (blocks: [MarkdownDisplayBlock]?, timestamps: MarkdownTimestampUsage) {
+        guard !document.blocks.isEmpty else { return (nil, MarkdownTimestampUsage()) }
         var budget = Budget()
+        budget.timestampContext = timestampContext
         var blocks = walkBlocks(
             document.blocks,
             budget: &budget,
             depth: 0,
             mentionDisplayName: mentionDisplayName
         )
-        guard !blocks.isEmpty else { return nil }
+        guard !blocks.isEmpty else { return (nil, budget.timestamps) }
         if budget.truncated {
             blocks.append(.paragraph(AttributedString("…")))
         }
-        return blocks
+        return (blocks, budget.timestamps)
     }
 
     /// Inline flattening, exposed for tests.
@@ -505,8 +584,7 @@ enum MarkdownMessageBuilder {
                 emitted = appendNostrEntity(entity, prefix: "", to: &out, context: context, budget: &budget) || emitted
 
             case .timestamp(let unixSeconds, let style):
-                let text = MarkdownTimestampFormatter.text(unixSeconds: unixSeconds, style: style)
-                emitted = append(text, to: &out, context: context, budget: &budget) || emitted
+                emitted = appendTimestamp(unixSeconds, style: style, to: &out, context: context, budget: &budget) || emitted
             }
         }
         return emitted
@@ -589,15 +667,57 @@ enum MarkdownMessageBuilder {
         return append(prefix + truncatedBech32(entity.bech32), to: &out, context: nested, budget: &budget)
     }
 
+    /// A renderable instant reads as a subtle chip (the inline-code tint,
+    /// without the monospaced face) carrying its absolute description for
+    /// VoiceOver; an unrenderable one stays literal source text.
+    @discardableResult
+    private static func appendTimestamp(
+        _ unixSeconds: Int64,
+        style: MarkdownTimestampStyleFfi,
+        to out: inout AttributedString,
+        context: InlineContext,
+        budget: inout Budget
+    ) -> Bool {
+        let render = budget.resolvedTimestampContext()
+        budget.timestamps.record(unixSeconds: unixSeconds, style: style)
+        let text = MarkdownTimestampFormatter.text(
+            unixSeconds: unixSeconds,
+            style: style,
+            now: render.now,
+            locale: render.locale,
+            timeZone: render.timeZone
+        )
+        // Host-formatted, not peer text: skip the bidi strip so right-to-left
+        // locales keep their date-order marks.
+        guard MarkdownTimestampFormatter.isRenderable(unixSeconds) else {
+            return append(text, to: &out, context: context, budget: &budget, trusted: true)
+        }
+        let description = MarkdownTimestampFormatter.accessibilityText(
+            unixSeconds: unixSeconds,
+            locale: render.locale,
+            timeZone: render.timeZone
+        )
+        return append(
+            text,
+            to: &out,
+            context: context,
+            budget: &budget,
+            trusted: true,
+            timestampDescription: description
+        )
+    }
+
     @discardableResult
     private static func append(
         _ raw: String,
         to out: inout AttributedString,
         context: InlineContext,
         budget: inout Budget,
-        codeBackground: Bool = false
+        codeBackground: Bool = false,
+        trusted: Bool = false,
+        timestampDescription: String? = nil
     ) -> Bool {
-        let piece = budget.takeSanitizedTextRun(raw)
+        let piece = trusted ? String(budget.take(raw)) : budget.takeSanitizedTextRun(raw)
         guard !piece.isEmpty else { return false }
         var attributes = AttributeContainer()
         attributes.font = context.font
@@ -610,6 +730,11 @@ enum MarkdownMessageBuilder {
         }
         if codeBackground {
             attributes.backgroundColor = Color.primary.opacity(0.08)
+        }
+        if let timestampDescription {
+            attributes.font = context.font.monospacedDigit()
+            attributes.backgroundColor = Color.primary.opacity(0.08)
+            attributes[MarkdownTimestampDescriptionAttribute.self] = timestampDescription
         }
         out += AttributedString(piece, attributes: attributes)
         return true

@@ -358,6 +358,10 @@ struct ChatsListView: View {
             .onChange(of: appState.conversationDraftStore.pendingSendHandoffGeneration) { _, _ in
                 viewModel?.refreshDisplayProjections()
             }
+            // Previews flatten Markdown timestamps with the current locale.
+            .onChange(of: appState.markdownTimestampClock.formatGeneration) { _, _ in
+                viewModel?.refreshDisplayProjections()
+            }
             // A query typed against the previous profile's chats must not
             // survive into the next one's list.
             .onChange(of: appState.activeAccountRef) { _, _ in

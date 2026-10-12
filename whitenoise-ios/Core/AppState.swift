@@ -394,6 +394,8 @@ final class AppState {
     let appReviewDemo = AppReviewDemoCoordinator()
     let toastState = ToastState()
     let navigation = NavigationState()
+    /// Invalidates rendered Markdown timestamps; see `MarkdownTimestampRenderClock`.
+    let markdownTimestampClock = MarkdownTimestampRenderClock()
     /// Optional local-auth gate and app-switcher privacy shield. UI-only:
     /// runtime suspend/resume stays independent of the lock state.
     let appLock = AppLockController()

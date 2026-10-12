@@ -35,6 +35,7 @@ struct MarkdownMessageView: View {
         case .paragraph(let text), .heading(let text):
             MarkdownLinkText(text)
                 .fixedSize(horizontal: false, vertical: true)
+                .modifier(MarkdownTimestampAccessibility(text: text))
 
         case .codeBlock(let code):
             CustomEmojiAwareText(code)
@@ -114,6 +115,30 @@ struct MarkdownMessageView: View {
             Image(systemName: done ? "checkmark.square" : "square")
                 .font(.subheadline)
                 .accessibilityLabel(done ? L10n.string("Completed task") : L10n.string("Open task"))
+        }
+    }
+}
+
+/// VoiceOver hears a timestamp as displayed ("in 5 minutes"); the absolute
+/// instant is offered as custom content. SwiftUI `Text` has no per-run
+/// replacement label, and Foundation's accessibility attributes only adjust
+/// speech (pitch, spelling, phonetics), so the description cannot ride the run.
+private struct MarkdownTimestampAccessibility: ViewModifier {
+    let descriptions: [String]
+
+    init(text: AttributedString) {
+        descriptions = MarkdownTimestampDescriptionAttribute.descriptions(in: text)
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if descriptions.isEmpty {
+            content
+        } else {
+            content.accessibilityCustomContent(
+                Text(L10n.string("Exact time")),
+                Text(verbatim: descriptions.joined(separator: "; "))
+            )
         }
     }
 }

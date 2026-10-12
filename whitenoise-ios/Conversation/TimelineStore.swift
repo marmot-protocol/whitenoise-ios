@@ -233,6 +233,7 @@ final class TimelineStore {
     nonisolated static let maxStreamDebugTimelineItems = 256
 
     @ObservationIgnored let markdownProjections = ConversationMarkdownProjectionCache()
+    @ObservationIgnored let relativeTimestampRefresh = RelativeTimestampRefreshScheduler()
     @ObservationIgnored let agentEventProjections = ConversationAgentEventProjectionCache()
     @ObservationIgnored let mediaProjections = ConversationMediaProjectionCache()
     private struct CustomEmojiCacheEntry {
@@ -263,6 +264,12 @@ final class TimelineStore {
         self.appState = appState
         self.groupIdHex = groupIdHex
         self.hiddenMessageIds = Set(hiddenMessageIds.compactMap { Hex.normalized32Bytes($0) })
+        relativeTimestampRefresh.relativeUnixSeconds = { [markdownProjections] rowId in
+            markdownProjections.relativeTimestampSeconds(forRowId: rowId)
+        }
+        relativeTimestampRefresh.refreshRows = { [weak self] rowIds in
+            self?.refreshRelativeTimestampRows(rowIds)
+        }
     }
 
     // Loading / pagination edges are set by the view model's IO methods.
@@ -1406,6 +1413,41 @@ final class TimelineStore {
 
     func noteProjectionChanged() {
         timelineProjectionGeneration += 1
+        relativeTimestampRefresh.reschedule()
+    }
+
+    // MARK: - Markdown timestamps
+
+    /// Rebuilds only rows that render a timestamp when the locale, time zone,
+    /// clock or app foreground state changed how instants read.
+    func applyTimestampRenderGeneration(_ generation: Int) {
+        guard generation != markdownProjections.timestampGeneration else { return }
+        markdownProjections.applyTimestampGeneration(
+            generation,
+            to: timeline,
+            resolver: mentionDisplayNameResolver
+        )
+        // Reply quotes flatten timestamps to static absolute text.
+        replyPreviewDisplayCache.removeAll()
+        noteProjectionChanged()
+    }
+
+    func setTimestampRowVisible(_ rowId: String, isVisible: Bool) {
+        relativeTimestampRefresh.setRowVisible(rowId, isVisible: isVisible)
+    }
+
+    func setRelativeTimestampRefreshActive(_ active: Bool) {
+        relativeTimestampRefresh.setActive(active)
+    }
+
+    private func refreshRelativeTimestampRows(_ rowIds: Set<String>) {
+        if markdownProjections.refreshRelativeTimestamps(
+            rowIds: rowIds,
+            in: timeline,
+            resolver: mentionDisplayNameResolver
+        ) {
+            noteProjectionChanged()
+        }
     }
 
     /// Resolves a loaded message id to its current visible timeline row, for the

@@ -657,6 +657,8 @@ final class RuntimeLifecycle {
     func startForegroundActivation() -> Task<Void, Never> {
         appState?.isAppSceneActive = true
         appState?.sceneHasReportedPhase = true
+        // Time passed and settings may have changed while in the background.
+        appState?.markdownTimestampClock.invalidate()
         guard appState?.isErasingAppData != true else { return Task {} }
         resumeBootstrapRegistrationWaiters()
         if appState?.phase == .bootstrapping {
