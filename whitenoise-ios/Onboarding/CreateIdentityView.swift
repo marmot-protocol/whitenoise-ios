@@ -32,6 +32,7 @@ struct IdentityProfileSetupView: View {
     @State private var isRestarting = false
     @State private var restartError: String?
     @State private var signUpFailure: CreateIdentityViewModel.Failure?
+    @State private var photoRemovalFailure: PhotoSelectionFailure?
     @State private var showPrivacyDetails = false
     @FocusState private var focusedField: ProfileField?
     @State private var nameFieldHeight: CGFloat = 0
@@ -148,16 +149,7 @@ struct IdentityProfileSetupView: View {
                     sourceURL: sourceURL
                 )
             },
-            onRemove: {
-                submissionTask = Task {
-                    do {
-                        try await model.acceptPreparedAvatar(nil)
-                        profileDraftDidChange()
-                    }
-                    catch is CancellationError { return }
-                    catch { model.failure = .draftStorage }
-                }
-            },
+            onRemove: removePhoto,
             onSelect: { selection in
                 try await model.acceptPreparedAvatar(selection)
                 profileDraftDidChange()
@@ -216,6 +208,11 @@ struct IdentityProfileSetupView: View {
         .onChange(of: model.failure, initial: true) {
             if isFormReady, !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
         }
+        .photoSelectionFailureAlert(
+            $photoRemovalFailure, title: "Couldn’t remove photo",
+            message: CreateIdentityViewModel.Failure.draftStorage.message,
+            retry: removePhoto, chooseAnother: nil
+        )
         .alert(signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"), isPresented: Binding(
             get: { signUpFailure != nil },
             set: { if !$0 { signUpFailure = nil } }
@@ -363,6 +360,7 @@ struct IdentityProfileSetupView: View {
         } else if accountSetup == nil {
             await appState.openSignUpDraft()
             let preparedModel = appState.signUpModel
+            let previousFailure = preparedModel.failure
             if preparedModel.isResetPending { isFormReady = false }
             await preparedModel.prepare(using: appState)
             guard !Task.isCancelled else { return }
@@ -371,7 +369,9 @@ struct IdentityProfileSetupView: View {
             // Reveal the model only after reset cleanup and name preparation settle.
             model = preparedModel
             isFormReady = true
-            if !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
+            if !model.isRestorationBlocked, let failure = model.failure, failure != previousFailure {
+                presentFailure(failure)
+            }
         }
     }
 
@@ -589,6 +589,21 @@ struct IdentityProfileSetupView: View {
             if presentation.canSkip {
                 WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
                     .disabled(isBusy || !setup.isConnected)
+            }
+        }
+    }
+
+    private func removePhoto() {
+        guard !isBusy else { return }
+        photoRemovalFailure = nil
+        submissionTask = Task {
+            do {
+                try await model.acceptPreparedAvatar(nil)
+                profileDraftDidChange()
+            } catch is CancellationError {
+                return
+            } catch {
+                photoRemovalFailure = PhotoSelectionFailure.classify(error, fallback: .storage)
             }
         }
     }

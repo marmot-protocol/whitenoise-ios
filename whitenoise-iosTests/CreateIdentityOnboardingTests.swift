@@ -634,6 +634,29 @@ struct CreateIdentityOnboardingTests {
         try await client.marmot.shutdownAndClose()
     }
 
+    @Test func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("draft.json")
+        try Data("broken".utf8).write(to: file)
+        let client = try MarmotClient.testClient()
+        try await client.startRuntime()
+        let state = AppState.test(client: client, notifications: .shared,
+                                  signUpDraftStore: SignUpDraftStore(directory: directory))
+        try await state.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(state.signUpModel.isRestorationBlocked)
+        #expect(state.restoreSignUpPresentation)
+
+        try FileManager.default.removeItem(at: file)
+        await state.retrySignUpRestoration()
+
+        #expect(!state.signUpModel.isRestorationBlocked)
+        #expect(!state.restoreSignUpPresentation)
+        #expect(state.accounts.isEmpty)
+        try await client.marmot.shutdownAndClose()
+    }
+
     @Test(arguments: [false, true])
     func missingOrUnidentifiedAccountOffersRecoveryWithoutChangingAccounts(unknownID: Bool) async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

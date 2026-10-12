@@ -3,12 +3,14 @@ import SwiftUI
 extension View {
     func photoSelectionFailureAlert(
         _ failure: Binding<PhotoSelectionFailure?>,
+        title: LocalizedStringKey = "Couldn’t add photo",
+        message: String? = nil,
         retry: (() -> Void)?,
         dismissTitle: LocalizedStringKey = "Close",
         chooseAnother: (() -> Void)?
     ) -> some View {
         alert(
-            "Couldn’t add photo",
+            title,
             isPresented: Binding(
                 get: { failure.wrappedValue != nil },
                 set: { if !$0 { failure.wrappedValue = nil } }
@@ -24,7 +26,7 @@ extension View {
                 Button("Choose Another Photo", role: .cancel) {}
             }
         } message: { presented in
-            Text(presented.message)
+            Text(message ?? presented.message)
         }
     }
 }
