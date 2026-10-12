@@ -56,19 +56,19 @@ struct BlockedUsersPresentationTests {
         #expect(rows.map(\.accountIdHex) == ["ab12", "cd34"])
     }
 
-    @Test func blockingIsOfferedForAPeerButNeverForThisDevicesOwnProfiles() {
-        let mine = ["AAAA", "bbbb"]
-
-        #expect(BlockedUsersPresentation.canBlock(targetAccountIdHex: "cccc", localAccountIdHexes: mine))
-        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "aaaa", localAccountIdHexes: mine))
-        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "BBBB", localAccountIdHexes: mine))
+    @Test func blockingIsOfferedForAnyoneButTheActiveProfile() {
+        #expect(BlockedUsersPresentation.canBlock(targetAccountIdHex: "cccc", activeAccountIdHex: "AAAA"))
+        // Another profile signed in on this device has its own identity and can be blocked.
+        #expect(BlockedUsersPresentation.canBlock(targetAccountIdHex: "bbbb", activeAccountIdHex: "aaaa"))
+        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "aaaa", activeAccountIdHex: "AAAA"))
+        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "cccc", activeAccountIdHex: nil))
     }
 
     /// The target is resolved asynchronously, so the control must stay hidden
     /// until there is a key to publish rather than flashing an inert button.
     @Test func blockingIsWithheldUntilTheReferenceResolves() {
-        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: nil, localAccountIdHexes: []))
-        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "", localAccountIdHexes: []))
+        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: nil, activeAccountIdHex: "aaaa"))
+        #expect(!BlockedUsersPresentation.canBlock(targetAccountIdHex: "", activeAccountIdHex: "aaaa"))
     }
 
     /// The row stays on screen and goes inert: hiding it turned a suspended

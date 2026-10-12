@@ -3941,7 +3941,7 @@ struct ConversationView: View {
         viewModel.canBlockAuthor(of: record) && blockedUsers.canMutate
             && BlockedUsersPresentation.canBlock(
                 targetAccountIdHex: record.sender,
-                localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+                activeAccountIdHex: appState.activeAccount?.accountIdHex
             )
             && !blockedUsers.isConfirmedBlocked(record.sender, accountRef: appState.activeAccountRef)
     }

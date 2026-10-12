@@ -328,7 +328,7 @@ struct ProfileContentView: View {
     private var isBlockablePeer: Bool {
         BlockedUsersPresentation.canBlock(
             targetAccountIdHex: model.hex,
-            localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+            activeAccountIdHex: appState.activeAccount?.accountIdHex
         )
     }
 

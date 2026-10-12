@@ -1419,6 +1419,10 @@ Marmot root. Automated simulator checks do not replace these device checks.
       either fails with an error or dismisses with "Saved and waiting to send to
       the White Noise team." (or the pending-confirmation line), and Block still
       succeeds or fails on its own.
+- [ ] With two profiles on this device (for example after Create Demo
+      Environment), the active profile can Block and Block and Report the other
+      from a message, its profile and the direct chat's details; neither profile
+      is ever offered a block of itself.
 - [ ] In a group, Report keeps the group report and adds **Send to White Noise**
       (on by default). If the group report succeeds but the White Noise copy
       fails, retrying sends only the copy. Profile and direct-chat-details Block

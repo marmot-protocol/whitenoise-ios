@@ -194,12 +194,15 @@ nonisolated enum BlockedUsersPresentation {
         }
     }
 
-    /// Blocking is offered for a resolved identity that isn't one of this
-    /// device's own signed-in profiles. Blocking yourself would hide your own
-    /// messages, and an unresolved reference has no key to publish.
-    static func canBlock(targetAccountIdHex: String?, localAccountIdHexes: [String]) -> Bool {
-        guard let target = targetAccountIdHex?.lowercased(), !target.isEmpty else { return false }
-        return !localAccountIdHexes.contains { $0.lowercased() == target }
+    /// Blocking is offered for any resolved identity except the profile that
+    /// would do the blocking: blocking yourself would hide your own messages,
+    /// and an unresolved reference has no key to publish. Block lists belong to
+    /// each profile, so another profile signed in on this device can be blocked
+    /// like anyone else (the App Review demo relies on this).
+    static func canBlock(targetAccountIdHex: String?, activeAccountIdHex: String?) -> Bool {
+        guard let target = targetAccountIdHex?.lowercased(), !target.isEmpty,
+              let active = activeAccountIdHex?.lowercased(), !active.isEmpty else { return false }
+        return target != active
     }
 
     /// A direct chat with a blocked peer says so in place of their last

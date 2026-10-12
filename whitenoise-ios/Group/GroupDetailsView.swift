@@ -1017,12 +1017,12 @@ struct GroupDetailsView: View {
     }
 
     /// The direct peer this screen can offer a block action for, or nil when
-    /// the chat is a group or resolves to one of this device's own profiles.
+    /// the chat is a group or its peer is the active profile itself.
     private var blockablePeer: String? {
         guard isDirectMessage, let peer = viewModel.otherMember,
               BlockedUsersPresentation.canBlock(
                   targetAccountIdHex: peer,
-                  localAccountIdHexes: appState.accounts.map(\.accountIdHex)
+                  activeAccountIdHex: appState.activeAccount?.accountIdHex
               )
         else { return nil }
         return peer
