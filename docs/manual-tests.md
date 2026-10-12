@@ -637,7 +637,7 @@ only from custom emoji already shown in that chat.
 - [ ] Enter another discovery relay: lookup does not publish any settings. A failed
       or inconclusive lookup does not enable default-relay publication.
 - [ ] Import a profile with both default relays marked read-only and only an onion
-      write relay. Use default relays is absent; Choose Relays opens an explicit
+      write relay. Use default relays is absent; Edit Relays opens an explicit
       editor. Read and write fields remain separate. Review Replacement publishes
       nothing; review the roles, then approve to replace the list. Closing the
       editor or cancelling the proposal preserves the original list. Repeat for
@@ -646,6 +646,10 @@ only from custom emoji already shown in that chat.
       returns no declaration. After any earlier checks finish, Use default relays
       remains available alongside Look on another relay. Defaults publish only
       after the user chooses them; a timeout is not an empty result.
+- [ ] For both relay-list and inbox-list recovery, make the lookup inconclusive
+      (no defaults offered). Search Default Relays searches only the two seed
+      relays and publishes nothing; Try Again stays available beside it to repeat
+      the broader lookup. After a failed custom search, neither step dead-ends.
 - [ ] Change a record while its form/card is open: MDK rejects stale publication
       instead of silently overwriting the changed record.
 - [ ] Attention rows open native decision sheets; the underlying checklist keeps

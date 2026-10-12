@@ -1,14 +1,15 @@
 import MarmotKit
 import SwiftUI
 
-struct AccountSetupInboxRelayView: View {
+struct AccountSetupRelayStepView: View {
     @Environment(\.dismiss) private var dismiss
     let model: AccountSetupModel
-    private let selectedStep: OnboardingStepFfi = .inboxRelays
+    let selectedStep: OnboardingStepFfi
     @State private var isDismissing = false
     @State private var presentation: AccountSetupRecoveryPresentation
     @State private var editor: Editor?
     @State private var draft = AccountSetupRelayDraft()
+    @State private var proposedDraft: AccountSetupRelayDraft
     @State private var activeAction: Action?
     @State private var lastAction: Action?
     @State private var operationPrimary: PrimaryAction?
@@ -19,31 +20,39 @@ struct AccountSetupInboxRelayView: View {
         case relays, discovery
         var id: String { rawValue }
     }
-    private typealias Action = AccountSetupInboxRelayPresentation.Action
-    private typealias PrimaryAction = AccountSetupInboxRelayPresentation.PrimaryAction
+    private typealias Action = AccountSetupRelayStepPresentation.Action
+    private typealias PrimaryAction = AccountSetupRelayStepPresentation.PrimaryAction
 
-    private var recovery: AccountSetupInboxRelayPresentation {
-        .init(actions: step?.actions ?? [], proposal: proposal, childFailureSource: childFailure?.source,
+    private var recovery: AccountSetupRelayStepPresentation {
+        .init(step: selectedStep, actions: step?.actions ?? [], proposal: proposal, childFailureSource: childFailure?.source,
               hasOperationError: model.errorMessage != nil, lastAction: lastAction,
-              needsEarlierReview: AccountSetupInboxRelayPresentation.needsEarlierReview(in: presentation.snapshot))
+              needsEarlierReview: AccountSetupRelayStepPresentation.needsEarlierReview(in: presentation.snapshot, step: selectedStep))
     }
 
-    init(model: AccountSetupModel) {
+    init(model: AccountSetupModel, selectedStep: OnboardingStepFfi) {
         self.model = model
+        self.selectedStep = selectedStep
         _presentation = State(initialValue: AccountSetupRecoveryPresentation(snapshot: model.snapshot))
+        _proposedDraft = State(initialValue: AccountSetupRelayDraft(
+            proposal: model.snapshot.proposal.flatMap { $0.step == selectedStep ? $0 : nil }
+        ))
     }
 
+    private var isInbox: Bool { selectedStep == .inboxRelays }
     private var step: OnboardingStepStateFfi? { presentation.snapshot.steps.first { $0.step == selectedStep } }
     private var proposal: OnboardingRepairProposalFfi? {
         presentation.snapshot.proposal.flatMap { $0.step == selectedStep ? $0 : nil }
     }
     private var interrupted: Bool { recovery.isInterrupted }
     private var isBusy: Bool { model.isBusy || activeAction != nil || isDismissing }
-    private var relays: [String]? { proposal == nil ? MarmotClient.seedRelays : recovery.relays }
-    private var hasError: Bool { model.errorMessage != nil || childFailure != nil || interrupted || relays == nil }
     private var childFailure: AccountSetupRecoveryPresentation.ChildFailure? { presentation.childFailure }
+    private var hasFailure: Bool { model.errorMessage != nil || childFailure != nil }
+    private var hasError: Bool { hasFailure || interrupted || recovery.isInvalid }
     private var settingsChanged: Bool {
         (model.errorMessage ?? childFailure?.message) == L10n.string("Setup changed. Try again to review the latest options.")
+    }
+    private var defaultRelays: [String] {
+        isInbox ? MarmotClient.seedRelays : AppContainerConfig.accountRelays(runtimeRelays: MarmotClient.seedRelays)
     }
 
     var body: some View {
@@ -58,32 +67,43 @@ struct AccountSetupInboxRelayView: View {
                         if recovery.canSearchDefaults {
                             Divider()
                             Text("Search these relays for your existing settings. This won’t publish changes to your profile.")
-                        } else if relays != nil, proposal != nil || allows(.useRecommendedRelays) {
+                        } else if !recovery.isInvalid, proposal != nil || allows(.useRecommendedRelays) {
                             Divider()
                             publicationExplanation
                         }
                     }
                 }
                 if let proposal {
-                    addresses(proposal.readRelays, title: "Proposed inbox relays")
-                    if !proposal.writeRelays.isEmpty { addresses(proposal.writeRelays, title: "Write relays") }
-                } else if allows(.useRecommendedRelays) || recovery.canSearchDefaults, let relays {
-                    addresses(relays, title: "Default relays")
+                    if isInbox {
+                        addresses(proposal.readRelays, title: "Proposed inbox relays")
+                        if !proposal.writeRelays.isEmpty { addresses(proposal.writeRelays, title: "Write relays") }
+                    } else {
+                        Section {
+                            ForEach(proposedDraft.entries) { AccountSetupRelaySummary(entry: $0) }
+                        } header: { Text("Proposed relays") }
+                    }
+                } else if recovery.canSearchDefaults || allows(.useRecommendedRelays) {
+                    let relays = recovery.canSearchDefaults ? MarmotClient.seedRelays : defaultRelays
+                    if isInbox {
+                        addresses(relays, title: "Default relays")
+                    } else {
+                        Section {
+                            ForEach(relays, id: \.self) { AccountSetupRelaySummary(address: $0) }
+                        } header: { Text("Default relays") }
+                    }
                 }
             } actions: {
                 VStack(spacing: 8) {
                     if let primary = primaryAction {
-                        WNOnboardingButton(title: title(for: primary), isLoading: isBusy && activeAction == primary.action) {
+                        WNOnboardingButton(title: primaryTitle(primary), isLoading: isBusy && activeAction == primary.action) {
                             request(primary.action)
                         }
                     }
-                    if recovery.canEdit, primaryAction?.action != .edit {
-                        WNButton(title: proposal == nil ? "Choose Inbox Relays" : "Edit Inbox Relays",
-                                 emphasis: .secondary, isLoading: activeAction == .edit) { request(.edit) }
-                            .environment(\.isEnabled, activeAction == .edit || (!isBusy && model.isConnected))
-                    }
-                    if recovery.canDiscover, primaryAction?.action != .discovery {
-                        WNButton(title: "Look on Another Relay", emphasis: .secondary) { perform(.discovery) }
+                    ForEach(recovery.secondaryActions, id: \.self) { action in
+                        WNButton(title: title(for: action, isPrimary: false), emphasis: .secondary,
+                                 isLoading: activeAction == action) { request(action) }
+                            .environment(\.isEnabled, activeAction == action || (!isBusy && model.isConnected))
+                            .accessibilityValue(activeAction == action ? "In progress" : "")
                     }
                 }
                 .disabled(isBusy || !model.isConnected)
@@ -112,9 +132,9 @@ struct AccountSetupInboxRelayView: View {
                 .appAppearance()
             }
         }
-        .alert(discardAction == .edit ? "Edit Inbox Relays" : "Discard relay changes?", isPresented: $confirmsDiscard) {
+        .alert(discardAction == .edit ? editTitle : "Discard relay changes?", isPresented: $confirmsDiscard) {
             if discardAction == .edit {
-                Button("Edit Inbox Relays") { perform(.edit) }
+                Button(editTitle) { perform(.edit) }
             } else {
                 Button("Discard Changes", role: .destructive) { perform(.discard) }
             }
@@ -131,19 +151,22 @@ struct AccountSetupInboxRelayView: View {
     }
 
     private var statusTitle: LocalizedStringKey {
-        if isBusy { return "Your inbox relays" }
+        if isBusy { return isInbox ? "Your inbox relays" : "Your relays" }
         if settingsChanged { return "Relay settings changed" }
         switch recovery.status {
         case .earlierCheck: return "Review Sign-In Checks"
-        case .relays: return "Your inbox relays"
+        case .relays:
+            if isInbox { return "Your inbox relays" }
+            if allows(.useRecommendedRelays) { return "Set up your relays" }
+            return allows(.editRelays) ? "Your relays need attention" : "Couldn’t find your relay settings"
         case .review: return "Review your relay changes"
-        case .invalid: return "Your relays need attention"
+        case .invalid: return isInbox ? "Your relays need attention" : "Check your relay addresses"
         case .interrupted: return "Your relay update didn’t finish"
         case .draftFailure: return "Couldn’t prepare your relay changes"
         case .discoveryFailure: return "Couldn’t find your relay settings"
         case .checkFailure: return "Couldn’t check your relays"
         case .discardFailure: return "Couldn’t discard your relay changes"
-        case .updateFailure: return "Couldn’t update your inbox relays"
+        case .updateFailure: return isInbox ? "Couldn’t update your inbox relays" : "Couldn’t save your relays"
         }
     }
 
@@ -153,30 +176,40 @@ struct AccountSetupInboxRelayView: View {
         } else if isBusy {
             Text(progressMessage)
         } else if recovery.needsEarlierReview {
-            Text("Another sign-in check needs your attention. Review it before continuing with your inbox relays.")
+            Text("Another sign-in check needs your attention. Review it before continuing.")
         } else if settingsChanged {
             Text("Your relay settings changed during this step. Review the current options before continuing.")
         } else if lastAction == .discard, model.errorMessage != nil, allows(.cancelRepair) {
             Text("Couldn’t discard your relay changes. Use Back to try again.")
-        } else if lastAction == .edit, model.errorMessage != nil, allows(.cancelRepair) {
-            Text("Your relay draft is still available. Review the changes and try again.")
         } else if let error = model.errorMessage ?? childFailure?.message {
-            if error == L10n.string("Couldn’t finish this step. Try again."), let childFailure {
-                Text(childFailure.source == .relays
-                     ? "Your relay draft is still available. Review the changes and try again."
-                     : "Couldn’t find your settings. Try another relay.")
-            } else {
-                Text(error)
-            }
+            Text(failureExplanation(error))
         } else if interrupted {
-            Text("Your previous update hasn’t finished. Try again to finish publishing it.")
-        } else if relays == nil {
-            Text("This inbox relay list is invalid. Edit the addresses before reviewing it again. Nothing will be published.")
+            Text(isInbox
+                 ? "Your previous update hasn’t finished. Try again to finish publishing it."
+                 : "Your relay changes haven’t finished publishing. Try again to complete the update.")
+        } else if recovery.isInvalid {
+            Text(isInbox
+                 ? "This inbox relay list is invalid. Edit the addresses before reviewing it again. Nothing will be published."
+                 : "This list needs a valid write relay, and every address must be valid. Edit the relays below to continue.")
         } else {
-            Text("Inbox relays receive invitations to new chats and groups.")
+            readyMessage
             if let step {
                 ForEach(AccountSetupPresentation.findingMessages(step.findings), id: \.self) { Text(verbatim: $0) }
             }
+        }
+    }
+
+    @ViewBuilder private var readyMessage: some View {
+        if isInbox {
+            Text("Inbox relays receive invitations to new chats and groups.")
+        } else if proposal != nil {
+            Text("Check the addresses and their uses before saving.")
+        } else if allows(.useRecommendedRelays) {
+            Text("We couldn’t find a usable relay list for your profile. You can use the defaults below, or search a relay you’ve used before.")
+        } else if allows(.editRelays) {
+            Text("Your current relay settings don’t let this profile publish information. Edit your relay list, or search another relay for your existing settings.")
+        } else {
+            Text("We couldn’t finish checking your relay settings. Try again, or search a relay you’ve used with this profile. Searching won’t publish changes.")
         }
     }
 
@@ -187,16 +220,20 @@ struct AccountSetupInboxRelayView: View {
         case .retry: return interrupted ? "Saving…" : "Checking…"
         case .edit: return "Preparing changes…"
         case .discovery, .searchDefaults: return "Searching…"
-        case .reviewChecks: return "Checking…"
-        case nil: return "Checking…"
+        case .reviewChecks, nil: return "Checking…"
         }
     }
 
     @ViewBuilder private var publicationExplanation: some View {
-        if proposal == nil {
+        switch (isInbox, proposal == nil) {
+        case (true, true):
             Text("Continuing adds any of these addresses that are missing to your public profile. Relays already listed there are kept.")
-        } else {
+        case (true, false):
             Text("Saving publishes these addresses as your inbox relay list. It replaces the previous list, removing any entries not included here.")
+        case (false, true):
+            Text("Using defaults adds any missing addresses below to your public relay list. Existing entries are kept.")
+        case (false, false):
+            Text("Saving publishes this as your public relay list. It replaces the previous list, removing any entries not included here.")
         }
     }
 
@@ -214,15 +251,20 @@ struct AccountSetupInboxRelayView: View {
 
     private var primaryAction: PrimaryAction? { operationPrimary ?? recovery.primaryAction }
 
-    private func title(for primary: PrimaryAction) -> LocalizedStringKey {
-        if primary.isRetry { return "Try Again" }
-        switch primary.action {
+    private var editTitle: LocalizedStringKey { isInbox ? "Edit Inbox Relays" : "Edit Relays" }
+
+    private func primaryTitle(_ primary: PrimaryAction) -> LocalizedStringKey {
+        primary.isRetry ? "Try Again" : title(for: primary.action, isPrimary: true)
+    }
+
+    private func title(for action: Action, isPrimary: Bool) -> LocalizedStringKey {
+        switch action {
         case .defaults: return "Use Default Relays"
-        case .approve: return "Use These Relays"
+        case .approve: return isInbox ? "Use These Relays" : "Save Relay Changes"
         case .retry: return "Try Again"
         case .discard: return "Discard Changes"
-        case .edit: return "Edit Inbox Relays"
-        case .discovery: return "Look on Another Relay"
+        case .edit: return isInbox && proposal == nil && !isPrimary ? "Choose Inbox Relays" : editTitle
+        case .discovery: return isInbox ? "Look on Another Relay" : "Find Existing Relay Settings"
         case .searchDefaults: return "Search Default Relays"
         case .reviewChecks: return "Review Sign-In Checks"
         }
@@ -245,7 +287,9 @@ struct AccountSetupInboxRelayView: View {
             editor = .relays
             return
         }
-        let proposalChange = AccountSetupInboxRelayPresentation.ProposalChange(action: action, snapshot: presentation.snapshot)
+        let proposalChange = AccountSetupRelayStepPresentation.ProposalChange(
+            action: action, step: selectedStep, snapshot: presentation.snapshot
+        )
         let command: AccountSetupCommand
         switch action {
         case .edit, .discard: command = .cancelRepair
@@ -258,7 +302,7 @@ struct AccountSetupInboxRelayView: View {
             return
         case .defaults: command = .useDefaults(selectedStep)
         case .approve:
-            guard let proposal, relays != nil else { return }
+            guard let proposal, recovery.isValidProposal else { return }
             command = .approve(proposal.revision, recoveryEpoch: presentation.snapshot.recoveryEpoch)
         case .retry: command = .retry(selectedStep)
         }
@@ -291,9 +335,24 @@ struct AccountSetupInboxRelayView: View {
 
     private func updatePresentation() {
         guard !isBusy, model.isConnected else { return }
+        let previousProposal = proposal
         if presentation.update(model.snapshot, step: selectedStep, operationError: model.errorMessage) {
             isDismissing = true
             dismiss()
+            return
+        }
+        if previousProposal != proposal {
+            proposedDraft = AccountSetupRelayDraft(proposal: proposal)
+        }
+    }
+
+    private func failureExplanation(_ error: String) -> String {
+        guard error == L10n.string("Couldn’t finish this step. Try again.") else { return error }
+        switch recovery.status {
+        case .draftFailure, .discardFailure: return L10n.string("Your relay draft is still available. Review the changes and try again.")
+        case .discoveryFailure: return L10n.string("Couldn’t find your settings. Try another relay.")
+        case .checkFailure: return L10n.string("We couldn’t finish checking your relay settings. Try again, or search another relay.")
+        default: return L10n.string("We couldn’t finish saving the relay list below. Try again to complete the update.")
         }
     }
 }

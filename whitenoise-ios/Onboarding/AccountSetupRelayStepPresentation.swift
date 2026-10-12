@@ -1,6 +1,6 @@
 import MarmotKit
 
-nonisolated struct AccountSetupInboxRelayPresentation {
+nonisolated struct AccountSetupRelayStepPresentation {
     enum Action { case defaults, approve, retry, discard, edit, discovery, searchDefaults, reviewChecks }
     enum Status { case relays, review, invalid, interrupted, draftFailure, discoveryFailure, checkFailure, discardFailure, updateFailure, earlierCheck }
     struct PrimaryAction: Equatable {
@@ -8,6 +8,7 @@ nonisolated struct AccountSetupInboxRelayPresentation {
         var isRetry = false
     }
 
+    let step: OnboardingStepFfi
     let actions: [OnboardingActionFfi]
     let proposal: OnboardingRepairProposalFfi?
     var childFailureSource: AccountSetupRecoveryPresentation.ChildFailure.Source?
@@ -15,25 +16,26 @@ nonisolated struct AccountSetupInboxRelayPresentation {
     var lastAction: Action?
     var needsEarlierReview = false
 
-    var relays: [String]? {
-        guard let proposal else { return nil }
-        guard let reads = AccountSetupInput.proposalRelays(proposal.readRelays),
-              let writes = AccountSetupInput.proposalRelays(proposal.writeRelays),
-              !reads.isEmpty, writes.isEmpty else { return nil }
-        return Array(Set(reads)).sorted()
+    var isValidProposal: Bool {
+        guard let proposal,
+              AccountSetupInput.proposalRelays(proposal.readRelays) != nil,
+              let writes = AccountSetupInput.proposalRelays(proposal.writeRelays) else { return false }
+        // Inbox relays have no write role; a proposal carrying one is not what the user reviewed.
+        if step == .inboxRelays, !writes.isEmpty { return false }
+        return (try? AccountSetupRelayDraft(proposal: proposal).selection(for: step)) != nil
     }
 
-    var isInvalid: Bool { proposal != nil && relays == nil }
+    var isInvalid: Bool { proposal != nil && !isValidProposal }
     var isInterrupted: Bool { proposal != nil && !allows(.approveRepair) && !allows(.cancelRepair) }
     var canEdit: Bool { !isInterrupted && (proposal == nil ? allows(.editRelays) : allows(.cancelRepair)) }
     var canDiscover: Bool { !isInterrupted && allows(.editDiscoveryRelays) }
 
     var canSearchDefaults: Bool { proposal == nil && canDiscover && !allows(.useRecommendedRelays) }
 
-    static func needsEarlierReview(in snapshot: OnboardingSnapshotFfi) -> Bool {
-        guard snapshot.steps.first(where: { $0.step == .inboxRelays })?.status == .pending,
+    static func needsEarlierReview(in snapshot: OnboardingSnapshotFfi, step: OnboardingStepFfi) -> Bool {
+        guard snapshot.steps.first(where: { $0.step == step })?.status == .pending,
               let current = snapshot.steps.first(where: { $0.status != .passed && $0.status != .skipped }) else { return false }
-        return current.step != .inboxRelays && !current.actions.isEmpty
+        return current.step != step && !current.actions.isEmpty
     }
 
     var primaryAction: PrimaryAction? {
@@ -51,6 +53,17 @@ nonisolated struct AccountSetupInboxRelayPresentation {
         if canSearchDefaults { return .init(action: .searchDefaults) }
         if allows(.retry) { return .init(action: .retry) }
         return canEdit ? .init(action: .edit) : nil
+    }
+
+    var secondaryActions: [Action] {
+        let primary = primaryAction?.action
+        var result: [Action] = []
+        // Searching only the defaults drops MDK's public indexers for the rest of the
+        // attempt, so keep the broader re-check reachable beside it.
+        if primary == .searchDefaults, allows(.retry) { result.append(.retry) }
+        if canEdit, primary != .edit { result.append(.edit) }
+        if canDiscover, primary != .discovery { result.append(.discovery) }
+        return result
     }
 
     var status: Status {
@@ -78,9 +91,9 @@ nonisolated struct AccountSetupInboxRelayPresentation {
         private let recoveryEpoch: String?
         private let revision: UInt64
 
-        init?(action: Action, snapshot: OnboardingSnapshotFfi) {
+        init?(action: Action, step: OnboardingStepFfi, snapshot: OnboardingSnapshotFfi) {
             guard action == .edit || action == .discard,
-                  let proposal = snapshot.proposal, proposal.step == .inboxRelays else { return nil }
+                  let proposal = snapshot.proposal, proposal.step == step else { return nil }
             self.action = action
             draft = action == .edit ? AccountSetupRelayDraft(proposal: proposal) : AccountSetupRelayDraft()
             accountID = snapshot.accountIdHex

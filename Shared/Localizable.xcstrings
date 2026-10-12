@@ -9728,71 +9728,6 @@
         }
       }
     },
-    "A relay address is invalid. Go back and check the settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine Relay-Adresse ist ungültig. Gehe zurück und prüfe die Einstellungen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A relay address is invalid. Go back and check the settings."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una dirección de relay no es válida. Vuelve y revisa los ajustes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une adresse de relais est invalide. Revenez en arrière et vérifiez les réglages."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Un indirizzo relay non è valido. Torna indietro e controlla le impostazioni."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Um endereço de relay é inválido. Volte e confira as configurações."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Недопустимый адрес ретранслятора. Вернитесь назад и проверьте настройки."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bir aktarıcı adresi geçersiz. Geri dönüp ayarları kontrol edin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中继地址无效。请返回检查设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中繼站位址無效。請返回檢查設定。"
-          }
-        }
-      }
-    },
     "A relay address is not safe to connect to." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -14344,67 +14279,67 @@
         }
       }
     },
-    "Another sign-in check needs your attention. Review it before continuing with your inbox relays." : {
+    "Another sign-in check needs your attention. Review it before continuing." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eine andere Anmeldeprüfung benötigt deine Aufmerksamkeit. Prüfe sie, bevor du mit deinen Posteingangs-Relays fortfährst."
+            "value" : "Eine andere Anmeldeprüfung benötigt deine Aufmerksamkeit. Prüfe sie, bevor du fortfährst."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Another sign-in check needs your attention. Review it before continuing with your inbox relays."
+            "value" : "Another sign-in check needs your attention. Review it before continuing."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Otra comprobación de inicio de sesión requiere tu atención. Revísala antes de continuar con los relays de tu bandeja de entrada."
+            "value" : "Otra comprobación de inicio de sesión requiere tu atención. Revísala antes de continuar."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Une autre vérification de connexion nécessite votre attention. Examinez-la avant de continuer avec les relais de votre boîte de réception."
+            "value" : "Une autre vérification de connexion nécessite votre attention. Examinez-la avant de continuer."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un altro controllo di accesso richiede la tua attenzione. Verificalo prima di continuare con i relay della posta in arrivo."
+            "value" : "Un altro controllo di accesso richiede la tua attenzione. Verificalo prima di continuare."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Outra verificação de entrada precisa da sua atenção. Revise-a antes de continuar com os relays da sua caixa de entrada."
+            "value" : "Outra verificação de entrada precisa da sua atenção. Revise-a antes de continuar."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Другая проверка входа требует вашего внимания. Просмотрите её, прежде чем продолжить настройку ретрансляторов входящих сообщений."
+            "value" : "Другая проверка входа требует вашего внимания. Просмотрите её, прежде чем продолжить."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Başka bir giriş kontrolü ilgilenmenizi gerektiriyor. Gelen kutusu rölelerinize devam etmeden önce bu kontrolü inceleyin."
+            "value" : "Başka bir giriş kontrolü ilgilenmenizi gerektiriyor. Devam etmeden önce bu kontrolü inceleyin."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另一项登录检查需要你处理。请先查看，再继续设置收件箱中继。"
+            "value" : "另一项登录检查需要你处理。请先查看，再继续。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "另一項登入檢查需要你處理。請先查看，再繼續設定收件匣中繼。"
+            "value" : "另一項登入檢查需要你處理。請先查看，再繼續。"
           }
         }
       }
@@ -22244,71 +22179,6 @@
         }
       }
     },
-    "Choose Relays" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relays auswählen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Relays"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elegir relays"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisir les relais"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scegli relay"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolher relays"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выбрать ретрансляторы"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aktarıcıları Seç"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择中继"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇中繼站"
-          }
-        }
-      }
-    },
     "Choose the quality for photos and videos you send." : {
       "comment" : "A description of the data usage of photos and videos.",
       "isCommentAutoGenerated" : true,
@@ -24530,71 +24400,6 @@
         }
       }
     },
-    "Continuing publishes these addresses to your public profile." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beim Fortfahren werden diese Adressen in deinem öffentlichen Profil veröffentlicht."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuing publishes these addresses to your public profile."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Al continuar, estas direcciones se publicarán en tu perfil público."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En continuant, ces adresses seront publiées sur votre profil public."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuando, questi indirizzi verranno pubblicati sul tuo profilo pubblico."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ao continuar, estes endereços serão publicados no seu perfil público."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "При продолжении эти адреса будут опубликованы в вашем открытом профиле."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Devam ettiğinizde bu adresler herkese açık profilinizde yayınlanır."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "继续后，这些地址将发布到你的公开个人资料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "繼續後，這些位址將發布至你的公開個人檔案。"
-          }
-        }
-      }
-    },
     "Continuing setup…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -26074,71 +25879,6 @@
         }
       }
     },
-    "Couldn’t change your relay draft" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relay-Entwurf konnte nicht geändert werden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t change your relay draft"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo modificar el borrador de relays"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de modifier votre brouillon de relais"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile modificare la bozza dei relay"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível alterar seu rascunho de relays"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось изменить черновик списка ретрансляторов"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Röle taslağın değiştirilemedi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法更改你的中继草稿"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法變更你的中繼草稿"
-          }
-        }
-      }
-    },
     "Couldn’t check group recovery. Try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27005,71 +26745,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法捨棄中繼變更"
-          }
-        }
-      }
-    },
-    "Couldn’t discard your relay changes. Try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relay-Änderungen konnten nicht verworfen werden. Versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t discard your relay changes. Try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudieron descartar los cambios de relays. Inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d’abandonner vos modifications de relais. Réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile scartare le modifiche ai relay. Riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível descartar as alterações nos relays. Tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось отменить изменения ретрансляторов. Повторите попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Röle değişikliklerin iptal edilemedi. Tekrar dene."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法舍弃中继更改。请重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法捨棄中繼變更。請重試。"
           }
         }
       }
@@ -83813,71 +83488,6 @@
         }
       }
     },
-    "Read relays" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lese-Relays"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Read relays"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relays de lectura"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relais de lecture"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relay di lettura"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relays de leitura"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ретрансляторы для чтения"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Okuma röleleri"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "读取中继"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "讀取中繼"
-          }
-        }
-      }
-    },
     "Read relays (optional)" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -86099,71 +85709,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中繼站"
-          }
-        }
-      }
-    },
-    "Relays let your profile publish information, receive chat invitations, and deliver messages." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relays ermöglichen deinem Profil, Informationen zu veröffentlichen, Chat-Einladungen zu empfangen und Nachrichten zuzustellen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Relays let your profile publish information, receive chat invitations, and deliver messages."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los relays permiten a tu perfil publicar información, recibir invitaciones a chats y entregar mensajes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les relais permettent à votre profil de publier des informations, de recevoir des invitations à discuter et de transmettre des messages."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I relay consentono al tuo profilo di pubblicare informazioni, ricevere inviti alle chat e recapitare messaggi."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Os relays permitem que seu perfil publique informações, receba convites para conversas e entregue mensagens."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ретрансляторы позволяют вашему профилю публиковать информацию, получать приглашения в чаты и доставлять сообщения."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aktarıcılar profilinizin bilgi yayınlamasını, sohbet davetleri almasını ve mesajları iletmesini sağlar."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中继让你的个人资料能够发布信息、接收聊天邀请和传递消息。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中繼站讓你的個人檔案能夠發布資訊、接收聊天邀請和傳遞訊息。"
           }
         }
       }
@@ -119365,71 +118910,6 @@
         }
       }
     },
-    "We couldn’t complete the lookup. Try another relay or check again before replacing any settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Suche konnte nicht abgeschlossen werden. Versuche ein anderes Relay oder prüfe erneut, bevor du Einstellungen ersetzt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "We couldn’t complete the lookup. Try another relay or check again before replacing any settings."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No pudimos completar la búsqueda. Prueba otro relay o vuelve a comprobar antes de sustituir la configuración."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La recherche n’a pas abouti. Essayez un autre relais ou vérifiez à nouveau avant de remplacer des paramètres."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non è stato possibile completare la ricerca. Prova un altro relay o riprova prima di sostituire le impostazioni."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível concluir a busca. Tente outro relay ou verifique novamente antes de substituir configurações."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось завершить поиск. Попробуйте другое реле или повторите проверку, прежде чем заменять настройки."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Arama tamamlanamadı. Ayarları değiştirmeden önce başka bir röle deneyin veya yeniden kontrol edin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法完成查找。请尝试其他中继或重新检查，然后再替换设置。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法完成查找。請嘗試其他中繼或重新檢查，然後再取代設定。"
-          }
-        }
-      }
-    },
     "We couldn’t connect to the service that provides your profile." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -125868,71 +125348,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法找到您目前的位置。點擊地圖選擇一個地點。"
-          }
-        }
-      }
-    },
-    "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die aktuellen Relay-Rollen bieten keinen funktionierenden Sendeweg. Wähle Relays aus, um eine Ersatzliste zu prüfen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your current relay roles cannot provide a working write route. Choose relays to review a replacement list."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los roles actuales de tus relays no ofrecen una ruta de escritura funcional. Elige relays para revisar una lista de reemplazo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Les rôles actuels de vos relais ne permettent pas d’écrire sur un relais accessible. Choisissez des relais pour vérifier une liste de remplacement."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I ruoli attuali dei relay non offrono un percorso di scrittura funzionante. Scegli i relay per controllare una lista sostitutiva."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As funções atuais dos seus relays não oferecem uma rota de escrita funcional. Escolha relays para revisar uma lista de substituição."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Текущие роли ретрансляторов не обеспечивают рабочий маршрут для записи. Выберите ретрансляторы, чтобы проверить новый список."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mevcut aktarıcı rolleri çalışan bir yazma yolu sağlamıyor. Yeni listeyi incelemek için aktarıcıları seçin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前的中继角色无法提供可用的写入路径。请选择中继以检查替换列表。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "目前的中繼站角色無法提供可用的寫入路徑。請選擇中繼站以檢查替換清單。"
           }
         }
       }
