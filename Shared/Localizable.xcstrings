@@ -109836,6 +109836,71 @@
         }
       }
     },
+    "These attachments are too large to send together." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Anhänge sind zusammen zu groß zum Senden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These attachments are too large to send together."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estos archivos adjuntos son demasiado grandes para enviarlos juntos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ces pièces jointes sont trop volumineuses pour être envoyées ensemble."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questi allegati sono troppo grandi per essere inviati insieme."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esses anexos são grandes demais para enviar juntos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Эти вложения слишком большие, чтобы отправить их вместе."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu ekler birlikte gönderilemeyecek kadar büyük."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些附件过大，无法一起发送。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這些附件過大，無法一起傳送。"
+          }
+        }
+      }
+    },
     "These changes haven’t been shared yet. Check the details below, then save to update your public profile." : {
       "extractionState" : "manual",
       "localizations" : {

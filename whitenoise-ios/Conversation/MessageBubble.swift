@@ -15,6 +15,9 @@ extension EnvironmentValues {
         get { self[TimelineRowVisibleEnvironmentKey.self] }
         set { self[TimelineRowVisibleEnvironmentKey.self] = newValue }
     }
+
+    /// The conversation's file-backed upload progress; nil outside a conversation.
+    @Entry var mediaUploadProgress: MediaUploadProgressStore? = nil
 }
 
 struct TimelineMediaTaskID: Equatable {
@@ -637,13 +640,7 @@ struct MessageBubble: View {
         )
         .overlay {
             if showsMediaUploadProgress {
-                ProgressView()
-                    .controlSize(.regular)
-                    .tint(.white)
-                    .frame(width: 48, height: 48)
-                    .background(.black.opacity(0.55), in: Circle())
-                    .accessibilityLabel(L10n.string("Sending…"))
-                    .allowsHitTesting(false)
+                MessageMediaUploadIndicator(itemIds: mediaItems.map(\.id))
             }
         }
     }
@@ -1000,6 +997,40 @@ struct MessageBubble: View {
     static func timeLabel(recordedAt: UInt64, locale: Locale = .autoupdatingCurrent) -> String {
         let date = Date(timeIntervalSince1970: TimeInterval(recordedAt))
         return RelativeTime.shortTime(date, locale: locale)
+    }
+}
+
+/// Spinner over a sending media bubble; a ring once a single file-backed
+/// upload reports byte progress. Only this view observes the progress store.
+private struct MessageMediaUploadIndicator: View {
+    @Environment(\.mediaUploadProgress) private var progressStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let itemIds: [String]
+
+    var body: some View {
+        let fraction = progressStore?.fraction(forItemIds: itemIds)
+        ZStack {
+            if let fraction {
+                Circle()
+                    .stroke(.white.opacity(0.3), lineWidth: 3)
+                Circle()
+                    .trim(from: 0, to: fraction)
+                    .stroke(.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .animation(reduceMotion ? nil : .linear(duration: 0.25), value: fraction)
+            } else {
+                ProgressView()
+                    .controlSize(.regular)
+                    .tint(.white)
+            }
+        }
+        .padding(fraction == nil ? 0 : 12)
+        .frame(width: 48, height: 48)
+        .background(.black.opacity(0.55), in: Circle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.string("Sending…"))
+        .accessibilityValue(fraction.map { $0.formatted(.percent.precision(.fractionLength(0))) } ?? "")
+        .allowsHitTesting(false)
     }
 }
 

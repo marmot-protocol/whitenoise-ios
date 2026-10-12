@@ -2287,6 +2287,7 @@ struct ConversationView: View {
                 : { senderProfileTarget = SenderProfileTarget(senderAccountIdHex: record.sender) }
         )
         .environment(\.customEmojiStore, viewModel.customEmojiStore)
+        .environment(\.mediaUploadProgress, viewModel.composer.uploadProgress)
         .id(AttachmentPresentationState.shared.revision)
     }
 

@@ -40,13 +40,16 @@ nonisolated enum OutgoingSendSizePolicy {
         if let failure = error as? MediaDraftProcessor.Failure, case .attachmentTooLarge = failure {
             return true
         }
+        if let failure = error as? MediaFileUploadFailure, case .exceedsTransferLimit = failure {
+            return true
+        }
         guard error is MarmotKitError else { return false }
         let diagnostic = UserFacingError.sanitizedDiagnostic(for: error).lowercased()
         return sizeRejectionMarkers.contains { diagnostic.contains($0) }
     }
 
     private static let sizeRejectionMarkers = [
-        "http 413", "too large", "too big",
+        "http 413", "too large", "too big", "transfer bound",
         "message too long", "content too long", "text too long",
     ]
 }

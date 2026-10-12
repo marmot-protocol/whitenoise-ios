@@ -27,6 +27,13 @@ extension MarmotClient {
             request: request, clientToken: clientToken)
     }
 
+    func uploadFilesWithClientToken(accountRef: String, groupIdHex: String, request: MediaFileUploadRequestFfi,
+                                    control: MediaFileTransferControlFfi,
+                                    clientToken: String) async throws -> MediaUploadSubmissionFfi {
+        try await marmot.uploadMediaFilesWithClientToken(accountRef: accountRef, groupIdHex: groupIdHex,
+            request: request, control: control, clientToken: clientToken)
+    }
+
     func localSendStatus(accountRef: String, groupIdHex: String,
                          clientToken: String) async throws -> LocalSendStatusFfi? {
         try await Task.detached { [marmot] in

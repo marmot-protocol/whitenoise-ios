@@ -723,6 +723,14 @@ nonisolated final class MarmotClient: Sendable {
         try await marmot.uploadMedia(accountRef: accountRef, groupIdHex: groupIdHex, request: request)
     }
 
+    /// File-backed upload; `control` is the only cancellation input and must be
+    /// fresh for this call. Keep every source file in place until it returns.
+    func uploadMediaFiles(accountRef: String, groupIdHex: String, request: MediaFileUploadRequestFfi,
+                          control: MediaFileTransferControlFfi) async throws -> MediaUploadResultFfi {
+        try await marmot.uploadMediaFiles(accountRef: accountRef, groupIdHex: groupIdHex,
+            request: request, control: control)
+    }
+
     func downloadMedia(accountRef: String, groupIdHex: String, reference: MediaAttachmentReferenceFfi) async throws -> MediaDownloadResultFfi {
         try await marmot.downloadMedia(accountRef: accountRef, groupIdHex: groupIdHex, reference: reference)
     }

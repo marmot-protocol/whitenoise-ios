@@ -798,6 +798,23 @@ then AirDrop or drag them into Files on the device or simulator.
 - [ ] Interrupt connectivity during an attachment send. An uncertain outcome
       never restores the composer, so no duplicate can be sent.
 
+### File-backed media upload (MarmotKit 0.13.0)
+
+Videos, documents and any batch of 4 MiB or more upload from a protected
+temporary file through `uploadMediaFiles`; small photos and voice notes keep the
+byte-array path.
+
+- [ ] Send a single 30–50 MiB video. The pending bubble's spinner becomes a ring
+      that fills through preparation and upload; the video then delivers and
+      plays on a second device.
+- [ ] Send two videos together. The bubble keeps the plain spinner and both
+      deliver.
+- [ ] Attach a large video, then remove it from the composer while it is still
+      pre-uploading. Nothing is sent, and a later send of another file works.
+- [ ] Forward a received video to another chat. It arrives and plays there.
+- [ ] After these sends, `tmp/WhiteNoiseMediaUploads` in the app container
+      (Xcode > Devices > Download Container) holds no leftover files.
+
 ## Conversation keyboard avoidance
 
 - [ ] Open a conversation at the latest message and tap the composer. The

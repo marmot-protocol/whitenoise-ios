@@ -26,6 +26,17 @@ nonisolated enum MediaUploadIntegrity {
     }
 }
 
+enum MediaSubmissionRecovery {
+    /// With no local-send status, only an abandoned wait leaves admission
+    /// unknown. A file-backed upload error returns after MDK stopped, so its
+    /// missing status is definitive.
+    static func isAmbiguousWithoutStatus(_ error: Error) -> Bool {
+        if error is MediaFileUploadFailure { return false }
+        return error is CancellationError
+            || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+    }
+}
+
 /// One outgoing message already parked in the timeline, waiting for its draft
 /// revision and its trip to MDK. Everything the send publishes is captured at
 /// the Send tap, so a composer edit afterwards belongs to the next message.
@@ -84,6 +95,8 @@ final class ComposerModel {
     @ObservationIgnored var canSendMediaAttachments: () -> Bool = { false }
     @ObservationIgnored var currentGroupEpoch: () -> UInt64? = { nil }
     @ObservationIgnored private let draftMediaUploads: DraftMediaPreuploads
+    /// Byte progress of file-backed uploads, read by the pending media bubble.
+    @ObservationIgnored let uploadProgress: MediaUploadProgressStore
     /// Surfaces a send failure to the view model (sets its observable `error`).
     @ObservationIgnored var onError: (String) -> Void = { _ in }
 #if DEBUG
@@ -101,18 +114,46 @@ final class ComposerModel {
         self.appState = appState
         self.groupIdHex = groupIdHex
         self.timelineStore = timelineStore
+        let uploadProgress = MediaUploadProgressStore()
+        self.uploadProgress = uploadProgress
         self.draftMediaUploads = DraftMediaPreuploads(uploader: draftMediaUploader ?? { [weak appState] accountRef, attachment in
             guard let client = try appState?.currentMarmotClient() else { return nil }
-            let result = try await client.uploadMedia(
-                accountRef: accountRef,
-                groupIdHex: groupIdHex,
-                request: MediaUploadRequestFfi(
-                    attachments: [attachment.uploadRequest],
-                    caption: nil,
-                    send: false,
-                    blossomServer: nil
+            let result: MediaUploadResultFfi
+            switch MediaUploadRoute.route(for: [attachment]) {
+            case .bytes:
+                result = try await client.uploadMedia(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    request: MediaUploadRequestFfi(
+                        attachments: [attachment.uploadRequest],
+                        caption: nil,
+                        send: false,
+                        blossomServer: nil
+                    )
                 )
-            )
+            case .files:
+                // Removing the draft cancels this task, which cancels the control.
+                let control = MediaFileTransferControlFfi()
+                let progress = uploadProgress.track([attachment], control: control)
+                defer { progress.cancel() }
+                result = try await MediaFileUploadRunner.run(
+                    [attachment],
+                    control: control,
+                    limit: maxFileMediaCiphertextBytes()
+                ) { sources in
+                    try await client.uploadMediaFiles(
+                        accountRef: accountRef,
+                        groupIdHex: groupIdHex,
+                        request: MediaFileUploadRequestFfi(
+                            attachments: sources,
+                            caption: nil,
+                            send: false,
+                            blossomServer: nil
+                        ),
+                        control: control
+                    )
+                }
+            }
             return result.attachments.first?.reference
         })
     }
@@ -298,6 +339,8 @@ final class ComposerModel {
         phase: OutgoingSendPhase
     ) -> OutgoingSendSizeRejection? {
         timelineStore.markFailed(tempId: staged.tempId)
+        // A cancelled upload admitted nothing; the failed bubble keeps the message.
+        if MediaFileUploadErrorMapping.isCancellation(error) { return nil }
         if staged.reportsSizeRejection,
            let rejection = OutgoingSendSizePolicy.rejection(for: error, phase: phase) {
             Haptics.error()
@@ -448,16 +491,11 @@ final class ComposerModel {
                 var submitted: MediaUploadSubmissionFfi?
                 if !missing.isEmpty {
                     phase = .upload(candidates: missing)
-                    submitted = try await client.uploadWithClientToken(
-                        accountRef: staged.accountRef,
-                        groupIdHex: groupIdHex,
-                        request: MediaUploadRequestFfi(
-                            attachments: missing.map(\.uploadRequest),
-                            caption: staged.text.isEmpty ? nil : staged.text,
-                            send: draftRevision == nil,
-                            blossomServer: nil
-                        ),
-                        clientToken: staged.clientToken
+                    submitted = try await uploadWithClientToken(
+                        missing,
+                        client: client,
+                        staged: staged,
+                        send: draftRevision == nil
                     )
                     phase = .admission
                 }
@@ -535,6 +573,54 @@ final class ComposerModel {
         }.value
     }
 
+    private func uploadWithClientToken(
+        _ attachments: [MediaDraftAttachment],
+        client: MarmotClient,
+        staged: StagedOutgoingSend,
+        send: Bool
+    ) async throws -> MediaUploadSubmissionFfi {
+        let accountRef = staged.accountRef
+        let groupIdHex = groupIdHex
+        let caption = staged.text.isEmpty ? nil : staged.text
+        let clientToken = staged.clientToken
+        switch MediaUploadRoute.route(for: attachments) {
+        case .bytes:
+            return try await client.uploadWithClientToken(
+                accountRef: accountRef,
+                groupIdHex: groupIdHex,
+                request: MediaUploadRequestFfi(
+                    attachments: attachments.map(\.uploadRequest),
+                    caption: caption,
+                    send: send,
+                    blossomServer: nil
+                ),
+                clientToken: clientToken
+            )
+        case .files:
+            let control = MediaFileTransferControlFfi()
+            let progress = uploadProgress.track(attachments, control: control)
+            defer { progress.cancel() }
+            return try await MediaFileUploadRunner.run(
+                attachments,
+                control: control,
+                limit: maxFileMediaCiphertextBytes()
+            ) { sources in
+                try await client.uploadFilesWithClientToken(
+                    accountRef: accountRef,
+                    groupIdHex: groupIdHex,
+                    request: MediaFileUploadRequestFfi(
+                        attachments: sources,
+                        caption: caption,
+                        send: send,
+                        blossomServer: nil
+                    ),
+                    control: control,
+                    clientToken: clientToken
+                )
+            }
+        }
+    }
+
     private func preparedReferences(for staged: StagedOutgoingSend) async -> [MediaAttachmentReferenceFfi?] {
         var references: [MediaAttachmentReferenceFfi?] = []
         for upload in staged.preparedUploads {
@@ -568,8 +654,7 @@ final class ComposerModel {
                 return true
             case .rejected: return false
             case nil:
-                return error is CancellationError
-                    || (error as? MarmotKitError)?.isAccountWorkerResponseTimedOut == true
+                return MediaSubmissionRecovery.isAmbiguousWithoutStatus(error)
             }
         } catch {
             // A failed status read is not evidence that admission failed.

@@ -3066,18 +3066,42 @@ final class ConversationViewModel {
 
         var successful = Set<String>()
         var failed = Set<String>()
+        let route = MediaUploadRoute.route(for: [prepared])
         for destination in destinations {
             do {
-                _ = try await client.uploadMedia(
-                    accountRef: accountRef,
-                    groupIdHex: destination,
-                    request: MediaUploadRequestFfi(
-                        attachments: [prepared.uploadRequest],
-                        caption: nil,
-                        send: true,
-                        blossomServer: nil
+                switch route {
+                case .bytes:
+                    _ = try await client.uploadMedia(
+                        accountRef: accountRef,
+                        groupIdHex: destination,
+                        request: MediaUploadRequestFfi(
+                            attachments: [prepared.uploadRequest],
+                            caption: nil,
+                            send: true,
+                            blossomServer: nil
+                        )
                     )
-                )
+                case .files:
+                    // One control per destination: each is its own MDK operation.
+                    let control = MediaFileTransferControlFfi()
+                    _ = try await MediaFileUploadRunner.run(
+                        [prepared],
+                        control: control,
+                        limit: maxFileMediaCiphertextBytes()
+                    ) { sources in
+                        try await client.uploadMediaFiles(
+                            accountRef: accountRef,
+                            groupIdHex: destination,
+                            request: MediaFileUploadRequestFfi(
+                                attachments: sources,
+                                caption: nil,
+                                send: true,
+                                blossomServer: nil
+                            ),
+                            control: control
+                        )
+                    }
+                }
                 successful.insert(destination)
             } catch {
                 failed.insert(destination)
