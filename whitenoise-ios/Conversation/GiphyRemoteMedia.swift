@@ -352,7 +352,7 @@ final class GiphyAnimatedImageUIView: UIImageView {
         let generation = playbackGeneration
         let options = loopMode == .forever ? [kCGImageAnimationLoopCount: Double.infinity] as CFDictionary : nil
         var remainingFrames: Int?
-        if loopMode == .source, onCompletion != nil,
+        if loopMode == .source,
            let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) {
             let properties = CGImageSourceCopyProperties(source, nil) as? [CFString: Any]
             let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
@@ -371,7 +371,10 @@ final class GiphyAnimatedImageUIView: UIImageView {
             self.image = UIImage(cgImage: image)
             if let remaining = remainingFrames, remaining > 0 {
                 remainingFrames = remaining - 1
-                if remaining == 1 { onCompletion?() }
+                if remaining == 1 {
+                    stop.pointee = true
+                    onCompletion?()
+                }
             }
         }
         if status != noErr {
