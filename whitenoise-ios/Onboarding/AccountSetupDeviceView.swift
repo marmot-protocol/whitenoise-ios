@@ -45,7 +45,10 @@ struct AccountSetupDeviceView: View {
                     }
                 }
             } actions: {
-                if let step {
+                if model.hasConnectionFailure && activeAction == nil {
+                    WNOnboardingButton(title: "Close") { dismiss() }
+                        .disabled(isBusy)
+                } else if let step {
                     if step.actions.contains(.continueAnyway) {
                         // Keep the consent label when the action acknowledges this device.
                         WNOnboardingButton(
@@ -73,6 +76,9 @@ struct AccountSetupDeviceView: View {
 
     private var failureMessages: [String] {
         guard !isBusy else { return [] }
+        if model.hasConnectionFailure {
+            return [L10n.string("Setup updates stopped. Close this sheet, then tap Try Again on Sign In to reconnect.")]
+        }
         if let error = model.errorMessage { return [error] }
         guard let step, step.status == .retryableFailure else { return [] }
         let messages = AccountSetupPresentation.findingMessages(step.findings)
