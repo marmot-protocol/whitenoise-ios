@@ -66,6 +66,36 @@ struct DiagnosticLogExportTests {
         }
     }
 
+    @Test func shareFileKeepsOriginalNameAndBytesAndRemovalDeletesItsDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let data = Data("{\"kind\":{\"type\":\"fixture\"}}\n".utf8)
+        let snapshot = DiagnosticLogSnapshot(fileName: "audit-engine-v3.jsonl", data: data)
+
+        let first = try DiagnosticLogExport.writeShareFile(snapshot, in: root)
+        let second = try DiagnosticLogExport.writeShareFile(snapshot, in: root)
+
+        #expect(first.url.lastPathComponent == "audit-engine-v3.jsonl")
+        #expect(first.url != second.url)
+        #expect(try Data(contentsOf: first.url) == data)
+
+        DiagnosticLogExport.removeShareFile(first)
+        #expect(!FileManager.default.fileExists(atPath: first.url.deletingLastPathComponent().path))
+        #expect(FileManager.default.fileExists(atPath: second.url.path))
+    }
+
+    @Test func shareFileNameCannotEscapeItsDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        for name in ["../../escape.jsonl", "..", ""] {
+            let file = try DiagnosticLogExport.writeShareFile(
+                DiagnosticLogSnapshot(fileName: name, data: Data("x\n".utf8)), in: root
+            )
+            #expect(file.url.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL
+                == root.standardizedFileURL)
+        }
+    }
+
     private func file(
         _ name: String, modified: UInt64?, size: UInt64 = 1, account: String = "first"
     ) -> AuditLogFileFfi {

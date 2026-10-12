@@ -9,6 +9,7 @@ struct DeveloperToolsSettingsView: View {
     @State private var exportDocument = DiagnosticLogDocument()
     @State private var exportFileName = "audit.jsonl"
     @State private var showExport = false
+    @State private var shareFile: DiagnosticLogShareFile?
     @State private var exporting = false
     @State private var exportError: String?
     @State private var showDemoConfirmation = false
@@ -151,10 +152,16 @@ struct DeveloperToolsSettingsView: View {
                 Section {
                     LabeledContent("Diagnostic Logging", value: model.auditSettings?.enabled == true ? L10n.string("On") : L10n.string("Off"))
                     if model.auditFileRows.contains(where: { $0.sizeBytes > 0 }) {
-                        Button("Export Latest Audit Log", systemImage: "square.and.arrow.up") { exportLogs() }
-                            .disabled(exporting)
+                        Menu {
+                            exportActions()
+                        } label: {
+                            Label("Export Latest Audit Log", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(exporting)
                         ForEach(model.auditFileRows.filter { $0.sizeBytes > 0 }) { row in
-                            Button { exportLogs(path: row.path) } label: {
+                            Menu {
+                                exportActions(path: row.path)
+                            } label: {
                                 HStack {
                                     auditFileRow(row)
                                     Spacer(minLength: 8)
@@ -224,6 +231,9 @@ struct DeveloperToolsSettingsView: View {
             if case .failure = result { exportError = L10n.string("Couldn’t save diagnostic logs. Try again.") }
             exportDocument = DiagnosticLogDocument()
         }
+        .sheet(item: $shareFile, onDismiss: cleanupShareFile) { file in
+            ActivityShareSheet(items: [file.url], onComplete: cleanupShareFile)
+        }
         .alert("Couldn’t Export Diagnostic Logs", isPresented: Binding(
             get: { exportError != nil }, set: { if !$0 { exportError = nil } }
         )) { Button("OK", role: .cancel) {} } message: { Text(exportError ?? "") }
@@ -254,7 +264,13 @@ struct DeveloperToolsSettingsView: View {
         }
     }
 
-    private func exportLogs(path: String? = nil) {
+    @ViewBuilder
+    private func exportActions(path: String? = nil) -> some View {
+        Button("Share", systemImage: "square.and.arrow.up") { shareLogs(path: path) }
+        Button("Save to Files", systemImage: "folder") { saveLogs(path: path) }
+    }
+
+    private func saveLogs(path: String?) {
         guard !exporting else { return }
         exporting = true
         Task {
@@ -268,6 +284,29 @@ struct DeveloperToolsSettingsView: View {
                 exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")
             }
         }
+    }
+
+    private func shareLogs(path: String?) {
+        guard !exporting else { return }
+        exporting = true
+        cleanupShareFile()
+        Task {
+            defer { exporting = false }
+            do {
+                let snapshot = try await appState.diagnosticLogExport(path: path)
+                shareFile = try await Task.detached(priority: .userInitiated) {
+                    try DiagnosticLogExport.writeShareFile(snapshot)
+                }.value
+            } catch {
+                exportError = L10n.string("Couldn’t read diagnostic logs. Try again.")
+            }
+        }
+    }
+
+    private func cleanupShareFile() {
+        guard let shareFile else { return }
+        DiagnosticLogExport.removeShareFile(shareFile)
+        self.shareFile = nil
     }
 
     private var appVersion: String {

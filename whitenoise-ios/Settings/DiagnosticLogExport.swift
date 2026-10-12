@@ -24,6 +24,11 @@ nonisolated struct DiagnosticLogSnapshot: Sendable {
     let data: Data
 }
 
+nonisolated struct DiagnosticLogShareFile: Identifiable, Sendable {
+    let url: URL
+    var id: URL { url }
+}
+
 nonisolated enum DiagnosticLogExport {
     enum ExportError: Error {
         case noLogs
@@ -68,5 +73,28 @@ nonisolated enum DiagnosticLogExport {
         // Never silently truncate a record caught mid-write. The caller can retry.
         guard !data.isEmpty, data.last == 0x0A else { throw ExportError.fileChangedDuringRead }
         return DiagnosticLogSnapshot(fileName: file.fileName, data: data)
+    }
+
+    static func writeShareFile(
+        _ snapshot: DiagnosticLogSnapshot,
+        in root: URL = FileManager.default.temporaryDirectory
+    ) throws -> DiagnosticLogShareFile {
+        let protection: [FileAttributeKey: Any] = [.protectionKey: FileProtectionType.complete]
+        let directory = root.appendingPathComponent("diagnostic-log-share-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: protection)
+        let name = URL(fileURLWithPath: snapshot.fileName).lastPathComponent
+        let url = directory.appendingPathComponent(["", "/", ".", ".."].contains(name) ? "audit.jsonl" : name)
+        do {
+            try snapshot.data.write(to: url, options: [.atomic, .completeFileProtection])
+            try? FileManager.default.setAttributes(protection, ofItemAtPath: url.path)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+        return DiagnosticLogShareFile(url: url)
+    }
+
+    static func removeShareFile(_ file: DiagnosticLogShareFile) {
+        try? FileManager.default.removeItem(at: file.url.deletingLastPathComponent())
     }
 }
