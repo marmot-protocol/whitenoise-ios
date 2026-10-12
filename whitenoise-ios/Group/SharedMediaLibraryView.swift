@@ -86,6 +86,22 @@ final class SharedMediaLibraryViewModel {
                 guard generation == requestGeneration, appState.activeAccountRef == accountRef,
                       appState.client === client else { return }
             }
+            var hops = 0
+            while case .page(let filtered) = result,
+                  GroupSharedMediaPresentation.shouldReadPastFilteredPage(
+                      galleryEntryCount: GroupSharedMediaPresentation.galleryEntries(filtered.entries).count,
+                      hasMore: filtered.hasMore
+                  ),
+                  hops < GroupSharedMediaPresentation.maxFilteredPageHops,
+                  let next = filtered.nextCursor {
+                if version == nil { version = filtered.version }
+                result = try await client.marmot.attachmentHistoryPage(accountRef: accountRef,
+                    groupIdHex: groupIdHex, limit: 100, cursor: next)
+                try Task.checkCancellation()
+                guard generation == requestGeneration, appState.activeAccountRef == accountRef,
+                      appState.client === client else { return }
+                hops += 1
+            }
             switch result {
             case .page(let page):
                 var ids = Set(items.map(\.id))

@@ -196,6 +196,8 @@ struct MessageDeletionTests {
         #expect(model.canReportToDeveloper(theirs))
         #expect(model.canReport(theirs))
         #expect(!model.canReport(mine))
+        // MarmotKit 0.13 accepts polls in direct conversations too.
+        #expect(model.canCreatePolls == model.canSendMessages)
         // Unconfigured builds offer no report in a direct chat, but Block stays.
         state.moderationReportingAvailableForTesting = false
         #expect(!model.canReport(theirs))

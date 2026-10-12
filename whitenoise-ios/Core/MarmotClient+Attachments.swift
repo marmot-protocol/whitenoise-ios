@@ -2,11 +2,28 @@ import Foundation
 import MarmotKit
 
 extension MarmotClient {
+    /// The first page with gallery entries, reading past pages that hold only
+    /// custom-emoji artwork. The returned version is the first page's, which
+    /// anchors change detection for everything read here.
     func attachmentPreview(accountRef: String, groupID: String) async throws -> AttachmentPageFfi {
         let result = try await marmot.attachmentHistoryPage(accountRef: accountRef,
             groupIdHex: groupID, limit: 100, cursor: nil)
-        guard case .page(let page) = result else { throw AttachmentReadError.stale }
-        return page
+        guard case .page(let first) = result else { throw AttachmentReadError.stale }
+        var page = first
+        var hops = 0
+        while GroupSharedMediaPresentation.shouldReadPastFilteredPage(
+            galleryEntryCount: GroupSharedMediaPresentation.galleryEntries(page.entries).count,
+            hasMore: page.hasMore
+        ), hops < GroupSharedMediaPresentation.maxFilteredPageHops, let cursor = page.nextCursor {
+            try Task.checkCancellation()
+            let next = try await marmot.attachmentHistoryPage(accountRef: accountRef,
+                groupIdHex: groupID, limit: 100, cursor: cursor)
+            guard case .page(let nextPage) = next else { throw AttachmentReadError.stale }
+            page = nextPage
+            hops += 1
+        }
+        return AttachmentPageFfi(entries: page.entries, version: first.version,
+                                 nextCursor: page.nextCursor, hasMore: page.hasMore)
     }
 
     /// Every chunk revalidates the opaque reference against current visibility.

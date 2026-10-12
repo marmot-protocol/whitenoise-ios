@@ -1153,9 +1153,9 @@ final class ConversationViewModel {
         return PollVotesSubject(accountRef: accountRef, groupIdHex: group.groupIdHex, pollEventId: messageIdHex)
     }
 
-    /// MDK only accepts polls in group conversations, never direct messages.
+    /// MDK 0.13 accepts polls in direct conversations as well as groups.
     var canCreatePolls: Bool {
-        canSendMessages && !groupDisplay.isDirectMessage
+        canSendMessages
     }
 
     var canVoteInPolls: Bool {

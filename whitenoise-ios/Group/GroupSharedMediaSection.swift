@@ -14,8 +14,25 @@ nonisolated struct GroupSharedMediaItem: Identifiable, Equatable {
 }
 
 nonisolated enum GroupSharedMediaPresentation {
+    /// Pages to read past while every entry is custom-emoji artwork, so a long
+    /// run of emoji can't leave the gallery empty while more history exists.
+    static let maxFilteredPageHops = 20
+
+    /// Custom-emoji artwork (`InlineEmoji`) belongs inline in its message, not
+    /// in the shared-media gallery. Slots and acquisition references stay as MDK
+    /// returned them.
+    static func galleryEntries(_ entries: [AttachmentEntryFfi]) -> [AttachmentEntryFfi] {
+        entries.filter { $0.role == .shared }
+    }
+
+    /// MDK can return a page with no gallery entries while `hasMore` is true;
+    /// paging must continue rather than stop on a filtered page.
+    static func shouldReadPastFilteredPage(galleryEntryCount: Int, hasMore: Bool) -> Bool {
+        galleryEntryCount == 0 && hasMore
+    }
+
     static func items(entries: [AttachmentEntryFfi]) -> [GroupSharedMediaItem] {
-        entries.flatMap { entry in
+        galleryEntries(entries).flatMap { entry in
             MessageMediaAttachment.displayItems(fromOutcomes: [entry.attachment],
                 ownerId: "shared-media:\(entry.messageIdHex)", messageId: entry.messageIdHex,
                 sourceMessageId: entry.sourceMessageIdHex).map { attachment in

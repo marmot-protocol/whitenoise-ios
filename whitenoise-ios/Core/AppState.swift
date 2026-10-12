@@ -287,6 +287,16 @@ final class AppState {
         }
     }
 
+    /// Device-wide opt-in for MDK's native startup diagnostics. Applied to the
+    /// running runtime immediately and to future runtimes before account reads.
+    /// Disabling clears captured history.
+    var startupDiagnosticsEnabled: Bool = StartupDiagnosticsPreference.isEnabled() {
+        didSet {
+            StartupDiagnosticsPreference.setEnabled(startupDiagnosticsEnabled)
+            try? client?.marmot.setStartupDiagnosticsEnabled(enabled: startupDiagnosticsEnabled)
+        }
+    }
+
     /// Effective streaming-debug flag: requires developer mode.
     var streamingDebugEnabled: Bool {
         developerMode && streamingDebugMode
@@ -482,6 +492,15 @@ final class AppState {
             groupProjectionUpdate = GroupRecoveryUpdate(accountID: update.accountIdHex, groupID: update.update.groupIdHex)
         }
         if case .groupStateUpdated(let accountID, _, let groupID) = event,
+           activeAccount?.accountIdHex == accountID,
+           visibleChat?.groupIdHex == groupID {
+            groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
+        }
+        // MDK applies device-local membership changes before delivering these
+        // events and creates no system row, so the open conversation re-reads
+        // its membership and recovery state to reflect them.
+        if case .groupEvent(let accountID, _, let groupID, let kind) = event,
+           GroupEventPresentationPolicy.refreshesMembershipPresentation(kind),
            activeAccount?.accountIdHex == accountID,
            visibleChat?.groupIdHex == groupID {
             groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
@@ -1687,8 +1706,12 @@ final class AppState {
     /// Creates the durable identity without routing out of onboarding. The
     /// sign-up profile flow uses the returned account to publish optional
     /// metadata, then calls `completeIdentityProfileSetup` exactly once.
+    /// An `initialProfile` becomes the identity's first public kind-0, so
+    /// relays and contacts never see MDK's generated name first.
     @MainActor
-    func createIdentityForProfileSetup() async throws -> IdentityCreationResultFfi {
+    func createIdentityForProfileSetup(
+        initialProfile: UserProfileMetadataFfi? = nil
+    ) async throws -> IdentityCreationResultFfi {
         let ticket = productAnalytics.ticket()
         productOnboardingTicket = ticket
         productAnalytics.record(.onboarding(.identitySelection, .create, .success), ticket: ticket)
@@ -1698,11 +1721,21 @@ final class AppState {
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         let relays = lease.client.relayUrls
         let existingAccountLabels = Set(accounts.map(\.label))
-        let creation = try await lease.client.marmot.createIdentityWithProfile(
-            defaultRelays: AppContainerConfig.accountRelays(runtimeRelays: relays),
-            bootstrapRelays: relays,
-            inboxRelays: relays
-        )
+        let defaultRelays = AppContainerConfig.accountRelays(runtimeRelays: relays)
+        let creation = if let initialProfile {
+            try await lease.client.marmot.createIdentityWithInitialProfile(
+                profile: initialProfile,
+                defaultRelays: defaultRelays,
+                bootstrapRelays: relays,
+                inboxRelays: relays
+            )
+        } else {
+            try await lease.client.marmot.createIdentityWithProfile(
+                defaultRelays: defaultRelays,
+                bootstrapRelays: relays,
+                inboxRelays: relays
+            )
+        }
         // MDK deliberately coalesces generated-identity calls while an earlier
         // account is still publishing. Never let a second-account flow edit or
         // activate that already-existing identity as though it were new.
@@ -2087,4 +2120,17 @@ extension AppState: NotificationCoordinatorHost {
 
     var isRuntimeSuspendingForNotificationCoordinator: Bool { isRuntimeSuspending }
     var isSigningOutForNotificationCoordinator: Bool { isSigningOut }
+}
+
+nonisolated enum GroupEventPresentationPolicy {
+    /// Device-local membership changes (MDK 0.13): this copy was terminated or
+    /// restored, or member-leave records were removed.
+    static func refreshesMembershipPresentation(_ kind: GroupEventKindFfi) -> Bool {
+        switch kind {
+        case .localGroupCopyTerminated, .localGroupCopyRestored, .groupMemberLeavesRemoved:
+            return true
+        default:
+            return false
+        }
+    }
 }

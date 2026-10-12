@@ -234,7 +234,8 @@ before every release tag.
       notice still shows it. Diagnostics logs "history notices changed".
 - [ ] In a group, **+** → Poll opens New Poll. Validation stays inline (empty
       question, fewer than two options, duplicates, over-long text) and the sheet
-      closes only after the send succeeds. Poll is absent in direct messages.
+      closes only after the send succeeds. Poll is also offered in direct
+      messages (MarmotKit 0.13), and a direct-chat poll votes and closes the same way.
 - [ ] Send single-choice and multiple-choice polls. On a second account, vote,
       change the vote, and confirm tallies, voter count and your selection update
       live on both devices. A single-choice tap on the current answer does
@@ -1619,3 +1620,22 @@ Marmot root. Automated simulator checks do not replace these device checks.
   or native image decoding. A cancelled synchronous system resolver can continue
   until the OS returns, retaining its slot throughout; this change neither kills
   resolver threads nor changes negative-cache or retry policy.
+
+## MarmotKit 0.13.0 adoption
+
+- [ ] Upgrade a device that has 0.12 data: first open completes migrations
+      102–107 (note the time on a large account), chats, drafts and retained
+      media remain, and the previous app build refuses the upgraded database.
+- [ ] Sign up with a chosen name and about but no photo: another client sees
+      that name as the account's first profile, never the generated default,
+      and setup publishes no second profile. With a photo, the photo follows in
+      one profile update.
+- [ ] In a direct chat, **+** → Poll creates a poll the other person can vote on.
+- [ ] Send a message with custom emoji: the emoji artwork renders inline and is
+      absent from Group Info shared media and the full media library, even when
+      the newest 100+ attachments are all emoji; real photos still appear.
+- [ ] Developer Tools → Startup Diagnostics: turn on capture, relaunch, and the
+      Steps list shows account-open phases with durations and migration numbers.
+      Share exports the same text. Turning capture off clears it.
+- [ ] Leave or get removed from a group on this device while its conversation
+      is open: the composer and recovery banner update without reopening it.

@@ -26,6 +26,17 @@ nonisolated struct SignUpDraft: Codable, Equatable, Sendable {
         stage != .editing || baselineAccountIDs != nil || accountID != nil
     }
 
+    /// The name and about the user entered, published as the identity's first
+    /// kind-0. A photo needs the created account to upload, so it follows in a
+    /// later profile publish.
+    var initialProfile: UserProfileMetadataFfi? {
+        guard let name = ContentSanitizer.displayName(displayName) else { return nil }
+        return UserProfileMetadataFfi(
+            name: name, displayName: name, about: ContentSanitizer.multilineText(about),
+            picture: nil, banner: nil, nip05: nil, lud16: nil
+        )
+    }
+
     func matchesPublishedProfile(_ profile: UserProfileMetadataFfi) -> Bool {
         let name = ContentSanitizer.displayName(displayName)
         return profile.name == name && profile.displayName == name

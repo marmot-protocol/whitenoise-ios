@@ -95,6 +95,10 @@ nonisolated final class MarmotClient: Sendable {
                 moderationReportConfig: ModerationReportBuildConfig.current()?.ffi)
         )
         moderationReportingAvailable = marmot.moderationReportingAvailable()
+        // Opt-in startup capture must begin before the first account read.
+        if StartupDiagnosticsPreference.isEnabled() {
+            try? marmot.setStartupDiagnosticsEnabled(enabled: true)
+        }
         // A rejected audit destination must not block startup; recordings stay local.
         do {
             _ = try marmot.setAuditOtlpConfigV5(config: telemetryConfig.auditOtlpConfig())

@@ -9,7 +9,7 @@ protocol CreateIdentityServicing: AnyObject {
     func loadIdentityProfile(accountID: String) async throws -> UserProfileMetadataFfi?
     func removeUnfinishedSignUpAccount(_ account: AccountSummaryFfi) async throws
     func suggestedProfileName() async throws -> String
-    func createIdentityForProfileSetup() async throws -> IdentityCreationResultFfi
+    func createIdentityForProfileSetup(initialProfile: UserProfileMetadataFfi?) async throws -> IdentityCreationResultFfi
     func waitForIdentityProfileSetup(accountRef: String, retry: Bool) async throws
     func uploadOnboardingAvatar(
         accountRef: String,
@@ -359,7 +359,9 @@ final class CreateIdentityViewModel {
                 }
                 try await checkpoint(.creating)
                 try Task.checkCancellation()
-                let creation = try await service.createIdentityForProfileSetup()
+                let creation = try await service.createIdentityForProfileSetup(
+                    initialProfile: draft.initialProfile
+                )
                 createdIdentity = creation.account
                 existingProfile = creation.profile
             }
@@ -377,6 +379,13 @@ final class CreateIdentityViewModel {
                let profile = try await service.loadIdentityProfile(accountID: createdIdentity.accountIdHex),
                draft.matchesPublishedProfile(profile) {
                 try await finish(using: service, identity: createdIdentity, dismiss: dismiss)
+                return
+            }
+            if avatarDraft == nil, uploadedAvatarURL == nil,
+               let existingProfile, draft.matchesPublishedProfile(existingProfile) {
+                // The name and about went out as the first kind-0 at creation.
+                try await finish(using: service, identity: createdIdentity, dismiss: dismiss)
+                HostActionPerformance.record("identity_submit_to_ready", since: performance)
                 return
             }
             phase = .savingProfile

@@ -115,6 +115,12 @@ struct DeveloperToolsSettingsView: View {
                     } label: {
                         Label("Debug Events", systemImage: "stethoscope")
                     }
+
+                    NavigationLink {
+                        StartupDiagnosticsView()
+                    } label: {
+                        Label("Startup Diagnostics", systemImage: "timer")
+                    }
                 } header: {
                     Text("Debugging")
                 } footer: {

@@ -75,6 +75,38 @@ struct CreateIdentityOnboardingTests {
         #expect(dismissed)
     }
 
+    @Test func chosenNameIsTheFirstPublishedProfileWithoutARepublish() async {
+        let service = CreateIdentityServiceStub()
+        service.creationEchoesInitialProfile = true
+        let model = CreateIdentityViewModel()
+        await model.prepare(using: service)
+        model.displayName = "  Ada  "
+        model.about = "Hello"
+        var dismissed = false
+        await model.submit(using: service) { dismissed = true }
+        #expect(service.createCount == 1)
+        #expect(service.initialProfiles.count == 1)
+        #expect(service.initialProfiles.first??.name == "Ada")
+        #expect(service.initialProfiles.first??.displayName == "Ada")
+        #expect(service.initialProfiles.first??.about == "Hello")
+        #expect(service.initialProfiles.first??.picture == nil)
+        #expect(service.publishCount == 0)
+        #expect(service.completeCount == 1)
+        #expect(dismissed)
+    }
+
+    @Test func profileIsRepublishedWhenCreationIgnoredTheInitialProfile() async {
+        let service = CreateIdentityServiceStub()
+        let model = CreateIdentityViewModel()
+        await model.prepare(using: service)
+        model.displayName = "Ada"
+        await model.submit(using: service) {}
+        // A resumed setup returns the bootstrap profile instead of "Ada".
+        #expect(service.initialProfiles.first??.name == "Ada")
+        #expect(service.publishCount == 1)
+        #expect(service.publishedProfile?.name == "Ada")
+    }
+
     @Test func lateSuggestionDoesNotOverwriteTyping() async {
         let gate = IdentityCreationGate()
         let service = CreateIdentityServiceStub()
@@ -972,6 +1004,10 @@ private final class CreateIdentityServiceStub: CreateIdentityServicing {
     var beforeSuggestionReturn: (() async -> Void)?
     private(set) var suggestionCount = 0
     private(set) var publishedProfile: UserProfileMetadataFfi?
+    private(set) var initialProfiles: [UserProfileMetadataFfi?] = []
+    /// When set, creation honors the initial profile like MDK does instead of
+    /// returning the generated default.
+    var creationEchoesInitialProfile = false
     private var savedProfile: UserProfileMetadataFfi?
 
     var beforeAccountsReturn: (() async -> Void)?
@@ -1008,8 +1044,9 @@ private final class CreateIdentityServiceStub: CreateIdentityServicing {
         running: true
     )
 
-    func createIdentityForProfileSetup() async throws -> IdentityCreationResultFfi {
+    func createIdentityForProfileSetup(initialProfile: UserProfileMetadataFfi?) async throws -> IdentityCreationResultFfi {
         createCount += 1
+        initialProfiles.append(initialProfile)
         if createFailuresRemaining > 0 {
             createFailuresRemaining -= 1
             throw StubError.failed
@@ -1017,6 +1054,9 @@ private final class CreateIdentityServiceStub: CreateIdentityServicing {
         await beforeCreateReturn?()
         storedAccounts.append(identity)
         if loseCreationReply { loseCreationReply = false; throw StubError.failed }
+        if creationEchoesInitialProfile, let initialProfile {
+            return IdentityCreationResultFfi(account: identity, profile: initialProfile, readiness: .localReady)
+        }
         return IdentityCreationResultFfi(
             account: identity,
             profile: UserProfileMetadataFfi(

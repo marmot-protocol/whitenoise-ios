@@ -404,7 +404,10 @@ final class AppReviewDemoCoordinator {
         for attempt in 0..<120 {
             try Task.checkCancellation()
             do {
-                return try await appState.createIdentityForProfileSetup()
+                return try await appState.createIdentityForProfileSetup(initialProfile: UserProfileMetadataFfi(
+                    name: "Johnny Appleseed", displayName: "Johnny Appleseed", about: "App Review demo profile",
+                    picture: nil, banner: nil, nip05: nil, lud16: nil
+                ))
             } catch MarmotKitError.AccountSetupRetryRequired {
                 if attempt == 119 { throw MarmotKitError.AccountSetupRetryRequired }
                 try await Task.sleep(for: .milliseconds(500))

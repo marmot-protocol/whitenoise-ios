@@ -135,4 +135,25 @@ extension GroupSharedMediaPresentationTests {
                                    fileName: "updated.jpg", timestamp: 99).reference)
         #expect(GroupSharedMediaPresentation.items(entries: [replacement]).first?.id == items[0].id)
     }
+
+    @Test func customEmojiArtworkStaysOutOfTheGalleryWithoutStoppingPaging() {
+        let reference = mediaRecord(messageID: "message", index: 0, mediaType: "image/png",
+                                    fileName: "emoji.png", timestamp: 1).reference
+        let emoji = AttachmentEntryFfi(messageIdHex: "emoji-message", sourceMessageIdHex: "emoji-message",
+            sender: "sender", timelineAt: 1, receivedAt: 1, sourceEpoch: nil, category: .image, role: .inlineEmoji,
+            attachment: .accepted(attachmentIndex: 0, reference: reference))
+        var photo = emoji
+        photo.messageIdHex = "photo-message"
+        photo.role = .shared
+        photo.attachment = .accepted(attachmentIndex: 3, reference: reference)
+
+        #expect(GroupSharedMediaPresentation.galleryEntries([emoji, photo]).map(\.messageIdHex) == ["photo-message"])
+        // The original slot survives filtering; slots are never renumbered.
+        #expect(GroupSharedMediaPresentation.items(entries: [emoji, photo]).map(\.id) == ["photo-message:3"])
+        #expect(GroupSharedMediaPresentation.items(entries: [emoji]).isEmpty)
+
+        #expect(GroupSharedMediaPresentation.shouldReadPastFilteredPage(galleryEntryCount: 0, hasMore: true))
+        #expect(!GroupSharedMediaPresentation.shouldReadPastFilteredPage(galleryEntryCount: 0, hasMore: false))
+        #expect(!GroupSharedMediaPresentation.shouldReadPastFilteredPage(galleryEntryCount: 1, hasMore: true))
+    }
 }
