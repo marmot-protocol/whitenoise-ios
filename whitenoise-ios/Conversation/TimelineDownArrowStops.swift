@@ -1,4 +1,39 @@
 import Foundation
+import MarmotKit
+
+/// MDK's canonical history order, mirrored from `canonical_timeline_order_key`
+/// in mdk `crates/storage-sqlite/src/timeline.rs`. Window pages arrive in this
+/// order; `timelineAt` alone is not monotonic across epochs.
+nonisolated struct TimelineHistoryOrderKey: Comparable {
+    private let rank: UInt8
+    private let primary: UInt64
+    private let phase: UInt8
+    private let intraEpochAt: UInt64
+    private let messageIdHex: String
+
+    init(sourceMessageIdHex: String?, sourceEpoch: UInt64?, kind: UInt64, timelineAt: UInt64, messageIdHex: String) {
+        switch (sourceEpoch, sourceMessageIdHex) {
+        case (let epoch?, _): (rank, primary) = (1, epoch)
+        // Unresolved local projections stay at the optimistic head.
+        case (nil, nil): (rank, primary) = (2, timelineAt)
+        case (nil, _?): (rank, primary) = (0, timelineAt)
+        }
+        // Authenticated group-state rows lead their epoch.
+        phase = kind == MessageSemantics.kindGroupSystem && sourceMessageIdHex == nil && sourceEpoch != nil ? 0 : 1
+        intraEpochAt = phase == 0 ? 0 : timelineAt
+        self.messageIdHex = messageIdHex
+    }
+
+    init(_ record: TimelineMessageRecordFfi) {
+        self.init(sourceMessageIdHex: record.sourceMessageIdHex, sourceEpoch: record.sourceEpoch,
+                  kind: record.kind, timelineAt: record.timelineAt, messageIdHex: record.messageIdHex)
+    }
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        (lhs.rank, lhs.primary, lhs.phase, lhs.intraEpochAt, lhs.messageIdHex)
+            < (rhs.rank, rhs.primary, rhs.phase, rhs.intraEpochAt, rhs.messageIdHex)
+    }
+}
 
 /// Where a down-arrow stop sits relative to the rows on screen.
 nonisolated enum TimelineDownArrowStopPlacement: Equatable {
@@ -12,13 +47,13 @@ nonisolated enum TimelineDownArrowStopPlacement: Equatable {
     /// Nothing visible yet, or the row is missing from inside the loaded range.
     case unknown
 
-    /// `orderKey` is the stop's `recordedAt`, captured when the stop was taken,
-    /// so a row the bounded window has dropped can still be placed.
+    /// `orderKey` is captured while the stop's row is in the window, so a row
+    /// the bounded window has dropped can still be placed.
     static func of(
         targetIndex: Int?,
         visibleIndices: ClosedRange<Int>?,
-        orderKey: UInt64?,
-        loadedOrderKeys: ClosedRange<UInt64>?,
+        orderKey: TimelineHistoryOrderKey?,
+        loadedOrderKeys: ClosedRange<TimelineHistoryOrderKey>?,
         hasMoreAfter: Bool
     ) -> Self {
         if let targetIndex {
@@ -37,6 +72,8 @@ nonisolated enum TimelineDownArrowStopPlacement: Equatable {
     var isPassed: Bool { self == .above || self == .unloadedOlder }
 
     var isAhead: Bool { self == .below || self == .unloadedNewer }
+
+    var isOnScreenOrAhead: Bool { self == .visible || isAhead }
 }
 
 nonisolated enum TimelineDownArrowDestination: Equatable {
@@ -70,8 +107,15 @@ nonisolated enum TimelineDownArrowPolicy {
         isInitialPositionSettled && isUserScrolling
     }
 
-    static func orderKeyRange<Keys: Sequence>(_ keys: Keys) -> ClosedRange<UInt64>? where Keys.Element == UInt64 {
-        var range: ClosedRange<UInt64>?
+    /// The reader passes a stop only by moving beyond it after having it on
+    /// screen or ahead. MDK cannot place a row outside the window that was never
+    /// loaded, so a stop behind an opening page stays until the reader reaches it.
+    static func hasPassed(_ placement: TimelineDownArrowStopPlacement, wasOnScreenOrAhead: Bool) -> Bool {
+        wasOnScreenOrAhead && placement.isPassed
+    }
+
+    static func orderKeyRange<Keys: Sequence>(_ keys: Keys) -> ClosedRange<Keys.Element>? where Keys.Element: Comparable {
+        var range: ClosedRange<Keys.Element>?
         for key in keys {
             range = range.map { min($0.lowerBound, key)...max($0.upperBound, key) } ?? key...key
         }

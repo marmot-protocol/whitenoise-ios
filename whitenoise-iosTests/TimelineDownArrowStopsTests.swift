@@ -4,13 +4,21 @@ import Testing
 struct TimelineDownArrowStopsTests {
     private typealias Stop = TimelineDownArrowPolicy.Stop
     private typealias Placement = TimelineDownArrowStopPlacement
+    private typealias Key = TimelineHistoryOrderKey
+
+    private static func key(epoch: UInt64? = 10, at timelineAt: UInt64, id: String = "m",
+                            source: String? = nil, kind: UInt64 = 9) -> Key {
+        Key(sourceMessageIdHex: source, sourceEpoch: epoch, kind: kind, timelineAt: timelineAt, messageIdHex: id)
+    }
+
+    private static let page = key(at: 100)...key(at: 200)
 
     private func loaded(_ index: Int, visible: ClosedRange<Int>?) -> Placement {
         Placement.of(targetIndex: index, visibleIndices: visible, orderKey: nil,
-                     loadedOrderKeys: 100...200, hasMoreAfter: false)
+                     loadedOrderKeys: Self.page, hasMoreAfter: false)
     }
 
-    private func unloaded(orderKey: UInt64?, loaded: ClosedRange<UInt64>? = 100...200,
+    private func unloaded(orderKey: Key?, loaded: ClosedRange<Key>? = page,
                           hasMoreAfter: Bool) -> Placement {
         Placement.of(targetIndex: nil, visibleIndices: 5...9, orderKey: orderKey,
                      loadedOrderKeys: loaded, hasMoreAfter: hasMoreAfter)
@@ -25,12 +33,38 @@ struct TimelineDownArrowStopsTests {
     }
 
     @Test func unloadedPlacementUsesTheCapturedOrderKey() {
-        #expect(unloaded(orderKey: 50, hasMoreAfter: true) == .unloadedOlder)
-        #expect(unloaded(orderKey: 250, hasMoreAfter: true) == .unloadedNewer)
-        #expect(unloaded(orderKey: 250, hasMoreAfter: false) == .unknown)
-        #expect(unloaded(orderKey: 150, hasMoreAfter: true) == .unknown)
+        #expect(unloaded(orderKey: Self.key(at: 50), hasMoreAfter: true) == .unloadedOlder)
+        #expect(unloaded(orderKey: Self.key(at: 250), hasMoreAfter: true) == .unloadedNewer)
+        #expect(unloaded(orderKey: Self.key(at: 250), hasMoreAfter: false) == .unknown)
+        #expect(unloaded(orderKey: Self.key(at: 150), hasMoreAfter: true) == .unknown)
         #expect(unloaded(orderKey: nil, hasMoreAfter: true) == .unknown)
-        #expect(unloaded(orderKey: 250, loaded: nil, hasMoreAfter: true) == .unknown)
+        #expect(unloaded(orderKey: Self.key(at: 250), loaded: nil, hasMoreAfter: true) == .unknown)
+    }
+
+    /// A later epoch is newer history even when its clock reads earlier.
+    @Test func unloadedPlacementFollowsEpochBeforeTimestamp() {
+        let epochTenPage = Self.key(epoch: 10, at: 200, id: "a")...Self.key(epoch: 10, at: 210, id: "b")
+        #expect(unloaded(orderKey: Self.key(epoch: 11, at: 100), loaded: epochTenPage,
+                         hasMoreAfter: true) == .unloadedNewer)
+        #expect(unloaded(orderKey: Self.key(epoch: 9, at: 300), loaded: epochTenPage,
+                         hasMoreAfter: true) == .unloadedOlder)
+    }
+
+    /// Rows sharing the page edge's timestamp are placed by message id, as MDK pages them.
+    @Test func unloadedPlacementBreaksTimestampTiesByMessageId() {
+        let page = Self.key(at: 100, id: "b")...Self.key(at: 200, id: "b")
+        #expect(unloaded(orderKey: Self.key(at: 200, id: "c"), loaded: page, hasMoreAfter: true) == .unloadedNewer)
+        #expect(unloaded(orderKey: Self.key(at: 100, id: "a"), loaded: page, hasMoreAfter: true) == .unloadedOlder)
+    }
+
+    @Test func historyOrderMatchesMDKCanonicalOrder() {
+        let sourcedWithoutEpoch = Self.key(epoch: nil, at: 900, source: "s")
+        let groupState = Self.key(epoch: 10, at: 500, id: "z", kind: MessageSemantics.kindGroupSystem)
+        let chat = Self.key(epoch: 10, at: 1, id: "a")
+        let nextEpoch = Self.key(epoch: 11, at: 0)
+        let localSend = Self.key(epoch: nil, at: 0)
+        #expect([localSend, nextEpoch, chat, groupState, sourcedWithoutEpoch].sorted()
+            == [sourcedWithoutEpoch, groupState, chat, nextEpoch, localSend])
     }
 
     @Test func stopsBehindTheReaderArePassedAndOnlyStopsInFrontAreAhead() {
@@ -101,6 +135,22 @@ struct TimelineDownArrowStopsTests {
         // Back above the stop: it would be ahead, but a retired stop is not offered.
         #expect(loaded(stopIndex, visible: 0...4) == .below)
         #expect(TimelineDownArrowPolicy.destination(replyOrigin: nil, firstUnread: nil) == .latest)
+    }
+
+    /// MDK cannot place a first unread outside an opening page it never
+    /// loaded, so a stop the reader never had on screen or ahead survives.
+    @Test func onlyAStopOnceOnScreenOrAheadCanBePassed() {
+        #expect(!TimelineDownArrowPolicy.hasPassed(.above, wasOnScreenOrAhead: false))
+        #expect(!TimelineDownArrowPolicy.hasPassed(.unloadedOlder, wasOnScreenOrAhead: false))
+        #expect(TimelineDownArrowPolicy.hasPassed(.above, wasOnScreenOrAhead: true))
+        #expect(TimelineDownArrowPolicy.hasPassed(.unloadedOlder, wasOnScreenOrAhead: true))
+        #expect(!TimelineDownArrowPolicy.hasPassed(.below, wasOnScreenOrAhead: true))
+        #expect(!TimelineDownArrowPolicy.hasPassed(.unknown, wasOnScreenOrAhead: true))
+        #expect(Placement.visible.isOnScreenOrAhead)
+        #expect(Placement.below.isOnScreenOrAhead)
+        #expect(Placement.unloadedNewer.isOnScreenOrAhead)
+        #expect(!Placement.above.isOnScreenOrAhead)
+        #expect(!Placement.unknown.isOnScreenOrAhead)
     }
 
     @Test func orderKeyRangeSpansTheGivenKeys() {
