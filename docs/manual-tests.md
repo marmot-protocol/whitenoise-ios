@@ -648,8 +648,10 @@ only from custom emoji already shown in that chat.
       after the user chooses them; a timeout is not an empty result.
 - [ ] For both relay-list and inbox-list recovery, make the lookup inconclusive
       (no defaults offered). Search Default Relays searches only the two seed
-      relays and publishes nothing; Try Again stays available beside it to repeat
-      the broader lookup. After a failed custom search, neither step dead-ends.
+      relays and publishes nothing; Try Again stays available beside it. Before
+      any explicit search, Try Again repeats the broader indexer-backed lookup;
+      after one, it repeats the chosen search relays for the rest of the attempt.
+      After a failed custom search, neither step dead-ends.
 - [ ] Change a record while its form/card is open: MDK rejects stale publication
       instead of silently overwriting the changed record.
 - [ ] Attention rows open native decision sheets; the underlying checklist keeps

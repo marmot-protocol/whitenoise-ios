@@ -59,7 +59,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
         let primary = primaryAction?.action
         var result: [Action] = []
         // Searching only the defaults drops MDK's public indexers for the rest of the
-        // attempt, so keep the broader re-check reachable beside it.
+        // attempt. Until then, Try Again repeats the broader lookup.
         if primary == .searchDefaults, allows(.retry) { result.append(.retry) }
         if canEdit, primary != .edit { result.append(.edit) }
         if canDiscover, primary != .discovery { result.append(.discovery) }

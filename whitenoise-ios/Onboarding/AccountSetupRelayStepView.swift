@@ -84,12 +84,13 @@ struct AccountSetupRelayStepView: View {
                     }
                 } else if recovery.canSearchDefaults || allows(.useRecommendedRelays) {
                     let relays = recovery.canSearchDefaults ? MarmotClient.seedRelays : defaultRelays
+                    let header: LocalizedStringKey = recovery.canSearchDefaults ? "Relays to search" : "Default relays"
                     if isInbox {
-                        addresses(relays, title: "Default relays")
+                        addresses(relays, title: header)
                     } else {
                         Section {
                             ForEach(relays, id: \.self) { AccountSetupRelaySummary(address: $0) }
-                        } header: { Text("Default relays") }
+                        } header: { Text(header) }
                     }
                 }
             } actions: {
