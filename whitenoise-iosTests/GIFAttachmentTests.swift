@@ -37,6 +37,7 @@ struct GIFAttachmentTests {
 
     private func checkGIF(_ attachment: MediaDraftAttachment) throws {
         #expect(attachment.mediaType == "image/gif")
+        #expect(attachment.isGIF)
         #expect(attachment.fileName.lowercased().hasSuffix(".gif"))
         #expect(attachment.dim == "4x2")
         #expect(attachment.thumbnail != nil)
@@ -116,6 +117,7 @@ struct GIFAttachmentTests {
 
     private func expectStill(_ attachment: MediaDraftAttachment) throws {
         #expect(attachment.mediaType == "image/jpeg")
+        #expect(!attachment.isGIF)
         #expect(attachment.fileName.hasSuffix(".jpg"))
         #expect(try AttachmentGIF.source(from: attachment.data) == nil)
     }

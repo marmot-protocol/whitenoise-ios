@@ -399,6 +399,10 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
 
+    var isGIF: Bool {
+        MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
+    }
+
     init(
         id: UUID = UUID(),
         fileName: String,
