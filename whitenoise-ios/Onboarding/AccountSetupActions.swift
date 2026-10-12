@@ -6,6 +6,7 @@ struct AccountSetupActions: View {
     @Bindable var model: AccountSetupModel
     let selectedStep: OnboardingStepFfi
     @State private var editor: SetupEditor?
+    @State private var activePrimaryTitle: LocalizedStringKey?
 
     private var step: OnboardingStepStateFfi? {
         model.snapshot.steps.first { $0.step == selectedStep }
@@ -29,6 +30,16 @@ struct AccountSetupActions: View {
     }
 
     var body: some View {
+        if selectedStep == .profile {
+            AccountSetupProfileView(model: model)
+        } else if selectedStep == .relays {
+            AccountSetupRelayRecoveryView(model: model, selectedStep: selectedStep)
+        } else {
+            decisionContent
+        }
+    }
+
+    private var decisionContent: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -45,7 +56,7 @@ struct AccountSetupActions: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .safeAreaPadding()
             }
-            .navigationTitle(title)
+            .navigationTitle(AccountSetupPresentation.title(selectedStep))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -53,18 +64,15 @@ struct AccountSetupActions: View {
                         .accessibilityLabel("Close")
                 }
             }
-            .safeAreaInset(edge: .bottom) {
+            .modifier(WNOnboardingActionBar {
                 VStack(spacing: 8) { actions }
                     .disabled(model.isBusy || !model.isConnected)
                     .safeAreaPadding(.horizontal)
                     .safeAreaPadding(.bottom)
-                    .background(.background)
-            }
+            })
             .sheet(item: $editor) { editor in
                 NavigationStack {
                     switch editor {
-                    case .profile:
-                        IdentityProfileSetupView(accountSetup: model)
                     case .discovery:
                         AccountSetupDiscoverySheet(model: model, step: selectedStep)
                     case .relays:
@@ -79,24 +87,12 @@ struct AccountSetupActions: View {
         }
     }
 
-    private var title: String {
-        if selectedStep == .profile {
-            return step?.status == .retryableFailure
-                ? L10n.string("Couldn’t load your profile") : L10n.string("Your profile")
-        }
-        return AccountSetupPresentation.title(selectedStep)
-    }
-
     @ViewBuilder private var explanation: some View {
         if proposal != nil, step?.actions.contains(.approveRepair) != true,
            step?.actions.contains(.cancelRepair) != true {
             Text("Your previous update hasn’t finished. Try again to finish publishing it.")
         } else {
             switch selectedStep {
-            case .profile:
-                Text(step?.status == .retryableFailure
-                     ? "Try again to load your profile, or continue without changing it."
-                     : "A name and photo help people recognize you. You can also do this later.")
             case .relays, .inboxRelays:
                 if step?.actions.contains(.useRecommendedRelays) == true || proposal != nil {
                     Text("Relays let your profile publish information, receive chat invitations, and deliver messages.")
@@ -138,6 +134,8 @@ struct AccountSetupActions: View {
                 Text("Secure messaging must be ready before you can open Chats. Try this check again.")
             case .follows:
                 Text("You can continue without changing the people you follow.")
+            default:
+                EmptyView()
             }
         }
     }
@@ -145,18 +143,13 @@ struct AccountSetupActions: View {
     @ViewBuilder private var actions: some View {
         if let step {
             if proposal != nil, !step.actions.contains(.approveRepair), !step.actions.contains(.cancelRepair) {
-                if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
-            } else if selectedStep == .profile {
-                if step.actions.contains(.editProfile) || step.actions.contains(.approveRepair) {
-                    WNButton(title: "Edit Profile") { editor = .profile }
-                } else if step.actions.contains(.retry) { action("Try again", .retry(.profile)) }
-                if step.actions.contains(.continueWithout) { action("Not Now", .skip(.profile), secondary: true) }
+                if step.actions.contains(.retry) { action("Try Again", .retry(selectedStep)) }
             } else if selectedStep == .relays || selectedStep == .inboxRelays {
                 if let proposal, step.actions.contains(.approveRepair) {
                     action("Use These Relays", .approve(proposal.revision, recoveryEpoch: model.snapshot.recoveryEpoch)).disabled(relays == nil)
                 } else if step.actions.contains(.useRecommendedRelays) {
                     action("Use Default Relays", .useDefaults(selectedStep))
-                } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+                } else if step.actions.contains(.retry) { action("Try Again", .retry(selectedStep)) }
                 if step.actions.contains(.editRelays) {
                     WNButton(title: "Choose Relays", emphasis: .secondary) { editor = .relays }
                 }
@@ -166,141 +159,29 @@ struct AccountSetupActions: View {
             } else if step.actions.contains(.continueAnyway) {
                 action(LocalizedStringKey(AccountSetupPresentation.deviceAction(model.snapshot.singleDeviceNotice?.discovery)),
                        .acknowledge(model.snapshot.revision, recoveryEpoch: model.snapshot.recoveryEpoch))
-            } else if step.actions.contains(.retry) { action("Try again", .retry(selectedStep)) }
+            } else if step.actions.contains(.retry) { action("Try Again", .retry(selectedStep)) }
             if step.actions.contains(.cancelRepair) { action("Back", .cancelRepair, secondary: true) }
             if selectedStep == .follows, step.actions.contains(.continueWithout) { action("Continue", .skip(.follows)) }
         }
     }
 
-    private func action(_ title: LocalizedStringKey, _ command: AccountSetupCommand, secondary: Bool = false) -> some View {
-        WNButton(title: title, emphasis: secondary ? .secondary : .primary) { model.send(command) }
+    @ViewBuilder private func action(_ title: LocalizedStringKey, _ command: AccountSetupCommand, secondary: Bool = false) -> some View {
+        if secondary {
+            WNButton(title: title, emphasis: .secondary) { model.send(command) }
+        } else {
+            WNOnboardingButton(title: title, isLoading: activePrimaryTitle == title) {
+                guard activePrimaryTitle == nil, let operation = model.send(command) else { return }
+                activePrimaryTitle = title
+                Task {
+                    await operation.value
+                    activePrimaryTitle = nil
+                }
+            }
+        }
     }
 }
 
 private enum SetupEditor: String, Identifiable {
-    case profile, discovery, relays
+    case discovery, relays
     var id: String { rawValue }
-}
-
-private struct AccountSetupRelaySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let model: AccountSetupModel
-    let step: OnboardingStepFfi
-    @State private var reads = ""
-    @State private var writes = ""
-    @State private var error: String?
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("wss://relay.example.com", text: $reads, axis: .vertical)
-                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-            } header: {
-                if step == .relays { Text("Read relays (optional)") } else { Text("Inbox relays") }
-            }
-            if step == .relays {
-                Section("Write relays") {
-                    TextField("Write relays", text: $writes, axis: .vertical)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                }
-            }
-            Section {
-                if step == .inboxRelays {
-                    Text("Enter one address per line. This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Enter one address per line. This replaces your public relay list, including entries you leave out. Nothing is published until you review and approve it.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if let error { Text(error).foregroundStyle(.orange) }
-        }
-        .navigationTitle("Choose Relays")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Review Replacement", isLoading: model.isBusy) {
-                let readValues = step == .relays && reads.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? [] : AccountSetupInput.relays(reads)
-                let writeValues = step == .inboxRelays ? [] : AccountSetupInput.relays(writes)
-                guard let readValues, let writeValues else {
-                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
-                    return
-                }
-                guard !AccountSetupInput.exceedsSelectionLimit(reads: readValues, writes: writeValues) else {
-                    error = L10n.string("The relay list is too large.")
-                    return
-                }
-                guard let operation = model.send(.editRelays(step, reads: readValues, writes: writeValues)) else { return }
-                error = nil
-                Task {
-                    await operation.value
-                    if model.errorMessage == nil,
-                       model.snapshot.proposal?.step == step,
-                       model.snapshot.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true {
-                        dismiss()
-                    } else {
-                        error = model.errorMessage ?? L10n.string("Couldn’t finish this step. Try again.")
-                    }
-                }
-            }
-            .disabled(model.isBusy || !model.isConnected)
-            .safeAreaPadding()
-            .background(.background)
-        }
-    }
-}
-
-private struct AccountSetupDiscoverySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let model: AccountSetupModel
-    let step: OnboardingStepFfi
-    @State private var relay = ""
-    @State private var error: String?
-
-    var body: some View {
-        Form {
-            Section {
-                TextField("wss://relay.example.com", text: $relay)
-                    .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .accessibilityLabel("Relay URL")
-            } footer: {
-                Text("Choose a relay you’ve used with this profile. We’ll look there for your existing settings without publishing anything.")
-            }
-            if let error { Text(error).foregroundStyle(.orange) }
-        }
-        .navigationTitle("Find Your Settings")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel("Close")
-            }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNButton(title: "Look for My Settings", isLoading: model.isBusy) {
-                guard let values = AccountSetupInput.relays(relay), values.count == 1 else {
-                    error = L10n.string("Enter a valid relay URL, like wss://relay.example.com.")
-                    return
-                }
-                guard let operation = model.send(.discovery(values)) else { return }
-                error = nil
-                Task {
-                    await operation.value
-                    if model.errorMessage == nil,
-                       model.snapshot.steps.first(where: { $0.step == step })?.status != .retryableFailure {
-                        dismiss()
-                    } else {
-                        error = model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay.")
-                    }
-                }
-            }
-            .disabled(model.isBusy || !model.isConnected)
-            .safeAreaPadding()
-            .background(.background)
-        }
-    }
 }

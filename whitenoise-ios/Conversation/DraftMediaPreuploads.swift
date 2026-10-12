@@ -1,16 +1,8 @@
 import Foundation
 import MarmotKit
-import Observation
 
 typealias DraftMediaUpload = Task<MediaAttachmentReferenceFfi?, Never>
 
-nonisolated enum DraftMediaUploadState: Equatable {
-    case uploading
-    case uploaded
-    case failed
-}
-
-@Observable
 @MainActor
 final class DraftMediaPreuploads {
     typealias Uploader = @MainActor (_ accountRef: String, _ attachment: MediaDraftAttachment) async throws
@@ -18,13 +10,11 @@ final class DraftMediaPreuploads {
 
     private struct Entry {
         let accountRef: String
-        let token: UUID
         let task: DraftMediaUpload
     }
 
-    private(set) var states: [MediaDraftAttachment.ID: DraftMediaUploadState] = [:]
-    @ObservationIgnored private let uploader: Uploader
-    @ObservationIgnored private var entries: [MediaDraftAttachment.ID: Entry] = [:]
+    private let uploader: Uploader
+    private var entries: [MediaDraftAttachment.ID: Entry] = [:]
 
     init(uploader: @escaping Uploader) {
         self.uploader = uploader
@@ -36,31 +26,20 @@ final class DraftMediaPreuploads {
         for (id, entry) in dropped {
             entry.task.cancel()
             entries[id] = nil
-            states[id] = nil
         }
         guard let accountRef else { return }
         for attachment in attachments where entries[attachment.id] == nil {
             let uploader = uploader
-            let token = UUID()
-            let task = DraftMediaUpload { [weak self] in
+            let task = DraftMediaUpload {
                 let uploaded = try? await uploader(accountRef, attachment)
-                let reference = Task.isCancelled ? nil : uploaded ?? nil
-                self?.settle(attachment.id, token: token, reference: reference)
-                return reference
+                return Task.isCancelled ? nil : uploaded ?? nil
             }
-            entries[attachment.id] = Entry(accountRef: accountRef, token: token, task: task)
-            states[attachment.id] = .uploading
+            entries[attachment.id] = Entry(accountRef: accountRef, task: task)
         }
-    }
-
-    private func settle(_ id: MediaDraftAttachment.ID, token: UUID, reference: MediaAttachmentReferenceFfi?) {
-        guard entries[id]?.token == token else { return }
-        states[id] = reference == nil ? .failed : .uploaded
     }
 
     func take(_ attachments: [MediaDraftAttachment], accountRef: String) -> [DraftMediaUpload?] {
         attachments.map { attachment in
-            states[attachment.id] = nil
             guard let entry = entries.removeValue(forKey: attachment.id) else { return nil }
             guard entry.accountRef == accountRef else {
                 entry.task.cancel()
@@ -75,7 +54,6 @@ final class DraftMediaPreuploads {
             entry.task.cancel()
         }
         entries.removeAll()
-        states.removeAll()
     }
 }
 
