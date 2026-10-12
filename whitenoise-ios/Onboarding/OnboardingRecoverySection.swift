@@ -5,7 +5,7 @@ struct OnboardingRecoverySection: View {
     @Environment(AppState.self) private var appState
     @State private var selected: AccountSummaryFfi?
     @State private var isConfirming = false
-    @State private var isRecovering = false
+    @Binding var isRecovering: Bool
     @State private var message: String?
 
     var body: some View {
@@ -13,7 +13,8 @@ struct OnboardingRecoverySection: View {
             ForEach(appState.onboardingRecoveryAccounts, id: \.accountIdHex) { account in
                 VStack(alignment: .leading) {
                     Text("This profile’s saved sign-in setup needs recovery.")
-                    Text(account.accountIdHex).font(.caption.monospaced()).textSelection(.enabled)
+                    Text(IdentityPresentation.text(accountIdHex: account.accountIdHex, abbreviation: .full))
+                        .font(.caption.monospaced()).textSelection(.enabled)
                     Button("Recover Sign-In Setup") {
                         selected = account
                         isConfirming = true
@@ -42,7 +43,6 @@ struct OnboardingRecoverySection: View {
         } message: {
             Text("Recovery signs this profile out and replaces its unreadable setup checkpoint. Only the latest recovery evidence is retained. It does not undo earlier relay publications. You will need the private key to start a new sign-in; no publication is approved by this action.")
         }
-        .interactiveDismissDisabled(isRecovering)
     }
 }
 

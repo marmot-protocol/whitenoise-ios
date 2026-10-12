@@ -90,13 +90,19 @@ nonisolated enum AccountSetupPresentation {
 
     static func header(
         _ snapshot: OnboardingSnapshotFfi, reviewStep: OnboardingStepFfi?, errorMessage: String?,
-        isOpeningChats: Bool, closeFailed: Bool
+        isOpeningChats: Bool, closeFailed: Bool, isCancelled: Bool = false
     ) -> (title: String, subtitle: String) {
         if let errorMessage {
             return (
                 closeFailed ? L10n.string("Couldn’t close sign-in") : L10n.string("Couldn’t continue signing in"),
                 errorMessage
             )
+        }
+        if isCancelled {
+            return (L10n.string("Sign-in cancelled"), L10n.string("Close this screen and sign in again to continue. Your saved identity and completed changes are kept."))
+        }
+        if snapshot.cancellationPending {
+            return (L10n.string("Closing sign-in"), L10n.string("Finishing cancellation. Your saved identity and completed changes will be kept."))
         }
         if isOpeningChats {
             return (L10n.string("You’re ready to chat"), L10n.string("Opening your chats…"))

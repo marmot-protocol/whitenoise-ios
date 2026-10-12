@@ -23545,6 +23545,65 @@
         }
       }
     },
+    "Close this screen and sign in again to continue. Your saved identity and completed changes are kept." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließe diesen Bildschirm und melde dich erneut an, um fortzufahren. Deine gespeicherte Identität und abgeschlossenen Änderungen bleiben erhalten."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cierra esta pantalla e inicia sesión de nuevo para continuar. Se conservan tu identidad guardada y los cambios completados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermez cet écran et reconnectez-vous pour continuer. Votre identité enregistrée et les modifications effectuées sont conservées."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiudi questa schermata e accedi di nuovo per continuare. L’identità salvata e le modifiche completate vengono conservate."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feche esta tela e entre novamente para continuar. Sua identidade salva e as alterações concluídas são mantidas."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закройте этот экран и войдите снова, чтобы продолжить. Сохранённая личность и завершённые изменения будут сохранены."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Devam etmek için bu ekranı kapatıp tekrar giriş yapın. Kayıtlı kimliğiniz ve tamamlanan değişiklikler korunur."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭此屏幕并重新登录以继续。已保存的身份和已完成的更改会保留。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "關閉此畫面並重新登入以繼續。已儲存的身分和已完成的變更會保留。"
+          }
+        }
+      }
+    },
     "Close search" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -23600,6 +23659,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "關閉搜尋"
+          }
+        }
+      }
+    },
+    "Closing sign-in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung wird geschlossen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrando el inicio de sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermeture de la connexion"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chiusura dell’accesso"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fechando o início de sessão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрытие входа"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş kapatılıyor"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在关闭登录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在關閉登入"
           }
         }
       }
@@ -99389,6 +99507,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登出"
+          }
+        }
+      }
+    },
+    "Sign-in cancelled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anmeldung abgebrochen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicio de sesión cancelado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion annulée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accesso annullato"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Início de sessão cancelado"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вход отменён"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş iptal edildi"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录已取消"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登入已取消"
           }
         }
       }

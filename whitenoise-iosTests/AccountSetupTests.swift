@@ -218,6 +218,26 @@ struct AccountSetupTests {
         #expect(opening.subtitle == refreshError)
     }
 
+    @Test func cancellationFeedbackNeverClaimsChecksAreRunningOrChatsAreReady() {
+        let pending = AccountSetupPresentation.header(
+            snapshot(ready: true, cancellationPending: true), reviewStep: nil, errorMessage: nil,
+            isOpeningChats: false, closeFailed: false
+        )
+        #expect(pending.title == L10n.string("Closing sign-in"))
+        let finished = AccountSetupPresentation.header(
+            snapshot(ready: true, cancellationPending: true), reviewStep: nil, errorMessage: nil,
+            isOpeningChats: false, closeFailed: false, isCancelled: true
+        )
+        #expect(finished.title == L10n.string("Sign-in cancelled"))
+        #expect(finished.subtitle == L10n.string("Close this screen and sign in again to continue. Your saved identity and completed changes are kept."))
+        let failed = AccountSetupPresentation.header(
+            snapshot(cancellationPending: true), reviewStep: nil, errorMessage: "failure",
+            isOpeningChats: false, closeFailed: true
+        )
+        #expect(failed.title == L10n.string("Couldn’t close sign-in"))
+        #expect(failed.subtitle == "failure")
+    }
+
     @Test func readyHeaderDistinguishesOpeningFromReady() {
         let ready = AccountSetupPresentation.header(
             snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: false, closeFailed: false

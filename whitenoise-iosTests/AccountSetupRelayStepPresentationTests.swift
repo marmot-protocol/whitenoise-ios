@@ -130,6 +130,17 @@ struct AccountSetupRelayStepPresentationTests {
         #expect(presentation.status == .draftFailure)
     }
 
+    @Test func reopenedSheetDoesNotDescribeAnUnknownErrorAsASaveFailure() {
+        let lookup = Presentation(step: .relays, actions: [.retry], proposal: nil, hasOperationError: true)
+        #expect(lookup.status == .operationFailure)
+        #expect(lookup.primaryAction?.action == .retry)
+        let review = Presentation(
+            step: .inboxRelays, actions: [.approveRepair, .cancelRepair], proposal: proposal(), hasOperationError: true
+        )
+        #expect(review.status == .operationFailure)
+        #expect(review.primaryAction == .init(action: .approve))
+    }
+
     @Test func failedApprovalRetriesApprovalRatherThanStartingOver() {
         let presentation = Presentation(
             step: .inboxRelays, actions: [.approveRepair, .cancelRepair], proposal: proposal(), hasOperationError: true, lastAction: .approve

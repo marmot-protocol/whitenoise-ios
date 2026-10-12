@@ -155,6 +155,7 @@ struct AccountSetupRelayStepView: View {
         if isBusy { return isInbox ? "Your inbox relays" : "Your relays" }
         if settingsChanged { return "Relay settings changed" }
         switch recovery.status {
+        case .operationFailure: return "Couldn’t continue signing in"
         case .earlierCheck: return "Review Sign-In Checks"
         case .relays:
             if isInbox { return "Your inbox relays" }
@@ -350,6 +351,7 @@ struct AccountSetupRelayStepView: View {
     private func failureExplanation(_ error: String) -> String {
         guard error == L10n.string("Couldn’t finish this step. Try again.") else { return error }
         switch recovery.status {
+        case .operationFailure: return error
         case .draftFailure, .discardFailure: return L10n.string("Your relay draft is still available. Review the changes and try again.")
         case .discoveryFailure: return L10n.string("Couldn’t find your settings. Try another relay.")
         case .checkFailure: return L10n.string("We couldn’t finish checking your relay settings. Try again, or search another relay.")

@@ -2,7 +2,7 @@ import MarmotKit
 
 nonisolated struct AccountSetupRelayStepPresentation {
     enum Action { case defaults, approve, retry, discard, edit, discovery, searchDefaults, reviewChecks }
-    enum Status { case relays, review, invalid, interrupted, draftFailure, discoveryFailure, checkFailure, discardFailure, updateFailure, earlierCheck }
+    enum Status { case relays, review, invalid, interrupted, draftFailure, discoveryFailure, checkFailure, discardFailure, updateFailure, operationFailure, earlierCheck }
     struct PrimaryAction: Equatable {
         let action: Action
         var isRetry = false
@@ -72,6 +72,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
         if childFailureSource == .relays { return .draftFailure }
         if childFailureSource == .discovery { return .discoveryFailure }
         if hasOperationError {
+            if lastAction == nil { return .operationFailure }
             if lastAction == .retry, !isInterrupted { return .checkFailure }
             if lastAction == .discard { return .discardFailure }
             if lastAction == .edit { return .draftFailure }

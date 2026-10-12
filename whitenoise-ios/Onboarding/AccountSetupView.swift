@@ -53,7 +53,7 @@ struct AccountSetupView: View {
             }
         }
         .modifier(WNOnboardingActionBar(
-            isPresented: model.errorMessage != nil || model.isDurablyReady || isOpeningChats || reviewStep != nil
+            isPresented: model.errorMessage != nil || (!model.cancelled && (model.isDurablyReady || isOpeningChats || reviewStep != nil))
         ) {
             bottomAction
                 .safeAreaPadding(.horizontal, 16)
@@ -74,7 +74,8 @@ struct AccountSetupView: View {
     }
 
     private var reviewStep: OnboardingStepFfi? {
-        AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected)
+        guard !model.cancelled else { return nil }
+        return AccountSetupPresentation.stepToReview(model.snapshot, isBusy: model.isBusy, isConnected: model.isConnected)
     }
 
     private var closeFailed: Bool {
@@ -111,7 +112,7 @@ struct AccountSetupView: View {
     private var header: some View {
         let content = AccountSetupPresentation.header(
             model.snapshot, reviewStep: reviewStep, errorMessage: model.errorMessage,
-            isOpeningChats: isOpeningChats, closeFailed: closeFailed
+            isOpeningChats: isOpeningChats, closeFailed: closeFailed, isCancelled: model.cancelled
         )
         return VStack(alignment: .leading, spacing: 4) {
             Text(content.title)
