@@ -241,6 +241,16 @@ nonisolated enum GiphyPlaybackLoadState: Equatable {
             || (error as? HostResolutionGuard.GuardError) == .resolvesToPrivateAddress {
             return .unavailable
         }
+        if (error as? GiphySearchError) == .unsupportedMedia { return .unavailable }
+        if let failure = error as? PinnedHTTPSFetcher.FetchError {
+            switch failure {
+            case .httpStatus(404), .httpStatus(410), .invalidRequest, .responseHeadersTooLarge,
+                 .malformedResponse, .tooManyRedirects:
+                return .unavailable
+            case .httpStatus:
+                break
+            }
+        }
         return .retryableFailure
     }
 }

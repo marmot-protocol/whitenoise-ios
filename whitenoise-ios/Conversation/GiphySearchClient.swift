@@ -115,7 +115,7 @@ nonisolated struct GiphySearchClient {
         }
         guard let result = result(from: response.data),
               result.media.url.pathExtension.lowercased() == "gif"
-        else { throw GiphySearchError.badResponse }
+        else { throw GiphySearchError.unsupportedMedia }
         return result.media
     }
 
@@ -183,7 +183,7 @@ nonisolated struct GiphySearchClient {
               url.pathExtension.lowercased() == "gif"
         else { return nil }
         let rawFrames = rendition.frames ?? originalFrames
-        let frames = rawFrames.flatMap(Int.init)
+        let frames = rawFrames.flatMap { Int($0) }
         guard rawFrames == nil || frames != nil,
               GIFPlaybackAdmission.allowsMetadata(width: width, height: height, frameCount: frames)
         else { return nil }
@@ -281,6 +281,7 @@ nonisolated enum GiphySearchError: LocalizedError, Equatable {
     case queryTooLong
     case invalidRequest
     case badResponse
+    case unsupportedMedia
 
     var errorDescription: String? {
         switch self {
@@ -288,6 +289,8 @@ nonisolated enum GiphySearchError: LocalizedError, Equatable {
             L10n.string("GIF search isn't configured in this build.")
         case .queryTooLong:
             L10n.string("That GIF search is too long.")
+        case .unsupportedMedia:
+            L10n.string("This GIF isn't supported.")
         case .invalidRequest, .badResponse:
             L10n.string("GIF search is temporarily unavailable.")
         }

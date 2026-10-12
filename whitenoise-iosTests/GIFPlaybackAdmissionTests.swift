@@ -26,6 +26,9 @@ struct GIFPlaybackAdmissionTests {
         #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.invalidURL) == .unavailable)
         #expect(GiphyPlaybackLoadState.failed(with: URLError(.dataLengthExceedsMaximum)) == .unavailable)
         #expect(GiphyPlaybackLoadState.failed(with: HostResolutionGuard.GuardError.resolvesToPrivateAddress) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: PinnedHTTPSFetcher.FetchError.httpStatus(404)) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: PinnedHTTPSFetcher.FetchError.httpStatus(500)) == .retryableFailure)
+        #expect(GiphyPlaybackLoadState.failed(with: GiphySearchError.unsupportedMedia) == .unavailable)
         #expect(GiphyPlaybackLoadState.failed(with: URLError(.timedOut)) == .retryableFailure)
         #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.invalidResponse) == .retryableFailure)
     }
