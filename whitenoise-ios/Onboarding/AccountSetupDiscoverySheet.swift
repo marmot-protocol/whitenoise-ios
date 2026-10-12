@@ -5,7 +5,7 @@ struct AccountSetupDiscoverySheet: View {
     @Environment(\.dismiss) private var dismiss
     let model: AccountSetupModel
     let step: OnboardingStepFfi
-    var onFailure: ((String) -> Void)?
+    var onFailure: ((AccountSetupFailure) -> Void)?
     @State private var relay = ""
     @State private var fieldError: String?
     @State private var lookupError: String?
@@ -77,9 +77,9 @@ struct AccountSetupDiscoverySheet: View {
                 dismiss()
             } else {
                 isSubmitting = false
-                let message = model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay.")
-                lookupError = message
-                onFailure?(message)
+                let failure = model.failure ?? .discovery
+                lookupError = failure.message
+                onFailure?(failure)
             }
         }
     }

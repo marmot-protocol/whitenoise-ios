@@ -824,9 +824,13 @@ struct AccountSetupTests {
         model.send(.approve(0))
         await settle { model.errorMessage != nil && !model.isBusy }
         #expect(await client.approvalCount == 1)
-        #expect(model.errorMessage != nil)
+        #expect(model.failure == .settingsChanged)
         #expect(!model.snapshot.ready)
         #expect(model.snapshot.revision == 1)
+        if let retry = model.send(.retry(.singleDevice)) { await retry.value }
+        #expect(model.failure == nil)
+        #expect(model.errorMessage == nil)
+        #expect(await client.approvalCount == 1)
         model.suspend()
         await model.drain()
     }

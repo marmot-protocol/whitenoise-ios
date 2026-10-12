@@ -8,7 +8,6 @@ struct AccountSetupView: View {
     let onClose: () -> Void
     let onOpenChats: () -> Void
     @State private var decision: SetupDecision?
-    @State private var failedCloseError: String?
 
     var body: some View {
         List {
@@ -64,9 +63,6 @@ struct AccountSetupView: View {
             if appState.canUseRuntimeForLocalForegroundWork { await appState.connectAccountSetup() }
         }
         .onDisappear { model.suspend() }
-        .onChange(of: model.errorMessage) {
-            if model.errorMessage != failedCloseError { failedCloseError = nil }
-        }
         .sheet(item: $decision) { decision in
             AccountSetupActions(model: model, selectedStep: decision.step)
                 .appAppearance()
@@ -79,14 +75,12 @@ struct AccountSetupView: View {
     }
 
     private var closeFailed: Bool {
-        failedCloseError != nil && model.errorMessage == failedCloseError
+        model.failure == .closeSignIn
     }
 
     private func close() async {
         if await appState.cancelAccountSetup() {
             onClose()
-        } else {
-            failedCloseError = model.errorMessage
         }
     }
 

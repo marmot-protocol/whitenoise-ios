@@ -108,6 +108,22 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
     }
 }
 
+nonisolated enum AccountSetupFailure: Equatable, Sendable {
+    case settingsChanged, operation, updatesStopped, loadChecks, closeSignIn, refreshAccounts, discovery
+
+    var message: String {
+        switch self {
+        case .settingsChanged: L10n.string("Setup changed. Try again to review the latest options.")
+        case .operation: L10n.string("Couldn’t finish this step. Try again.")
+        case .updatesStopped: L10n.string("Setup updates stopped. Try again to continue.")
+        case .loadChecks: L10n.string("Couldn’t load sign-in checks. Please try again.")
+        case .closeSignIn: L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+        case .refreshAccounts: L10n.string("Couldn’t refresh your accounts. Try again.")
+        case .discovery: L10n.string("Couldn’t find your settings. Try another relay.")
+        }
+    }
+}
+
 @MainActor @Observable
 final class AccountSetupModel {
     private(set) var snapshot: OnboardingSnapshotFfi
@@ -115,7 +131,8 @@ final class AccountSetupModel {
     private(set) var isConnected = false
     private(set) var hasConnectionFailure = false
     private(set) var cancelled = false
-    var errorMessage: String?
+    var failure: AccountSetupFailure?
+    var errorMessage: String? { failure?.message }
     @ObservationIgnored private var client: (any AccountSetupClient)?
     @ObservationIgnored private var observer: Task<Void, Never>?
     @ObservationIgnored private var operation: Task<Void, Never>?
@@ -127,7 +144,7 @@ final class AccountSetupModel {
     var accountID: String { snapshot.accountIdHex }
     var isDurablyReady: Bool { snapshot.ready && !snapshot.cancellationPending }
     var canFinish: Bool {
-        !isBusy && !cancelled && isDurablyReady && isConnected && errorMessage == nil
+        !isBusy && !cancelled && isDurablyReady && isConnected && failure == nil
     }
     var offeredActions: Set<OnboardingActionFfi> { Set(snapshot.steps.flatMap(\.actions)) }
     var currentStep: OnboardingStepStateFfi? {
@@ -162,7 +179,7 @@ final class AccountSetupModel {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 self.apply(subscription.snapshot)
                 self.isConnected = true
-                self.errorMessage = nil
+                self.failure = nil
                 self.send(self.snapshot.cancellationPending ? .cancel : .run)
                 while let update = try await subscription.next() {
                     guard self.session == id, !Task.isCancelled else { return }
@@ -173,12 +190,12 @@ final class AccountSetupModel {
                       !self.snapshot.ready || self.snapshot.cancellationPending else { return }
                 self.isConnected = false
                 self.hasConnectionFailure = true
-                self.errorMessage = L10n.string("Setup updates stopped. Try again to continue.")
+                self.failure = .updatesStopped
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 self.isConnected = false
                 self.hasConnectionFailure = true
-                self.errorMessage = L10n.string("Couldn’t load sign-in checks. Please try again.")
+                self.failure = .loadChecks
             }
         }
     }
@@ -188,7 +205,7 @@ final class AccountSetupModel {
         guard !isBusy, let client, isConnected else { return nil }
         let id = session
         isBusy = true
-        errorMessage = nil
+        failure = nil
         operation = Task { [weak self] in
             do {
                 let result = try await client.perform(command)
@@ -197,9 +214,9 @@ final class AccountSetupModel {
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 if let error = error as? MarmotKitError, case .OnboardingActionUnavailable = error {
-                    self.errorMessage = L10n.string("Setup changed. Try again to review the latest options.")
+                    self.failure = .settingsChanged
                 } else {
-                    self.errorMessage = L10n.string("Couldn’t finish this step. Try again.")
+                    self.failure = .operation
                 }
             }
             guard let self, self.session == id else { return }
@@ -214,14 +231,14 @@ final class AccountSetupModel {
         let id = session
         guard let task = send(isResumingProfilePublication ? .retry(.profile) : .saveProfile(profile, avatar)) else { return false }
         await task.value
-        return session == id && errorMessage == nil && snapshot.steps.first { $0.step == .profile }?.status == .passed
+        return session == id && failure == nil && snapshot.steps.first { $0.step == .profile }?.status == .passed
     }
 
     private func advanceOptionalSteps() {
-        guard !isBusy, isConnected, errorMessage == nil,
+        guard !isBusy, isConnected, failure == nil,
               let command = AccountSetupPolicy.automaticAction(snapshot) else { return }
         guard lastAutomaticRevision != snapshot.revision else {
-            errorMessage = L10n.string("Couldn’t finish this step. Try again.")
+            failure = .operation
             return
         }
         lastAutomaticRevision = snapshot.revision

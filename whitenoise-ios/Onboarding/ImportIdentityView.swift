@@ -61,12 +61,6 @@ struct ImportIdentityView: View {
         return normalized
     }
 
-    static func redactedImportError(_ message: String) -> String {
-        message
-            .replacing(/nsec1[a-z0-9]+/.ignoresCase(), with: "nsec1…")
-            .replacing(/[0-9a-fA-F]{32,}/, with: "…")
-    }
-
     var body: some View {
         Group {
             if let setup = openingSetup ?? (appState.isAccountSetupPresented ? appState.pendingAccountSetup : nil) {

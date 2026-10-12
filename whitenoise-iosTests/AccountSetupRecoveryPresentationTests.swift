@@ -28,28 +28,28 @@ struct AccountSetupRecoveryPresentationTests {
         #expect(presentation.snapshot == updated)
     }
 
-    @Test(arguments: [false, true])
-    func childFailureSurvivesItsSnapshotRegardlessOfCallbackOrder(_ reportBeforeUpdate: Bool) {
+    @Test(arguments: [false, true], [AccountSetupFailure.discovery, .settingsChanged])
+    func childFailureSurvivesItsSnapshotRegardlessOfCallbackOrder(_ reportBeforeUpdate: Bool, failure: AccountSetupFailure) {
         var presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .needsInput, revision: 1))
         let failed = snapshot(status: .retryableFailure, revision: 2)
         if reportBeforeUpdate {
-            presentation.reportChildFailure(source: .discovery, message: "Lookup failed", revision: 2)
+            presentation.reportChildFailure(source: .discovery, failure: failure, revision: 2)
         }
         let shouldDismiss = presentation.update(failed, step: .relays)
         if !reportBeforeUpdate {
-            presentation.reportChildFailure(source: .discovery, message: "Lookup failed", revision: 2)
+            presentation.reportChildFailure(source: .discovery, failure: failure, revision: 2)
         }
         #expect(!shouldDismiss)
         #expect(presentation.snapshot == failed)
         #expect(presentation.childFailure?.source == .discovery)
-        #expect(presentation.childFailure?.message == "Lookup failed")
+        #expect(presentation.childFailure?.failure == failure)
     }
 
     @Test func newerSuccessfulCheckClearsAnEarlierChildFailure() {
         var presentation = AccountSetupRecoveryPresentation(snapshot: snapshot(status: .retryableFailure, revision: 2))
-        presentation.reportChildFailure(source: .relays, message: "Draft failed", revision: 2)
+        presentation.reportChildFailure(source: .relays, failure: .operation, revision: 2)
         let failedUpdate = snapshot(status: .retryableFailure, revision: 3)
-        _ = presentation.update(failedUpdate, step: .relays, operationError: "Still unavailable")
+        _ = presentation.update(failedUpdate, step: .relays, operationFailure: .operation)
         #expect(presentation.childFailure != nil)
         let refreshed = snapshot(status: .needsInput, revision: 4)
         _ = presentation.update(refreshed, step: .relays)

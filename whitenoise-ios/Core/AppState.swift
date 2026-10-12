@@ -204,7 +204,7 @@ final class AppState {
             if activeAccountRef == nil { phase = accounts.contains { !$0.signedOut } ? .ready : .onboarding }
             return true
         } catch {
-            model.errorMessage = L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+            model.failure = .closeSignIn
             return false
         }
     }
@@ -243,7 +243,7 @@ final class AppState {
             signInAttempts.begin(id)
             pendingAccountSetup = model
             isAccountSetupPresented = true
-            model.errorMessage = L10n.string("Couldn’t refresh your accounts. Try again.")
+            model.failure = .refreshAccounts
         }
     }
 

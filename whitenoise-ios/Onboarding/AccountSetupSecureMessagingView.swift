@@ -81,7 +81,7 @@ struct AccountSetupSecureMessagingView: View {
 
     private func updatePresentation() {
         guard !isBusy, model.isConnected else { return }
-        if presentation.update(model.snapshot, step: .keyPackage, operationError: model.errorMessage) {
+        if presentation.update(model.snapshot, step: .keyPackage, operationFailure: model.failure) {
             isDismissing = true
             dismiss()
         }

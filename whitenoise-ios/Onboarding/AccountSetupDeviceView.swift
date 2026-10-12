@@ -101,7 +101,7 @@ struct AccountSetupDeviceView: View {
 
     private func updatePresentation() {
         guard !isBusy, model.isConnected else { return }
-        if presentation.update(model.snapshot, step: .singleDevice, operationError: model.errorMessage) {
+        if presentation.update(model.snapshot, step: .singleDevice, operationFailure: model.failure) {
             isDismissing = true
             dismiss()
         }

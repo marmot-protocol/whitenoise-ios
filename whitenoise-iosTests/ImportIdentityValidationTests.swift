@@ -63,23 +63,6 @@ struct ImportIdentityValidationTests {
         ))
     }
 
-    @Test func redactedImportErrorStripsSecretShapedTokens() {
-        // Login/parse errors can echo the rejected input; anything nsec- or
-        // key-hex-shaped must not reach the persistent error label or toast.
-        let nsec = "nsec1" + String(repeating: "q", count: 58)
-        #expect(
-            ImportIdentityView.redactedImportError("invalid secret key: \(nsec)")
-                == "invalid secret key: nsec1…"
-        )
-        let hex = String(repeating: "ab", count: 32)
-        #expect(
-            ImportIdentityView.redactedImportError("bad key \(hex) rejected")
-                == "bad key … rejected"
-        )
-        // Ordinary failure text passes through untouched.
-        #expect(ImportIdentityView.redactedImportError("Relay unreachable") == "Relay unreachable")
-    }
-
     @Test @MainActor func invalidRuntimeIdentityUsesTheInlineValidationCopy() {
         let message = ImportIdentityViewModel.importFallbackMessage(
             for: MarmotKitError.InvalidIdentity(details: "bad key")

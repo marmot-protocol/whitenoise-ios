@@ -49,7 +49,7 @@ struct AccountSetupRelayStepView: View {
     private var hasFailure: Bool { model.errorMessage != nil || childFailure != nil }
     private var hasError: Bool { hasFailure || interrupted || recovery.isInvalid }
     private var settingsChanged: Bool {
-        (model.errorMessage ?? childFailure?.message) == L10n.string("Setup changed. Try again to review the latest options.")
+        (model.failure ?? childFailure?.failure) == .settingsChanged
     }
     private var defaultRelays: [String] {
         isInbox ? MarmotClient.seedRelays : AppContainerConfig.accountRelays(runtimeRelays: MarmotClient.seedRelays)
@@ -121,12 +121,12 @@ struct AccountSetupRelayStepView: View {
                 NavigationStack {
                     switch editor {
                     case .relays:
-                        AccountSetupRelayEditor(model: model, step: selectedStep, draft: $draft, onFailure: { message in
-                            presentation.reportChildFailure(source: .relays, message: message, revision: model.snapshot.revision)
+                        AccountSetupRelayEditor(model: model, step: selectedStep, draft: $draft, onFailure: { failure in
+                            presentation.reportChildFailure(source: .relays, failure: failure, revision: model.snapshot.revision)
                         })
                     case .discovery:
-                        AccountSetupDiscoverySheet(model: model, step: selectedStep, onFailure: { message in
-                            presentation.reportChildFailure(source: .discovery, message: message, revision: model.snapshot.revision)
+                        AccountSetupDiscoverySheet(model: model, step: selectedStep, onFailure: { failure in
+                            presentation.reportChildFailure(source: .discovery, failure: failure, revision: model.snapshot.revision)
                         })
                     }
                 }
@@ -183,8 +183,8 @@ struct AccountSetupRelayStepView: View {
             Text("Your relay settings changed during this step. Review the current options before continuing.")
         } else if lastAction == .discard, model.errorMessage != nil, allows(.cancelRepair) {
             Text("Couldn’t discard your relay changes. Use Back to try again.")
-        } else if let error = model.errorMessage ?? childFailure?.message {
-            Text(failureExplanation(error))
+        } else if let failure = model.failure ?? childFailure?.failure {
+            Text(failureExplanation(failure))
         } else if interrupted {
             Text(isInbox
                  ? "Your previous update hasn’t finished. Try again to finish publishing it."
@@ -321,7 +321,7 @@ struct AccountSetupRelayStepView: View {
             if action == .searchDefaults, model.errorMessage != nil
                 || model.snapshot.steps.first(where: { $0.step == selectedStep })?.status == .retryableFailure {
                 presentation.reportChildFailure(source: .discovery,
-                                                message: model.errorMessage ?? L10n.string("Couldn’t find your settings. Try another relay."),
+                                                failure: model.failure ?? .discovery,
                                                 revision: model.snapshot.revision)
             }
             updatePresentation()
@@ -338,7 +338,7 @@ struct AccountSetupRelayStepView: View {
     private func updatePresentation() {
         guard !isBusy, model.isConnected else { return }
         let previousProposal = proposal
-        if presentation.update(model.snapshot, step: selectedStep, operationError: model.errorMessage) {
+        if presentation.update(model.snapshot, step: selectedStep, operationFailure: model.failure) {
             isDismissing = true
             dismiss()
             return
@@ -348,10 +348,10 @@ struct AccountSetupRelayStepView: View {
         }
     }
 
-    private func failureExplanation(_ error: String) -> String {
-        guard error == L10n.string("Couldn’t finish this step. Try again.") else { return error }
+    private func failureExplanation(_ failure: AccountSetupFailure) -> String {
+        guard failure == .operation else { return failure.message }
         switch recovery.status {
-        case .operationFailure: return error
+        case .operationFailure: return failure.message
         case .draftFailure, .discardFailure: return L10n.string("Your relay draft is still available. Review the changes and try again.")
         case .discoveryFailure: return L10n.string("Couldn’t find your settings. Try another relay.")
         case .checkFailure: return L10n.string("We couldn’t finish checking your relay settings. Try again, or search another relay.")

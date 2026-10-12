@@ -6,7 +6,7 @@ struct AccountSetupRelayEditor: View {
     let model: AccountSetupModel
     var step: OnboardingStepFfi = .relays
     @Binding var draft: AccountSetupRelayDraft
-    var onFailure: ((String) -> Void)?
+    var onFailure: ((AccountSetupFailure) -> Void)?
     @State private var editingEntry: AccountSetupRelayDraft.Entry?
     @State private var error: String?
     @State private var invalidEntryID: UUID?
@@ -144,9 +144,9 @@ struct AccountSetupRelayEditor: View {
             } else {
                 isSubmitting = false
                 operationFailed = true
-                let message = model.errorMessage ?? L10n.string("Couldn’t finish this step. Try again.")
-                error = message
-                onFailure?(message)
+                let failure = model.failure ?? .operation
+                error = failure.message
+                onFailure?(failure)
             }
         }
     }
