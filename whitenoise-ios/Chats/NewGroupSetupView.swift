@@ -18,44 +18,21 @@ struct NewGroupSetupView: View {
 
     var body: some View {
         Form {
-            Section {
-                VStack(spacing: 0) {
-                    WNAvatarPhotoMenu(
-                        hasPhoto: groupImage != nil,
-                        selection: $photoMenuAction
-                    ) {
-                        WNAvatarPreview(
-                            name: name,
-                            image: groupImage?.thumbnail,
-                            emptySystemImage: "person.2"
-                        )
-                    }
-                    .disabled(model.isCreatingGroup)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
-
-            Section {
-                TextField(
-                    model.groupSelection.isEmpty
-                        ? L10n.string("Group name")
-                        : L10n.string("Group name (optional)"),
-                    text: $name
+            GroupInfoFormSections(
+                name: $name,
+                description: $description,
+                namePlaceholder: model.groupSelection.isEmpty
+                    ? L10n.string("Group name")
+                    : L10n.string("Group name (optional)"),
+                hasPhoto: groupImage != nil,
+                photoMenuAction: $photoMenuAction,
+                isDisabled: model.isCreatingGroup
+            ) {
+                WNAvatarPreview(
+                    name: name,
+                    image: groupImage?.thumbnail,
+                    emptySystemImage: "person.2"
                 )
-                    .textContentType(.organizationName)
-                    .disabled(model.isCreatingGroup)
-
-                TextField(
-                    L10n.string("Description"),
-                    text: $description,
-                    axis: .vertical
-                )
-                .lineLimit(2...5)
-                .disabled(model.isCreatingGroup)
-            } header: {
-                Text("Group Details")
             } footer: {
                 if model.groupSelection.isEmpty {
                     Text("A group name is required when creating it without members.")
