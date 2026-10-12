@@ -717,6 +717,28 @@ final class ConversationViewModel {
         return timelineStore.reactionDetails(for: messageIdHex)
     }
 
+    /// The window's bounded reaction preview for a message, with local
+    /// optimistic changes, or nil when the message is not in the window.
+    func projectedReactionDetails(for messageIdHex: String) -> ReactionDetails? {
+        _ = timelineStore.timelineProjectionGeneration
+        guard let value = windowReactions[messageIdHex] else { return nil }
+        return timelineStore.reactionProjections.preparedDetails(value, target: messageIdHex, me: myAccountId ?? "")
+    }
+
+    /// The complete-reactions read for a message in the active account and
+    /// runtime, or nil when there is no account or durable message id.
+    func messageReactionsSubject(for messageIdHex: String) -> MessageReactionsSubject? {
+        guard let appState, let accountRef = appState.activeAccountRef, !messageIdHex.isEmpty else { return nil }
+        return MessageReactionsSubject(accountRef: accountRef, groupIdHex: group.groupIdHex,
+                                       messageIdHex: messageIdHex, runtimeGeneration: appState.runtimeGeneration)
+    }
+
+    /// Changes with every installed conversation revision; MDK bumps it even
+    /// when only reactions outside the bounded preview change.
+    var conversationWindowRevision: ConversationWindowRevisionFfi? {
+        conversationWindow?.revision
+    }
+
     func windowAvatarURL(for accountId: String) -> URL? {
         guard conversationWindow != nil else { return appState?.avatarURL(forAccountIdHex: accountId) }
         if case .remoteImage(let url, _) = windowIdentities[accountId]?.avatar { return ContentSanitizer.imageURL(url) }

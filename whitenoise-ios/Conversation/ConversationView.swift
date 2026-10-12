@@ -963,7 +963,8 @@ struct ConversationView: View {
             .sheet(item: $reactionDetailsTarget) { target in
                 if let viewModel {
                     ReactionDetailsSheet(
-                        details: viewModel.reactionDetails(for: target.messageIdHex),
+                        messageIdHex: target.messageIdHex,
+                        viewModel: viewModel,
                         initialEmoji: target.initialEmoji,
                         onRemoveOwnReaction: { emoji in
                             Task {
@@ -972,10 +973,7 @@ struct ConversationView: View {
                                     reactionDetailsTarget = nil
                                 }
                             }
-                        },
-                        identityName: viewModel.windowDisplayName,
-                        identityAvatar: viewModel.windowAvatarURL,
-                        identityAvatarAsset: { viewModel.windowIdentities[$0]?.avatarAsset }
+                        }
                     )
                     .environment(\.customEmojiStore, viewModel.customEmojiStore)
                     .appAppearance()

@@ -994,6 +994,16 @@ nonisolated final class MarmotClient: Sendable {
         }.value
     }
 
+    /// Every effective reaction on one message, without the conversation
+    /// preview cap. `messageReactions` is a synchronous local read, so it runs
+    /// off the MainActor.
+    func messageReactions(accountRef: String, groupIdHex: String,
+                          messageIdHex: String) async throws -> [TimelineUserReactionFfi] {
+        try await Task.detached(priority: .userInitiated) { [marmot] in
+            try marmot.messageReactions(accountRef: accountRef, groupIdHex: groupIdHex, messageIdHex: messageIdHex)
+        }.value
+    }
+
     func unreactFromMessage(accountRef: String, groupIdHex: String, targetMessageId: String) async throws -> SendSummaryFfi {
         try await marmot.unreactFromMessage(accountRef: accountRef, groupIdHex: groupIdHex, targetMessageId: targetMessageId)
     }

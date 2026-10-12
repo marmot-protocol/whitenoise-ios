@@ -184,47 +184,78 @@ struct MessageInfoSheet: View {
     }
 }
 
+/// Every reaction on one message. Reads MDK's complete `messageReactions` list
+/// and re-reads it on each installed conversation revision while open.
 struct ReactionDetailsSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-
-    let details: ConversationViewModel.ReactionDetails
-    let onRemoveOwnReaction: ((String) -> Void)?
-    var identityName: ((String) -> String)?
-    var identityAvatar: ((String) -> URL?)?
-    var identityAvatarAsset: ((String) -> AvatarAssetFfi?)?
-    @State private var selectedEmoji: String?
     @Environment(\.colorScheme) private var colorScheme
 
+    let messageIdHex: String
+    let viewModel: ConversationViewModel
+    let onRemoveOwnReaction: ((String) -> Void)?
+    @State private var selectedEmoji: String?
+    @State private var model = MessageReactionsModel()
+    @State private var retryCount = 0
+    @State private var showsLoadingIndicator = false
+
+    private struct LoadKey: Hashable {
+        let subject: MessageReactionsSubject?
+        let revision: ConversationWindowRevisionFfi?
+        let runtimeReady: Bool
+        let retry: Int
+    }
+
     init(
-        details: ConversationViewModel.ReactionDetails,
+        messageIdHex: String,
+        viewModel: ConversationViewModel,
         initialEmoji: String?,
-        onRemoveOwnReaction: ((String) -> Void)? = nil,
-        identityName: ((String) -> String)? = nil,
-        identityAvatar: ((String) -> URL?)? = nil,
-        identityAvatarAsset: ((String) -> AvatarAssetFfi?)? = nil
+        onRemoveOwnReaction: ((String) -> Void)? = nil
     ) {
-        self.details = details
+        self.messageIdHex = messageIdHex
+        self.viewModel = viewModel
         self.onRemoveOwnReaction = onRemoveOwnReaction
-        self.identityName = identityName
-        self.identityAvatar = identityAvatar
-        self.identityAvatarAsset = identityAvatarAsset
         _selectedEmoji = State(initialValue: initialEmoji)
     }
 
     var body: some View {
+        let subject = viewModel.messageReactionsSubject(for: messageIdHex)
+        let content = content(for: subject)
+        let isLoading = content == .loading
         NavigationStack {
             VStack(spacing: 0) {
-                filters
-                Divider()
-                if details.isTruncated {
-                    Text("Showing a limited preview of reactions.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
+                switch content {
+                case .details(let details, let refreshError):
+                    filters(details)
+                    Divider()
+                    if refreshError != nil {
+                        refreshErrorRow
+                    }
+                    reactionList(details)
+                case .loading:
+                    Group {
+                        if showsLoadingIndicator {
+                            ProgressView(L10n.string("Loading…"))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("Couldn’t load reactions", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("Retry") { retryCount += 1 }
+                    }
+                case .empty:
+                    ContentUnavailableView {
+                        Label("No reactions", systemImage: "face.smiling")
+                    } description: {
+                        Text("This message has no reactions, or it’s no longer available.")
+                    }
                 }
-                reactionList
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .navigationTitle("Reactions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -235,19 +266,53 @@ struct ReactionDetailsSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .onAppear {
-            if let selectedEmoji, !details.groups.contains(where: { $0.emoji == selectedEmoji }) {
-                self.selectedEmoji = nil
-            }
+        .onChange(of: ReactionDetailsPresentation.availableEmojis(in: content), initial: true) { _, available in
+            selectedEmoji = ReactionDetailsPresentation.selection(selectedEmoji, availableEmojis: available)
         }
-        .onChange(of: details.groups.map(\.emoji)) { _, availableEmojis in
-            if let selectedEmoji, !availableEmojis.contains(selectedEmoji) {
-                self.selectedEmoji = nil
-            }
+        .task(id: isLoading) {
+            showsLoadingIndicator = false
+            guard isLoading else { return }
+            try? await Task.sleep(for: ReactionDetailsPresentation.loadingIndicatorDelay)
+            if !Task.isCancelled { showsLoadingIndicator = true }
+        }
+        .task(id: LoadKey(
+            subject: subject,
+            revision: viewModel.conversationWindowRevision,
+            runtimeReady: appState.canUseRuntimeForForegroundWork,
+            retry: retryCount
+        )) {
+            guard let subject, appState.canUseRuntimeForForegroundWork,
+                  let client = try? appState.currentMarmotClient() else { return }
+            await model.load(subject, using: client)
         }
     }
 
-    private var filters: some View {
+    private func content(for subject: MessageReactionsSubject?) -> ReactionDetailsPresentation.Content {
+        // Reactions read for another account, runtime or message are never shown.
+        let isCurrent = subject != nil && model.subject == subject
+        return ReactionDetailsPresentation.content(
+            phase: isCurrent ? model.phase : .idle,
+            hasLoaded: isCurrent && model.hasLoaded,
+            reactions: isCurrent ? model.reactions : [],
+            projected: viewModel.projectedReactionDetails(for: messageIdHex),
+            me: viewModel.myAccountId ?? ""
+        )
+    }
+
+    private var refreshErrorRow: some View {
+        HStack(spacing: 12) {
+            Text("Couldn’t refresh reactions.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Button("Retry") { retryCount += 1 }
+                .font(.footnote.weight(.semibold))
+                .frame(minHeight: 44)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private func filters(_ details: ConversationViewModel.ReactionDetails) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 filterButton(emoji: nil, count: details.totalReactionCount) {
@@ -290,8 +355,8 @@ struct ReactionDetailsSheet: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private var reactionList: some View {
-        let users = sortedUsers
+    private func reactionList(_ details: ConversationViewModel.ReactionDetails) -> some View {
+        let users = sortedUsers(details)
         return ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(users) { user in
@@ -305,15 +370,23 @@ struct ReactionDetailsSheet: View {
         }
     }
 
-    private var sortedUsers: [ConversationViewModel.ReactionDetails.User] {
+    /// Reactors outside the window's identity sidecar resolve through the
+    /// profile directory, like group members do.
+    private func displayName(for sender: String) -> String {
+        if viewModel.windowIdentities[sender] != nil {
+            return viewModel.windowDisplayName(for: sender)
+        }
+        return appState.displayName(forAccountIdHex: sender)
+    }
+
+    private func sortedUsers(_ details: ConversationViewModel.ReactionDetails) -> [ConversationViewModel.ReactionDetails.User] {
         let users = details.users(filteredBy: selectedEmoji)
-        let namesBySender = Dictionary(uniqueKeysWithValues: users.map { user in
-            (user.sender, (identityName?(user.sender) ?? appState.displayName(forAccountIdHex: user.sender)))
-        })
+        let namesBySender = Dictionary(uniqueKeysWithValues: users.map { ($0.sender, displayName(for: $0.sender)) })
+        let me = viewModel.myAccountId
 
         return users.sorted { lhs, rhs in
-            let lhsIsMe = lhs.sender == appState.activeAccount?.accountIdHex
-            let rhsIsMe = rhs.sender == appState.activeAccount?.accountIdHex
+            let lhsIsMe = lhs.sender == me
+            let rhsIsMe = rhs.sender == me
             if lhsIsMe != rhsIsMe { return lhsIsMe }
 
             let lhsName = namesBySender[lhs.sender] ?? lhs.sender
@@ -324,22 +397,13 @@ struct ReactionDetailsSheet: View {
     }
 
     private func reactionRow(_ user: ConversationViewModel.ReactionDetails.User) -> some View {
-        let name = (identityName?(user.sender) ?? appState.displayName(forAccountIdHex: user.sender))
-        let isMe = user.sender == appState.activeAccount?.accountIdHex
+        let name = displayName(for: user.sender)
+        let isMe = user.sender == viewModel.myAccountId
 
         return HStack(spacing: 12) {
-            Group {
-                if let identityAvatarAsset {
-                    NativeAvatarBubble(seed: user.sender, title: name, asset: identityAvatarAsset(user.sender))
-                } else {
-                    AvatarBubble(
-                        seed: user.sender,
-                        title: name,
-                        pictureURL: identityAvatar != nil ? identityAvatar?(user.sender) : appState.avatarURL(forAccountIdHex: user.sender)
-                    )
-                }
-            }
-            .frame(width: 44, height: 44)
+            NativeAvatarBubble(seed: user.sender, title: name,
+                               asset: viewModel.windowIdentities[user.sender]?.avatarAsset)
+                .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

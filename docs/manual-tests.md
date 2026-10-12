@@ -1402,7 +1402,15 @@ Marmot root. Automated simulator checks do not replace these device checks.
       preserving group participation and stored history. Verify cross-device
       delivery and notification behavior with a second test identity.
 - [ ] Reactions show the full count and your selected state even when your identity
-      is outside the preview. Overflow/truncated reactor previews are disclosed.
+      is outside the preview. With more reactors or reaction kinds than the bubble
+      previews, tapping a chip or the overflow pill opens Reactions listing every
+      reactor (not a truncated preview), with All and per-emoji counts matching the
+      bubble. A fast read shows no spinner flash; the tapped emoji stays selected.
+      With the sheet open, a reaction added, changed or removed on another device
+      (including one outside the two-name preview) updates the list. Removing your
+      own reaction updates it immediately. Blocked reactors are not listed. A
+      deleted or hidden message shows “No reactions”; a failed read shows Retry.
+      Switching profiles or backgrounding/resuming never shows another profile's list.
 - [ ] Developer Key Packages shows current and superseded relay events.
 - [ ] Welcome shows an unchecked terms checkbox above Sign In/Sign Up, and both
       buttons stay disabled until it is checked. Tapping the row toggles it; the
