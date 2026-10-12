@@ -72,6 +72,7 @@ struct GiphySearchView: View {
                         onSelect(result)
                         dismiss()
                     }
+                    .id(result.media.url)
                 }
             }
         }
