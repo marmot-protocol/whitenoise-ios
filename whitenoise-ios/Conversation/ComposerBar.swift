@@ -195,8 +195,6 @@ struct ComposerBar: View {
     let hasAttachments: Bool
     let audioDraft: MediaDraftAttachment?
     let preparedAttachments: [MediaDraftAttachment]
-    var preparedAttachmentUploadStates: [MediaDraftAttachment.ID: DraftMediaUploadState] = [:]
-    var showsPreparedAttachmentUploadDiagnostics = false
     let replyPreview: ComposerReplyPreview?
     let mediaEnabled: Bool
     let disabledMessage: String?
@@ -480,9 +478,7 @@ struct ComposerBar: View {
             MediaDraftStrip(
                 attachments: preparedAttachments,
                 onRemove: onRemovePreparedAttachment,
-                onPreviewVisual: onPreviewPreparedMedia,
-                uploadStates: preparedAttachmentUploadStates,
-                showsUploadDiagnostics: showsPreparedAttachmentUploadDiagnostics
+                onPreviewVisual: onPreviewPreparedMedia
             )
         }
 

@@ -87,7 +87,7 @@ nonisolated struct OnboardingProfileMetadataDraft: Equatable {
             // Nostr spellings whenever the user changes it.
             name: editedName ?? existing?.name,
             displayName: editedName ?? existing?.displayName,
-            about: normalizedAbout ?? existing?.about,
+            about: normalizedAbout,
             picture: uploadedPictureURL ?? existing?.picture,
             banner: existing?.banner,
             nip05: existing?.nip05,

@@ -16,17 +16,22 @@ struct ImportIdentityView: View {
 
     @State private var model = ImportIdentityViewModel()
     @State private var isKeyFocused = false
+    @State private var isKeyboardVisible = false
     @State private var showScanner = false
+    @State private var openingSetup: AccountSetupModel?
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
+    let onChatsOpened: () -> Void
 
     init(
         isPushed: Bool = false,
-        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in }
+        onPreferredSheetExpansionChange: @escaping (Bool) -> Void = { _ in },
+        onChatsOpened: @escaping () -> Void = {}
     ) {
         self.isPushed = isPushed
         self.onPreferredSheetExpansionChange = onPreferredSheetExpansionChange
+        self.onChatsOpened = onChatsOpened
     }
 
     private var normalizedIdentity: String {
@@ -61,11 +66,30 @@ struct ImportIdentityView: View {
 
     var body: some View {
         Group {
-            if let setup = appState.pendingAccountSetup, appState.isAccountSetupPresented {
-                AccountSetupView(model: setup, onClose: { dismiss() })
-                    .onAppear { onPreferredSheetExpansionChange(true) }
+            if let setup = openingSetup ?? (appState.isAccountSetupPresented ? appState.pendingAccountSetup : nil) {
+                AccountSetupView(
+                    model: setup,
+                    isOpeningChats: openingSetup != nil,
+                    onClose: { dismiss() },
+                    onOpenChats: { openChats(setup) }
+                )
+                .onAppear { onPreferredSheetExpansionChange(true) }
             } else {
                 signInForm
+            }
+        }
+    }
+
+    private func openChats(_ setup: AccountSetupModel) {
+        guard openingSetup == nil else { return }
+        // Keep the checklist through account refresh and the outgoing sheet transition.
+        openingSetup = setup
+        Task {
+            await appState.finishAccountSetup()
+            if appState.pendingAccountSetup != nil || appState.activeAccount?.accountIdHex != setup.accountID {
+                openingSetup = nil
+            } else {
+                onChatsOpened()
             }
         }
     }
@@ -97,6 +121,7 @@ struct ImportIdentityView: View {
                         }
                         .compatibleGlassCircleButtonStyle()
                         .controlSize(.large)
+                        .preservesKeyboardOnTap()
                         .transition(.opacity)
                         .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                     }
@@ -115,10 +140,14 @@ struct ImportIdentityView: View {
                         .foregroundStyle(.secondary)
                         .padding(.leading)
                 }
+                signInAction
+                    .padding(.top)
             }
             .safeAreaPadding(.horizontal)
             .safeAreaPadding(.top)
+            .safeAreaPadding(.bottom)
         }
+        .compatibleBottomScrollEdgeEffectHidden()
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Sign In")
         .navigationBarTitleDisplayMode(.inline)
@@ -134,19 +163,6 @@ struct ImportIdentityView: View {
                 }
                 .disabled(model.isImporting)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
-                isKeyFocused = false
-                Task {
-                    await model.runImport(using: appState, dismiss: { dismiss() })
-                }
-            }
-            .disabled(!canSubmit && !model.isImporting)
-            .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
-            .accessibilityValue(model.isImporting ? "In progress" : "")
-            .safeAreaPadding(.horizontal)
-            .safeAreaPadding(.bottom)
         }
         .sheet(isPresented: $showScanner) {
             NavigationStack {
@@ -169,7 +185,21 @@ struct ImportIdentityView: View {
             .presentationDragIndicator(.visible)
         }
         .onChange(of: isKeyFocused) {
+            // Coordinate compact sizing with keyboard dismissal, not the focus change.
+            guard isKeyFocused || !isKeyboardVisible else { return }
             onPreferredSheetExpansionChange(isKeyFocused)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+            guard isKeyboardVisible else { return }
+            isKeyboardVisible = false
+            if !isKeyFocused {
+                withAnimation(KeyboardFrameChange.animation(from: notification)) {
+                    onPreferredSheetExpansionChange(false)
+                }
+            }
         }
         .interactiveDismissDisabled(model.isImporting)
         .alert(
@@ -189,6 +219,17 @@ struct ImportIdentityView: View {
             model.scrubDismissedImportState()
         }
         .background(.background)
+    }
+
+    private var signInAction: some View {
+        WNOnboardingButton(title: "Sign In", isLoading: model.isImporting) {
+            isKeyFocused = false
+            Task {
+                await model.runImport(using: appState, dismiss: { dismiss() })
+            }
+        }
+        .disabled(!canSubmit && !model.isImporting)
+        .accessibilityLabel(model.isImporting ? "Signing In" : "Sign In")
     }
 
     private func privateKeyField(identity: Binding<String>) -> some View {
