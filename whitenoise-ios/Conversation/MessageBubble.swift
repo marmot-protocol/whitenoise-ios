@@ -703,7 +703,13 @@ struct MessageBubble: View {
                 Text(preview.name)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(MessageBubblePalette.foreground(isFromMe: isFromMe))
-                Text(preview.text)
+                Group {
+                    if let source = preview.timestampText {
+                        MarkdownLinkText(source)
+                    } else {
+                        Text(preview.text)
+                    }
+                }
                     .font(.caption)
                     .foregroundStyle(MessageBubblePalette.secondaryForeground(isFromMe: isFromMe))
                     .lineLimit(2)

@@ -5,8 +5,17 @@ import MarmotKit
 
 nonisolated struct ConversationReplyPreview: Equatable {
     let name: String
-    let text: String
+    private let staticText: String
+    let timestampText: AttributedString?
+    var text: String { timestampText.map { MarkdownTimestamp.plainText($0) } ?? staticText }
     let media: MessageMediaAttachment?
+
+    init(name: String, text: String, media: MessageMediaAttachment?, timestampText: AttributedString? = nil) {
+        self.name = name
+        self.staticText = timestampText == nil ? text : ""
+        self.timestampText = timestampText
+        self.media = media
+    }
 }
 
 /// Owns the conversation's merged timeline: the durable message mirror, the
@@ -537,7 +546,10 @@ final class TimelineStore {
                     resolveMissingSource: true
                 ).first
             let value = ConversationReplyPreview(
-                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media
+                name: name, text: text.isEmpty ? media?.rejectionMessage ?? "" : text, media: media,
+                timestampText: preview.deleted ? nil : MarkdownPlainText.timestampProjection(
+                    preview.contentTokens, kind: preview.kind, plaintext: preview.plaintext,
+                    mentionDisplayName: mentionDisplayNameResolver)
             )
             replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
             return value
@@ -570,7 +582,10 @@ final class TimelineStore {
                 for: target,
                 ownerId: "reply:\(record.messageIdHex):\(targetId)"
             ).first
-        let value = ConversationReplyPreview(name: name, text: text, media: media)
+        let value = ConversationReplyPreview(name: name, text: text, media: media,
+            timestampText: targetDeleted ? nil : MarkdownPlainText.timestampProjection(
+                target.contentTokens, kind: target.kind, plaintext: target.plaintext,
+                mentionDisplayName: mentionDisplayNameResolver))
         replyPreviewDisplayCache[record.messageIdHex] = ReplyPreviewDisplayCacheEntry(key: key, value: value)
         return value
     }
