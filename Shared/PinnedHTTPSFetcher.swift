@@ -134,10 +134,10 @@ nonisolated enum PinnedHTTPSFetcher {
         let requestData = try requestBytes(for: request)
         var lastError: Error = URLError(.cannotConnectToHost)
         for endpoint in resolvedEndpoints {
-            let timeout = try deadline.attemptNanoseconds(maximum: timeoutNanoseconds(for: request))
             do {
                 let result: PinnedResponse
                 if let attempt {
+                    let timeout = try deadline.attemptNanoseconds(maximum: timeoutNanoseconds(for: request))
                     result = try await attempt(requestData, url, endpoint, maximumResponseBytes, timeout)
                 } else {
                     let response = try await fetch(
