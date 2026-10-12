@@ -13,11 +13,16 @@ final class OnboardingImageDownloadModel {
     var failure: PhotoSelectionFailure?
     private var failedURL: URL?
 
-    func start(_ url: URL) {
+    func start(_ url: URL, preview: AvatarImageCropSource? = nil) {
         source = nil
         failure = nil
         failedURL = nil
-        request = Request(url: url)
+        if let preview, preview.sourceURL == url, preview.preparedImage != nil {
+            request = nil
+            source = preview
+        } else {
+            request = Request(url: url)
+        }
     }
 
     func retry() {

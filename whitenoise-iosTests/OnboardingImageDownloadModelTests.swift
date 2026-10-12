@@ -25,21 +25,44 @@ struct OnboardingImageDownloadModelTests {
         #expect(model.failure == .unsupported)
     }
 
-    @Test func previewAndSelectionAcceptAnOriginalLargerThanTwoMegabytes() async throws {
+    @Test func loadedPreviewOpensCropWithoutDownloadingTheOriginalAgain() async throws {
         var bytes = try validImageData()
         // A valid image may carry trailing data; downloading still counts every byte.
         bytes.append(Data(repeating: 0, count: 3 * 1024 * 1024))
+        var fetchCount = 0
         let fetch: (URL, Int) async throws -> Data = { _, maximumBytes in
+            fetchCount += 1
             guard bytes.count <= maximumBytes else { throw URLError(.dataLengthExceedsMaximum) }
             return bytes
         }
         let preview = try await AvatarImageCropSource.downloaded(from: url, fetch: fetch)
         #expect(preview.preparedImage != nil)
         let model = OnboardingImageDownloadModel()
-        model.start(url)
-        await model.load(try #require(model.request), fetch: fetch)
+        model.start(url, preview: preview)
+        if let request = model.request { await model.load(request, fetch: fetch) }
+        #expect(fetchCount == 1)
+        #expect(model.request == nil)
         #expect(model.failure == nil)
+        #expect(model.source?.id == preview.id)
         #expect(model.source?.data == preview.data)
+        #expect(model.source?.preparedImage != nil)
+    }
+
+    @Test(arguments: [false, true])
+    func staleOrUnpreparedPreviewStillDownloadsTheSelectedURL(wrongURL: Bool) async throws {
+        let bytes = try validImageData()
+        let otherURL = URL(string: "https://example.com/other.jpg")!
+        let preview = wrongURL
+            ? try await AvatarImageCropSource.prepared(data: bytes, from: otherURL)
+            : AvatarImageCropSource(data: bytes, fileName: nil, typeIdentifier: nil, sourceURL: url)
+        let model = OnboardingImageDownloadModel()
+        model.start(url, preview: preview)
+        #expect(model.source == nil)
+        let request = try #require(model.request)
+        #expect(request.url == url)
+        await model.load(request) { _, _ in bytes }
+        #expect(model.source?.sourceURL == url)
+        #expect(model.source?.id != preview.id)
         #expect(model.source?.preparedImage != nil)
     }
 
@@ -86,8 +109,8 @@ struct OnboardingImageDownloadModelTests {
         #expect(model.request?.id != retry.id)
     }
 
-    @Test(arguments: [false, true])
-    func cancelledDownloadCannotReplaceANewerResult(fails: Bool) async throws {
+    @Test(arguments: [false, true], [false, true])
+    func cancelledDownloadCannotReplaceANewerResult(fails: Bool, reusePreview: Bool) async throws {
         let model = OnboardingImageDownloadModel()
         model.start(url)
         let old = try #require(model.request)
@@ -105,14 +128,19 @@ struct OnboardingImageDownloadModelTests {
         for await _ in started { break }
         model.cancel()
         let nextURL = URL(string: "https://example.com/another.jpg")!
-        model.start(nextURL)
-        let next = try #require(model.request)
         let newBytes = try validImageData()
-        await model.load(next) { _, _ in newBytes }
+        if reusePreview {
+            let preview = try await AvatarImageCropSource.prepared(data: newBytes, from: nextURL)
+            model.start(nextURL, preview: preview)
+        } else {
+            model.start(nextURL)
+            let next = try #require(model.request)
+            await model.load(next) { _, _ in newBytes }
+        }
         if fails {
             completion?.resume(throwing: URLError(.timedOut))
         } else {
-            completion?.resume(returning: Data([4, 5, 6]))
+            completion?.resume(returning: newBytes)
         }
         await pending.value
 
