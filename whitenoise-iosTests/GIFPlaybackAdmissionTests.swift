@@ -21,6 +21,13 @@ struct GIFPlaybackAdmissionTests {
         #expect(!GiphyPlaybackLoadState.unavailable.canSelect)
     }
 
+    @Test func leavingAPreviewRearmsTransientFailuresOnly() {
+        #expect(GiphyPlaybackLoadState.retryableFailure.afterPreviewStops == .loading)
+        #expect(GiphyPlaybackLoadState.playable.afterPreviewStops == .loading)
+        #expect(GiphyPlaybackLoadState.unavailable.afterPreviewStops == .unavailable)
+        #expect(!GiphyPlaybackLoadState.retryableFailure.afterPreviewStops.canSelect)
+    }
+
     @Test func permanentRejectionsCannotOfferRetry() {
         #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.unsupportedMedia) == .unavailable)
         #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.invalidURL) == .unavailable)

@@ -232,6 +232,10 @@ nonisolated enum GiphyPlaybackLoadState: Equatable {
 
     var canSelect: Bool { self == .playable }
 
+    var afterPreviewStops: Self {
+        self == .playable || self == .retryableFailure ? .loading : self
+    }
+
     static func failed(with error: Error) -> Self {
         if let failure = error as? GiphyRemoteMediaLoader.Failure,
            failure == .invalidURL || failure == .unsupportedMedia {
@@ -465,7 +469,7 @@ struct GiphySearchPreviewView: View {
     private func stopPlayback() {
         playback?.stop()
         playback = nil
-        if loadState == .playable { loadState = .loading }
+        loadState = loadState.afterPreviewStops
     }
 }
 
