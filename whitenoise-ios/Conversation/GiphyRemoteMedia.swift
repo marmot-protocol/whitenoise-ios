@@ -116,7 +116,7 @@ nonisolated enum GiphyRemoteMediaLoader {
         } else {
             guard let apiKey else {
                 GiphyPlaybackDiagnostics.log.error("legacy_lookup_failed reason=missing_api_key")
-                throw Failure.invalidResponse
+                throw Failure.unsupportedMedia
             }
             do {
                 var client = GiphySearchClient(apiKey: apiKey)
@@ -161,7 +161,7 @@ nonisolated enum GiphyRemoteMediaLoader {
 
     static func animatedImageAspectRatio(from data: Data) throws -> CGFloat {
         guard let admitted = GIFPlaybackAdmission.inspect(data) else {
-            throw Failure.invalidResponse
+            throw Failure.unsupportedMedia
         }
         let options = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, options),
@@ -171,7 +171,7 @@ nonisolated enum GiphyRemoteMediaLoader {
               UTType(type as String)?.conforms(to: .gif) == true
         else {
             GiphyPlaybackDiagnostics.log.error("image_decode_failed bytes=\(data.count, privacy: .public)")
-            throw Failure.invalidResponse
+            throw Failure.unsupportedMedia
         }
         return CGFloat(admitted.width) / CGFloat(admitted.height)
     }
@@ -197,8 +197,10 @@ nonisolated enum GiphyRemoteMediaLoader {
             GiphyPlaybackDiagnostics.log.error("media_download_failed reason=non_http")
             throw Failure.invalidResponse
         }
-        guard http.statusCode == 200,
-              !data.isEmpty,
+        guard http.statusCode == 200 else {
+            throw http.statusCode == 404 || http.statusCode == 410 ? Failure.unsupportedMedia : Failure.invalidResponse
+        }
+        guard !data.isEmpty,
               data.count <= GiphySearchClient.maximumMediaBytes,
               let mimeType = response.mimeType?.lowercased(),
               allowedMIMETypes.contains(mimeType)
@@ -206,7 +208,7 @@ nonisolated enum GiphyRemoteMediaLoader {
             GiphyPlaybackDiagnostics.log.error(
                 "media_download_failed status=\(http.statusCode, privacy: .public) bytes=\(data.count, privacy: .public) mime=\(response.mimeType ?? "none", privacy: .public)"
             )
-            throw Failure.invalidResponse
+            throw Failure.unsupportedMedia
         }
         return data
     }
@@ -214,10 +216,32 @@ nonisolated enum GiphyRemoteMediaLoader {
     enum Failure: LocalizedError, Equatable {
         case invalidURL
         case invalidResponse
+        case unsupportedMedia
 
         var errorDescription: String? {
             L10n.string("This GIF couldn't be loaded.")
         }
+    }
+}
+
+nonisolated enum GiphyPlaybackLoadState: Equatable {
+    case loading
+    case playable
+    case retryableFailure
+    case unavailable
+
+    var canSelect: Bool { self == .playable }
+
+    static func failed(with error: Error) -> Self {
+        if let failure = error as? GiphyRemoteMediaLoader.Failure,
+           failure == .invalidURL || failure == .unsupportedMedia {
+            return .unavailable
+        }
+        if (error as? URLError)?.code == .dataLengthExceedsMaximum
+            || (error as? HostResolutionGuard.GuardError) == .resolvesToPrivateAddress {
+            return .unavailable
+        }
+        return .retryableFailure
     }
 }
 
@@ -374,26 +398,34 @@ private struct GiphyPlaybackView: View {
 
 struct GiphySearchPreviewView: View {
     let media: RemoteGiphyMedia
+    @Binding var loadState: GiphyPlaybackLoadState
 
     private let playbackBudget = GiphyPlaybackBudget.shared
     @State private var playback: GiphyPlaybackSession?
-    @State private var didFail = false
 
     var body: some View {
         ZStack {
             Color(.tertiarySystemFill)
             if let playback {
                 GiphyPlaybackView(playback: playback)
-            } else if didFail {
-                Image(systemName: "photo")
-                    .foregroundStyle(.secondary)
+            } else if loadState == .unavailable || loadState == .retryableFailure {
+                VStack(spacing: 6) {
+                    Image(systemName: "photo")
+                    Text(loadState == .unavailable
+                        ? L10n.string("This GIF isn't supported.")
+                        : L10n.string("This GIF couldn't be loaded."))
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundStyle(.secondary)
+                .padding(8)
             } else {
                 ProgressView()
                     .controlSize(.small)
             }
         }
         .task(id: media.url) {
-            guard playback == nil, !didFail,
+            guard playback == nil, loadState == .loading,
                   let reservation = await playbackBudget.acquire()
             else { return }
             do {
@@ -408,12 +440,13 @@ struct GiphySearchPreviewView: View {
                     playbackBudget: playbackBudget,
                     budgetReservation: reservation
                 )
+                loadState = .playable
             } catch is CancellationError {
                 playbackBudget.release(reservation)
                 return
             } catch {
                 playbackBudget.release(reservation)
-                didFail = true
+                loadState = .failed(with: error)
             }
         }
         .onDisappear { stopPlayback() }
@@ -422,6 +455,7 @@ struct GiphySearchPreviewView: View {
     private func stopPlayback() {
         playback?.stop()
         playback = nil
+        if loadState == .playable { loadState = .loading }
     }
 }
 
@@ -434,7 +468,7 @@ struct RemoteGiphyMediaView: View {
     @State private var loadRequested = false
     @State private var loadRequestGeneration: UInt64 = 0
     @State private var isLoading = false
-    @State private var didFail = false
+    @State private var failureState: GiphyPlaybackLoadState?
     @State private var playback: GiphyPlaybackSession?
     @State private var displayGeometry: StableGiphyDisplayGeometry
     @Environment(\.timelineRowIsVisible) private var isTimelineRowVisible
@@ -485,7 +519,7 @@ struct RemoteGiphyMediaView: View {
             isEligible: isTimelineRowVisible && shouldLoad,
             requestGeneration: loadRequestGeneration
         )) {
-            guard isTimelineRowVisible, shouldLoad, playback == nil, !didFail else { return }
+            guard isTimelineRowVisible, shouldLoad, playback == nil, failureState == nil else { return }
             await load()
         }
         .onDisappear { stopPlayback() }
@@ -501,19 +535,29 @@ struct RemoteGiphyMediaView: View {
         if isLoading {
             ProgressView()
                 .tint(.white)
+        } else if failureState == .unavailable {
+            VStack(spacing: 10) {
+                Image(systemName: "photo")
+                    .font(.title2)
+                Text(L10n.string("This GIF isn't supported."))
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundStyle(.white)
+            .padding(12)
         } else {
             Button {
-                didFail = false
+                failureState = nil
                 loadRequested = true
                 loadRequestGeneration &+= 1
             } label: {
                 VStack(spacing: 10) {
-                    Image(systemName: didFail ? "arrow.clockwise" : "play.fill")
+                    Image(systemName: failureState != nil ? "arrow.clockwise" : "play.fill")
                         .font(.title2)
                         .foregroundStyle(.white)
                         .frame(width: 48, height: 48)
                         .background(.white.opacity(0.16), in: Circle())
-                    Text(didFail ? L10n.string("Retry") : L10n.string("Load GIF"))
+                    Text(failureState != nil ? L10n.string("Retry") : L10n.string("Load GIF"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white)
                 }
@@ -529,7 +573,7 @@ struct RemoteGiphyMediaView: View {
             return
         }
         isLoading = true
-        didFail = false
+        failureState = nil
         defer { isLoading = false }
         do {
             let prepared = try await GiphyRemoteMediaLoader.preparePlayback(for: media)
@@ -550,7 +594,7 @@ struct RemoteGiphyMediaView: View {
             return
         } catch {
             playbackBudget.release(reservation)
-            didFail = true
+            failureState = .failed(with: error)
             loadRequested = false
         }
     }

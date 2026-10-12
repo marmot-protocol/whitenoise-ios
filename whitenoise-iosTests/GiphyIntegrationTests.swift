@@ -314,6 +314,30 @@ struct GiphyIntegrationTests {
         #expect(result.media.height == 450)
     }
 
+    @Test func decoderFallsBackToARenditionWithinCanvasAndFrameBudgets() throws {
+        let json = #"""
+        {"data":[{"id":"bounded","title":"GIF","images":{
+          "original":{"width":"960","height":"540","frames":"100","size":"1000000",
+            "url":"https://media.giphy.com/media/bounded/original.gif"},
+          "fixed_width":{"width":"200","height":"113","size":"100000",
+            "url":"https://media.giphy.com/media/bounded/200w.gif"}
+        }}]}
+        """#
+        let result = try #require(GiphySearchClient.decodeResults(from: Data(json.utf8)).first)
+        #expect(result.media.url.path == "/media/bounded/200w.gif")
+    }
+
+    @Test(arguments: ["1001", "0", "invalid"])
+    func decoderRejectsUnusableFrameMetadata(frames: String) throws {
+        let json = """
+        {"data":[{"id":"rejected","title":"GIF","images":{
+          "original":{"width":"1","height":"1","frames":"\(frames)","size":"100",
+            "url":"https://media.giphy.com/media/rejected/giphy.gif"}
+        }}]}
+        """
+        #expect(try GiphySearchClient.decodeResults(from: Data(json.utf8)).isEmpty)
+    }
+
     @MainActor
     @Test func automaticLoadingIsOffByDefaultAndPersistsExplicitChoice() throws {
         let suiteName = "GiphyIntegrationTests.\(UUID().uuidString)"

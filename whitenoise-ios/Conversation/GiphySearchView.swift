@@ -68,14 +68,10 @@ struct GiphySearchView: View {
         } else {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(results) { result in
-                    Button {
+                    GiphySearchResultTile(result: result) {
                         onSelect(result)
                         dismiss()
-                    } label: {
-                        GiphySearchResultTile(result: result)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(result.title)
                 }
             }
         }
@@ -111,10 +107,24 @@ struct GiphySearchView: View {
 
 private struct GiphySearchResultTile: View {
     let result: GiphySearchResult
+    let onSelect: () -> Void
+    @State private var loadState = GiphyPlaybackLoadState.loading
 
     var body: some View {
+        Button {
+            guard loadState.canSelect else { return }
+            onSelect()
+        } label: {
+            preview
+        }
+        .buttonStyle(.plain)
+        .disabled(!loadState.canSelect)
+        .accessibilityLabel(result.title)
+    }
+
+    private var preview: some View {
         ZStack {
-            GiphySearchPreviewView(media: result.media)
+            GiphySearchPreviewView(media: result.media, loadState: $loadState)
 
             if let attribution = result.media.attribution {
                 Text(attribution)

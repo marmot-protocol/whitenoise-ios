@@ -14,6 +14,15 @@ nonisolated enum GIFPlaybackAdmission {
         let frameCount: Int
     }
 
+    static func allowsMetadata(width: Int, height: Int, frameCount: Int? = nil) -> Bool {
+        guard (1...maximumEdge).contains(width), (1...maximumEdge).contains(height) else { return false }
+        let pixels = width * height
+        guard pixels <= maximumCanvasPixels else { return false }
+        guard let frameCount else { return true }
+        return (2...maximumFrames).contains(frameCount)
+            && pixels <= maximumCanvasPixelsAcrossFrames / frameCount
+    }
+
     /// Walks bounded headers/sub-blocks only; never decompresses pixels or allocates a raster.
     static func inspect(_ data: Data) -> Metadata? {
         guard data.count >= 14, data.count <= GiphySearchClient.maximumMediaBytes else { return nil }

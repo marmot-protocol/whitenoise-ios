@@ -162,7 +162,7 @@ nonisolated struct GiphySearchClient {
             images.fixedWidth,
         ].compactMap { $0 }
         let candidates = renditions.compactMap {
-            candidate(url: $0.url, size: $0.size, rendition: $0)
+            candidate(url: $0.url, size: $0.size, rendition: $0, originalFrames: images.original?.frames)
         }
         let preferred = candidates.filter { $0.byteCount <= preferredMaximumMediaBytes }
         let selected = preferred.max { ($0.width * $0.height) < ($1.width * $1.height) }
@@ -173,12 +173,19 @@ nonisolated struct GiphySearchClient {
     private static func candidate(
         url rawURL: String?,
         size rawSize: String?,
-        rendition: Rendition
+        rendition: Rendition,
+        originalFrames: String?
     ) -> (url: URL, width: Int, height: Int, byteCount: Int)? {
         guard let url = RemoteGiphyMedia.validatedMediaURL(rawURL ?? ""),
               let width = boundedDimension(rendition.width),
               let height = boundedDimension(rendition.height),
-              let byteCount = boundedByteCount(rawSize)
+              let byteCount = boundedByteCount(rawSize),
+              url.pathExtension.lowercased() == "gif"
+        else { return nil }
+        let rawFrames = rendition.frames ?? originalFrames
+        let frames = rawFrames.flatMap(Int.init)
+        guard rawFrames == nil || frames != nil,
+              GIFPlaybackAdmission.allowsMetadata(width: width, height: height, frameCount: frames)
         else { return nil }
         return (url, width, height, byteCount)
     }
@@ -258,11 +265,12 @@ nonisolated struct GiphySearchClient {
         let height: String?
         let url: String?
         let size: String?
+        let frames: String?
         let mp4: String?
         let mp4Size: String?
 
         enum CodingKeys: String, CodingKey {
-            case width, height, url, size, mp4
+            case width, height, url, size, frames, mp4
             case mp4Size = "mp4_size"
         }
     }

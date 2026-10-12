@@ -4,6 +4,49 @@ import Testing
 @testable import whitenoise_ios
 
 struct GIFPlaybackAdmissionTests {
+    @Test func candidateMetadataUsesThePlaybackBudgets() {
+        #expect(GIFPlaybackAdmission.allowsMetadata(width: 4_096, height: 1_024, frameCount: 8))
+        #expect(!GIFPlaybackAdmission.allowsMetadata(width: 4_096, height: 1_025, frameCount: 2))
+        #expect(!GIFPlaybackAdmission.allowsMetadata(width: 4_097, height: 1, frameCount: 2))
+        #expect(!GIFPlaybackAdmission.allowsMetadata(width: 1, height: 1, frameCount: 1_001))
+        #expect(!GIFPlaybackAdmission.allowsMetadata(width: 1, height: 1, frameCount: 0))
+        #expect(!GIFPlaybackAdmission.allowsMetadata(width: 2_048, height: 2_048, frameCount: 9))
+        #expect(GIFPlaybackAdmission.allowsMetadata(width: 200, height: 113))
+    }
+
+    @Test func onlyAdmittedPreviewCanBeSelected() {
+        #expect(GiphyPlaybackLoadState.playable.canSelect)
+        #expect(!GiphyPlaybackLoadState.loading.canSelect)
+        #expect(!GiphyPlaybackLoadState.retryableFailure.canSelect)
+        #expect(!GiphyPlaybackLoadState.unavailable.canSelect)
+    }
+
+    @Test func permanentRejectionsCannotOfferRetry() {
+        #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.unsupportedMedia) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.invalidURL) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: URLError(.dataLengthExceedsMaximum)) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: HostResolutionGuard.GuardError.resolvesToPrivateAddress) == .unavailable)
+        #expect(GiphyPlaybackLoadState.failed(with: URLError(.timedOut)) == .retryableFailure)
+        #expect(GiphyPlaybackLoadState.failed(with: GiphyRemoteMediaLoader.Failure.invalidResponse) == .retryableFailure)
+    }
+
+    @Test(arguments: [404, 410, 429, 500])
+    func responseFailuresDistinguishPermanentAndTransient(status: Int) async throws {
+        let media = RemoteGiphyMedia(
+            url: URL(string: "https://media.giphy.com/media/fixture/giphy.gif")!,
+            width: 1, height: 1, attribution: nil)
+        do {
+            _ = try await GiphyRemoteMediaLoader.preparePlayback(for: media, apiKey: nil) { request in
+                let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+                return (Data(), response)
+            }
+            Issue.record("Failed HTTP status produced playback")
+        } catch {
+            let expected: GiphyPlaybackLoadState = status == 404 || status == 410 ? .unavailable : .retryableFailure
+            #expect(GiphyPlaybackLoadState.failed(with: error) == expected)
+        }
+    }
+
     @Test func admitsSmallAnimationAndUsesLogicalCanvas() throws {
         let data = Self.container(width: 3, height: 2, frames: [Self.frame(), Self.frame(left: 2, top: 1)])
         #expect(GIFPlaybackAdmission.inspect(data) == .init(width: 3, height: 2, frameCount: 2))
@@ -94,7 +137,7 @@ struct GIFPlaybackAdmissionTests {
                 }
                 Issue.record("Oversized GIF was admitted")
             } catch {
-                #expect(error as? GiphyRemoteMediaLoader.Failure == .invalidResponse)
+                #expect(error as? GiphyRemoteMediaLoader.Failure == .unsupportedMedia)
             }
         }
     }
@@ -135,7 +178,7 @@ struct GIFPlaybackAdmissionTests {
             }
             Issue.record("Legacy lookup admitted an oversized canvas")
         } catch {
-            #expect(error as? GiphyRemoteMediaLoader.Failure == .invalidResponse)
+            #expect(error as? GiphyRemoteMediaLoader.Failure == .unsupportedMedia)
         }
         let urls = await requests.urls
         #expect(urls.count == 2)
