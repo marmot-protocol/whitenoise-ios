@@ -2041,7 +2041,7 @@ private struct MessageMediaTile: View {
                 AttachmentGIFPlayback(contentID: item.id, data: gifData, activity: isTimelineRowVisible ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFill,
-                            onCompletion: playback.stop)
+                            onCompletion: playback.finish)
                     } else {
                         Image(uiImage: image).resizable().scaledToFill()
                     }
@@ -4099,7 +4099,7 @@ private struct MessageMediaFullscreenImagePage: View {
                         activity: isSelected ? .active : .inactive) { playback in
                         ZoomableMediaImage(image: image, isSelected: isSelected,
                             onTap: onToggleChrome, onZoomChanged: onZoomChanged,
-                            gifData: playback?.data, playbackID: playback?.id, onGIFCompletion: playback?.stop)
+                            gifData: playback?.data, playbackID: playback?.id, onGIFCompletion: playback?.finish)
                     }
                 } else if isLoading {
                     ProgressView()

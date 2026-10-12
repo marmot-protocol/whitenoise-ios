@@ -6,11 +6,13 @@ nonisolated enum AttachmentGIF {
     enum Activity { case active, inactive }
 
     @MainActor
+    @Observable
     final class Playback {
         let contentID: String
         let data: Data
         let id: UUID
-        private var isStopped = false
+        private(set) var didFail = false
+        @ObservationIgnored private var isStopped = false
 
         init(contentID: String, data: Data, id: UUID) {
             self.contentID = contentID
@@ -22,6 +24,11 @@ nonisolated enum AttachmentGIF {
             guard !isStopped else { return }
             isStopped = true
             GiphyPlaybackBudget.shared.release(id)
+        }
+
+        func finish(_ end: GiphyAnimatedImageUIView.PlaybackEnd) {
+            if end == .failed { didFail = true }
+            stop()
         }
 
         isolated deinit { stop() }
@@ -92,7 +99,8 @@ struct AttachmentGIFPlayback<Content: View>: View {
     }
 
     var body: some View {
-        content(taskID.isEligible && taskID.contentID != nil && playback?.contentID == contentID ? playback : nil)
+        content(taskID.isEligible && taskID.contentID != nil && playback?.contentID == contentID
+            && playback?.didFail == false ? playback : nil)
             .task(id: taskID) {
                 stop()
                 guard taskID.isEligible, let data else { return }
@@ -121,7 +129,7 @@ struct AttachmentGIFImage: UIViewRepresentable {
     let data: Data
     let playbackID: UUID
     let contentMode: UIView.ContentMode
-    let onCompletion: () -> Void
+    let onCompletion: (GiphyAnimatedImageUIView.PlaybackEnd) -> Void
 
     func makeUIView(context: Context) -> GiphyAnimatedImageUIView {
         GiphyAnimatedImageUIView(frame: .zero)

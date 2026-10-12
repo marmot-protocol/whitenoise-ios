@@ -319,6 +319,7 @@ nonisolated struct StableGiphyDisplayGeometry: Equatable, Sendable {
 
 final class GiphyAnimatedImageUIView: UIImageView {
     enum LoopMode { case forever, source }
+    enum PlaybackEnd { case finished, failed }
 
     private var playbackID: UUID?
     private var playbackGeneration: UInt64 = 0
@@ -343,7 +344,7 @@ final class GiphyAnimatedImageUIView: UIImageView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func play(data: Data, id: UUID, loopMode: LoopMode = .forever, onCompletion: (() -> Void)? = nil) {
+    func play(data: Data, id: UUID, loopMode: LoopMode = .forever, onCompletion: ((PlaybackEnd) -> Void)? = nil) {
         guard playbackID != id else { return }
         stop()
         playbackID = id
@@ -373,14 +374,16 @@ final class GiphyAnimatedImageUIView: UIImageView {
                 remainingFrames = remaining - 1
                 if remaining == 1 {
                     stop.pointee = true
-                    onCompletion?()
+                    onCompletion?(.finished)
                 }
             }
         }
         if status != noErr {
             GiphyPlaybackDiagnostics.log.error("animation_start_failed status=\(status, privacy: .public)")
             stop()
-            onCompletion?()
+            if let onCompletion {
+                Task { @MainActor in onCompletion(.failed) }
+            }
         }
     }
 

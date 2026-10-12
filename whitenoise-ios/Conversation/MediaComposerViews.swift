@@ -538,7 +538,7 @@ private struct ComposerMediaPreviewPage: View {
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
-                            onCompletion: playback.stop)
+                            onCompletion: playback.finish)
                     } else {
                         Image(uiImage: image).resizable().scaledToFit()
                     }
@@ -808,7 +808,7 @@ private struct MediaApprovalPage: View {
                     activity: isSelected ? .active : .inactive) { playback in
                     if let playback {
                         AttachmentGIFImage(data: playback.data, playbackID: playback.id, contentMode: .scaleAspectFit,
-                            onCompletion: playback.stop)
+                            onCompletion: playback.finish)
                     } else {
                         Image(uiImage: image).resizable().scaledToFit()
                     }

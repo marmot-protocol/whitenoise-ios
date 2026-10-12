@@ -34,7 +34,7 @@ final class MediaImageZoomTests: XCTestCase {
         defer { playback.stop() }
         var completionFrame: UIImage?
         view.setZoomScale(2.5, animated: false)
-        view.displayGIF(data: data as Data, id: id) {
+        view.displayGIF(data: data as Data, id: id) { _ in
             completionFrame = view.imageView.image
             playback.stop()
         }
@@ -64,6 +64,20 @@ final class MediaImageZoomTests: XCTestCase {
         view.displayGIF(data: nil, id: nil)
         try await Task.sleep(for: .milliseconds(250))
         XCTAssertTrue(view.imageView.image === poster, "Cancelled callbacks must not replace the still image")
+    }
+
+    func testFailedGIFStartRestoresStill() async throws {
+        let view = makeViewer()
+        let poster = try XCTUnwrap(view.imageView.image)
+        let ended = expectation(description: "playback ended")
+        var end: GiphyAnimatedImageUIView.PlaybackEnd?
+        view.displayGIF(data: Data("GIF89a-not-an-animation".utf8), id: UUID()) {
+            end = $0
+            ended.fulfill()
+        }
+        await fulfillment(of: [ended], timeout: 5)
+        XCTAssertEqual(end, .failed)
+        XCTAssertTrue(view.imageView.image === poster, "A failed start must fall back to the still image")
     }
 
     private func makeViewer(size: CGSize = CGSize(width: 390, height: 844)) -> MediaImageScrollView {
