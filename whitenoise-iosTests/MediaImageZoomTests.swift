@@ -7,6 +7,63 @@ import XCTest
 @MainActor
 final class MediaImageZoomTests: XCTestCase {
     func testGIFPlaybackKeepsZoom() async throws {
+        let data = try makeTwoFrameGIF()
+        let view = makeViewer()
+        let poster = try XCTUnwrap(view.imageView.image)
+        let budget = GiphyPlaybackBudget(maximumConcurrentPlaybacks: 1)
+        let reservation = await budget.acquire()
+        let id = try XCTUnwrap(reservation)
+        let playback = AttachmentGIF.Playback(contentID: "gif", data: data, id: id, budget: budget)
+        defer { playback.stop() }
+        let finished = expectation(description: "playback finished")
+        var end: GiphyAnimatedImageUIView.PlaybackEnd?
+        var completionFrame: UIImage?
+        view.setZoomScale(2.5, animated: false)
+        view.displayGIF(data: data, id: id) {
+            end = $0
+            completionFrame = view.imageView.image
+            playback.finish($0)
+            finished.fulfill()
+        }
+        defer { view.displayGIF(data: nil, id: nil) }
+        await fulfillment(of: [finished], timeout: 10)
+        XCTAssertEqual(end, .finished)
+        let finalFrame = try XCTUnwrap(completionFrame)
+        XCTAssertEqual(try redComponent(of: finalFrame), 0, "Completion lands on the last, blue frame")
+        XCTAssertEqual(budget.activePlaybackCount, 0)
+        XCTAssertFalse(playback.didFail)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
+        view.display(poster)
+        view.displayGIF(data: data, id: id)
+        view.layoutIfNeeded()
+        XCTAssertEqual(view.zoomScale, 2.5)
+        view.displayGIF(data: nil, id: nil)
+        XCTAssertTrue(view.imageView.image === poster, "Cancelling playback restores the still image")
+    }
+
+    func testFailedGIFStartRestoresStill() async throws {
+        let view = makeViewer()
+        let poster = try XCTUnwrap(view.imageView.image)
+        let budget = GiphyPlaybackBudget(maximumConcurrentPlaybacks: 1)
+        let reservation = await budget.acquire()
+        let id = try XCTUnwrap(reservation)
+        let playback = AttachmentGIF.Playback(contentID: "gif", data: Data(), id: id, budget: budget)
+        let ended = expectation(description: "playback ended")
+        var end: GiphyAnimatedImageUIView.PlaybackEnd?
+        view.displayGIF(data: Data("GIF89a-not-an-animation".utf8), id: id) {
+            end = $0
+            playback.finish($0)
+            ended.fulfill()
+        }
+        await fulfillment(of: [ended], timeout: 5)
+        XCTAssertEqual(end, .failed)
+        XCTAssertTrue(playback.didFail)
+        XCTAssertEqual(budget.activePlaybackCount, 0)
+        XCTAssertTrue(view.imageView.image === poster, "A failed start must fall back to the still image")
+    }
+
+    private func makeTwoFrameGIF() throws -> Data {
         let data = NSMutableData()
         let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.gif.identifier as CFString, 2, nil))
         CGImageDestinationSetProperties(destination, [
@@ -25,59 +82,15 @@ final class MediaImageZoomTests: XCTestCase {
             ] as CFDictionary)
         }
         XCTAssertTrue(CGImageDestinationFinalize(destination))
-        let view = makeViewer()
-        let poster = try XCTUnwrap(view.imageView.image)
-        let previousReservations = GiphyPlaybackBudget.shared.activePlaybackCount
-        let reservation = await GiphyPlaybackBudget.shared.acquire()
-        let id = try XCTUnwrap(reservation)
-        let playback = AttachmentGIF.Playback(contentID: "gif", data: data as Data, id: id)
-        defer { playback.stop() }
-        var completionFrame: UIImage?
-        view.setZoomScale(2.5, animated: false)
-        view.displayGIF(data: data as Data, id: id) { _ in
-            completionFrame = view.imageView.image
-            playback.stop()
-        }
-        defer { view.displayGIF(data: nil, id: nil) }
-        var observedColors = Set<UInt8>()
-        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
-        while observedColors.count < 2, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(30))
-            if let frame = view.imageView.image?.cgImage {
-                let context = try XCTUnwrap(CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
-                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
-                context.draw(frame, in: CGRect(x: 0, y: 0, width: 1, height: 1))
-                observedColors.insert(try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)[0])
-            }
-        }
-        XCTAssertEqual(observedColors, [0, 255], "The native view must display both GIF frames")
-        try await Task.sleep(for: .milliseconds(600))
-        let finalFrame = try XCTUnwrap(view.imageView.image)
-        XCTAssertTrue(completionFrame === finalFrame, "Release the slot on the final frame, not an earlier loop")
-        XCTAssertEqual(GiphyPlaybackBudget.shared.activePlaybackCount, previousReservations)
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertTrue(view.imageView.image === finalFrame, "Finite-loop GIFs must stop at their last frame")
-        view.display(poster)
-        view.displayGIF(data: data as Data, id: id)
-        view.layoutIfNeeded()
-        XCTAssertEqual(view.zoomScale, 2.5)
-        view.displayGIF(data: nil, id: nil)
-        try await Task.sleep(for: .milliseconds(250))
-        XCTAssertTrue(view.imageView.image === poster, "Cancelled callbacks must not replace the still image")
+        return data as Data
     }
 
-    func testFailedGIFStartRestoresStill() async throws {
-        let view = makeViewer()
-        let poster = try XCTUnwrap(view.imageView.image)
-        let ended = expectation(description: "playback ended")
-        var end: GiphyAnimatedImageUIView.PlaybackEnd?
-        view.displayGIF(data: Data("GIF89a-not-an-animation".utf8), id: UUID()) {
-            end = $0
-            ended.fulfill()
-        }
-        await fulfillment(of: [ended], timeout: 5)
-        XCTAssertEqual(end, .failed)
-        XCTAssertTrue(view.imageView.image === poster, "A failed start must fall back to the still image")
+    private func redComponent(of image: UIImage) throws -> UInt8 {
+        let frame = try XCTUnwrap(image.cgImage)
+        let context = try XCTUnwrap(CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(frame, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)[0]
     }
 
     private func makeViewer(size: CGSize = CGSize(width: 390, height: 844)) -> MediaImageScrollView {

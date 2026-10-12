@@ -13,17 +13,19 @@ nonisolated enum AttachmentGIF {
         let id: UUID
         private(set) var didFail = false
         @ObservationIgnored private var isStopped = false
+        @ObservationIgnored private let budget: GiphyPlaybackBudget
 
-        init(contentID: String, data: Data, id: UUID) {
+        init(contentID: String, data: Data, id: UUID, budget: GiphyPlaybackBudget) {
             self.contentID = contentID
             self.data = data
             self.id = id
+            self.budget = budget
         }
 
         func stop() {
             guard !isStopped else { return }
             isStopped = true
-            GiphyPlaybackBudget.shared.release(id)
+            budget.release(id)
         }
 
         func finish(_ end: GiphyAnimatedImageUIView.PlaybackEnd) {
@@ -113,7 +115,7 @@ struct AttachmentGIFPlayback<Content: View>: View {
                     GiphyPlaybackBudget.shared.release(id)
                     return
                 }
-                playback = AttachmentGIF.Playback(contentID: contentID, data: data, id: id)
+                playback = AttachmentGIF.Playback(contentID: contentID, data: data, id: id, budget: .shared)
             }
             .onDisappear { stop() }
     }
