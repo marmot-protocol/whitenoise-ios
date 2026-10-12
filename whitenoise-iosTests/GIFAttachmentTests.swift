@@ -97,12 +97,47 @@ struct GIFAttachmentTests {
         #expect(!still.isGIF)
     }
 
-    @Test func rejectsOversizedGIF() throws {
+    private func makeLongGIF(frameCount: Int) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(
+            data, UTType.gif.identifier as CFString, frameCount, nil))
+        let context = try #require(CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        for index in 0..<frameCount {
+            context.setFillColor(index.isMultiple(of: 2) ? UIColor.red.cgColor : UIColor.blue.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+            CGImageDestinationAddImage(destination, try #require(context.makeImage()), [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.02],
+            ] as CFDictionary)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private func expectStill(_ attachment: MediaDraftAttachment) throws {
+        #expect(attachment.mediaType == "image/jpeg")
+        #expect(attachment.fileName.hasSuffix(".jpg"))
+        #expect(try AttachmentGIF.source(from: attachment.data) == nil)
+    }
+
+    @Test func oversizedGIFSendsStill() async throws {
         var data = try makeGIF()
         data.append(Data(repeating: 0, count: MediaDraftProcessor.maxImageAttachmentBytes))
+        try expectStill(MediaDraftProcessor.attachment(from: data, fileName: "large.gif"))
+        try expectStill(MediaDraftProcessor.imageAttachment(from: data, fileName: "large.gif"))
+        try expectStill(await MediaDraftProcessor.preparedAttachment(
+            from: data, fileName: "large.gif", typeIdentifier: UTType.gif.identifier))
+    }
+
+    @Test func overlongGIFSendsStill() async throws {
+        let data = try makeLongGIF(frameCount: 1001)
         #expect(throws: MediaDraftProcessor.Failure.self) {
-            try MediaDraftProcessor.attachment(from: data, fileName: "large.gif")
+            try AttachmentGIF.source(from: data)
         }
+        try expectStill(MediaDraftProcessor.attachment(from: data, fileName: "long.gif"))
+        try expectStill(MediaDraftProcessor.imageAttachment(from: data, fileName: "long.gif"))
+        try expectStill(await MediaDraftProcessor.preparedAttachment(
+            from: data, fileName: "long.gif", typeIdentifier: UTType.gif.identifier))
     }
 
     @Test func rejectsOversizedCanvas() throws {

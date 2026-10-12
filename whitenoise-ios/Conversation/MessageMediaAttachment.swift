@@ -670,8 +670,8 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
-        if let source = try AttachmentGIF.source(from: data) {
-            return try gifAttachment(from: source, fileName: fileName)
+        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+            return gif
         }
         if let typeIdentifier,
            let type = UTType(typeIdentifier),
@@ -769,13 +769,18 @@ nonisolated enum MediaDraftProcessor {
     }
 
     static func imageAttachment(from data: Data, fileName: String?) throws -> MediaDraftAttachment {
-        if let source = try AttachmentGIF.source(from: data) {
-            return try gifAttachment(from: source, fileName: fileName)
+        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+            return gif
         }
         guard let image = UIImage(data: data) else {
             throw Failure.unsupportedImage
         }
         return try attachment(from: image, fileName: fileName)
+    }
+
+    private static func animatedGIFAttachment(from data: Data, fileName: String?) -> MediaDraftAttachment? {
+        guard let source = try? AttachmentGIF.source(from: data) else { return nil }
+        return try? gifAttachment(from: source, fileName: fileName)
     }
 
     private static func gifAttachment(from source: CGImageSource, fileName: String?) throws -> MediaDraftAttachment {

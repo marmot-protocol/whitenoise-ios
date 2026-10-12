@@ -30,9 +30,13 @@ nonisolated enum AttachmentGIF {
     private static let maxTotalPixels = 32 * 1024 * 1024
 
     // Validate before either re-encoding local imports or playing peer-controlled bytes.
-    static func source(from data: Data) throws -> CGImageSource? {
+    static func hasSignature(_ data: Data) -> Bool {
         let signature = data.prefix(6)
-        guard signature == Data("GIF87a".utf8) || signature == Data("GIF89a".utf8) else { return nil }
+        return signature == Data("GIF87a".utf8) || signature == Data("GIF89a".utf8)
+    }
+
+    static func source(from data: Data) throws -> CGImageSource? {
+        guard hasSignature(data) else { return nil }
         guard data.count <= MediaDraftProcessor.maxImageAttachmentBytes else {
             throw MediaDraftProcessor.Failure.attachmentTooLarge(data.count)
         }
