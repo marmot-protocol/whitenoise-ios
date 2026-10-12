@@ -5,6 +5,286 @@ import MarmotKit
 
 @MainActor
 struct AccountSetupTests {
+    @Test func profileProgressDistinguishesLookupFromPublicationAndExitActions() {
+        var value = proposalSnapshot(step: .profile)
+        value.steps[0].actions = [.retry]
+        let publication = AccountSetupProfilePresentation(snapshot: value)
+        #expect(publication.progress(for: .retry) == .saving)
+
+        value.proposal = nil
+        let lookup = AccountSetupProfilePresentation(snapshot: value)
+        #expect(lookup.progress(for: .retry) == .checking)
+        #expect(lookup.progress(for: nil) == .checking)
+        #expect(lookup.progress(for: .save) == .saving)
+        #expect(lookup.progress(for: .skip) == .skipping)
+        #expect(lookup.progress(for: .cancelRepair) == .discarding)
+    }
+
+    @Test func profileProgressDoesNotMasqueradeAsLookupOrPublicationFailure() {
+        var value = proposalSnapshot(step: .profile)
+        value.steps[0].status = .checking
+        value.steps[0].actions = []
+        var presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .working)
+        value.proposal = nil
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .working)
+        #expect(presentation.feedback(hasFailure: true, isBusy: false) == .actionFailure)
+
+        // A retry starts with the previous failure snapshot until MDK sends an update.
+        value.steps[0].status = .retryableFailure
+        value.steps[0].actions = [.retry]
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: true, isBusy: true) == .working)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .lookupFailure)
+
+        value.proposal = proposalSnapshot(step: .profile).proposal
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: false, isBusy: true) == .working)
+        #expect(presentation.feedback(hasFailure: false, isBusy: false) == .interrupted)
+    }
+
+    @Test(arguments: [OnboardingStatusFfi.passed, .skipped])
+    func completedProfileNeverShowsAnErrorDuringDismissal(status: OnboardingStatusFfi) {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: status, findings: [], actions: [], checkedAt: nil)]
+        let presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.feedback(hasFailure: true, isBusy: false) == .complete)
+    }
+
+    @Test func editableProfileNeverOffersAnImplicitSaveRetry() {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: .needsInput, findings: [],
+                             actions: [.retry, .editDiscoveryRelays, .editProfile, .continueWithout], checkedAt: nil)]
+        let presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .save, isRetry: false))
+        #expect(presentation.primaryAction(failure: .init(action: .skip, message: "Skip failed"))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.canSkip)
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed"))
+                == .init(action: .save, isRetry: true))
+    }
+
+    @Test func editingAfterAFailedSaveRestoresSaveInsteadOfRetry() {
+        let presentation = AccountSetupProfilePresentation(snapshot: proposalSnapshot(step: .profile))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed", draftWasEdited: true))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed"))
+                == .init(action: .save, isRetry: true))
+        #expect(presentation.primaryAction(failure: .init(action: .cancelRepair, message: "Back failed"))
+                == .init(action: .save, isRetry: false))
+        #expect(presentation.canCancelRepair)
+    }
+
+    @Test func pendingProfileDiscardRecognizesTheRefreshedCheckpoint() {
+        var value = proposalSnapshot(step: .profile)
+        let pending = AccountSetupProfilePresentation.PendingDiscard(snapshot: value)
+        #expect(!pending.isComplete(in: value))
+        value.revision += 1
+        #expect(!pending.isComplete(in: value))
+        // Cancellation can commit before the suspended UI receives its completion.
+        value.proposal = nil
+        #expect(pending.isComplete(in: value))
+        #expect(value.steps[0].status == .needsInput)
+
+        value.revision = 8
+        #expect(!pending.isComplete(in: value))
+        value.revision = 9
+        value.recoveryEpoch = "another-attempt"
+        #expect(!pending.isComplete(in: value))
+        value.recoveryEpoch = nil
+        value.accountIdHex = String(repeating: "b", count: 64)
+        #expect(!pending.isComplete(in: value))
+    }
+
+    @Test func interruptedProfileOffersPrimaryRetryWithoutSkipOrEditing() {
+        var value = proposalSnapshot(step: .profile)
+        value.steps[0].actions = [.retry]
+        var presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .retry, isRetry: true))
+        #expect(presentation.primaryAction(failure: .init(action: .save, message: "Save failed", draftWasEdited: true))
+                == .init(action: .retry, isRetry: true))
+        #expect(!presentation.canEdit && !presentation.canSkip && !presentation.canCancelRepair)
+
+        value.steps[0].actions = []
+        presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.primaryAction(failure: nil) == nil)
+    }
+
+    @Test func discardingAProfileProposalClosesOnlyAfterConfirmedCancellation() {
+        var value = proposalSnapshot(step: .profile)
+        #expect(!AccountSetupProfilePresentation.shouldDismiss(after: .cancelRepair, snapshot: value, errorMessage: nil))
+
+        // MDK returns NeedsInput with no proposal after cancellation, not Passed or Skipped.
+        value.proposal = nil
+        value.steps[0].actions = [.retry, .editProfile, .continueWithout]
+        #expect(AccountSetupProfilePresentation.shouldDismiss(after: .cancelRepair, snapshot: value, errorMessage: nil))
+        #expect(!AccountSetupProfilePresentation.shouldDismiss(after: .cancelRepair, snapshot: value, errorMessage: "Cancellation failed"))
+        #expect(!AccountSetupProfilePresentation.shouldDismiss(after: .skip, snapshot: value, errorMessage: nil))
+
+        value.steps[0].status = .skipped
+        #expect(AccountSetupProfilePresentation.shouldDismiss(after: .skip, snapshot: value, errorMessage: nil))
+        #expect(!AccountSetupProfilePresentation.shouldDismiss(after: .skip, snapshot: value, errorMessage: "Skip failed"))
+    }
+
+    @Test func profileLookupFailureDoesNotOfferEditing() {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: .retryableFailure, findings: [],
+                             actions: [.retry, .continueWithout], checkedAt: nil)]
+        let presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(!presentation.canEdit)
+        #expect(presentation.canRetry)
+        #expect(presentation.canSkip)
+        #expect(presentation.profile == nil)
+        #expect(presentation.primaryAction(failure: nil) == .init(action: .retry, isRetry: true))
+    }
+
+    @Test func profileDraftRemainsReadOnlyWhilePublicationIsInterrupted() {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: .retryableFailure, findings: [],
+                             actions: [.retry], checkedAt: nil)]
+        let profile = UserProfileMetadataFfi(name: "Alex", displayName: nil, about: nil,
+                                            picture: nil, banner: nil, nip05: nil, lud16: nil)
+        value.proposal = .init(step: .profile, revision: value.revision, previousEventId: nil,
+                               readRelays: [], writeRelays: [], profile: profile, follows: nil)
+        let interrupted = AccountSetupProfilePresentation(snapshot: value)
+        #expect(interrupted.isInterrupted)
+        #expect(interrupted.profile == profile)
+        #expect(!interrupted.canEdit && !interrupted.canSkip)
+        #expect(interrupted.canRetry)
+
+        value.steps[0].actions = [.approveRepair, .cancelRepair]
+        let editable = AccountSetupProfilePresentation(snapshot: value)
+        #expect(!editable.isInterrupted)
+        #expect(editable.canEdit && editable.canCancelRepair)
+        #expect(!editable.canRetry && !editable.canSkip)
+    }
+
+    @Test func optionalProfileFormDoesNotUseAnUnrelatedRepairProposal() {
+        var value = snapshot()
+        value.steps = [.init(step: .profile, status: .needsInput, findings: [],
+                             actions: [.editProfile, .continueWithout], checkedAt: nil)]
+        value.proposal = .init(step: .relays, revision: value.revision, previousEventId: nil,
+                               readRelays: ["wss://relay.example.com"], writeRelays: [], profile: nil, follows: nil)
+        let presentation = AccountSetupProfilePresentation(snapshot: value)
+        #expect(presentation.canEdit && presentation.canSkip)
+        #expect(!presentation.isInterrupted)
+        #expect(presentation.profile == nil)
+    }
+
+    @Test func profileOptionalityFollowsTheOfferedActions() {
+        var step = snapshot().steps[0]
+        step.step = .profile
+        step.findings = [.init(issue: .missing, endpoint: nil)]
+        step.actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
+
+        step.status = .retryableFailure
+        step.findings = [.init(issue: .timedOut, endpoint: nil)]
+        step.actions = [.retry, .continueWithout]
+        #expect(AccountSetupPresentation.checkState(step) == .optionalReview)
+
+        // An interrupted profile publication cannot promise a skip that MDK does not offer.
+        step.findings = [.init(issue: .publicationFailed, endpoint: nil)]
+        step.actions = [.retry]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func deviceAcknowledgmentIsDifferentFromARequiredRepair() {
+        var step = snapshot().steps[0]
+        #expect(AccountSetupPresentation.checkState(step) == .acknowledgment)
+        step.actions = [.retry]
+        step.status = .retryableFailure
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+
+        step.step = .relays
+        step.actions = [.useRecommendedRelays, .editDiscoveryRelays]
+        #expect(AccountSetupPresentation.checkState(step) == .requiredFix)
+    }
+
+    @Test func errorsPreserveTheExplanationAndIdentifyFailedClose() {
+        let error = L10n.string("Couldn’t close sign-in. Try again when the current update has finished.")
+        let header = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: error, isOpeningChats: false, closeFailed: true
+        )
+        #expect(header.title == L10n.string("Couldn’t close sign-in"))
+        #expect(header.subtitle == error)
+
+        let refreshError = L10n.string("Couldn’t refresh your accounts. Try again.")
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: refreshError, isOpeningChats: true, closeFailed: false
+        )
+        #expect(opening.title == L10n.string("Couldn’t continue signing in"))
+        #expect(opening.subtitle == refreshError)
+    }
+
+    @Test func readyHeaderDistinguishesOpeningFromReady() {
+        let ready = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        let opening = AccountSetupPresentation.header(
+            snapshot(ready: true), reviewStep: nil, errorMessage: nil, isOpeningChats: true, closeFailed: false
+        )
+        #expect(ready.title == L10n.string("You’re ready to chat"))
+        #expect(opening.title == ready.title)
+        #expect(ready.subtitle == L10n.string("Open Chats to start messaging."))
+        #expect(opening.subtitle == L10n.string("Opening your chats…"))
+    }
+
+    @Test func reviewPromptRequiresAnAvailableCurrentDecision() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .checking
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        let queued = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(queued.title == L10n.string("Getting ready to chat"))
+        #expect(queued.subtitle == L10n.string("We’re checking your profile and connection."))
+
+        current.steps[0].status = .skipped
+        let disconnected = AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: false)
+        #expect(disconnected == nil)
+        let reconnecting = AccountSetupPresentation.header(
+            current, reviewStep: disconnected, errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(reconnecting.title == queued.title)
+        #expect(reconnecting.subtitle == queued.subtitle)
+
+        let connected = AccountSetupPresentation.header(
+            current, reviewStep: AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true),
+            errorMessage: nil, isOpeningChats: false, closeFailed: false
+        )
+        #expect(connected.title == L10n.string("A little more to do"))
+        #expect(connected.subtitle == L10n.string("Review the item below to continue."))
+    }
+
+    @Test func reviewDestinationFollowsTheCurrentUnfinishedCheck() {
+        var current = snapshot()
+        var profile = current.steps[0]
+        profile.step = .profile
+        profile.status = .skipped
+        profile.actions = []
+        current.steps.insert(profile, at: 0)
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .singleDevice)
+
+        current.steps[0].status = .needsInput
+        current.steps[0].actions = [.editProfile, .continueWithout]
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == .profile)
+
+        // A later decision must not jump ahead of the check that is still running or queued.
+        current.steps[0].status = .checking
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        current.steps[0].status = .pending
+        #expect(AccountSetupPresentation.stepToReview(current, isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(), isBusy: true, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(ready: true), isBusy: false, isConnected: true) == nil)
+        #expect(AccountSetupPresentation.stepToReview(snapshot(cancellationPending: true), isBusy: false, isConnected: true) == nil)
+    }
+
     @Test func accountRelaysAddGeneralPurposeRelaysOnlyToProductionSeeds() {
         #expect(AppContainerConfig.accountRelays(runtimeRelays: AppContainerConfig.seedRelays) == [
             "wss://relay.eu.whitenoise.chat", "wss://relay.us.whitenoise.chat",
@@ -94,8 +374,12 @@ struct AccountSetupTests {
     }
 
     @Test func optionalSkipIsDistinctFromSuccess() {
-        #expect(AccountSetupPresentation.symbol(.skipped) != AccountSetupPresentation.symbol(.passed))
-        #expect(AccountSetupPresentation.status(.skipped) != AccountSetupPresentation.status(.passed))
+        let skipped = AccountSetupPresentation.checkState(snapshot(status: .skipped).steps[0])
+        let passed = AccountSetupPresentation.checkState(snapshot(status: .passed).steps[0])
+        #expect(skipped == .skipped)
+        #expect(passed == .passed)
+        #expect(skipped.symbol != passed.symbol)
+        #expect(skipped.subtitle != passed.subtitle)
     }
 
     @Test func analyticsReadinessWaitsForCancellationToClear() {
@@ -161,7 +445,31 @@ struct AccountSetupTests {
         await model.drain()
         #expect(model.canFinish == ready)
         #expect((model.errorMessage == nil) == ready)
+        #expect(model.hasConnectionFailure == !ready)
         model.suspend()
+        #expect(!model.hasConnectionFailure)
+    }
+
+    @Test func suspendingAfterAnActionFailureDoesNotReportAConnectionFailure() async {
+        let initial = snapshot()
+        let model = AccountSetupModel(snapshot: initial)
+        await model.connect(SetupTestClient(initial: initial))
+        await settle { model.isConnected && !model.isBusy }
+        await model.send(.approve(0))?.value
+        #expect(model.errorMessage != nil)
+        #expect(!model.hasConnectionFailure)
+        model.suspend()
+        #expect(!model.isConnected)
+        #expect(model.errorMessage != nil)
+        #expect(!model.hasConnectionFailure)
+
+        await model.connect(SetupTestClient(initial: initial))
+        await settle { model.isConnected && !model.isBusy }
+        #expect(model.isConnected)
+        #expect(model.errorMessage == nil)
+        #expect(!model.hasConnectionFailure)
+        model.suspend()
+        await model.drain()
     }
 
     @Test(arguments: [UInt64(4), 5]) func automaticSkipStopsOnUnchangedOrOlderResults(revision: UInt64) async {

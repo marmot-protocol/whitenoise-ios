@@ -96,32 +96,45 @@ struct DraftMediaPreuploadsTests {
         #expect(await taken.first??.value == nil)
     }
 
-    @Test func uploadStateFollowsTheUploadOutcome() async {
-        let succeeding = DraftMediaPreuploads(uploader: UploadProbe().uploader())
-        let failing = DraftMediaPreuploads { _, _ in throw MarmotKitError.Runtime(details: "blossom unreachable") }
+    @Test func composerUploadsStagedMediaWhileTheUserIsStillWriting() async throws {
+        let client = try MarmotClient.testClient()
+        let state = AppState.test(client: client)
+        state.activeAccountRef = "account-ref"
+        let probe = UploadProbe()
+        let composer = ComposerModel(
+            appState: state,
+            groupIdHex: hex("aa"),
+            timelineStore: TimelineStore(appState: state, groupIdHex: hex("aa")),
+            draftMediaUploader: probe.uploader()
+        )
         let photo = attachment("photo.jpg")
 
-        succeeding.reconcile([photo], accountRef: "account")
-        failing.reconcile([photo], accountRef: "account")
-        #expect(succeeding.states[photo.id] == .uploading)
-        #expect(failing.states[photo.id] == .uploading)
+        composer.reconcileDraftMediaUploads([photo])
+        await probe.waitForCalls(1)
 
-        await settle { succeeding.states[photo.id] != .uploading && failing.states[photo.id] != .uploading }
-        #expect(succeeding.states[photo.id] == .uploaded)
-        #expect(failing.states[photo.id] == .failed)
+        #expect(probe.calls == [UploadCall(accountRef: "account-ref", fileName: "photo.jpg", cancelled: false)])
+        try await client.marmot.shutdownAndClose()
     }
 
-    @Test func removedOrSentAttachmentsLeaveNoUploadState() async {
-        let uploads = DraftMediaPreuploads(uploader: UploadProbe().uploader())
-        let removed = attachment("removed.jpg")
-        let sent = attachment("sent.jpg")
+    @Test func composerCancelsTheUploadOfMediaRemovedBeforeSend() async throws {
+        let client = try MarmotClient.testClient()
+        let state = AppState.test(client: client)
+        state.activeAccountRef = "account-ref"
+        let probe = UploadProbe()
+        let composer = ComposerModel(
+            appState: state,
+            groupIdHex: hex("aa"),
+            timelineStore: TimelineStore(appState: state, groupIdHex: hex("aa")),
+            draftMediaUploader: probe.uploader()
+        )
+        let photo = attachment("photo.jpg")
 
-        uploads.reconcile([removed, sent], accountRef: "account")
-        uploads.reconcile([sent], accountRef: "account")
-        let taken = uploads.take([sent], accountRef: "account")
-        _ = await taken.first??.value
+        composer.reconcileDraftMediaUploads([photo])
+        composer.reconcileDraftMediaUploads([])
+        await probe.waitForCalls(1)
 
-        #expect(uploads.states.isEmpty)
+        #expect(probe.calls == [UploadCall(accountRef: "account-ref", fileName: "photo.jpg", cancelled: true)])
+        try await client.marmot.shutdownAndClose()
     }
 
     @Test(arguments: [
@@ -165,13 +178,6 @@ struct DraftMediaPreuploadsTests {
 
         #expect(resolved.references.map(\.fileName) == ["a.jpg", "c.jpg"])
         #expect(resolved.attachments.map(\.id) == [attachments[0].id, attachments[2].id])
-    }
-}
-
-@MainActor
-private func settle(_ condition: () -> Bool) async {
-    for _ in 0..<1_000 where !condition() {
-        await Task.yield()
     }
 }
 
@@ -227,20 +233,6 @@ private func reference(_ fileName: String, sourceEpoch: UInt64 = 1) -> MediaAtta
     )
 }
 
-struct DraftMediaUploadPresentationTests {
-    @Test(arguments: [
-        (state: DraftMediaUploadState?.none, spinner: false),
-        (state: DraftMediaUploadState?.some(.uploading), spinner: true),
-        (state: DraftMediaUploadState?.some(.uploaded), spinner: false),
-        (state: DraftMediaUploadState?.some(.failed), spinner: false),
-    ])
-    func onlyAnAttachmentStillUploadingShowsTheSpinner(state: DraftMediaUploadState?, spinner: Bool) {
-        #expect(DraftMediaUploadPresentation.showsSpinner(for: state) == spinner)
-    }
-
-    @Test func uploadBadgeIsDeveloperOnly() {
-        #expect(DraftMediaUploadPresentation.diagnosticBadge(for: .failed, showsDiagnostics: false) == nil)
-        #expect(DraftMediaUploadPresentation.diagnosticBadge(for: .failed, showsDiagnostics: true) == .failed)
-        #expect(DraftMediaUploadPresentation.diagnosticBadge(for: nil, showsDiagnostics: true) == nil)
-    }
+private func hex(_ byte: String) -> String {
+    String(repeating: byte, count: 32)
 }

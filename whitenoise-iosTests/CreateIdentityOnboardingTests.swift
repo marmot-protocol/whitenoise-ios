@@ -134,6 +134,20 @@ struct CreateIdentityOnboardingTests {
         #expect(merged.lud16 == existing.lud16)
     }
 
+    @Test(arguments: ["", " \n\t"])
+    func clearingRecoveryBioPreservesOtherProfileMetadata(about: String) throws {
+        let existing = UserProfileMetadataFfi(
+            name: "Alex", displayName: "Alex", about: "Old bio",
+            picture: "https://example.com/photo.jpg", banner: "https://example.com/banner.jpg",
+            nip05: "alex@example.com", lud16: "alex@example.com"
+        )
+        let draft = OnboardingProfileMetadataDraft(displayName: "Alex", about: about, uploadedPictureURL: nil)
+        let merged = try #require(draft.merging(with: existing))
+        var expected = existing
+        expected.about = nil
+        #expect(merged == expected)
+    }
+
     @Test func profileRetryNeverCreatesASecondIdentityOrUploadsAgain() async {
         let service = CreateIdentityServiceStub()
         service.publishFailuresRemaining = 1
