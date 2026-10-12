@@ -35,6 +35,7 @@ struct UserFacingError: Equatable {
             return L10n.string("Your follow list is unavailable from relays. Check your connection and relay settings, then try again. No follows were changed.")
         }
         if let setupMessage = accountSetupMessage(for: error) { return capitalizingFirstLetter(setupMessage) }
+        if let reportMessage = moderationReportMessage(for: error) { return reportMessage }
         if let sendMessage = sendMessage(for: error) { return capitalizingFirstLetter(sendMessage) }
         if let mediaMessage = mediaMessage(for: error) { return mediaMessage }
         if let fetchError = error as? PinnedHTTPSFetcher.FetchError, case .httpStatus = fetchError {
@@ -94,6 +95,22 @@ struct UserFacingError: Equatable {
             return L10n.string("Identity setup can be resumed. Try importing again.")
         case .AccountSetupResetNotApplicable:
             return L10n.string("This incomplete identity setup could not be recovered.")
+        default:
+            return nil
+        }
+    }
+
+    private nonisolated static func moderationReportMessage(for error: Error) -> String? {
+        guard let marmotError = error as? MarmotKitError else { return nil }
+        switch marmotError {
+        case .ModerationReportingNotConfigured, .InvalidModerationReportConfig:
+            return L10n.string("Reporting to White Noise isn’t available in this version of the app.")
+        case .ModerationReportRateLimited:
+            return L10n.string("You’ve sent a lot of reports recently. Try again later.")
+        case .CannotReportSelf:
+            return L10n.string("You can’t report yourself.")
+        case .InvalidReportedPublicKey:
+            return L10n.string("This person can’t be reported.")
         default:
             return nil
         }

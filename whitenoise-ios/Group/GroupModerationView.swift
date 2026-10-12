@@ -129,7 +129,7 @@ struct ReportMessageSheet: View {
                         }
                     } footer: {
                         if reportsToDeveloper {
-                            Text("Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified.")
+                            Text("Your report and the sender’s public key are sent privately to the White Noise team. The message itself isn’t shared, and the sender isn’t notified.")
                         }
                     }
                 }
@@ -178,11 +178,14 @@ struct ReportMessageSheet: View {
         var developerDisposition: SendAcceptDispositionFfi?
         if toDeveloper {
             do {
-                guard let text = DeveloperReportContent.text(
-                    kind: .message(reason: reason, explanation: explanation),
-                    reportedAccountIdHex: message.sender
-                ) else { throw DeveloperReportDelivery.Failure.supportUnavailable }
-                developerDisposition = try await DeveloperReportSender.send(text, using: appState).acceptDisposition
+                developerDisposition = try await ModerationReportSender.submit(
+                    reportedAccountIdHex: message.sender,
+                    reason: reason,
+                    explanation: explanation,
+                    origin: .report,
+                    accountRef: account,
+                    using: appState
+                ).acceptDisposition
                 try Task.checkCancellation()
             } catch is CancellationError {
                 return
@@ -190,7 +193,7 @@ struct ReportMessageSheet: View {
                 guard appState.activeAccountRef == account, appState.runtimeGeneration == generation else { return }
                 self.error = ReportPresentation.developerFailure(
                     groupOutcome: groupOutcome,
-                    failure: DeveloperReportSender.failureMessage(for: error)
+                    failure: UserFacingError.message(for: error)
                 )
                 return
             }

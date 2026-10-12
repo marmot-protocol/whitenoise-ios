@@ -7,6 +7,7 @@ import Testing
 extension PresentedChatRowFfi {
     init(row: ChatListRowFfi, presentation: ConversationPresentationFfi, avatarAsset: AvatarAssetFfi?) {
         self.init(
+            draftVersion: nil,
             preview: row.lastMessage != nil ? .message : (row.pendingConfirmation ? .invitation : .empty),
             actions: Self.testActions(), row: row, presentation: presentation, avatarAsset: avatarAsset
         )

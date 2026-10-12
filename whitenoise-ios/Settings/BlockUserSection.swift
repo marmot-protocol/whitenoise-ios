@@ -79,7 +79,7 @@ struct BlockUserActions: View {
             titleVisibility: .visible
         ) {
             if let intent = pendingIntent {
-                if intent.blocked {
+                if intent.blocked, ModerationReportSender.isAvailable(appState) {
                     Button(L10n.string("Block and Report"), role: .destructive) {
                         Task {
                             guard appState.activeAccountRef == intent.accountRef,
@@ -105,7 +105,11 @@ struct BlockUserActions: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if pendingIntent?.blocked == true {
-                Text("You won't see their messages. Block and Report also notifies the White Noise team.")
+                if ModerationReportSender.isAvailable(appState) {
+                    Text("You won't see their messages. Block and Report also notifies the White Noise team.")
+                } else {
+                    Text("You won't see their messages.")
+                }
             } else {
                 Text("Their messages will appear again and you'll be able to send to them.")
             }
@@ -134,9 +138,11 @@ struct BlockUserActions: View {
             }
         case .send:
             pendingBlockReport = nil
-            guard let text = DeveloperReportContent.text(kind: .block, reportedAccountIdHex: report.targetId)
-            else { return }
-            await DeveloperReportSender.sendBlockReport(text, using: appState)
+            await ModerationReportSender.sendBlockReport(
+                reportedAccountIdHex: report.targetId,
+                accountRef: report.accountRef,
+                using: appState
+            )
         }
     }
 

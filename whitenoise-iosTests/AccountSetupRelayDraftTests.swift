@@ -126,6 +126,6 @@ struct AccountSetupRelayDraftTests {
 
     private func proposal(reads: [String], writes: [String]) -> OnboardingRepairProposalFfi {
         .init(step: .relays, revision: 1, previousEventId: nil,
-              readRelays: reads, writeRelays: writes, profile: nil, follows: nil)
+              readRelays: reads, writeRelays: writes, profile: nil, follows: nil, relayRepair: nil)
     }
 }

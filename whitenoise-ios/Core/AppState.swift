@@ -352,6 +352,18 @@ final class AppState {
     /// `@ObservationIgnored client`), matching the original raw-handle semantics.
     var client: MarmotClient? { runtimeLifecycle.client }
 
+    /// IPF moderation reports are configured per build flavor. Unconfigured
+    /// builds hide every report-to-White-Noise affordance.
+    var moderationReportingAvailable: Bool {
+#if DEBUG
+        if let moderationReportingAvailableForTesting { return moderationReportingAvailableForTesting }
+#endif
+        return client?.moderationReportingAvailable == true
+    }
+#if DEBUG
+    @ObservationIgnored var moderationReportingAvailableForTesting: Bool?
+#endif
+
     /// Launch-to-root-surface timing, held until the first runtime can record it.
     @ObservationIgnored var hostWindowInitStartedAt: ContinuousClock.Instant?
     @ObservationIgnored private var pendingHostWindowInitMilliseconds: UInt64?

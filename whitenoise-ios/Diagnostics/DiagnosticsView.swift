@@ -291,6 +291,12 @@ struct DiagnosticsView: View {
             return "pending commit recovered"
         case .groupHydrationRecovered:
             return "hydration recovered"
+        case .localGroupCopyTerminated(let voluntary):
+            return voluntary ? "local copy left" : "local copy removed"
+        case .localGroupCopyRestored:
+            return "local copy restored"
+        case .groupMemberLeavesRemoved:
+            return "member leaves removed"
         }
     }
 

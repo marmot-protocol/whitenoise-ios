@@ -557,7 +557,7 @@ final class ChatsListViewModel {
     }
 
     private func installWindowSnapshot(_ snapshot: ChatListWindowSnapshotFfi) {
-        if windowSnapshot?.rows != snapshot.rows { windowWillChange?(snapshot) }
+        if !PresentedChatRowFfi.sameContent(windowSnapshot?.rows, snapshot.rows) { windowWillChange?(snapshot) }
         windowSnapshot = snapshot
         loadError = nil
         isLoading = false
@@ -1801,5 +1801,20 @@ final class ChatsListViewModel {
             leaveRequestPending: group.leaveRequestPending,
             leaveRequestedAtMs: group.leaveRequestedAtMs
         )
+    }
+}
+
+extension PresentedChatRowFfi {
+    /// `draftVersion` is an opaque, device-local correlation token (MDK 0.13
+    /// object, not `Equatable`); it is never rendered, so rows that differ only
+    /// there present the same content.
+    nonisolated func hasSameContent(as other: PresentedChatRowFfi) -> Bool {
+        preview == other.preview && actions == other.actions && row == other.row
+            && presentation == other.presentation && avatarAsset == other.avatarAsset
+    }
+
+    nonisolated static func sameContent(_ lhs: [PresentedChatRowFfi]?, _ rhs: [PresentedChatRowFfi]?) -> Bool {
+        guard let lhs, let rhs else { return lhs == nil && rhs == nil }
+        return lhs.count == rhs.count && zip(lhs, rhs).allSatisfy { $0.hasSameContent(as: $1) }
     }
 }

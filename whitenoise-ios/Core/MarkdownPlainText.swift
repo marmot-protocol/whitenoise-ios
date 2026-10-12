@@ -119,6 +119,8 @@ nonisolated enum MarkdownPlainText {
                 appendInlines(alt, to: &state, depth: depth + 1)
             case .autolink(let url, _, _):
                 state.append(url)
+            case .timestamp(let unixSeconds, let style):
+                state.append(MarkdownTimestampFormatter.text(unixSeconds: unixSeconds, style: style))
             case .nostrMention(let entity):
                 if let name = state.mentionDisplayName?(entity) {
                     state.append("@" + name)

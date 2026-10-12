@@ -1232,6 +1232,18 @@ final class ConversationViewModel {
     }
 
     func canReportToDeveloper(_ message: AppMessageRecordFfi) -> Bool {
+        ModerationReportSender.isAvailable(appState)
+            && moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
+            && MessageModerationPolicy.isOtherAuthor(
+                direction: message.direction,
+                sender: message.sender,
+                myAccountId: myAccountId,
+                isDeleted: isDeleted(message.messageIdHex)
+            )
+    }
+
+    /// Blocking needs no report destination; only "Block and Report" does.
+    func canBlockAuthor(of message: AppMessageRecordFfi) -> Bool {
         moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef
             && MessageModerationPolicy.isOtherAuthor(
                 direction: message.direction,
@@ -1241,9 +1253,7 @@ final class ConversationViewModel {
             )
     }
 
-    func canBlockAuthor(of message: AppMessageRecordFfi) -> Bool {
-        canReportToDeveloper(message)
-    }
+    var canBlockAndReport: Bool { ModerationReportSender.isAvailable(appState) }
 
     var canModerateReports: Bool {
         moderationAccountRef != nil && appState?.activeAccountRef == moderationAccountRef

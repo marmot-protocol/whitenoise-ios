@@ -31,6 +31,11 @@ These stay the same for production, staging, Debug, and Release:
 
 - **Native-push server pubkey** — `WHITENOISE_PUSH_SERVER_PUBKEY_HEX` differs
   between production and staging. Do not share or swap those keys.
+- **Moderation reports key** — `WHITENOISE_MODERATION_REPORT_PUBKEY` (an npub)
+  is IPF's reports key for that flavor, so staging reports never reach the
+  production queue. Reports publish only to the White Noise seed relays. A
+  missing or invalid key leaves reporting unconfigured, which hides the
+  report-to-White-Noise options rather than failing.
 
 ## Rules
 
@@ -40,6 +45,7 @@ These stay the same for production, staging, Debug, and Release:
 - Do not split the OTLP endpoint by flavor.
 - Keep the push relay hint shared unless the relays themselves diverge.
 - Keep the push server pubkey flavor-specific.
+- Keep the moderation reports key flavor-specific.
 - Audit delivery is v5 only, through `setAuditOtlpConfigV5` with the fixed
   `TelemetryBuildConfig.auditOtlpDestination`; keep that identity stable across
   token rotation because MDK's delivery cursor is bound to it. The v4 whole-file

@@ -42,6 +42,9 @@ nonisolated final class MarmotClient: Sendable {
     static let seedRelays = AppContainerConfig.seedRelays
 
     let marmot: Marmot
+    /// Whether this build's IPF reports destination was accepted. It is set
+    /// once from build settings at construction and never changes at runtime.
+    let moderationReportingAvailable: Bool
     let rootPath: String
     let relayUrls: [String]
     /// Durable transport-cursor policy this runtime was constructed with.
@@ -88,8 +91,10 @@ nonisolated final class MarmotClient: Sendable {
             rootPath: rootPath,
             relayUrls: relayUrls,
             options: MarmotOptions(cursorPersistence: cursorPersistence, clientName: "whitenoise",
-                attachmentAcquisitionMode: .hostManaged)
+                attachmentAcquisitionMode: .hostManaged,
+                moderationReportConfig: ModerationReportBuildConfig.current()?.ffi)
         )
+        moderationReportingAvailable = marmot.moderationReportingAvailable()
         // A rejected audit destination must not block startup; recordings stay local.
         do {
             _ = try marmot.setAuditOtlpConfigV5(config: telemetryConfig.auditOtlpConfig())
@@ -900,6 +905,22 @@ nonisolated final class MarmotClient: Sendable {
         try await Task.detached { [marmot] in
             try marmot.reportedMessage(accountRef: accountRef, groupIdHex: groupID, messageId: messageID)
         }.value
+    }
+
+    func submitModerationReport(
+        accountRef: String,
+        reportedPubkey: String,
+        reason: ReportReasonFfi,
+        explanation: String,
+        origin: ModerationReportOriginFfi
+    ) async throws -> ModerationReportOutcomeFfi {
+        try await marmot.submitModerationReport(
+            accountRef: accountRef,
+            reportedPubkey: reportedPubkey,
+            reason: reason,
+            explanation: explanation,
+            origin: origin
+        )
     }
 
     func reportMessage(accountRef: String, groupID: String, messageID: String,

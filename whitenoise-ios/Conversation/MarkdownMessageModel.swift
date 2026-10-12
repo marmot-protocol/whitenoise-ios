@@ -503,6 +503,10 @@ enum MarkdownMessageBuilder {
 
             case .nostrUri(let entity):
                 emitted = appendNostrEntity(entity, prefix: "", to: &out, context: context, budget: &budget) || emitted
+
+            case .timestamp(let unixSeconds, let style):
+                let text = MarkdownTimestampFormatter.text(unixSeconds: unixSeconds, style: style)
+                emitted = append(text, to: &out, context: context, budget: &budget) || emitted
             }
         }
         return emitted

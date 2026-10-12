@@ -385,71 +385,6 @@
         }
       }
     },
-    "Couldn't reach White Noise. Please check your connection and try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise ist nicht erreichbar. Bitte überprüfe deine Verbindung und versuche es erneut."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't reach White Noise. Please check your connection and try again."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo contactar con White Noise. Comprueba tu conexión e inténtalo de nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible de joindre White Noise. Vérifiez votre connexion et réessayez."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossibile raggiungere White Noise. Controlla la connessione e riprova."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível falar com o White Noise. Verifique sua conexão e tente novamente."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось связаться с White Noise. Проверьте подключение и повторите попытку."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "White Noise’a ulaşılamadı. Lütfen bağlantınızı kontrol edip yeniden deneyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法联系 White Noise。请检查网络连接后重试。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法聯絡 White Noise。請檢查網路連線後再試一次。"
-          }
-        }
-      }
-    },
     "Couldn’t close sign-in" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1226,6 +1161,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "檢舉未傳送"
+          }
+        }
+      }
+    },
+    "Reporting to White Noise isn’t available in this version of the app." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldungen an White Noise sind in dieser Version der App nicht verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reporting to White Noise isn’t available in this version of the app."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los reportes a White Noise no están disponibles en esta versión de la app."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les signalements à White Noise ne sont pas disponibles dans cette version de l’app."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le segnalazioni a White Noise non sono disponibili in questa versione dell’app."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denúncias ao White Noise não estão disponíveis nesta versão do app."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Жалобы в White Noise недоступны в этой версии приложения."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a bildirim, uygulamanın bu sürümünde kullanılamıyor."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本的应用无法向 White Noise 举报。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此版本的 App 無法向 White Noise 檢舉。"
           }
         }
       }
@@ -2205,6 +2205,71 @@
         }
       }
     },
+    "This person can’t be reported." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Person kann nicht gemeldet werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This person can’t be reported."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede reportar a esta persona."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette personne ne peut pas être signalée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questa persona non può essere segnalata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta pessoa não pode ser denunciada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На этого человека нельзя пожаловаться."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişi bildirilemez."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法举报此人。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "無法檢舉此人。"
+          }
+        }
+      }
+    },
     "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2335,6 +2400,136 @@
         }
       }
     },
+    "You can’t report yourself." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du kannst dich nicht selbst melden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can’t report yourself."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No puedes reportarte a ti mismo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous ne pouvez pas vous signaler vous-même."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non puoi segnalare te stesso."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você não pode denunciar a si mesmo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нельзя пожаловаться на самого себя."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kendinizi bildiremezsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你不能举报自己。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你不能檢舉自己。"
+          }
+        }
+      }
+    },
+    "You won't see their messages." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du siehst ihre Nachrichten nicht mehr."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You won't see their messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No verás sus mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous ne verrez plus ses messages."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non vedrai i suoi messaggi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você não verá as mensagens dessa pessoa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы не будете видеть сообщения этого человека."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu kişinin iletilerini görmezsiniz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你将不会看到此人的消息。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你將不會看到此人的訊息。"
+          }
+        }
+      }
+    },
     "You won't see their messages. Block and Report also notifies the White Noise team." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2400,67 +2595,67 @@
         }
       }
     },
-    "Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified." : {
+    "Your report and the sender’s public key are sent privately to the White Noise team. The message itself isn’t shared, and the sender isn’t notified." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Deine Meldung und der öffentliche Schlüssel des Absenders werden über deinen Support-Chat an das White-Noise-Team gesendet. Die Nachricht selbst wird nicht geteilt, und der Absender wird nicht benachrichtigt."
+            "value" : "Deine Meldung und der öffentliche Schlüssel des Absenders werden vertraulich an das White-Noise-Team gesendet. Die Nachricht selbst wird nicht geteilt, und der Absender wird nicht benachrichtigt."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Your report and the sender’s public key are sent to the White Noise team through your support chat. The message itself isn’t shared, and the sender isn’t notified."
+            "value" : "Your report and the sender’s public key are sent privately to the White Noise team. The message itself isn’t shared, and the sender isn’t notified."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu reporte y la clave pública del remitente se envían al equipo de White Noise a través de tu chat de soporte. El mensaje no se comparte y no se notifica al remitente."
+            "value" : "Tu reporte y la clave pública del remitente se envían de forma privada al equipo de White Noise. El mensaje no se comparte y no se notifica al remitente."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Votre signalement et la clé publique de l’expéditeur sont envoyés à l’équipe White Noise via votre discussion avec l’assistance. Le message lui-même n’est pas partagé et l’expéditeur n’est pas averti."
+            "value" : "Votre signalement et la clé publique de l’expéditeur sont envoyés en privé à l’équipe White Noise. Le message lui-même n’est pas partagé et l’expéditeur n’est pas averti."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La tua segnalazione e la chiave pubblica del mittente vengono inviate al team di White Noise tramite la chat con il supporto. Il messaggio non viene condiviso e il mittente non riceve alcuna notifica."
+            "value" : "La tua segnalazione e la chiave pubblica del mittente vengono inviate in privato al team di White Noise. Il messaggio non viene condiviso e il mittente non riceve alcuna notifica."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sua denúncia e a chave pública do remetente são enviadas à equipe do White Noise pelo seu chat de suporte. A mensagem em si não é compartilhada, e o remetente não é notificado."
+            "value" : "Sua denúncia e a chave pública do remetente são enviadas de forma privada à equipe do White Noise. A mensagem em si não é compartilhada, e o remetente não é notificado."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ваша жалоба и открытый ключ отправителя передаются команде White Noise через чат с поддержкой. Само сообщение не передаётся, а отправитель не получает уведомления."
+            "value" : "Ваша жалоба и открытый ключ отправителя конфиденциально передаются команде White Noise. Само сообщение не передаётся, а отправитель не получает уведомления."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bildiriminiz ve gönderenin açık anahtarı destek sohbetiniz üzerinden White Noise ekibine gönderilir. İletinin kendisi paylaşılmaz ve gönderene bildirim yapılmaz."
+            "value" : "Bildiriminiz ve gönderenin açık anahtarı White Noise ekibine gizli olarak gönderilir. İletinin kendisi paylaşılmaz ve gönderene bildirim yapılmaz."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的举报和发送者的公钥会通过你的支持聊天发送给 White Noise 团队。消息本身不会被分享，发送者也不会收到通知。"
+            "value" : "你的举报和发送者的公钥会私密地发送给 White Noise 团队。消息本身不会被分享，发送者也不会收到通知。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你的檢舉和傳送者的公鑰會透過你的支援聊天傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
+            "value" : "你的檢舉和傳送者的公鑰會私密地傳送給 White Noise 團隊。訊息本身不會被分享，傳送者也不會收到通知。"
           }
         }
       }
@@ -2526,6 +2721,71 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可以開始聊天了"
+          }
+        }
+      }
+    },
+    "You’ve sent a lot of reports recently. Try again later." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast in letzter Zeit viele Meldungen gesendet. Versuche es später erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ve sent a lot of reports recently. Try again later."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has enviado muchos reportes recientemente. Inténtalo más tarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez envoyé beaucoup de signalements récemment. Réessayez plus tard."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai inviato molte segnalazioni di recente. Riprova più tardi."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você enviou muitas denúncias recentemente. Tente novamente mais tarde."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы недавно отправили много жалоб. Повторите попытку позже."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son zamanlarda çok sayıda bildirim gönderdiniz. Daha sonra yeniden deneyin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你最近发送的举报过多。请稍后再试。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你最近傳送的檢舉過多。請稍後再試。"
           }
         }
       }

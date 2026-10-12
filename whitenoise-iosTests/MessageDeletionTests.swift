@@ -158,6 +158,7 @@ struct MessageDeletionTests {
         let other = hex("22")
         let group = groupRecord(id: String(repeating: "ab", count: 16), name: "Reports", admins: [other])
         let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
+        state.moderationReportingAvailableForTesting = true
         let model = ConversationViewModel(appState: state, group: group)
         let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
         let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
@@ -182,6 +183,7 @@ struct MessageDeletionTests {
         let other = hex("22")
         let group = groupRecord(id: String(repeating: "cd", count: 16), name: "")
         let state = try appState(accountRef: "reports-\(UUID())", accountIdHex: me)
+        state.moderationReportingAvailableForTesting = true
         let model = ConversationViewModel(appState: state, group: group, initialOtherMember: other, initialMemberCount: 2)
         let mine = appRecord(id: hex("44"), groupId: group.groupIdHex, sender: me, direction: "sent")
         let theirs = appRecord(id: hex("55"), groupId: group.groupIdHex, sender: other, direction: "received")
@@ -194,6 +196,12 @@ struct MessageDeletionTests {
         #expect(model.canReportToDeveloper(theirs))
         #expect(model.canReport(theirs))
         #expect(!model.canReport(mine))
+        // Unconfigured builds offer no report in a direct chat, but Block stays.
+        state.moderationReportingAvailableForTesting = false
+        #expect(!model.canReport(theirs))
+        #expect(model.canBlockAuthor(of: theirs))
+        #expect(!model.canBlockAndReport)
+        state.moderationReportingAvailableForTesting = true
         state.activeAccountRef = "replacement-account"
         #expect(!model.canReport(theirs))
         #expect(!model.canBlockAuthor(of: theirs))

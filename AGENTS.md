@@ -151,13 +151,17 @@ Conversation-open performance ends at rendered layout, uses the navigation conse
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
 Group reports use encrypted group transport and are visible to group members.
-App Review also requires reports and blocks to reach the developer, only on
-explicit user action, as an ordinary encrypted message to the White Noise support
-account in the reporter's support chat. Report (including in direct chats, which
-have no group report) sends only the reported npub, the reason, and the
-reporter's optional explanation. Block and Report sends only the blocked npub,
-after the block is confirmed. Never include the reported message, its id, or
-anything identifying the conversation.
+App Review also requires reports and blocks to reach the developer. Report
+(including in direct chats, which have no group report) and Block and Report also
+call MDK's `submitModerationReport`, a NIP-59 gift-wrapped NIP-56 report to the
+flavor's IPF reports key (`WHITENOISE_MODERATION_REPORT_PUBKEY`) on the seed
+relays, only on explicit user action. It is additive to `reportMessage`. MDK
+sends only the reported key, the reason and the optional explanation; Block and
+Report sends `other` with no explanation, and only after the block is confirmed.
+Never add message, group or relay identifiers. Gate every report-to-White-Noise
+affordance on `moderationReportingAvailable`; Block itself never depends on it.
+Retained outcomes (`AcceptedPending`, `CompletionUnknown`) are queued by MDK and
+retried on catch-up: report them as waiting, never resubmit them.
 Dismissal labels resolve individual reports without deleting their message.
 Admin deletion uses `deleteMessage`; MDK authorizes it against source group state.
 Pending acceptance is not completed moderation. Refresh reports from projection

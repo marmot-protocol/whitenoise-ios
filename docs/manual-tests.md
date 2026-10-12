@@ -1412,13 +1412,16 @@ Marmot root. Automated simulator checks do not replace these device checks.
 - [ ] In a direct chat, long-press the other person's message: **Report** sends
       only to the White Noise team (no group report), and **Block** offers
       **Block and Report** and **Block User**. Your own messages offer neither.
-      A sent report appears as a message in **Chat with support** containing
-      only the reported npub, the reason, and any explanation; Block and Report
-      sends the npub only. Neither includes the reported message, its id, or the
-      chat. The support chat is created if missing. With relays down, a report
-      either fails with an error or dismisses with "Saved and waiting to send to
-      the White Noise team." (or the pending-confirmation line), and Block still
-      succeeds or fails on its own.
+      Reports are gift-wrapped to the flavor's reports key; nothing appears in
+      Chat with support. Confirm with IPF's reader that a staging report arrives
+      on the staging key only, carrying just the reported npub, the reason, any
+      explanation, and the `report`/`block` label. With relays down, a report
+      dismisses with "Saved and waiting to send to the White Noise team." and
+      publishes after the next catch-up; repeating it within 10 minutes does not
+      send a second report. Block still succeeds or fails on its own.
+- [ ] In a build with no valid `WHITENOISE_MODERATION_REPORT_PUBKEY`, direct
+      chats offer no Report, groups hide **Send to White Noise**, and Block offers
+      only **Block User**.
 - [ ] With two profiles on this device (for example after Create Demo
       Environment), the active profile can Block and Block and Report the other
       from a message, its profile and the direct chat's details; neither profile

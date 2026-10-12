@@ -1046,15 +1046,21 @@ struct ConversationView: View {
                 titleVisibility: .visible,
                 presenting: blockTarget
             ) { target in
-                Button(L10n.string("Block and Report"), role: .destructive) {
-                    blockAuthor(of: target.record, reporting: true)
+                if ModerationReportSender.isAvailable(appState) {
+                    Button(L10n.string("Block and Report"), role: .destructive) {
+                        blockAuthor(of: target.record, reporting: true)
+                    }
                 }
                 Button(L10n.string("Block User"), role: .destructive) {
                     blockAuthor(of: target.record, reporting: false)
                 }
                 Button(L10n.string("Cancel"), role: .cancel) {}
             } message: { _ in
-                Text("You won't see their messages. Block and Report also notifies the White Noise team.")
+                if ModerationReportSender.isAvailable(appState) {
+                    Text("You won't see their messages. Block and Report also notifies the White Noise team.")
+                } else {
+                    Text("You won't see their messages.")
+                }
             }
             .sheet(item: $editHistoryTarget) { target in
                 if let viewModel {
@@ -3951,7 +3957,6 @@ struct ConversationView: View {
     private func blockAuthor(of record: AppMessageRecordFfi, reporting: Bool) {
         guard let author = Hex.normalized32Bytes(record.sender),
               let accountRef = draftAccountRef else { return }
-        let reportText = reporting ? DeveloperReportContent.text(kind: .block, reportedAccountIdHex: author) : nil
         Task {
             // `setBlocked` blocks for whichever profile is active when it runs,
             // so a profile switch while the dialog was open must not block there.
@@ -3968,8 +3973,12 @@ struct ConversationView: View {
                 ))
                 return
             }
-            guard let reportText else { return }
-            await DeveloperReportSender.sendBlockReport(reportText, using: appState)
+            guard reporting else { return }
+            await ModerationReportSender.sendBlockReport(
+                reportedAccountIdHex: author,
+                accountRef: accountRef,
+                using: appState
+            )
         }
     }
 

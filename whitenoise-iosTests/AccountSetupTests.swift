@@ -146,7 +146,7 @@ struct AccountSetupTests {
         let profile = UserProfileMetadataFfi(name: "Alex", displayName: nil, about: nil,
                                             picture: nil, banner: nil, nip05: nil, lud16: nil)
         value.proposal = .init(step: .profile, revision: value.revision, previousEventId: nil,
-                               readRelays: [], writeRelays: [], profile: profile, follows: nil)
+                               readRelays: [], writeRelays: [], profile: profile, follows: nil, relayRepair: nil)
         let interrupted = AccountSetupProfilePresentation(snapshot: value)
         #expect(interrupted.isInterrupted)
         #expect(interrupted.profile == profile)
@@ -165,7 +165,7 @@ struct AccountSetupTests {
         value.steps = [.init(step: .profile, status: .needsInput, findings: [],
                              actions: [.editProfile, .continueWithout], checkedAt: nil)]
         value.proposal = .init(step: .relays, revision: value.revision, previousEventId: nil,
-                               readRelays: ["wss://relay.example.com"], writeRelays: [], profile: nil, follows: nil)
+                               readRelays: ["wss://relay.example.com"], writeRelays: [], profile: nil, follows: nil, relayRepair: nil)
         let presentation = AccountSetupProfilePresentation(snapshot: value)
         #expect(presentation.canEdit && presentation.canSkip)
         #expect(!presentation.isInterrupted)
@@ -733,7 +733,7 @@ struct AccountSetupTests {
         value.steps[0].step = step
         value.steps[0].actions = [.approveRepair, .cancelRepair]
         value.proposal = OnboardingRepairProposalFfi(step: step, revision: 8, previousEventId: nil,
-                                                   readRelays: [], writeRelays: [], profile: nil, follows: nil)
+                                                   readRelays: [], writeRelays: [], profile: nil, follows: nil, relayRepair: nil)
         return value
     }
 
@@ -913,7 +913,7 @@ private actor SetupTestClient: AccountSetupClient {
             value.steps[0].actions = [.approveRepair, .cancelRepair]
             value.proposal = OnboardingRepairProposalFfi(
                 step: step, revision: value.revision, previousEventId: nil,
-                readRelays: reads, writeRelays: writes, profile: nil, follows: nil
+                readRelays: reads, writeRelays: writes, profile: nil, follows: nil, relayRepair: nil
             )
             return value
         case .useDefaults:

@@ -190,7 +190,7 @@ struct AccountSetupRelayStepPresentationTests {
         step: OnboardingStepFfi = .inboxRelays, reads: [String] = ["wss://inbox.example.com"], writes: [String] = []
     ) -> OnboardingRepairProposalFfi {
         .init(step: step, revision: 1, previousEventId: nil,
-              readRelays: reads, writeRelays: writes, profile: nil, follows: nil)
+              readRelays: reads, writeRelays: writes, profile: nil, follows: nil, relayRepair: nil)
     }
 
     private func snapshot(

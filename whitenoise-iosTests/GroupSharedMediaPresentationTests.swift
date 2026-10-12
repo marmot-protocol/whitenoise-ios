@@ -119,10 +119,10 @@ extension GroupSharedMediaPresentationTests {
             ownerId: "reply", messageId: "original-message", resolveMissingSource: true)
         #expect(reply.first?.sourceHint == AttachmentSourceHint(messageID: "original-message", slot: 2))
         let newest = AttachmentEntryFfi(messageIdHex: "newest", sourceMessageIdHex: "original-source",
-            sender: "sender", timelineAt: 1, receivedAt: 90, sourceEpoch: nil, category: .image,
+            sender: "sender", timelineAt: 1, receivedAt: 90, sourceEpoch: nil, category: .image, role: .shared,
             attachment: .accepted(attachmentIndex: 2, reference: reference))
         let older = AttachmentEntryFfi(messageIdHex: "older", sourceMessageIdHex: "older-source",
-            sender: "sender", timelineAt: 50, receivedAt: 2, sourceEpoch: 1, category: .image,
+            sender: "sender", timelineAt: 50, receivedAt: 2, sourceEpoch: 1, category: .image, role: .shared,
             attachment: .accepted(attachmentIndex: 7, reference: reference))
         let items = GroupSharedMediaPresentation.items(entries: [newest, older])
         #expect(items.map(\.id) == ["newest:2", "older:7"])
