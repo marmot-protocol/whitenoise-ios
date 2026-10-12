@@ -125,6 +125,55 @@ struct AppStateBootstrapTests {
         await appState.startRuntimeSuspension().value
     }
 
+    @Test func openChatsKeepsSetupWhenItsAccountIsExcludedAndCanRetry() async throws {
+        let seeded = try await readyAppStateWithCreatedIdentities()
+        let appState = seeded.appState
+        let account = seeded.accounts[0]
+        let maintenance = appState.beginForegroundMaintenanceCancellation()
+        for task in maintenance.mutationFollowups { await task.value }
+        let completed = OnboardingSnapshotFfi(
+            accountIdHex: account.accountIdHex, recoveryEpoch: nil, revision: 1, ready: true, steps: [],
+            proposal: nil, singleDeviceNotice: nil, cancellationPending: false
+        )
+        let model = AccountSetupModel(snapshot: completed)
+        await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
+        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(model.canFinish)
+        appState.activeAccountRef = nil
+        appState.setPhase(.onboarding)
+        appState.signInAttempts.begin(account.accountIdHex)
+        appState.pendingAccountSetup = model
+        appState.isAccountSetupPresented = true
+        appState.beforeOnboardingSnapshotReadForTesting = { accountID in
+            if accountID == account.accountIdHex { throw CocoaError(.fileReadCorruptFile) }
+        }
+
+        await appState.finishAccountSetup()
+
+        #expect(appState.pendingAccountSetup === model)
+        #expect(appState.isAccountSetupPresented)
+        #expect(appState.signInAttempts.accountIDs.contains(account.accountIdHex))
+        #expect(appState.accounts.isEmpty)
+        #expect(appState.activeAccountRef == nil)
+        #expect(appState.phase == .onboarding)
+        #expect(model.errorMessage != nil)
+        #expect(!model.canFinish)
+        #expect(!appState.isFinishingAccountSetup)
+
+        appState.beforeOnboardingSnapshotReadForTesting = nil
+        await model.connect(CompletedAccountSetupTestClient(snapshot: completed))
+        for _ in 0..<200 where !model.canFinish { try await Task.sleep(for: .milliseconds(10)) }
+        try #require(model.canFinish)
+        await appState.finishAccountSetup()
+        #expect(appState.pendingAccountSetup == nil)
+        #expect(!appState.isAccountSetupPresented)
+        #expect(!appState.signInAttempts.accountIDs.contains(account.accountIdHex))
+        #expect(appState.activeAccountRef == account.label)
+        #expect(appState.phase == .ready)
+        appState.setAppSceneActive(false)
+        await appState.startRuntimeSuspension().value
+    }
+
     @Test func olderRefreshCannotDiscardSetupRestoredAfterFinishFailure() async throws {
         let seeded = try await readyAppStateWithCreatedIdentities()
         let appState = seeded.appState

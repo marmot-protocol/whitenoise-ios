@@ -222,7 +222,6 @@ final class AppState {
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         isFinishingAccountSetup = true
         defer { isFinishingAccountSetup = false }
-        let completed = model.snapshot.ready && !model.cancelled
         let id = model.accountID
         signInAttempts.finish(id)
         model.suspend()
@@ -231,14 +230,14 @@ final class AppState {
         isAccountSetupPresented = false
         do {
             try await refreshAccounts(refreshUnreadSummaries: false)
-            if completed, let summary = accounts.first(where: { $0.accountIdHex == id }) {
-                await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: productOnboardingTicket)?.value
-                productOnboardingTicket = nil
-                productOnboardingPath = nil
-                await activateNewIdentity(summary)
-            } else if model.cancelled, !accounts.isEmpty {
-                phase = .ready
+            guard let summary = accounts.first(where: { $0.accountIdHex == id }) else {
+                // Refresh can exclude an unreadable checkpoint without failing the other accounts.
+                throw MarmotKitError.AccountSetupRetryRequired
             }
+            await productAnalytics.record(.onboarding(.complete, .import, .success), ticket: productOnboardingTicket)?.value
+            productOnboardingTicket = nil
+            productOnboardingPath = nil
+            await activateNewIdentity(summary)
         } catch {
             signInAttempts.begin(id)
             pendingAccountSetup = model
