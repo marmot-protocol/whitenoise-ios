@@ -113,6 +113,7 @@ final class AccountSetupModel {
     private(set) var snapshot: OnboardingSnapshotFfi
     private(set) var isBusy = false
     private(set) var isConnected = false
+    private(set) var hasConnectionFailure = false
     private(set) var cancelled = false
     var errorMessage: String?
     @ObservationIgnored private var client: (any AccountSetupClient)?
@@ -171,11 +172,13 @@ final class AccountSetupModel {
                 guard self.session == id, !Task.isCancelled, !self.cancelled,
                       !self.snapshot.ready || self.snapshot.cancellationPending else { return }
                 self.isConnected = false
-                self.errorMessage = L10n.string("Setup updates stopped. Reconnect to continue.")
+                self.hasConnectionFailure = true
+                self.errorMessage = L10n.string("Setup updates stopped. Try again to continue.")
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 self.isConnected = false
-                self.errorMessage = L10n.string("Couldn’t load sign-in checks. Reconnect to try again.")
+                self.hasConnectionFailure = true
+                self.errorMessage = L10n.string("Couldn’t load sign-in checks. Please try again.")
             }
         }
     }
@@ -194,7 +197,7 @@ final class AccountSetupModel {
             } catch {
                 guard let self, self.session == id, !Task.isCancelled else { return }
                 if let error = error as? MarmotKitError, case .OnboardingActionUnavailable = error {
-                    self.errorMessage = L10n.string("Setup changed. Reconnect and review the latest options.")
+                    self.errorMessage = L10n.string("Setup changed. Try again to review the latest options.")
                 } else {
                     self.errorMessage = L10n.string("Couldn’t finish this step. Try again.")
                 }
@@ -228,6 +231,7 @@ final class AccountSetupModel {
     func suspend() {
         session = UUID()
         isConnected = false
+        hasConnectionFailure = false
         isBusy = false
         client = nil
         observer?.cancel()
