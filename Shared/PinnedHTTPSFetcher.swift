@@ -89,6 +89,7 @@ nonisolated enum PinnedHTTPSFetcher {
         guard url.scheme?.lowercased() == "https",
               let host = url.host,
               !host.isEmpty,
+              !ContentSanitizer.isNonPublicAddressLiteral(host),
               let port = UInt16(exactly: url.port ?? 443),
               // Mirror ContentSanitizer.imageURL: a peer-controlled URL must
               // not steer the pinned connection off the standard HTTPS port.

@@ -143,7 +143,7 @@ nonisolated enum RelayURL {
               scheme == "wss",
               let host = components.host,
               !host.isEmpty,
-              !ContentSanitizer.isPrivateOrLoopbackAddressLiteral(host),
+              !ContentSanitizer.isNonPublicAddressLiteral(host),
               components.user == nil,
               components.password == nil
         else { return nil }

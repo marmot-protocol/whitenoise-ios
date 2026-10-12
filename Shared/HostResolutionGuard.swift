@@ -4,8 +4,8 @@ import Foundation
 /// address. `ContentSanitizer.imageURL` blocks private/loopback IP *literals*
 /// in every spelling, but cannot see that `10-0-0-5.sslip.io` or
 /// `127-0-0-1.nip.io` resolves to `10.0.0.5` / `127.0.0.1`. This resolves the
-/// host and re-checks each resolved address against the same private-range
-/// classifier.
+/// host and re-checks each resolved address against the resolved-address
+/// policy, retaining configured fake-IP VPN DNS answers.
 ///
 /// Remote image fetches consume `resolvedPublicAddresses` and connect directly
 /// to one of those numeric endpoints while preserving the original hostname for
@@ -29,7 +29,7 @@ nonisolated enum HostResolutionGuard {
         _ host: String,
         resolver: Resolver = systemResolver
     ) -> Bool {
-        resolver(host).contains { ContentSanitizer.isPrivateOrLoopbackAddressLiteral($0) }
+        resolver(host).contains { ContentSanitizer.isNonPublicResolvedAddress($0) }
     }
 
     /// Returns the complete resolved address set only when every answer is
@@ -41,7 +41,7 @@ nonisolated enum HostResolutionGuard {
     ) throws -> [String] {
         let addresses = resolver(host)
         guard !addresses.isEmpty else { throw GuardError.resolutionFailed }
-        guard !addresses.contains(where: ContentSanitizer.isPrivateOrLoopbackAddressLiteral) else {
+        guard !addresses.contains(where: ContentSanitizer.isNonPublicResolvedAddress) else {
             throw GuardError.resolvesToPrivateAddress
         }
         return addresses

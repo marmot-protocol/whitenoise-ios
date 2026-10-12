@@ -11,13 +11,16 @@ struct ContentSanitizerRemoteMediaAddressTests {
         "2001:db8::", "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff",
         "2001:2::", "2001:2:0:ffff:ffff:ffff:ffff:ffff",
         "2001:1::4", "2001:10::1", "2001:1ff:ffff:ffff:ffff:ffff:ffff:ffff",
-        "64:ff9b:1::", "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
+        "64:ff9b:1::a00:1", "64:ff9b:1::5db8:d822", "64:ff9b:1::", "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
         "3fff::", "3fff:fff:ffff:ffff:ffff:ffff:ffff:ffff", "5f00::1",
         "::ffff:198.18.0.1", "::ffff:0:198.19.255.255", "::198.51.100.1",
         "64:ff9b::198.18.0.1", "2002:c612:1::1",
     ])
     func rejectsNonPublicLiteralAndImageURL(address: String) {
-        #expect(ContentSanitizer.isPrivateOrLoopbackAddressLiteral(address))
+        #expect(ContentSanitizer.isNonPublicAddressLiteral(address))
+        if !address.hasPrefix("198.18.") && !address.hasPrefix("198.19.") {
+            #expect(ContentSanitizer.isNonPublicResolvedAddress(address))
+        }
         let host = address.contains(":") ? "[\(address)]" : address
         #expect(ContentSanitizer.imageURL("https://\(host)/image.png") == nil)
     }
@@ -34,7 +37,7 @@ struct ContentSanitizerRemoteMediaAddressTests {
         "64:ff9b::93.184.216.34", "::ffff:93.184.216.34", "2002:5db8:d822::1",
     ])
     func retainsPublicAddressesAndGlobalExceptions(address: String) {
-        #expect(!ContentSanitizer.isPrivateOrLoopbackAddressLiteral(address))
+        #expect(!ContentSanitizer.isNonPublicAddressLiteral(address))
         let host = address.contains(":") ? "[\(address)]" : address
         #expect(ContentSanitizer.imageURL("https://\(host)/image.png") != nil)
     }

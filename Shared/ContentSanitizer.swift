@@ -162,7 +162,7 @@ nonisolated enum ContentSanitizer {
               comps.password == nil,
               let host = comps.host,
               !host.isEmpty,
-              !isPrivateOrLoopbackHost(host),
+              !isNonPublicHost(host),
               // Standard HTTPS port only — an explicit port would let a peer
               // steer TLS connections at arbitrary ports on public hosts, the
               // one dimension the host checks don't constrain.
@@ -195,11 +195,19 @@ nonisolated enum ContentSanitizer {
     /// already blocks. Exposed for connect-time resolution checks: a DNS name
     /// that is not an IP literal returns `false` here, so callers resolve the
     /// host first and pass each resolved address string through this.
-    static func isPrivateOrLoopbackAddressLiteral(_ host: String) -> Bool {
-        isPrivateOrLoopbackHost(host)
+    static func isNonPublicAddressLiteral(_ host: String) -> Bool {
+        isNonPublicHost(host)
     }
 
-    private static func isPrivateOrLoopbackHost(_ host: String) -> Bool {
+    /// Configured fake-IP VPNs use this pool for DNS answers. Literal URLs stay blocked.
+    static func isNonPublicResolvedAddress(_ address: String) -> Bool {
+        if let octets = ipv4Octets(address), octets[0] == 198, (18...19).contains(Int(octets[1])) {
+            return false
+        }
+        return isNonPublicAddressLiteral(address)
+    }
+
+    private static func isNonPublicHost(_ host: String) -> Bool {
         let normalized = host
             .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
             .lowercased()
@@ -210,14 +218,14 @@ nonisolated enum ContentSanitizer {
         }
 
         if let octets = ipv4Octets(canonical) {
-            return isPrivateOrLoopbackIPv4(octets)
+            return isNonPublicIPv4(octets)
         }
 
         if isLegacyIPv4Literal(canonical) {
             return true
         }
 
-        return isPrivateOrLoopbackIPv6(canonical)
+        return isNonPublicIPv6(canonical)
     }
 
     private static func strippingTrailingRootDots(_ host: String) -> String {
@@ -228,7 +236,7 @@ nonisolated enum ContentSanitizer {
         return canonical
     }
 
-    private static func isPrivateOrLoopbackIPv4(_ octets: [UInt8]) -> Bool {
+    private static func isNonPublicIPv4(_ octets: [UInt8]) -> Bool {
         guard octets.count == 4 else { return false }
 
         if octets[0] == 0 || octets[0] == 10 || octets[0] == 127 {
@@ -342,7 +350,7 @@ nonisolated enum ContentSanitizer {
         guard !value.isEmpty,
               value.utf8.count <= 253,
               value.contains("."),
-              !isPrivateOrLoopbackHost(value)
+              !isNonPublicHost(value)
         else { return false }
         let labels = value.split(separator: ".", omittingEmptySubsequences: false)
         guard labels.count >= 2,
@@ -363,7 +371,7 @@ nonisolated enum ContentSanitizer {
         }
     }
 
-    private static func isPrivateOrLoopbackIPv6(_ host: String) -> Bool {
+    private static func isNonPublicIPv6(_ host: String) -> Bool {
         guard host.contains(":") else { return false }
 
         let address = String(host.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)[0])
@@ -385,7 +393,7 @@ nonisolated enum ContentSanitizer {
             bytes[10] == 0xff &&
             bytes[11] == 0xff
         if isIPv4Mapped {
-            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+            return isNonPublicIPv4(Array(bytes[12..<16]))
         }
 
         // SIIT / IPv4-translatable (`::ffff:0:a.b.c.d`, RFC 6052) embeds the
@@ -396,7 +404,7 @@ nonisolated enum ContentSanitizer {
             bytes[10] == 0 &&
             bytes[11] == 0
         if isIPv4Translatable {
-            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+            return isNonPublicIPv4(Array(bytes[12..<16]))
         }
 
         // NAT64 well-known prefix (`64:ff9b::/96`, RFC 6052) also carries the
@@ -405,13 +413,13 @@ nonisolated enum ContentSanitizer {
             bytes[2] == 0xff && bytes[3] == 0x9b &&
             bytes[4..<12].allSatisfy { $0 == 0 }
         if isNAT64WellKnown {
-            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+            return isNonPublicIPv4(Array(bytes[12..<16]))
         }
 
         // Deprecated IPv4-compatible IPv6 (`::a.b.c.d`) embeds the IPv4
         // address in the low 32 bits without the `::ffff:` marker.
         if bytes[0..<12].allSatisfy({ $0 == 0 }) {
-            return isPrivateOrLoopbackIPv4(Array(bytes[12..<16]))
+            return isNonPublicIPv4(Array(bytes[12..<16]))
         }
 
         // Multicast (`ff00::/8`), mirroring the IPv4 multicast/reserved block.
@@ -425,7 +433,7 @@ nonisolated enum ContentSanitizer {
         // `2002:7f00:1::` routes toward 127.0.0.1 on a host with a 6to4
         // pseudo-interface, so re-check the embedded v4 against the private set.
         if bytes[0] == 0x20 && bytes[1] == 0x02 {
-            return isPrivateOrLoopbackIPv4(Array(bytes[2..<6]))
+            return isNonPublicIPv4(Array(bytes[2..<6]))
         }
 
         // Teredo (`2001:0000::/32`, RFC 4380) embeds the Teredo server IPv4 in
@@ -433,11 +441,11 @@ nonisolated enum ContentSanitizer {
         // by a bitwise-NOT. Route both through the IPv4 check so a Teredo address
         // pointing at an internal v4 is rejected like the other embeddings.
         if bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x00 && bytes[3] == 0x00 {
-            if isPrivateOrLoopbackIPv4(Array(bytes[4..<8])) {
+            if isNonPublicIPv4(Array(bytes[4..<8])) {
                 return true
             }
             let teredoClient = bytes[12..<16].map { $0 ^ 0xff }
-            return isPrivateOrLoopbackIPv4(teredoClient)
+            return isNonPublicIPv4(teredoClient)
         }
 
         return (bytes[0] & 0xfe) == 0xfc || (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80)
@@ -446,24 +454,53 @@ nonisolated enum ContentSanitizer {
     /// IANA special-purpose ranges plus deprecated site-local space (RFC 3879).
     /// IPv4 embeddings and Teredo are checked separately against the IPv4 policy.
     private static func isNonGlobalIPv6Allocation(_ bytes: [UInt8]) -> Bool {
-        if bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0xc0 { return true }
-        if bytes[0] == 1 && bytes[1..<7].allSatisfy({ $0 == 0 }) && bytes[7] <= 1 { return true }
-        if bytes[0] == 0x3f && bytes[1] == 0xff && (bytes[2] & 0xf0) == 0 { return true }
-        if bytes[0] == 0x5f && bytes[1] == 0 { return true }
-        if Array(bytes[0..<6]) == [0, 0x64, 0xff, 0x9b, 0, 1] { return true }
-        guard bytes[0] == 0x20 && bytes[1] == 1 else { return false }
-        if bytes[2] == 0x0d && bytes[3] == 0xb8 { return true }
-        // General 2001::/23 is non-global unless a more specific allocation allows it.
-        guard bytes[2] < 2 else { return false }
-        if bytes[2] == 0 && bytes[3] == 0 { return false } // Teredo: embedded IPv4 checks below.
-        let anycast = bytes[2] == 0 && bytes[3] == 1 &&
-            bytes[4..<15].allSatisfy({ $0 == 0 }) && (1...3).contains(bytes[15])
-        let assignedGlobal = bytes[2] == 0 && (
-            bytes[3] == 3 ||
-            (bytes[3] == 4 && bytes[4] == 1 && bytes[5] == 0x12) ||
-            (bytes[3] & 0xf0) == 0x20 || (bytes[3] & 0xf0) == 0x30
-        )
-        return !anycast && !assignedGlobal
+        nonGlobalIPv6Prefixes.contains { $0.matches(bytes) }
+            && !globalIPv6Exceptions.contains { $0.matches(bytes) }
+    }
+
+    // IANA IPv6 Special-Purpose Address Registry; Teredo retains embedded-IPv4 checks.
+    private static let nonGlobalIPv6Prefixes = [
+        IPv6Prefix("fec0::", length: 10),
+        IPv6Prefix("100::", length: 64),
+        IPv6Prefix("100:0:0:1::", length: 64),
+        IPv6Prefix("3fff::", length: 20),
+        IPv6Prefix("5f00::", length: 16),
+        IPv6Prefix("64:ff9b:1::", length: 48),
+        IPv6Prefix("2001:db8::", length: 32),
+        IPv6Prefix("2001::", length: 23),
+    ]
+
+    private static let globalIPv6Exceptions = [
+        IPv6Prefix("2001::", length: 32),
+        IPv6Prefix("2001:1::1", length: 128),
+        IPv6Prefix("2001:1::2", length: 128),
+        IPv6Prefix("2001:1::3", length: 128),
+        IPv6Prefix("2001:3::", length: 32),
+        IPv6Prefix("2001:4:112::", length: 48),
+        IPv6Prefix("2001:20::", length: 28),
+        IPv6Prefix("2001:30::", length: 28),
+    ]
+
+    private struct IPv6Prefix {
+        let bytes: [UInt8]
+        let length: Int
+
+        init(_ address: String, length: Int) {
+            guard let bytes = ipv6Bytes(address), (0...128).contains(length) else {
+                preconditionFailure("Invalid static IPv6 prefix")
+            }
+            self.bytes = bytes
+            self.length = length
+        }
+
+        func matches(_ address: [UInt8]) -> Bool {
+            let wholeBytes = length / 8
+            guard address.prefix(wholeBytes).elementsEqual(bytes.prefix(wholeBytes)) else { return false }
+            let remainingBits = length % 8
+            guard remainingBits > 0 else { return true }
+            let mask = UInt8.max << (8 - remainingBits)
+            return address[wholeBytes] & mask == bytes[wholeBytes] & mask
+        }
     }
 
     private static func ipv6Bytes(_ host: String) -> [UInt8]? {

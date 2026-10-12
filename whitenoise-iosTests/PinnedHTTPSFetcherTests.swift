@@ -5,7 +5,7 @@ import Testing
 @testable import whitenoise_ios
 
 struct PinnedHTTPSFetcherTests {
-    @Test(arguments: ["198.19.255.255", "100::1", "fec0::1", "2001:2::1"])
+    @Test(arguments: ["198.51.100.255", "100::1", "fec0::1", "2001:2::1"])
     func endpointsRejectSingleAndMixedNonPublicAnswers(address: String) throws {
         let url = try #require(URL(string: "https://cdn.example/image.png"))
         for answers in [[address], ["93.184.216.34", address]] {
@@ -14,6 +14,22 @@ struct PinnedHTTPSFetcherTests {
                 try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver)
             }
         }
+    }
+
+    @Test func fakeIPLiteralCannotBecomeAnEndpoint() throws {
+        let url = try #require(URL(string: "https://198.18.0.1/avatar.png"))
+        let resolver: HostResolutionGuard.Resolver = { _ in ["198.18.0.1"] }
+        #expect(throws: PinnedHTTPSFetcher.FetchError.invalidRequest) {
+            try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver)
+        }
+    }
+
+    @Test func fakeIPEndpointPreservesOriginalTLSHostname() throws {
+        let url = try #require(URL(string: "https://cdn.example/avatar.png"))
+        let resolver: HostResolutionGuard.Resolver = { _ in ["198.18.0.1"] }
+        #expect(try PinnedHTTPSFetcher.endpoints(for: url, resolver: resolver) == [
+            .init(address: "198.18.0.1", tlsServerName: "cdn.example", port: 443),
+        ])
     }
 
     @Test func endpointsResolveOnceAndPreserveTLSHostname() throws {

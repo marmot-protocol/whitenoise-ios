@@ -38,7 +38,7 @@ nonisolated enum Nip05Resolver {
         guard let sanitized = ContentSanitizer.profileAddress("\(name)@\(domain)") else { return nil }
         let host = String(sanitized.split(separator: "@")[1])
         let localName = String(sanitized.split(separator: "@")[0])
-        guard !ContentSanitizer.isPrivateOrLoopbackAddressLiteral(host) else { return nil }
+        guard !ContentSanitizer.isNonPublicAddressLiteral(host) else { return nil }
         guard let lastLabel = host.split(separator: ".").last,
               !lastLabel.allSatisfy(\.isNumber)
         else { return nil }
