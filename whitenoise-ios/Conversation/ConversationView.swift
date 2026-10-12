@@ -2431,19 +2431,22 @@ struct ConversationView: View {
 
     private func handleDownArrowTap(proxy: ScrollViewProxy, viewModel: ConversationViewModel) {
         let stops = downArrowStops(viewModel: viewModel)
-        noteFirstUnreadPlacement(stops.firstUnread)
         // Choosing any destination retires the reply origin: it is either the
         // destination or was not ahead, and a later jump may drop its row.
         replyOrigin = nil
-        switch TimelineDownArrowPolicy.destination(replyOrigin: stops.replyOrigin, firstUnread: stops.firstUnread) {
+        let destination = TimelineDownArrowPolicy.destination(
+            replyOrigin: stops.replyOrigin, firstUnread: stops.firstUnread)
+        if TimelineDownArrowPolicy.consumesFirstUnread(destination) {
+            didPassFirstUnread = true
+        } else {
+            didSeeFirstUnreadOnScreenOrAhead = false
+        }
+        switch destination {
         case .replyOrigin(let messageIdHex):
             navigateToTimelineMessage(messageIdHex, viewModel: viewModel)
         case .firstUnread(let messageIdHex):
-            didPassFirstUnread = true
             navigateToTimelineMessage(messageIdHex, viewModel: viewModel, landsOnUnreadDivider: true)
         case .latest:
-            // A first unread the reader has never reached stays a stop.
-            if didSeeFirstUnreadOnScreenOrAhead { didPassFirstUnread = true }
             messageNavigationTask?.cancel()
             isAtTimelineBottom = TimelineBottom.pinnedStateAfterScrollButtonTap(
                 currentIsPinned: isAtTimelineBottom)

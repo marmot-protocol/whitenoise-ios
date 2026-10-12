@@ -153,6 +153,33 @@ struct TimelineDownArrowStopsTests {
         #expect(!Placement.unknown.isOnScreenOrAhead)
     }
 
+    @Test func onlyLandingOnTheFirstUnreadConsumesIt() {
+        #expect(TimelineDownArrowPolicy.consumesFirstUnread(.firstUnread(messageIdHex: "unread")))
+        #expect(!TimelineDownArrowPolicy.consumesFirstUnread(.latest))
+        #expect(!TimelineDownArrowPolicy.consumesFirstUnread(.replyOrigin(messageIdHex: "origin")))
+    }
+
+    /// Open on the divider, tap to latest, scroll back above the divider:
+    /// the next tap lands on the divider rather than skipping the unread.
+    @Test func jumpingToLatestPastTheDividerKeepsItAsAStop() {
+        let unreadIndex = 5
+        #expect(loaded(unreadIndex, visible: 3...8).isOnScreenOrAhead)
+        let tap = TimelineDownArrowPolicy.destination(
+            replyOrigin: nil, firstUnread: Stop(messageIdHex: "unread", placement: loaded(unreadIndex, visible: 3...8)))
+        #expect(tap == .latest)
+        #expect(!TimelineDownArrowPolicy.consumesFirstUnread(tap))
+        // The jump forgets the sighting.
+        var seen = false
+        // Scrolling up from the bottom with the divider still above does not retire it.
+        #expect(!TimelineDownArrowPolicy.hasPassed(loaded(unreadIndex, visible: 40...48), wasOnScreenOrAhead: seen))
+        seen = seen || loaded(unreadIndex, visible: 4...9).isOnScreenOrAhead
+        let afterScrollingAbove = loaded(unreadIndex, visible: 0...3)
+        #expect(!TimelineDownArrowPolicy.hasPassed(afterScrollingAbove, wasOnScreenOrAhead: seen))
+        #expect(TimelineDownArrowPolicy.destination(
+            replyOrigin: nil, firstUnread: Stop(messageIdHex: "unread", placement: afterScrollingAbove)
+        ) == .firstUnread(messageIdHex: "unread"))
+    }
+
     @Test func orderKeyRangeSpansTheGivenKeys() {
         #expect(TimelineDownArrowPolicy.orderKeyRange([150, 120, 180]) == 120...180)
         #expect(TimelineDownArrowPolicy.orderKeyRange([42]) == 42...42)

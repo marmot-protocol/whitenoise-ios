@@ -114,6 +114,14 @@ nonisolated enum TimelineDownArrowPolicy {
         wasOnScreenOrAhead && placement.isPassed
     }
 
+    /// Only landing on the first unread consumes it. Jumping past it is not
+    /// reading past it, so the caller forgets its sighting and it stays a stop
+    /// until the reader sees it and scrolls past it.
+    static func consumesFirstUnread(_ destination: TimelineDownArrowDestination) -> Bool {
+        if case .firstUnread = destination { return true }
+        return false
+    }
+
     static func orderKeyRange<Keys: Sequence>(_ keys: Keys) -> ClosedRange<Keys.Element>? where Keys.Element: Comparable {
         var range: ClosedRange<Keys.Element>?
         for key in keys {
