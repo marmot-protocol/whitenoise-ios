@@ -769,6 +769,13 @@ only from custom emoji already shown in that chat.
       not add a locally retryable duplicate beside the MDK message. Reopen the
       conversation: an unaccepted draft remains available; an accepted message
       stays in the timeline without restoring its submitted composer.
+- [ ] Leave a draft with a photo in a chat, open it and send on a slow
+      connection, then go back to Chats before the upload ends. The row shows
+      “You: …” for the sent message instead of “Draft: …”, and does not flash
+      the draft back when the send is accepted. Make a send fail before
+      acceptance (offline upload): the row returns to “Draft: …” and reopening
+      the chat restores the draft. On iPad, type a new draft after sending: it
+      shows as “Draft: …” once saved, even with the same text.
 
 ### Oversized attachments and text
 

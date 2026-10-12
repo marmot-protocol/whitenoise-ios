@@ -54,6 +54,26 @@ nonisolated enum ConversationDraftHydrationGate {
     }
 }
 
+/// Chat-list presentation of a revision-checked send between capturing its
+/// draft revision and MDK settling it (MDK 0.13 pending-send draft handoff).
+/// It only correlates the row's opaque `draftVersion` with `revision`; it never
+/// authorizes clearing a draft. MDK consumes exactly that revision on durable
+/// acceptance, and nothing else deletes the draft on the handoff's strength.
+nonisolated struct PendingDraftSendHandoff {
+    let revision: MessageDraftRevisionFfi
+    /// What was submitted, rendered as the pending outgoing preview.
+    let submitted: MessageDraftSummaryFfi
+
+    /// Whether the handoff outlives a settled send. It stays only when the send
+    /// was accepted and MDK then selects no draft, so a chat-list snapshot that
+    /// still shows the consumed revision cannot flash it back as a draft. A
+    /// rejected or unconfirmed send, or one that left a draft selected, restores
+    /// MDK's row as is.
+    static func retainsAfterSend(accepted: Bool, selectedHasDraft: Bool?) -> Bool {
+        accepted && selectedHasDraft == false
+    }
+}
+
 /// Bounded retry for a draft load that reported `runtimeUnavailable` after the
 /// host already considered the runtime ready (e.g. a transient startup-readiness
 /// error). The final attempt surfaces such failures instead of staying silent.
@@ -268,6 +288,10 @@ final class ConversationDraftStore {
     @ObservationIgnored private var sendingKeys: Set<ConversationDraftKey> = []
     @ObservationIgnored private var suppressEmptyAfterSendKeys: Set<ConversationDraftKey> = []
     @ObservationIgnored private var editedWhileSending: Set<ConversationDraftKey> = []
+    @ObservationIgnored private var pendingSendHandoffs: [ConversationDraftKey: PendingDraftSendHandoff] = [:]
+    /// Advances whenever a pending-send handoff starts or ends, so the chat
+    /// list can re-project its rows.
+    private(set) var pendingSendHandoffGeneration = 0
     private(set) var loadErrorKeys: Set<ConversationDraftKey> = []
     private(set) var conflictedKeys: Set<ConversationDraftKey> = []
     /// Custom emoji sends (`sendTaggedMedia`, no draft revision or client
@@ -327,19 +351,27 @@ final class ConversationDraftStore {
         suppressEmptyAfterSendKeys.insert(key)
         activeWrites[key, default: 0] += 1
         editedWhileSending.remove(key)
+        setPendingSendHandoff(Self.summary(for: selection).map {
+            PendingDraftSendHandoff(revision: selection.revision, submitted: $0)
+        }, for: key)
         return selection.revision
     }
 
     func finishSend(accountRef: String, groupIdHex: String, accepted: Bool) async {
         let key = ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)
+        var selectedHasDraft: Bool?
         if accepted, let state = persistence as? AppState,
            let client = try? state.currentMarmotClient(),
            let selected = try? await client.selectedMessageDraft(accountRef: accountRef, groupIdHex: groupIdHex) {
+            selectedHasDraft = selected.draft != nil
             selections[key] = selected
             if pendingWrites[key] == nil {
                 summaries[key] = Self.summary(for: selected)
                 generation &+= 1
             }
+        }
+        if !PendingDraftSendHandoff.retainsAfterSend(accepted: accepted, selectedHasDraft: selectedHasDraft) {
+            setPendingSendHandoff(nil, for: key)
         }
         if sendingKeys.remove(key) != nil {
             activeWrites[key, default: 0] -= 1
@@ -474,6 +506,16 @@ final class ConversationDraftStore {
             loadTasks[accountRef] = nil
             Self.logger.error("Failed to load encrypted composer draft summaries")
         }
+    }
+
+    func pendingSendHandoff(accountRef: String, groupIdHex: String) -> PendingDraftSendHandoff? {
+        pendingSendHandoffs[ConversationDraftKey(accountRef: accountRef, groupIdHex: groupIdHex)]
+    }
+
+    private func setPendingSendHandoff(_ handoff: PendingDraftSendHandoff?, for key: ConversationDraftKey) {
+        guard handoff != nil || pendingSendHandoffs[key] != nil else { return }
+        pendingSendHandoffs[key] = handoff
+        pendingSendHandoffGeneration &+= 1
     }
 
     func summary(accountRef: String, groupIdHex: String) -> MessageDraftSummaryFfi? {
@@ -614,6 +656,7 @@ final class ConversationDraftStore {
             conflictedKeys.remove(key)
             pendingWrites[key] = nil
             summaries[key] = nil
+            setPendingSendHandoff(nil, for: key)
             generation &+= 1
         } else if pendingWrites[key] != nil {
             scheduleSave(for: key)
@@ -640,6 +683,7 @@ final class ConversationDraftStore {
         let keys = Set(summaries.keys.filter { $0.accountRef == accountRef })
             .union(pendingWrites.keys.filter { $0.accountRef == accountRef })
             .union(selections.keys.filter { $0.accountRef == accountRef })
+            .union(pendingSendHandoffs.keys.filter { $0.accountRef == accountRef })
         guard !keys.isEmpty else { return }
         for key in keys {
             saveTasks.removeValue(forKey: key)?.cancel()
@@ -651,6 +695,7 @@ final class ConversationDraftStore {
             sendingKeys.remove(key)
             editedWhileSending.remove(key)
             acceptedUnrevisionedSends[key] = nil
+            setPendingSendHandoff(nil, for: key)
         }
         loadedAccounts.remove(accountRef)
         generation &+= 1

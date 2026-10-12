@@ -355,6 +355,9 @@ struct ChatsListView: View {
             .onChange(of: appState.profileRefreshGeneration) { _, _ in
                 viewModel?.refreshDisplayProjections()
             }
+            .onChange(of: appState.conversationDraftStore.pendingSendHandoffGeneration) { _, _ in
+                viewModel?.refreshDisplayProjections()
+            }
             // A query typed against the previous profile's chats must not
             // survive into the next one's list.
             .onChange(of: appState.activeAccountRef) { _, _ in

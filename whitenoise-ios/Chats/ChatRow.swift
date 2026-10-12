@@ -174,6 +174,11 @@ struct ChatRow: View {
         case .pendingInvite, nil:
             break
         }
+        if let pending = item.pendingSendPreview {
+            return pending.isEmpty
+                ? ChatRowPreviewPresentation(prefix: nil, body: L10n.string("You sent a message"))
+                : ChatRowPreviewPresentation(prefix: L10n.string("You"), body: pending)
+        }
         if let draftPreview = item.draftPreview {
             return ChatRowPreviewPresentation(prefix: nil, body: L10n.formatted("Draft: %@", draftPreview))
         }

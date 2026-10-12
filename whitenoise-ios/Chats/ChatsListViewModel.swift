@@ -93,6 +93,9 @@ final class ChatsListViewModel {
         let previewSymbolName: String?
         let previewExpired: Bool
         let draftPreview: String?
+        /// The submitted text of a send whose draft this row still shows; the
+        /// row presents it as the pending outgoing message instead of a draft.
+        let pendingSendPreview: String?
         let selectedPreview: SelectedChatPreviewFfi?
         let actions: ChatListRowActionsFfi?
         let searchHaystack: String
@@ -114,6 +117,7 @@ final class ChatsListViewModel {
             isBlockedDirectPeer: Bool = false,
             draftSummary: MessageDraftSummaryFfi? = nil,
             prepared: PresentedChatRowFfi? = nil,
+            pendingSend: PendingDraftSendHandoff? = nil,
             mentionDisplayName: MarkdownMentionResolver? = nil,
             systemEventNaming: GroupSystemEventNaming = .unresolvedIdentities,
             now: Date = Date()
@@ -147,8 +151,16 @@ final class ChatsListViewModel {
             var actions = prepared?.actions
             if leaveRequestPending { actions?.canStartLeave = false }
             self.actions = actions
+            var pendingSendPreview: String?
             if let prepared {
-                if case .draft(let draft) = prepared.preview {
+                if let pendingSend, ChatListDraftHandoff.coversDraftPreview(
+                    prepared.preview, draftVersion: prepared.draftVersion, sentRevision: pendingSend.revision
+                ) {
+                    self.draftPreview = nil
+                    pendingSendPreview = ConversationDraftPreview.text(
+                        from: pendingSend.submitted, mentionDisplayName: mentionDisplayName
+                    ) ?? ""
+                } else if case .draft(let draft) = prepared.preview {
                     self.draftPreview = ConversationDraftPreview.preparedText(draft, mentionDisplayName: mentionDisplayName)
                 } else {
                     self.draftPreview = nil
@@ -156,10 +168,11 @@ final class ChatsListViewModel {
             } else {
                 self.draftPreview = ConversationDraftPreview.text(from: draftSummary, mentionDisplayName: mentionDisplayName)
             }
+            self.pendingSendPreview = pendingSendPreview
             self.searchHaystack = Self.makeSearchHaystack(
                 title: title,
                 previewText: previewText,
-                draftPreview: self.draftPreview
+                draftPreview: self.draftPreview ?? pendingSendPreview
             )
         }
 
@@ -1124,6 +1137,9 @@ final class ChatsListViewModel {
                 blockedAccountIds: blockedAccountIds
             ),
             prepared: prepared ?? preparedRowsByGroupId[row.groupIdHex],
+            pendingSend: currentAccount.flatMap {
+                draftStore.pendingSendHandoff(accountRef: $0, groupIdHex: row.groupIdHex)
+            },
             mentionDisplayName: { [weak appState] entity in
                 #if DEBUG
                 if let name = self.mentionDisplayNameForTesting?(entity) {
@@ -1807,7 +1823,8 @@ final class ChatsListViewModel {
 extension PresentedChatRowFfi {
     /// `draftVersion` is an opaque, device-local correlation token (MDK 0.13
     /// object, not `Equatable`); it is never rendered, so rows that differ only
-    /// there present the same content.
+    /// there keep the same window layout. Items are still rebuilt from every
+    /// accepted snapshot, which re-checks any pending-send draft handoff.
     nonisolated func hasSameContent(as other: PresentedChatRowFfi) -> Bool {
         preview == other.preview && actions == other.actions && row == other.row
             && presentation == other.presentation && avatarAsset == other.avatarAsset
