@@ -472,6 +472,7 @@ final class AppState {
     }
 
     var groupRecoveryUpdate: GroupRecoveryUpdate?
+    var groupMembershipUpdate: GroupRecoveryUpdate?
     var groupProjectionUpdate: GroupRecoveryUpdate?
     let historyNotices = HistoryNoticeStore()
     let pollVotesInvalidation = PollVotesInvalidation()
@@ -499,13 +500,14 @@ final class AppState {
             groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
         }
         // MDK applies device-local membership changes before delivering these
-        // events and creates no system row, so the open conversation re-reads
-        // its membership and recovery state to reflect them.
+        // events and creates no system row. The group-record subscription can
+        // deduplicate them, so the open conversation re-reads its snapshot
+        // (membership) and recovery state directly.
         if case .groupEvent(let accountID, _, let groupID, let kind) = event,
            GroupEventPresentationPolicy.refreshesMembershipPresentation(kind),
            activeAccount?.accountIdHex == accountID,
            visibleChat?.groupIdHex == groupID {
-            groupRecoveryUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
+            groupMembershipUpdate = GroupRecoveryUpdate(accountID: accountID, groupID: groupID)
         }
         if case .historyNoticesChanged(let accountID, _) = event, activeAccount?.accountIdHex == accountID {
             Task { await historyNotices.refresh(using: self) }

@@ -280,6 +280,31 @@ struct MediaFileUploadTests {
         #expect(throws: MediaFileUploadFailure.cancelled) { try result.get() }
     }
 
+    @Test func cancellingWhileStagingLeavesNoSourceFilesBehind() async throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let control = MediaFileTransferControlFfi()
+        // Large enough that staging is still writing when the task is cancelled.
+        let attachments = (0..<4).map { _ in Self.attachment(bytes: 8 * 1_024 * 1_024) }
+
+        let task = Task {
+            try await MediaFileUploadRunner.run(attachments, control: control, limit: .max, directory: directory) { _ in
+                // Stands in for MDK, which refuses work on a cancelled control.
+                if control.isCancelled() {
+                    throw MarmotKitError.InvalidMediaReference(details: "media transfer cancelled")
+                }
+                return 0
+            }
+        }
+        task.cancel()
+        let result = await task.result
+
+        #expect(control.isCancelled())
+        #expect(throws: MediaFileUploadFailure.cancelled) { try result.get() }
+        let leftovers = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        #expect(leftovers.isEmpty)
+    }
+
     // MARK: Progress store
 
     @MainActor

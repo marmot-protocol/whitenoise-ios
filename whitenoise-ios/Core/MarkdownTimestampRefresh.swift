@@ -143,6 +143,9 @@ final class RelativeTimestampRefreshScheduler {
         if isVisible {
             guard visibleRowIds.insert(rowId).inserted,
                   !relativeUnixSeconds(rowId).isEmpty else { return }
+            // Its cached text may date from before it scrolled away, or from an
+            // offscreen build; scheduling only covers changes after this moment.
+            refreshRows([rowId])
             reschedule()
         } else {
             visibleRowIds.remove(rowId)

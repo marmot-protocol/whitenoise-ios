@@ -5,6 +5,9 @@ import Testing
 
 /// Stands in for MDK's opaque revision so the presentation decision can be
 /// exercised without a runtime; the published binary is covered below.
+// Immutable after init and used only by these tests; it must subclass the
+// UniFFI object, whose Sendable conformance is unchecked.
+// swiftlint:disable:next no_unchecked_sendable
 private final class FakeDraftRevision: MessageDraftRevisionFfi, @unchecked Sendable {
     private let includes: Bool
 

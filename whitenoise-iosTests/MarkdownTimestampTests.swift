@@ -389,6 +389,25 @@ struct MarkdownTimestampTests {
         scheduler.cancel()
     }
 
+    @Test func aRelativeRowIsRefreshedEachTimeItBecomesVisible() {
+        let scheduler = RelativeTimestampRefreshScheduler()
+        var refreshed: [Set<String>] = []
+        scheduler.relativeUnixSeconds = { [instant] rowId in rowId == "relative" ? [instant] : [] }
+        scheduler.refreshRows = { refreshed.append($0) }
+        scheduler.setActive(true)
+
+        scheduler.setRowVisible("relative", isVisible: true)
+        scheduler.setRowVisible("relative", isVisible: true)
+        scheduler.setRowVisible("absolute", isVisible: true)
+        #expect(refreshed == [["relative"]])
+
+        // Scrolled away, then back: the text was built for an earlier time.
+        scheduler.setRowVisible("relative", isVisible: false)
+        scheduler.setRowVisible("relative", isVisible: true)
+        #expect(refreshed == [["relative"], ["relative"]])
+        scheduler.cancel()
+    }
+
     @Test func formatNotificationsBumpBothGenerationsAndClockOnlyOne() {
         let center = NotificationCenter()
         let clock = MarkdownTimestampRenderClock(notificationCenter: center)

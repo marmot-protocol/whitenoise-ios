@@ -133,6 +133,28 @@ struct MessageDeletionTests {
         #expect(!viewModel.canReport(theirs))
     }
 
+    @Test func deviceLocalMembershipEventsRefreshOnlyTheOpenConversation() throws {
+        let state = try appState(accountRef: "members", accountIdHex: hex("11"))
+        state.setPhase(.ready)
+        let generation = try #require(state.runtimeEventsGeneration)
+        let route = try #require(state.beginViewingChat(groupIdHex: "group"))
+        defer { state.endViewingChat(route) }
+        func event(_ group: String, _ kind: GroupEventKindFfi) -> MarmotEventFfi {
+            .groupEvent(accountIdHex: hex("11"), accountLabel: "members", groupIdHex: group, event: kind)
+        }
+
+        state.handleRuntimeEvent(event("other", .localGroupCopyRestored), generation: generation)
+        #expect(state.groupMembershipUpdate == nil)
+        state.handleRuntimeEvent(event("group", .messageReceived(senderIdHex: hex("22"), epoch: 1)), generation: generation)
+        #expect(state.groupMembershipUpdate == nil)
+
+        state.handleRuntimeEvent(event("group", .localGroupCopyTerminated(voluntary: false)), generation: generation)
+        let first = try #require(state.groupMembershipUpdate)
+        #expect(first.groupID == "group" && first.accountID == hex("11"))
+        state.handleRuntimeEvent(event("group", .groupMemberLeavesRemoved(epoch: 3)), generation: generation)
+        #expect(state.groupMembershipUpdate?.id != first.id)
+    }
+
     @Test func moderationRefreshSurvivesNavigationAwayFromTheVisibleTimeline() throws {
         let state = try appState(accountRef: "reports", accountIdHex: hex("11"))
         state.setPhase(.ready)

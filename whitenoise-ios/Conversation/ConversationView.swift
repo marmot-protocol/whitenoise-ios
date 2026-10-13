@@ -1260,6 +1260,12 @@ struct ConversationView: View {
                       update.accountID == appState.activeAccount?.accountIdHex else { return }
                 await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
             }
+            .task(id: appState.groupMembershipUpdate) {
+                guard let update = appState.groupMembershipUpdate, update.groupID == chat.groupIdHex,
+                      update.accountID == appState.activeAccount?.accountIdHex else { return }
+                _ = await viewModel?.refreshGroupManagement()
+                await viewModel?.recovery.refresh(using: appState, groupID: chat.groupIdHex)
+            }
     }
 
     private var conversationStateObservers: some View {
