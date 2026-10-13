@@ -21,6 +21,9 @@ struct BlockUserActions: View {
     }
 
     @State private var pendingIntent: PendingIntent?
+    /// A Block and Report whose block hasn't been confirmed yet. It survives an
+    /// uncertain publication so a successful Retry still sends the report.
+    @State private var pendingBlockReport: PendingIntent?
 
     var body: some View {
         Group {
@@ -30,7 +33,12 @@ struct BlockUserActions: View {
                     .foregroundStyle(.secondary)
                 Button(L10n.string("Retry")) {
                     if let intent = model.uncertainIntent {
-                        Task { await model.setBlocked(intent.blocked, userId: intent.id, using: appState) }
+                        Task {
+                            await model.setBlocked(intent.blocked, userId: intent.id, using: appState)
+                            if let report = pendingBlockReport, report.targetId == intent.id {
+                                await followUpBlockReport(report)
+                            }
+                        }
                     } else {
                         reloadAfterFailure()
                     }
@@ -78,23 +86,7 @@ struct BlockUserActions: View {
                                   model.targetId == intent.targetId
                             else { return }
                             await model.setBlocked(true, userId: intent.targetId, using: appState)
-                            guard appState.activeAccountRef == intent.accountRef else { return }
-                            // An unloaded list makes `setBlocked` return with no error row to show.
-                            guard model.isConfirmedBlocked(intent.targetId, accountRef: intent.accountRef) else {
-                                if model.error == nil {
-                                    appState.present(.error(
-                                        L10n.string("Couldn't block user"),
-                                        message: L10n.string("Please try again.")
-                                    ))
-                                }
-                                return
-                            }
-                            guard let text = DeveloperReportContent.text(
-                                      kind: .block,
-                                      reportedAccountIdHex: intent.targetId
-                                  )
-                            else { return }
-                            await DeveloperReportSender.sendBlockReport(text, using: appState)
+                            await followUpBlockReport(intent)
                         }
                     }
                 }
@@ -117,6 +109,34 @@ struct BlockUserActions: View {
             } else {
                 Text("Their messages will appear again and you'll be able to send to them.")
             }
+        }
+    }
+
+    /// Sends the report once its block is confirmed, keeps waiting while an
+    /// uncertain publication can still be retried, and otherwise gives up.
+    private func followUpBlockReport(_ report: PendingIntent) async {
+        let decision = BlockReportFollowUp.after(
+            blockConfirmed: model.isConfirmedBlocked(report.targetId, accountRef: report.accountRef),
+            retryPending: model.uncertainIntent.map { $0.id == report.targetId && $0.blocked } ?? false,
+            sameAccount: appState.activeAccountRef == report.accountRef
+        )
+        switch decision {
+        case .wait:
+            pendingBlockReport = report
+        case .drop:
+            pendingBlockReport = nil
+            // An unloaded list makes `setBlocked` return with no error row to show.
+            if appState.activeAccountRef == report.accountRef, model.error == nil {
+                appState.present(.error(
+                    L10n.string("Couldn't block user"),
+                    message: L10n.string("Please try again.")
+                ))
+            }
+        case .send:
+            pendingBlockReport = nil
+            guard let text = DeveloperReportContent.text(kind: .block, reportedAccountIdHex: report.targetId)
+            else { return }
+            await DeveloperReportSender.sendBlockReport(text, using: appState)
         }
     }
 
@@ -152,5 +172,19 @@ struct BlockPublishingRow: View {
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// What happens to Block and Report's report after a block attempt.
+nonisolated enum BlockReportFollowUp: Equatable {
+    case send
+    /// The block publication is uncertain; a Retry may still confirm it.
+    case wait
+    case drop
+
+    static func after(blockConfirmed: Bool, retryPending: Bool, sameAccount: Bool) -> BlockReportFollowUp {
+        guard sameAccount else { return .drop }
+        if blockConfirmed { return .send }
+        return retryPending ? .wait : .drop
     }
 }

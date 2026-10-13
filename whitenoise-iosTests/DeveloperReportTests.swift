@@ -87,6 +87,30 @@ struct DeveloperReportTests {
             .hasPrefix("Saved and waiting to send."))
     }
 
+    @Test func retryFinishesWhatTheFirstSubmitCommittedToEvenAfterDeletion() {
+        // A fresh submit follows live eligibility.
+        #expect(ReportSubmissionPlan.plan(reportsToGroup: true, reportsToDeveloper: true,
+                                          groupOutcomeRecorded: false, committedToDeveloper: nil)
+            == ReportSubmissionPlan(toGroup: true, toDeveloper: true))
+        #expect(ReportSubmissionPlan.plan(reportsToGroup: false, reportsToDeveloper: false,
+                                          groupOutcomeRecorded: false, committedToDeveloper: nil) == nil)
+        // The group has the report and the copy failed; the message is now deleted,
+        // so live eligibility is gone, but the committed copy can still be retried.
+        #expect(ReportSubmissionPlan.plan(reportsToGroup: false, reportsToDeveloper: false,
+                                          groupOutcomeRecorded: true, committedToDeveloper: true)
+            == ReportSubmissionPlan(toGroup: false, toDeveloper: true))
+        // A group-only report that already succeeded has nothing left to send.
+        #expect(ReportSubmissionPlan.plan(reportsToGroup: true, reportsToDeveloper: false,
+                                          groupOutcomeRecorded: true, committedToDeveloper: false) == nil)
+    }
+
+    @Test func blockAndReportWaitsOutAnUncertainBlockAndNeverReportsForAnotherProfile() {
+        #expect(BlockReportFollowUp.after(blockConfirmed: true, retryPending: false, sameAccount: true) == .send)
+        #expect(BlockReportFollowUp.after(blockConfirmed: false, retryPending: true, sameAccount: true) == .wait)
+        #expect(BlockReportFollowUp.after(blockConfirmed: false, retryPending: false, sameAccount: true) == .drop)
+        #expect(BlockReportFollowUp.after(blockConfirmed: true, retryPending: false, sameAccount: false) == .drop)
+    }
+
     @MainActor
     @Test func deliveryReusesTheSupportChatAndReturnsTheSendDisposition() async throws {
         let harness = DeliveryHarness(existing: "support-group")

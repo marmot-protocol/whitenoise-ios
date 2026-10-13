@@ -47,6 +47,29 @@ nonisolated enum ReportPresentation {
     }
 }
 
+/// Which destinations a Report Message submit sends to. Live eligibility
+/// decides a fresh submit. Once the group has the report, a retry finishes
+/// exactly what the first submit committed to, even if the message was
+/// deleted meanwhile, and never reports to the group twice.
+nonisolated struct ReportSubmissionPlan: Equatable {
+    let toGroup: Bool
+    let toDeveloper: Bool
+
+    static func plan(
+        reportsToGroup: Bool,
+        reportsToDeveloper: Bool,
+        groupOutcomeRecorded: Bool,
+        committedToDeveloper: Bool?
+    ) -> ReportSubmissionPlan? {
+        if groupOutcomeRecorded {
+            guard committedToDeveloper == true else { return nil }
+            return ReportSubmissionPlan(toGroup: false, toDeveloper: true)
+        }
+        guard reportsToGroup || reportsToDeveloper else { return nil }
+        return ReportSubmissionPlan(toGroup: reportsToGroup, toDeveloper: reportsToDeveloper)
+    }
+}
+
 struct ReportMessageSheet: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
@@ -59,6 +82,8 @@ struct ReportMessageSheet: View {
     @State private var error: String?
     /// A retry after a failed White Noise copy must not report to the group twice.
     @State private var groupOutcome: String?
+    /// What the first submit committed to; a retry finishes exactly that.
+    @State private var committedToDeveloper: Bool?
     @State private var operation: Task<Void, Never>?
 
     private var reportsToGroup: Bool { conversation.canReportToGroup(message) }
@@ -68,6 +93,14 @@ struct ReportMessageSheet: View {
     }
     /// Once the group has the report, a retried White Noise copy must say the same thing.
     private var reportIsLocked: Bool { sending || groupOutcome != nil }
+    private var plan: ReportSubmissionPlan? {
+        ReportSubmissionPlan.plan(
+            reportsToGroup: reportsToGroup,
+            reportsToDeveloper: reportsToDeveloper,
+            groupOutcomeRecorded: groupOutcome != nil,
+            committedToDeveloper: committedToDeveloper
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -103,7 +136,7 @@ struct ReportMessageSheet: View {
                 if let error { Section { Text(error).foregroundStyle(.red) } }
                 Section {
                     Button("Report Message") { operation = Task { await submit() } }
-                        .disabled(sending || !conversation.canReport(message))
+                        .disabled(sending || plan == nil)
                     if sending { ProgressView() }
                 }
             }
@@ -116,10 +149,11 @@ struct ReportMessageSheet: View {
     }
 
     private func submit() async {
-        guard !sending, conversation.canReport(message), let account = appState.activeAccountRef else { return }
+        guard !sending, let plan, let account = appState.activeAccountRef else { return }
         let generation = appState.runtimeGeneration
-        let toGroup = reportsToGroup && groupOutcome == nil
-        let toDeveloper = reportsToDeveloper
+        let toGroup = plan.toGroup
+        let toDeveloper = plan.toDeveloper
+        if groupOutcome == nil { committedToDeveloper = toDeveloper }
         let reason = reason
         let explanation = explanation
         sending = true

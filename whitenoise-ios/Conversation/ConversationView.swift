@@ -3950,9 +3950,12 @@ struct ConversationView: View {
     /// to the White Noise team only once the block is confirmed.
     private func blockAuthor(of record: AppMessageRecordFfi, reporting: Bool) {
         guard let author = Hex.normalized32Bytes(record.sender),
-              let accountRef = appState.activeAccountRef else { return }
+              let accountRef = draftAccountRef else { return }
         let reportText = reporting ? DeveloperReportContent.text(kind: .block, reportedAccountIdHex: author) : nil
         Task {
+            // `setBlocked` blocks for whichever profile is active when it runs,
+            // so a profile switch while the dialog was open must not block there.
+            guard appState.activeAccountRef == accountRef else { return }
             await blockedUsers.setBlocked(true, userId: author, using: appState)
             guard appState.activeAccountRef == accountRef else { return }
             // The message menu has no inline row to show the model's error.

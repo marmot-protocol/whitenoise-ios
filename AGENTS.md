@@ -151,12 +151,13 @@ Conversation-open performance ends at rendered layout, uses the navigation conse
 ticket, and records unavailable/cancelled/timeout outcomes separately from success.
 
 Group reports use encrypted group transport and are visible to group members.
-App Review also requires reports and blocks to reach the developer: Report
-(including in direct chats, which have no group report) and Block and Report send
-only the reported npub, the reason, and the reporter's optional explanation to
-the White Noise support account as an ordinary encrypted message in the
-reporter's support chat, only on explicit user action. Never include the
-reported message, its id, or anything identifying the conversation.
+App Review also requires reports and blocks to reach the developer, only on
+explicit user action, as an ordinary encrypted message to the White Noise support
+account in the reporter's support chat. Report (including in direct chats, which
+have no group report) sends only the reported npub, the reason, and the
+reporter's optional explanation. Block and Report sends only the blocked npub,
+after the block is confirmed. Never include the reported message, its id, or
+anything identifying the conversation.
 Dismissal labels resolve individual reports without deleting their message.
 Admin deletion uses `deleteMessage`; MDK authorizes it against source group state.
 Pending acceptance is not completed moderation. Refresh reports from projection
