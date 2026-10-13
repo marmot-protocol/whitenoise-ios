@@ -40,6 +40,8 @@
 	<string>$(WHITENOISE_DONATION_SERVICE_URL)</string>
 	<key>WhiteNoiseGiphyAPIKey</key>
 	<string>$(WHITENOISE_GIPHY_API_KEY)</string>
+	<key>WhiteNoiseModerationReportPubkey</key>
+	<string>$(WHITENOISE_MODERATION_REPORT_PUBKEY)</string>
 	<key>WhiteNoiseProductAnalyticsAppKey</key>
 	<string>$(WHITENOISE_PRODUCT_ANALYTICS_APP_KEY)</string>
 	<key>WhiteNoiseProductAnalyticsEndpoint</key>
@@ -48,8 +50,6 @@
 	<string>$(WHITENOISE_PRODUCT_ANALYTICS_OPERATOR)</string>
 	<key>WhiteNoiseProductAnalyticsRetention</key>
 	<string>$(WHITENOISE_PRODUCT_ANALYTICS_RETENTION)</string>
-	<key>WhiteNoiseModerationReportPubkey</key>
-	<string>$(WHITENOISE_MODERATION_REPORT_PUBKEY)</string>
 	<key>WhiteNoisePushRelayHint</key>
 	<string>$(WHITENOISE_PUSH_RELAY_HINT)</string>
 	<key>WhiteNoisePushServerPubkeyHex</key>
