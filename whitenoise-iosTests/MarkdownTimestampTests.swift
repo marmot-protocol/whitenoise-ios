@@ -389,6 +389,23 @@ struct MarkdownTimestampTests {
         scheduler.cancel()
     }
 
+    @Test func trackingKeepsTheRelativeInstantsClosestToTheRenderTime() {
+        let now = Date(timeIntervalSince1970: TimeInterval(instant))
+        var usage = MarkdownTimestampUsage()
+        let farAway = (1...MarkdownTimestampUsage.maxTrackedRelative).map { instant - Int64($0) * 40 * 86_400 }
+        for seconds in farAway { usage.record(unixSeconds: seconds, style: .relative, now: now) }
+        // The 17th instant is five minutes away and needs the earliest refresh.
+        let soon = instant + 300
+        usage.record(unixSeconds: soon, style: .relative, now: now)
+        #expect(usage.relativeUnixSeconds.count == MarkdownTimestampUsage.maxTrackedRelative)
+        #expect(usage.relativeUnixSeconds.contains(soon))
+        #expect(!usage.relativeUnixSeconds.contains(farAway.last!))
+        // A farther instant never displaces a nearer one.
+        usage.record(unixSeconds: instant - 1_000 * 86_400, style: .relative, now: now)
+        #expect(!usage.relativeUnixSeconds.contains(instant - 1_000 * 86_400))
+        #expect(usage.count == MarkdownTimestampUsage.maxTrackedRelative + 2)
+    }
+
     @Test func aRelativeRowIsRefreshedEachTimeItBecomesVisible() {
         let scheduler = RelativeTimestampRefreshScheduler()
         var refreshed: [Set<String>] = []

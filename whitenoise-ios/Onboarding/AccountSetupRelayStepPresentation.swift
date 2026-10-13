@@ -75,7 +75,7 @@ nonisolated struct AccountSetupRelayStepPresentation {
     /// Replacing with the defaults is an explicit edit offered from manual review,
     /// hidden when the current list already declares exactly the defaults.
     var canReplaceWithDefaults: Bool {
-        isManualReview && allows(.editRelays) && repair?.offersDefaultReplacement(defaults: defaultRelays) == true
+        isManualReview && allows(.editRelays) && repair?.offersDefaultReplacement(defaults: defaultRelays, step: step) == true
     }
 
     /// Editing opens the editor without withdrawing anything first.

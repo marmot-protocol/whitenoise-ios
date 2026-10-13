@@ -83,12 +83,21 @@ nonisolated struct AccountSetupRelayRepairPresentation: Equatable {
     }
 
     /// A default-relay replacement is a no-op when the current list already declares exactly the defaults.
-    func offersDefaultReplacement(defaults: [String]) -> Bool {
-        let current = Set(beforeTags.compactMap { tag -> String? in
-            guard Self.use(tag.role) != .other, let endpoint = tag.endpoint else { return nil }
-            return AccountSetupInput.proposalRelays([endpoint])?.first ?? endpoint
-        })
-        return current != Set(AccountSetupInput.proposalRelays(defaults) ?? defaults)
+    /// The replacement declares the defaults as both read and write relays on
+    /// the Relay step, and as inbox relays on the Inbox step, so roles count too.
+    func offersDefaultReplacement(defaults: [String], step: OnboardingStepFfi) -> Bool {
+        let normalizedDefaults = Set(AccountSetupInput.proposalRelays(defaults) ?? defaults)
+        func addresses(_ uses: Set<Use>) -> Set<String> {
+            Set(beforeTags.compactMap { tag -> String? in
+                guard uses.contains(Self.use(tag.role)), let endpoint = tag.endpoint else { return nil }
+                return AccountSetupInput.proposalRelays([endpoint])?.first ?? endpoint
+            })
+        }
+        guard step == .relays else {
+            return addresses([.readAndWrite, .read, .write, .inbox]) != normalizedDefaults
+        }
+        return addresses([.readAndWrite, .read]) != normalizedDefaults
+            || addresses([.readAndWrite, .write]) != normalizedDefaults
     }
 
     /// The diff is a real change that accounts for every published tag, keeps the

@@ -44,13 +44,24 @@ struct MarkdownTimestampUsage: Equatable {
     var containsTimestamps: Bool { count > 0 }
     var containsRelative: Bool { !relativeUnixSeconds.isEmpty }
 
-    mutating func record(unixSeconds: Int64, style: MarkdownTimestampStyleFfi) {
+    /// Past the bound, keeps the instants closest to the render time: they
+    /// change soonest and most often, so a far-off instant never crowds out
+    /// one that needs the next refresh.
+    mutating func record(unixSeconds: Int64, style: MarkdownTimestampStyleFfi, now: Date) {
         count += 1
         guard MarkdownTimestampFormatter.isRelative(style),
               MarkdownTimestampFormatter.isRenderable(unixSeconds),
-              relativeUnixSeconds.count < Self.maxTrackedRelative,
               !relativeUnixSeconds.contains(unixSeconds) else { return }
-        relativeUnixSeconds.append(unixSeconds)
+        guard relativeUnixSeconds.count >= Self.maxTrackedRelative else {
+            relativeUnixSeconds.append(unixSeconds)
+            return
+        }
+        let reference = Int64(now.timeIntervalSince1970)
+        func distance(_ seconds: Int64) -> UInt64 { (seconds &- reference).magnitude }
+        guard let farthest = relativeUnixSeconds.indices.max(by: {
+            distance(relativeUnixSeconds[$0]) < distance(relativeUnixSeconds[$1])
+        }), distance(unixSeconds) < distance(relativeUnixSeconds[farthest]) else { return }
+        relativeUnixSeconds[farthest] = unixSeconds
     }
 }
 
@@ -679,7 +690,7 @@ enum MarkdownMessageBuilder {
         budget: inout Budget
     ) -> Bool {
         let render = budget.resolvedTimestampContext()
-        budget.timestamps.record(unixSeconds: unixSeconds, style: style)
+        budget.timestamps.record(unixSeconds: unixSeconds, style: style, now: render.now)
         let text = MarkdownTimestampFormatter.text(
             unixSeconds: unixSeconds,
             style: style,

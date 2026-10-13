@@ -155,15 +155,21 @@ struct AccountSetupRelayRepairTests {
 
     @Test func defaultReplacementIsHiddenWhenTheListAlreadyMatchesTheDefaults() throws {
         let defaults = ["wss://one.example.com", "wss://two.example.com"]
-        let matching = [tag(["r", "WSS://ONE.example.com"], .unmarked), tag(["r", "wss://two.example.com", "write"], .write)]
+        let matching = [tag(["r", "WSS://ONE.example.com"], .unmarked), tag(["r", "wss://two.example.com"], .unmarked)]
         let same = try #require(AccountSetupRelayRepairPresentation(
             proposal: relayProposal(mode: .manualReview, before: matching, after: matching, changes: []), step: .relays
         ))
-        #expect(!same.offersDefaultReplacement(defaults: defaults))
+        #expect(!same.offersDefaultReplacement(defaults: defaults, step: .relays))
         let different = try #require(AccountSetupRelayRepairPresentation(
             proposal: relayProposal(mode: .manualReview, before: [matching[0]], after: [matching[0]], changes: []), step: .relays
         ))
-        #expect(different.offersDefaultReplacement(defaults: defaults))
+        #expect(different.offersDefaultReplacement(defaults: defaults, step: .relays))
+        // Same addresses, but one is write-only: replacing would make it read and write.
+        let writeOnly = [matching[0], tag(["r", "wss://two.example.com", "write"], .write)]
+        let roles = try #require(AccountSetupRelayRepairPresentation(
+            proposal: relayProposal(mode: .manualReview, before: writeOnly, after: writeOnly, changes: []), step: .relays
+        ))
+        #expect(roles.offersDefaultReplacement(defaults: defaults, step: .relays))
     }
 
     @Test func proposalsWithoutATypedPreviewKeepTheLegacyPresentation() {
