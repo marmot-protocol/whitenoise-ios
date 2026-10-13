@@ -115494,7 +115494,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O perfil será desligado e a sua configuração reposta. Vais precisar da chave privada para iniciares sessão novamente.\n\nSó é mantido o registo de recuperação mais recente. Nada muda nos relays."
+            "value" : "A sessão do perfil será terminada e a sua configuração reposta. Vais precisar da chave privada para iniciares sessão novamente.\n\nSó é mantido o registo de recuperação mais recente. Nada muda nos relays."
           }
         },
         "ru" : {

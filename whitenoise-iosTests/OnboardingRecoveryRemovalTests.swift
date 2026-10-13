@@ -91,6 +91,34 @@ struct OnboardingRecoveryRemovalTests {
         try await client.marmot.shutdownAndClose()
     }
 
+    @Test func recoveryIsRejectedWhileAnotherProfileSignsOut() async throws {
+        let (state, client) = try await makeState()
+        do {
+            _ = try await state.createIdentity()
+            let account = try await makeBrokenAccount(client)
+            try await state.refreshAccounts(refreshUnreadSummaries: false)
+            var attemptedRecovery = false
+            state.afterAccountExitClientCapturedForTesting = {
+                attemptedRecovery = true
+                await #expect(throws: MarmotKitError.OnboardingActionUnavailable) {
+                    try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
+                }
+            }
+
+            let signedOut = await state.signOut()
+            state.afterAccountExitClientCapturedForTesting = nil
+
+            #expect(signedOut)
+            #expect(attemptedRecovery)
+            #expect(try await client.onboardingRecoveryRequired(accountRef: account.label))
+            #expect(state.onboardingRecoveryAccounts.map(\.accountIdHex) == [account.accountIdHex])
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
+        try await client.marmot.shutdownAndClose()
+    }
+
     private func makeState() async throws -> (AppState, MarmotClient) {
         let client = try MarmotClient.testClient()
         let state = AppState.test(

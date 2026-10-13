@@ -1792,6 +1792,7 @@ final class AppState {
     }
 
     func recoverOnboardingSetup(accountID: String) async throws {
+        guard !isSigningOut else { throw MarmotKitError.OnboardingActionUnavailable }
         let lease = try await runtimeLifecycle.beginUserInitiatedForegroundRuntimeMutation()
         defer { runtimeLifecycle.endForegroundRuntimeMutation(lease) }
         guard try await lease.client.onboardingRecoveryRequired(accountRef: accountID) else {
@@ -1801,6 +1802,7 @@ final class AppState {
             model.suspend()
             await model.drain()
         }
+        guard !isSigningOut else { throw MarmotKitError.OnboardingActionUnavailable }
         _ = try await lease.client.recoverOnboarding(accountRef: accountID)
         signInAttempts.finish(accountID)
         if pendingAccountSetup?.accountID == accountID { pendingAccountSetup = nil }
