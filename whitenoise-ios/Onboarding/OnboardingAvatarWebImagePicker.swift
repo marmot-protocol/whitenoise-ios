@@ -25,7 +25,7 @@ struct OnboardingAvatarWebImagePicker: View {
     @State private var isSearching = false
     @State private var searchError: String?
     @State private var download = OnboardingImageDownloadModel()
-    @State private var urlPreview: (url: URL, image: UIImage)?
+    @State private var urlPreview: AvatarImageCropSource?
     @State private var loadingPreviewURL: URL?
     @State private var previewFailure: (url: URL, message: String)?
     @FocusState private var isURLFocused: Bool
@@ -64,7 +64,7 @@ struct OnboardingAvatarWebImagePicker: View {
                             guard let activeURL, download.request == nil else { return }
                             isSearchFocused = false
                             isURLFocused = false
-                            download.start(activeURL)
+                            download.start(activeURL, preview: mode == .url ? urlPreview : nil)
                         } label: {
                             Text("Done")
                                 .opacity(download.request == nil ? 1 : 0)
@@ -292,8 +292,8 @@ struct OnboardingAvatarWebImagePicker: View {
     }
 
     private var loadedURLPreview: UIImage? {
-        guard let urlPreview, urlPreview.url == validatedURL else { return nil }
-        return urlPreview.image
+        guard let urlPreview, urlPreview.sourceURL == validatedURL else { return nil }
+        return urlPreview.preparedImage
     }
 
     private func loadURLPreview() async {
@@ -308,8 +308,8 @@ struct OnboardingAvatarWebImagePicker: View {
             try await Task.sleep(for: .milliseconds(350))
             let source = try await AvatarImageCropSource.downloaded(from: url)
             try Task.checkCancellation()
-            guard url == validatedURL, let image = source.preparedImage else { return }
-            urlPreview = (url, image)
+            guard url == validatedURL, source.preparedImage != nil else { return }
+            urlPreview = source
         } catch {
             guard !Task.isCancelled, url == validatedURL else { return }
             previewFailure = (url, PhotoSelectionFailure.classify(error, fallback: .download).message)

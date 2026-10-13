@@ -286,6 +286,179 @@ struct GroupDetailsArchiveActionTests {
         #expect(!model.membershipActionInFlight)
     }
 
+    @Test func groupInfoSavePublishesTextThenImageAndClearsTheImageEdit() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let groupIdHex = String(repeating: "ab", count: 32)
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false)
+        )
+        let model = GroupDetailsViewModel()
+        let draft = GroupImageUploadDraft(
+            data: Data([4, 5, 6]),
+            mediaType: "image/jpeg",
+            sourceURL: nil,
+            dim: nil,
+            thumbhash: nil
+        )
+        var operations: [String] = []
+
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+        model.renameDraft = "Renamed group"
+        model.imageEdit = .replaced(draft)
+        model.updateGroupProfileForTesting = { _, _, name, _ in
+            operations.append("profile:\(name)")
+            return SendSummaryFfi(published: 1, messageIds: ["profile"])
+        }
+        model.updateGroupImageForTesting = { _, _, data, _ in
+            operations.append("image:\(data.count)")
+            return SendSummaryFfi(published: 1, messageIds: ["image"])
+        }
+
+        #expect(model.canSaveGroupInfo)
+        let succeeded = await model.saveGroupInfo(using: appState)
+
+        #expect(succeeded)
+        #expect(operations == ["profile:Renamed group", "image:3"])
+        #expect(model.imageEdit == .unchanged)
+        #expect(!model.membershipActionInFlight)
+    }
+
+    @Test func groupInfoSaveKeepsTheImageEditWhenTheTextPublishFails() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let groupIdHex = String(repeating: "ab", count: 32)
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(groupIdHex: groupIdHex, archived: false, description: "Existing description")
+        )
+        let model = GroupDetailsViewModel()
+        var imageRequests = 0
+
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+        model.descriptionDraft = "Changed"
+        model.imageEdit = .removed
+        model.updateGroupProfileForTesting = { _, _, _, _ in
+            throw GroupDetailsActionError.noActiveAccount
+        }
+        model.clearGroupImageForTesting = { _, _ in
+            imageRequests += 1
+            return SendSummaryFfi(published: 1, messageIds: ["clear"])
+        }
+
+        let succeeded = await model.saveGroupInfo(using: appState)
+
+        #expect(!succeeded)
+        #expect(imageRequests == 0)
+        #expect(model.imageEdit == .removed)
+        #expect(model.actionError != nil)
+    }
+
+    @Test func groupInfoSaveSaysTheTextWasSavedWhenOnlyTheImageFails() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(
+                groupIdHex: String(repeating: "ab", count: 32),
+                archived: false,
+                avatarUrl: "https://example.com/group.jpg"
+            )
+        )
+        let model = GroupDetailsViewModel()
+
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+        model.renameDraft = "Renamed group"
+        model.imageEdit = .removed
+        model.updateGroupProfileForTesting = { _, _, _, _ in
+            SendSummaryFfi(published: 1, messageIds: ["profile"])
+        }
+        model.updateGroupAvatarUrlForTesting = { _, _, _ in
+            throw GroupDetailsActionError.noActiveAccount
+        }
+
+        let succeeded = await model.saveGroupInfo(using: appState)
+
+        #expect(!succeeded)
+        #expect(model.imageEdit == .removed)
+        #expect(model.actionError?.hasPrefix("Name and description saved.") == true)
+    }
+
+    @Test func groupInfoSaveSetsAnUnnamedGroupImageWithoutPublishingText() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "account-1"
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
+        )
+        let model = GroupDetailsViewModel()
+        var operations: [String] = []
+
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+        model.imageEdit = .replaced(GroupImageUploadDraft(
+            data: Data([7, 8]),
+            mediaType: "image/jpeg",
+            sourceURL: nil,
+            dim: nil,
+            thumbhash: nil
+        ))
+        model.updateGroupProfileForTesting = { _, _, name, _ in
+            operations.append("profile:\(name)")
+            return SendSummaryFfi(published: 1, messageIds: ["profile"])
+        }
+        model.updateGroupImageForTesting = { _, _, data, _ in
+            operations.append("image:\(data.count)")
+            return SendSummaryFfi(published: 1, messageIds: ["image"])
+        }
+
+        #expect(model.canSaveGroupInfo)
+        let succeeded = await model.saveGroupInfo(using: appState)
+
+        #expect(succeeded)
+        #expect(operations == ["image:2"])
+    }
+
+    @Test func groupInfoTextEditsOnAnUnnamedGroupStillNeedAName() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false, name: "")
+        )
+        let model = GroupDetailsViewModel()
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+
+        model.descriptionDraft = "About us"
+        #expect(!model.canSaveGroupInfo)
+
+        model.renameDraft = "Named now"
+        #expect(model.canSaveGroupInfo)
+    }
+
+    @Test func groupInfoCanSaveOnlyAValidChangedDraft() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        let conversation = ConversationViewModel(
+            appState: appState,
+            group: archiveTestGroup(groupIdHex: String(repeating: "ab", count: 32), archived: false)
+        )
+        let model = GroupDetailsViewModel()
+        model.conversation = conversation
+        model.prepareProfileDrafts()
+
+        #expect(!model.canSaveGroupInfo)
+
+        model.imageEdit = .removed
+        #expect(model.canSaveGroupInfo)
+
+        model.renameDraft = "   "
+        #expect(!model.canSaveGroupInfo)
+    }
+
     @Test func sharedMediaProjectionLoadsOnceUnlessExplicitlyRefreshed() async throws {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "account-1"
@@ -776,6 +949,7 @@ private final class GroupAvatarPublishProbe {
 private func archiveTestGroup(
     groupIdHex: String,
     archived: Bool,
+    name: String = "Archive Test Group",
     selfMembership: SelfMembershipFfi = .member,
     leaveRequestPending: Bool = false,
     description: String = "",
@@ -784,7 +958,7 @@ private func archiveTestGroup(
     AppGroupRecordFfi(
         groupIdHex: groupIdHex,
         endpoint: "",
-        name: "Archive Test Group",
+        name: name,
         description: description,
         admins: [],
         relays: [],

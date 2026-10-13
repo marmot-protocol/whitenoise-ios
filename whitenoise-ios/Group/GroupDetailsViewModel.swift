@@ -13,10 +13,10 @@ import MarmotKit
 final class GroupDetailsViewModel {
     var showAddMembers = false
     var showProfileEditor = false
-    var showGroupImageEditor = false
     var showRetentionEditor = false
     var renameDraft = ""
     var descriptionDraft = ""
+    var imageEdit: GroupImageEdit = .unchanged
     var actionError: String?
     var mlsState: AppGroupMlsStateFfi?
     var pushDebugInfo: GroupPushDebugInfoFfi?
@@ -210,6 +210,47 @@ final class GroupDetailsViewModel {
         descriptionDraft = GroupDetailsView.normalizedGroupDescriptionForUpdate(
             conversation.group.description
         )
+        imageEdit = .unchanged
+    }
+
+    var canSaveGroupInfo: Bool {
+        guard let conversation, !membershipActionInFlight else { return false }
+        let textChanged = groupInfoTextChanged(from: conversation.group)
+        if textChanged, GroupDetailsView.validatedGroupName(renameDraft) == nil { return false }
+        return textChanged || imageEdit != .unchanged
+    }
+
+    private func groupInfoTextChanged(from group: AppGroupRecordFfi) -> Bool {
+        (GroupDetailsView.validatedGroupName(renameDraft) ?? "") != (ContentSanitizer.groupName(group.name) ?? "")
+            || GroupDetailsView.normalizedGroupDescriptionForUpdate(descriptionDraft)
+                != GroupDetailsView.normalizedGroupDescriptionForUpdate(group.description)
+    }
+
+    func saveGroupInfo(
+        using appState: AppState,
+        onProgress: (GroupImageProgressPhase?) -> Void = { _ in }
+    ) async -> Bool {
+        guard let conversation else { return false }
+        let publishesText = groupInfoTextChanged(from: conversation.group)
+        if publishesText {
+            guard await updateProfile(using: appState) else { return false }
+        }
+        let draft: GroupImageUploadDraft?
+        switch imageEdit {
+        case .unchanged: return true
+        case .replaced(let replacement): draft = replacement
+        case .removed: draft = nil
+        }
+        do {
+            try await updateGroupImage(draft: draft, using: appState, onProgress: onProgress)
+            imageEdit = .unchanged
+            return true
+        } catch {
+            if publishesText, let actionError {
+                self.actionError = L10n.formatted("Name and description saved. %@", actionError)
+            }
+            return false
+        }
     }
 
     @discardableResult

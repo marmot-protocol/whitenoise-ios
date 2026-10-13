@@ -318,6 +318,9 @@ nonisolated struct StableGiphyDisplayGeometry: Equatable, Sendable {
 }
 
 final class GiphyAnimatedImageUIView: UIImageView {
+    enum LoopMode { case forever, source }
+    enum PlaybackEnd { case finished, failed }
+
     private var playbackID: UUID?
     private var playbackGeneration: UInt64 = 0
     private var retainedData: Data?
@@ -341,14 +344,24 @@ final class GiphyAnimatedImageUIView: UIImageView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func play(data: Data, id: UUID) {
+    func play(data: Data, id: UUID, loopMode: LoopMode = .forever, onCompletion: ((PlaybackEnd) -> Void)? = nil) {
         guard playbackID != id else { return }
         stop()
         playbackID = id
         retainedData = data
         playbackGeneration &+= 1
         let generation = playbackGeneration
-        let options = [kCGImageAnimationLoopCount: Double.infinity] as CFDictionary
+        let options = loopMode == .forever ? [kCGImageAnimationLoopCount: Double.infinity] as CFDictionary : nil
+        var remainingFrames: Int?
+        if loopMode == .source,
+           let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) {
+            let properties = CGImageSourceCopyProperties(source, nil) as? [CFString: Any]
+            let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+            let loops = gif?[kCGImagePropertyGIFLoopCount] as? Int ?? 1
+            if loops > 0 {
+                remainingFrames = CGImageSourceGetCount(source) * loops
+            }
+        }
         let status = CGAnimateImageDataWithBlock(data as CFData, options) { [weak self] _, image, stop in
             guard let self,
                   self.playbackGeneration == generation
@@ -357,10 +370,20 @@ final class GiphyAnimatedImageUIView: UIImageView {
                 return
             }
             self.image = UIImage(cgImage: image)
+            if let remaining = remainingFrames, remaining > 0 {
+                remainingFrames = remaining - 1
+                if remaining == 1 {
+                    stop.pointee = true
+                    onCompletion?(.finished)
+                }
+            }
         }
         if status != noErr {
             GiphyPlaybackDiagnostics.log.error("animation_start_failed status=\(status, privacy: .public)")
             stop()
+            if let onCompletion {
+                Task { @MainActor in onCompletion(.failed) }
+            }
         }
     }
 

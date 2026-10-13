@@ -32,6 +32,8 @@ struct IdentityProfileSetupView: View {
     @State private var isRestarting = false
     @State private var restartError: String?
     @State private var signUpFailure: CreateIdentityViewModel.Failure?
+    @State private var failurePresentation = SignUpFailurePresentation()
+    @State private var photoRemovalFailure: PhotoSelectionFailure?
     @State private var showPrivacyDetails = false
     @FocusState private var focusedField: ProfileField?
     @State private var nameFieldHeight: CGFloat = 0
@@ -148,16 +150,7 @@ struct IdentityProfileSetupView: View {
                     sourceURL: sourceURL
                 )
             },
-            onRemove: {
-                submissionTask = Task {
-                    do {
-                        try await model.acceptPreparedAvatar(nil)
-                        profileDraftDidChange()
-                    }
-                    catch is CancellationError { return }
-                    catch { model.failure = .draftStorage }
-                }
-            },
+            onRemove: removePhoto,
             onSelect: { selection in
                 try await model.acceptPreparedAvatar(selection)
                 profileDraftDidChange()
@@ -214,8 +207,13 @@ struct IdentityProfileSetupView: View {
             Text(restartError ?? L10n.string("This will discard your name, bio, photo, and unfinished account from this device. Anything already uploaded or published may remain online."))
         }
         .onChange(of: model.failure, initial: true) {
-            if isFormReady, !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
+            presentNewFailure()
         }
+        .photoSelectionFailureAlert(
+            $photoRemovalFailure, title: "Couldn’t remove photo",
+            message: CreateIdentityViewModel.Failure.draftStorage.message,
+            retry: removePhoto, chooseAnother: nil
+        )
         .alert(signUpFailure == .photoUpload ? L10n.string("Couldn’t upload photo") : L10n.string("Couldn’t finish sign-up"), isPresented: Binding(
             get: { signUpFailure != nil },
             set: { if !$0 { signUpFailure = nil } }
@@ -361,6 +359,9 @@ struct IdentityProfileSetupView: View {
             model.displayName = profile.displayName ?? profile.name ?? ""
             model.about = profile.about ?? ""
         } else if accountSetup == nil {
+            failurePresentation = SignUpFailurePresentation(
+                retaining: appState.signUpModel.isFinished ? nil : appState.signUpModel.failure
+            )
             await appState.openSignUpDraft()
             let preparedModel = appState.signUpModel
             if preparedModel.isResetPending { isFormReady = false }
@@ -371,8 +372,14 @@ struct IdentityProfileSetupView: View {
             // Reveal the model only after reset cleanup and name preparation settle.
             model = preparedModel
             isFormReady = true
-            if !model.isRestorationBlocked, let failure = model.failure { presentFailure(failure) }
+            presentNewFailure()
         }
+    }
+
+    private func presentNewFailure() {
+        guard isFormReady, !model.isRestorationBlocked,
+              let failure = failurePresentation.takeNewFailure(model.failure) else { return }
+        presentFailure(failure)
     }
 
     private var profileForm: some View {
@@ -589,6 +596,21 @@ struct IdentityProfileSetupView: View {
             if presentation.canSkip {
                 WNButton(title: "Not Now", emphasis: .secondary) { requestProfileExit(.skip) }
                     .disabled(isBusy || !setup.isConnected)
+            }
+        }
+    }
+
+    private func removePhoto() {
+        guard !isBusy else { return }
+        photoRemovalFailure = nil
+        submissionTask = Task {
+            do {
+                try await model.acceptPreparedAvatar(nil)
+                profileDraftDidChange()
+            } catch is CancellationError {
+                return
+            } catch {
+                photoRemovalFailure = PhotoSelectionFailure.classify(error, fallback: .storage)
             }
         }
     }

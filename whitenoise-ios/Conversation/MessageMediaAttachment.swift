@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import AVFoundation
 import CryptoKit
 import MarmotKit
@@ -278,6 +279,10 @@ nonisolated struct MessageMediaAttachment: Identifiable, Hashable {
         MediaAttachmentPolicy.isDecodableImageMediaType(mediaType)
     }
 
+    var isGIF: Bool {
+        MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
+    }
+
     var isVideo: Bool {
         MediaAttachmentPolicy.canonicalMediaType(mediaType).hasPrefix("video/")
     }
@@ -393,6 +398,10 @@ nonisolated struct MediaDraftAttachment: Identifiable, Hashable {
     let thumbnail: UIImage?
     let durationSeconds: Double?
     let waveformSamples: [CGFloat]
+
+    var isGIF: Bool {
+        MediaAttachmentPolicy.canonicalMediaType(mediaType) == "image/gif"
+    }
 
     init(
         id: UUID = UUID(),
@@ -665,6 +674,9 @@ nonisolated enum MediaDraftProcessor {
         typeIdentifier: String?,
         videoMetadata: MediaVideoMetadata.Metadata?
     ) throws -> MediaDraftAttachment {
+        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+            return gif
+        }
         if let typeIdentifier,
            let type = UTType(typeIdentifier),
            type.conforms(to: .image)
@@ -761,10 +773,66 @@ nonisolated enum MediaDraftProcessor {
     }
 
     static func imageAttachment(from data: Data, fileName: String?) throws -> MediaDraftAttachment {
+        if let gif = animatedGIFAttachment(from: data, fileName: fileName) {
+            return gif
+        }
         guard let image = UIImage(data: data) else {
             throw Failure.unsupportedImage
         }
         return try attachment(from: image, fileName: fileName)
+    }
+
+    private static func animatedGIFAttachment(from data: Data, fileName: String?) -> MediaDraftAttachment? {
+        guard let source = try? AttachmentGIF.source(from: data) else { return nil }
+        return try? gifAttachment(from: source, fileName: fileName)
+    }
+
+    private static func gifAttachment(from source: CGImageSource, fileName: String?) throws -> MediaDraftAttachment {
+        let count = CGImageSourceGetCount(source)
+        let encoded = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(encoded, UTType.gif.identifier as CFString, count, nil) else {
+            throw Failure.encodingFailed
+        }
+        let properties = CGImageSourceCopyProperties(source, nil) as? [CFString: Any]
+        let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any]
+        if let loopCount = gif?[kCGImagePropertyGIFLoopCount] {
+            CGImageDestinationSetProperties(destination, [
+                kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: loopCount],
+            ] as CFDictionary)
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: min(MediaQualityStore.quality().imageMaxEdgePx, AttachmentGIF.maxPixelEdge),
+            kCGImageSourceShouldCache: false,
+        ]
+        var thumbnail: UIImage?
+        var dim: String?
+        for index in 0..<count {
+            try autoreleasepool {
+                guard let frame = CGImageSourceCreateThumbnailAtIndex(source, index, options as CFDictionary) else {
+                    throw Failure.unsupportedImage
+                }
+                let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
+                let gif = properties?[kCGImagePropertyGIFDictionary] as? [CFString: Any] ?? [:]
+                // Rebuild pixels and carry only animation timing; never copy source metadata.
+                let timing = gif.filter { $0.key == kCGImagePropertyGIFDelayTime || $0.key == kCGImagePropertyGIFUnclampedDelayTime }
+                CGImageDestinationAddImage(destination, frame, [kCGImagePropertyGIFDictionary: timing] as CFDictionary)
+                if index == 0 {
+                    dim = "\(frame.width)x\(frame.height)"
+                    thumbnail = thumbnailImage(from: UIImage(cgImage: frame))
+                }
+            }
+        }
+        guard CGImageDestinationFinalize(destination) else { throw Failure.encodingFailed }
+        guard encoded.length <= maxImageAttachmentBytes else { throw Failure.attachmentTooLarge(encoded.length) }
+        var name = sanitizedFileName(fileName, fallbackStem: "animation", fallbackExtension: "gif")
+        if !name.lowercased().hasSuffix(".gif") {
+            name = "\((name as NSString).deletingPathExtension).gif"
+        }
+        return MediaDraftAttachment(
+            fileName: name, mediaType: "image/gif", data: encoded as Data, dim: dim,
+            thumbhash: thumbnail.flatMap { ThumbHash.encodedString(from: $0) }, thumbnail: thumbnail
+        )
     }
 
     static func attachment(

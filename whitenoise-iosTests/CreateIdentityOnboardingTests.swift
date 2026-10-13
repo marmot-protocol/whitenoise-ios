@@ -7,6 +7,38 @@ import UIKit
 
 @MainActor
 struct CreateIdentityOnboardingTests {
+    @Test func reopeningSignUpDoesNotReplayRetainedFailure() {
+        var presentation = SignUpFailurePresentation(retaining: .profile)
+        #expect(presentation.takeNewFailure(.profile) == nil)
+        #expect(presentation.takeNewFailure(.profile) == nil)
+    }
+
+    @Test func preparationFailureIsPresentedOnceAcrossObserverAndCompletion() {
+        var presentation = SignUpFailurePresentation(retaining: .profile)
+        #expect(presentation.takeNewFailure(.draftStorage) == .draftStorage)
+        #expect(presentation.takeNewFailure(.draftStorage) == nil)
+        #expect(presentation.takeNewFailure(nil) == nil)
+        #expect(presentation.takeNewFailure(.draftStorage) == .draftStorage)
+    }
+
+    @Test func openingSavedDraftPresentsANewStorageFailure() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data([0]).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let store = SignUpDraftStore(directory: file)
+        let state = AppState.test(signUpDraftStore: store)
+        var draft = SignUpDraft()
+        draft.stage = .creating
+        await state.signUpModel.configurePersistence(store: store, restored: draft)
+        #expect(state.signUpModel.failure == nil)
+        var presentation = SignUpFailurePresentation(retaining: state.signUpModel.failure)
+
+        await state.openSignUpDraft()
+
+        #expect(presentation.takeNewFailure(state.signUpModel.failure) == .draftStorage)
+        #expect(presentation.takeNewFailure(state.signUpModel.failure) == nil)
+    }
+
     @Test func onlySignInPrefersTheCompactSheetHeight() {
         #expect(!OnboardingSheetContent.welcome.prefersCompactHeight)
         #expect(OnboardingSheetContent.signIn.prefersCompactHeight)
@@ -631,6 +663,29 @@ struct CreateIdentityOnboardingTests {
         #expect(state.signUpModel === blocked)
         #expect(await state.signUpModel.discardUnrestorableDraft())
         #expect(!FileManager.default.fileExists(atPath: file.path))
+        try await client.marmot.shutdownAndClose()
+    }
+
+    @Test func retryRestorationClosesRecoveryWhenTheSavedDraftIsGone() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("draft.json")
+        try Data("broken".utf8).write(to: file)
+        let client = try MarmotClient.testClient()
+        try await client.startRuntime()
+        let state = AppState.test(client: client, notifications: .shared,
+                                  signUpDraftStore: SignUpDraftStore(directory: directory))
+        try await state.refreshAccounts(refreshUnreadSummaries: false)
+        #expect(state.signUpModel.isRestorationBlocked)
+        #expect(state.restoreSignUpPresentation)
+
+        try FileManager.default.removeItem(at: file)
+        await state.retrySignUpRestoration()
+
+        #expect(!state.signUpModel.isRestorationBlocked)
+        #expect(!state.restoreSignUpPresentation)
+        #expect(state.accounts.isEmpty)
         try await client.marmot.shutdownAndClose()
     }
 

@@ -68,6 +68,7 @@ extension AppState {
         hasRestoredSignUp = false
         do {
             try await refreshAccounts(refreshUnreadSummaries: false)
+            restoreSignUpPresentation = signUpModel.isRestorationBlocked || signUpModel.draft.requiresRecovery
         } catch {
             signUpModel = previousModel
             hasRestoredSignUp = true
