@@ -286,6 +286,7 @@ struct AvatarBubble: View {
     let title: String
     var pictureURL: URL? = nil
     var pictureImage: UIImage? = nil
+    var monogramFont: Font? = nil
 
     var body: some View {
         Circle()
@@ -310,9 +311,15 @@ struct AvatarBubble: View {
         }
     }
 
-    private var initialsView: some View {
-        WNAvatarMonogramView(name: title)
-            .foregroundStyle(.white)
+    @ViewBuilder private var initialsView: some View {
+        if let monogramFont {
+            Text(WNAvatarMonogram.initial(for: title))
+                .font(monogramFont)
+                .foregroundStyle(.white)
+        } else {
+            WNAvatarMonogramView(name: title)
+                .foregroundStyle(.white)
+        }
     }
 }
 

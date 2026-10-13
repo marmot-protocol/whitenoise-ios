@@ -20,6 +20,8 @@ struct ImportIdentityView: View {
     @State private var showScanner = false
     @State private var openingSetup: AccountSetupModel?
     @State private var isRecoveringSetup = false
+    @State private var showsPrivateKeyForm = false
+    @State private var recoveryMessage: String?
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
@@ -71,9 +73,20 @@ struct ImportIdentityView: View {
                     onOpenChats: { openChats(setup) }
                 )
                 .onAppear { onPreferredSheetExpansionChange(true) }
+            } else if !showsPrivateKeyForm && (isRecoveringSetup || !appState.onboardingRecoveryAccounts.isEmpty) {
+                OnboardingRecoverySection(isPushed: isPushed, isWorking: $isRecoveringSetup) { message in
+                    recoveryMessage = message
+                    showsPrivateKeyForm = true
+                    onPreferredSheetExpansionChange(false)
+                }
+                .onAppear { onPreferredSheetExpansionChange(true) }
             } else {
                 signInForm
             }
+        }
+        .task(id: appState.runtimeGeneration) {
+            guard openingSetup == nil, !appState.isAccountSetupPresented else { return }
+            try? await appState.refreshAccounts(refreshUnreadSummaries: false)
         }
     }
 
@@ -97,8 +110,13 @@ struct ImportIdentityView: View {
 
         ScrollView {
             VStack(alignment: .leading) {
-                OnboardingRecoverySection(isRecovering: $isRecoveringSetup)
-                    .disabled(model.isImporting)
+                if let recoveryMessage {
+                    Text(verbatim: recoveryMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                        .padding(.bottom, 16)
+                }
                 Text("Private Key")
                     .font(.headline)
                     .padding(.leading)
