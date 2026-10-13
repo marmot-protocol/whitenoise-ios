@@ -108,6 +108,13 @@ begins setup or approves publication. The user explicitly signs in again.
 Bind repair/device approvals to the displayed revision and recovery epoch; use
 the epoch-aware APIs whenever the same displayed snapshot has a recovery epoch. Reject an entire relay
 proposal if any address is unsafe; never hide an invalid entry and approve the rest.
+Request `proposeOnboardingRelayRepair` only on explicit Suggest a Fix. On the shared
+Relay/Inbox step, `AccountSetupRelayStepPresentation` makes it the primary action
+when Use Default Relays isn't offered (a step retry and Search Default Relays then
+stay available as secondary actions). Show MDK's typed relay diff for consent and
+approve only when it accounts for every published tag. `ManualReview` never
+approves: prefill the editor from `beforeTags` or offer the separately labeled
+default-relay replacement, which returns its own diff.
 
 The generated Swift bindings and immutable remote binary declaration live in `Packages/MarmotKit`. The source of truth is the MDK MarmotKit release published from `marmot-protocol/mdk`.
 

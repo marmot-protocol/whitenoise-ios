@@ -4,7 +4,7 @@ import MarmotKit
 nonisolated enum AccountSetupCommand: Sendable {
     case run, cancel, retry(OnboardingStepFfi), skip(OnboardingStepFfi)
     case acknowledge(UInt64, recoveryEpoch: String? = nil), approve(UInt64, recoveryEpoch: String? = nil), cancelRepair
-    case useDefaults(OnboardingStepFfi)
+    case useDefaults(OnboardingStepFfi), suggestRelayRepair(OnboardingStepFfi)
     case editRelays(OnboardingStepFfi, reads: [String], writes: [String])
     case discovery([String]), saveProfile(UserProfileMetadataFfi, AccountSetupAvatar?)
 }
@@ -81,6 +81,8 @@ nonisolated struct MarmotAccountSetupClient: AccountSetupClient {
             }, approve: { revision, epoch in
                 try await client.approveOnboarding(accountID: accountID, revision: revision, recoveryEpoch: epoch)
             })
+        case .suggestRelayRepair(let step):
+            return try await client.proposeOnboardingRelayRepair(accountID: accountID, step: step)
         case .editRelays(let step, let reads, let writes):
             return try await marmot.proposeOnboardingRelays(
                 accountRef: accountID, step: step, readRelays: reads, writeRelays: writes

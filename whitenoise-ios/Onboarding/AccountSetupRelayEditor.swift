@@ -137,10 +137,15 @@ struct AccountSetupRelayEditor: View {
         isSubmitting = true
         Task {
             await operation.value
-            if model.errorMessage == nil, model.isConnected,
-               model.snapshot.proposal?.step == step,
-               model.snapshot.steps.first(where: { $0.step == step })?.actions.contains(.approveRepair) == true {
+            let outcome = model.isConnected
+                ? AccountSetupRelayRepairPresentation.editOutcome(model.snapshot, step: step, errorMessage: model.errorMessage)
+                : .failed
+            if outcome == .review {
                 dismiss()
+            } else if outcome == .unchanged {
+                // MDK found nothing to publish; keep the draft open for another change.
+                isSubmitting = false
+                error = L10n.string("This matches your current relay list. Change at least one relay to continue.")
             } else {
                 isSubmitting = false
                 operationFailed = true

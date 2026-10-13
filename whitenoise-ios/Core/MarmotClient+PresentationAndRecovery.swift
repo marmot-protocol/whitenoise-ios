@@ -10,6 +10,11 @@ extension MarmotClient {
         return try await marmot.approveOnboardingRepair(accountRef: accountID, revision: revision)
     }
 
+    /// Persists a revision-bound preview only; it never signs or publishes.
+    func proposeOnboardingRelayRepair(accountID: String, step: OnboardingStepFfi) async throws -> OnboardingSnapshotFfi {
+        try await marmot.proposeOnboardingRelayRepair(accountRef: accountID, step: step)
+    }
+
     func acknowledgeOnboarding(accountID: String, revision: UInt64, recoveryEpoch: String?) async throws -> OnboardingSnapshotFfi {
         if let recoveryEpoch {
             return try await marmot.acknowledgeOnboardingSingleDeviceInEpoch(

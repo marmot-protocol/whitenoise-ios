@@ -33,16 +33,33 @@ nonisolated struct AccountSetupRelayDraft: Equatable {
     init(proposal: OnboardingRepairProposalFfi? = nil) {
         guard let proposal else { return }
         for (addresses, isWrite) in [(proposal.readRelays, false), (proposal.writeRelays, true)] {
-            for address in addresses {
-                let normalized = AccountSetupInput.proposalRelays([address])?.first
-                if let index = entries.firstIndex(where: {
-                    normalized != nil ? $0.normalizedAddress == normalized : $0.address == address
-                }) {
-                    if isWrite { entries[index].writes = true } else { entries[index].reads = true }
-                } else {
-                    entries.append(Entry(address: address, reads: !isWrite, writes: isWrite))
-                }
+            for address in addresses { merge(address, reads: !isWrite, writes: isWrite) }
+        }
+    }
+
+    /// Prefill from signed relay tags. Opaque tags stay outside the editor; MDK retains them.
+    init(tags: [OnboardingRelayTagFfi]) {
+        for tag in tags {
+            guard let address = tag.endpoint,
+                  !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            switch AccountSetupRelayRepairPresentation.use(tag.role) {
+            case .readAndWrite: merge(address, reads: true, writes: true)
+            case .read, .inbox: merge(address, reads: true, writes: false)
+            case .write: merge(address, reads: false, writes: true)
+            case .other: continue
             }
+        }
+    }
+
+    private mutating func merge(_ address: String, reads: Bool, writes: Bool) {
+        let normalized = AccountSetupInput.proposalRelays([address])?.first
+        if let index = entries.firstIndex(where: {
+            normalized != nil ? $0.normalizedAddress == normalized : $0.address == address
+        }) {
+            if reads { entries[index].reads = true }
+            if writes { entries[index].writes = true }
+        } else {
+            entries.append(Entry(address: address, reads: reads, writes: writes))
         }
     }
 

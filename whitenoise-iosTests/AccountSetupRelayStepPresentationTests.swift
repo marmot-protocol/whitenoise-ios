@@ -51,7 +51,55 @@ struct AccountSetupRelayStepPresentationTests {
             step: .relays, actions: [.useRecommendedRelays, .retry, .editRelays, .editDiscoveryRelays], proposal: nil
         )
         #expect(presentation.primaryAction?.action == .defaults)
-        #expect(presentation.secondaryActions == [.edit, .discovery])
+        #expect(presentation.secondaryActions == [.suggest, .edit, .discovery])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func suggestionLeadsWhenDefaultRelaysAreNotOffered(_ step: OnboardingStepFfi) {
+        let withRetry = Presentation(step: step, actions: [.retry, .editRelays], proposal: nil)
+        #expect(withRetry.primaryAction == .init(action: .suggest))
+        // A leading suggestion keeps the step's retry available below it.
+        #expect(withRetry.secondaryActions == [.retry, .edit])
+        let withoutRetry = Presentation(step: step, actions: [.editRelays], proposal: nil)
+        #expect(withoutRetry.primaryAction == .init(action: .suggest))
+        #expect(withoutRetry.secondaryActions == [.edit])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func suggestionLeadsOverDefaultSearchAndKeepsItAvailable(_ step: OnboardingStepFfi) {
+        let presentation = Presentation(step: step, actions: [.retry, .editDiscoveryRelays, .editRelays], proposal: nil)
+        #expect(presentation.canSearchDefaults)
+        #expect(presentation.primaryAction == .init(action: .suggest))
+        #expect(presentation.secondaryActions == [.retry, .searchDefaults, .edit, .discovery])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func suggestionIsSecondaryWhenDefaultRelaysAreOffered(_ step: OnboardingStepFfi) {
+        let presentation = Presentation(step: step, actions: [.useRecommendedRelays, .editRelays], proposal: nil)
+        #expect(presentation.primaryAction?.action == .defaults)
+        #expect(presentation.secondaryActions == [.suggest, .edit])
+    }
+
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func suggestionNeedsEditableRelaysAndNoPendingProposal(_ step: OnboardingStepFfi) {
+        let cannotEdit = Presentation(step: step, actions: [.retry, .useRecommendedRelays, .editDiscoveryRelays], proposal: nil)
+        #expect(!cannotEdit.offersSuggestion)
+        #expect(!cannotEdit.secondaryActions.contains(.suggest))
+        let reviewing = Presentation(step: step, actions: [.approveRepair, .cancelRepair, .editRelays], proposal: proposal(step: step))
+        #expect(!reviewing.offersSuggestion)
+        #expect(reviewing.primaryAction?.action != .suggest)
+        #expect(!reviewing.secondaryActions.contains(.suggest))
+        let interrupted = Presentation(step: step, actions: [.retry, .editRelays], proposal: proposal(step: step))
+        #expect(!interrupted.offersSuggestion)
+        #expect(interrupted.primaryAction?.action == .retry)
+    }
+
+    @Test func failedSuggestionCanBeRequestedAgain() {
+        let presentation = Presentation(
+            step: .relays, actions: [.retry, .editRelays], proposal: nil, hasOperationError: true, lastAction: .suggest
+        )
+        #expect(presentation.primaryAction == .init(action: .suggest))
+        #expect(presentation.status == .previewFailure)
     }
 
     @Test func defaultSearchRequiresDiscoveryPermissionAndNoProposal() {

@@ -659,6 +659,35 @@ struct AccountSetupTests {
         await model.drain()
     }
 
+    @Test(arguments: [OnboardingStepFfi.relays, .inboxRelays])
+    func suggestedRelayFixOnlyPreviewsAndManualReviewIsNeverApproved(_ step: OnboardingStepFfi) async {
+        var initial = snapshot()
+        initial.steps[0].step = step
+        initial.steps[0].actions = [.retry, .editDiscoveryRelays, .editRelays]
+        let client = SetupTestClient(initial: initial)
+        let model = AccountSetupModel(snapshot: initial)
+        await model.connect(client)
+        await settle { model.isConnected && !model.isBusy }
+        // Connecting never requests a preview on the user's behalf.
+        #expect(await client.relayRepairPreviews.isEmpty)
+
+        await model.send(.suggestRelayRepair(step))?.value
+
+        #expect(await client.relayRepairPreviews == [step])
+        #expect(model.snapshot.proposal?.relayRepair?.mode == .manualReview)
+        let presentation = AccountSetupRelayStepPresentation(
+            step: step, actions: model.snapshot.steps[0].actions, proposal: model.snapshot.proposal
+        )
+        #expect(presentation.status == .manualReview)
+        #expect(presentation.primaryAction?.action == .edit)
+        #expect(!presentation.isValidProposal)
+        #expect(AccountSetupPolicy.automaticAction(model.snapshot) == nil)
+        #expect(await client.approvalCount == 0)
+        #expect(await client.defaultPublicationCount == 0)
+        model.suspend()
+        await model.drain()
+    }
+
     @Test func recoveredPublicationUsesTheEpochOfTheDisplayedProposal() async throws {
         var proposed = proposalSnapshot(step: .profile)
         proposed.recoveryEpoch = "recovered-epoch"
@@ -873,6 +902,7 @@ private actor SetupTestClient: AccountSetupClient {
     var approvalCount = 0
     var skipCount = 0
     var defaultPublicationCount = 0
+    var relayRepairPreviews: [OnboardingStepFfi] = []
     let profileSaveFails: Bool
     let discoveryResult: OnboardingSnapshotFfi?
     let skipResult: OnboardingSnapshotFfi?
@@ -907,6 +937,21 @@ private actor SetupTestClient: AccountSetupClient {
             runCount += 1
             await runGate?.wait()
         case .discovery: return discoveryResult ?? initial
+        case .suggestRelayRepair(let step):
+            relayRepairPreviews.append(step)
+            var value = initial
+            value.revision += 1
+            value.steps[0].actions = [.editRelays, .cancelRepair]
+            let current = OnboardingRelayTagFfi(fields: ["r", "wss://current.example"], endpoint: "wss://current.example",
+                                                role: .unmarked)
+            value.proposal = OnboardingRepairProposalFfi(
+                step: step, revision: value.revision, previousEventId: "event", readRelays: [], writeRelays: [],
+                profile: nil, follows: nil, relayRepair: OnboardingRelayRepairFfi(
+                    mode: .manualReview, originalEventId: "event", originalContent: "", proposedContent: "",
+                    beforeTags: [current], afterTags: [current], changes: []
+                )
+            )
+            return value
         case .editRelays(let step, let reads, let writes):
             var value = initial
             value.revision += 1

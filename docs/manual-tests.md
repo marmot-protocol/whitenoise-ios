@@ -644,6 +644,18 @@ only from custom emoji already shown in that chat.
       nothing; review the roles, then approve to replace the list. Closing the
       editor or cancelling the proposal preserves the original list. Repeat for
       inbox relays; invalid/private/retired selections fail without publication.
+- [ ] Import a profile whose relay list has a retired relay or lacks a write
+      route, plus unrelated tags or duplicate entries. Suggest a Fix is the main
+      button when Use Default Relays isn't offered (Try Again and Search Default
+      Relays stay below it when the step allows them), and secondary otherwise.
+      Suggest a Fix publishes nothing; it shows Will be added / Will be removed /
+      Unchanged rows and what an added relay lets the profile do. Save Relay Changes publishes only that diff;
+      other tags, duplicates, marker spelling and content survive. A list with no
+      safe automatic fix shows Current relays and no save action: Edit Relays opens
+      prefilled with the current list, and Replace With Default Relays leads to a
+      reviewable diff. Saving an unchanged edit keeps the editor open. Any invalid
+      published address (such as a retained `ws://…onion`) blocks the whole save.
+      Repeat on the Inbox Relays step, where saving is labeled Use These Relays.
 - [ ] For both relay-list and inbox-list recovery, search a reachable relay that
       returns no declaration. After any earlier checks finish, Use default relays
       remains available alongside Look on another relay. Defaults publish only
