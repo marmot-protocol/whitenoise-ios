@@ -193,6 +193,13 @@ struct OnboardingRecoverySection: View {
                         onSignIn(L10n.string("Profile removed from this device."))
                     }
                 }
+            } catch MarmotKitError.OnboardingActionUnavailable {
+                try? await appState.refreshAccounts(refreshUnreadSummaries: false)
+                if appState.onboardingRecoveryAccounts.isEmpty {
+                    onSignIn(nil)
+                } else if appState.onboardingRecoveryAccounts.contains(where: { $0.accountIdHex == account.accountIdHex }) {
+                    failure = (account.accountIdHex, action)
+                }
             } catch {
                 failure = (account.accountIdHex, action)
             }
