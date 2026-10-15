@@ -20,9 +20,17 @@ struct Marmot0104BindingTests {
             let token = UUID().uuidString
             let accepted = try await client.sendTextWithClientToken(accountRef: account.label,
                 groupIdHex: group.groupIdHex, text: "Durable message", clientToken: token)
-            let repeated = try await client.sendTextWithClientToken(accountRef: account.label,
-                groupIdHex: group.groupIdHex, text: "Durable message", clientToken: token)
-            #expect(accepted == repeated)
+            // Admission queues work; an unreachable relay can cause rejection before
+            // engine acceptance. A rejected token must stay rejected, never be reused.
+            do {
+                let repeated = try await client.sendTextWithClientToken(accountRef: account.label,
+                    groupIdHex: group.groupIdHex, text: "Durable message", clientToken: token)
+                #expect(accepted == repeated)
+            } catch MarmotKitError.Runtime(let details) {
+                #expect(details.contains("client token belongs to a rejected submission"))
+                #expect(try await client.localSendStatus(accountRef: account.label,
+                    groupIdHex: group.groupIdHex, clientToken: token) == .rejected)
+            }
             #expect(accepted.clientToken == token)
             #expect(!accepted.messageIdHex.isEmpty)
             #expect(try await client.localSendStatus(accountRef: account.label,
@@ -31,7 +39,9 @@ struct Marmot0104BindingTests {
                 _ = try await client.sendTextWithClientToken(accountRef: account.label,
                     groupIdHex: group.groupIdHex, text: "Changed request", clientToken: token)
                 Issue.record("A token must not be reassigned to a different request")
-            } catch MarmotKitError.Runtime {}
+            } catch MarmotKitError.Runtime(let details) {
+                #expect(details.contains("client token is already bound to another submission"))
+            }
             let window = try await client.openConversationWindow(accountRef: account.label, groupIdHex: group.groupIdHex)
             let snapshot = try #require(window.snapshot())
             #expect(snapshot.messages.filter { $0.timeline.clientToken == token }.count == 1)
