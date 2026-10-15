@@ -11,11 +11,15 @@ struct OnboardingRecoverySection: View {
     @State private var selected: AccountSummaryFfi?
     @State private var confirmation: Action?
     @State private var operation: Action?
+    @State private var operationIdentity: UserProfileMetadataFfi?
+    @State private var operationProfiles: (recovery: [AccountSummaryFfi], ready: [AccountSummaryFfi])?
     @State private var failure: (accountID: String, action: Action)?
 
     let isPushed: Bool
     @Binding var isWorking: Bool
-    let onSignIn: (String?) -> Void
+    let readyProfiles: [AccountSummaryFfi]
+    let onRecovered: (AccountSummaryFfi) -> Void
+    let onSignIn: (AccountSummaryFfi?, String?) -> Void
 
     var body: some View {
         GeometryReader { geometry in
@@ -25,24 +29,48 @@ struct OnboardingRecoverySection: View {
     }
 
     private func recoveryContent(avatarDiameter: CGFloat) -> some View {
-        ScrollView {
+        let recoveryAccounts = operationProfiles?.recovery ?? appState.onboardingRecoveryAccounts
+        let readyAccounts = operationProfiles?.ready ?? readyProfiles
+        return ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Reset setup to sign in again")
-                        .font(.title.bold())
-                    Group {
-                        if appState.onboardingRecoveryAccounts.count > 1 {
-                            Text("We couldn’t restore these profiles’ saved sign-in setup. Choose Recover Setup for the profile you want to use, then sign in again with its private key.")
-                        } else {
-                            Text("We couldn’t restore this profile’s saved sign-in setup. Choose Recover Setup below, then sign in again with its private key.")
+                if !recoveryAccounts.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Reset setup to sign in again")
+                            .font(.title.bold())
+                        Group {
+                            if recoveryAccounts.count > 1 {
+                                Text("We couldn’t restore these profiles’ saved sign-in setup. Choose Recover Setup for the profile you want to use, then sign in again with its private key.")
+                            } else {
+                                Text("We couldn’t restore this profile’s saved sign-in setup. Choose Recover Setup below, then sign in again with its private key.")
+                            }
                         }
+                        .foregroundStyle(.secondary)
                     }
-                    .foregroundStyle(.secondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                ForEach(appState.onboardingRecoveryAccounts, id: \.accountIdHex) { account in
-                    recoveryCard(account, avatarDiameter: avatarDiameter)
+                    ForEach(recoveryAccounts, id: \.accountIdHex) { account in
+                        recoveryCard(account, avatarDiameter: avatarDiameter)
+                    }
+                }
+                if !readyAccounts.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Ready to sign in")
+                            .font(.title.bold())
+                        Group {
+                            if readyAccounts.count == 1 {
+                                Text("Sign in with this profile’s private key.")
+                            } else {
+                                Text("Choose a profile and sign in with its private key.")
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, recoveryAccounts.isEmpty ? 0 : 8)
+
+                    ForEach(readyAccounts, id: \.accountIdHex) { account in
+                        readyCard(account)
+                    }
                 }
             }
             .safeAreaPadding(.horizontal, 16)
@@ -50,7 +78,7 @@ struct OnboardingRecoverySection: View {
         }
         .modifier(WNOnboardingActionBar {
             WNOnboardingButton(title: "Sign In with Another Account") {
-                onSignIn(nil)
+                onSignIn(nil, nil)
             }
             .disabled(operation != nil)
             .safeAreaPadding(.horizontal, 16)
@@ -81,11 +109,23 @@ struct OnboardingRecoverySection: View {
             Button("Cancel", role: .cancel) {}
         } message: { action in
             if action == .remove {
-                Text("This removes the profile and its saved private key from this device. It does not remove anything already published to relays. Keep a copy of your private key if you want to sign in again. Local message history cannot be restored by signing in again.")
+                Text("Your saved key and local chats will be deleted. Keep your private key to sign in again. Published data stays on relays.")
             } else {
                 Text("This signs the profile out and resets its setup. You’ll need its private key to sign in again.\n\nOnly the latest recovery record is kept. Nothing on relays changes.")
             }
         }
+    }
+
+    private func readyCard(_ account: AccountSummaryFfi) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            OnboardingRecoveryProfileSummary(account: account)
+            WNGrayButton(title: L10n.string("Sign In")) {
+                onSignIn(account, L10n.string("Enter this profile’s private key to sign in."))
+            }
+            .disabled(operation != nil)
+        }
+        .padding(20)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: .rect(cornerRadius: WNGroupedCardMetrics.cornerRadius))
     }
 
     private func recoveryCard(_ account: AccountSummaryFfi, avatarDiameter: CGFloat) -> some View {
@@ -93,32 +133,19 @@ struct OnboardingRecoverySection: View {
             recoveryIdentity(account, avatarDiameter: avatarDiameter)
 
             VStack(spacing: 8) {
-                WNButton(
-                    title: "Recover Setup",
-                    emphasis: .secondary,
+                WNGrayButton(
+                    title: L10n.string("Recover Setup"),
                     isLoading: operation == .recover && selected?.accountIdHex == account.accountIdHex
                 ) { confirm(.recover, account: account) }
                 .disabled(operation != nil)
 
                 actionError(.recover, accountID: account.accountIdHex)
 
-                Button(role: .destructive) { confirm(.remove, account: account) } label: {
-                    ZStack {
-                        Text("Remove Profile from This Device")
-                            .opacity(operation == .remove && selected?.accountIdHex == account.accountIdHex ? 0 : 1)
-                        if operation == .remove && selected?.accountIdHex == account.accountIdHex {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(.red)
-                        }
-                    }
-                    .foregroundStyle(operation == nil ? .red : .secondary)
-                    .wnButtonLabelSizing(.large)
-                }
-                .wnSecondaryButtonStyle()
-                .wnButtonChrome(emphasis: .secondary)
-                .controlSize(.extraLarge)
-                .wnButtonSizing()
+                WNGrayButton(
+                    title: L10n.string("Remove Profile from This Device"),
+                    isDestructive: true,
+                    isLoading: operation == .remove && selected?.accountIdHex == account.accountIdHex
+                ) { confirm(.remove, account: account) }
                 .disabled(operation != nil)
 
                 actionError(.remove, accountID: account.accountIdHex)
@@ -147,11 +174,14 @@ struct OnboardingRecoverySection: View {
     }
 
     private func recoveryIdentity(_ account: AccountSummaryFfi, avatarDiameter: CGFloat) -> some View {
-        let profile = appState.cachedProfile(forAccountIdHex: account.accountIdHex)
-        let name = IdentityPresentation.text(
+        let profile = operation != nil && selected?.accountIdHex == account.accountIdHex
+            ? operationIdentity : appState.cachedProfile(forAccountIdHex: account.accountIdHex)
+        let identity = IdentityPresentation.resolve(
             accountIdHex: account.accountIdHex,
             knownName: AppState.resolvedKnownDisplayName(profile: profile, projectedName: nil, localAccountLabel: nil)
         )
+        let hasName = identity.source == .name
+        let name = hasName ? identity.text : L10n.string("Unnamed profile")
         let npub = IdentityPresentation.canonicalNpub(accountIdHex: account.accountIdHex)
         return ProfileIdentityHeader(
             name: name,
@@ -161,10 +191,10 @@ struct OnboardingRecoverySection: View {
             avatarDiameter: avatarDiameter
         ) { size in
             AvatarBubble(
-                seed: npub ?? account.accountIdHex,
+                seed: account.accountIdHex,
                 title: name,
                 pictureURL: ContentSanitizer.imageURL(profile?.picture),
-                monogramFont: .subheadline.weight(.semibold)
+                placeholderSystemImage: hasName ? nil : "person.fill"
             )
             .frame(width: size, height: size)
         }
@@ -177,26 +207,34 @@ struct OnboardingRecoverySection: View {
 
     private func perform(_ action: Action, account: AccountSummaryFfi) {
         guard operation == nil else { return }
+        // Keep the initiating card visible while the committed action refreshes accounts.
+        operationProfiles = (appState.onboardingRecoveryAccounts, readyProfiles)
+        operationIdentity = appState.cachedProfile(forAccountIdHex: account.accountIdHex)
         operation = action
         isWorking = true
         failure = nil
         Task {
-            defer { operation = nil; isWorking = false }
+            defer {
+                operation = nil
+                operationProfiles = nil
+                operationIdentity = nil
+                isWorking = false
+            }
             do {
                 switch action {
                 case .recover:
                     try await appState.recoverOnboardingSetup(accountID: account.accountIdHex)
-                    onSignIn(L10n.string("Setup recovered. Enter this profile’s private key to begin a new sign-in."))
+                    onRecovered(account)
                 case .remove:
                     try await appState.removeOnboardingRecoveryAccount(account)
-                    if appState.onboardingRecoveryAccounts.isEmpty {
-                        onSignIn(L10n.string("Profile removed from this device."))
+                    if appState.onboardingRecoveryAccounts.isEmpty && readyProfiles.isEmpty {
+                        onSignIn(nil, L10n.string("Profile removed from this device."))
                     }
                 }
             } catch MarmotKitError.OnboardingActionUnavailable {
                 try? await appState.refreshAccounts(refreshUnreadSummaries: false)
-                if appState.onboardingRecoveryAccounts.isEmpty {
-                    onSignIn(nil)
+                if appState.onboardingRecoveryAccounts.isEmpty && readyProfiles.isEmpty {
+                    onSignIn(nil, nil)
                 } else if appState.onboardingRecoveryAccounts.contains(where: { $0.accountIdHex == account.accountIdHex }) {
                     failure = (account.accountIdHex, action)
                 }

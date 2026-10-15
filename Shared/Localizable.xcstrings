@@ -1,6 +1,266 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Enter this profile’s private key to sign in." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gib den privaten Schlüssel dieses Profils ein, um dich anzumelden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter this profile’s private key to sign in."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce la clave privada de este perfil para iniciar sesión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez la clé privée de ce profil pour vous connecter."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inserisci la chiave privata di questo profilo per accedere."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduza a chave privada deste perfil para iniciar sessão."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Введите приватный ключ этого профиля для входа."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş yapmak için bu profilin özel anahtarını girin."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入此个人资料的私钥以登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "輸入此個人檔案的私鑰以登入。"
+          }
+        }
+      }
+    },
+    "Ready to sign in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bereit zum Anmelden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to sign in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listo para iniciar sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prêt à se connecter"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronto per accedere"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronto para iniciar sessão"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Можно войти"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giriş yapmaya hazır"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以登录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以登入"
+          }
+        }
+      }
+    },
+    "Choose a profile and sign in with its private key." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle ein Profil und melde dich mit seinem privaten Schlüssel an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a profile and sign in with its private key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige un perfil e inicia sesión con su clave privada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez un profil et connectez-vous avec sa clé privée."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli un profilo e accedi con la sua chiave privata."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha um perfil e inicie sessão com a respetiva chave privada."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите профиль и войдите с помощью его приватного ключа."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir profil seçin ve özel anahtarıyla giriş yapın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择个人资料并使用其私钥登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇個人檔案並使用其私鑰登入。"
+          }
+        }
+      }
+    },
+    "Sign in with this profile’s private key." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Melde dich mit dem privaten Schlüssel dieses Profils an."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in with this profile’s private key."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión con la clave privada de este perfil."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connectez-vous avec la clé privée de ce profil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accedi con la chiave privata di questo profilo."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicie sessão com a chave privada deste perfil."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Войдите с помощью приватного ключа этого профиля."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profilin özel anahtarıyla giriş yapın."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用此个人资料的私钥登录。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用此個人檔案的私鑰登入。"
+          }
+        }
+      }
+    },
     "" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2851,6 +3111,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "這將取代你的訊息收件中繼清單，包括你未填寫的項目。在你檢查並核准之前，不會發布任何內容。"
+          }
+        }
+      }
+    },
+    "Unnamed profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unbenanntes Profil"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil sin nombre"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profil sans nom"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilo senza nome"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil sem nome"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Профиль без имени"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adsız profil"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名个人资料"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名個人檔案"
           }
         }
       }
@@ -32229,7 +32548,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível remover este perfil. Tenta novamente."
+            "value" : "Não foi possível remover este perfil. Tente novamente."
           }
         },
         "ru" : {
@@ -91724,7 +92043,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Repõe a configuração para iniciares sessão novamente"
+            "value" : "Reponha a configuração para iniciar sessão novamente"
           }
         },
         "ru" : {
@@ -99403,71 +99722,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "無法完成此操作。進度已儲存，請重試。"
-          }
-        }
-      }
-    },
-    "Setup recovered. Enter this profile’s private key to begin a new sign-in." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Einrichtung wiederhergestellt. Gib den privaten Schlüssel dieses Profils ein, um eine neue Anmeldung zu starten."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Setup recovered. Enter this profile’s private key to begin a new sign-in."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configuración recuperada. Introduce la clave privada de este perfil para iniciar una nueva sesión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configuration récupérée. Saisissez la clé privée de ce profil pour démarrer une nouvelle connexion."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configurazione recuperata. Inserisci la chiave privata di questo profilo per iniziare un nuovo accesso."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Configuração recuperada. Introduza a chave privada deste perfil para iniciar uma nova sessão."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настройка восстановлена. Введите закрытый ключ этого профиля, чтобы начать новый вход."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kurulum kurtarıldı. Yeni bir giriş başlatmak için bu profilin özel anahtarını girin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置已恢复。请输入此个人资料的私钥以开始新的登录。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定已恢復。請輸入此個人檔案的私鑰以開始新的登入。"
           }
         }
       }
@@ -114596,67 +114850,67 @@
         }
       }
     },
-    "This removes the profile and its saved private key from this device. It does not remove anything already published to relays. Keep a copy of your private key if you want to sign in again. Local message history cannot be restored by signing in again." : {
+    "Your saved key and local chats will be deleted. Keep your private key to sign in again. Published data stays on relays." : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dadurch werden das Profil und sein gespeicherter privater Schlüssel von diesem Gerät entfernt. Bereits auf Relays veröffentlichte Inhalte bleiben erhalten. Bewahre eine Kopie deines privaten Schlüssels auf, wenn du dich erneut anmelden möchtest. Der lokale Nachrichtenverlauf wird durch erneutes Anmelden nicht wiederhergestellt."
+            "value" : "Dein gespeicherter Schlüssel und lokale Chats werden gelöscht. Bewahre deinen privaten Schlüssel auf, um dich erneut anzumelden. Veröffentlichte Daten bleiben auf den Relays."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This removes the profile and its saved private key from this device. It does not remove anything already published to relays. Keep a copy of your private key if you want to sign in again. Local message history cannot be restored by signing in again."
+            "value" : "Your saved key and local chats will be deleted. Keep your private key to sign in again. Published data stays on relays."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esto elimina el perfil y su clave privada guardada de este dispositivo. No elimina nada que ya se haya publicado en relays. Guarda una copia de tu clave privada si quieres volver a iniciar sesión. Volver a iniciar sesión no restaura el historial local de mensajes."
+            "value" : "Se eliminarán tu clave guardada y los chats locales. Conserva tu clave privada para volver a iniciar sesión. Los datos publicados permanecen en los relays."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette action supprime le profil et sa clé privée enregistrée de cet appareil. Elle ne supprime rien de ce qui a déjà été publié sur les relais. Conservez une copie de votre clé privée pour vous reconnecter. Une nouvelle connexion ne restaure pas l’historique local des messages."
+            "value" : "Votre clé enregistrée et vos discussions locales seront supprimées. Conservez votre clé privée pour vous reconnecter. Les données publiées restent sur les relais."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Questa azione rimuove il profilo e la sua chiave privata salvata da questo dispositivo. Non rimuove nulla di già pubblicato sui relay. Conserva una copia della chiave privata per accedere di nuovo. Un nuovo accesso non ripristina la cronologia locale dei messaggi."
+            "value" : "La chiave salvata e le chat locali verranno eliminate. Conserva la chiave privata per accedere di nuovo. I dati pubblicati restano sui relay."
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Esta ação remove o perfil e a sua chave privada guardada deste dispositivo. Não remove nada já publicado nos relays. Guarda uma cópia da tua chave privada se quiseres iniciar sessão novamente. Voltar a iniciar sessão não restaura o histórico local de mensagens."
+            "value" : "A sua chave guardada e as conversas locais serão eliminadas. Guarde a sua chave privada para iniciar sessão novamente. Os dados publicados permanecem nos relays."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это удалит профиль и его сохранённый приватный ключ с этого устройства. Уже опубликованные на реле данные не удаляются. Сохраните копию приватного ключа для повторного входа. Повторный вход не восстановит локальную историю сообщений."
+            "value" : "Сохранённый ключ и локальные чаты будут удалены. Сохраните приватный ключ для повторного входа. Опубликованные данные останутся на реле."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bu işlem, profili ve kayıtlı özel anahtarını bu cihazdan kaldırır. Aktarıcılarda yayımlanmış hiçbir şeyi kaldırmaz. Yeniden giriş yapmak istiyorsanız özel anahtarınızın bir kopyasını saklayın. Yeniden giriş yapmak yerel mesaj geçmişini geri yüklemez."
+            "value" : "Kayıtlı anahtarınız ve yerel sohbetleriniz silinecek. Yeniden giriş yapmak için özel anahtarınızı saklayın. Yayımlanmış veriler aktarıcılarda kalır."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这会从此设备移除个人资料及其保存的私钥。已发布到中继的内容不会被移除。如果你想再次登录，请保留私钥副本。再次登录无法恢复本地消息记录。"
+            "value" : "已保存的密钥和本地聊天将被删除。请保留私钥以便再次登录。已发布的数据仍保留在中继上。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這會從此裝置移除個人檔案及其儲存的私鑰。已發佈到中繼的內容不會被移除。如果你想再次登入，請保留私鑰副本。再次登入無法復原本機訊息記錄。"
+            "value" : "已儲存的金鑰和本機聊天將被刪除。請保留私鑰以便再次登入。已發佈的資料仍保留在中繼上。"
           }
         }
       }
@@ -115494,7 +115748,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A sessão do perfil será terminada e a sua configuração reposta. Vais precisar da chave privada para iniciares sessão novamente.\n\nSó é mantido o registo de recuperação mais recente. Nada muda nos relays."
+            "value" : "A sessão do perfil será terminada e a sua configuração reposta. Vai precisar da chave privada para iniciar sessão novamente.\n\nSó é mantido o registo de recuperação mais recente. Nada muda nos relays."
           }
         },
         "ru" : {
@@ -123363,7 +123617,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível restaurar a configuração de início de sessão guardada destes perfis. Escolhe Recuperar configuração no perfil que queres usar e volta a iniciar sessão com a respetiva chave privada."
+            "value" : "Não foi possível restaurar a configuração de início de sessão guardada destes perfis. Escolha Recuperar configuração no perfil que pretende usar e volte a iniciar sessão com a respetiva chave privada."
           }
         },
         "ru" : {
@@ -123428,7 +123682,7 @@
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Não foi possível restaurar a configuração de início de sessão guardada deste perfil. Escolhe Recuperar configuração abaixo e volta a iniciar sessão com a respetiva chave privada."
+            "value" : "Não foi possível restaurar a configuração de início de sessão guardada deste perfil. Escolha Recuperar configuração abaixo e volte a iniciar sessão com a respetiva chave privada."
           }
         },
         "ru" : {

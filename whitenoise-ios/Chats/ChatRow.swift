@@ -286,7 +286,7 @@ struct AvatarBubble: View {
     let title: String
     var pictureURL: URL? = nil
     var pictureImage: UIImage? = nil
-    var monogramFont: Font? = nil
+    var placeholderSystemImage: String? = nil
 
     var body: some View {
         Circle()
@@ -312,10 +312,14 @@ struct AvatarBubble: View {
     }
 
     @ViewBuilder private var initialsView: some View {
-        if let monogramFont {
-            Text(WNAvatarMonogram.initial(for: title))
-                .font(monogramFont)
-                .foregroundStyle(.white)
+        if let placeholderSystemImage {
+            GeometryReader { geometry in
+                let diameter = min(geometry.size.width, geometry.size.height)
+                Image(systemName: placeholderSystemImage)
+                    .font(.system(size: WNAvatarMonogram.fontSize(for: diameter), weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+            }
         } else {
             WNAvatarMonogramView(name: title)
                 .foregroundStyle(.white)

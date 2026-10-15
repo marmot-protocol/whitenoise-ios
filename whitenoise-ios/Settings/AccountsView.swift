@@ -63,10 +63,8 @@ struct AccountsView: View {
         .sheet(isPresented: $showAdd) {
             AddProfileSheet()
         }
-        // Close the add-account sheet as soon as a new identity lands, so the
-        // user returns straight to the (updated) accounts list rather than
-        // being left on the creation flow.
-        .onChange(of: appState.accounts.count) { _, _ in
+        // A reset profile is still signed out; keep its recovery screen open.
+        .onChange(of: appState.accounts.filter { !$0.signedOut }.count) { _, _ in
             if showAdd { showAdd = false }
         }
         .presentationBackground(Color(uiColor: .systemGroupedBackground))
@@ -237,7 +235,7 @@ struct SignedOutProfilesView: View {
         .sheet(isPresented: $showAdd) {
             AddProfileSheet()
         }
-        .onChange(of: appState.accounts.count) { _, _ in
+        .onChange(of: appState.accounts.filter { !$0.signedOut }.count) { _, _ in
             if showAdd { showAdd = false }
         }
     }

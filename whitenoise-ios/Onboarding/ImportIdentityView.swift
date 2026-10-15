@@ -22,6 +22,8 @@ struct ImportIdentityView: View {
     @State private var isRecoveringSetup = false
     @State private var showsPrivateKeyForm = false
     @State private var recoveryMessage: String?
+    @State private var selectedRecoveryProfile: AccountSummaryFfi?
+    @State private var recoveredInSession: [AccountSummaryFfi] = []
 
     let isPushed: Bool
     let onPreferredSheetExpansionChange: (Bool) -> Void
@@ -52,6 +54,19 @@ struct ImportIdentityView: View {
         !isBusy && keyState == .valid
     }
 
+    private var readyProfiles: [AccountSummaryFfi] {
+        OnboardingRecoveryPresentation.readyProfiles(
+            accounts: appState.accounts,
+            recoveredInSession: recoveredInSession,
+            recoveryIDs: Set(appState.onboardingRecoveryAccounts.map(\.accountIdHex)),
+            unfinishedIDs: Set(appState.accountSetupSnapshots.map(\.accountIdHex))
+        )
+    }
+
+    private var hasRecoveryProfiles: Bool {
+        !appState.onboardingRecoveryAccounts.isEmpty || !readyProfiles.isEmpty
+    }
+
     /// Accept only a checksum-valid NIP-19 encoding of a 32-byte private key.
     nonisolated static func isPlausibleNsec(_ raw: String) -> Bool {
         NostrProfileReference.normalizedNsec(raw) != nil
@@ -73,8 +88,20 @@ struct ImportIdentityView: View {
                     onOpenChats: { openChats(setup) }
                 )
                 .onAppear { onPreferredSheetExpansionChange(true) }
-            } else if !showsPrivateKeyForm && (isRecoveringSetup || !appState.onboardingRecoveryAccounts.isEmpty) {
-                OnboardingRecoverySection(isPushed: isPushed, isWorking: $isRecoveringSetup) { message in
+            } else if !showsPrivateKeyForm && (isRecoveringSetup || hasRecoveryProfiles) {
+                OnboardingRecoverySection(
+                    isPushed: isPushed,
+                    isWorking: $isRecoveringSetup,
+                    readyProfiles: readyProfiles,
+                    onRecovered: { account in
+                        var recovered = account
+                        recovered.signedOut = true
+                        recovered.running = false
+                        recoveredInSession.removeAll { $0.accountIdHex == account.accountIdHex }
+                        recoveredInSession.append(recovered)
+                    }
+                ) { account, message in
+                    selectedRecoveryProfile = account
                     recoveryMessage = message
                     showsPrivateKeyForm = true
                     onPreferredSheetExpansionChange(false)
@@ -110,6 +137,10 @@ struct ImportIdentityView: View {
 
         ScrollView {
             VStack(alignment: .leading) {
+                if let selectedRecoveryProfile {
+                    OnboardingRecoveryProfileSummary(account: selectedRecoveryProfile)
+                        .padding(.bottom, 16)
+                }
                 if let recoveryMessage {
                     Text(verbatim: recoveryMessage)
                         .font(.callout)
@@ -171,11 +202,19 @@ struct ImportIdentityView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 WNIconButton(
-                    title: isPushed ? "Back" : "Close",
-                    systemImage: isPushed ? "chevron.backward" : "xmark",
+                    title: isPushed || hasRecoveryProfiles ? "Back" : "Close",
+                    systemImage: isPushed || hasRecoveryProfiles ? "chevron.backward" : "xmark",
                     chrome: .container
                 ) {
-                    dismiss()
+                    if hasRecoveryProfiles {
+                        isKeyFocused = false
+                        showsPrivateKeyForm = false
+                        selectedRecoveryProfile = nil
+                        recoveryMessage = nil
+                        onPreferredSheetExpansionChange(true)
+                    } else {
+                        dismiss()
+                    }
                 }
                 .disabled(isBusy)
             }
@@ -202,6 +241,7 @@ struct ImportIdentityView: View {
         }
         .onChange(of: isKeyFocused) {
             // Coordinate compact sizing with keyboard dismissal, not the focus change.
+            guard showsPrivateKeyForm || !hasRecoveryProfiles else { return }
             guard isKeyFocused || !isKeyboardVisible else { return }
             onPreferredSheetExpansionChange(isKeyFocused)
         }
@@ -211,7 +251,7 @@ struct ImportIdentityView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
             guard isKeyboardVisible else { return }
             isKeyboardVisible = false
-            if !isKeyFocused {
+            if !isKeyFocused && (showsPrivateKeyForm || !hasRecoveryProfiles) {
                 withAnimation(KeyboardFrameChange.animation(from: notification)) {
                     onPreferredSheetExpansionChange(false)
                 }
