@@ -19,6 +19,7 @@ struct OnboardingRecoverySection: View {
     @Binding var isWorking: Bool
     let readyProfiles: [AccountSummaryFfi]
     let onRecovered: (AccountSummaryFfi) -> Void
+    let onProfilesChanged: (String?) -> Void
     let onSignIn: (AccountSummaryFfi?, String?) -> Void
 
     var body: some View {
@@ -120,7 +121,7 @@ struct OnboardingRecoverySection: View {
         VStack(alignment: .leading, spacing: 16) {
             OnboardingRecoveryProfileSummary(account: account)
             WNGrayButton(title: L10n.string("Sign In")) {
-                onSignIn(account, L10n.string("Enter this profile’s private key to sign in."))
+                onSignIn(account, nil)
             }
             .disabled(operation != nil)
         }
@@ -227,15 +228,12 @@ struct OnboardingRecoverySection: View {
                     onRecovered(account)
                 case .remove:
                     try await appState.removeOnboardingRecoveryAccount(account)
-                    if appState.onboardingRecoveryAccounts.isEmpty && readyProfiles.isEmpty {
-                        onSignIn(nil, L10n.string("Profile removed from this device."))
-                    }
+                    onProfilesChanged(L10n.string("Profile removed from this device."))
                 }
             } catch MarmotKitError.OnboardingActionUnavailable {
                 try? await appState.refreshAccounts(refreshUnreadSummaries: false)
-                if appState.onboardingRecoveryAccounts.isEmpty && readyProfiles.isEmpty {
-                    onSignIn(nil, nil)
-                } else if appState.onboardingRecoveryAccounts.contains(where: { $0.accountIdHex == account.accountIdHex }) {
+                onProfilesChanged(nil)
+                if appState.onboardingRecoveryAccounts.contains(where: { $0.accountIdHex == account.accountIdHex }) {
                     failure = (account.accountIdHex, action)
                 }
             } catch {

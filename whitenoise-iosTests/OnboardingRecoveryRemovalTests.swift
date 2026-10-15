@@ -128,21 +128,32 @@ struct OnboardingRecoveryRemovalTests {
 
     @Test func resetProfileRemainsAvailableAfterRuntimeReopens() async throws {
         let (state, client) = try await makeState()
-        let account = try await makeBrokenAccount(client)
-        try await state.refreshAccounts(refreshUnreadSummaries: false)
-        try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
+        let account: AccountSummaryFfi
+        do {
+            account = try await makeBrokenAccount(client)
+            try await state.refreshAccounts(refreshUnreadSummaries: false)
+            try await state.recoverOnboardingSetup(accountID: account.accountIdHex)
+        } catch {
+            try? await client.marmot.shutdownAndClose()
+            throw error
+        }
         try await client.marmot.shutdownAndClose()
 
         let reopened = try MarmotClient(rootPath: client.rootPath, relayUrls: client.relayUrls)
-        let (reopenedState, _) = try await makeState(existingClient: reopened)
-        let readyProfiles = OnboardingRecoveryPresentation.readyProfiles(
-            accounts: reopenedState.accounts, recoveredInSession: [],
-            recoveryIDs: Set(reopenedState.onboardingRecoveryAccounts.map(\.accountIdHex)),
-            unfinishedIDs: Set(reopenedState.accountSetupSnapshots.map(\.accountIdHex))
-        )
-        #expect(readyProfiles.map(\.accountIdHex) == [account.accountIdHex])
-        #expect(reopenedState.activeAccountRef == nil)
-        #expect(reopenedState.pendingAccountSetup == nil)
+        do {
+            let (reopenedState, _) = try await makeState(existingClient: reopened)
+            let readyProfiles = OnboardingRecoveryPresentation.readyProfiles(
+                accounts: reopenedState.accounts, recoveredInSession: [],
+                recoveryIDs: Set(reopenedState.onboardingRecoveryAccounts.map(\.accountIdHex)),
+                unfinishedIDs: Set(reopenedState.accountSetupSnapshots.map(\.accountIdHex))
+            )
+            #expect(readyProfiles.map(\.accountIdHex) == [account.accountIdHex])
+            #expect(reopenedState.activeAccountRef == nil)
+            #expect(reopenedState.pendingAccountSetup == nil)
+        } catch {
+            try? await reopened.marmot.shutdownAndClose()
+            throw error
+        }
         try await reopened.marmot.shutdownAndClose()
     }
 

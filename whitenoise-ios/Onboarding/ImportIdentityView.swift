@@ -99,13 +99,13 @@ struct ImportIdentityView: View {
                         recovered.running = false
                         recoveredInSession.removeAll { $0.accountIdHex == account.accountIdHex }
                         recoveredInSession.append(recovered)
-                    }
-                ) { account, message in
-                    selectedRecoveryProfile = account
-                    recoveryMessage = message
-                    showsPrivateKeyForm = true
-                    onPreferredSheetExpansionChange(false)
-                }
+                    },
+                    onProfilesChanged: { message in
+                        guard !hasRecoveryProfiles else { return }
+                        showPrivateKeyForm(account: nil, message: message)
+                    },
+                    onSignIn: showPrivateKeyForm
+                )
                 .onAppear { onPreferredSheetExpansionChange(true) }
             } else {
                 signInForm
@@ -115,6 +115,13 @@ struct ImportIdentityView: View {
             guard openingSetup == nil, !appState.isAccountSetupPresented else { return }
             try? await appState.refreshAccounts(refreshUnreadSummaries: false)
         }
+    }
+
+    private func showPrivateKeyForm(account: AccountSummaryFfi?, message: String?) {
+        selectedRecoveryProfile = account
+        recoveryMessage = message
+        showsPrivateKeyForm = true
+        onPreferredSheetExpansionChange(false)
     }
 
     private func openChats(_ setup: AccountSetupModel) {
@@ -294,6 +301,9 @@ struct ImportIdentityView: View {
                 text: identity,
                 isFocused: $isKeyFocused,
                 showsAccessory: !isBusy,
+                placeholder: selectedRecoveryProfile == nil
+                    ? L10n.string("Enter private key")
+                    : L10n.string("Enter this profile’s private key"),
                 onFocusRequest: { onPreferredSheetExpansionChange(true) },
                 onPaste: { token, resultingIdentity in
                     model.recordPastedClipboardToken(

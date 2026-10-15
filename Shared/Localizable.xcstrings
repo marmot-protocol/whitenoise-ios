@@ -1,67 +1,67 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Enter this profile’s private key to sign in." : {
+    "Enter this profile’s private key" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gib den privaten Schlüssel dieses Profils ein, um dich anzumelden."
+            "value" : "Gib den privaten Schlüssel dieses Profils ein"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter this profile’s private key to sign in."
+            "value" : "Enter this profile’s private key"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Introduce la clave privada de este perfil para iniciar sesión."
+            "value" : "Introduce la clave privada de este perfil"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Saisissez la clé privée de ce profil pour vous connecter."
+            "value" : "Saisissez la clé privée de ce profil"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Inserisci la chiave privata di questo profilo per accedere."
+            "value" : "Inserisci la chiave privata di questo profilo"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Introduza a chave privada deste perfil para iniciar sessão."
+            "value" : "Introduza a chave privada deste perfil"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Введите приватный ключ этого профиля для входа."
+            "value" : "Введите приватный ключ этого профиля"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Giriş yapmak için bu profilin özel anahtarını girin."
+            "value" : "Bu profilin özel anahtarını girin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入此个人资料的私钥以登录。"
+            "value" : "输入此个人资料的私钥"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "輸入此個人檔案的私鑰以登入。"
+            "value" : "輸入此個人檔案的私鑰"
           }
         }
       }
