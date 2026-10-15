@@ -286,6 +286,7 @@ struct AvatarBubble: View {
     let title: String
     var pictureURL: URL? = nil
     var pictureImage: UIImage? = nil
+    var placeholderSystemImage: String? = nil
 
     var body: some View {
         Circle()
@@ -310,9 +311,19 @@ struct AvatarBubble: View {
         }
     }
 
-    private var initialsView: some View {
-        WNAvatarMonogramView(name: title)
-            .foregroundStyle(.white)
+    @ViewBuilder private var initialsView: some View {
+        if let placeholderSystemImage {
+            GeometryReader { geometry in
+                let diameter = min(geometry.size.width, geometry.size.height)
+                Image(systemName: placeholderSystemImage)
+                    .font(.system(size: WNAvatarMonogram.fontSize(for: diameter), weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+            }
+        } else {
+            WNAvatarMonogramView(name: title)
+                .foregroundStyle(.white)
+        }
     }
 }
 
