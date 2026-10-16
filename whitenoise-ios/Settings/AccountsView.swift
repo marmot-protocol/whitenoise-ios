@@ -4,11 +4,18 @@ import MarmotKit
 struct AccountsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
-    @State private var showAdd = false
+    @State private var initiallyActiveAccountRef: String?
     let showsCloseButton: Bool
+    let onAddProfile: () -> Void
 
-    init(showsCloseButton: Bool = false) {
+    init(
+        activeAccountRef: String?,
+        showsCloseButton: Bool = false,
+        onAddProfile: @escaping () -> Void
+    ) {
+        _initiallyActiveAccountRef = State(initialValue: activeAccountRef)
         self.showsCloseButton = showsCloseButton
+        self.onAddProfile = onAddProfile
     }
 
     var body: some View {
@@ -23,26 +30,24 @@ struct AccountsView: View {
                             }
                         }
                     } label: {
-                        AccountSummaryRow(account: account)
+                        AccountSummaryRow(account: account, usesCompactLayout: true)
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(Color(uiColor: .tertiarySystemFill))
                     .disabled(appState.isAccountExitInProgress)
                 }
             }
-            Section {
-                WNButton(
-                    title: "Add Profile",
-                    systemImage: "person.crop.circle.badge.plus"
-                ) {
-                    showAdd = true
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-            }
         }
+        .modifier(WNOnboardingActionBar {
+            WNButton(
+                title: "Add Profile",
+                systemImage: "person.crop.circle.badge.plus",
+                action: onAddProfile
+            )
+            .padding()
+        })
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color(uiColor: .systemGroupedBackground))
         .productScreen(.settings, section: .account)
         .localizedNavigationTitle("Switch Profile")
         .navigationBarTitleDisplayMode(.inline)
@@ -60,29 +65,14 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .sheet(isPresented: $showAdd) {
-            AddProfileSheet()
-        }
-        // Close the add-account sheet as soon as a new identity lands, so the
-        // user returns straight to the (updated) accounts list rather than
-        // being left on the creation flow.
-        .onChange(of: appState.accounts.count) { _, _ in
-            if showAdd { showAdd = false }
-        }
-        .presentationBackground(Color(uiColor: .systemGroupedBackground))
-        .presentationDetents(accountSheetDetents)
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
     }
 
-    private var accountSheetDetents: Set<PresentationDetent> {
-        Self.prefersFullHeight(accountCount: orderedAccounts.count)
-            ? [.large]
-            : [.medium, .large]
-    }
-
     private var orderedAccounts: [AccountSummaryFfi] {
-        Self.switcherAccounts(appState.accounts, activeAccountRef: appState.activeAccountRef)
+        // Reorder on the next presentation, not while the selected row dismisses.
+        Self.switcherAccounts(appState.accounts, activeAccountRef: initiallyActiveAccountRef)
     }
 
     static func switcherAccounts(
@@ -99,10 +89,6 @@ struct AccountsView: View {
     static func unreadBadgeCount(for summary: AccountUnreadFfi?) -> UInt64? {
         guard let summary, summary.hasUnread else { return nil }
         return max(summary.unreadCount, 1)
-    }
-
-    static func prefersFullHeight(accountCount: Int) -> Bool {
-        accountCount >= 3
     }
 }
 
@@ -129,10 +115,11 @@ struct AccountSummaryRow: View {
 
     @Environment(AppState.self) private var appState
     let account: AccountSummaryFfi
+    var usesCompactLayout = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            AccountIdentitySummary(account: account, avatarSize: 48)
+        HStack(spacing: usesCompactLayout ? nil : 12) {
+            AccountIdentitySummary(account: account, avatarSize: 48, spacing: usesCompactLayout ? nil : 12)
             Spacer()
             HStack(spacing: 8) {
                 if appState.accountUnreadIsUnavailable(forAccountIdHex: account.accountIdHex) {
@@ -147,7 +134,7 @@ struct AccountSummaryRow: View {
                 status
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, usesCompactLayout ? 0 : 4)
         .contentShape(Rectangle())
     }
 
@@ -248,6 +235,7 @@ struct AddProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var content = OnboardingSheetContent.welcome
     @State private var selectedDetent = PresentationDetent.large
+    var onCompletion: (() -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -260,7 +248,9 @@ struct AddProfileSheet: View {
                 onSignInExpansionChange: { isExpanded in
                     selectedDetent = isExpanded ? .large : .medium
                 },
-                onChatsOpened: { dismiss() }
+                onChatsOpened: {
+                    if let onCompletion { onCompletion() } else { dismiss() }
+                }
             )
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
