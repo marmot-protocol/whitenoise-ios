@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SupportChatView: View {
+    let onOpen: (String) -> Void
+
     @Environment(AppState.self) private var appState
     @State private var model = SupportChatViewModel()
     @State private var requestID: UUID?
@@ -40,9 +42,7 @@ struct SupportChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: requestID) {
             guard requestID != nil else { return }
-            await model.start(using: appState) {
-                appState.presentChat(groupIdHex: $0)
-            }
+            await model.start(using: appState, onOpen: onOpen)
         }
         .alert(SupportChatPresentation.failureTitle, isPresented: failureBinding) {
             Button("Try Again") { requestID = UUID() }
@@ -107,10 +107,12 @@ final class SupportChatViewModel {
 
     init() {
         chatFlow = NewChatFlowViewModel()
+        chatFlow.starter.playsSuccessHaptic = false
     }
 
     init(chatFlow: NewChatFlowViewModel) {
         self.chatFlow = chatFlow
+        chatFlow.starter.playsSuccessHaptic = false
     }
 
     var isCreatingChat: Bool {
@@ -134,6 +136,7 @@ final class SupportChatViewModel {
             memberRef: recipient.memberRef,
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }
@@ -153,6 +156,7 @@ final class SupportChatViewModel {
         await chatFlow.retryStart(
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }
