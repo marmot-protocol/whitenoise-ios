@@ -52,6 +52,7 @@ struct SettingsView: View {
     @State private var showAccounts = false
     @State private var addProfileAfterSwitcherCloses = false
     let onAddProfile: () -> Void
+    var recordsScreenView = true
 
     var body: some View {
         Form {
@@ -99,7 +100,7 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .productScreen(.settings)
+        .productScreen(.settings, isEnabled: recordsScreenView)
         .localizedNavigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: appState.activeAccount?.accountIdHex) {

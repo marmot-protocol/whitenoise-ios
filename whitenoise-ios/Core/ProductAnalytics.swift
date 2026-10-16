@@ -250,15 +250,17 @@ private struct ProductScreenObservation: ViewModifier {
     @Environment(AppState.self) private var appState
     let screen: ProductScreen
     let section: ProductSettingsSection?
+    let isEnabled: Bool
     func body(content: Content) -> some View {
         content.onAppear {
+            guard isEnabled else { return }
             appState.productAnalytics.record(.screen(screen))
             if let section { appState.productAnalytics.record(.settings(section)) }
         }
     }
 }
 extension View {
-    func productScreen(_ screen: ProductScreen, section: ProductSettingsSection? = nil) -> some View {
-        modifier(ProductScreenObservation(screen: screen, section: section))
+    func productScreen(_ screen: ProductScreen, section: ProductSettingsSection? = nil, isEnabled: Bool = true) -> some View {
+        modifier(ProductScreenObservation(screen: screen, section: section, isEnabled: isEnabled))
     }
 }

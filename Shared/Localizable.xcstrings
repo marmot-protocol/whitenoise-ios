@@ -3430,6 +3430,71 @@
         }
       }
     },
+    "You’ve signed out of your previous profile. Choose another profile to continue, or tap Add Profile to sign in or create a new account." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast dich von deinem bisherigen Profil abgemeldet. Wähle ein anderes Profil, um fortzufahren, oder tippe auf „Profil hinzufügen“, um dich anzumelden oder ein neues Konto zu erstellen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You’ve signed out of your previous profile. Choose another profile to continue, or tap Add Profile to sign in or create a new account."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Has cerrado la sesión de tu perfil anterior. Elige otro perfil para continuar, o toca Agregar perfil para iniciar sesión o crear una cuenta nueva."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous vous êtes déconnecté de votre profil précédent. Choisissez un autre profil pour continuer, ou touchez Ajouter un profil pour vous connecter ou créer un nouveau compte."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hai effettuato la disconnessione dal profilo precedente. Scegli un altro profilo per continuare oppure tocca Aggiungi profilo per accedere o creare un nuovo account."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você saiu do perfil anterior. Escolha outro perfil para continuar ou toque em Adicionar perfil para entrar ou criar uma nova conta."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вы вышли из предыдущего профиля. Выберите другой профиль, чтобы продолжить, или нажмите «Добавить профиль», чтобы войти или создать новый аккаунт."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Önceki profilinizden çıkış yaptınız. Devam etmek için başka bir profil seçin veya giriş yapmak ya da yeni bir hesap oluşturmak için Profil ekle’ye dokunun."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已退出之前的个人资料。请选择另一个个人资料以继续，或轻点“添加个人资料”以登录或创建新账户。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已登出先前的個人檔案。請選擇另一個個人檔案以繼續，或點一下「新增個人資料」以登入或建立新帳號。"
+          }
+        }
+      }
+    },
     "[NSE %@] %@ at %@ in %@ (%@)" : {
       "comment" : "Developer diagnostic for a notification service wake. Arguments are timestamp, outcome, stage, localized duration, and localized notification count.",
       "extractionState" : "manual",
@@ -23127,71 +23192,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "選擇你曾用於此個人檔案的中繼站。我們會在那裡尋找現有設定，不會發布任何內容。"
-          }
-        }
-      }
-    },
-    "Choose a signed-in profile, or add a new one." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wähle ein angemeldetes Profil oder füge ein neues hinzu."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose a signed-in profile, or add a new one."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elige un perfil con sesión iniciada o añade uno nuevo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez un profil connecté ou ajoutez-en un nouveau."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Scegli un profilo connesso o aggiungine uno nuovo."
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Escolha um perfil conectado ou adicione um novo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выберите профиль с активным входом или добавьте новый."
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Oturumu açık bir profil seçin veya yeni bir profil ekleyin."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择已登录的个人资料，或添加新的个人资料。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "選擇已登入的個人檔案，或新增個人檔案。"
           }
         }
       }

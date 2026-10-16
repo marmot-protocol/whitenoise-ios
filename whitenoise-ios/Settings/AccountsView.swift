@@ -6,15 +6,18 @@ struct AccountsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var initiallyActiveAccountRef: String?
     let showsCloseButton: Bool
+    let requiresSelection: Bool
     let onAddProfile: () -> Void
 
     init(
         activeAccountRef: String?,
         showsCloseButton: Bool = false,
+        requiresSelection: Bool = false,
         onAddProfile: @escaping () -> Void
     ) {
         _initiallyActiveAccountRef = State(initialValue: activeAccountRef)
         self.showsCloseButton = showsCloseButton
+        self.requiresSelection = requiresSelection
         self.onAddProfile = onAddProfile
     }
 
@@ -24,10 +27,14 @@ struct AccountsView: View {
                 ForEach(orderedAccounts, id: \.label) { account in
                     Button {
                         Task {
+                            let returnsToSettings = requiresSelection
+                                && appState.accountStore.returnsToSettingsAfterSelection
                             await appState.activateAccount(account.label)
-                            if appState.activeAccountRef == account.label, showsCloseButton {
-                                dismiss()
+                            guard appState.activeAccountRef == account.label else { return }
+                            if returnsToSettings {
+                                appState.openSettingsAfterProfileSelection = true
                             }
+                            if showsCloseButton, !requiresSelection { dismiss() }
                         }
                     } label: {
                         AccountSummaryRow(account: account, usesCompactLayout: true)
@@ -35,6 +42,22 @@ struct AccountsView: View {
                     .buttonStyle(.plain)
                     .listRowBackground(Color(uiColor: .tertiarySystemFill))
                     .disabled(appState.isAccountExitInProgress)
+                }
+            } header: {
+                if requiresSelection {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Choose a profile")
+                            .font(.title.bold())
+                            .foregroundStyle(Color(uiColor: .label))
+                        Text("You’ve signed out of your previous profile. Choose another profile to continue, or tap Add Profile to sign in or create a new account.")
+                            .font(.body)
+                            .foregroundStyle(Color(uiColor: .secondaryLabel))
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textCase(nil)
+                    .padding(.vertical, 16)
+                    .listRowInsets(EdgeInsets())
                 }
             }
         }
@@ -48,11 +71,11 @@ struct AccountsView: View {
         })
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .productScreen(.settings, section: .account)
+        .productScreen(.settings, section: .account, isEnabled: !requiresSelection)
         .localizedNavigationTitle("Switch Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if showsCloseButton {
+            if showsCloseButton, !requiresSelection {
                 ToolbarItem(placement: .cancellationAction) {
                     WNIconButton(
                         title: "Close",
@@ -65,8 +88,9 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        .presentationDetents(requiresSelection ? [.large] : [.medium, .large])
+        .presentationDragIndicator(requiresSelection ? .hidden : .visible)
+        .interactiveDismissDisabled(requiresSelection)
         .presentationContentInteraction(.resizes)
     }
 
@@ -164,68 +188,32 @@ struct AccountSummaryRow: View {
     }
 }
 
+/// Settings stays behind the required switcher until a profile is activated.
 struct SignedOutProfilesView: View {
-    @Environment(AppState.self) private var appState
+    let canPresentProfiles: Bool
+    @State private var showProfiles = false
     @State private var showAdd = false
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    VStack(spacing: 12) {
-                        Image(systemName: "person.crop.circle.badge.checkmark")
-                            .font(.system(size: 42, weight: .medium))
-                            .foregroundStyle(.tint)
-                            .accessibilityHidden(true)
-                        Text("Choose a profile")
-                            .font(.title2.weight(.bold))
-                        Text("Choose a signed-in profile, or add a new one.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .listRowBackground(Color.clear)
-                }
-
-                Section("Profiles") {
-                    ForEach(appState.accounts.filter { !$0.signedOut }, id: \.label) { account in
-                        Button {
-                            Task {
-                                let returnsToSettings = appState.accountStore.returnsToSettingsAfterSelection
-                                await appState.activateAccount(account.label)
-                                if appState.activeAccountRef == account.label, returnsToSettings {
-                                    appState.openSettingsAfterProfileSelection = true
-                                }
-                            }
-                        } label: {
-                            AccountSummaryRow(account: account)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(appState.isAccountExitInProgress)
-                    }
-                }
-
-                Section {
-                    WNButton(
-                        title: "Add Profile",
-                        systemImage: "person.crop.circle.badge.plus"
-                    ) {
-                        showAdd = true
-                    }
-                    .listRowBackground(Color.clear)
-                }
+            SettingsView(onAddProfile: { showAdd = true }, recordsScreenView: false)
+                .disabled(true)
+        }
+        .onChange(of: canPresentProfiles, initial: true) { _, canPresent in
+            showProfiles = canPresent
+        }
+        .sheet(isPresented: $showProfiles) {
+            NavigationStack {
+                AccountsView(
+                    activeAccountRef: nil,
+                    requiresSelection: true,
+                    onAddProfile: { showAdd = true }
+                )
             }
-            .localizedNavigationTitle("White Noise")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .task { await appState.refreshAccountUnreadSummaries() }
-        .sheet(isPresented: $showAdd) {
-            AddProfileSheet()
-        }
-        .onChange(of: appState.accounts.count) { _, _ in
-            if showAdd { showAdd = false }
+            .appAppearance()
+            .sheet(isPresented: $showAdd) {
+                AddProfileSheet()
+            }
         }
     }
 }
