@@ -143,7 +143,7 @@ private struct WipeBullet: View {
 /// is a single async call that reports per-stage results only in its final
 /// outcome — there is no streaming progress — so all three stages render as
 /// in-flight with indeterminate spinners; they are marked from the outcome
-/// afterwards (success toast, or the partial-failure report).
+/// afterwards in the partial-failure report when needed; clean completion navigates back.
 private struct WipeProgressView: View {
     var body: some View {
         ZStack {

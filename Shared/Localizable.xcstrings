@@ -2790,6 +2790,71 @@
         }
       }
     },
+    "This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat." : {
+      "comment" : "Short explanation of profile removal when signing out with wiping enabled.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Profil und alle lokalen Daten werden dauerhaft entfernt. Eine erneute Anmeldung stellt frühere Chats nicht wieder her. Du brauchst eine neue Einladung für jeden Chat."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil y todos sus datos locales se eliminarán permanentemente. Volver a iniciar sesión no restaurará los chats anteriores. Necesitarás una nueva invitación para cada chat."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce profil et toutes ses données locales seront définitivement supprimés. Vous reconnecter ne restaurera pas les anciennes discussions. Il vous faudra une nouvelle invitation pour chaque discussion."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo profilo e tutti i dati locali verranno rimossi definitivamente. Accedere di nuovo non ripristinerà le chat precedenti. Avrai bisogno di un nuovo invito per ogni chat."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil e todos os dados locais serão removidos permanentemente. Entrar novamente não restaurará as conversas anteriores. Você precisará de um novo convite para cada conversa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот профиль и все локальные данные будут удалены безвозвратно. Повторный вход не восстановит прежние чаты. Для каждого чата понадобится новое приглашение."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bu profil ve tüm yerel veriler kalıcı olarak kaldırılacak. Tekrar giriş yapmak önceki sohbetleri geri getirmez. Her sohbet için yeni bir davete ihtiyacınız olacak."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此个人资料及所有本地数据将被永久移除。再次登录不会恢复以往的聊天。你需要每个聊天的新邀请。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此個人檔案及所有本機資料將被永久移除。再次登入不會恢復以往的聊天。你需要每個聊天的新邀請。"
+          }
+        }
+      }
+    },
     "This replaces your message inbox relay list, including entries you leave out. Nothing is published until you review and approve it." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -82781,65 +82846,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "個人檔案 QR 碼"
-          }
-        }
-      }
-    },
-    "Profile wiped from this device" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil von diesem Gerät gelöscht"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perfil borrado de este dispositivo"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil effacé de cet appareil"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profilo eliminato da questo dispositivo"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perfil apagado deste dispositivo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Профиль стёрт с этого устройства"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profil bu cihazdan silindi"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "个人资料已从此设备清除"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "個人資料已從此裝置清除"
           }
         }
       }

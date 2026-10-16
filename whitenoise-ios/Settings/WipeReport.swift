@@ -31,7 +31,7 @@ nonisolated struct WipeStageReport: Equatable {
     var hasIssues: Bool { !failures.isEmpty }
 }
 
-/// UI model of a finished Sign Out & Wipe. A `clean` wipe just toasts; a report
+/// UI model of a finished Sign Out & Wipe. A `clean` wipe just navigates back; a report
 /// with issues drives the outcome sheet. The account ref is invalid by the time
 /// this exists, so the sheet renders only this snapshot and never reaches back
 /// into the FFI.
