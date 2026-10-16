@@ -86,6 +86,9 @@ final class DirectChatStarter {
 
     var isCreating: Bool { creatingAccountIdHex != nil }
 
+    /// Support opens quietly while other entry points keep their existing feedback.
+    var playsSuccessHaptic = true
+
 #if DEBUG
     @ObservationIgnored var createGroupForTesting: (@MainActor (String, String) async throws -> String)?
 #endif
@@ -190,7 +193,7 @@ final class DirectChatStarter {
         )
         switch outcome {
         case .opened(let groupIdHex), .created(let groupIdHex):
-            Haptics.success()
+            if playsSuccessHaptic { Haptics.success() }
             return .open(groupIdHex: groupIdHex)
         case .failed(let failure):
             Haptics.error()

@@ -54,7 +54,7 @@ struct SupportChatTests {
         #expect(model.phase == .routing)
     }
 
-    @Test func returningFromSupportConversationAllowsOpeningItAgain() async throws {
+    @Test func openingSupportAgainReusesTheConversation() async throws {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
         let flow = testFlow(existingGroupIdHex: "existing-support-dm")
@@ -70,11 +70,12 @@ struct SupportChatTests {
         await model.start(using: appState) { openedGroupIds.append($0) }
         #expect(openedGroupIds == ["existing-support-dm"])
 
-        model.finishRouting()
-        await model.start(using: appState) { openedGroupIds.append($0) }
+        // Opening Support again creates a fresh screen after returning to Chats.
+        let reopenedModel = SupportChatViewModel(chatFlow: flow)
+        await reopenedModel.start(using: appState) { openedGroupIds.append($0) }
 
         #expect(openedGroupIds == ["existing-support-dm", "existing-support-dm"])
-        #expect(model.phase == .routing)
+        #expect(reopenedModel.phase == .routing)
     }
 
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {

@@ -48,8 +48,6 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
-    let chatsViewModel: ChatsListViewModel
-
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
@@ -200,11 +198,20 @@ struct SettingsView: View {
     private func destinationSection(_ destinations: [SettingsDestination]) -> some View {
         Section {
             ForEach(destinations, id: \.self) { destination in
-                NavigationLink {
-                    destinationView(destination)
-                } label: {
-                    Label(destination.title, systemImage: destination.symbol)
-                        .foregroundStyle(.primary)
+                Group {
+                    if destination == .support {
+                        NavigationLink(value: ChatsListView.NavigationDestination.support) {
+                            Label(destination.title, systemImage: destination.symbol)
+                                .foregroundStyle(.primary)
+                        }
+                    } else {
+                        NavigationLink {
+                            destinationView(destination)
+                        } label: {
+                            Label(destination.title, systemImage: destination.symbol)
+                                .foregroundStyle(.primary)
+                        }
+                    }
                 }
                 .accessibilityIdentifier("settings.\(destination.rawValue)")
             }
@@ -222,7 +229,7 @@ struct SettingsView: View {
         case .dataUsage: DataAndStorageView()
         case .relays: RelaysView()
         case .aiAgents: AIAgentsSettingsView()
-        case .support: SupportChatView(chatsViewModel: chatsViewModel)
+        case .support: EmptyView() // Support uses the Chats navigation path above.
         case .donate:
             DonateView()
         case .developerTools: DeveloperToolsSettingsView()
