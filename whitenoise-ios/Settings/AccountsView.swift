@@ -5,6 +5,7 @@ struct AccountsView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var initiallyActiveAccountRef: String?
+    @State private var selectedDetent = PresentationDetent.medium
     let showsCloseButton: Bool
     let onAddProfile: () -> Void
 
@@ -33,6 +34,7 @@ struct AccountsView: View {
                         AccountSummaryRow(account: account, usesCompactLayout: true)
                     }
                     .buttonStyle(.plain)
+                    .listRowBackground(selectedDetent == .large ? Color(uiColor: .secondarySystemFill) : nil)
                     .disabled(appState.isAccountExitInProgress)
                 }
             }
@@ -64,7 +66,7 @@ struct AccountsView: View {
             }
         }
         .task { await appState.refreshAccountUnreadSummaries() }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
         .presentationDragIndicator(.visible)
         .presentationContentInteraction(.resizes)
     }
