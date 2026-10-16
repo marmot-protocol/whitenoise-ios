@@ -1109,9 +1109,7 @@ final class AppState {
             from: outcome,
             additionalLocalFailures: localCleanupFailures
         )
-        if report.clean {
-            present(.success(L10n.string("Profile wiped from this device")))
-        } else {
+        if !report.clean {
             pendingWipeReport = report
         }
         return true

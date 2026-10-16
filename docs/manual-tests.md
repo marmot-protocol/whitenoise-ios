@@ -58,9 +58,12 @@ before every release tag.
       removed where reachable, and local chats, drafts, media, settings, push
       registration, and device keys are removed. Remaining signed-in profiles go
       to the profile chooser; with none remaining, the app returns to Welcome.
-- [ ] During either operation, the button shows progress, prevents repeat submits,
-      and the sheet cannot be closed. A failed operation keeps the sheet and input
-      with an error so the action can be retried.
+      Successful completion shows no toast.
+- [ ] During either operation, the button keeps its original size and red fill
+      with a small white spinner, including while the keyboard dismisses. Repeated
+      taps do nothing, inputs are disabled, and the sheet cannot be closed.
+      A failed operation keeps the sheet and input with an error so the action can
+      be retried. Successful completion keeps the loading treatment until dismissal.
 - [ ] Interrupt relay access during wiping and verify local removal still
       completes while the existing outcome report identifies unfinished relay work.
 

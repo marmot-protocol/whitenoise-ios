@@ -335,6 +335,7 @@ private struct SignOutView: View {
                 Section {
                     profileSummaryRow
                     Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
+                        .disabled(isBusy)
                         .accessibilityIdentifier("sign-out.wipe-data-toggle")
                 } footer: {
                     if shouldWipeData {
@@ -351,6 +352,7 @@ private struct SignOutView: View {
                             .autocorrectionDisabled()
                             .submitLabel(.done)
                             .focused($confirmationFocused)
+                            .disabled(isBusy)
                             .accessibilityIdentifier("wipe-profile.confirmation-field")
                     } header: {
                         Text("Enter Profile Name").wnSectionHeader()
@@ -365,15 +367,17 @@ private struct SignOutView: View {
 
                 Section {
                     Button(role: .destructive, action: signOut) {
-                        ZStack {
-                            Text(busyTitle)
-                                .opacity(isBusy ? 0 : 1)
-                            if isBusy {
-                                ProgressView()
+                        Text("Sign Out")
+                            .font(.body.weight(.regular))
+                            .frame(maxWidth: .infinity)
+                            .opacity(isBusy ? 0 : 1)
+                            .overlay {
+                                if isBusy {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(.white)
+                                }
                             }
-                        }
-                        .font(.body.weight(.regular))
-                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
@@ -381,11 +385,12 @@ private struct SignOutView: View {
                     .frame(maxWidth: .infinity)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
-                    .disabled(!canSignOut)
+                    .disabled(!isBusy && !canSignOut)
+                    .allowsHitTesting(!isBusy)
+                    .accessibilityLabel(busyTitle)
                     .accessibilityIdentifier(shouldWipeData ? "wipe-profile.confirm" : "sign-out.keep-data")
                 }
             }
-            .disabled(isBusy)
             .navigationTitle("Sign Out")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -472,10 +477,10 @@ private struct SignOutView: View {
             } else {
                 success = await appState.signOut()
             }
-            isBusy = false
             if success {
                 dismiss()
             } else {
+                isBusy = false
                 error = wiping
                     ? L10n.string("Couldn't wipe profile")
                     : L10n.string("Couldn’t sign out. Try again.")
