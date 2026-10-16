@@ -26,8 +26,13 @@ nonisolated enum RootPresentation: Equatable {
 /// flow (when no accounts exist), and the main app once at least one
 /// identity is set up.
 struct RootView: View {
+    private enum RootSheet: Hashable {
+        case signIn, signUp, erasureRecovery, wipeReport
+    }
+
     @Environment(AppState.self) private var appState
     @State private var showSignIn = false
+    @State private var visibleRootSheets: Set<RootSheet> = []
 
     var body: some View {
         let presentation = RootPresentation.resolve(
@@ -41,10 +46,12 @@ struct RootView: View {
         .toastHost()
         // Keep the presenter alive when Chats replaces Welcome behind the sheet.
         .sheet(isPresented: $showSignIn, onDismiss: {
+            visibleRootSheets.remove(.signIn)
             appState.diagnosticsConsent.onboardingVisible = false
             appState.cancelProductOnboardingIfAbandoned()
         }) {
             InitialSignInSheet()
+                .onAppear { visibleRootSheets.insert(.signIn) }
         }
         .onChange(of: presentation) { _, current in
             if current != .onboarding { showSignIn = false }
@@ -55,37 +62,60 @@ struct RootView: View {
                 appState.restoreSignUpPresentation = presented
                 if !presented { appState.closeSignUpDraft() }
             }
-        )) {
+        ), onDismiss: {
+            visibleRootSheets.remove(.signUp)
+        }) {
             NavigationStack { CreateIdentityView() }
                 .appAppearance()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationSizing(.page)
+                .onAppear { visibleRootSheets.insert(.signUp) }
         }
         .task(id: appState.runtimeEventsGeneration) {
             await appState.observeRuntimeEvents()
         }
         .sheet(isPresented: Binding(
-            get: { appState.erasureState.shouldPresentRecovery(
-                activeAccountRef: appState.activeAccountRef,
-                runtimeReady: appState.canUseRuntimeForLocalForegroundWork
-            ) },
+            get: { shouldPresentErasureRecovery },
             set: { if !$0 { appState.erasureState.needsRecovery = false } }
-        )) { EraseAppDataView(isRecovery: true).appAppearance() }
+        ), onDismiss: {
+            visibleRootSheets.remove(.erasureRecovery)
+        }) {
+            EraseAppDataView(isRecovery: true)
+                .appAppearance()
+                .onAppear { visibleRootSheets.insert(.erasureRecovery) }
+        }
         // Hosted at the root so a partial-failure wipe report survives the
         // account teardown (routing to onboarding / switching accounts pops the
         // Settings screen that started the wipe).
         .sheet(isPresented: Binding(
             get: { appState.pendingWipeReport != nil },
             set: { if !$0 { appState.pendingWipeReport = nil } }
-        )) {
+        ), onDismiss: {
+            visibleRootSheets.remove(.wipeReport)
+        }) {
             if let report = appState.pendingWipeReport {
                 WipeOutcomeReportView(report: report) {
                     appState.pendingWipeReport = nil
                 }
                 .appAppearance()
+                .onAppear { visibleRootSheets.insert(.wipeReport) }
             }
         }
+    }
+
+    private var shouldPresentErasureRecovery: Bool {
+        appState.erasureState.shouldPresentRecovery(
+            activeAccountRef: appState.activeAccountRef,
+            runtimeReady: appState.canUseRuntimeForLocalForegroundWork
+        )
+    }
+
+    private var canPresentProfiles: Bool {
+        // Keep the chooser deferred through each root sheet's dismissal animation.
+        visibleRootSheets.isEmpty && !showSignIn
+            && !(appState.restoreSignUpPresentation && appState.phaseOwnsLiveRuntime)
+            && !shouldPresentErasureRecovery && appState.pendingWipeReport == nil
     }
 
     @ViewBuilder
@@ -101,7 +131,7 @@ struct RootView: View {
                 })
             }
         case .profileSelection:
-            SignedOutProfilesView()
+            SignedOutProfilesView(canPresentProfiles: canPresentProfiles)
         case .main:
             MainView()
         case .failed(let message):
