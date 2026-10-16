@@ -48,6 +48,8 @@ private enum SettingsDestination: String, CaseIterable, Hashable {
 }
 
 struct SettingsView: View {
+    let chatsViewModel: ChatsListViewModel
+
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
@@ -220,7 +222,7 @@ struct SettingsView: View {
         case .dataUsage: DataAndStorageView()
         case .relays: RelaysView()
         case .aiAgents: AIAgentsSettingsView()
-        case .support: SupportChatView()
+        case .support: SupportChatView(chatsViewModel: chatsViewModel)
         case .donate:
             DonateView()
         case .developerTools: DeveloperToolsSettingsView()

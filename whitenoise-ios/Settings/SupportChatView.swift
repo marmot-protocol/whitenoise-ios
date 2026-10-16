@@ -1,9 +1,12 @@
 import SwiftUI
 
 struct SupportChatView: View {
+    let chatsViewModel: ChatsListViewModel
+
     @Environment(AppState.self) private var appState
     @State private var model = SupportChatViewModel()
     @State private var requestID: UUID?
+    @State private var chatTarget: ChatsListView.ChatNavigationTarget?
 
     var body: some View {
         Form {
@@ -41,8 +44,36 @@ struct SupportChatView: View {
         .task(id: requestID) {
             guard requestID != nil else { return }
             await model.start(using: appState) {
-                appState.presentChat(groupIdHex: $0)
+                chatsViewModel.retainDestination(groupIdHex: $0)
+                chatTarget = ChatsListView.ChatNavigationTarget(
+                    groupIdHex: $0,
+                    performance: appState.beginConversationOpenPerformance()
+                )
             }
+        }
+        .navigationDestination(item: $chatTarget) { target in
+            ChatDestination(
+                target: target,
+                viewModel: chatsViewModel,
+                appState: appState,
+                onGroupLeft: { groupIdHex in
+                    chatsViewModel.markGroupLeft(groupIdHex: groupIdHex)
+                    chatTarget = nil
+                },
+                onGroupDeleted: { groupIdHex in
+                    chatsViewModel.removeChatListRow(groupIdHex: groupIdHex)
+                    chatTarget = nil
+                }
+            )
+        }
+        .onChange(of: chatTarget) { _, target in
+            guard target == nil else { return }
+            requestID = nil
+            model.finishRouting()
+        }
+        .onChange(of: appState.pendingChatId) { _, pending in
+            // Let an external chat request unwind this local push as well.
+            if pending != nil { chatTarget = nil }
         }
         .alert(SupportChatPresentation.failureTitle, isPresented: failureBinding) {
             Button("Try Again") { requestID = UUID() }
@@ -166,5 +197,10 @@ final class SupportChatViewModel {
         guard phase == .failed else { return }
         phase = .idle
         chatFlow.startPrompt = nil
+    }
+
+    func finishRouting() {
+        guard phase == .routing else { return }
+        phase = .idle
     }
 }

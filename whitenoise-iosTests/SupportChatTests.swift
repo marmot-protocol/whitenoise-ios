@@ -54,6 +54,29 @@ struct SupportChatTests {
         #expect(model.phase == .routing)
     }
 
+    @Test func returningFromSupportConversationAllowsOpeningItAgain() async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = testFlow(existingGroupIdHex: "existing-support-dm")
+        flow.starter.createGroupForTesting = { _, _ in
+            Issue.record("reopening support must reuse the existing conversation")
+            return "unexpected"
+        }
+        let model = SupportChatViewModel(chatFlow: flow)
+        var openedGroupIds: [String] = []
+
+        await model.start(using: appState) { openedGroupIds.append($0) }
+        // A second tap during the handoff must not start another operation.
+        await model.start(using: appState) { openedGroupIds.append($0) }
+        #expect(openedGroupIds == ["existing-support-dm"])
+
+        model.finishRouting()
+        await model.start(using: appState) { openedGroupIds.append($0) }
+
+        #expect(openedGroupIds == ["existing-support-dm", "existing-support-dm"])
+        #expect(model.phase == .routing)
+    }
+
     @Test func supportChatFailureIsRecoverableWithoutSurfacingEngineCopy() async throws {
         let appState = AppState.test(client: try MarmotClient.testClient())
         appState.activeAccountRef = "active"
