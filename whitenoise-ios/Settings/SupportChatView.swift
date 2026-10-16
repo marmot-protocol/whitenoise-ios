@@ -165,6 +165,7 @@ final class SupportChatViewModel {
             memberRef: recipient.memberRef,
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }
@@ -184,6 +185,7 @@ final class SupportChatViewModel {
         await chatFlow.retryStart(
             using: appState,
             onOpen: { [weak self] groupIdHex in
+                guard !Task.isCancelled else { return }
                 self?.phase = .routing
                 onOpen(groupIdHex)
             }

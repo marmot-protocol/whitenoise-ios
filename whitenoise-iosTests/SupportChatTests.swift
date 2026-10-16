@@ -251,6 +251,54 @@ struct SupportChatTests {
         #expect(model.phase == .idle)
     }
 
+    @Test(arguments: [false, true])
+    func cancelledCreationDoesNotOpenSupportButCanBeReopened(isRetry: Bool) async throws {
+        let appState = AppState.test(client: try MarmotClient.testClient())
+        appState.activeAccountRef = "active"
+        let flow = testFlow(existingGroupIdHex: nil)
+        let model = SupportChatViewModel(chatFlow: flow)
+        var openedGroupIds: [String] = []
+
+        if isRetry {
+            flow.starter.createGroupForTesting = { _, _ in throw TestFailure.sensitiveEngineDetail }
+            await model.start(using: appState) { openedGroupIds.append($0) }
+            #expect(model.phase == .failed)
+        }
+
+        let gate = SupportChatCreateGate()
+        var creationCompleted = false
+        flow.starter.createGroupForTesting = { _, _ in
+            // Like the native operation, this completion can arrive after cancellation.
+            await gate.hold()
+            creationCompleted = true
+            return "created-support-dm"
+        }
+        let task = Task {
+            if isRetry {
+                await model.retry(using: appState) { openedGroupIds.append($0) }
+            } else {
+                await model.start(using: appState) { openedGroupIds.append($0) }
+            }
+        }
+        await gate.waitUntilHeld()
+        task.cancel()
+        await gate.release()
+        await task.value
+
+        #expect(creationCompleted)
+        #expect(openedGroupIds.isEmpty)
+        #expect(model.phase == .idle)
+
+        flow.existingDirectChatGroupIdForTesting = { _ in "created-support-dm" }
+        flow.starter.createGroupForTesting = { _, _ in
+            Issue.record("a later Start Chat must reuse the completed conversation")
+            return "unexpected"
+        }
+        await model.start(using: appState) { openedGroupIds.append($0) }
+        #expect(openedGroupIds == ["created-support-dm"])
+        #expect(model.phase == .routing)
+    }
+
     private func testFlow(existingGroupIdHex: String?) -> NewChatFlowViewModel {
         let flow = NewChatFlowViewModel()
         flow.existingDirectChatGroupIdForTesting = { _ in existingGroupIdHex }
