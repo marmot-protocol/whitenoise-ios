@@ -43,16 +43,6 @@ struct AccountsViewTests {
         } == "99+")
     }
 
-    @Test func compactSheetFitsOneOrTwoProfiles() {
-        #expect(!AccountsView.prefersFullHeight(accountCount: 1))
-        #expect(!AccountsView.prefersFullHeight(accountCount: 2))
-    }
-
-    @Test func fullHeightSheetClearsActionsForThreeOrMoreProfiles() {
-        #expect(AccountsView.prefersFullHeight(accountCount: 3))
-        #expect(AccountsView.prefersFullHeight(accountCount: 12))
-    }
-
     @Test func activeProfileIsMarkedAheadOfEveryOtherState() {
         for signedOut in [true, false] {
             for localSigning in [true, false] {

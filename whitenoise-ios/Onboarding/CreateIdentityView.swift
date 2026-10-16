@@ -3,9 +3,10 @@ import SwiftUI
 
 struct CreateIdentityView: View {
     var isPushed = false
+    var onCompletion: (() -> Void)?
 
     var body: some View {
-        IdentityProfileSetupView(isPushed: isPushed)
+        IdentityProfileSetupView(isPushed: isPushed, onCompletion: onCompletion)
     }
 }
 
@@ -41,6 +42,7 @@ struct IdentityProfileSetupView: View {
 
     let isPushed: Bool
     let accountSetup: AccountSetupModel?
+    let onCompletion: (() -> Void)?
     @State private var profileFailure: AccountSetupProfilePresentation.Failure?
     @State private var profileExit: ProfileExit?
     @State private var activeProfileSnapshot: OnboardingSnapshotFfi?
@@ -65,9 +67,14 @@ struct IdentityProfileSetupView: View {
             || model.about != (profile?.about ?? "") || model.avatarDraft != nil
     }
 
-    init(isPushed: Bool = false, accountSetup: AccountSetupModel? = nil) {
+    init(
+        isPushed: Bool = false,
+        accountSetup: AccountSetupModel? = nil,
+        onCompletion: (() -> Void)? = nil
+    ) {
         self.isPushed = isPushed
         self.accountSetup = accountSetup
+        self.onCompletion = onCompletion
         _isFormReady = State(initialValue: accountSetup != nil)
     }
 
@@ -673,7 +680,9 @@ struct IdentityProfileSetupView: View {
             if let accountSetup {
                 await saveImportedProfile(using: accountSetup)
             } else {
-                await model.submit(using: appState, dismiss: { dismiss() })
+                await model.submit(using: appState, dismiss: {
+                    if let onCompletion { onCompletion() } else { dismiss() }
+                })
                 guard !Task.isCancelled, !model.isRestorationBlocked, let failure = model.failure else { return }
                 presentFailure(failure)
             }
