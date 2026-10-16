@@ -255,67 +255,197 @@
         }
       }
     },
-    "By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)." : {
+    "Agree & Continue" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Durch die Nutzung von White Noise stimmst du unseren [Nutzungsbedingungen](https://whitenoise.chat/terms) und unserer [Richtlinie zur akzeptablen Nutzung](https://whitenoise.chat/terms#section-7) zu."
+            "value" : "Zustimmen & Fortfahren"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "By using White Noise, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)."
+            "value" : "Agree & Continue"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Al usar White Noise, aceptas nuestros [Términos de servicio](https://whitenoise.chat/terms) y nuestra [Política de uso aceptable](https://whitenoise.chat/terms#section-7)."
+            "value" : "Aceptar y continuar"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En utilisant White Noise, vous acceptez nos [Conditions d’utilisation](https://whitenoise.chat/terms) et notre [Politique d’utilisation acceptable](https://whitenoise.chat/terms#section-7)."
+            "value" : "Accepter et continuer"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usando White Noise, accetti i nostri [Termini di servizio](https://whitenoise.chat/terms) e la nostra [Politica di utilizzo accettabile](https://whitenoise.chat/terms#section-7)."
+            "value" : "Accetta e continua"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ao usar o White Noise, você concorda com nossos [Termos de Serviço](https://whitenoise.chat/terms) e nossa [Política de Uso Aceitável](https://whitenoise.chat/terms#section-7)."
+            "value" : "Concordar e continuar"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Используя White Noise, вы соглашаетесь с нашими [Условиями использования](https://whitenoise.chat/terms) и [Правилами допустимого использования](https://whitenoise.chat/terms#section-7)."
+            "value" : "Принять и продолжить"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "White Noise’u kullanarak [Hizmet Şartlarımızı](https://whitenoise.chat/terms) ve [Kabul Edilebilir Kullanım Politikamızı](https://whitenoise.chat/terms#section-7) kabul etmiş olursunuz."
+            "value" : "Kabul Et ve Devam Et"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 White Noise 即表示你同意我们的[服务条款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
+            "value" : "同意并继续"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "使用 White Noise 即表示你同意我們的[服務條款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
+            "value" : "同意並繼續"
+          }
+        }
+      }
+    },
+    "Welcome to White Noise" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Willkommen bei White Noise"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to White Noise"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te damos la bienvenida a White Noise"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenue sur White Noise"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ti diamo il benvenuto su White Noise"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boas-vindas ao White Noise"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добро пожаловать в White Noise"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "White Noise’a hoş geldiniz"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欢迎使用 White Noise"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "歡迎使用 White Noise"
+          }
+        }
+      }
+    },
+    "By continuing, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn du fortfährst, stimmst du unseren [Nutzungsbedingungen](https://whitenoise.chat/terms) und unserer [Richtlinie zur akzeptablen Nutzung](https://whitenoise.chat/terms#section-7) zu."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "By continuing, you agree to our [Terms of Service](https://whitenoise.chat/terms) and [Acceptable Use Policy](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al continuar, aceptas nuestros [Términos de servicio](https://whitenoise.chat/terms) y nuestra [Política de uso aceptable](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En continuant, vous acceptez nos [Conditions d’utilisation](https://whitenoise.chat/terms) et notre [Politique d’utilisation acceptable](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuando, accetti i nostri [Termini di servizio](https://whitenoise.chat/terms) e la nostra [Politica di utilizzo accettabile](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ao continuar, você concorda com nossos [Termos de Serviço](https://whitenoise.chat/terms) e nossa [Política de Uso Aceitável](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Продолжая, вы соглашаетесь с нашими [Условиями использования](https://whitenoise.chat/terms) и [Правилами допустимого использования](https://whitenoise.chat/terms#section-7)."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Devam ederek [Hizmet Şartlarımızı](https://whitenoise.chat/terms) ve [Kabul Edilebilir Kullanım Politikamızı](https://whitenoise.chat/terms#section-7) kabul etmiş olursunuz."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续即表示你同意我们的[服务条款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "繼續即表示你同意我們的[服務條款](https://whitenoise.chat/terms)和[可接受使用政策](https://whitenoise.chat/terms#section-7)。"
           }
         }
       }
