@@ -34,23 +34,35 @@ before every release tag.
       and opens the same thread. Clear Saved Demo Setup removes only the resume
       record; it must not delete either profile or published conversation data.
 
-## Profile deletion
+## Sign Out and profile deletion
 
-- [ ] With two profiles on the device, open Settings and verify **Delete Profile**
-      is plainly visible immediately below **Sign Out**.
-- [ ] Open **Sign Out** and confirm it keeps the profile and its local data on
-      the device. Sign back in and verify the profile's chats are still present.
-- [ ] Open **Delete Profile**, verify the disclosure names the local data and key
-      material that will be destroyed and explains the limits of deleting copies
-      held by members or independent relays. The destructive action must remain
-      disabled until the displayed profile name is entered exactly.
-- [ ] Delete one profile. Verify the app leaves its groups, removes its published
-      KeyPackages where reachable, clears its local chats, drafts, media, settings,
-      push registration, and device key material, then shows the remaining profile
-      chooser. If no profile remains, verify the app returns to Welcome.
-- [ ] Interrupt relay access during deletion and verify local removal still
-      completes while the post-delete report identifies any relay-side work that
-      could not be completed.
+- [ ] Settings shows one **Sign Out** row. It opens a large sheet with the active
+      profile, **Wipe Data From This Device** on, and a leading Close button.
+- [ ] With wiping on, verify the short disclosure explains permanent local data
+      removal, chats not returning after signing in again, and needing a new
+      invitation to each chat.
+      The profile-name field uses the native Form background without glass;
+      the required name in its helper text uses the primary text color.
+      The final button uses a flat red fill with white text when enabled and
+      native muted colors when disabled.
+      **Sign Out** stays disabled until the displayed profile name matches exactly
+      (surrounding whitespace is ignored; case and internal spacing must match).
+      For a lowercase profile name, the keyboard must not automatically capitalize it.
+- [ ] Turn wiping off: the name field disappears and its input clears. The footer
+      says the profile and local data stay on this device. Turning wiping back on
+      requires entering the name again. The final action stays red in both modes.
+- [ ] Close or swipe down before submitting: the profile and local data remain.
+      Reopening starts with wiping on and an empty confirmation field.
+- [ ] Sign out with wiping off, then sign back in and verify chats remain.
+- [ ] Sign out with wiping on. Verify groups are left, published KeyPackages are
+      removed where reachable, and local chats, drafts, media, settings, push
+      registration, and device keys are removed. Remaining signed-in profiles go
+      to the profile chooser; with none remaining, the app returns to Welcome.
+- [ ] During either operation, the button shows progress, prevents repeat submits,
+      and the sheet cannot be closed. A failed operation keeps the sheet and input
+      with an error so the action can be retried.
+- [ ] Interrupt relay access during wiping and verify local removal still
+      completes while the existing outcome report identifies unfinished relay work.
 
 ## Apple Pay donations
 
@@ -394,7 +406,7 @@ simulator clone.
       `xcrun devicectl`, not TestFlight. It must refuse the store,
       either with the startup failure screen or with the affected profiles
       unavailable. It must not open chats, show empty history, or rewrite data.
-      Do not use Sign Out, Delete Profile, Erase App Data or nsec re-import
+      Do not use Sign Out, Erase App Data or nsec re-import
       while the old build is installed.
 - [ ] Reinstall the new build. It opens the upgraded store unchanged.
 - [ ] Confirm the only way back to the old build is the pre-upgrade backup.

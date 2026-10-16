@@ -52,6 +52,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showAccounts = false
     @State private var showAddProfile = false
+    @State private var showSignOut = false
 
     var body: some View {
         Form {
@@ -74,26 +75,16 @@ struct SettingsView: View {
             destinationSection([.support, .donate, .developerTools])
 
             Section {
-                NavigationLink {
-                    SignOutView()
+                Button {
+                    showSignOut = true
                 } label: {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(.rect)
                 }
-                .disabled(appState.activeAccount == nil)
-
-                NavigationLink {
-                    DeleteProfileView()
-                } label: {
-                    Label("Delete Profile", systemImage: "trash")
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                }
-                .disabled(appState.activeAccount == nil)
-                .accessibilityIdentifier("settings.deleteProfile")
+                .disabled(appState.activeAccount == nil || appState.isAccountExitInProgress)
+                .accessibilityIdentifier("settings.signOut")
             } footer: {
                 Text("White Noise · \(appVersion)")
                     .frame(maxWidth: .infinity)
@@ -114,6 +105,10 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAddProfile) {
             AddProfileSheet()
+        }
+        .sheet(isPresented: $showSignOut) {
+            SignOutView()
+                .appAppearance()
         }
         .onChange(of: appState.activeAccountRef) { oldValue, newValue in
             if oldValue != nil, oldValue != newValue, !appState.appReviewDemo.isRunning {
@@ -326,48 +321,133 @@ nonisolated enum MarmotKitBuildLabel {
 private struct SignOutView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
+    @State private var shouldWipeData = true
+    @State private var confirmation = ""
     @State private var isBusy = false
     @State private var profileRef: String?
     @State private var profileName = ""
     @State private var error: String?
+    @FocusState private var confirmationFocused: Bool
 
     var body: some View {
-        Form {
-            Section {
-                profileSummaryRow
-            } footer: {
-                Text("This profile and its local data will stay on this device.")
+        NavigationStack {
+            Form {
+                Section {
+                    profileSummaryRow
+                    Toggle("Wipe Data From This Device", isOn: $shouldWipeData)
+                        .accessibilityIdentifier("sign-out.wipe-data-toggle")
+                } footer: {
+                    if shouldWipeData {
+                        Text("This profile and all local data will be permanently removed. Signing in again won’t restore previous chats. You’ll need a new invitation to each chat.")
+                    } else {
+                        Text("This profile and its local data will stay on this device.")
+                    }
+                }
+
+                if shouldWipeData {
+                    Section {
+                        TextField("Profile name", text: $confirmation)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.done)
+                            .focused($confirmationFocused)
+                            .accessibilityIdentifier("wipe-profile.confirmation-field")
+                    } header: {
+                        Text("Enter Profile Name").wnSectionHeader()
+                    } footer: {
+                        Text(confirmationHint)
+                    }
+                }
+
+                if let error {
+                    Text(error).foregroundStyle(.orange)
+                }
+
+                Section {
+                    Button(role: .destructive, action: signOut) {
+                        ZStack {
+                            Text(busyTitle)
+                                .opacity(isBusy ? 0 : 1)
+                            if isBusy {
+                                ProgressView()
+                            }
+                        }
+                        .font(.body.weight(.regular))
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(.red)
+                    .frame(maxWidth: .infinity)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .disabled(!canSignOut)
+                    .accessibilityIdentifier(shouldWipeData ? "wipe-profile.confirm" : "sign-out.keep-data")
+                }
             }
-            if let error { Text(error).foregroundStyle(.orange) }
-            Section {
-                WNButton(
-                    title: busyTitle,
-                    emphasis: .destructive,
-                    size: .standard,
-                    isLoading: isBusy,
-                    action: signOut
-                )
-                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                .disabled(isBusy || appState.isAccountExitInProgress || profileRef != appState.activeAccountRef)
+            .disabled(isBusy)
+            .navigationTitle("Sign Out")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Close")
+                    .disabled(isBusy)
+                }
             }
         }
-        .disabled(isBusy)
-        .navigationTitle("Sign Out")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isBusy)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(isBusy)
         .onAppear {
+            guard profileRef == nil else { return }
             profileRef = appState.activeAccountRef
             if let account = appState.activeAccount {
                 profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
             }
         }
+        .onChange(of: shouldWipeData) { _, wiping in
+            error = nil
+            if !wiping {
+                confirmation = ""
+                confirmationFocused = false
+            }
+        }
     }
 
-    /// The spinner hides the label, but it stays in the hierarchy for
-    /// VoiceOver, so the busy wording still has to be accurate.
+    private var canSignOut: Bool {
+        profileRef != nil
+            && profileRef == appState.activeAccountRef
+            && !appState.isAccountExitInProgress
+            && ProfileExitConfirmation.canSignOut(
+                wiping: shouldWipeData,
+                input: confirmation,
+                profileName: profileName,
+                busy: isBusy
+            )
+    }
+
+    private var confirmationHint: AttributedString {
+        // Style the argument, even when a profile name also occurs in the surrounding copy.
+        let placeholder = "\u{FFFC}"
+        var hint = AttributedString(L10n.formatted("Enter %@ exactly to confirm.", placeholder))
+        hint.foregroundColor = .secondary
+        if let range = hint.range(of: placeholder) {
+            var name = AttributedString(profileName)
+            name.foregroundColor = Color(uiColor: .label)
+            hint.replaceSubrange(range, with: name)
+        }
+        return hint
+    }
+
+    /// Keep the action label in the hierarchy while showing its spinner.
     private var busyTitle: LocalizedStringKey {
         guard isBusy else { return "Sign Out" }
-        return "Signing out…"
+        return shouldWipeData ? "Signing out and wiping data…" : "Signing out…"
     }
 
     @ViewBuilder
@@ -380,128 +460,25 @@ private struct SignOutView: View {
     }
 
     private func signOut() {
-        guard profileRef == appState.activeAccountRef,
-              !isBusy, !appState.isAccountExitInProgress else { return }
-        isBusy = true
-        error = nil
-        Task {
-            let success = await appState.signOut()
-            isBusy = false
-            if success { dismiss() } else { error = L10n.string("Couldn’t sign out. Try again.") }
-        }
-    }
-}
-
-private struct DeleteProfileView: View {
-    @Environment(AppState.self) private var appState
-    @Environment(\.dismiss) private var dismiss
-    @State private var confirmation = ""
-    @State private var isBusy = false
-    @State private var profileRef: String?
-    @State private var profileName = ""
-    @State private var error: String?
-    @FocusState private var confirmationFocused: Bool
-
-    var body: some View {
-        Form {
-            Section {
-                profileSummaryRow
-                Text("This permanently removes this profile from this device.")
-            }
-
-            Section {
-                deletionRow("The local message database and MLS group state for this profile.")
-                deletionRow("This profile's key material stored on this device.")
-                deletionRow("Outstanding key packages published for this profile on relays.")
-            } header: {
-                Text("What gets destroyed").wnSectionHeader()
-            } footer: {
-                Text("Signing back in with the same key keeps your identity, but past groups, messages, and media can't be recovered on this device. You'll need to be re-invited to any groups.")
-            }
-
-            Section {
-                Text("White Noise cannot delete encrypted messages already delivered to other members or copies kept by independent relays.")
-            }
-
-            Section {
-                WNInput(
-                    placeholder: L10n.string("Profile name"),
-                    text: $confirmation,
-                    fill: WNInputMetrics.groupedFill,
-                    submitLabel: .done,
-                    focus: $confirmationFocused
-                )
-                .wnInputRow()
-            } header: {
-                Text("Enter Profile Name").wnSectionHeader()
-            } footer: {
-                Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
-            }
-
-            if let error {
-                Text(error).foregroundStyle(.orange)
-            }
-
-            Section {
-                WNButton(
-                    title: isBusy ? "Deleting…" : "Delete Profile",
-                    emphasis: .destructive,
-                    size: .standard,
-                    isLoading: isBusy,
-                    action: deleteProfile
-                )
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .disabled(!ProfileExitConfirmation.matches(confirmation, expected: profileName)
-                          || isBusy
-                          || appState.isAccountExitInProgress
-                          || profileRef != appState.activeAccountRef)
-            }
-        }
-        .disabled(isBusy)
-        .navigationTitle("Delete Profile")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(isBusy)
-        .onAppear {
-            profileRef = appState.activeAccountRef
-            if let account = appState.activeAccount {
-                profileName = appState.displayName(forAccountIdHex: account.accountIdHex)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var profileSummaryRow: some View {
-        if let active = appState.activeAccount, active.label == profileRef {
-            AccountIdentitySummary(account: active, avatarSize: 48)
-        } else {
-            Text(profileName).font(.headline)
-        }
-    }
-
-    private func deletionRow(_ text: LocalizedStringKey) -> some View {
-        Label {
-            Text(text)
-        } icon: {
-            Image(systemName: "minus.circle.fill")
-                .foregroundStyle(.red)
-        }
-    }
-
-    private func deleteProfile() {
-        guard profileRef == appState.activeAccountRef,
-              ProfileExitConfirmation.matches(confirmation, expected: profileName),
-              !isBusy, !appState.isAccountExitInProgress else { return }
+        guard canSignOut else { return }
         confirmationFocused = false
+        let wiping = shouldWipeData
         isBusy = true
         error = nil
         Task {
-            let success = await appState.signOutAndWipeActiveAccount()
+            let success: Bool
+            if wiping {
+                success = await appState.signOutAndWipeActiveAccount()
+            } else {
+                success = await appState.signOut()
+            }
             isBusy = false
             if success {
                 dismiss()
             } else {
-                error = L10n.string("Couldn't wipe profile")
+                error = wiping
+                    ? L10n.string("Couldn't wipe profile")
+                    : L10n.string("Couldn’t sign out. Try again.")
             }
         }
     }
