@@ -16,6 +16,7 @@ struct ShareAndConnectView: View {
     @State private var qrImage: UIImage?
     @State private var qrUnavailable = false
     @State private var scannedNpub: String?
+    @State private var previouslyScannedPayload: String?
     @State private var scanHint: String?
     @State private var scanHintID = UUID()
     @State private var cameraFailure: QRScannerFailure?
@@ -226,13 +227,16 @@ struct ShareAndConnectView: View {
                 },
                 onInvalidPayload: showInvalidScanHint,
                 scanAttempt: scanAttempt,
-                continuesAfterInvalidPayload: true
+                continuesAfterInvalidPayload: true,
+                previouslyScannedPayload: previouslyScannedPayload,
+                onPreviousPayloadCleared: { previouslyScannedPayload = nil }
             )
             .id(scanSession)
         }
     }
 
     private func showInvalidScanHint() {
+        guard scanHint == nil else { return }
         scanHintID = UUID()
         scanHint = L10n.string("That QR code isn't a White Noise profile.")
     }
@@ -242,6 +246,7 @@ struct ShareAndConnectView: View {
 
         Haptics.success()
         scanHint = nil
+        previouslyScannedPayload = raw
         self.scannedNpub = scannedNpub
     }
 

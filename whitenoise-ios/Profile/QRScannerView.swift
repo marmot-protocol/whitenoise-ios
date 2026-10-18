@@ -12,11 +12,15 @@ struct QRScannerView: UIViewControllerRepresentable {
     var onInvalidPayload: () -> Void = {}
     var scanAttempt = 0
     var continuesAfterInvalidPayload = false
+    var previouslyScannedPayload: String?
+    var onPreviousPayloadCleared: () -> Void = {}
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onScan: onScan, onError: onError, validate: validate, onInvalidPayload: onInvalidPayload,
-            continuesAfterInvalidPayload: continuesAfterInvalidPayload
+            continuesAfterInvalidPayload: continuesAfterInvalidPayload,
+            previouslyScannedPayload: previouslyScannedPayload,
+            onPreviousPayloadCleared: onPreviousPayloadCleared
         )
     }
 
@@ -39,19 +43,27 @@ struct QRScannerView: UIViewControllerRepresentable {
         private let onInvalidPayload: () -> Void
         private let continuesAfterInvalidPayload: Bool
         private var lastRejectedPayload: String?
+        private var hasReportedInvalidPayload = false
+        private var previouslyScannedPayload: String?
+        private var previousPayloadLastSeen: ContinuousClock.Instant?
+        private let onPreviousPayloadCleared: () -> Void
 
         init(
             onScan: @escaping (String) -> Void,
             onError: @escaping (QRScannerFailure) -> Void,
             validate: @escaping (String) -> Bool = { _ in true },
             onInvalidPayload: @escaping () -> Void = {},
-            continuesAfterInvalidPayload: Bool = false
+            continuesAfterInvalidPayload: Bool = false,
+            previouslyScannedPayload: String? = nil,
+            onPreviousPayloadCleared: @escaping () -> Void = {}
         ) {
             self.onScan = onScan
             self.onError = onError
             self.validate = validate
             self.onInvalidPayload = onInvalidPayload
             self.continuesAfterInvalidPayload = continuesAfterInvalidPayload
+            self.previouslyScannedPayload = previouslyScannedPayload
+            self.onPreviousPayloadCleared = onPreviousPayloadCleared
         }
 
         func metadataOutput(
@@ -59,15 +71,31 @@ struct QRScannerView: UIViewControllerRepresentable {
             didOutput metadataObjects: [AVMetadataObject],
             from connection: AVCaptureConnection
         ) {
-            guard !didScan,
-                  let object = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-                  let value = object.stringValue
-            else { return }
-            DispatchQueue.main.async { self.receive(value) }
+            let payloads = metadataObjects.compactMap {
+                ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue
+            }
+            DispatchQueue.main.async { self.receiveFrame(payloads) }
         }
 
         func receive(_ payload: String) {
+            receiveFrame([payload])
+        }
+
+        func receiveFrame(_ payloads: [String], at now: ContinuousClock.Instant = .now) {
             guard !didScan else { return }
+            if let previouslyScannedPayload {
+                // Start observing on return, not while the profile covers the camera.
+                let lastSeen = previousPayloadLastSeen ?? now
+                if lastSeen.duration(to: now) >= .seconds(1) {
+                    self.previouslyScannedPayload = nil
+                    previousPayloadLastSeen = nil
+                    onPreviousPayloadCleared()
+                } else if previousPayloadLastSeen == nil || payloads.contains(previouslyScannedPayload) {
+                    previousPayloadLastSeen = now
+                }
+            }
+            // Another code remains usable even if the previous one is still in frame.
+            guard let payload = payloads.first(where: { $0 != previouslyScannedPayload }) else { return }
             // A held invalid code must not repeatedly validate or update SwiftUI.
             if continuesAfterInvalidPayload, payload == lastRejectedPayload { return }
             if validate(payload) {
@@ -76,7 +104,10 @@ struct QRScannerView: UIViewControllerRepresentable {
             } else {
                 didScan = !continuesAfterInvalidPayload
                 lastRejectedPayload = payload
-                onInvalidPayload()
+                if !hasReportedInvalidPayload {
+                    hasReportedInvalidPayload = true
+                    onInvalidPayload()
+                }
             }
         }
 
@@ -84,6 +115,7 @@ struct QRScannerView: UIViewControllerRepresentable {
             guard scanAttempt != attempt else { return }
             scanAttempt = attempt
             lastRejectedPayload = nil
+            hasReportedInvalidPayload = false
             didScan = false
         }
 

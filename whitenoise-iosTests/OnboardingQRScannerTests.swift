@@ -37,7 +37,7 @@ struct OnboardingQRScannerTests {
 struct ContinuousQRScannerTests {
     private let profile = "marmot://profile/npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
 
-    @Test func rejectsOncePerCodeAndAcceptsTheNextProfileWithoutRestarting() {
+    @Test func rejectsOncePerFeedbackIntervalAndAcceptsTheNextProfileWithoutRestarting() {
         var accepted: [String] = []
         var rejected = 0
         let scanner = QRScannerView.Coordinator(
@@ -52,8 +52,11 @@ struct ContinuousQRScannerTests {
         for _ in 0..<10 { scanner.receive("https://example.com") }
         #expect(rejected == 1)
         #expect(accepted.isEmpty)
-        scanner.receive("WIFI:T:WPA;S:Example;;")
-        #expect(rejected == 2)
+        for _ in 0..<10 {
+            scanner.receive("WIFI:T:WPA;S:Example;;")
+            scanner.receive("https://example.com")
+        }
+        #expect(rejected == 1)
         scanner.receive(profile)
         scanner.receive(profile)
         #expect(accepted == [profile])
@@ -72,5 +75,56 @@ struct ContinuousQRScannerTests {
         scanner.resumeScanning(attempt: 1)
         scanner.receive("invalid")
         #expect(rejected == 2)
+    }
+
+    @Test func returningToAStillVisibleProfileDoesNotOpenItAgain() {
+        var accepted: [String] = []
+        let scanner = QRScannerView.Coordinator(
+            onScan: { accepted.append($0) }, onError: { _ in },
+            previouslyScannedPayload: profile
+        )
+        let start = ContinuousClock.now
+        for step in 0..<10 {
+            scanner.receiveFrame([profile], at: start.advanced(by: .milliseconds(step * 400)))
+            scanner.resumeScanning(attempt: step)
+        }
+        #expect(accepted.isEmpty)
+    }
+
+    @Test(arguments: [false, true])
+    func previousProfileCanBeScannedAfterLeavingView(emitsEmptyFrames: Bool) {
+        var accepted: [String] = []
+        var cleared = 0
+        let scanner = QRScannerView.Coordinator(
+            onScan: { accepted.append($0) }, onError: { _ in },
+            previouslyScannedPayload: profile,
+            onPreviousPayloadCleared: { cleared += 1 }
+        )
+        let start = ContinuousClock.now
+        scanner.receiveFrame([profile], at: start)
+        scanner.receiveFrame([], at: start.advanced(by: .milliseconds(100)))
+        scanner.receiveFrame([profile], at: start.advanced(by: .milliseconds(200)))
+        #expect(accepted.isEmpty)
+        #expect(cleared == 0)
+
+        if emitsEmptyFrames {
+            scanner.receiveFrame([], at: start.advanced(by: .milliseconds(800)))
+            #expect(cleared == 0)
+            scanner.receiveFrame([], at: start.advanced(by: .milliseconds(1300)))
+            #expect(cleared == 1)
+        }
+        scanner.receiveFrame([profile], at: start.advanced(by: .milliseconds(1400)))
+        #expect(cleared == 1)
+        #expect(accepted == [profile])
+    }
+
+    @Test func anotherCodeCanOpenWhileThePreviousCodeIsStillVisible() {
+        var accepted: [String] = []
+        let scanner = QRScannerView.Coordinator(
+            onScan: { accepted.append($0) }, onError: { _ in },
+            previouslyScannedPayload: "previous-profile"
+        )
+        scanner.receiveFrame(["previous-profile", profile])
+        #expect(accepted == [profile])
     }
 }
