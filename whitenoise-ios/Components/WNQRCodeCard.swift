@@ -13,6 +13,7 @@ struct WNQRCodeCard: View {
 
     let image: UIImage?
     let accessibilityLabel: LocalizedStringKey
+    var unavailableDescription: LocalizedStringKey?
 
     var body: some View {
         content
@@ -27,7 +28,18 @@ struct WNQRCodeCard: View {
 
     @ViewBuilder
     private var content: some View {
-        if let image {
+        if let unavailableDescription {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    ContentUnavailableView(
+                        "QR Code Unavailable", systemImage: "qrcode",
+                        description: Text(unavailableDescription)
+                    )
+                    // The QR surface stays white in both app appearances.
+                    .environment(\.colorScheme, .light)
+                }
+        } else if let image {
             Image(uiImage: image)
                 .resizable()
                 .interpolation(.none)

@@ -9,6 +9,7 @@ struct ProfileIdentityHeader<Avatar: View>: View {
     var isAddressVerified = false
     var bottomPadding: CGFloat = 14
     var showsIdentityValues = true
+    var compactPublicKey = false
     @ViewBuilder let avatar: (CGFloat) -> Avatar
 
     var body: some View {
@@ -37,7 +38,7 @@ struct ProfileIdentityHeader<Avatar: View>: View {
             }
 
             if showsIdentityValues {
-                ProfilePublicKeyValue(npub: npub)
+                ProfilePublicKeyValue(npub: npub, compact: compactPublicKey)
             }
         }
         .frame(maxWidth: .infinity)
@@ -64,13 +65,15 @@ struct ProfileIdentityValues: View {
 
 private struct ProfilePublicKeyValue: View {
     let npub: String?
+    var compact = false
 
     var body: some View {
         if let npub {
             CopyableValueChip(
                 display: IdentityFormatter.short(npub, head: 14, tail: 4),
                 copyValue: npub,
-                valueName: L10n.string("npub")
+                valueName: L10n.string("npub"),
+                compact: compact
             )
         }
     }
