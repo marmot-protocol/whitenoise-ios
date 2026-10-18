@@ -51,14 +51,27 @@ struct WNPhotoMenuButton: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
     var controlSize: ControlSize = .large
+    var isLoading = false
 
     var body: some View {
         Menu {
             WNPhotoMenuActions(hasPhoto: hasPhoto, selection: $selection)
         } label: {
             Text(hasPhoto ? "Change Photo" : "Add Photo")
+                .opacity(isLoading ? 0 : 1)
         }
         .wnAvatarActionButtonStyle(controlSize: controlSize)
+        .accessibilityValue(isLoading ? L10n.string("Loading…") : "")
+        .disabled(isLoading)
+        .overlay {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.primary)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 }
 

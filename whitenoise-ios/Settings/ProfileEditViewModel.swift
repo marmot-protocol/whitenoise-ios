@@ -54,9 +54,9 @@ final class ProfileEditViewModel {
         guard currentDraft.validationError == field else { return nil }
         switch field {
         case .picture:
-            return L10n.string("Only public HTTPS image URLs are allowed.")
+            return L10n.string("Change or remove this photo before saving your profile.")
         case .nip05:
-            return L10n.string("Enter a valid NIP-05 address like name@example.com.")
+            return L10n.string("Enter an address like name@example.com.")
         }
     }
 

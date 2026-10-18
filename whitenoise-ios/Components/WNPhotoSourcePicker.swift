@@ -38,6 +38,7 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
     let hasPhoto: Bool
     @Binding var selection: WNPhotoMenuAction?
     var buttonControlSize: ControlSize = .large
+    var isLoading = false
     @ViewBuilder var preview: () -> Preview
 
     var body: some View {
@@ -52,8 +53,13 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
             .accessibilityLabel(hasPhoto ? "Change Photo" : "Add Photo")
 
-            WNPhotoMenuButton(hasPhoto: hasPhoto, selection: $selection, controlSize: buttonControlSize)
-                .padding(.top)
+            WNPhotoMenuButton(
+                hasPhoto: hasPhoto,
+                selection: $selection,
+                controlSize: buttonControlSize,
+                isLoading: isLoading
+            )
+            .padding(.top)
         }
     }
 }
