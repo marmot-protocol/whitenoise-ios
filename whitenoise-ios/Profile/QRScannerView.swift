@@ -45,7 +45,7 @@ struct QRScannerView: UIViewControllerRepresentable {
         private var lastRejectedPayload: String?
         private var hasReportedInvalidPayload = false
         private var previouslyScannedPayload: String?
-        private var previousPayloadLastSeen: ContinuousClock.Instant?
+        private var previousPayloadAbsentSince: ContinuousClock.Instant?
         private let onPreviousPayloadCleared: () -> Void
 
         init(
@@ -84,30 +84,36 @@ struct QRScannerView: UIViewControllerRepresentable {
         func receiveFrame(_ payloads: [String], at now: ContinuousClock.Instant = .now) {
             guard !didScan else { return }
             if let previouslyScannedPayload {
-                // Start observing on return, not while the profile covers the camera.
-                let lastSeen = previousPayloadLastSeen ?? now
-                if lastSeen.duration(to: now) >= .seconds(1) {
+                if payloads.contains(previouslyScannedPayload) {
+                    previousPayloadAbsentSince = nil
+                } else if let absentSince = previousPayloadAbsentSince,
+                          absentSince.duration(to: now) >= .seconds(1) {
+                    // Only an observed absence can rearm this code; a callback gap cannot.
                     self.previouslyScannedPayload = nil
-                    previousPayloadLastSeen = nil
+                    previousPayloadAbsentSince = nil
                     onPreviousPayloadCleared()
-                } else if previousPayloadLastSeen == nil || payloads.contains(previouslyScannedPayload) {
-                    previousPayloadLastSeen = now
+                } else if previousPayloadAbsentSince == nil {
+                    previousPayloadAbsentSince = now
                 }
             }
-            // Another code remains usable even if the previous one is still in frame.
-            guard let payload = payloads.first(where: { $0 != previouslyScannedPayload }) else { return }
-            // A held invalid code must not repeatedly validate or update SwiftUI.
-            if continuesAfterInvalidPayload, payload == lastRejectedPayload { return }
-            if validate(payload) {
-                didScan = true
-                onScan(payload)
-            } else {
-                didScan = !continuesAfterInvalidPayload
-                lastRejectedPayload = payload
-                if !hasReportedInvalidPayload {
-                    hasReportedInvalidPayload = true
-                    onInvalidPayload()
+            var rejectedPayload: String?
+            for payload in payloads where payload != previouslyScannedPayload {
+                let alreadyRejected = continuesAfterInvalidPayload && payload == lastRejectedPayload
+                if !alreadyRejected, validate(payload) {
+                    didScan = true
+                    onScan(payload)
+                    return
                 }
+                rejectedPayload = payload
+                // Explicit-retry scanners retain their first-code behavior.
+                if !continuesAfterInvalidPayload { break }
+            }
+            guard let rejectedPayload else { return }
+            didScan = !continuesAfterInvalidPayload
+            lastRejectedPayload = rejectedPayload
+            if !hasReportedInvalidPayload {
+                hasReportedInvalidPayload = true
+                onInvalidPayload()
             }
         }
 
