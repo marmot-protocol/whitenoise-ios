@@ -39,19 +39,26 @@ struct WNAvatarPhotoMenu<Preview: View>: View {
     @Binding var selection: WNPhotoMenuAction?
     var buttonControlSize: ControlSize = .large
     var isLoading = false
+    var previewOpensMenu = true
     @ViewBuilder var preview: () -> Preview
 
     var body: some View {
         VStack(spacing: 0) {
-            Menu {
-                WNPhotoMenuActions(hasPhoto: hasPhoto, selection: $selection)
-            } label: {
-                preview()
-                    .accessibilityHidden(true)
+            Group {
+                if previewOpensMenu {
+                    Menu {
+                        WNPhotoMenuActions(hasPhoto: hasPhoto, selection: $selection)
+                    } label: {
+                        preview()
+                            .accessibilityHidden(true)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(hasPhoto ? "Change Photo" : "Add Photo")
+                } else {
+                    preview()
+                }
             }
-            .buttonStyle(.plain)
             .containerRelativeFrame(.horizontal, count: 3, span: 1, spacing: 0)
-            .accessibilityLabel(hasPhoto ? "Change Photo" : "Add Photo")
 
             WNPhotoMenuButton(
                 hasPhoto: hasPhoto,

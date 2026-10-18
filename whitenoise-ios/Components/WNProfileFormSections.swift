@@ -80,6 +80,7 @@ struct WNProfilePhotoSection<Avatar: View>: View {
                     WNAvatarPhotoMenu(
                         hasPhoto: hasPhoto, selection: $selection,
                         buttonControlSize: .regular, isLoading: isBusy,
+                        previewOpensMenu: false,
                         preview: avatar
                     )
                     .disabled(isBusy || isDisabled)
