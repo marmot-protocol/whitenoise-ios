@@ -103,40 +103,38 @@ struct ImportIdentityView: View {
                     .font(.headline)
                     .padding(.leading)
 
-                HStack {
-                    privateKeyField(identity: $model.identity)
+                WNInputWithFooter {
+                    HStack {
+                        privateKeyField(identity: $model.identity)
 
-                    if !isBusy && (isKeyFocused || normalizedIdentity.isEmpty) {
-                        Button {
-                            if isKeyFocused {
-                                isKeyFocused = false
-                            } else {
-                                showScanner = true
+                        if !isBusy && (isKeyFocused || normalizedIdentity.isEmpty) {
+                            Button {
+                                if isKeyFocused {
+                                    isKeyFocused = false
+                                } else {
+                                    showScanner = true
+                                }
+                            } label: {
+                                Image(systemName: isKeyFocused ? "xmark" : "qrcode.viewfinder")
+                                    .contentTransition(.symbolEffect(.replace))
                             }
-                        } label: {
-                            Image(systemName: isKeyFocused ? "xmark" : "qrcode.viewfinder")
-                                .contentTransition(.symbolEffect(.replace))
+                            .compatibleGlassCircleButtonStyle()
+                            .controlSize(.large)
+                            .preservesKeyboardOnTap()
+                            .transition(.opacity)
+                            .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                         }
-                        .compatibleGlassCircleButtonStyle()
-                        .controlSize(.large)
-                        .preservesKeyboardOnTap()
-                        .transition(.opacity)
-                        .accessibilityLabel(isKeyFocused ? "Dismiss Keyboard" : "Scan QR Code")
                     }
-                }
-                .animation(.default, value: isKeyFocused)
-                .animation(.default, value: normalizedIdentity.isEmpty)
-
-                if keyState == .invalid {
-                    Text("That private key isn't valid. Check it and try again.")
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.leading)
-                } else {
-                    Text("It starts with nsec.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .padding(.leading)
+                    .animation(.default, value: isKeyFocused)
+                    .animation(.default, value: normalizedIdentity.isEmpty)
+                } footer: {
+                    if keyState == .invalid {
+                        Text("That private key isn't valid. Check it and try again.")
+                            .wnInputFooter(isError: true)
+                    } else {
+                        Text("It starts with nsec.")
+                            .wnInputFooter()
+                    }
                 }
                 signInAction
                     .padding(.top)

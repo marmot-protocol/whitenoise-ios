@@ -424,18 +424,21 @@ private struct DeleteProfileView: View {
             }
 
             Section {
-                WNInput(
-                    placeholder: L10n.string("Profile name"),
-                    text: $confirmation,
-                    fill: WNInputMetrics.groupedFill,
-                    submitLabel: .done,
-                    focus: $confirmationFocused
-                )
+                WNInputWithFooter {
+                    WNInput(
+                        placeholder: L10n.string("Profile name"),
+                        text: $confirmation,
+                        fill: WNInputMetrics.groupedFill,
+                        submitLabel: .done,
+                        focus: $confirmationFocused
+                    )
+                } footer: {
+                    Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
+                        .wnInputFooter()
+                }
                 .wnInputRow()
             } header: {
                 Text("Enter Profile Name").wnSectionHeader()
-            } footer: {
-                Text(L10n.formatted("Enter %@ exactly to confirm.", profileName))
             }
 
             if let error {
