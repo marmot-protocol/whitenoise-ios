@@ -600,7 +600,8 @@ final class ConversationViewModel {
             hasWindowSnapshot: conversationWindow != nil,
             hasLiveEpoch: conversationWindow?.header.epoch != nil,
             hasWindowSubscription: windowSubscription != nil,
-            isLocallyReset: isLocallyReset
+            isLocallyReset: isLocallyReset,
+            isActiveParticipant: isActiveParticipant
         )
     }
 

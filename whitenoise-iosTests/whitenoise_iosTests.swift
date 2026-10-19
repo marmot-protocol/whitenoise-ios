@@ -12015,21 +12015,24 @@ struct MediaComposerAvailabilityTests {
             hasWindowSnapshot: false,
             hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: false,
             hasLiveEpoch: false,
             hasWindowSubscription: true,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: true,
             hasWindowSnapshot: true,
             hasLiveEpoch: true,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
     }
 
@@ -12039,14 +12042,16 @@ struct MediaComposerAvailabilityTests {
             hasWindowSnapshot: true,
             hasLiveEpoch: true,
             hasWindowSubscription: true,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
         #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
             usesLiveWindow: false,
             hasWindowSnapshot: false,
             hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
         ))
     }
 
@@ -12056,7 +12061,8 @@ struct MediaComposerAvailabilityTests {
             hasWindowSnapshot: false,
             hasLiveEpoch: false,
             hasWindowSubscription: false,
-            isLocallyReset: true
+            isLocallyReset: true,
+            isActiveParticipant: true
         ))
     }
 
@@ -12066,7 +12072,21 @@ struct MediaComposerAvailabilityTests {
             hasWindowSnapshot: true,
             hasLiveEpoch: false,
             hasWindowSubscription: true,
-            isLocallyReset: false
+            isLocallyReset: false,
+            isActiveParticipant: true
+        ))
+    }
+
+    @Test func inactiveMembershipDoesNotWaitForLiveCapabilities() {
+        // MDK preserves departed membership in its local-only snapshot even
+        // while the epoch and live send permissions are unavailable.
+        #expect(!ComposerAvailabilityPresentation.awaitsLiveConversationState(
+            usesLiveWindow: true,
+            hasWindowSnapshot: true,
+            hasLiveEpoch: false,
+            hasWindowSubscription: true,
+            isLocallyReset: false,
+            isActiveParticipant: false
         ))
     }
 
