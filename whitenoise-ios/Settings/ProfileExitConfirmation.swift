@@ -6,7 +6,7 @@ nonisolated enum ProfileExitConfirmation {
     }
 
     static func canSignOut(wiping: Bool, input: String, profileName: String, busy: Bool) -> Bool {
-        !busy && (!wiping || matches(input, expected: profileName))
+        !busy && (!wiping || (!profileName.isEmpty && input == profileName))
     }
 
     static func erasePhrase() -> String {

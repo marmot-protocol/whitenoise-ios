@@ -88,12 +88,14 @@ struct DeviceSettingsFlowTests {
     }
 
     @Test func destructiveProfileConfirmationIsExactAndBoundToTheDisplayedName() {
-        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: "  Alice  ", profileName: "Alice", busy: false))
+        #expect(ProfileExitConfirmation.canSignOut(wiping: true, input: "Alice", profileName: "Alice", busy: false))
+        #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "  Alice  ", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "alice", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "Alice", profileName: "Bob", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: true, input: "", profileName: "", busy: false))
         #expect(ProfileExitConfirmation.canSignOut(wiping: false, input: "", profileName: "Alice", busy: false))
         #expect(!ProfileExitConfirmation.canSignOut(wiping: false, input: "", profileName: "Alice", busy: true))
+        #expect(ProfileExitConfirmation.matches("  apple bird cloud  ", expected: "apple bird cloud"))
         #expect(!ProfileExitConfirmation.matches("apple  bird cloud", expected: "apple bird cloud"))
         #expect(ProfileExitConfirmation.erasePhrase().split(separator: " ").count == 3)
     }
