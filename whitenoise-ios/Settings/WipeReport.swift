@@ -3,9 +3,8 @@ import MarmotKit
 
 /// The stages of the destructive Sign Out & Wipe, in the order the engine runs
 /// them inside `Marmot.signOutAndWipe`. The FFI is a single async call that
-/// reports every stage only in its final `WipeOutcomeFfi`, so the UI renders
-/// these as an indeterminate staged display while in flight and marks them from
-/// the outcome afterwards.
+/// reports every stage only in its final `WipeOutcomeFfi`; stage status is
+/// displayed only after completion.
 nonisolated enum WipeStage: Equatable, Hashable {
     case leavingGroups
     case deletingKeyPackages
@@ -16,8 +15,13 @@ nonisolated enum WipeStage: Equatable, Hashable {
 /// identifier of the affected group / relay event (`nil` for the local-cleanup
 /// stage, which has no per-item subject); `reason` is the engine's diagnostic.
 nonisolated struct WipeFailureItem: Equatable {
+    enum Kind: Equatable {
+        case cleanup, notificationPreviews, decryptedMedia, accountRefresh
+    }
+
     let subject: String?
     let reason: String
+    var kind: Kind = .cleanup
 }
 
 /// Per-stage result mapped from the engine outcome for the wipe outcome sheet.
@@ -29,17 +33,20 @@ nonisolated struct WipeStageReport: Equatable {
     let failures: [WipeFailureItem]
 
     var hasIssues: Bool { !failures.isEmpty }
+    var hasCleanupIssues: Bool { failures.contains { $0.kind != .accountRefresh } }
 }
 
-/// UI model of a finished Sign Out & Wipe. A `clean` wipe just toasts; a report
+/// UI model of a finished Sign Out & Wipe. A `clean` wipe just navigates back; a report
 /// with issues drives the outcome sheet. The account ref is invalid by the time
 /// this exists, so the sheet renders only this snapshot and never reaches back
 /// into the FFI.
 nonisolated struct WipeReport: Equatable {
     let stages: [WipeStageReport]
+    var didWipeData = true
 
     var issueCount: Int { stages.reduce(0) { $0 + $1.failures.count } }
     var clean: Bool { issueCount == 0 }
+    var hasCleanupIssues: Bool { stages.contains { $0.hasCleanupIssues } }
 }
 
 /// Maps the engine's `WipeOutcomeFfi` to the pure `WipeReport` UI model. Stages
@@ -57,7 +64,7 @@ nonisolated enum WipeReportProjection {
             ? []
             : [WipeFailureItem(subject: nil, reason: boundedReason(outcome.localCleanup.reason ?? ""))]
         let localFailures = engineLocalFailures + additionalLocalFailures.map {
-            WipeFailureItem(subject: $0.subject, reason: boundedReason($0.reason))
+            WipeFailureItem(subject: $0.subject, reason: boundedReason($0.reason), kind: $0.kind)
         }
         return WipeReport(stages: [
             WipeStageReport(
@@ -93,17 +100,6 @@ nonisolated enum WipeReportProjection {
         let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count > maxReasonLength else { return trimmed }
         return String(trimmed.prefix(maxReasonLength)) + "…"
-    }
-}
-
-/// Type-to-confirm gate for the destructive wipe. Pure so the decision is
-/// observable in tests without a view. Matches the confirmation keyword after
-/// trimming, case-insensitively (mirrors the Android gate).
-nonisolated enum WipeConfirmation {
-    static func isConfirmed(_ input: String, keyword: String) -> Bool {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return false }
-        return trimmed.caseInsensitiveCompare(keyword) == .orderedSame
     }
 }
 

@@ -3,39 +3,13 @@ import Foundation
 @testable import whitenoise_ios
 @testable import MarmotKit
 
-/// Pure decisions behind the destructive Sign Out & Wipe: the type-to-confirm
-/// gate, the engine-outcome → report projection, and the suspension-safety gate
-/// that decides whether the teardown may begin.
+/// Outcome presentation and the foreground gate for Sign Out & Wipe.
 struct SignOutAndWipeTests {
 
     @Test func readyRootRoutesToProfileSelectionWithoutAnActiveAccount() {
         #expect(RootPresentation.resolve(phase: .ready, activeAccountRef: nil) == .profileSelection)
         #expect(RootPresentation.resolve(phase: .ready, activeAccountRef: "profile-a") == .main)
         #expect(RootPresentation.resolve(phase: .onboarding, activeAccountRef: nil) == .onboarding)
-    }
-
-    // MARK: - Confirm gate
-
-    @Test func confirmGateAcceptsExactKeyword() {
-        #expect(WipeConfirmation.isConfirmed("WIPE", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateIsCaseInsensitiveAndTrimsWhitespace() {
-        #expect(WipeConfirmation.isConfirmed("wipe", keyword: "WIPE"))
-        #expect(WipeConfirmation.isConfirmed("  WIPE  ", keyword: "WIPE"))
-        #expect(WipeConfirmation.isConfirmed("\tWipe\n", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateRejectsPartialOrWrongInput() {
-        #expect(!WipeConfirmation.isConfirmed("", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("WIP", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("WIPE!", keyword: "WIPE"))
-        #expect(!WipeConfirmation.isConfirmed("delete", keyword: "WIPE"))
-    }
-
-    @Test func confirmGateRejectsEverythingWhenKeywordEmpty() {
-        #expect(!WipeConfirmation.isConfirmed("", keyword: ""))
-        #expect(!WipeConfirmation.isConfirmed("WIPE", keyword: ""))
     }
 
     // MARK: - Report projection
@@ -137,6 +111,46 @@ struct SignOutAndWipeTests {
         let bounded = WipeReportProjection.boundedReason(huge)
         #expect(bounded.count == WipeReportProjection.maxReasonLength + 1) // + the ellipsis
         #expect(bounded.hasSuffix("…"))
+    }
+
+    @Test func profileRefreshFailureDoesNotClaimLocalDataRemains() {
+        let report = WipeReportProjection.report(
+            from: outcome(),
+            additionalLocalFailures: [WipeFailureItem(subject: nil, reason: "timeout", kind: .accountRefresh)]
+        )
+        #expect(!report.clean)
+        #expect(!report.hasCleanupIssues)
+        #expect(!report.stages[2].hasCleanupIssues)
+        #expect(report.stages[2].failures.first?.kind == .accountRefresh)
+    }
+
+    @Test func mediaCleanupFailureStillWarnsWhenProfileRefreshAlsoFails() {
+        let report = WipeReportProjection.report(
+            from: outcome(),
+            additionalLocalFailures: [
+                WipeFailureItem(subject: nil, reason: "media residue", kind: .decryptedMedia),
+                WipeFailureItem(subject: nil, reason: "timeout", kind: .accountRefresh),
+            ]
+        )
+        #expect(report.hasCleanupIssues)
+        #expect(report.stages[2].hasCleanupIssues)
+        #expect(report.stages[2].failures.map(\.kind) == [.decryptedMedia, .accountRefresh])
+    }
+
+    @MainActor
+    @Test(arguments: [false, true])
+    func unavailableRuntimeKeepsFailureInTheSignOutSheet(_ wiping: Bool) async {
+        let appState = AppState.test(accountDefaults: IsolatedAccountDefaults.make())
+        appState.activeAccountRef = "sample-profile"
+        let feedback = AccountExitFeedback()
+        let succeeded = if wiping {
+            await appState.signOutAndWipeActiveAccount(feedback: feedback)
+        } else {
+            await appState.signOut(feedback: feedback)
+        }
+        #expect(!succeeded)
+        #expect(feedback.error != nil)
+        #expect(appState.activeToast == nil)
     }
 
     // MARK: - Suspension-safety gate
